@@ -50,6 +50,11 @@ pub struct BookmarkQuery;
 
 #[Object]
 impl BookmarkQuery {
+    async fn bookmark(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<Option<Bookmark>> {
+        let db = ctx.data_unchecked::<Arc<Db>>();
+        Ok(bookmark_db::get_bookmark_by_id(db, id.as_str())?.map(Bookmark::from))
+    }
+
     async fn bookmarks(&self, ctx: &Context<'_>) -> Vec<Bookmark> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         bookmark_db::get_bookmarks(db)
@@ -111,18 +116,35 @@ impl BookmarkMutation {
         input: BookmarkInput,
     ) -> Result<Bookmark, async_graphql::Error> {
         let db = ctx.data_unchecked::<Arc<Db>>();
-        let mut bookmark = bookmark_db::get_bookmark_by_id(db, id.as_str())
+        let mut bookmark = bookmark_db::get_bookmark_by_id(db, id.as_str())?
             .ok_or_else(|| async_graphql::Error::new("bookmark not found"))?;
         bookmark.url = input.url;
         bookmark.title = input.title;
         bookmark.group_id = (!input.group_id.is_empty()).then(|| input.group_id.to_string());
         bookmark.pinned = input.pinned;
         bookmark.sort_order = input.sort_order;
-        bookmark.updated_at = now_iso();
-        bookmark_db::update_fields(db, &bookmark)?;
-        let bookmark = bookmark_db::get_bookmark_by_id(db, id.as_str())
-            .ok_or_else(|| async_graphql::Error::new("bookmark not found"))?;
-        emit_bookmark_updated(ctx, &[bookmark.clone()]);
+        let assets = ctx.data_unchecked::<Arc<crate::services::feeds::FeedAssets>>();
+        let favicon_path = match input.favicon_url.as_deref() {
+            None => None,
+            Some("") => Some(String::new()),
+            Some(url) => Some(assets.cache_bookmark_icon(url).await?),
+        };
+        let saved = bookmark_db::update_fields(db, &bookmark, favicon_path.as_deref())
+            .map_err(async_graphql::Error::from)
+            .and_then(|saved| saved.ok_or_else(|| async_graphql::Error::new("bookmark not found")));
+        let (bookmark, previous_favicon) = match saved {
+            Ok(saved) => saved,
+            Err(error) => {
+                if let Some(path) = &favicon_path {
+                    assets.release(path);
+                }
+                return Err(error);
+            }
+        };
+        if favicon_path.is_some() {
+            assets.release(&previous_favicon);
+        }
+        emit_bookmark_updated(ctx, std::slice::from_ref(&bookmark));
         Ok(Bookmark::from(bookmark))
     }
 

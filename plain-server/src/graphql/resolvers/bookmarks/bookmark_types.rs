@@ -77,6 +77,8 @@ impl BookmarkGroup {
 pub struct BookmarkInput {
     pub url: String,
     pub title: String,
+    /// Omit to keep the current icon; use an empty string to clear it.
+    pub favicon_url: Option<String>,
     pub group_id: ID,
     pub pinned: bool,
     pub sort_order: i32,

@@ -1,7 +1,7 @@
 //! Cross-platform bookmark storage in the shared SQLite database.
 //! The tables are created when [`Db::open`] opens the database.
 
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 use crate::db::Db;
 pub use crate::db::models::bookmark::DBookmark;
@@ -52,14 +52,14 @@ pub fn get_bookmarks(db: &Db) -> Vec<DBookmark> {
     })
 }
 
-pub fn get_bookmark_by_id(db: &Db, id: &str) -> Option<DBookmark> {
+pub fn get_bookmark_by_id(db: &Db, id: &str) -> rusqlite::Result<Option<DBookmark>> {
     db.with_conn(|conn| {
         conn.query_row(
             &format!("SELECT {BOOKMARK_COLUMNS} FROM bookmarks WHERE id=?"),
             params![id],
             row_to_bookmark,
         )
-        .ok()
+        .optional()
     })
 }
 
@@ -224,17 +224,33 @@ pub fn record_click(db: &Db, id: &str) -> rusqlite::Result<usize> {
     db.with_conn(|conn| conn.execute("UPDATE bookmarks SET click_count=click_count+1,last_clicked_at=?1,updated_at=?1 WHERE id=?2", params![now_iso(), id]))
 }
 
-pub fn update_fields(db: &Db, b: &DBookmark) -> rusqlite::Result<usize> {
-    db.with_conn(|conn| conn.execute("UPDATE bookmarks SET url=?1,title=?2,group_id=?3,pinned=?4,sort_order=?5,updated_at=?6 WHERE id=?7", params![b.url,b.title,b.group_id,b.pinned,b.sort_order,now_iso(),b.id]))
-}
-
-pub fn update_metadata(
+pub fn update_fields(
     db: &Db,
-    original: &DBookmark,
-    title: &str,
-    icon: &str,
-) -> rusqlite::Result<usize> {
-    db.with_conn(|conn| conn.execute("UPDATE bookmarks SET title=?1,favicon_path=?2,updated_at=?3 WHERE id=?4 AND url=?5 AND title=?6 AND favicon_path=?7", params![title,icon,now_iso(),original.id,original.url,original.title,original.favicon_path]))
+    bookmark: &DBookmark,
+    favicon_path: Option<&str>,
+) -> rusqlite::Result<Option<(DBookmark, String)>> {
+    db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        let previous_favicon = tx.query_row(
+            "SELECT favicon_path FROM bookmarks WHERE id=?1",
+            params![bookmark.id],
+            |row| row.get::<_, String>(0),
+        ).optional()?;
+        let Some(previous_favicon) = previous_favicon else {
+            return Ok(None);
+        };
+        tx.execute(
+            "UPDATE bookmarks SET url=?1,title=?2,group_id=?3,pinned=?4,sort_order=?5,updated_at=?6,favicon_path=COALESCE(?7,favicon_path) WHERE id=?8",
+            params![bookmark.url, bookmark.title, bookmark.group_id, bookmark.pinned, bookmark.sort_order, now_iso(), favicon_path, bookmark.id],
+        )?;
+        let updated = tx.query_row(
+            &format!("SELECT {BOOKMARK_COLUMNS} FROM bookmarks WHERE id=?1"),
+            params![bookmark.id],
+            row_to_bookmark,
+        )?;
+        tx.commit()?;
+        Ok(Some((updated, previous_favicon)))
+    })
 }
 
 #[cfg(test)]

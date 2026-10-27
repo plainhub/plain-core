@@ -191,6 +191,8 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
     }
     assert!(sdl.contains("enum AudioCommandAction {"));
     assert!(!sdl.contains("enum MediaAction {"));
+    assert!(!sdl.contains("fetchBookmarkMetadata("));
+    assert!(sdl.contains("faviconUrl: String"));
     assert!(sdl.contains("TTY_TDD"));
     assert!(!sdl.contains("TTY_DDD"));
     for field in [
@@ -253,7 +255,9 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "openWebSettings(feature: WebSettingsFeature): Boolean!",
         "appFiles(query: String!, offset: Int!, limit: Int!): [AppFile!]!",
         "appFileCount(query: String!): Int!",
+        "bookmark(id: ID!): Bookmark",
         "bookmarks: [Bookmark!]!",
+        "pageMetadata(url: String!): PageMetadata!",
         "bookmarkGroups: [BookmarkGroup!]!",
         "addBookmarks(urls: [String!]!, groupId: ID!): [Bookmark!]!",
         "updateBookmark(id: ID!, input: BookmarkInput!): Bookmark!",

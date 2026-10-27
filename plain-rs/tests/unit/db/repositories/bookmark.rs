@@ -15,7 +15,7 @@ fn bookmark_store_survives_reopen_and_ungroups_on_group_delete() {
     assert_eq!(get_bookmarks(&db).len(), 1);
     assert_eq!(get_bookmark_groups(&db).len(), 1);
     delete_bookmark_group(&db, &group.id).unwrap();
-    let ungrouped = get_bookmark_by_id(&db, &bookmark.id).unwrap();
+    let ungrouped = get_bookmark_by_id(&db, &bookmark.id).unwrap().unwrap();
     assert_eq!(ungrouped.group_id, None);
     assert!(get_bookmark_group_by_id(&db, &group.id).is_none());
     assert_eq!(delete_bookmarks(&db, &[bookmark.id]).unwrap(), 1);
@@ -56,4 +56,50 @@ fn now_iso_minus(secs: u64) -> String {
     crate::utils::dbtime::iso_from_unix_millis(
         crate::utils::dbtime::now_millis() - secs as i64 * 1000,
     )
+}
+
+#[test]
+fn explicit_updates_preserve_clicks_and_replace_only_requested_favicons() {
+    let db = Db::open(&crate::db::chat_tests::unique_tmp_dir("bookmark-update").join("plain.db"))
+        .unwrap();
+    let mut original = DBookmark::new("https://example.com/page", "");
+    original.favicon_path = "original-icon".into();
+    insert_bookmark(&db, &original).unwrap();
+    record_click(&db, &original.id).unwrap();
+
+    let (updated, previous_icon) = update_fields(&db, &original, Some("selected-icon"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(previous_icon, "original-icon");
+    assert_eq!(updated.favicon_path, "selected-icon");
+    assert_eq!(updated.click_count, 1);
+    let mut stale_edit = original.clone();
+    stale_edit.title = "Explicit title".into();
+    let (updated, previous_icon) = update_fields(&db, &stale_edit, None).unwrap().unwrap();
+    assert_eq!(updated.title, "Explicit title");
+    assert_eq!(updated.favicon_path, "selected-icon");
+    assert_eq!(previous_icon, "selected-icon");
+    assert_eq!(updated.click_count, 1);
+
+    let (cleared, previous_icon) = update_fields(&db, &updated, Some("")).unwrap().unwrap();
+    assert_eq!(previous_icon, "selected-icon");
+    assert!(cleared.favicon_path.is_empty());
+    delete_bookmarks(&db, std::slice::from_ref(&original.id)).unwrap();
+    assert!(
+        update_fields(&db, &original, Some("unused-icon"))
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn bookmark_lookup_distinguishes_missing_rows_from_decode_failures() {
+    let db = Db::open(&crate::db::chat_tests::unique_tmp_dir("bookmark-read").join("plain.db")).unwrap();
+    assert!(get_bookmark_by_id(&db, "missing").unwrap().is_none());
+    let bookmark = DBookmark::new("https://example.com/page", "");
+    insert_bookmark(&db, &bookmark).unwrap();
+    db.with_conn(|conn| {
+        conn.execute("UPDATE bookmarks SET title=?1 WHERE id=?2", params![vec![0u8], bookmark.id])
+    }).unwrap();
+    assert!(get_bookmark_by_id(&db, &bookmark.id).is_err());
 }

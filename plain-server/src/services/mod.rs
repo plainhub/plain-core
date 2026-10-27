@@ -1,6 +1,8 @@
 #[cfg(feature = "core")]
 pub mod backups;
 #[cfg(feature = "core")]
+pub(crate) mod bookmarks;
+#[cfg(feature = "core")]
 pub(crate) mod cache;
 #[cfg(feature = "core")]
 pub mod feeds;

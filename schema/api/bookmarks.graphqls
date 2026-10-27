@@ -25,9 +25,18 @@ type BookmarkGroup {
 input BookmarkInput {
 	url: String!
 	title: String!
+	"""
+	Omit to keep the current icon; use an empty string to clear it.
+	"""
+	faviconUrl: String
 	groupId: ID!
 	pinned: Boolean!
 	sortOrder: Int!
+}
+
+type PageMetadata {
+	title: String
+	faviconUrl: String
 }
 
 extend type Mutation {
@@ -35,13 +44,14 @@ extend type Mutation {
 	createBookmarkGroup(name: String!): BookmarkGroup!
 	deleteBookmarkGroup(id: ID!): Boolean!
 	deleteBookmarks(ids: [ID!]!): ActionResult!
-	fetchBookmarkMetadata(id: ID!): Bookmark
 	recordBookmarkClick(id: ID!): Boolean!
 	updateBookmark(id: ID!, input: BookmarkInput!): Bookmark!
 	updateBookmarkGroup(id: ID!, name: String!, collapsed: Boolean!, sortOrder: Int!): BookmarkGroup!
 }
 
 extend type Query {
+	bookmark(id: ID!): Bookmark
 	bookmarkGroups: [BookmarkGroup!]!
 	bookmarks: [Bookmark!]!
+	pageMetadata(url: String!): PageMetadata!
 }

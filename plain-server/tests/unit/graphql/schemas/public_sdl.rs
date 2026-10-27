@@ -177,7 +177,8 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!(
         "Query",
         "bookmarks",
-        resolvers::bookmarks::bookmark::BookmarkQuery
+        resolvers::bookmarks::bookmark::BookmarkQuery,
+        resolvers::bookmarks::metadata::PageMetadataQuery
     );
     group!("Query", "notes", resolvers::notes::note::NoteQuery);
     group!("Query", "feeds", resolvers::feeds::feed::FeedQuery);
@@ -284,7 +285,6 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!(
         "Mutation",
         "bookmarks",
-        resolvers::bookmarks::metadata::BookmarkMetadataMutation,
         resolvers::bookmarks::bookmark::BookmarkMutation
     );
     group!(
