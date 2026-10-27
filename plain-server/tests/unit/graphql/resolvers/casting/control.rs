@@ -27,7 +27,7 @@ fn fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServer) {
     tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
             let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => json!(["LAN_SHARE"]),
+                "systemCapabilities" => json!([]),
                 "mdnsMulticast" => json!(true),
                 "systemCastAddressFacts" => {
                     json!({"ip":"127.0.0.1","defaultDeviceName":"Test Phone"})

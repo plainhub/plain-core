@@ -36,3 +36,34 @@ async fn enabling_without_http_defers_platform_work_and_retry() {
     assert!(plain_rs::prefs::dlna::enabled(&state.prefs));
     core.stop_core().await;
 }
+
+#[tokio::test]
+async fn receiver_without_samba_still_requires_multicast_permission() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let host = state.host.clone();
+    let (generation, mut requests) = crate::test_support::HostRequests::connect(&host);
+    let responder = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let result = match request["method"].as_str().unwrap() {
+                "systemCapabilities" => serde_json::json!([]),
+                "mdnsMulticast" => serde_json::json!(false),
+                other => panic!("Unexpected platform primitive: {other}"),
+            };
+            host.reply(
+                generation,
+                serde_json::json!({"id": request["id"], "result": result}),
+            )
+            .unwrap();
+        }
+    });
+    let error = start_locked(&state, 45123).await.unwrap_err();
+    assert_eq!(error, "Multicast permission unavailable");
+    assert_eq!(state.dlna.snapshot().await.start_error, error);
+    assert!(!state.dlna.is_running());
+    assert!(state.cast.receiver_lease.lock().unwrap().is_none());
+    state.host.disconnect(generation);
+    core.stop_core().await;
+    responder.await.unwrap();
+}

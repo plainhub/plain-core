@@ -19,9 +19,6 @@ pub(crate) async fn stop_locked(state: &ServerState) {
 
 async fn start_locked(state: &ServerState, port: u16) -> Result<(), String> {
     let result: Result<(), String> = async {
-        crate::services::capabilities::require(&state.host, "LAN_SHARE")
-            .await
-            .map_err(|error| error.to_string())?;
         acquire_permission(state, &state.cast.receiver_lease).await?;
         if active_port(state) != Some(port) {
             release_permission(state, &state.cast.receiver_lease).await;

@@ -28,17 +28,10 @@ async fn receiver_preserves_state_rules_and_refuses_operations_after_stop() {
     assert!(management.retry_dlna_receiver().await.is_err());
 }
 
-async fn set_enabled(core: &ContentServer, enabled: bool) -> async_graphql::Response {
-    core.native_graphql()
+async fn set_enabled(core: &ContentServer, enabled: bool) -> Result<bool, String> {
+    core.native_management()
         .unwrap()
-        .execute(
-            async_graphql::Request::new(
-                "mutation($value:JSON!){setPref(key:\"dlna\",value:$value)}",
-            )
-            .variables(async_graphql::Variables::from_json(
-                json!({"value":enabled}),
-            )),
-        )
+        .set_pref("dlna", json!(enabled))
         .await
 }
 
@@ -52,7 +45,7 @@ async fn snapshot(core: &ContentServer) -> serde_json::Value {
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
-async fn enabling_receiver_uses_the_public_listeners_actual_bound_port() {
+async fn enabling_receiver_without_samba_uses_the_public_listeners_actual_bound_port() {
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
@@ -74,7 +67,7 @@ async fn enabling_receiver_uses_the_public_listeners_actual_bound_port() {
             if request["method"] == "systemCapabilities" {
                 host.reply(
                     generation,
-                    json!({"id":request["id"],"result":["LAN_SHARE"]}),
+                    json!({"id":request["id"],"result":[]}),
                 )
                 .unwrap();
                 continue;
@@ -85,15 +78,10 @@ async fn enabling_receiver_uses_the_public_listeners_actual_bound_port() {
                 .unwrap();
         }
     });
-    let response = set_enabled(&core, true).await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert!(set_enabled(&core, true).await.unwrap());
     let value = snapshot(&core).await;
     assert_eq!(value["enabled"], true);
-    assert_eq!(
-        value["isRunning"], true,
-        "{value}; command: {:?}",
-        response.data
-    );
+    assert_eq!(value["isRunning"], true, "{value}");
     assert_eq!(value["port"], http);
     core.stop_public().await;
     assert_eq!(snapshot(&core).await["isRunning"], false);
@@ -111,7 +99,7 @@ async fn enabling_receiver_uses_the_public_listeners_actual_bound_port() {
     let restarted = snapshot(&core).await;
     assert_eq!(restarted["isRunning"], true);
     assert_eq!(restarted["port"], restarted_http);
-    assert!(set_enabled(&core, false).await.errors.is_empty());
+    assert!(set_enabled(&core, false).await.unwrap());
     assert_eq!(snapshot(&core).await["isRunning"], false);
     core.shutdown().await;
 }
