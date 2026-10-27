@@ -1,4 +1,4 @@
-#[derive(Copy, Clone, Eq, PartialEq, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, serde::Serialize)]
 #[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum FileSortBy {
@@ -9,6 +9,23 @@ pub enum FileSortBy {
     NameAsc,
     NameDesc,
     TakenAtDesc,
+}
+
+impl<'de> serde::Deserialize<'de> for FileSortBy {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        super::enum_value::deserialize(
+            deserializer,
+            &[
+                (0, "DATE_ASC", Self::DateAsc),
+                (1, "DATE_DESC", Self::DateDesc),
+                (2, "SIZE_ASC", Self::SizeAsc),
+                (3, "SIZE_DESC", Self::SizeDesc),
+                (4, "NAME_ASC", Self::NameAsc),
+                (5, "NAME_DESC", Self::NameDesc),
+                (6, "TAKEN_AT_DESC", Self::TakenAtDesc),
+            ],
+        )
+    }
 }
 
 impl FileSortBy {

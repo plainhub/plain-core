@@ -1,6 +1,36 @@
 use crate::assembly::server::ContentServer;
 
 #[tokio::test]
+async fn startup_loads_published_integer_enums_and_returns_names_to_the_app() {
+    use plain_rs::prefs::{Prefs, pref_keys as keys};
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = plain_rs::prefs::default_path(directory.path());
+    let prefs = Prefs::load(&path).unwrap();
+    let expected = [
+        (keys::DARK_THEME, "OFF"),
+        (keys::AUDIO_PLAY_MODE, "SHUFFLE"),
+        (keys::AUDIO_SORT_BY, "SIZE_ASC"),
+        (keys::VIDEO_SORT_BY, "SIZE_ASC"),
+        (keys::IMAGE_SORT_BY, "SIZE_ASC"),
+        (keys::DOC_SORT_BY, "SIZE_ASC"),
+        (keys::FILE_SORT_BY, "SIZE_ASC"),
+        (keys::PACKAGE_SORT_BY, "SIZE_ASC"),
+    ];
+    for (key, _) in expected {
+        prefs.set(key, 2).unwrap();
+    }
+    let core = ContentServer::open(directory.path()).unwrap();
+    let values = core.native_management().unwrap().preferences().unwrap();
+    let stored = Prefs::load(&path).unwrap();
+    for (key, name) in expected {
+        assert_eq!(values[key], serde_json::json!(name));
+        assert_eq!(stored.get::<u64>(key).unwrap(), Some(2));
+    }
+    core.stop_core().await;
+}
+
+#[tokio::test]
 async fn native_resets_keep_identity_and_publish_once_per_change() {
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();

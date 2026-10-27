@@ -1,4 +1,5 @@
 mod sort;
+mod enum_value;
 pub use sort::FileSortBy;
 mod play_mode;
 pub use play_mode::MediaPlayMode;

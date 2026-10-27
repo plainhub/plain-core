@@ -20,10 +20,16 @@ pub struct PrefsQuery;
 
 #[Object]
 impl PrefsQuery {
-    async fn prefs(&self, ctx: &Context<'_>) -> Json<Value> {
-        Json(Value::Object(
-            prefs(ctx).entries().into_iter().filter(|(key, _)| allowed(ctx, key)).collect(),
-        ))
+    async fn prefs(&self, ctx: &Context<'_>) -> async_graphql::Result<Json<Value>> {
+        let prefs = prefs(ctx);
+        let mut values = serde_json::Map::new();
+        for (key, value) in prefs.entries() {
+            if allowed(ctx, &key) {
+                let value = plain_rs::prefs::settings::get_entry(prefs, &key)?.unwrap_or(value);
+                values.insert(key, value);
+            }
+        }
+        Ok(Json(Value::Object(values)))
     }
     async fn saved_value(&self, ctx: &Context<'_>, key: String) -> async_graphql::Result<Json<Value>> {
         saved_key(&key)?;

@@ -54,6 +54,11 @@ async fn reads_come_from_the_rust_store() {
 
     prefs.set("device_name", "Pixel").unwrap();
     prefs.set("editor_wrap_content", json!(true)).unwrap();
+    prefs.set("dark_theme", 2).unwrap();
+    prefs.set("audio_play_mode", 2).unwrap();
+    for key in ["audio_sort_by", "video_sort_by", "image_sort_by", "doc_sort_by", "file_sort_by", "pkg_sort_by"] {
+        prefs.set(key, 2).unwrap();
+    }
 
     let response = schema.execute(r#"query { prefs }"#).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -61,6 +66,12 @@ async fn reads_come_from_the_rust_store() {
     assert_eq!(prefs.get::<String>("device_name").unwrap().unwrap(), "Pixel");
     assert_eq!(data["prefs"]["editor_wrap_content"], json!(true));
     assert_eq!(data["prefs"]["device_name"], "Pixel");
+    assert_eq!(data["prefs"]["dark_theme"], "OFF");
+    assert_eq!(data["prefs"]["audio_play_mode"], "SHUFFLE");
+    for key in ["audio_sort_by", "video_sort_by", "image_sort_by", "doc_sort_by", "file_sort_by", "pkg_sort_by"] {
+        assert_eq!(data["prefs"][key], "SIZE_ASC");
+    }
+    assert_eq!(prefs.get::<u64>("dark_theme").unwrap(), Some(2));
     prefs.set("http_port", 8080).unwrap();
     prefs.set("master_secret", "not public").unwrap();
     let response = schema.execute("{prefs}").await;
@@ -72,7 +83,14 @@ async fn reads_come_from_the_rust_store() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["prefs"]["http_port"], 8080);
+    assert_eq!(data["prefs"]["dark_theme"], "OFF");
+    assert_eq!(data["prefs"]["audio_play_mode"], "SHUFFLE");
     assert!(data["prefs"].get("master_secret").is_none());
+
+    prefs.set("dark_theme", 99).unwrap();
+    let response = schema.execute("{prefs}").await;
+    assert!(!response.errors.is_empty());
+    assert_eq!(prefs.get::<u64>("dark_theme").unwrap(), Some(99));
 
 }
 
