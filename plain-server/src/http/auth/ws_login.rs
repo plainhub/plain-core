@@ -1,6 +1,6 @@
-use plain_rs::prefs::security::PasswordType;
 use crate::assembly::server::ServerState;
 use plain_rs::db::SessionRow;
+use plain_rs::prefs::security::PasswordType;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256, Sha512};
 use std::{
@@ -28,21 +28,17 @@ pub(crate) fn admit_attempt(
     state: &ServerState,
     client_id: &str,
     client_ip: &str,
-    attempt_id: &str,
 ) -> anyhow::Result<()> {
     anyhow::ensure!(!client_id.is_empty(), "Client id is required");
     let allowed = state
         .login_attempts
         .lock()
         .map_err(|_| anyhow::anyhow!("Login state unavailable"))?
-        .acquire(
-            &if client_ip.is_empty() {
-                format!("cid:{client_id}")
-            } else {
-                client_ip.into()
-            },
-            attempt_id,
-        );
+        .acquire(&if client_ip.is_empty() {
+            format!("cid:{client_id}")
+        } else {
+            client_ip.into()
+        });
     anyhow::ensure!(allowed, "too_many_login_attempts");
     Ok(())
 }
@@ -56,7 +52,7 @@ fn now_ms() -> u64 {
 
 #[derive(Default)]
 pub(crate) struct LoginAttempts {
-    entries: HashMap<String, Vec<(String, Instant)>>,
+    entries: HashMap<String, Vec<Instant>>,
     pending: HashMap<String, Pending>,
     recovery_pending: bool,
 }
@@ -75,7 +71,9 @@ impl LoginAttempts {
                 let mut attempts = state.login_attempts.lock().unwrap();
                 if let Ok(permit) = permit {
                     if let Err(error) = state.host.notify_reserved_callback(
-                        "systemWebLoginSnapshot", attempts.host_snapshot(), permit,
+                        "systemWebLoginSnapshot",
+                        attempts.host_snapshot(),
+                        permit,
                     ) {
                         log::warn!("Web login snapshot callback: {error}");
                     }
@@ -89,9 +87,14 @@ impl LoginAttempts {
     }
 
     pub(crate) fn host_snapshot(&self) -> Value {
-        let mut pending: Vec<_> = self.pending.iter()
-            .filter(|(_, item)| item.at.elapsed() < Duration::from_secs(300)).collect();
-        pending.sort_by(|(left_id, left), (right_id, right)| left.at.cmp(&right.at).then(left_id.cmp(right_id)));
+        let mut pending: Vec<_> = self
+            .pending
+            .iter()
+            .filter(|(_, item)| item.at.elapsed() < Duration::from_secs(300))
+            .collect();
+        pending.sort_by(|(left_id, left), (right_id, right)| {
+            left.at.cmp(&right.at).then(left_id.cmp(right_id))
+        });
         let requests: Vec<_> = pending.into_iter().map(|(id, item)| {
             let mut request = item.request.clone();
             request["password"] = json!("");
@@ -104,34 +107,25 @@ impl LoginAttempts {
         json!({"requests":requests})
     }
 
-    fn acquire(&mut self, key: &str, attempt_id: &str) -> bool {
+    fn acquire(&mut self, key: &str) -> bool {
         let now = Instant::now();
-        if self.entries.len() > MAX_TRACKED_CLIENTS {
+        if !self.entries.contains_key(key) && self.entries.len() >= MAX_TRACKED_CLIENTS {
             self.entries.retain(|_, attempts| {
-                attempts.retain(|(_, at)| now.duration_since(*at) < LOGIN_ATTEMPT_WINDOW);
+                attempts.retain(|at| now.duration_since(*at) < LOGIN_ATTEMPT_WINDOW);
                 !attempts.is_empty()
             });
+            if self.entries.len() >= MAX_TRACKED_CLIENTS {
+                return false;
+            }
         }
         let attempts = self.entries.entry(key.to_owned()).or_default();
-        attempts.retain(|(_, at)| now.duration_since(*at) < LOGIN_ATTEMPT_WINDOW);
+        attempts.retain(|at| now.duration_since(*at) < LOGIN_ATTEMPT_WINDOW);
         if attempts.len() >= LOGIN_ATTEMPT_LIMIT {
             return false;
         }
-        attempts.push((attempt_id.to_owned(), now));
+        attempts.push(now);
         true
     }
-}
-
-pub(crate) fn finish_attempt(state: &ServerState, attempt_id: &str) {
-    state
-        .login_attempts
-        .lock()
-        .unwrap()
-        .entries
-        .retain(|_, attempts| {
-            attempts.retain(|(id, _)| id != attempt_id);
-            !attempts.is_empty()
-        });
 }
 
 struct Pending {
@@ -310,7 +304,11 @@ impl Confirmation {
 }
 
 pub(crate) fn notify_closed(state: &ServerState, attempts: &mut LoginAttempts, request_id: &str) {
-    attempts.notify_host(state, "systemWebLoginClosed", json!({"requestId":request_id}));
+    attempts.notify_host(
+        state,
+        "systemWebLoginClosed",
+        json!({"requestId":request_id}),
+    );
 }
 
 fn text(value: &Value, field: &str) -> String {
@@ -481,7 +479,9 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
     }
     let (pending, request_id) = match request {
         Request::Cancel { request_id } => {
-            let mut attempts = state.login_attempts.lock()
+            let mut attempts = state
+                .login_attempts
+                .lock()
                 .map_err(|_| anyhow::anyhow!("Login state unavailable"))?;
             if attempts.pending.remove(&request_id).is_some() {
                 notify_closed(state, &mut attempts, &request_id);
@@ -490,9 +490,13 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
         }
         Request::Complete { request_id } => {
             let pending = {
-                let mut attempts = state.login_attempts.lock()
+                let mut attempts = state
+                    .login_attempts
+                    .lock()
                     .map_err(|_| anyhow::anyhow!("Login state unavailable"))?;
-                let pending = attempts.pending.remove(&request_id)
+                let pending = attempts
+                    .pending
+                    .remove(&request_id)
                     .ok_or_else(|| anyhow::anyhow!("Login confirmation is no longer pending"))?;
                 notify_closed(state, &mut attempts, &request_id);
                 pending

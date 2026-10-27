@@ -167,12 +167,17 @@ pub(super) async fn run(
                 _ => anyhow::bail!("invalid_auth_response"),
             }
         };
-        let channel = client.accept(
+        let (channel, reveal) = client.accept(
             &response,
             &public_key,
             &target.target.device_id,
             chrono::Utc::now().timestamp_millis() as u64,
         )?;
+        socket
+            .send(tokio_tungstenite::tungstenite::Message::Text(
+                serde_json::to_string(&reveal)?.into(),
+            ))
+            .await?;
         request["loginContext"] = json!(channel.context);
         state.pairing_runtime.attempts.set_verification_code(
             state,

@@ -163,15 +163,15 @@ fn signature_data_matches_the_client_verification_format() {
 #[test]
 fn login_attempts_are_rate_limited_per_key() {
     let mut attempts = LoginAttempts::default();
-    for index in 0..LOGIN_ATTEMPT_LIMIT {
-        assert!(attempts.acquire("fixture-a", &index.to_string()));
+    for _ in 0..LOGIN_ATTEMPT_LIMIT {
+        assert!(attempts.acquire("fixture-a"));
     }
     assert!(
-        !attempts.acquire("fixture-a", "blocked"),
+        !attempts.acquire("fixture-a"),
         "the window must lock out"
     );
     assert!(
-        attempts.acquire("fixture-b", "unrelated"),
+        attempts.acquire("fixture-b"),
         "another address is unaffected"
     );
 }
@@ -287,7 +287,7 @@ async fn passwordless_browser(
         panic!("signed hello required")
     };
     let public = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
-    let channel = client
+    let (channel, reveal) = client
         .accept(
             &serde_json::from_str(&hello).unwrap(),
             &plain_rs::utils::base64::base64_encode(&public[32..]),
@@ -295,6 +295,7 @@ async fn passwordless_browser(
             now_ms(),
         )
         .unwrap();
+    socket.send(Message::Text(serde_json::to_string(&reveal).unwrap().into())).await.unwrap();
     let session = plain_rs::crypto::EcdhSession::generate();
     let request = json!({"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
     let encrypted = channel
@@ -591,38 +592,54 @@ async fn disconnect_expiry_mode_changes_and_repeated_requests_cannot_create_a_pa
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
-async fn successful_passwordless_logins_skip_disabled_approval_and_do_not_exhaust_attempts() {
+async fn successful_passwordless_logins_still_count_toward_the_rolling_ip_limit() {
+    use futures_util::SinkExt;
+    use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
     state.prefs.set("login_require_approval", false).unwrap();
-    admit_attempt(&state, "failed-client", "127.0.0.1", "failed-attempt").unwrap();
-    for index in 0..LOGIN_ATTEMPT_LIMIT + 2 {
+    for index in 0..LOGIN_ATTEMPT_LIMIT {
         let client_id = format!("successful-browser-{index}");
         let (mut socket, _, _, _) = passwordless_browser(&state, port, &client_id).await;
         assert!(state.db.session_get(&client_id).unwrap().is_some());
         assert!(state.login_attempts.lock().unwrap().pending.is_empty());
-        let attempts = state.login_attempts.lock().unwrap();
-        let remaining = attempts.entries.get("127.0.0.1").unwrap();
-        assert_eq!(remaining.len(), 1);
-        assert_eq!(remaining[0].0, "failed-attempt");
-        drop(attempts);
         socket.close(None).await.unwrap();
     }
+    let (mut socket, _) =
+        tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid=blocked&auth=2"))
+            .await
+            .unwrap();
+    let (_, hello) = super::super::login_channel::Client::start("blocked").unwrap();
+    socket
+        .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
+        .await
+        .unwrap();
+    assert!(
+        matches!(login_frame(&mut socket).await, Message::Close(Some(close)) if close.reason == "too_many_login_attempts")
+    );
+    assert!(state.db.session_get("blocked").unwrap().is_none());
     server.shutdown().await;
 }
 
-#[tokio::test]
-async fn completing_an_attempt_preserves_other_attempts_from_the_same_address() {
-    let directory = tempfile::tempdir().unwrap();
-    let server = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
-    let state = server.runtime_state();
-    admit_attempt(&state, "client", "fixture", "failure").unwrap();
-    admit_attempt(&state, "client", "fixture", "success").unwrap();
-    finish_attempt(&state, "success");
-    let attempts = state.login_attempts.lock().unwrap();
-    let remaining = attempts.entries.get("fixture").unwrap();
-    assert_eq!(remaining.len(), 1);
-    assert_eq!(remaining[0].0, "failure");
+#[test]
+fn attempt_history_expires_and_never_exceeds_the_tracked_address_bound() {
+    let mut attempts = LoginAttempts::default();
+    for index in 0..MAX_TRACKED_CLIENTS {
+        assert!(attempts.acquire(&format!("address-{index}")));
+    }
+    assert!(!attempts.acquire("overflow"));
+    assert_eq!(attempts.entries.len(), MAX_TRACKED_CLIENTS);
+    for times in attempts.entries.values_mut() {
+        for at in times {
+            *at -= LOGIN_ATTEMPT_WINDOW;
+        }
+    }
+    assert!(attempts.acquire("new-address"));
+    assert_eq!(attempts.entries.len(), 1);
+    for _ in 1..LOGIN_ATTEMPT_LIMIT {
+        assert!(attempts.acquire("new-address"));
+    }
+    assert!(!attempts.acquire("new-address"));
 }
 
 #[test]
@@ -644,4 +661,82 @@ fn recovery_requests_follow_creation_order_independent_of_hash_iteration() {
     let actual: Vec<_> = snapshot["requests"].as_array().unwrap().iter()
         .map(|value| value["requestId"].as_str().unwrap()).collect();
     assert_eq!(actual, ids);
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any_grant() {
+    use futures_util::SinkExt;
+    use tokio_tungstenite::tungstenite::Message;
+    for variant in [
+        "before-commitment",
+        "missing-reveal",
+        "changed-reveal",
+        "repeated-reveal",
+    ] {
+        let (_directory, server, port) = passwordless_server().await;
+        let state = server.runtime_state();
+        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/auth?cid=browser&auth=2"
+        ))
+        .await
+        .unwrap();
+        if variant == "before-commitment" {
+            socket
+                .send(Message::Binary(vec![0; 40].into()))
+                .await
+                .unwrap();
+        } else {
+            let (client, hello) = super::super::login_channel::Client::start("browser").unwrap();
+            socket
+                .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
+                .await
+                .unwrap();
+            let Message::Text(response) = login_frame(&mut socket).await else {
+                panic!("signed challenge required")
+            };
+            let keypair = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+            let (channel, mut reveal) = client
+                .accept(
+                    &serde_json::from_str(&response).unwrap(),
+                    &plain_rs::utils::base64::base64_encode(&keypair[32..]),
+                    "",
+                    now_ms(),
+                )
+                .unwrap();
+            match variant {
+                "missing-reveal" => socket
+                    .send(Message::Binary(
+                        channel.encrypt_request(b"{}", now_ms()).unwrap().into(),
+                    ))
+                    .await
+                    .unwrap(),
+                "changed-reveal" => {
+                    reveal.nonce = plain_rs::utils::base64::base64_encode(&[9; 32]);
+                    socket
+                        .send(Message::Text(
+                            serde_json::to_string(&reveal).unwrap().into(),
+                        ))
+                        .await
+                        .unwrap();
+                }
+                "repeated-reveal" => {
+                    let frame = serde_json::to_string(&reveal).unwrap();
+                    socket
+                        .send(Message::Text(frame.clone().into()))
+                        .await
+                        .unwrap();
+                    socket.send(Message::Text(frame.into())).await.unwrap();
+                }
+                _ => unreachable!(),
+            }
+        }
+        assert!(
+            matches!(login_frame(&mut socket).await, Message::Close(Some(close)) if close.reason == "invalid_login_request"),
+            "{variant}"
+        );
+        assert!(state.db.session_get("browser").unwrap().is_none());
+        assert!(state.login_attempts.lock().unwrap().pending.is_empty());
+        server.shutdown().await;
+    }
 }

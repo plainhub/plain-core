@@ -162,19 +162,16 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             let result: Value = serde_json::from_slice(&decrypted).unwrap();
             assert_eq!(result["status"], "COMPLETED");
             let state = server.runtime_state();
-            for index in 0..3 {
+            for _ in 0..3 {
                 crate::http::auth::ws_login::admit_attempt(
                     &state,
                     cid,
                     "127.0.0.1",
-                    &format!("remaining-{index}"),
                 )
                 .unwrap();
             }
-            crate::http::auth::ws_login::admit_attempt(&state, cid, "127.0.0.1", "last-slot")
-                .unwrap();
             assert!(
-                crate::http::auth::ws_login::admit_attempt(&state, cid, "127.0.0.1", "blocked")
+                crate::http::auth::ws_login::admit_attempt(&state, cid, "127.0.0.1")
                     .is_err()
             );
             assert!(
@@ -290,7 +287,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
             assert_eq!(u16::from(frame.code), 1013);
             assert_eq!(
                 frame.reason,
-                if attempt == 6 {
+                if attempt >= 5 {
                     "too_many_login_attempts"
                 } else {
                     "invalid_password"

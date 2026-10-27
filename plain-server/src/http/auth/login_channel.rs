@@ -8,43 +8,66 @@ use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-const PROTOCOL: &str = "plain-web-login-v1";
+const DOMAIN: &str = "plain-web-login-v2";
 const LIFETIME_MS: u64 = 300_000;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ClientHello {
-    pub protocol: String,
-    pub public_key: String,
-    pub nonce: String,
+    pub commitment: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ClientReveal {
+    pub public_key: String,
+    pub nonce: String,
+}
+
+impl ClientReveal {
+    fn commitment(&self, client_id: &str) -> Result<String> {
+        Ok(base64_encode(&Sha256::digest(serde_json::to_vec(
+            &serde_json::json!([DOMAIN, client_id, self.public_key, self.nonce,]),
+        )?)))
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ServerHello {
-    pub protocol: String,
     pub client_id: String,
     pub device_id: String,
-    pub client_public_key: String,
+    pub client_commitment: String,
     pub server_public_key: String,
-    pub client_nonce: String,
     pub server_nonce: String,
     pub expires_at: u64,
     pub signature: String,
 }
 
 impl ServerHello {
-    fn transcript(&self) -> Result<Vec<u8>> {
-        Ok(serde_json::to_vec(&serde_json::json!([
-            self.protocol,
-            self.client_id,
-            self.device_id,
-            self.client_public_key,
-            self.server_public_key,
-            self.client_nonce,
-            self.server_nonce,
-            self.expires_at,
-        ]))?)
+    fn fields(&self) -> Vec<serde_json::Value> {
+        vec![
+            DOMAIN.into(),
+            self.client_id.clone().into(),
+            self.device_id.clone().into(),
+            self.client_commitment.clone().into(),
+            self.server_public_key.clone().into(),
+            self.server_nonce.clone().into(),
+            self.expires_at.into(),
+        ]
+    }
+
+    fn signed_transcript(&self) -> Result<Vec<u8>> {
+        Ok(serde_json::to_vec(&self.fields())?)
+    }
+
+    fn transcript(&self, reveal: &ClientReveal) -> Result<Vec<u8>> {
+        let mut fields = self.fields();
+        fields.extend([
+            reveal.public_key.clone().into(),
+            reveal.nonce.clone().into(),
+        ]);
+        Ok(serde_json::to_vec(&fields)?)
     }
 }
 
@@ -57,21 +80,22 @@ pub(crate) struct Client {
 impl Client {
     pub(crate) fn start(client_id: &str) -> Result<(Self, ClientHello)> {
         identity(client_id)?;
-        let key = EcdhSession::generate();
-        let nonce = nonce();
-        let hello = ClientHello {
-            protocol: PROTOCOL.into(),
-            public_key: base64_encode(&key.public_key_bytes),
-            nonce: nonce.clone(),
+        let client = Self {
+            client_id: client_id.into(),
+            key: EcdhSession::generate(),
+            nonce: nonce(),
         };
-        Ok((
-            Self {
-                client_id: client_id.into(),
-                key,
-                nonce,
-            },
-            hello,
-        ))
+        let hello = ClientHello {
+            commitment: client.reveal().commitment(client_id)?,
+        };
+        Ok((client, hello))
+    }
+
+    fn reveal(&self) -> ClientReveal {
+        ClientReveal {
+            public_key: base64_encode(&self.key.public_key_bytes),
+            nonce: self.nonce.clone(),
+        }
     }
 
     pub(crate) fn accept(
@@ -80,12 +104,11 @@ impl Client {
         public_key: &str,
         expected_device: &str,
         now: u64,
-    ) -> Result<Channel> {
-        ensure!(hello.protocol == PROTOCOL, "invalid_auth_response");
+    ) -> Result<(Channel, ClientReveal)> {
+        let reveal = self.reveal();
         ensure!(hello.client_id == self.client_id, "invalid_auth_response");
-        ensure!(hello.client_nonce == self.nonce, "invalid_auth_response");
         ensure!(
-            hello.client_public_key == base64_encode(&self.key.public_key_bytes),
+            hello.client_commitment == reveal.commitment(&self.client_id)?,
             "invalid_auth_response"
         );
         identity(&hello.device_id)?;
@@ -97,19 +120,83 @@ impl Client {
         canonical(&hello.server_nonce, 32)?;
         let server_public = canonical(&hello.server_public_key, 65)?;
         canonical(public_key, 32)?;
-        let transcript = hello.transcript()?;
         ensure!(
-            ed25519_verify(public_key, &transcript, &hello.signature),
+            ed25519_verify(public_key, &hello.signed_transcript()?, &hello.signature),
             "signature_verification_failed"
         );
         let shared = self
             .key
             .compute_shared_key(&server_public)
             .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))?;
+        Ok((
+            Channel::new(
+                &shared,
+                &hello.transcript(&reveal)?,
+                hello.expires_at.min(now.saturating_add(LIFETIME_MS)),
+            ),
+            reveal,
+        ))
+    }
+}
+
+pub(crate) struct ServerHandshake {
+    key: EcdhSession,
+    hello: ServerHello,
+}
+
+impl ServerHandshake {
+    pub(crate) fn start(
+        client_id: &str,
+        device_id: &str,
+        hello: &ClientHello,
+        signing_key: &[u8],
+        now: u64,
+    ) -> Result<(Self, ServerHello)> {
+        identity(client_id)?;
+        identity(device_id)?;
+        canonical(&hello.commitment, 32)?;
+        let key = EcdhSession::generate();
+        let mut response = ServerHello {
+            client_id: client_id.into(),
+            device_id: device_id.into(),
+            client_commitment: hello.commitment.clone(),
+            server_public_key: base64_encode(&key.public_key_bytes),
+            server_nonce: nonce(),
+            expires_at: now
+                .checked_add(LIFETIME_MS)
+                .ok_or_else(|| anyhow::anyhow!("login_expired"))?,
+            signature: String::new(),
+        };
+        response.signature = ed25519_sign(signing_key, &response.signed_transcript()?);
+        ensure!(
+            !response.signature.is_empty(),
+            "signature_verification_failed"
+        );
+        Ok((
+            Self {
+                key,
+                hello: response.clone(),
+            },
+            response,
+        ))
+    }
+
+    pub(crate) fn finish(self, reveal: &ClientReveal, now: u64) -> Result<Channel> {
+        ensure!(now < self.hello.expires_at, "login_expired");
+        canonical(&reveal.nonce, 32)?;
+        ensure!(
+            reveal.commitment(&self.hello.client_id)? == self.hello.client_commitment,
+            "invalid_login_reveal"
+        );
+        let client_public = canonical(&reveal.public_key, 65)?;
+        let shared = self
+            .key
+            .compute_shared_key(&client_public)
+            .ok_or_else(|| anyhow::anyhow!("invalid_login_reveal"))?;
         Ok(Channel::new(
             &shared,
-            &transcript,
-            hello.expires_at.min(now.saturating_add(LIFETIME_MS)),
+            &self.hello.transcript(reveal)?,
+            self.hello.expires_at,
         ))
     }
 }
@@ -123,59 +210,18 @@ pub(crate) struct Channel {
 }
 
 impl Channel {
-    pub(crate) fn accept(
-        client_id: &str,
-        device_id: &str,
-        hello: &ClientHello,
-        signing_key: &[u8],
-        now: u64,
-    ) -> Result<(Self, ServerHello)> {
-        identity(client_id)?;
-        identity(device_id)?;
-        ensure!(hello.protocol == PROTOCOL, "invalid_login_hello");
-        canonical(&hello.nonce, 32)?;
-        let client_public = canonical(&hello.public_key, 65)?;
-        let server_key = EcdhSession::generate();
-        let mut response = ServerHello {
-            protocol: PROTOCOL.into(),
-            client_id: client_id.into(),
-            device_id: device_id.into(),
-            client_public_key: hello.public_key.clone(),
-            server_public_key: base64_encode(&server_key.public_key_bytes),
-            client_nonce: hello.nonce.clone(),
-            server_nonce: nonce(),
-            expires_at: now
-                .checked_add(LIFETIME_MS)
-                .ok_or_else(|| anyhow::anyhow!("login_expired"))?,
-            signature: String::new(),
-        };
-        let transcript = response.transcript()?;
-        response.signature = ed25519_sign(signing_key, &transcript);
-        ensure!(
-            !response.signature.is_empty(),
-            "signature_verification_failed"
-        );
-        let shared = server_key
-            .compute_shared_key(&client_public)
-            .ok_or_else(|| anyhow::anyhow!("invalid_login_hello"))?;
-        Ok((
-            Self::new(&shared, &transcript, response.expires_at),
-            response,
-        ))
-    }
-
     fn new(shared: &[u8; 32], transcript: &[u8], expires_at: u64) -> Self {
         let context = Sha256::digest(transcript);
-        let verification_code = context[..16]
-            .chunks(4)
-            .map(plain_rs::utils::hex::bytes_to_hex)
-            .collect::<Vec<_>>()
-            .join(" ");
+        let sas = derive(shared, &context, b"plain-web-login-v2/sas");
+        let digits = format!(
+            "{:08}",
+            u64::from_be_bytes(sas[..8].try_into().unwrap()) % 100_000_000
+        );
         Self {
-            request_key: derive(shared, &context, b"plain-web-login-v1/request"),
-            response_key: derive(shared, &context, b"plain-web-login-v1/response"),
+            request_key: derive(shared, &context, b"plain-web-login-v2/request"),
+            response_key: derive(shared, &context, b"plain-web-login-v2/response"),
             context: base64_encode(&context),
-            verification_code,
+            verification_code: format!("{} {}", &digits[..4], &digits[4..]),
             expires_at,
         }
     }

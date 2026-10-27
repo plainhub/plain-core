@@ -137,7 +137,7 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
         waiting.verification_code.as_deref(),
         request["request"]["verificationCode"].as_str()
     );
-    assert_eq!(waiting.verification_code.unwrap().len(), 35);
+    assert_eq!(waiting.verification_code.unwrap().len(), 9);
     assert!(remote_state.db.session_get(&local_id).unwrap().is_none());
     assert!(
         plain_rs::db::chat_store::peers::all(&state.db)
