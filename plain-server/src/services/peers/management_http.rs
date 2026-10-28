@@ -32,14 +32,8 @@ pub(crate) async fn query(
         matches!(base.scheme(), "https" | "http") && base.host_str().is_some(),
         "Invalid management address"
     );
-    let body = format!(
-        "{}|{}|{}",
-        chrono::Utc::now().timestamp_millis(),
-        uuid::Uuid::new_v4(),
-        request
-    );
-    let encrypted = plain_rs::crypto::xchacha_encrypt_raw(key, body.as_bytes())
-        .ok_or_else(|| anyhow::anyhow!("invalid_session"))?;
+    let encrypted = plain_rs::transport::http_request::encrypt(key, &request.to_string())
+        .map_err(|_| anyhow::anyhow!("invalid_session"))?;
     let context = plain_rs::transport::http_response::Context::new("/graphql", &encrypted);
     let response = state
         .lan
