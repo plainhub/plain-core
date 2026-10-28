@@ -149,7 +149,7 @@ pub fn chat_to_json(c: &DChat) -> Value {
         "id": c.id, "fromId": c.from_id, "toId": c.to_id,
         "channelId": c.channel_id, "content": c.content,
         "createdAt": c.created_at, "updatedAt": c.updated_at,
-        "status": c.status, "statusData": c.status_data,
+        "status": c.status, "statusData": c.status_data.as_deref().unwrap_or_default(),
     })
 }
 
