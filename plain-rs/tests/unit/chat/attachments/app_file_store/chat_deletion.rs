@@ -179,7 +179,7 @@ fn discovery_and_unpair_update_only_owned_fields_and_require_paired_peer() {
     let unpaired = peers::get(&db, "peer").unwrap().unwrap();
     assert_eq!(unpaired.status, PeerStatus::Unpaired);
     assert_eq!(unpaired.key, "current-key");
-    assert_eq!(unpaired.token, "session");
+    assert!(unpaired.token.is_empty());
     assert!(
         peers::discovered(&db, "peer", &[], 1, "stale", DeviceType::Phone)
             .unwrap()
