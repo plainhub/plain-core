@@ -1,4 +1,97 @@
 use super::*;
+
+#[test]
+fn config_preserves_chains_mixed_sections_line_endings_and_alpn() {
+    let first = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let second = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let certificate = first.cert.pem();
+    let key = first.key_pair.serialize_pem();
+    let chain = format!("text before PEM\n{key}{certificate}{}", second.cert.pem());
+    let mixed_key = format!("{certificate}{key}");
+    let configured = config(chain.as_bytes(), mixed_key.as_bytes()).unwrap();
+    assert_eq!(
+        configured.alpn_protocols,
+        [b"h2".to_vec(), b"http/1.1".to_vec()]
+    );
+    assert_eq!(
+        signature(chain.as_bytes()).unwrap(),
+        signature(certificate.as_bytes()).unwrap()
+    );
+    assert!(
+        config(
+            certificate.replace('\n', "\r\n").as_bytes(),
+            key.replace('\n', "\r\n").as_bytes()
+        )
+        .is_ok()
+    );
+    assert!(config(certificate.trim_end().as_bytes(), key.trim_end().as_bytes()).is_ok());
+    assert!(
+        config(
+            certificate.as_bytes(),
+            second.key_pair.serialize_pem().as_bytes()
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn pem_failures_are_rejected_without_skipping_a_malformed_recognized_section() {
+    let identity = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let certificate = identity.cert.pem();
+    let key = identity.key_pair.serialize_pem();
+    for malformed in [
+        "-----BEGIN CERTIFICATE-----\n@@@\n-----END CERTIFICATE-----\n",
+        "-----BEGIN CERTIFICATE-----\nAQID\n",
+        "-----BEGIN CERTIFICATE-----\nAQID\n-----END PRIVATE KEY-----\n",
+    ] {
+        assert!(signature(malformed.as_bytes()).is_err());
+        assert!(config(malformed.as_bytes(), key.as_bytes()).is_err());
+    }
+    let bad_key = "-----BEGIN PRIVATE KEY-----\n@@@\n-----END PRIVATE KEY-----\n";
+    assert!(config(certificate.as_bytes(), format!("{bad_key}{key}").as_bytes()).is_err());
+    assert!(config(format!("{certificate}{bad_key}").as_bytes(), key.as_bytes()).is_err());
+    assert!(config(b"", key.as_bytes()).is_err());
+    assert_eq!(
+        config(certificate.as_bytes(), b"no key").err().as_deref(),
+        Some("TLS private key is missing")
+    );
+}
+
+#[test]
+fn private_key_reader_preserves_all_three_pem_encodings_and_first_key_selection() {
+    for (label, kind) in [
+        ("RSA PRIVATE KEY", "pkcs1"),
+        ("EC PRIVATE KEY", "sec1"),
+        ("PRIVATE KEY", "pkcs8"),
+    ] {
+        let pem = format!("-----BEGIN {label}-----\nAQID\n-----END {label}-----\n");
+        let key = PrivateKeyDer::pem_slice_iter(pem.as_bytes())
+            .next()
+            .unwrap()
+            .unwrap();
+        assert_eq!(key.secret_der(), [1, 2, 3]);
+        assert_eq!(
+            match key {
+                PrivateKeyDer::Pkcs1(_) => "pkcs1",
+                PrivateKeyDer::Sec1(_) => "sec1",
+                PrivateKeyDer::Pkcs8(_) => "pkcs8",
+                _ => unreachable!(),
+            },
+            kind
+        );
+    }
+    let identity = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let certificate = identity.cert.pem();
+    let key = identity.key_pair.serialize_pem();
+    let following = "-----BEGIN PRIVATE KEY-----\n@@@\n-----END PRIVATE KEY-----\n";
+    assert!(
+        config(
+            certificate.as_bytes(),
+            format!("{key}{following}").as_bytes()
+        )
+        .is_ok()
+    );
+}
 #[test]
 fn persists_rotates_and_rejects_invalid_identity() {
     let dir = std::env::temp_dir().join(format!("plain-mobile-tls-{}", std::process::id()));

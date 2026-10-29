@@ -1,3 +1,4 @@
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
 use serde_json::{Value, json};
 use std::{path::Path, sync::Mutex};
 static LOCK: Mutex<()> = Mutex::new(());
@@ -82,7 +83,7 @@ fn tlv<'a>(data: &mut &'a [u8], tag: u8) -> Result<&'a [u8], String> {
     Ok(value)
 }
 fn signature(cert: &[u8]) -> Result<Vec<u8>, String> {
-    let der = rustls_pemfile::certs(&mut std::io::Cursor::new(cert))
+    let der = CertificateDer::pem_slice_iter(cert)
         .next()
         .ok_or("Missing certificate")?
         .map_err(|e| e.to_string())?;
@@ -233,10 +234,12 @@ pub(crate) fn config(
     certificate_pem: &[u8],
     private_key_pem: &[u8],
 ) -> Result<rustls::ServerConfig, String> {
-    let certificates = rustls_pemfile::certs(&mut std::io::Cursor::new(certificate_pem))
+    let certificates = CertificateDer::pem_slice_iter(certificate_pem)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
-    let key = rustls_pemfile::private_key(&mut std::io::Cursor::new(private_key_pem))
+    let key = PrivateKeyDer::pem_slice_iter(private_key_pem)
+        .next()
+        .transpose()
         .map_err(|error| error.to_string())?
         .ok_or("TLS private key is missing")?;
     let mut config = rustls::ServerConfig::builder_with_provider(std::sync::Arc::new(

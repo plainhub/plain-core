@@ -268,7 +268,8 @@ async fn native_certificate_rotation_uses_the_server_identity_and_invalid_import
     assert!(!rotated.is_empty());
     let current = certificate();
     assert_ne!(first, current);
-    let der = rustls_pemfile::certs(&mut std::io::Cursor::new(&current))
+    use rustls::pki_types::pem::PemObject;
+    let der = rustls::pki_types::CertificateDer::pem_slice_iter(&current)
         .next()
         .unwrap()
         .unwrap();

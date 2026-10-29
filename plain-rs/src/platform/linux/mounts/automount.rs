@@ -1,6 +1,6 @@
+use crate::kv::Db;
 use crate::platform::linux::disks::blockdev::flatten_devices;
 use crate::platform::linux::disks::blockdev::run_lsblk;
-use crate::kv::Db;
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -106,9 +106,7 @@ fn mount_by_uuid(fs_uuid: &str, target: &str) -> Result<()> {
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub fn parse_usb_slot(mountpoint: &str) -> Option<usize> {
-    let rest = mountpoint
-        .strip_prefix(MOUNT_ROOT)?
-        .strip_prefix('/')?;
+    let rest = mountpoint.strip_prefix(MOUNT_ROOT)?.strip_prefix('/')?;
     let num = rest.strip_prefix(USB_PREFIX)?;
     if num.is_empty() || !num.bytes().all(|b| b.is_ascii_digit()) {
         return None;
@@ -135,15 +133,41 @@ fn is_mountpoint(path: &str) -> bool {
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 #[cfg(target_os = "linux")]
 fn unmount_all_at(path: &str) -> Result<()> {
-    use nix::mount::{MntFlags, umount, umount2};
+    let c_path = std::ffi::CString::new(path)?;
+    unmount_layers(
+        path,
+        || is_mountpoint(path),
+        |lazy| {
+            let result = unsafe {
+                if lazy {
+                    libc::umount2(c_path.as_ptr(), libc::MNT_DETACH)
+                } else {
+                    libc::umount(c_path.as_ptr())
+                }
+            };
+            if result == 0 {
+                Ok(())
+            } else {
+                Err(std::io::Error::last_os_error().into())
+            }
+        },
+    )
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn unmount_layers(
+    path: &str,
+    mut mounted: impl FnMut() -> bool,
+    mut unmount: impl FnMut(bool) -> Result<()>,
+) -> Result<()> {
     const MAX_LAYERS: usize = 32;
     for _ in 0..MAX_LAYERS {
-        if !is_mountpoint(path) {
+        if !mounted() {
             return Ok(());
         }
-        if umount(path).is_err() {
-            if umount2(path, MntFlags::MNT_DETACH).is_err() {
-                return umount(path).map_err(|e| anyhow!("{e}"));
+        if unmount(false).is_err() {
+            if unmount(true).is_err() {
+                return unmount(false);
             }
         }
     }

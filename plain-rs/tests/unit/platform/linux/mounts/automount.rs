@@ -1,5 +1,90 @@
 use super::*;
 
+#[test]
+fn unmount_layers_preserves_normal_lazy_and_final_retry_order() {
+    for (mounted, outcomes, expected, success) in [
+        (vec![false], vec![], vec![], true),
+        (
+            vec![true, true, false],
+            vec![true, true],
+            vec![false, false],
+            true,
+        ),
+        (
+            vec![true, false],
+            vec![false, true],
+            vec![false, true],
+            true,
+        ),
+        (
+            vec![true],
+            vec![false, false, true],
+            vec![false, true, false],
+            true,
+        ),
+        (
+            vec![true],
+            vec![false, false, false],
+            vec![false, true, false],
+            false,
+        ),
+    ] {
+        let mut mounted = mounted.into_iter();
+        let mut outcomes = outcomes.into_iter();
+        let mut calls = Vec::new();
+        let result = unmount_layers(
+            "/fixture",
+            || mounted.next().unwrap(),
+            |lazy| {
+                calls.push(lazy);
+                if outcomes.next().unwrap() {
+                    Ok(())
+                } else {
+                    Err(std::io::Error::from_raw_os_error(libc::EPERM).into())
+                }
+            },
+        );
+        assert_eq!(result.is_ok(), success);
+        assert_eq!(calls, expected);
+        if let Err(error) = result {
+            assert_eq!(
+                error
+                    .downcast_ref::<std::io::Error>()
+                    .unwrap()
+                    .raw_os_error(),
+                Some(libc::EPERM)
+            );
+        }
+    }
+}
+
+#[test]
+fn unmount_layers_stops_after_the_existing_layer_budget() {
+    let mut checks = 0;
+    let mut calls = 0;
+    let error = unmount_layers(
+        "/fixture",
+        || {
+            checks += 1;
+            true
+        },
+        |lazy| {
+            assert!(!lazy);
+            calls += 1;
+            Ok(())
+        },
+    )
+    .unwrap_err();
+    assert_eq!((checks, calls), (32, 32));
+    assert!(error.to_string().contains("too many mount layers"));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn unmount_rejects_nul_paths_before_any_system_call() {
+    assert!(unmount_all_at("/fixture\0suffix").is_err());
+}
+
 fn fs(uuid: &str, mountpoint: &str) -> BlockFs {
     BlockFs {
         path: format!("/dev/disk-{uuid}"),
@@ -160,7 +245,7 @@ fn inhibition_is_released_after_error_and_nested_guards() {
 #[tokio::test]
 async fn watcher_shutdown_reaps_the_monitor_without_output() {
     let directory = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let store = Arc::new(Db::open(&directory.path().join("kv")).unwrap());
     let events: EventSink = Arc::new(|_, _| panic!("no mount should run"));
     let child = tokio::process::Command::new("sleep")
         .arg("60")
@@ -170,7 +255,7 @@ async fn watcher_shutdown_reaps_the_monitor_without_output() {
         .unwrap();
     let pid = child.id().unwrap();
     let (stop, receiver) = tokio::sync::watch::channel(false);
-    let task = tokio::spawn(watch_child(child, prefs, events, receiver));
+    let task = tokio::spawn(watch_child(child, store, events, receiver));
     stop.send(true).unwrap();
     tokio::time::timeout(Duration::from_secs(5), task)
         .await
@@ -183,7 +268,7 @@ async fn watcher_shutdown_reaps_the_monitor_without_output() {
 #[tokio::test]
 async fn monitor_exit_is_reported_as_a_failure() {
     let directory = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let store = Arc::new(Db::open(&directory.path().join("kv")).unwrap());
     let events: EventSink = Arc::new(|_, _| panic!("no mount should run"));
     let child = tokio::process::Command::new("true")
         .stdout(Stdio::piped())
@@ -193,7 +278,7 @@ async fn monitor_exit_is_reported_as_a_failure() {
     let (_stop, receiver) = tokio::sync::watch::channel(false);
     let result = tokio::time::timeout(
         Duration::from_secs(5),
-        watch_child(child, prefs, events, receiver),
+        watch_child(child, store, events, receiver),
     )
     .await
     .unwrap();

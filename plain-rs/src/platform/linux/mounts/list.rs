@@ -374,17 +374,30 @@ fn non_empty(s: &str) -> Option<String> {
 fn statfs_usage(path: &str) -> Option<(i64, i64, i64)> {
     #[cfg(target_os = "linux")]
     {
-        let st = nix::sys::statfs::statfs(path).ok()?;
-        let bsize = st.block_size() as i64;
-        let total = st.blocks() as i64 * bsize;
-        let free = st.blocks_available() as i64 * bsize;
-        Some((total, total - free, free))
+        let path = std::ffi::CString::new(path).ok()?;
+        let mut stats = std::mem::MaybeUninit::<libc::statfs>::uninit();
+        if unsafe { libc::statfs(path.as_ptr(), stats.as_mut_ptr()) } != 0 {
+            return None;
+        }
+        let stats = unsafe { stats.assume_init() };
+        block_usage(
+            stats.f_blocks as u64,
+            stats.f_bavail as u64,
+            stats.f_bsize as i64,
+        )
     }
     #[cfg(not(target_os = "linux"))]
     {
         let (total, free) = df_usage(path);
         Some((total, total - free, free))
     }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn block_usage(blocks: u64, available: u64, block_size: i64) -> Option<(i64, i64, i64)> {
+    let total = i64::try_from(blocks).ok()?.checked_mul(block_size)?;
+    let free = i64::try_from(available).ok()?.checked_mul(block_size)?;
+    Some((total, total.checked_sub(free)?, free))
 }
 
 pub fn df_usage(path: &str) -> (i64, i64) {

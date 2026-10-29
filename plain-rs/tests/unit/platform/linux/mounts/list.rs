@@ -1,6 +1,31 @@
 use super::*;
 
 #[test]
+fn block_usage_preserves_available_blocks_and_rejects_unrepresentable_sizes() {
+    assert_eq!(block_usage(100, 30, 4096), Some((409600, 286720, 122880)));
+    assert_eq!(block_usage(0, 0, 4096), Some((0, 0, 0)));
+    assert_eq!(block_usage(10, 20, 1), Some((10, -10, 20)));
+    assert_eq!(block_usage(u64::MAX, 0, 1), None);
+    assert_eq!(block_usage(0, u64::MAX, 1), None);
+    assert_eq!(block_usage(i64::MAX as u64, 0, 2), None);
+    assert_eq!(block_usage(0, i64::MAX as u64, 2), None);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn statfs_usage_reads_native_statistics_and_reports_invalid_paths() {
+    let directory = tempfile::tempdir().unwrap();
+    let (total, used, free) = statfs_usage(directory.path().to_str().unwrap()).unwrap();
+    assert!(total > 0);
+    assert_eq!(total, used + free);
+    assert_eq!(statfs_usage("/fixture\0suffix"), None);
+    assert_eq!(
+        statfs_usage(directory.path().join("missing").to_str().unwrap()),
+        None
+    );
+}
+
+#[test]
 fn classify_keeps_block_mount() {
     let ml = classify_mount_line("/dev/sda1 / ext4 rw,relatime 0 0").unwrap();
     assert_eq!(ml.src, "/dev/sda1");
