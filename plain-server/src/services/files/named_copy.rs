@@ -38,10 +38,10 @@ pub(crate) async fn copy(
             None
         };
         anyhow::ensure!(!*state.stop.borrow(), "Rust core stopped");
-        let path = temporary
-            .as_ref()
-            .map(|file| file.path().to_string_lossy().into_owned())
-            .unwrap_or(source);
+        let path = match temporary.as_ref() {
+            Some(file) => file.path().to_string_lossy().into_owned(),
+            None => super::references::resolve(state.db.clone(), state.directory.clone(), &source)?,
+        };
         state
             .files
             .copy_to_directory(&caller, path, directory, name)

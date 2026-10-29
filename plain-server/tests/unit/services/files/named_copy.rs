@@ -332,3 +332,28 @@ async fn native_provider_uri_copy_is_not_exposed_to_remote_filesystem_callers() 
     assert!(!target.exists());
     core.stop_core().await;
 }
+
+#[tokio::test]
+async fn copies_logical_image_references_without_changing_the_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("data");
+    let core = ContentServer::open(&data).unwrap();
+    let source = data.join("note-images/source.png");
+    std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+    std::fs::write(&source, b"original image").unwrap();
+    let target = dir.path().join("exports");
+    for reference in ["app://note-images/source.png".to_owned(), source.to_string_lossy().into_owned()] {
+        let response = execute(&core, &reference, &target, "saved.png").await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let saved = response.data.into_json().unwrap()["copyFileToDirectory"].as_str().unwrap().to_owned();
+        assert!(std::path::Path::new(&saved).starts_with(&target));
+        assert_eq!(std::fs::read(saved).unwrap(), b"original image");
+        assert_eq!(std::fs::read(&source).unwrap(), b"original image");
+    }
+    assert_eq!(std::fs::read_dir(&target).unwrap().count(), 2);
+    let rejected = dir.path().join("rejected");
+    let response = execute(&core, "app://../outside.png", &rejected, "escape.png").await;
+    assert!(!response.errors.is_empty());
+    assert!(!rejected.exists());
+    core.stop_core().await;
+}
