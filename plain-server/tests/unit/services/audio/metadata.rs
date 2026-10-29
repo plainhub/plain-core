@@ -31,7 +31,7 @@ fn row(title: &str) -> MediaFileRow {
 #[test]
 fn indexed_audio_preserves_identity_tags_and_duration_and_falls_back_only_for_empty_titles() {
     let metadata = from_row(row("Indexed Title"));
-    assert_eq!(metadata.media_id.as_deref(), Some("audio-id"));
+    assert_eq!(metadata.file_id.as_deref(), Some("audio-id"));
     assert_eq!(metadata.track.title, "Indexed Title");
     assert_eq!(metadata.track.artist, "Artist");
     assert_eq!(metadata.track.album_id, "native-album");
@@ -49,7 +49,7 @@ fn native_unindexed_files_are_probed_for_tags_without_creating_persistent_media_
         "/../plain-rs/testdata/audio-tagged.mp3"
     );
     let metadata = read_file(path).unwrap();
-    assert!(metadata.media_id.is_none());
+    assert!(metadata.file_id.is_none());
     assert_eq!(metadata.title, "Hydrate Title");
     assert_eq!(metadata.artist, "Hydrate Artist");
     assert!(metadata.duration_ms > 0);
@@ -115,7 +115,7 @@ async fn uri_audio_tags_use_one_bounded_descriptor_without_sdk_metadata_or_stagi
     assert_eq!(track.title, "Hydrate Title");
     assert_eq!(track.artist, "Hydrate Artist");
     assert!(track.duration_ms > 0);
-    assert!(track.media_id.is_none());
+    assert!(track.file_id.is_none());
     assert!(!cache.exists());
     assert!(requests.try_recv().is_err());
 }

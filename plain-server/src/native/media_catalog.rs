@@ -103,7 +103,7 @@ impl NativeMediaCatalog {
                     },
                     metadata = self.read_file(data_type, &reference) => metadata?,
                 };
-                session.record_when_running(|| self.persist_file_reads(&[metadata])).await?;
+                session.record_when_running(1,|| self.persist_file_reads(&[metadata])).await?;
             }
             Ok(())
         }.await;
@@ -149,6 +149,10 @@ impl NativeMediaCatalog {
     #[cfg(feature = "media")]
     pub fn watch_source_directories(&self) -> Result<bool, String> {
         self.state.native_client_id()?;
+        self.state
+            .db
+            .refresh_volume_availability()
+            .map_err(|error| error.to_string())?;
         let roots = self
             .source_directories()?
             .into_iter()
@@ -179,6 +183,10 @@ impl NativeMediaCatalog {
 
     #[cfg(feature = "media")]
     async fn apply_watch_event(&self, event: notify::Event) -> Result<(), String> {
+        self.state
+            .db
+            .refresh_volume_availability()
+            .map_err(|error| error.to_string())?;
         use crate::services::files::media_watch::{Effect, effect_for};
         use notify::event::{EventKind, ModifyKind, RenameMode};
         if matches!(event.kind, EventKind::Other) {
@@ -233,15 +241,8 @@ impl NativeMediaCatalog {
                         .map_err(|error| error.to_string())?;
                 }
                 Effect::Forget => {
-                    if !path.try_exists().map_err(|error| error.to_string())? {
-                        let items = self.path_identities(&path)?;
-                        self.state
-                            .files
-                            .external_remove(&path, items)
-                            .await
-                            .map_err(|error| error.to_string())?;
-                    } else if excluded {
-                        self.forget_path(&path.to_string_lossy())?;
+                    if let Some(parent) = path.parent().filter(|parent| parent.is_dir()) {
+                        self.scan_directory(&parent.to_string_lossy()).await?;
                     }
                 }
                 Effect::RescanSubtree => {
@@ -266,8 +267,8 @@ impl NativeMediaCatalog {
         let root = root.to_str().ok_or("Invalid media path encoding")?;
         let prefix = format!("{}/", root.trim_end_matches('/'));
         self.state.db.with_conn(|connection| {
-            connection.prepare("SELECT data_type,id,path FROM media_items WHERE path=?1 OR substr(path,1,length(?2))=?2")?
-                .query_map(rusqlite::params![root,prefix], |row| Ok(crate::services::files::file_task_media::Identity { media_type:row.get(0)?, media_id:row.get(1)?, path:row.get(2)? }))?
+            connection.prepare("SELECT data_type,id,path FROM file_catalog WHERE missing=0 AND trashed=0 AND (path=?1 OR substr(path,1,length(?2))=?2)")?
+                .query_map(rusqlite::params![root,prefix], |row| Ok(crate::services::files::file_task_media::Identity { media_type:row.get(0)?, file_id:row.get(1)?, path:row.get(2)? }))?
                 .collect::<rusqlite::Result<Vec<_>>>()
         }).map_err(|error| error.to_string())
     }
@@ -370,11 +371,11 @@ impl NativeMediaCatalog {
                 let producer_root = canonical_root.clone();
                 let producer = tokio::task::spawn_blocking(move || -> Result<usize, String> {
                     let mut discovered = 0;
-                    plain_media::file_walk::walk_files(
+                    plain_media::file_walk::walk_entries(
                         &producer_root,
                         |path| {
                             path.to_str().is_some_and(|path| {
-                                plain_rs::media::catalog_paths::is_media_excluded_at(
+                                plain_rs::media::catalog_paths::is_file_excluded_at(
                                     path,
                                     &directory,
                                     &policy.cache_directory,
@@ -393,23 +394,28 @@ impl NativeMediaCatalog {
                                 anyhow::anyhow!("Invalid media file path encoding")
                             })?;
                             let kind = plain_rs::media::catalog_paths::infer_type(name);
-                            if let Some(data_type) = [
-                                DataType::Audio,
-                                DataType::Video,
-                                DataType::Image,
-                                DataType::Doc,
-                            ]
-                            .into_iter()
-                            .find(|data_type| data_type.media_type_str() == Some(kind))
-                            {
-                                if data_type == DataType::Doc && std::fs::metadata(path)?.len() == 0
-                                {
-                                    return Ok(());
-                                }
-                                send.blocking_send((data_type, path.to_owned()))
-                                    .map_err(|_| anyhow::anyhow!("Media scan receiver closed"))?;
-                                discovered += 1;
-                            }
+                            let data_type = if path.is_file()
+                                && !plain_rs::media::catalog_paths::is_media_excluded_at(
+                                    name,
+                                    &directory,
+                                    &policy.cache_directory,
+                                    &policy.excluded_roots,
+                                ) {
+                                [
+                                    DataType::Audio,
+                                    DataType::Video,
+                                    DataType::Image,
+                                    DataType::Doc,
+                                ]
+                                .into_iter()
+                                .find(|data_type| data_type.media_type_str() == Some(kind))
+                                .unwrap_or(DataType::File)
+                            } else {
+                                DataType::File
+                            };
+                            send.blocking_send((data_type, path.to_owned()))
+                                .map_err(|_| anyhow::anyhow!("File scan receiver closed"))?;
+                            discovered += usize::from(path.is_file());
                             Ok(())
                         },
                     )
@@ -424,6 +430,23 @@ impl NativeMediaCatalog {
                     if !actual.starts_with(&canonical_root) {
                         return Err("Media file escaped scan directory".into());
                     }
+                    if data_type == DataType::File {
+                        let file_count = usize::from(actual.is_file());
+                        let path = actual
+                            .to_str()
+                            .ok_or("Invalid file path encoding")?
+                            .to_owned();
+                        let types = session
+                            .record_when_running(file_count, || {
+                                crate::services::files::media_index::record_generic(
+                                    &self.state.db,
+                                    &[path],
+                                )
+                            })
+                            .await?;
+                        self.state.media_scans.publish_catalog_types(types);
+                        continue;
+                    }
                     let metadata = self
                         .read_file(
                             data_type,
@@ -434,7 +457,7 @@ impl NativeMediaCatalog {
                         return Err("Media file escaped scan directory".into());
                     }
                     session
-                        .record_when_running(|| self.persist_file_reads(&[metadata]))
+                        .record_when_running(1, || self.persist_file_reads(&[metadata]))
                         .await?;
                 }
                 let total = producer.await.map_err(|error| error.to_string())??;
@@ -444,6 +467,7 @@ impl NativeMediaCatalog {
                     .checked_add(total)
                     .ok_or("Media scan file count overflow")?;
             }
+            let mut missing = Vec::new();
             for root in completed_roots {
                 if !tokio::fs::metadata(&root)
                     .await
@@ -455,29 +479,21 @@ impl NativeMediaCatalog {
                 for item in self.path_identities(&root)? {
                     match tokio::fs::symlink_metadata(&item.path).await {
                         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                            self.state
-                                .files
-                                .external_remove(
-                                    std::path::Path::new(&item.path),
-                                    vec![item.clone()],
-                                )
-                                .await
-                                .map_err(|error| error.to_string())?;
+                            missing.push(item.path);
                         }
                         Err(error) => return Err(error.to_string()),
-                        Ok(_) => {
-                            if plain_rs::media::catalog_paths::is_media_excluded_at(
-                                &item.path,
-                                &self.state.directory,
-                                &policy.cache_directory,
-                                &policy.excluded_roots,
-                            ) {
-                                self.forget_path(&item.path)?;
-                            }
-                        }
+                        Ok(_) => {}
                     }
                 }
             }
+            session
+                .record_when_running(0, || {
+                    self.state
+                        .db
+                        .mark_file_paths_missing(&missing)
+                        .map_err(|error| error.to_string())
+                })
+                .await?;
             session.discovered(total_files)?;
             Ok(())
         };

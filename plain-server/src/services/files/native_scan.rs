@@ -15,10 +15,13 @@ pub(crate) fn completed(
         &policy.excluded_roots,
         paths,
     )?;
-    let rows = scans.record_completion(|| {
-        db.record_media_file_reads(&files)
-            .map_err(|error| error.to_string())
+    let (rows, generic_types) = scans.record_completion(|| {
+        let generic_types = super::media_index::record_generic(db, &files.generic)?;
+        let rows = db
+            .record_media_file_reads(&files.media)
+            .map_err(|error| error.to_string())?;
+        Ok((rows, generic_types))
     })?;
-    scans.publish_catalog_rows(&rows);
+    scans.publish_catalog_types(rows.iter().map(|row| row.data_type).chain(generic_types));
     Ok(())
 }

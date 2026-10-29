@@ -239,7 +239,7 @@ pub(crate) async fn serve(
     state: &ServerState,
     request: &axum::http::request::Parts,
     path: &str,
-    media_id: &str,
+    file_id: &str,
     name: &str,
 ) -> anyhow::Result<Response> {
     let download = query(request, "dl").as_deref() == Some("1");
@@ -435,7 +435,7 @@ pub(crate) async fn serve(
                         width,
                         height,
                         center_crop: query(request, "cc").as_deref() != Some("false"),
-                        media_id: media_id.to_owned(),
+                        file_id: file_id.to_owned(),
                         file_name: escape(filename),
                         if_none_match: request
                             .headers

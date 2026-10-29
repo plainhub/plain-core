@@ -86,7 +86,7 @@ fn open_creates_every_table_once() {
 #[test]
 fn current_track_defaults_to_none() {
     let db = test_db("current_default");
-    assert_eq!(db.audio_current_media_id(), None);
+    assert_eq!(db.audio_current_file_id(), None);
     assert_eq!(
         crate::media::audio::queue::get_audio_current(&db).unwrap(),
         ""

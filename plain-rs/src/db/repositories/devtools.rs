@@ -20,7 +20,7 @@ fn checked(db: &Db, table: &str) -> Result<()> {
 }
 
 pub fn tables(db: &Db) -> Vec<String> {
-    db.with_conn(browse::tables)
+    db.with_conn(|conn| browse::tables(conn))
 }
 
 pub fn table_row_count(db: &Db, table: &str) -> Result<i64> {

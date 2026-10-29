@@ -17,7 +17,8 @@ use std::{collections::HashMap, sync::Arc};
 
 #[derive(SimpleObject)]
 pub struct MediaPlayHistory {
-    media_id: ID,
+    #[graphql(name = "mediaId")]
+    file_id: ID,
     media_type: MediaDataType,
     position_ms: Long,
     play_count: Long,
@@ -58,7 +59,7 @@ impl MediaPlayHistoryQuery {
                 let ids: Vec<_> = batch
                     .iter()
                     .filter(|row| row.media_type == kind.data_type().kind())
-                    .map(|row| row.media_id.as_str())
+                    .map(|row| row.file_id.as_str())
                     .collect();
                 if ids.is_empty() {
                     continue;
@@ -88,7 +89,7 @@ impl MediaPlayHistoryQuery {
                 }
             }
             for row in batch {
-                let Some((media_type, media)) = media.remove(&row.media_id) else {
+                let Some((media_type, media)) = media.remove(&row.file_id) else {
                     continue;
                 };
                 if skipped < offset {
@@ -96,7 +97,7 @@ impl MediaPlayHistoryQuery {
                     continue;
                 }
                 result.push(MediaPlayHistory {
-                    media_id: row.media_id.clone().into(),
+                    file_id: row.file_id.clone().into(),
                     media_type,
                     position_ms: Long(row.position_ms),
                     play_count: Long(row.play_count),
@@ -120,14 +121,14 @@ impl MediaPlayHistoryMutation {
     async fn record_media_play(
         &self,
         ctx: &Context<'_>,
-        media_id: ID,
+        #[graphql(name = "mediaId")] file_id: ID,
         r#type: MediaDataType,
         position_ms: Long,
     ) -> Result<bool> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let db = ctx.data::<Arc<Db>>()?.clone();
         tokio::task::spawn_blocking(move || {
-            play_history::record(&db, r#type.data_type(), media_id.as_str(), position_ms.0)
+            play_history::record(&db, r#type.data_type(), file_id.as_str(), position_ms.0)
         })
         .await??;
         if r#type == MediaDataType::AUDIO {
@@ -141,14 +142,14 @@ impl MediaPlayHistoryMutation {
     async fn save_media_play_progress(
         &self,
         ctx: &Context<'_>,
-        media_id: ID,
+        #[graphql(name = "mediaId")] file_id: ID,
         r#type: MediaDataType,
         position_ms: Long,
     ) -> Result<bool> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let db = ctx.data::<Arc<Db>>()?.clone();
         tokio::task::spawn_blocking(move || {
-            play_history::save(&db, r#type.data_type(), media_id.as_str(), position_ms.0)
+            play_history::save(&db, r#type.data_type(), file_id.as_str(), position_ms.0)
         })
         .await??;
         Ok(true)

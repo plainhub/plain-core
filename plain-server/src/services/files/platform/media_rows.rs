@@ -31,7 +31,7 @@ pub(super) fn identities(facts: serde_json::Value) -> anyhow::Result<Vec<Identit
             };
             Some(Identity {
                 media_type: kind.kind(),
-                media_id: row.id,
+                file_id: row.id,
                 path: row.path,
             })
         })

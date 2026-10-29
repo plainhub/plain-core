@@ -56,11 +56,19 @@ impl NativeManagement {
 
     pub fn complete_onboarding(&self) -> Result<bool, String> {
         self.state.native_client_id()?;
-        let changed = self.state.store.get().map_err(|e| e.to_string())?
-            .set_json("onboarding_completed", true).map_err(|e| e.to_string())?;
+        let changed = self
+            .state
+            .store
+            .get()
+            .map_err(|e| e.to_string())?
+            .set_json("onboarding_completed", true)
+            .map_err(|e| e.to_string())?;
         if changed {
             self.state.prefs.notify_changed();
-            let _ = self.state.events.send(WsEvent::broadcast("PREFS_UPDATED", "{}".into()));
+            let _ = self
+                .state
+                .events
+                .send(WsEvent::broadcast("PREFS_UPDATED", "{}".into()));
         }
         Ok(changed)
     }
@@ -223,7 +231,6 @@ impl NativeManagement {
         crate::services::backups::export(
             self.state.db.clone(),
             self.state.prefs.clone(),
-            self.state.store.clone(),
             self.state.directory.clone(),
             self.state.cache.root().to_owned(),
             self.state.stop.clone(),
@@ -285,8 +292,8 @@ impl NativeManagement {
 #[path = "../../tests/unit/native/management.rs"]
 mod tests;
 
-mod preferences;
+mod casting;
+mod discovery;
 mod files;
 mod peers;
-mod discovery;
-mod casting;
+mod preferences;

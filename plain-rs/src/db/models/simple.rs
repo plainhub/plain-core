@@ -56,7 +56,8 @@ pub struct PomodoroItemRow {
 /// text-safe across the JNI and C ABI boundaries.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ImageEmbeddingRow {
-    pub id: String,
+    #[serde(rename = "id")]
+    pub file_id: String,
     pub path: String,
     pub embedding_base64: String,
     pub created_at: String,

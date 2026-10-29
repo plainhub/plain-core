@@ -1,10 +1,10 @@
 use super::*;
-use plain_rs::files::filesystem::deletion::{Outcome, Plan};
 use plain_rs::files::trash::{SortOrder, Trash, TrashItem};
+use rusqlite::OptionalExtension;
 
 impl FileTasks {
     fn trash_store(&self) -> Result<Trash> {
-        Ok(Trash::new(self.store.get()?))
+        Ok(Trash::new(self.hooks.platform.db.clone()))
     }
     pub(crate) async fn trash_paths(&self, paths: Vec<String>) -> Result<usize> {
         let _guard = self.deletion_lock.lock().await;
@@ -17,25 +17,34 @@ impl FileTasks {
             self.hooks.platform.authorize(&path, true).await?;
             let root =
                 super::super::file_task_media::normalized(std::path::Path::new(&path)).await?;
-            let checked = root.clone();
-            let plan =
-                tokio::task::spawn_blocking(move || Plan::inspect(std::path::Path::new(&checked)))
-                    .await??;
-            let snapshot = super::super::file_task_media::deletion_snapshot(
-                &self.hooks.platform,
-                root.clone(),
-                &plan.files,
-            )
-            .await?;
-            let paths = plan.paths();
             trash.trash_paths(vec![root.clone()]).await?;
-            let outcome = Outcome {
-                removed: true,
-                paths,
-                failures: Vec::new(),
-            };
-            self.finish_deletion(&path, &root, &snapshot, &outcome)
-                .await?;
+            self.hooks
+                .duration_cache
+                .invalidate_paths(&[], &[root.clone()])?;
+            let prefs = self.hooks.prefs.clone();
+            self.hooks
+                .audio
+                .run(move |db, engine| {
+                    let trashed = if let Some(id) = db.audio_current_file_id() {
+                        db.with_conn(|conn| {
+                            conn.query_row(
+                                "SELECT trashed FROM file_catalog WHERE id=?1",
+                                [id],
+                                |row| row.get::<_, bool>(0),
+                            )
+                            .optional()
+                        })?
+                        .unwrap_or(false)
+                    } else {
+                        false
+                    };
+                    if trashed {
+                        plain_rs::media::audio::commands::clear_engine(db, &prefs, engine)?;
+                    }
+                    Ok(())
+                })
+                .await
+                .map_err(|error| anyhow!(error.message))?;
             count += 1;
         }
         Ok(count)
@@ -95,9 +104,9 @@ impl FileTasks {
         query: String,
         order: SortOrder,
     ) -> Result<Vec<TrashItem>> {
-        let store = self.store.clone();
+        let db = self.hooks.platform.db.clone();
         tokio::task::spawn_blocking(move || {
-            let trash = Trash::new(store.get()?);
+            let trash = Trash::new(db);
             let mut rows = trash.list_trash(offset, limit, &query, order)?;
             for row in &mut rows {
                 plain_rs::files::trash::fill_stats(row)?;
@@ -107,7 +116,7 @@ impl FileTasks {
         .await?
     }
     pub(crate) async fn trash_count(&self) -> Result<usize> {
-        let store = self.store.clone();
-        tokio::task::spawn_blocking(move || Trash::new(store.get()?).trash_count()).await?
+        let db = self.hooks.platform.db.clone();
+        tokio::task::spawn_blocking(move || Trash::new(db).trash_count()).await?
     }
 }

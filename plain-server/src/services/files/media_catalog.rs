@@ -23,13 +23,25 @@ fn selection_with_trash(
         _ => anyhow::bail!("Unsupported media catalog type"),
     };
     let fields = query::fields(db, text)?;
-    let plan = query::plan(
+    let filters = fields
+        .iter()
+        .filter(|field| data_type != DataType::Doc || field.name != "text")
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut plan = query::plan(
         provider,
-        &fields,
+        &filters,
         &serde_json::Value::Null,
         None,
         text.is_empty(),
     )?;
+    if data_type == DataType::Doc {
+        for field in fields.iter().filter(|field| field.name == "text") {
+            let (predicate, args) = plain_rs::db::files::name_filter(&field.value);
+            plan.clauses.push(predicate);
+            plan.args.extend(args);
+        }
+    }
     Ok(selection_from_plan(data_type, plan, from_trash))
 }
 
@@ -43,7 +55,11 @@ fn selection_from_plan(
         Value::Integer(i64::from(from_trash || plan.trash.unwrap_or(false))),
     ];
     args.extend(plan.args.into_iter().map(Value::Text));
-    let mut clauses = vec!["trashed=?".to_string()];
+    let mut clauses = vec![
+        "trashed=?".to_string(),
+        "missing=0".into(),
+        "is_available=1".into(),
+    ];
     clauses.extend(plan.clauses);
     if plan.ids_column.is_some() {
         if plan.ids.is_empty() {
@@ -53,7 +69,7 @@ fn selection_from_plan(
             args.extend(plan.ids.into_iter().map(Value::Text));
         }
     }
-    let sql = "WITH selected AS (SELECT *,id AS _id,path AS _data,file_name AS _display_name,size_bytes AS _size FROM media_items WHERE data_type=?)";
+    let sql = "WITH selected AS (SELECT *,id AS _id,path AS _data,file_name AS _display_name,size_bytes AS _size FROM file_catalog WHERE data_type=?)";
     (
         format!(
             "{sql} SELECT {{columns}} FROM selected WHERE {}",
@@ -108,15 +124,15 @@ fn selected_rows(
     offset: u32,
 ) -> Result<Vec<MediaFileRow>> {
     let order = match sort {
-        FileSortBy::DateAsc => "updated_at ASC,id",
-        FileSortBy::DateDesc => "updated_at DESC,id",
-        FileSortBy::SizeAsc => "size_bytes ASC,id",
-        FileSortBy::SizeDesc => "size_bytes DESC,id",
-        FileSortBy::NameAsc if data_type == DataType::Audio => "title COLLATE NOCASE ASC,id",
-        FileSortBy::NameAsc => "file_name COLLATE NOCASE ASC,id",
-        FileSortBy::NameDesc if data_type == DataType::Audio => "title COLLATE NOCASE DESC,id",
-        FileSortBy::NameDesc => "file_name COLLATE NOCASE DESC,id",
-        FileSortBy::TakenAtDesc => "taken_at DESC,updated_at DESC,id",
+        FileSortBy::DateAsc => "updated_at ASC,file_id",
+        FileSortBy::DateDesc => "updated_at DESC,file_id",
+        FileSortBy::SizeAsc => "size_bytes ASC,file_id",
+        FileSortBy::SizeDesc => "size_bytes DESC,file_id",
+        FileSortBy::NameAsc if data_type == DataType::Audio => "title COLLATE NOCASE ASC,file_id",
+        FileSortBy::NameAsc => "file_name COLLATE NOCASE ASC,file_id",
+        FileSortBy::NameDesc if data_type == DataType::Audio => "title COLLATE NOCASE DESC,file_id",
+        FileSortBy::NameDesc => "file_name COLLATE NOCASE DESC,file_id",
+        FileSortBy::TakenAtDesc => "taken_at DESC,updated_at DESC,file_id",
     };
     args.extend([
         Value::Integer(i64::from(limit)),
@@ -156,7 +172,7 @@ pub(crate) fn ids(
 ) -> Result<Vec<String>> {
     let (sql, args) = selection_with_trash(db, data_type, query, from_trash)?;
     let sql = format!(
-        "{} ORDER BY updated_at DESC,id",
+        "{} ORDER BY updated_at DESC,file_id",
         sql.replace("{columns}", "id")
     );
     Ok(db.with_conn(|conn| {
@@ -170,7 +186,7 @@ pub(crate) fn ids(
 pub(crate) fn bucket_item_facts(db: &Db, data_type: DataType) -> Result<Vec<serde_json::Value>> {
     let (sql, args) = selection(db, data_type, "")?;
     let sql = format!(
-        "{} ORDER BY updated_at DESC,id",
+        "{} ORDER BY updated_at DESC,file_id",
         sql.replace("{columns}", "bucket_id,path,size_bytes")
     );
     Ok(db.with_conn(|conn| {

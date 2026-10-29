@@ -50,7 +50,7 @@ async fn native_catalog_reads_rows_counts_ids_and_buckets_without_a_host() {
             .is_empty()
     );
     let buckets = catalog.buckets(DataType::Image).await.unwrap();
-    assert_eq!(buckets[0]["id"], "pictures");
+    assert_eq!(buckets[0]["id"], "/catalog");
 }
 
 #[tokio::test]

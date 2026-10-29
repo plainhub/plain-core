@@ -18,7 +18,7 @@ pub fn playlist_covers(db: &Db, ids: &[String]) -> DomainResult<Vec<PlaylistCove
         let mut statement = conn.prepare(
             "WITH tracks AS (
                 SELECT m.album_id,m.path,p.sort_order
-                FROM audio_playlist_items p JOIN audio_media m ON m.media_id=p.media_id
+                FROM audio_playlist_items p JOIN audio_media m ON m.file_id=p.file_id
                 WHERE p.playlist_id=?1 AND trim(m.album_id)<>''
             ), albums AS (
                 SELECT album_id,count(*) AS track_count,min(sort_order) AS first_order

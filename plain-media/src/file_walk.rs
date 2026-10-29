@@ -5,9 +5,28 @@ use anyhow::{Context, Result};
 
 pub fn walk_files(
     root: &Path,
+    excluded: impl FnMut(&Path) -> bool,
+    cancelled: impl FnMut() -> bool,
+    visit: impl FnMut(&Path) -> Result<()>,
+) -> Result<()> {
+    walk(root, excluded, cancelled, visit, false)
+}
+
+pub fn walk_entries(
+    root: &Path,
+    excluded: impl FnMut(&Path) -> bool,
+    cancelled: impl FnMut() -> bool,
+    visit: impl FnMut(&Path) -> Result<()>,
+) -> Result<()> {
+    walk(root, excluded, cancelled, visit, true)
+}
+
+fn walk(
+    root: &Path,
     mut excluded: impl FnMut(&Path) -> bool,
     mut cancelled: impl FnMut() -> bool,
     mut visit: impl FnMut(&Path) -> Result<()>,
+    include_directories: bool,
 ) -> Result<()> {
     if !root.is_absolute() {
         return Err(anyhow::anyhow!(
@@ -47,6 +66,9 @@ pub fn walk_files(
     while let Some(directory) = stack.pop() {
         if cancelled() {
             return Err(cancelled_error(root));
+        }
+        if include_directories {
+            visit(&directory).with_context(|| format!("cannot visit {}", directory.display()))?;
         }
         let entries = fs::read_dir(&directory)
             .with_context(|| format!("cannot read directory {}", directory.display()))?;

@@ -85,7 +85,7 @@ fn runtime(directory: &std::path::Path, host: Arc<Host>) -> Arc<Runtime> {
         host,
         Arc::new(Db::open(&directory.join("plain.db")).unwrap()),
         directory.to_path_buf(),
-        Arc::new(plain_rs::kv::LazyDb::new(directory.join("fjall"))),
+        Arc::new(plain_rs::kv::LazyDb::new(directory.join("plain.db"))),
         broadcast::channel(16).0,
     )
 }

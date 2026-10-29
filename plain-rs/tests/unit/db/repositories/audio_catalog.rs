@@ -4,7 +4,7 @@ use super::*;
 fn parsed_metadata_updates_only_existing_platform_rows_and_preserves_identity_and_aliases() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let mut track = AudioTrack::from_path_stem("content://media/external/audio/media/7");
-    track.media_id = Some("7".into());
+    track.file_id = Some("7".into());
     track.title = "Parsed Title".into();
     track.artist = "Parsed Artist".into();
     track.duration_ms = 1234;
@@ -12,7 +12,7 @@ fn parsed_metadata_updates_only_existing_platform_rows_and_preserves_identity_an
     db.use_platform_audio_catalog().unwrap();
     db.cache_platform_audio(
         &[AudioMedia {
-            media_id: Some("7".into()),
+            file_id: Some("7".into()),
             aliases: vec!["content://documents/audio/7".into()],
             track: AudioTrack::from_path_stem(&track.path),
         }],
@@ -25,7 +25,7 @@ fn parsed_metadata_updates_only_existing_platform_rows_and_preserves_identity_an
             .with_conn(|conn| crate::media::audio::queue::track_by_path_conn(conn, path))
             .unwrap()
             .unwrap();
-        assert_eq!(actual.media_id, track.media_id);
+        assert_eq!(actual.file_id, track.file_id);
         assert_eq!(actual.path, track.path);
         assert_eq!(actual.title, track.title);
         assert_eq!(actual.artist, track.artist);
@@ -33,7 +33,7 @@ fn parsed_metadata_updates_only_existing_platform_rows_and_preserves_identity_an
     }
     assert_eq!(
         db.with_conn(
-            |conn| conn.query_row("SELECT COUNT(*) FROM media_items", [], |row| row
+            |conn| conn.query_row("SELECT COUNT(*) FROM file_catalog", [], |row| row
                 .get::<_, i64>(0))
         )
         .unwrap(),

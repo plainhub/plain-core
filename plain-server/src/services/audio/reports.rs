@@ -42,7 +42,7 @@ pub(crate) async fn accept(
                             )
                         })?
                         .unwrap_or_else(|| AudioTrack::from_path_stem(&report.path));
-                    let indexed = track.media_id.is_some();
+                    let indexed = track.file_id.is_some();
                     Ok(playback::started(db, &track, report.revision)? && indexed)
                 })
                 .await

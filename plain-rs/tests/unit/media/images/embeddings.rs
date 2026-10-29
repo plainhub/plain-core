@@ -57,7 +57,7 @@ fn invalid_vectors_and_failed_batch_do_not_commit_partial_updates() {
         .is_err()
     );
     assert_eq!(ids(&db).unwrap(), ["old"]);
-    db.with_conn(|c|c.execute_batch("CREATE TRIGGER fail_embedding BEFORE INSERT ON image_embeddings WHEN NEW.id='bad' BEGIN SELECT RAISE(ABORT,'fail'); END")).unwrap();
+    db.with_conn(|c|c.execute_batch("CREATE TRIGGER fail_embedding BEFORE INSERT ON image_embeddings WHEN NEW.file_id='bad' BEGIN SELECT RAISE(ABORT,'fail'); END")).unwrap();
     assert!(save(&db, &[item("new", &[1.0, 0.0]), item("bad", &[1.0, 0.0])]).is_err());
     assert_eq!(ids(&db).unwrap(), ["old"]);
     assert!(search(&db, &encode(&[1.0]), 5).is_err());

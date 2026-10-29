@@ -478,7 +478,7 @@ async fn media_action(
 fn written_file(record: plain_rs::files::filesystem::record::FileRecord) -> File {
     File {
         permission: record.permission,
-        media_id: (!record.media_id.is_empty()).then(|| record.media_id.into()),
+        file_id: (!record.file_id.is_empty()).then(|| record.file_id.into()),
         name: record.name,
         path: record.path,
         created_at: record

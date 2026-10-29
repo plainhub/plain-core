@@ -21,7 +21,10 @@ fn fixture(permissions: &[&str]) -> (tempfile::TempDir, Arc<Db>, PublicSchema) {
 }
 
 fn audio(db: &Db, id: &str, title: &str, artist: &str) {
-    db.with_conn(|conn| conn.execute("INSERT INTO media_items(id,data_type,path,mime_type,file_name,title,artist,bucket_id,size_bytes,duration_ms,cover_image_id,width,height,rotation,created_at,updated_at) VALUES(?1,1,?2,'audio/mpeg',?3,?3,?4,'',1,1000,'',0,0,0,'2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z')",rusqlite::params![id,format!("/music/{id}.mp3"),title,artist])).unwrap();
+    db.with_conn(|conn| {
+        conn.execute("INSERT OR IGNORE INTO volumes(id,identity,path,is_available) VALUES(1,'TEST','/music',1)",[])?;
+        conn.execute("INSERT INTO files(id,volume_id,path,file_name,kind,title,artist,size_bytes,duration_ms,created_at,updated_at) VALUES(?1,1,?2,?3,'AUDIO',?3,?4,1,1000,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')",rusqlite::params![id.parse::<i64>().unwrap(),format!("{id}.mp3"),title,artist])
+    }).unwrap();
     play_history::record(db, DataType::Audio, id, 123).unwrap();
 }
 
@@ -35,10 +38,10 @@ async fn query(schema: &PublicSchema, text: &str, offset: i32, limit: i32) -> Va
 #[tokio::test]
 async fn history_filters_current_metadata_before_paging_and_skips_missing_media() {
     let (_directory, db, schema) = fixture(&[STORAGE]);
-    audio(&db, "older", "Road Song", "Ferry");
-    audio(&db, "newer", "Another Song", "Ferry");
-    audio(&db, "unrelated", "Unrelated", "Other");
-    play_history::record(&db, DataType::Audio, "missing", 0).unwrap();
+    audio(&db, "1", "Road Song", "Ferry");
+    audio(&db, "2", "Another Song", "Ferry");
+    audio(&db, "3", "Unrelated", "Other");
+    play_history::record(&db, DataType::Audio, "999", 0).unwrap();
     db.with_conn(|conn| {
         conn.execute(
             "UPDATE media_play_history SET played_at='2026-01-01T00:00:00.000Z'",
@@ -55,7 +58,7 @@ async fn history_filters_current_metadata_before_paging_and_skips_missing_media(
             .iter()
             .map(|row| row["mediaId"].as_str().unwrap())
             .collect::<Vec<_>>(),
-        ["newer", "older"]
+        ["2", "1"]
     );
     let page = query(&schema, "type:AUDIO ferry", 1, 1).await;
     assert!(page["errors"].is_null(), "{page}");
@@ -63,15 +66,15 @@ async fn history_filters_current_metadata_before_paging_and_skips_missing_media(
         page["data"]["mediaPlayHistory"].as_array().unwrap().len(),
         1
     );
-    assert_eq!(page["data"]["mediaPlayHistory"][0]["mediaId"], "older");
+    assert_eq!(page["data"]["mediaPlayHistory"][0]["mediaId"], "1");
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE media_items SET title='Updated',artist='Changed' WHERE id='older'",
+            "UPDATE files SET title='Updated',artist='Changed' WHERE id='1'",
             [],
         )
     })
     .unwrap();
-    let updated = query(&schema, "ids:older changed", 0, 10).await;
+    let updated = query(&schema, "ids:1 changed", 0, 10).await;
     assert!(updated["errors"].is_null(), "{updated}");
     let row = &updated["data"]["mediaPlayHistory"][0];
     assert_eq!(row["media"]["title"], "Updated");
@@ -89,10 +92,10 @@ async fn history_filters_current_metadata_before_paging_and_skips_missing_media(
 #[tokio::test]
 async fn history_requires_storage_access_and_rejects_invalid_page_windows() {
     let (_denied_dir, denied_db, denied) = fixture(&[]);
-    audio(&denied_db, "private", "Private", "Artist");
+    audio(&denied_db, "1", "Private", "Artist");
     assert!(!query(&denied, "", 0, 10).await["errors"].is_null());
     let (_directory, db, schema) = fixture(&[STORAGE]);
-    audio(&db, "one", "One", "Artist");
+    audio(&db, "1", "One", "Artist");
     for (offset, limit) in [(-1, 10), (0, -1)] {
         assert!(!query(&schema, "", offset, limit).await["errors"].is_null());
     }

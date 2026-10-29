@@ -22,9 +22,6 @@ impl DataPaths {
     pub fn prefs(&self) -> PathBuf {
         self.root.join("prefs.json")
     }
-    pub fn kv(&self) -> PathBuf {
-        self.root.join("fjall")
-    }
     pub fn note_images(&self) -> PathBuf {
         self.root.join("note-images")
     }

@@ -40,11 +40,8 @@ impl Services {
         directory: std::path::PathBuf,
         cache: plain_rs::cache_paths::CachePaths,
     ) -> Self {
-        let path = plain_rs::kv::default_db_path(&directory);
-        let store = Arc::new(match db.key_values() {
-            Some(store) => plain_rs::kv::LazyDb::from_open(path, store),
-            None => plain_rs::kv::LazyDb::new(path),
-        });
+        let path = plain_rs::data_paths::DataPaths::new(&directory).database();
+        let store = Arc::new(plain_rs::kv::LazyDb::from_open(path, db.key_values()));
         let duration_cache = Arc::new(plain_rs::media::duration_cache::DurationCache::with_store(
             store.clone(),
         ));
@@ -88,7 +85,6 @@ impl Services {
             media_scans.clone(),
         ));
         let files = Arc::new(crate::services::files::file_tasks::FileTasks::new(
-            store.clone(),
             file_platform.clone(),
             events.clone(),
             audio.clone(),

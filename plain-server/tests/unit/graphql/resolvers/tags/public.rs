@@ -356,13 +356,15 @@ async fn notes_and_feed_entries_tag_selected_ids_without_host_or_body_reads() {
         )).unwrap();
     }
     db.with_conn(|connection| {
-        connection.authorizer(Some(|context: AuthContext<'_>| match context.action {
-            AuthAction::Read {
-                table_name: "notes" | "feed_entries",
-                column_name,
-            } if !["id", "deleted_at"].contains(&column_name) => Authorization::Deny,
-            _ => Authorization::Allow,
-        }))
+        connection
+            .authorizer(Some(|context: AuthContext<'_>| match context.action {
+                AuthAction::Read {
+                    table_name: "notes" | "feed_entries",
+                    column_name,
+                } if !["id", "deleted_at"].contains(&column_name) => Authorization::Deny,
+                _ => Authorization::Allow,
+            }))
+            .unwrap()
     });
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();

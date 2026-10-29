@@ -203,9 +203,9 @@ impl MediaScans {
             .ok_or_else(|| "Media scan directories not configured".into())
     }
 
-    pub(crate) fn publish_catalog_rows(&self, rows: &[plain_rs::db::MediaFileRow]) {
+    pub(crate) fn publish_catalog_types(&self, types: impl IntoIterator<Item = i32>) {
         if let Some(events) = &self.events {
-            super::catalog_events::publish(events, rows.iter().map(|row| row.data_type));
+            super::catalog_events::publish(events, types);
         }
     }
 
@@ -342,6 +342,7 @@ impl Session {
 
     pub(crate) async fn record_when_running<T>(
         &self,
+        file_count: usize,
         record: impl FnOnce() -> Result<T, String>,
     ) -> Result<T, String> {
         let mut record = Some(record);
@@ -363,7 +364,7 @@ impl Session {
                 match job.snapshot.status {
                     Status::Running => {
                         let value = record.take().ok_or("Media scan record unavailable")?()?;
-                        job.snapshot.processed_files += 1;
+                        job.snapshot.processed_files += file_count;
                         self.scans.publish(&job.snapshot);
                         return Ok(value);
                     }

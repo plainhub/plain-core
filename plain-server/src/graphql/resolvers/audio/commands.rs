@@ -106,14 +106,14 @@ impl AudioCommandsMutation {
     async fn audio_play_track(
         &self,
         ctx: &Context<'_>,
-        media_id: ID,
+        #[graphql(name = "mediaId")] file_id: ID,
     ) -> Result<AudioPlaybackState> {
         let prefs = ctx.data::<Arc<Prefs>>()?.clone();
         Ok(ctx
             .data::<Arc<Audio>>()?
             .run(move |db, engine| {
-                engine.cache_ids(&[media_id.to_string()])?;
-                let track = queue::track_by_id(db, media_id.as_str())?;
+                engine.cache_ids(&[file_id.to_string()])?;
+                let track = queue::track_by_id(db, file_id.as_str())?;
                 commands::play_track(db, &prefs, engine, track)
             })
             .await?

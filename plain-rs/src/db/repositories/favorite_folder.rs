@@ -40,7 +40,7 @@ pub(crate) mod io {
     }
 }
 pub fn all_folders(db: &Db) -> rusqlite::Result<Vec<FavoriteFolderRow>> {
-    db.with_conn(io::all)
+    db.with_conn(|conn| io::all(conn))
 }
 pub fn folder_by_paths(
     db: &Db,

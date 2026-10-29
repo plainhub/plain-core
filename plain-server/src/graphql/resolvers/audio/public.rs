@@ -19,7 +19,8 @@ pub use plain_rs::media::audio::play_mode::MediaPlayMode;
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct AudioItem {
-    pub media_id: Option<async_graphql::ID>,
+    #[graphql(name = "mediaId")]
+    pub file_id: Option<async_graphql::ID>,
     pub title: String,
     pub artist: String,
     pub path: String,
@@ -113,7 +114,8 @@ pub struct AudioPlaylistCovers {
 #[derive(SimpleObject, Clone, Debug)]
 pub struct AudioPlayback {
     pub revision: Long,
-    pub media_id: Option<async_graphql::ID>,
+    #[graphql(name = "mediaId")]
+    pub file_id: Option<async_graphql::ID>,
     pub path: Option<String>,
     pub mode: MediaPlayMode,
     #[graphql(name = "isPlaying")]
@@ -228,13 +230,13 @@ impl AudioQuery {
     async fn audio_lyrics(
         &self,
         ctx: &Context<'_>,
-        media_id: async_graphql::ID,
+        #[graphql(name = "mediaId")] file_id: async_graphql::ID,
     ) -> async_graphql::Result<Option<String>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let path = audio(ctx)?
             .run(move |db, lib| {
-                lib.cache_ids(&[media_id.to_string()])?;
-                Ok(domain::track_by_id(db, media_id.as_str())?.path)
+                lib.cache_ids(&[file_id.to_string()])?;
+                Ok(domain::track_by_id(db, file_id.as_str())?.path)
             })
             .await?;
         let lyrics = read_lyrics(ctx, path).await?;
@@ -339,11 +341,11 @@ impl AudioQuery {
     }
 
     async fn audio_playback(&self, ctx: &Context<'_>) -> async_graphql::Result<AudioPlayback> {
-        let (current, media_id) = audio(ctx)?
+        let (current, file_id) = audio(ctx)?
             .run(|db, _| {
                 Ok((
                     plain_rs::media::audio::playback::snapshot(db)?,
-                    db.audio_current_media_id(),
+                    db.audio_current_file_id(),
                 ))
             })
             .await?;
@@ -361,7 +363,7 @@ impl AudioQuery {
         };
         Ok(AudioPlayback {
             revision: Long(current.revision),
-            media_id: media_id.map(Into::into),
+            file_id: file_id.map(Into::into),
             path: Some(current.path).filter(|path| !path.is_empty()),
             mode,
             is_playing: player.is_playing,
@@ -391,12 +393,12 @@ impl AudioMutation {
     async fn play_audio(
         &self,
         ctx: &Context<'_>,
-        media_id: async_graphql::ID,
+        #[graphql(name = "mediaId")] file_id: async_graphql::ID,
     ) -> async_graphql::Result<AudioItem> {
         let track = audio(ctx)?
             .run(move |db, lib| {
-                lib.cache_ids(&[media_id.to_string()])?;
-                let track = domain::track_by_id(db, media_id.as_str())?;
+                lib.cache_ids(&[file_id.to_string()])?;
+                let track = domain::track_by_id(db, file_id.as_str())?;
                 plain_rs::media::audio::playback::prepare_track(db, &track)?;
                 Ok(track)
             })
@@ -422,13 +424,15 @@ impl AudioMutation {
     async fn clear_audio_queue(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
         let prefs = prefs(ctx).clone();
         let local = is_local(ctx);
-        audio(ctx)?.run(move |db, engine| {
-            domain::clear_queue(db)?;
-            if local {
-                plain_rs::media::audio::commands::clear_engine(db, &prefs, engine)?;
-            }
-            Ok(())
-        }).await?;
+        audio(ctx)?
+            .run(move |db, engine| {
+                domain::clear_queue(db)?;
+                if local {
+                    plain_rs::media::audio::commands::clear_engine(db, &prefs, engine)?;
+                }
+                Ok(())
+            })
+            .await?;
         notify_playback(ctx)?;
         Ok(true)
     }
@@ -436,14 +440,14 @@ impl AudioMutation {
     async fn remove_audio_from_queue(
         &self,
         ctx: &Context<'_>,
-        media_id: async_graphql::ID,
+        #[graphql(name = "mediaId")] file_id: async_graphql::ID,
     ) -> async_graphql::Result<bool> {
         let prefs = prefs(ctx).clone();
         let local = is_local(ctx);
         audio(ctx)?
             .run(move |db, engine| {
-                let current = db.audio_current_media_id().as_deref() == Some(media_id.as_str());
-                domain::remove_queued(db, media_id.as_str())?;
+                let current = db.audio_current_file_id().as_deref() == Some(file_id.as_str());
+                domain::remove_queued(db, file_id.as_str())?;
                 if local && current && domain::get_audio_current(db)?.is_empty() {
                     plain_rs::media::audio::commands::clear_engine(db, &prefs, engine)?;
                 }
@@ -475,7 +479,7 @@ impl AudioMutation {
                 lib.cache_ids(
                     &tracks
                         .iter()
-                        .filter_map(|track| track.media_id.clone())
+                        .filter_map(|track| track.file_id.clone())
                         .collect::<Vec<_>>(),
                 )?;
                 domain::enqueue_selecting_if_idle(db, &tracks)
@@ -488,13 +492,13 @@ impl AudioMutation {
     async fn reorder_audio_queue(
         &self,
         ctx: &Context<'_>,
-        media_ids: Vec<async_graphql::ID>,
+        #[graphql(name = "mediaIds")] file_ids: Vec<async_graphql::ID>,
     ) -> async_graphql::Result<bool> {
         audio(ctx)?
             .run(move |db, _| {
                 domain::reorder_queued(
                     db,
-                    &media_ids
+                    &file_ids
                         .into_iter()
                         .map(|id| id.to_string())
                         .collect::<Vec<_>>(),
@@ -575,7 +579,7 @@ impl AudioMutation {
                 lib.cache_ids(
                     &tracks
                         .iter()
-                        .filter_map(|track| track.media_id.clone())
+                        .filter_map(|track| track.file_id.clone())
                         .collect::<Vec<_>>(),
                 )?;
                 domain::add_playlist_items(db, id.as_str(), &tracks)
@@ -637,7 +641,7 @@ pub(crate) async fn search_tracks(
         .await?;
         let count = page.len();
         tracks.extend(page.into_iter().map(|row| AudioTrack {
-            media_id: row["id"].as_str().map(str::to_owned),
+            file_id: row["id"].as_str().map(str::to_owned),
             path: crate::graphql::types::facts::text(&row, "path"),
             title: crate::graphql::types::facts::text(&row, "title"),
             artist: crate::graphql::types::facts::text(&row, "artist"),
@@ -664,7 +668,7 @@ async fn read_lyrics(ctx: &Context<'_>, path: String) -> async_graphql::Result<S
 
 fn item(track: AudioTrack) -> AudioItem {
     AudioItem {
-        media_id: track.media_id.map(Into::into),
+        file_id: track.file_id.map(Into::into),
         title: track.title,
         artist: track.artist,
         path: track.path,
@@ -674,7 +678,7 @@ fn item(track: AudioTrack) -> AudioItem {
 
 fn playlist_item(row: plain_rs::db::PlaylistItem) -> AudioItem {
     AudioItem {
-        media_id: Some(row.media_id.into()),
+        file_id: Some(row.file_id.into()),
         title: row.title,
         artist: row.artist,
         path: row.audio_path,
@@ -693,12 +697,17 @@ fn playlist(row: Playlist, count: usize) -> async_graphql::Result<AudioPlaylist>
 }
 
 pub(crate) fn is_local(ctx: &Context<'_>) -> bool {
-    ctx.data_opt::<crate::graphql::executor::RequestOrigin>() == Some(&crate::graphql::executor::RequestOrigin::Local)
+    ctx.data_opt::<crate::graphql::executor::RequestOrigin>()
+        == Some(&crate::graphql::executor::RequestOrigin::Local)
 }
 
 pub(crate) fn audio(ctx: &Context<'_>) -> async_graphql::Result<AudioService> {
     let service = ctx.data::<Arc<AudioService>>()?;
-    Ok(if is_local(ctx) { service.as_ref().clone() } else { service.remote() })
+    Ok(if is_local(ctx) {
+        service.as_ref().clone()
+    } else {
+        service.remote()
+    })
 }
 
 fn library_sort(

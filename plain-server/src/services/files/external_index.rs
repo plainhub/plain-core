@@ -12,7 +12,7 @@ use std::{
 };
 use tokio::time::Instant;
 
-const IDENTITY_PREFIX: &str = "external_media_identity:";
+const IDENTITY_PREFIX: &str = "external_file_identity:";
 const MOVE_PAIR_TIMEOUT: Duration = Duration::from_secs(1);
 const BACKGROUND_BATCH_SIZE: usize = 32;
 const VOLUME_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
@@ -159,11 +159,11 @@ async fn run(state: &ServerState) -> Result<bool> {
     };
     for entry in state.store.get()?.scan_prefix(IDENTITY_PREFIX) {
         let (key, value) = entry?;
-        let row: Known = serde_json::from_slice(&value)?;
+        let row: Known = serde_json::from_str(&value)?;
         let path = PathBuf::from(&row.identity.path);
-        if key.as_ref() != identity_key(&path).as_bytes()
+        if key != identity_key(&path)
             || !path.is_absolute()
-            || row.identity.media_id.is_empty()
+            || row.identity.file_id.is_empty()
             || !matches!(row.identity.media_type, 1 | 2 | 3 | 24)
         {
             bail!("invalid saved external media identity");
@@ -580,7 +580,7 @@ fn save_identities(
         batch.remove(identity_key(path));
     }
     for (path, row) in updates {
-        batch.insert(identity_key(path), serde_json::to_vec(row)?);
+        batch.insert(identity_key(path), serde_json::to_string(row)?);
     }
     store.apply_batch(batch)
 }
@@ -589,8 +589,7 @@ fn matches_identity(row: &Known, key: Option<&str>, current: &[Identity]) -> boo
     match (row.file_key.as_deref(), key) {
         (Some(previous), Some(current)) => previous == current,
         _ => current.iter().any(|current| {
-            current.media_type == row.identity.media_type
-                && current.media_id == row.identity.media_id
+            current.media_type == row.identity.media_type && current.file_id == row.identity.file_id
         }),
     }
 }

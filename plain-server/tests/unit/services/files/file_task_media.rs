@@ -5,13 +5,13 @@ fn identity_receipts_reject_empty_ids_duplicate_paths_foreign_paths_and_non_medi
     let paths = vec!["/media/image.png".to_owned()];
     let row = Identity {
         media_type: 3,
-        media_id: "42".into(),
+        file_id: "42".into(),
         path: paths[0].clone(),
     };
     validate(&[row.clone()], &paths).unwrap();
     for rows in [
         vec![Identity {
-            media_id: String::new(),
+            file_id: String::new(),
             ..row.clone()
         }],
         vec![row.clone(), row.clone()],
@@ -20,7 +20,7 @@ fn identity_receipts_reject_empty_ids_duplicate_paths_foreign_paths_and_non_medi
             ..row.clone()
         }],
         vec![Identity {
-            media_type: 22,
+            media_type: 6,
             ..row.clone()
         }],
     ] {

@@ -18,7 +18,6 @@ use std::{
 };
 use tokio::sync::broadcast;
 pub struct FileTasks {
-    store: Arc<plain_rs::kv::LazyDb>,
     completion: Arc<tokio::sync::Notify>,
     deletion_lock: tokio::sync::Mutex<()>,
     events: broadcast::Sender<WsEvent>,
@@ -27,7 +26,6 @@ pub struct FileTasks {
 }
 impl FileTasks {
     pub(crate) fn new(
-        store: Arc<plain_rs::kv::LazyDb>,
         platform: Arc<FilePlatform>,
         events: broadcast::Sender<WsEvent>,
         audio: Arc<crate::services::audio::host::Audio>,
@@ -36,7 +34,6 @@ impl FileTasks {
         duration_cache: Arc<plain_rs::media::duration_cache::DurationCache>,
     ) -> Self {
         Self {
-            store,
             completion: Arc::new(tokio::sync::Notify::new()),
             hooks: Arc::new(NativeHooks {
                 platform,
@@ -122,11 +119,11 @@ impl FileTasks {
         previous: super::file_task_media::Identity,
         current: &super::file_task_media::Identity,
     ) -> Result<()> {
-        if previous.path != current.path || current.media_id.is_empty() {
+        if previous.path != current.path || current.file_id.is_empty() {
             bail!("invalid replacement media receipt");
         }
         self.hooks.platform.authorize(&current.path, false).await?;
-        if previous.media_type == current.media_type && previous.media_id == current.media_id {
+        if previous.media_type == current.media_type && previous.file_id == current.file_id {
             return Ok(());
         }
         let _lock = self.deletion_lock.lock().await;
@@ -147,7 +144,7 @@ impl FileTasks {
                     let before = plain_rs::media::audio::playback::snapshot(db)?;
                     let item = plain_rs::files::deletes::Item {
                         media_type: previous.media_type,
-                        id: previous.media_id,
+                        id: previous.file_id,
                         path: previous.path,
                     };
                     index
@@ -393,6 +390,13 @@ impl NativeHooks {
         let destination =
             crate::services::files::file_task_media::normalized(std::path::Path::new(&op.dst))
                 .await?;
+        if !self.platform.host.uses_system_media_catalog() {
+            self.platform.db.clone().change_file_paths(
+                &source,
+                &destination,
+                plain_rs::db::files::PathChange::Move,
+            )?;
+        }
         self.duration_cache
             .invalidate_paths(&[], &[op.src.clone(), op.dst.clone(), source, destination])?;
         Ok(())
@@ -464,11 +468,17 @@ impl NativeHooks {
     fn scan_completed<'a>(&'a self, kind: FileTaskType, op: &'a CompletedOp) -> HookResult<'a> {
         Box::pin(async move {
             let root = PathBuf::from(&op.dst);
-            let mut walker = crate::services::files::file_task_walk::FileWalker::new(&root);
+            let mut walker = if self.platform.host.uses_system_media_catalog() {
+                crate::services::files::file_task_walk::FileWalker::new(&root)
+            } else {
+                crate::services::files::file_task_walk::FileWalker::entries(&root)
+            };
             let mut batch = Vec::new();
             while let Some(path) = walker.next().await? {
                 let info = tokio::fs::symlink_metadata(&path).await?;
-                if info.is_file() {
+                if info.is_file()
+                    || (info.is_dir() && !self.platform.host.uses_system_media_catalog())
+                {
                     batch.push(
                         path.to_str()
                             .ok_or_else(|| anyhow!("invalid path encoding"))?

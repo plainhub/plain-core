@@ -10,7 +10,8 @@ use std::{collections::HashSet, path::Path};
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Identity {
     pub(crate) media_type: i32,
-    pub(crate) media_id: String,
+    #[serde(rename = "mediaId")]
+    pub(crate) file_id: String,
     pub(crate) path: String,
 }
 #[derive(Serialize, Deserialize)]
@@ -27,8 +28,8 @@ async fn lookup(platform: &FilePlatform, paths: &[String]) -> Result<Vec<Identit
 pub(crate) fn validate(rows: &[Identity], paths: &[String]) -> Result<()> {
     let mut seen = HashSet::new();
     for row in rows {
-        if !matches!(row.media_type, 1 | 2 | 3 | 24)
-            || row.media_id.is_empty()
+        if !matches!(row.media_type, 1 | 2 | 3 | 22 | 24)
+            || row.file_id.is_empty()
             || !paths.contains(&row.path)
             || !seen.insert(&row.path)
         {
@@ -55,7 +56,11 @@ pub(crate) async fn normalized(path: &Path) -> Result<String> {
 }
 pub(crate) async fn prepare(platform: &FilePlatform, source: &str) -> Result<Value> {
     let root = normalized(Path::new(source)).await?;
-    let mut walker = FileWalker::new(Path::new(&root));
+    let mut walker = if platform.host.uses_system_media_catalog() {
+        FileWalker::new(Path::new(&root))
+    } else {
+        FileWalker::entries(Path::new(&root))
+    };
     let mut batch = Vec::new();
     let mut items = Vec::new();
     while let Some(path) = walker.next().await? {
@@ -115,8 +120,8 @@ pub(crate) async fn resolve(
                 .ok_or_else(|| anyhow!("moved media identity missing: {path}"))?;
             bindings.push(Binding {
                 media_type: source.media_type,
-                source_id: source.media_id.clone(),
-                destination_id: target.media_id.clone(),
+                source_id: source.file_id.clone(),
+                destination_id: target.file_id.clone(),
                 source_path: source.path.clone(),
                 destination_path: path,
             });
@@ -151,7 +156,7 @@ pub(crate) fn deleted_items(
         .filter(|item| paths.contains(&item.path))
         .map(|item| plain_rs::files::deletes::Item {
             media_type: item.media_type,
-            id: item.media_id,
+            id: item.file_id,
             path: item.path,
         })
         .collect())

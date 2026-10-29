@@ -116,9 +116,11 @@ pub fn delete_tag(db: &Db, id: &str) -> rusqlite::Result<()> {
 }
 pub fn relations_for_key(db: &Db, key: &str) -> rusqlite::Result<Vec<TagRelationRow>> {
     db.with_conn(|c| {
-        c.prepare("SELECT tag_id,target_key FROM tag_relations WHERE target_key=? ORDER BY tag_id ASC")?
-            .query_map([key], row_to_relation)?
-            .collect()
+        c.prepare(
+            "SELECT tag_id,target_key FROM tag_relations WHERE target_key=? ORDER BY tag_id ASC",
+        )?
+        .query_map([key], row_to_relation)?
+        .collect()
     })
 }
 pub fn relations_for_keys_of_kind(
@@ -158,6 +160,23 @@ pub fn remove_relations_for_keys(db: &Db, keys: &[String]) -> rusqlite::Result<(
         )?;
         Ok(())
     })
+}
+
+pub(crate) fn move_file_path(
+    conn: &Connection,
+    source: &str,
+    destination: &str,
+) -> rusqlite::Result<()> {
+    if source == destination {
+        return Ok(());
+    }
+    let kind = crate::enums::DataType::File.kind();
+    conn.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) SELECT tag_id,?1,type,created_at FROM tag_relations WHERE type=?2 AND target_key=?3 ON CONFLICT(tag_id,target_key,type) DO UPDATE SET created_at=min(tag_relations.created_at,excluded.created_at)",params![destination,kind,source])?;
+    conn.execute(
+        "DELETE FROM tag_relations WHERE type=?1 AND target_key=?2",
+        params![kind, source],
+    )?;
+    Ok(())
 }
 #[cfg(test)]
 #[path = "../../../tests/unit/db/repositories/tag.rs"]

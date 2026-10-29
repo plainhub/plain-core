@@ -23,6 +23,7 @@ fn recreated_runtime_rejects_reports_from_the_previous_engine_session() {
     let previous = snapshot(&db).unwrap();
     drop(db);
     let db = Db::open(&path).unwrap();
+    register_audio(&db, &audio_queue::AudioTrack::from_path_stem("one"));
     let current = invalidate(&db).unwrap();
     assert!(!report(&db, "one", previous.revision, 123).unwrap());
     assert!(report(&db, "one", current.revision, 456).unwrap());
@@ -45,16 +46,12 @@ fn reopening_remembers_only_the_current_track_and_preserves_queue_and_history() 
     let playing = invalidate(&db).unwrap();
     assert!(report(&db, "one", playing.revision, 234_567).unwrap());
     loaded(&db, "one", playing.revision).unwrap();
-    let id = db
-        .media_file_by_path(crate::enums::DataType::Audio, "one")
-        .unwrap()
-        .unwrap()
-        .id;
+    let id = db.audio_current_file_id().unwrap();
     assert_eq!(
         fixtures::history_row(&db, &id).unwrap().position_ms,
         234_567
     );
-    assert_eq!(db.audio_current_media_id().unwrap(), id);
+    assert_eq!(db.audio_current_file_id().unwrap(), id);
     assert!(
         crate::prefs::Prefs::load(&crate::prefs::default_path(dir.path()))
             .unwrap()
@@ -65,6 +62,7 @@ fn reopening_remembers_only_the_current_track_and_preserves_queue_and_history() 
     drop(db);
 
     let db = Db::open(&path).unwrap();
+    register_audio(&db, &track);
     let restored = snapshot(&db).unwrap();
     assert_eq!(restored.path, "one");
     assert_eq!(restored.position_ms, 0);
@@ -86,7 +84,9 @@ fn reopening_remembers_only_the_current_track_and_preserves_queue_and_history() 
     );
     indexed_current(&db, "two").unwrap();
     drop(db);
-    assert_eq!(snapshot(&Db::open(&path).unwrap()).unwrap().path, "two");
+    let reopened = Db::open(&path).unwrap();
+    register_audio(&reopened, &audio_queue::AudioTrack::from_path_stem("two"));
+    assert_eq!(snapshot(&reopened).unwrap().path, "two");
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn failed_database_commit_restores_current_track_row_and_runtime() {
     db.with_conn(|c| c.execute_batch("PRAGMA foreign_keys=ON; CREATE TABLE parent(id INTEGER PRIMARY KEY); CREATE TABLE child(parent_id INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED);")).unwrap();
     assert!(
         db.audio_transaction(|tx, state| {
-            state.current_media_id = Some("test:two".into());
+            state.current_file_id = Some("test:two".into());
             state.select("two")?;
             tx.execute("INSERT INTO child VALUES(1)", [])?;
             Ok(())
@@ -106,7 +106,7 @@ fn failed_database_commit_restores_current_track_row_and_runtime() {
         .is_err()
     );
     assert_eq!(snapshot(&db).unwrap(), before);
-    let selected = db.audio_current_media_id().unwrap();
+    let selected = db.audio_current_file_id().unwrap();
     assert_eq!(selected, "test:one");
 }
 
@@ -117,12 +117,13 @@ fn failed_current_media_write_keeps_the_source_and_runtime_unchanged() {
     indexed_current(&db, "one").unwrap();
     let before = seek(&db, 123).unwrap();
     register_audio(&db, &audio_queue::AudioTrack::from_path_stem("two"));
-    let store = db.key_values().unwrap();
-    let stored = store.get("local_audio_current_media_id").unwrap();
-    store.set_write_failure_for_test(true);
+    let store = db.key_values();
+    let stored = store.get("local_audio_current_file_id").unwrap();
+    db.with_conn(|conn|conn.execute_batch("CREATE TRIGGER reject_current BEFORE INSERT ON key_values WHEN NEW.key='local_audio_current_file_id' BEGIN SELECT RAISE(ABORT,'current write failed'); END;")).unwrap();
     assert!(audio_queue::save_audio_current(&db, "two").is_err());
-    store.set_write_failure_for_test(false);
-    assert_eq!(store.get("local_audio_current_media_id").unwrap(), stored);
+    db.with_conn(|conn| conn.execute_batch("DROP TRIGGER reject_current;"))
+        .unwrap();
+    assert_eq!(store.get("local_audio_current_file_id").unwrap(), stored);
     assert_eq!(snapshot(&db).unwrap(), before);
     assert_eq!(audio_queue::get_audio_current(&db).unwrap(), "one");
 }
@@ -157,12 +158,13 @@ fn current_and_progress_reset_are_atomic() {
     audio_queue::save_audio_current(&db, "one").unwrap();
     seek(&db, 123).unwrap();
     register_audio(&db, &audio_queue::AudioTrack::from_path_stem("two"));
-    let store = db.key_values().unwrap();
-    let stored = store.get("local_audio_current_media_id").unwrap();
-    store.set_write_failure_for_test(true);
+    let store = db.key_values();
+    let stored = store.get("local_audio_current_file_id").unwrap();
+    db.with_conn(|conn|conn.execute_batch("CREATE TRIGGER reject_current BEFORE INSERT ON key_values WHEN NEW.key='local_audio_current_file_id' BEGIN SELECT RAISE(ABORT,'current write failed'); END;")).unwrap();
     assert!(audio_queue::save_audio_current(&db, "two").is_err());
-    store.set_write_failure_for_test(false);
-    assert_eq!(store.get("local_audio_current_media_id").unwrap(), stored);
+    db.with_conn(|conn| conn.execute_batch("DROP TRIGGER reject_current;"))
+        .unwrap();
+    assert_eq!(store.get("local_audio_current_file_id").unwrap(), stored);
     assert_eq!(audio_queue::get_audio_current(&db).unwrap(), "one");
     assert_eq!(snapshot(&db).unwrap().position_ms, 123);
     assert_eq!(seek(&db, 456).unwrap().position_ms, 456);

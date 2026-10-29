@@ -118,18 +118,18 @@ fn save_position(
     position_ms: i64,
 ) -> rusqlite::Result<()> {
     use rusqlite::OptionalExtension;
-    let media_id = conn
+    let file_id = conn
         .query_row(
-            "SELECT media_id FROM audio_media WHERE path=?1 UNION SELECT a.media_id FROM platform_audio_aliases a JOIN audio_media m USING(media_id) WHERE a.path=?1",
+            "SELECT file_id FROM audio_media WHERE path=?1 UNION SELECT a.file_id FROM platform_audio_aliases a JOIN audio_media m USING(file_id) WHERE a.path=?1",
             [path],
             |row| row.get::<_, String>(0),
         )
         .optional()?;
-    if let Some(media_id) = media_id {
+    if let Some(file_id) = file_id {
         crate::db::media_play_history::update_progress(
             conn,
             crate::enums::DataType::Audio,
-            &media_id,
+            &file_id,
             position_ms,
         )?;
     }

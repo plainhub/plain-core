@@ -12,7 +12,8 @@ pub struct FileRecord {
     pub is_dir: bool,
     pub child_count: i32,
     #[serde(default)]
-    pub media_id: String,
+    #[serde(rename = "mediaId")]
+    pub file_id: String,
 }
 impl FileRecord {
     pub fn stat(path: &std::path::Path) -> std::io::Result<Self> {
@@ -36,7 +37,7 @@ impl From<crate::files::filesystem::FileEntry> for FileRecord {
             size: entry.size,
             is_dir: entry.is_dir,
             child_count: entry.child_count,
-            media_id: String::new(),
+            file_id: String::new(),
         }
     }
 }

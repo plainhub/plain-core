@@ -51,10 +51,13 @@ fn encode(value: &Pending) -> anyhow::Result<Value> {
 }
 
 pub fn pending(store: &Db) -> anyhow::Result<Vec<Pending>> {
-    store.scan_prefix(PREFIX).map(|entry| {
-        let (_, value) = entry?;
-        decode(serde_json::from_slice(&value)?)
-    }).collect()
+    store
+        .scan_prefix(PREFIX)
+        .map(|entry| {
+            let (_, value) = entry?;
+            decode(serde_json::from_str(&value)?)
+        })
+        .collect()
 }
 
 pub fn register(
@@ -74,15 +77,11 @@ pub fn register(
         terminal_result_code: None,
         terminal_at_millis: None,
     };
-    store.set_json(
-        &key(&value.request_id),
-        &value,
-    )?;
+    store.set_json(&key(&value.request_id), &value)?;
     Ok(())
 }
 pub fn cancel(store: &Db, id: &str) -> anyhow::Result<()> {
     store.remove(&key(id))?;
-    store.flush()?;
     Ok(())
 }
 

@@ -56,7 +56,14 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
         directory.path().join("cache"),
     ));
     index.use_system_catalog_for_test();
-    let runtime = Runtime::new(directory.path().into(), host, prefs, Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("fjall"))), index, events);
+    let runtime = Runtime::new(
+        directory.path().into(),
+        host,
+        prefs,
+        Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("plain.db"))),
+        index,
+        events,
+    );
     runtime.import().await.unwrap();
     settled(&runtime).await;
     assert_eq!(
@@ -134,7 +141,14 @@ async fn catalog_changes_share_one_cancellable_timer_and_do_not_retain_the_runti
         directory.path().join("cache"),
     ));
     index.use_system_catalog_for_test();
-    let runtime = Runtime::new(directory.path().into(), host.clone(), prefs, Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("fjall"))), index, events);
+    let runtime = Runtime::new(
+        directory.path().into(),
+        host.clone(),
+        prefs,
+        Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("plain.db"))),
+        index,
+        events,
+    );
     runtime.catalog_changed();
     assert!(runtime.catalog_task.lock().unwrap().is_none());
     runtime.observing.store(true, Ordering::Release);
@@ -208,7 +222,14 @@ async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_do
         directory.path().join("cache"),
     ));
     index.use_system_catalog_for_test();
-    let runtime = Runtime::new(directory.path().into(), host, prefs, Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("fjall"))), index, events);
+    let runtime = Runtime::new(
+        directory.path().into(),
+        host,
+        prefs,
+        Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("plain.db"))),
+        index,
+        events,
+    );
     let (stop, stopped) = tokio::sync::watch::channel(false);
     runtime.follow(stopped);
     tokio::time::timeout(Duration::from_secs(10), async {
@@ -253,7 +274,14 @@ async fn native_model_restore_and_shutdown_do_not_request_sdk_observers_or_catal
         directory.path().join("cache"),
     ));
     index.use_native_catalog_for_test();
-    let runtime = Runtime::new(directory.path().into(), host, prefs, Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("fjall"))), index, events);
+    let runtime = Runtime::new(
+        directory.path().into(),
+        host,
+        prefs,
+        Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("plain.db"))),
+        index,
+        events,
+    );
     runtime.enable(true).await.unwrap();
     settled(&runtime).await;
     assert_eq!(
@@ -284,7 +312,14 @@ fn projection_runtime() -> (
         directory.path().join("cache"),
     ));
     index.use_native_catalog_for_test();
-    let runtime = Runtime::new(directory.path().into(), host, prefs, Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("fjall"))), index, events);
+    let runtime = Runtime::new(
+        directory.path().into(),
+        host,
+        prefs,
+        Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("plain.db"))),
+        index,
+        events,
+    );
     (directory, runtime, updates)
 }
 
@@ -363,10 +398,7 @@ async fn initial_snapshot_is_published_before_the_core_is_returned_to_consumers(
     let mut events = state.events.subscribe();
     tokio::task::yield_now().await;
     while let Ok(event) = events.try_recv() {
-        assert!(!matches!(
-            event.event_type,
-            "IMAGE_MODELS_UPDATED"
-        ));
+        assert!(!matches!(event.event_type, "IMAGE_MODELS_UPDATED"));
     }
     core.stop_core().await;
 }

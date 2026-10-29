@@ -13,3 +13,6 @@ pub mod android;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod download_directory;
 pub mod network;
+
+#[cfg(any(feature = "library", feature = "storage-platform"))]
+pub mod volumes;

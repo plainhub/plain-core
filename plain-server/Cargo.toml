@@ -53,7 +53,7 @@ parking_lot = "0.12"
 "uuid" = { "version" = "1", "features" = ["v4", "serde"] }
 "log" = "0.4"
 "libc" = "0.2"
-"rusqlite" = { "version" = "0.32", "features" = ["bundled"], "optional" = true }
+"rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "cache"], "optional" = true }
 "regex" = { "version" = "1", "optional" = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }
 "async-graphql" = { "version" = "7", "default-features" = false, "features" = ["dataloader"], "optional" = true }

@@ -1,7 +1,8 @@
 pub const HISTORY_KEEP: usize = 200;
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct QueueItem {
-    pub media_id: String,
+    #[serde(rename = "media_id")]
+    pub file_id: String,
     pub path: String,
     pub sort_order: i64,
     pub title: String,
@@ -19,7 +20,8 @@ pub struct Playlist {
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PlaylistItem {
-    pub media_id: String,
+    #[serde(rename = "media_id")]
+    pub file_id: String,
     pub id: String,
     pub playlist_id: String,
     pub audio_path: String,

@@ -101,7 +101,8 @@ async fn rescan_with_failed_probe_retains_current_known_metadata_without_host_ro
     known.cover_image_id = Some("known-album".into());
     known.size_bytes = 999;
     let original = catalog.record_files(&[known]).unwrap().remove(0);
-    let (_generation, mut requests) = crate::test_support::HostRequests::connect(&core.runtime_state().host);
+    let (_generation, mut requests) =
+        crate::test_support::HostRequests::connect(&core.runtime_state().host);
     let updated = catalog
         .scan_file(plain_rs::enums::DataType::Audio, path.to_str().unwrap())
         .await
@@ -131,7 +132,8 @@ async fn file_scan_cancel_aborts_pending_reads_and_keeps_catalog_unchanged() {
     let mut catalog = core.native_media_catalog().unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
-    let (_generation, mut requests) = crate::test_support::HostRequests::connect(&core.runtime_state().host);
+    let (_generation, mut requests) =
+        crate::test_support::HostRequests::connect(&core.runtime_state().host);
     let worker = tokio::spawn({
         let catalog = catalog.clone();
         let path = path.clone();
@@ -190,7 +192,8 @@ async fn aborted_scan_future_releases_the_shared_job_and_failed_scans_report_par
     let mut catalog = core.native_media_catalog().unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
-    let (_generation, mut requests) = crate::test_support::HostRequests::connect(&core.runtime_state().host);
+    let (_generation, mut requests) =
+        crate::test_support::HostRequests::connect(&core.runtime_state().host);
     let worker = tokio::spawn({
         let catalog = catalog.clone();
         let path = path.clone();
@@ -313,9 +316,9 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
     done.send(()).unwrap();
     authorize.await.unwrap();
     assert_eq!(result.status, Status::Completed);
-    assert_eq!(result.total_files, Some(3));
-    assert_eq!(result.processed_files, 3);
-    assert_eq!(catalog.count(plain_rs::enums::DataType::Doc).unwrap(), 2);
+    assert_eq!(result.total_files, Some(7));
+    assert_eq!(result.processed_files, 7);
+    assert_eq!(catalog.count(plain_rs::enums::DataType::Doc).unwrap(), 3);
     assert_eq!(catalog.count(plain_rs::enums::DataType::Image).unwrap(), 1);
     assert!(
         catalog
@@ -343,7 +346,8 @@ async fn directory_scan_cancels_during_the_first_read_without_catalog_writes() {
     std::fs::write(root.join("visible.txt"), b"data").unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
-    let (_generation, mut requests) = crate::test_support::HostRequests::connect(&core.runtime_state().host);
+    let (_generation, mut requests) =
+        crate::test_support::HostRequests::connect(&core.runtime_state().host);
     let worker = tokio::spawn({
         let catalog = catalog.clone();
         let root = root.to_str().unwrap().to_owned();
@@ -383,7 +387,8 @@ async fn directory_scan_cancellation_releases_a_bounded_producer_without_committ
     catalog.configure_scan_directories(None).unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
-    let (_generation, mut requests) = crate::test_support::HostRequests::connect(&core.runtime_state().host);
+    let (_generation, mut requests) =
+        crate::test_support::HostRequests::connect(&core.runtime_state().host);
     let worker = tokio::spawn({
         let catalog = catalog.clone();
         let root = root.to_str().unwrap().to_owned();
@@ -517,7 +522,8 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
     catalog.set_source_directories(&sources).unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
-    let (_generation, mut requests) = crate::test_support::HostRequests::connect(&core.runtime_state().host);
+    let (_generation, mut requests) =
+        crate::test_support::HostRequests::connect(&core.runtime_state().host);
     let worker = tokio::spawn({
         let catalog = catalog.clone();
         async move { catalog.scan_source_directories("/").await }
@@ -584,7 +590,8 @@ async fn background_source_scan_is_busy_before_the_first_read_and_core_stop_join
         .unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
-    let (_generation, mut requests) = crate::test_support::HostRequests::connect(&core.runtime_state().host);
+    let (_generation, mut requests) =
+        crate::test_support::HostRequests::connect(&core.runtime_state().host);
     let started = catalog.start_source_scan("/").unwrap();
     assert!(catalog.start_source_scan("/").is_err());
     tokio::time::timeout(std::time::Duration::from_secs(5), gate.0.notified())
@@ -716,5 +723,76 @@ async fn native_catalog_records_and_removal_publish_one_typed_change_per_batch()
     assert!(events.try_recv().is_err());
     assert_eq!(catalog.forget_path(path.to_str().unwrap()).unwrap(), 0);
     assert!(events.try_recv().is_err());
+    core.stop_core().await;
+}
+
+#[cfg(feature = "media")]
+#[tokio::test]
+async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
+    use plain_rs::{db::FileKind, enums::DataType};
+    let directory = directory_scan_fixture();
+    let core =
+        crate::assembly::server::ContentServer::open(&directory.path().join("core")).unwrap();
+    let catalog = core.native_media_catalog().unwrap();
+    catalog.configure_scan_directories(None).unwrap();
+    let path = directory.path().join("song.wav");
+    std::fs::write(&path, b"unrecognized audio bytes").unwrap();
+    let scan = || {
+        catalog
+            .scan_completed_files(serde_json::json!({"paths":[path]}))
+            .unwrap()
+    };
+    scan();
+    let original = catalog
+        .by_path(DataType::Audio, path.to_str().unwrap())
+        .unwrap()
+        .unwrap();
+    let id: i64 = original.id.parse().unwrap();
+    let db = core.runtime_state().db.clone();
+    db.with_conn(|conn| -> rusqlite::Result<()> {
+        conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [id])?;
+        conn.execute("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('nomedia-tag','Tag',1,'2026-01-01','2026-01-01')", [])?;
+        conn.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('nomedia-tag',?1,?2,'2026-01-01')", rusqlite::params![original.id, DataType::Audio.kind()])?;
+        Ok(())
+    }).unwrap();
+    let marker = directory.path().join(".nomedia");
+    std::fs::write(&marker, b"").unwrap();
+    let mut events = core.runtime_state().events.subscribe();
+    scan();
+    let event = events.try_recv().unwrap();
+    assert_eq!(event.event_type, plain_rs::events::MEDIA_LIBRARY_UPDATED);
+    assert!(crate::services::files::catalog_events::includes(
+        &event.payload,
+        DataType::Audio
+    ));
+    assert!(crate::services::files::catalog_events::includes(
+        &event.payload,
+        DataType::File
+    ));
+    assert_eq!(catalog.count(DataType::Audio).unwrap(), 0);
+    let file = db.file(id).unwrap().unwrap();
+    assert_eq!(file.kind, FileKind::File);
+    assert!(file.favorited);
+    std::fs::remove_file(marker).unwrap();
+    scan();
+    assert_eq!(catalog.count(DataType::Audio).unwrap(), 1);
+    assert_eq!(
+        catalog
+            .by_path(DataType::Audio, path.to_str().unwrap())
+            .unwrap()
+            .unwrap()
+            .id,
+        original.id
+    );
+    assert!(db.file(id).unwrap().unwrap().favorited);
+    assert_eq!(
+        db.with_conn(|conn| conn.query_row(
+            "SELECT count(*) FROM tag_relations WHERE tag_id='nomedia-tag' AND target_key=?1",
+            [&original.id],
+            |row| row.get::<_, i64>(0)
+        ))
+        .unwrap(),
+        1
+    );
     core.stop_core().await;
 }

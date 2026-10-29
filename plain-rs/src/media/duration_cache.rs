@@ -12,7 +12,8 @@ const PREFIX: &str = "android_media_duration:";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Duration {
     pub media_type: String,
-    pub media_id: String,
+    #[serde(rename = "media_id")]
+    pub file_id: String,
     pub path: String,
     pub size_bytes: i64,
     pub modified_at: String,
@@ -23,7 +24,7 @@ pub struct Duration {
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Identity {
     pub media_type: String,
-    pub media_id: String,
+    pub file_id: String,
     pub path: String,
     pub size_bytes: i64,
     pub modified_at: String,
@@ -37,7 +38,9 @@ pub struct DurationCache {
 
 impl DurationCache {
     pub fn new(data_dir: &Path) -> Self {
-        Self::with_store(Arc::new(LazyDb::new(crate::kv::default_db_path(data_dir))))
+        Self::with_store(Arc::new(LazyDb::new(
+            crate::data_paths::DataPaths::new(data_dir).database(),
+        )))
     }
 
     pub fn with_store(store: Arc<LazyDb>) -> Self {
@@ -58,7 +61,7 @@ impl DurationCache {
             db.scan_prefix(PREFIX)
                 .map(|entry| {
                     let (_, value) = entry?;
-                    Ok(serde_json::from_slice(&value)?)
+                    Ok(serde_json::from_str(&value)?)
                 })
                 .collect()
         })
@@ -81,11 +84,10 @@ impl DurationCache {
             identities
                 .iter()
                 .map(|identity| {
-                    let Some(bytes) = db.get(key(&identity.media_type, &identity.media_id)?)?
-                    else {
+                    let Some(bytes) = db.get(key(&identity.media_type, &identity.file_id)?)? else {
                         return Ok(None);
                     };
-                    let value: Duration = serde_json::from_slice(&bytes)?;
+                    let value: Duration = serde_json::from_str(&bytes)?;
                     let modified =
                         chrono::DateTime::parse_from_rfc3339(&identity.modified_at)?.timestamp();
                     let stored =
@@ -115,7 +117,7 @@ impl DurationCache {
     }
 
     fn save_locked(&self, mut value: Duration) -> Result<()> {
-        let key = key(&value.media_type, &value.media_id)?;
+        let key = key(&value.media_type, &value.file_id)?;
         if value.path.is_empty() || value.size_bytes < 0 || value.duration_ms <= 0 {
             bail!("Invalid media duration cache entry");
         }
@@ -123,10 +125,7 @@ impl DurationCache {
             .with_timezone(&chrono::Utc)
             .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         value.updated_at = crate::utils::dbtime::now_iso_millis();
-        self.with_db(|db| {
-            db.insert(key, serde_json::to_vec(&value)?)?;
-            db.flush()
-        })
+        self.with_db(|db| db.insert(key, serde_json::to_string(&value)?))
     }
 
     pub fn remove(&self, media_type: &str, ids: &[String]) -> Result<usize> {
@@ -151,7 +150,6 @@ impl DurationCache {
                 return Ok(0);
             }
             db.apply_batch(batch)?;
-            db.flush()?;
             Ok(removed.len())
         })
     }
@@ -167,7 +165,7 @@ impl DurationCache {
             let mut changed = false;
             for entry in db.scan_prefix(PREFIX) {
                 let (key, value) = entry?;
-                let value: Duration = serde_json::from_slice(&value)?;
+                let value: Duration = serde_json::from_str(&value)?;
                 let path = Path::new(&value.path);
                 if paths.iter().any(|item| path == Path::new(item))
                     || roots.iter().any(|root| path.starts_with(root))
@@ -179,8 +177,7 @@ impl DurationCache {
             if !changed {
                 return Ok(());
             }
-            db.apply_batch(batch)?;
-            db.flush()
+            db.apply_batch(batch)
         })
     }
 }

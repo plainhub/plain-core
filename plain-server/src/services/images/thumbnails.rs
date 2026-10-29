@@ -22,7 +22,8 @@ pub(crate) struct Request {
     pub(crate) width: u32,
     pub(crate) height: u32,
     pub(crate) center_crop: bool,
-    pub(crate) media_id: String,
+    #[serde(rename = "mediaId")]
+    pub(crate) file_id: String,
     pub(crate) file_name: String,
     #[serde(default)]
     pub(crate) if_none_match: Option<String>,
@@ -60,7 +61,7 @@ async fn fingerprint(request: &Request) -> Result<Option<String>, String> {
         request.width,
         request.height,
         request.center_crop,
-        request.media_id,
+        request.file_id,
         request.file_name,
         "mobile-v1"
     ])
@@ -114,7 +115,7 @@ async fn decode_sdk(
         service: &state.thumbnails,
         token: token.clone(),
     };
-    let result=state.host.call_wait("thumbnailDecode",json!({"outputToken":token,"path":request.path,"width":request.width,"height":request.height,"centerCrop":request.center_crop,"mediaId":if system { &request.media_id }else{""},"fileName":request.file_name})).await?;
+    let result=state.host.call_wait("thumbnailDecode",json!({"outputToken":token,"path":request.path,"width":request.width,"height":request.height,"centerCrop":request.center_crop,"mediaId":if system { &request.file_id }else{""},"fileName":request.file_name})).await?;
     if result.is_null() {
         return Ok(None);
     }

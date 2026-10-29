@@ -4,7 +4,7 @@ fn known(path: &str, key: Option<&str>) -> Known {
     Known {
         identity: Identity {
             media_type: 3,
-            media_id: "provider:42".into(),
+            file_id: "provider:42".into(),
             path: path.into(),
         },
         file_key: key.map(str::to_owned),
@@ -33,7 +33,7 @@ fn directory_move_identity_batch_survives_reopen_without_stale_sources_or_neighb
     let destination = PathBuf::from("/media/destination/image.png");
     let neighbor = PathBuf::from("/media/source-other/image.png");
     {
-        let store = plain_rs::kv::Db::open(directory.path()).unwrap();
+        let store = plain_rs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
         save_identities(
             &store,
             &[
@@ -57,11 +57,11 @@ fn directory_move_identity_batch_survives_reopen_without_stale_sources_or_neighb
         .unwrap();
         assert!(store.get(identity_key(&old)).unwrap().is_none());
     }
-    let store = plain_rs::kv::Db::open(directory.path()).unwrap();
+    let store = plain_rs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     assert!(store.get(identity_key(&old)).unwrap().is_none());
     for path in [&destination, &neighbor] {
         let row: Known =
-            serde_json::from_slice(&store.get(identity_key(path)).unwrap().unwrap()).unwrap();
+            serde_json::from_str(&store.get(identity_key(path)).unwrap().unwrap()).unwrap();
         assert_eq!(row.identity.path, path.to_str().unwrap());
     }
     assert_eq!(store.scan_prefix(IDENTITY_PREFIX).count(), 2);

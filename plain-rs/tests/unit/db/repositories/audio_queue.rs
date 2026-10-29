@@ -10,7 +10,7 @@ fn replace_queue_items_assigns_dense_sort_orders() {
         &db,
         &[
             crate::db::QueueItem {
-                media_id: format!("test:{}", "/a.mp3"),
+                file_id: format!("test:{}", "/a.mp3"),
                 path: "/a.mp3".into(),
                 sort_order: 99,
                 title: "A".into(),
@@ -18,7 +18,7 @@ fn replace_queue_items_assigns_dense_sort_orders() {
                 duration_ms: 1,
             },
             crate::db::QueueItem {
-                media_id: format!("test:{}", "/b.mp3"),
+                file_id: format!("test:{}", "/b.mp3"),
                 path: "/b.mp3".into(),
                 sort_order: -5,
                 title: "B".into(),
@@ -55,7 +55,7 @@ fn history_records_order_equal_timestamps_by_rowid_and_update_existing_rows() {
             .unwrap();
         db.with_conn(|conn| {
             conn.execute(
-                "UPDATE media_play_history SET played_at=?1 WHERE media_id=?2",
+                "UPDATE media_play_history SET played_at=?1 WHERE file_id=?2",
                 rusqlite::params![played_at, format!("test:{path}")],
             )
         })
@@ -64,7 +64,7 @@ fn history_records_order_equal_timestamps_by_rowid_and_update_existing_rows() {
     let rows = crate::media::play_history::matching(&db, &[]).unwrap();
     assert_eq!(
         rows.iter()
-            .map(|row| row.media_id.as_str())
+            .map(|row| row.file_id.as_str())
             .collect::<Vec<_>>(),
         [
             "test:/tie2.mp3",
@@ -75,10 +75,10 @@ fn history_records_order_equal_timestamps_by_rowid_and_update_existing_rows() {
     );
     db.media_play_history_record(crate::enums::DataType::Audio, "test:/old.mp3", 123)
         .unwrap();
-    db.with_conn(|conn| conn.execute("UPDATE media_play_history SET played_at='2026-01-03T00:00:00.000Z' WHERE media_id='test:/old.mp3'", [])).unwrap();
+    db.with_conn(|conn| conn.execute("UPDATE media_play_history SET played_at='2026-01-03T00:00:00.000Z' WHERE file_id='test:/old.mp3'", [])).unwrap();
     let rows = crate::media::play_history::matching(&db, &[]).unwrap();
     assert_eq!(rows.len(), 4);
-    assert_eq!(rows[0].media_id, "test:/old.mp3");
+    assert_eq!(rows[0].file_id, "test:/old.mp3");
     assert_eq!(rows[0].play_count, 2);
     assert_eq!(rows[0].position_ms, 123);
 }
@@ -98,7 +98,7 @@ fn remove_by_paths_deletes_only_matching_audio_history() {
         crate::media::play_history::matching(&db, &crate::utils::search_dsl::parse("type:AUDIO"))
             .unwrap();
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].media_id, "test:/b.mp3");
+    assert_eq!(rows[0].file_id, "test:/b.mp3");
     assert_eq!(history_row(&db, "video").unwrap().position_ms, 999);
 }
 
@@ -114,7 +114,7 @@ fn playlist_item_counts_and_bulk_delete() {
         ],
     );
     let item = |pl: &str, path: &str, sort: i64| crate::db::PlaylistItem {
-        media_id: format!("test:{path}"),
+        file_id: format!("test:{path}"),
         id: format!("{pl}-{path}"),
         playlist_id: pl.into(),
         audio_path: path.into(),

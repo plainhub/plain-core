@@ -16,7 +16,7 @@ fn a_data_directory_is_initialized_once_and_remains_locked_for_the_process() {
         assert!(path.is_dir(), "{}", path.display());
     }
     assert!(!paths.database().exists());
-    assert!(!paths.kv().exists());
+    assert!(!paths.database().exists());
     let other = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -43,7 +43,7 @@ fn invalid_fixed_directory_prevents_store_initialization() {
     assert!(DataDirectory::open(directory.path(), &directory.path().join("cache")).is_err());
     assert!(!paths.database().exists());
     assert!(!paths.prefs().exists());
-    assert!(!paths.kv().exists());
+    assert!(!paths.database().exists());
     assert_eq!(
         std::fs::read(paths.audio()).unwrap(),
         b"file in place of directory"
@@ -57,7 +57,7 @@ fn invalid_pending_restore_prevents_store_initialization() {
     assert!(DataDirectory::open(directory.path(), &directory.path().join("cache")).is_err());
     assert!(!paths.database().exists());
     assert!(!paths.prefs().exists());
-    assert!(!paths.kv().exists());
+    assert!(!paths.database().exists());
 }
 #[test]
 fn existing_lock_ownership_prevents_restore_application() {

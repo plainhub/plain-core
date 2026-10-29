@@ -44,7 +44,7 @@ fn a_changed_media_file_is_reindexed() {
 }
 
 #[test]
-fn a_non_media_file_is_never_catalogued() {
+fn ordinary_files_are_catalogued_without_media_probes() {
     let dir = tempfile::tempdir().unwrap();
     for name in ["notes.txt.bak.tmp", "archive.zip"] {
         let path = dir.path().join(name);
@@ -55,14 +55,14 @@ fn a_non_media_file_is_never_catalogued() {
                 &EventKind::Create(notify::event::CreateKind::File),
                 false
             ),
-            Effect::Ignore,
-            "{name} is not a catalog kind"
+            Effect::Index,
+            "{name} must be searchable"
         );
     }
 }
 
 #[test]
-fn a_dotfile_is_ignored_but_a_nomedia_marker_rescans() {
+fn dotfiles_are_indexed_and_a_nomedia_marker_rescans() {
     let dir = tempfile::tempdir().unwrap();
     let hidden = dir.path().join(".hidden.mp4");
     std::fs::write(&hidden, b"x").unwrap();
@@ -72,7 +72,7 @@ fn a_dotfile_is_ignored_but_a_nomedia_marker_rescans() {
             &EventKind::Create(notify::event::CreateKind::File),
             false
         ),
-        Effect::Ignore
+        Effect::Index
     );
     assert_eq!(
         effect_for(

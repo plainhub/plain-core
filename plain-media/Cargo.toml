@@ -13,12 +13,10 @@ description = "Shared Plain media scanning, indexing and thumbnails"
 "test-seams" = []
 
 [dependencies]
-"rand" = "0.8"
 "log" = "0.4"
 "serde" = { "version" = "1", "features" = ["derive"] }
 "serde_json" = { "version" = "1" }
 "anyhow" = { "version" = "1" }
-"chrono" = { "version" = "0.4", "features" = ["serde"] }
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"] }
 "fast_image_resize" = { "version" = "5", "features" = ["rayon"] }
 "jpeg-decoder" = { "version" = "0.3", "default-features" = true }

@@ -217,7 +217,7 @@ fn image_embedding_blob_survives_the_base64_boundary() {
     let raw: Vec<u8> = (0u8..=255).collect();
     let encoded = crate::utils::base64::base64_encode(&raw);
     db.embedding_save(&ImageEmbeddingRow {
-        id: "e1".into(),
+        file_id: "e1".into(),
         path: "/photos/a.jpg".into(),
         embedding_base64: encoded.clone(),
         created_at: "2026-01-01T00:00:00.000Z".into(),
@@ -241,7 +241,7 @@ fn image_embedding_delete_all() {
     let db = test_db("embedding_all");
     for id in ["a", "b"] {
         db.embedding_save(&ImageEmbeddingRow {
-            id: id.into(),
+            file_id: id.into(),
             path: format!("/{id}.jpg"),
             embedding_base64: "P4AAAA==".into(),
             created_at: "2026-01-01T00:00:00.000Z".into(),

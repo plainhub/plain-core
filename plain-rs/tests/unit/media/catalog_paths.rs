@@ -44,7 +44,7 @@ fn media_exclusions() {
     );
     // The app's own dirs (thumb cache pollution source).
     assert!(excl("/opt/plainapp/cache/thumbs/ab/x.webp"));
-    assert!(excl("/opt/plainapp/data/fjall/000001.sst"));
+    assert!(excl("/opt/plainapp/data/plain.db"));
 }
 
 #[test]

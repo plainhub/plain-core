@@ -41,7 +41,7 @@ async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
         .db
         .with_conn(|conn| {
             conn.execute(
-                "UPDATE media_items SET trashed=1 WHERE id=?1",
+                "UPDATE files SET trashed_at='2026-01-01T00:00:00Z',original_path=path WHERE id=?1",
                 [&rows[1].id],
             )
         })
@@ -199,12 +199,18 @@ fn native_move_runs_one_commit_after_the_physical_move_and_preserves_collisions(
             );
             assert_eq!(
                 db.with_conn(|connection| connection.query_row(
-                    "SELECT path FROM media_items WHERE id=?1",
+                    "SELECT path FROM file_catalog WHERE id=?1",
                     [&id],
                     |row| row.get::<_, String>(0)
                 ))
                 .unwrap(),
-                source.to_string_lossy()
+                source
+                    .parent()
+                    .unwrap()
+                    .canonicalize()
+                    .unwrap()
+                    .join(source.file_name().unwrap())
+                    .to_string_lossy()
             );
             plain_rs::media::actions::cleanup(
                 &db,
@@ -222,7 +228,7 @@ fn native_move_runs_one_commit_after_the_physical_move_and_preserves_collisions(
     );
     assert_eq!(
         db.with_conn(|connection| connection.query_row(
-            "SELECT path FROM media_items WHERE id=?1",
+            "SELECT path FROM file_catalog WHERE id=?1",
             [&id],
             |row| row.get::<_, String>(0)
         ))
@@ -325,13 +331,15 @@ fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row()
     let good_path = directory.path().join("good.wav");
     let blocked = directory.path().join("blocked");
     std::fs::write(&good_path, b"document").unwrap();
-    std::fs::write(&blocked, b"not a directory").unwrap();
+    std::fs::create_dir(&blocked).unwrap();
     let good = seed_kind(&db, &good_path, DataType::Audio);
     let bad = seed_kind(&db, &blocked.join("missing.wav"), DataType::Audio);
+    std::fs::remove_dir(&blocked).unwrap();
+    std::fs::write(&blocked, b"not a directory").unwrap();
     db.with_conn(|connection| -> rusqlite::Result<()> {
         connection.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio',1,'now','now'),('video','video',2,'now','now');")?;
         for (index, id) in [&good, &bad].into_iter().enumerate() {
-            connection.execute("INSERT INTO audio_queue_items(media_id,sort_order) VALUES(?1,?2)", rusqlite::params![id,index as i64])?;
+            connection.execute("INSERT INTO audio_queue_items(file_id,sort_order) VALUES(?1,?2)", rusqlite::params![id,index as i64])?;
             connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio',?1,1,'now'),('video',?1,2,'now')", [id])?;
         }
         Ok(())
@@ -363,10 +371,8 @@ fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row()
     assert!(!good_path.exists());
     db.with_conn(|connection| -> rusqlite::Result<()> {
         assert_eq!(
-            connection.query_row("SELECT media_id FROM audio_queue_items", [], |row| row
-                .get::<_, String>(
-                0
-            ))?,
+            connection.query_row("SELECT file_id FROM audio_queue_items", [], |row| row
+                .get::<_, String>(0))?,
             bad
         );
         assert_eq!(
@@ -409,11 +415,19 @@ fn wrong_media_type_and_corrupt_catalog_rows_never_delete_source_files() {
     assert_eq!(outcome.failed_ids, vec![id.clone()]);
     assert!(path.exists());
     db.with_conn(|connection| -> rusqlite::Result<()> {
-        connection.execute("UPDATE media_items SET path=X'FF' WHERE id=?1", [&id])?;
+        assert!(
+            connection
+                .execute("UPDATE files SET path=X'FF' WHERE id=?1", [&id])
+                .is_err()
+        );
         Ok(())
     })
     .unwrap();
-    assert!(files(&db, DataType::Doc, Action::Delete, &[id], false, "").is_err());
+    assert!(
+        db.media_file_by_path(DataType::Doc, path.to_str().unwrap())
+            .unwrap()
+            .is_some()
+    );
     assert!(path.exists());
 }
 
@@ -451,13 +465,15 @@ async fn partial_main_media_actions_invalidate_only_completed_duration_entries()
         let good_path = directory.path().join("good.mp4");
         let blocked = directory.path().join("blocked");
         std::fs::write(&good_path, b"document").unwrap();
-        std::fs::write(&blocked, b"not a directory").unwrap();
+        std::fs::create_dir(&blocked).unwrap();
         let bad_path = blocked.join("bad.mp4");
         let good = seed_kind(&state.db, &good_path, kind);
         let bad = seed_kind(&state.db, &bad_path, kind);
+        std::fs::remove_dir(&blocked).unwrap();
+        std::fs::write(&blocked, b"not a directory").unwrap();
         let duration = |id: &str, path: &Path| Duration {
             media_type: media_type.into(),
-            media_id: id.into(),
+            file_id: id.into(),
             path: path.to_string_lossy().into_owned(),
             size_bytes: 8,
             modified_at: "2026-01-01T00:00:00Z".into(),
@@ -486,7 +502,7 @@ async fn partial_main_media_actions_invalidate_only_completed_duration_entries()
         assert!(blocked.is_file());
         let remaining = state.duration_cache.all().unwrap();
         assert_eq!(remaining.len(), 1);
-        assert_eq!(remaining[0].media_id, bad);
+        assert_eq!(remaining[0].file_id, bad);
         assert_eq!(remaining[0].duration_ms, 5_000_000_001);
         assert!(
             !state

@@ -14,14 +14,14 @@ function sharedDbSource() {
 
 export function generateDatabaseSql() {
   const src = sharedDbSource().map((path) => readFileSync(path, 'utf8')).join('\n')
-  const stmts = [...src.matchAll(/(CREATE (?:TABLE|UNIQUE INDEX|INDEX) IF NOT EXISTS [\s\S]*?);/g)].map((m) =>
+  const stmts = [...src.matchAll(/(CREATE (?:VIRTUAL TABLE|TABLE|UNIQUE INDEX|INDEX) IF NOT EXISTS [\s\S]*?;|CREATE TRIGGER IF NOT EXISTS [\s\S]*?\nEND;)/g)].map((m) =>
     m[1]
       .split('\n')
       .map((l) => l.trimEnd())
       .filter((l, i) => l.trim() !== '' || i > 0)
       .map((l, i, lines) => i > 0 && i < lines.length - 1 ? `    ${l.trim()}` : l.trim())
       .join('\n')
-      .trim() + ';',
+      .trim(),
   )
   const schemaSource = readFileSync(join(ROOT, 'plain-rs/src/db/schema/mod.rs'), 'utf8')
   const version = schemaSource.match(/const VERSION: i32 = (\d+);/)[1]

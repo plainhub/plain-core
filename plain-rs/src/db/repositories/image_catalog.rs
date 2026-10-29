@@ -1,5 +1,4 @@
 use crate::db::Db;
-use crate::enums::DataType;
 use crate::error::{DomainError, DomainResult};
 use crate::media::images::indexing::{Image, Page, Snapshot};
 use rusqlite::{Connection, params, params_from_iter};
@@ -8,25 +7,29 @@ pub(crate) fn init(connection: &Connection) -> rusqlite::Result<()> {
     connection.execute_batch(
         "CREATE TEMP TABLE image_catalog_revision (revision INTEGER NOT NULL);
         INSERT INTO image_catalog_revision VALUES(0);
-        CREATE TEMP TRIGGER image_catalog_insert AFTER INSERT ON main.media_items WHEN NEW.data_type=3 BEGIN
+        CREATE TEMP TRIGGER image_catalog_insert AFTER INSERT ON main.files WHEN NEW.kind='IMAGE' BEGIN
             UPDATE image_catalog_revision SET revision=revision+1;
         END;
-        CREATE TEMP TRIGGER image_catalog_delete AFTER DELETE ON main.media_items WHEN OLD.data_type=3 BEGIN
+        CREATE TEMP TRIGGER image_catalog_delete AFTER DELETE ON main.files WHEN OLD.kind='IMAGE' BEGIN
             UPDATE image_catalog_revision SET revision=revision+1;
         END;
-        CREATE TEMP TRIGGER image_catalog_update AFTER UPDATE ON main.media_items
-        WHEN (OLD.data_type=3 OR NEW.data_type=3) AND (
-            OLD.id IS NOT NEW.id OR OLD.path IS NOT NEW.path OR OLD.data_type IS NOT NEW.data_type OR
-            OLD.trashed IS NOT NEW.trashed OR OLD.size_bytes IS NOT NEW.size_bytes OR OLD.updated_at IS NOT NEW.updated_at
+        CREATE TEMP TRIGGER image_catalog_update AFTER UPDATE ON main.files
+        WHEN (OLD.kind='IMAGE' OR NEW.kind='IMAGE') AND (
+            OLD.id IS NOT NEW.id OR OLD.path IS NOT NEW.path OR OLD.kind IS NOT NEW.kind OR
+            OLD.trashed_at IS NOT NEW.trashed_at OR OLD.missing IS NOT NEW.missing OR OLD.volume_id IS NOT NEW.volume_id OR OLD.size_bytes IS NOT NEW.size_bytes OR OLD.updated_at IS NOT NEW.updated_at
         ) BEGIN
+            UPDATE image_catalog_revision SET revision=revision+1;
+        END;
+        CREATE TEMP TRIGGER image_catalog_volume_update AFTER UPDATE OF path,is_available ON main.volumes
+        WHEN OLD.path IS NOT NEW.path OR OLD.is_available IS NOT NEW.is_available BEGIN
             UPDATE image_catalog_revision SET revision=revision+1;
         END;"
     )
 }
 
 fn revision(connection: &Connection) -> DomainResult<String> {
-    let external: u64 = connection.pragma_query_value(None, "data_version", |row| row.get(0))?;
-    let local: u64 = connection.query_row(
+    let external: i64 = connection.pragma_query_value(None, "data_version", |row| row.get(0))?;
+    let local: i64 = connection.query_row(
         "SELECT revision FROM temp.image_catalog_revision",
         [],
         |row| row.get(0),
@@ -59,9 +62,9 @@ pub fn snapshot(db: &Db) -> DomainResult<Snapshot> {
     db.with_conn(|connection| {
         let before = revision(connection)?;
         let total: usize = connection.query_row(
-            "SELECT count(*) FROM media_items WHERE data_type=?1 AND trashed=0",
-            [DataType::Image.kind()],
-            |row| row.get(0),
+            "SELECT count(*) FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND v.is_available=1",
+            [],
+            |row| crate::db::read_count(row, 0),
         )?;
         if revision(connection)? != before {
             return Err(DomainError::Other(
@@ -80,9 +83,9 @@ pub fn page(db: &Db, expected: &str, cursor: &str, limit: usize) -> DomainResult
         return Err(DomainError::Other("Invalid image catalog page size".into()));
     }
     read(db, expected, |connection| {
-        let mut statement = connection.prepare("SELECT id,path FROM media_items WHERE data_type=?1 AND trashed=0 AND id>?2 ORDER BY id LIMIT ?3")?;
+        let mut statement = connection.prepare("SELECT CAST(f.id AS TEXT),rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND v.is_available=1 AND f.id>CAST(?1 AS INTEGER) ORDER BY f.id LIMIT ?2")?;
         let items = statement
-            .query_map(params![DataType::Image.kind(), cursor, limit], |row| {
+            .query_map(params![cursor, limit as i64], |row| {
                 Ok(Image {
                     id: row.get(0)?,
                     path: row.get(1)?,
@@ -109,8 +112,7 @@ pub fn resolve(db: &Db, expected: &str, ids: &[String]) -> DomainResult<Vec<Imag
             return Ok(Vec::new());
         }
         let sql = format!(
-            "SELECT id,path FROM media_items WHERE data_type={} AND trashed=0 AND id IN ({}) ORDER BY id",
-            DataType::Image.kind(),
+            "SELECT CAST(f.id AS TEXT),rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND v.is_available=1 AND f.id IN ({}) ORDER BY f.id",
             vec!["?"; ids.len()].join(",")
         );
         let mut statement = connection.prepare(&sql)?;

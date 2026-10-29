@@ -43,14 +43,18 @@ pub use nearby_device::DNearbyDeviceCache;
 pub use peer::DPeer;
 #[cfg(feature = "library")]
 pub use simple::{
-    ArchivedConversationRow, ClipboardRow, ImageEmbeddingRow, PomodoroItemRow, SessionRow, ShareRow,
-    TrashedMessageRow,
+    ArchivedConversationRow, ClipboardRow, ImageEmbeddingRow, PomodoroItemRow, SessionRow,
+    ShareRow, TrashedMessageRow,
 };
 #[cfg(feature = "library")]
 pub use tag::{TagRelationRow, TagRow};
 
 #[cfg(feature = "library")]
+pub mod file;
+#[cfg(feature = "library")]
 pub mod media_file;
+#[cfg(feature = "library")]
+pub use file::{FileKind, FileRow, VolumeRow};
 #[cfg(feature = "library")]
 pub use media_file::{
     MediaFileMetadata, MediaFileMetadataAvailability, MediaFileMetadataRead, MediaFileRow,

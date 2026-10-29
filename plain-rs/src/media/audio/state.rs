@@ -1,9 +1,7 @@
 use super::playback::Playback;
 use crate::db::Db;
 use crate::error::{DomainError, DomainResult};
-use std::sync::{Arc, Mutex};
-
-
+use std::sync::Mutex;
 
 use std::sync::atomic::{AtomicI64, Ordering};
 
@@ -12,7 +10,7 @@ static NEXT_REVISION: AtomicI64 = AtomicI64::new(1);
 #[derive(Clone)]
 pub(crate) struct State {
     pub playback: Playback,
-    pub current_media_id: Option<String>,
+    pub current_file_id: Option<String>,
     pub load_revision: i64,
     pub started_revision: i64,
 }
@@ -24,7 +22,7 @@ impl State {
                 path,
                 ..Playback::default()
             },
-            current_media_id: None,
+            current_file_id: None,
             load_revision: -1,
             started_revision: -1,
         }
@@ -41,7 +39,7 @@ impl State {
 
     pub fn select(&mut self, path: &str) -> DomainResult<()> {
         if path.is_empty() {
-            self.current_media_id = None;
+            self.current_file_id = None;
         }
         if self.playback.path != path {
             self.advance()?;
@@ -57,25 +55,18 @@ impl State {
 pub(crate) struct Runtime {
     state: Mutex<State>,
     restored: Mutex<bool>,
-    store: Option<Arc<crate::kv::Db>>,
     key: &'static str,
 }
 
 impl Runtime {
-    pub fn new(store: Option<Arc<crate::kv::Db>>, key: &'static str) -> DomainResult<Self> {
+    pub fn new(key: &'static str, current_file_id: Option<String>) -> Self {
         let mut state = State::new(String::new());
-        state.current_media_id = match &store {
-            Some(store) => store.get(key)
-                .map_err(|e| DomainError::Other(e.to_string()))?
-                .map(|value| String::from_utf8(value.to_vec()))
-                .transpose().map_err(|e| DomainError::Other(e.to_string()))?,
-            None => None,
-        };
-        Ok(Self { state: Mutex::new(state), restored: Mutex::new(false), store, key })
-    }
-
-    pub fn key_values(&self) -> Option<Arc<crate::kv::Db>> {
-        self.store.clone()
+        state.current_file_id = current_file_id;
+        Self {
+            state: Mutex::new(state),
+            restored: Mutex::new(false),
+            key,
+        }
     }
 
     pub fn restore_needed(&self) -> bool {
@@ -116,16 +107,14 @@ impl Runtime {
         let result = db.with_conn(|connection| -> DomainResult<T> {
             let transaction = connection.unchecked_transaction()?;
             let result = operation(&transaction, &mut next)?;
-            transaction.commit()?;
-            if next.current_media_id != state.current_media_id {
-                if let Some(store) = &self.store {
-                    match &next.current_media_id {
-                        Some(id) => store.insert(self.key, id.as_bytes()),
-                        None => store.remove(self.key),
-                    }.map_err(|e| DomainError::Other(e.to_string()))?;
-                    store.flush().map_err(|e| DomainError::Other(e.to_string()))?;
-                }
+            if next.current_file_id != state.current_file_id {
+                crate::kv::set_in_connection(
+                    &transaction,
+                    self.key,
+                    next.current_file_id.as_deref(),
+                )?;
             }
+            transaction.commit()?;
             Ok(result)
         })?;
         *state = next;

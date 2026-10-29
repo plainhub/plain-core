@@ -70,7 +70,7 @@ fn document_filters_and_explicit_trash_selection_use_current_catalog() {
     );
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE media_items SET trashed=1 WHERE id=?1",
+            "UPDATE files SET trashed_at='2026-01-01T00:00:00Z',original_path=path WHERE id=?1",
             [&created[0].id],
         )
     })
@@ -114,7 +114,7 @@ fn bucket_items_use_shared_visibility_and_original_folder_names() {
         .unwrap();
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE media_items SET trashed=1 WHERE id=?1",
+            "UPDATE files SET trashed_at='2026-01-01T00:00:00Z',original_path=path WHERE id=?1",
             [&created[0].id],
         )
     })
@@ -164,7 +164,7 @@ fn action_ids_share_filters_and_explicit_from_trash_overrides_the_query_mode() {
         .unwrap();
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE media_items SET trashed=1 WHERE id=?1",
+            "UPDATE files SET trashed_at='2026-01-01T00:00:00Z',original_path=path WHERE id=?1",
             [&created[0].id],
         )
     })

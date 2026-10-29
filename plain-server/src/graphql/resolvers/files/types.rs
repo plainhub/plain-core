@@ -53,7 +53,7 @@ pub struct File {
     pub permission: String,
     /// Empty for non-media files — exposed as `null` rather than an empty id.
     #[graphql(name = "mediaId")]
-    pub media_id: Option<ID>,
+    pub file_id: Option<ID>,
     pub name: String,
     pub path: String,
     #[graphql(name = "createdAt")]

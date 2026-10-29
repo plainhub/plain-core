@@ -26,7 +26,7 @@ fn explicit_id_selection_preserves_order_and_rejects_empty_members() {
 #[test]
 fn owned_queue_rows_keep_their_string_allocations_when_projected() {
     let row = QueueItem {
-        media_id: "synthetic-audio".into(),
+        file_id: "synthetic-audio".into(),
         path: "/synthetic/track.mp3".into(),
         title: "Synthetic title".into(),
         artist: "Synthetic artist".into(),
@@ -34,7 +34,7 @@ fn owned_queue_rows_keep_their_string_allocations_when_projected() {
         sort_order: 7,
     };
     let allocations = [
-        row.media_id.as_ptr(),
+        row.file_id.as_ptr(),
         row.path.as_ptr(),
         row.title.as_ptr(),
         row.artist.as_ptr(),
@@ -42,14 +42,14 @@ fn owned_queue_rows_keep_their_string_allocations_when_projected() {
     let track = AudioTrack::from(row);
     assert_eq!(
         [
-            track.media_id.as_ref().unwrap().as_ptr(),
+            track.file_id.as_ref().unwrap().as_ptr(),
             track.path.as_ptr(),
             track.title.as_ptr(),
             track.artist.as_ptr()
         ],
         allocations
     );
-    assert_eq!(track.media_id.as_deref(), Some("synthetic-audio"));
+    assert_eq!(track.file_id.as_deref(), Some("synthetic-audio"));
     assert_eq!(track.path, "/synthetic/track.mp3");
     assert_eq!(track.title, "Synthetic title");
     assert_eq!(track.artist, "Synthetic artist");
@@ -223,10 +223,7 @@ fn play_starts_increment_counts_and_trim_old_audio_history() {
     indexed_on_playing(&db, "/tq7/a.mp3", "A2", "X", 2).unwrap();
     let h = history_row(&db, "test:/tq7/a.mp3").unwrap();
     assert_eq!(h.play_count, 2);
-    let metadata = db
-        .media_file_by_path(crate::enums::DataType::Audio, "/tq7/a.mp3")
-        .unwrap()
-        .unwrap();
+    let metadata = track_by_id(&db, "test:/tq7/a.mp3").unwrap();
     assert_eq!(metadata.title, "A2");
     assert_eq!(metadata.duration_ms, 2);
     for i in 0..(crate::db::HISTORY_KEEP * 5 / 4 + 2) {
@@ -288,6 +285,7 @@ fn state_survives_reopen() {
         indexed_on_playing(&db, "/p/a.mp3", "A", "X", 1).unwrap();
     }
     let db = crate::db::Db::open(&path).unwrap();
+    fixtures::register_audio(&db, &audio("/p/a.mp3", "A", 1));
     let listed = playlists(&db).unwrap();
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].1, 1);
@@ -306,9 +304,10 @@ fn milliseconds_survive_restart_without_persisting_album_snapshots() {
     let pl = create_playlist(&db, "Precise").unwrap();
     let mut item = audio("/precise.mp3", "Precise", 117_123);
     item.album_id = "album-42".into();
-    indexed_add_playlist_items(&db, &pl.id, std::slice::from_ref(&item)).unwrap();
-    indexed_enqueue(&db, std::slice::from_ref(&item), false).unwrap();
-    indexed_on_playing(&db, &item.path, &item.title, &item.artist, item.duration_ms).unwrap();
+    fixtures::register_native_audio(&db, &item);
+    add_playlist_items(&db, &pl.id, std::slice::from_ref(&item)).unwrap();
+    enqueue(&db, std::slice::from_ref(&item), false).unwrap();
+    on_playing(&db, &item.path).unwrap();
     drop(db);
     let db = crate::db::Db::open(&path).unwrap();
     assert_eq!(
@@ -355,7 +354,7 @@ fn duplicate_enqueue_uses_last_snapshot_and_preserves_other_tracks() {
 fn failed_queue_and_playlist_batch_writes_roll_back() {
     let db = test_db("rollback_batch");
     indexed_enqueue(&db, &[audio("/old", "Old", 1)], false).unwrap();
-    db.with_conn(|c|c.execute_batch("CREATE TRIGGER reject_queue BEFORE INSERT ON audio_queue_items WHEN NEW.media_id='test:/bad' BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")).unwrap();
+    db.with_conn(|c|c.execute_batch("CREATE TRIGGER reject_queue BEFORE INSERT ON audio_queue_items WHEN NEW.file_id='test:/bad' BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")).unwrap();
     assert!(
         indexed_enqueue(
             &db,
@@ -373,7 +372,7 @@ fn failed_queue_and_playlist_batch_writes_roll_back() {
         vec!["/old"]
     );
     let pl = create_playlist(&db, "List").unwrap();
-    db.with_conn(|c|c.execute_batch("CREATE TRIGGER reject_playlist BEFORE INSERT ON audio_playlist_items WHEN NEW.media_id='test:/bad' BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")).unwrap();
+    db.with_conn(|c|c.execute_batch("CREATE TRIGGER reject_playlist BEFORE INSERT ON audio_playlist_items WHEN NEW.file_id='test:/bad' BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")).unwrap();
     assert!(
         indexed_add_playlist_items(
             &db,
@@ -461,14 +460,14 @@ fn prefix_reorder_preserves_tail_and_current_track_and_navigation() {
     let ids: Vec<_> = queue_page(&db, 0, 5, "")
         .unwrap()
         .iter()
-        .map(|track| track.media_id.clone().unwrap())
+        .map(|track| track.file_id.clone().unwrap())
         .collect();
     reorder_queued(&db, &[ids[2].clone(), ids[0].clone(), ids[1].clone()]).unwrap();
     assert_eq!(
         queue_page(&db, 0, 5, "")
             .unwrap()
             .into_iter()
-            .map(|track| track.media_id.unwrap())
+            .map(|track| track.file_id.unwrap())
             .collect::<Vec<_>>(),
         [
             ids[2].clone(),
@@ -507,7 +506,7 @@ fn removing_current_stops_selection_and_playlist_deletion_leaves_queue() {
     assert!(!remove_queued(&db, "absent").unwrap());
     assert!(remove_queued(&db, "test:/one").unwrap());
     assert_eq!(get_audio_current(&db).unwrap(), "");
-    assert_eq!(db.audio_current_media_id(), None);
+    assert_eq!(db.audio_current_file_id(), None);
     assert_eq!(queue_total(&db).unwrap(), 1);
     save_audio_current(&db, "/two").unwrap();
     clear_queue(&db).unwrap();
@@ -516,7 +515,7 @@ fn removing_current_stops_selection_and_playlist_deletion_leaves_queue() {
 }
 
 #[test]
-fn playlist_query_count_and_bulk_removal_are_scoped_to_media_ids() {
+fn playlist_query_count_and_bulk_removal_are_scoped_to_file_ids() {
     let db = test_db("playlist_query");
     let tracks = [
         audio("/one", "First", 1),
@@ -570,7 +569,7 @@ fn file_cleanup_clears_a_selected_uri_alias_even_when_it_is_not_queued() {
     let uri = "content://media/external/audio/media/42";
     db.cache_platform_audio(
         &[crate::db::audio_catalog::AudioMedia {
-            media_id: Some("42".into()),
+            file_id: Some("42".into()),
             aliases: vec![uri.into()],
             track: AudioTrack::from_path_stem("/music/one.mp3"),
         }],
@@ -584,7 +583,7 @@ fn file_cleanup_clears_a_selected_uri_alias_even_when_it_is_not_queued() {
     db.audio_transaction(|tx, state| remove_root_paths_conn(tx, "/music", state))
         .unwrap();
     assert_eq!(get_audio_current(&db).unwrap(), "");
-    assert_eq!(db.audio_current_media_id(), None);
+    assert_eq!(db.audio_current_file_id(), None);
 }
 
 #[test]
@@ -629,7 +628,7 @@ fn initial_queue_selection_is_unchanged_on_invalid_inputs_and_sql_failure() {
         crate::media::audio::playback::snapshot(&db).unwrap(),
         before
     );
-    db.with_conn(|connection| connection.execute_batch("CREATE TRIGGER reject_second_queue_insert BEFORE INSERT ON audio_queue_items WHEN NEW.media_id='test:/a.mp3' BEGIN SELECT RAISE(ABORT,'owned queue failure'); END;")).unwrap();
+    db.with_conn(|connection| connection.execute_batch("CREATE TRIGGER reject_second_queue_insert BEFORE INSERT ON audio_queue_items WHEN NEW.file_id='test:/a.mp3' BEGIN SELECT RAISE(ABORT,'owned queue failure'); END;")).unwrap();
     assert!(enqueue_selecting_if_idle(&db, &tracks).is_err());
     assert!(queue_page(&db, 0, 10, "").unwrap().is_empty());
     assert_eq!(

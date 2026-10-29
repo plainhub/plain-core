@@ -50,7 +50,7 @@ pub fn read(
         cover_image_id: false,
     };
     Ok(MediaFileMetadataRead {
-        file_identity: crate::utils::file_identity::key(&canonical)?,
+        file_identity: crate::utils::file_identity::within_volume_key(&canonical)?,
         available,
         metadata: MediaFileMetadata {
             data_type,

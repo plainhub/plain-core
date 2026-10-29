@@ -14,7 +14,7 @@ fn first_observation_seeds_history_without_writing_and_reload_preserves_deduplic
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("prefs.json");
     let prefs = Prefs::load(&path).unwrap();
-    let store_path = directory.path().join("fjall");
+    let store_path = directory.path().join("plain.db");
     let store = crate::kv::Db::open(&store_path).unwrap();
     assert!(!prepare(&prefs, &store, "peer", &item("old")).unwrap());
     assert!(!prepare(&prefs, &store, "peer", &item("old")).unwrap());
@@ -34,7 +34,7 @@ fn first_observation_seeds_history_without_writing_and_reload_preserves_deduplic
 fn directions_and_sensitive_items_do_not_advance_the_applied_marker() {
     let directory = tempfile::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
-    let store = crate::kv::Db::open(&directory.path().join("fjall")).unwrap();
+    let store = crate::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     assert!(!prepare(&prefs, &store, "peer", &item("baseline")).unwrap());
     for (direction, receives) in [
         ("off", false),
@@ -72,7 +72,7 @@ fn directions_and_sensitive_items_do_not_advance_the_applied_marker() {
 fn invalid_text_and_identity_never_change_persisted_state() {
     let directory = tempfile::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
-    let store = crate::kv::Db::open(&directory.path().join("fjall")).unwrap();
+    let store = crate::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     for invalid in [
         item(""),
         Item {
@@ -93,7 +93,7 @@ fn invalid_text_and_identity_never_change_persisted_state() {
 fn failed_marker_persistence_does_not_claim_success_or_lose_other_peers() {
     let directory = tempfile::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
-    let store = crate::kv::Db::open(&directory.path().join("fjall")).unwrap();
+    let store = crate::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     assert!(!prepare(&prefs, &store, "peer", &item("old")).unwrap());
     assert!(!prepare(&prefs, &store, "other", &item("other-old")).unwrap());
     let before = store.get_json::<Value>(APPLIED).unwrap();
@@ -108,7 +108,7 @@ fn failed_marker_persistence_does_not_claim_success_or_lose_other_peers() {
 fn invalid_persisted_markers_do_not_claim_success_or_lose_other_peers() {
     let directory = tempfile::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
-    let store = crate::kv::Db::open(&directory.path().join("fjall")).unwrap();
+    let store = crate::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     assert!(!prepare(&prefs, &store, "peer", &item("old")).unwrap());
     assert!(!prepare(&prefs, &store, "other", &item("other-old")).unwrap());
     store

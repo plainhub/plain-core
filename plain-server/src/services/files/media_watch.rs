@@ -2,7 +2,6 @@ use std::path::Path;
 
 use notify::event::{EventKind, ModifyKind};
 use notify::{Event, RecursiveMode, Watcher};
-use plain_rs::enums::DataType;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Effect {
@@ -12,19 +11,6 @@ pub(crate) enum Effect {
     Ignore,
 }
 
-fn media_type_of(path: &Path) -> Option<DataType> {
-    let name = path.file_name()?.to_str()?;
-    let kind = plain_rs::media::catalog_paths::infer_type(name);
-    [
-        DataType::Audio,
-        DataType::Video,
-        DataType::Image,
-        DataType::Doc,
-    ]
-    .into_iter()
-    .find(|data_type| data_type.media_type_str() == Some(kind))
-}
-
 pub(crate) fn effect_for(path: &Path, kind: &EventKind, is_excluded: bool) -> Effect {
     let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
         return Effect::Ignore;
@@ -32,12 +18,9 @@ pub(crate) fn effect_for(path: &Path, kind: &EventKind, is_excluded: bool) -> Ef
     if name == ".nomedia" {
         return Effect::RescanSubtree;
     }
-    if name.starts_with('.') {
-        return Effect::Ignore;
-    }
     match kind {
         EventKind::Create(_) => {
-            if path.is_file() && media_type_of(path).is_some() {
+            if path.is_file() {
                 if is_excluded {
                     Effect::Forget
                 } else {
@@ -53,14 +36,14 @@ pub(crate) fn effect_for(path: &Path, kind: &EventKind, is_excluded: bool) -> Ef
         EventKind::Modify(ModifyKind::Name(_)) => {
             if path.is_dir() {
                 Effect::RescanSubtree
-            } else if path.is_file() && media_type_of(path).is_some() && !is_excluded {
+            } else if path.is_file() && !is_excluded {
                 Effect::Index
             } else {
                 Effect::Forget
             }
         }
         EventKind::Modify(_) => {
-            if path.is_file() && media_type_of(path).is_some() {
+            if path.is_file() {
                 if is_excluded {
                     Effect::Forget
                 } else {

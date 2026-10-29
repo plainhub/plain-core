@@ -106,7 +106,7 @@ fn seed_media(
     if trashed {
         database(schema).with_conn(|conn| {
             for row in &recorded {
-                conn.execute("UPDATE media_items SET trashed=1 WHERE id=?1", [&row.id])
+                conn.execute("UPDATE files SET trashed_at='2026-01-01T00:00:00Z',original_path=path WHERE id=?1", [&row.id])
                     .unwrap();
             }
         });
@@ -570,11 +570,14 @@ async fn media_batches_commit_successes_and_notify_only_confirmed_ids() {
         }
     }
     assert_eq!(refreshes, 2);
-    let remaining = db.with_conn(|connection| {
-        connection.prepare("SELECT id FROM media_items WHERE data_type=2")?
-            .query_map([], |row| row.get::<_, String>(0))?
-            .collect::<rusqlite::Result<Vec<_>>>()
-    }).unwrap();
+    let remaining = db
+        .with_conn(|connection| {
+            connection
+                .prepare("SELECT id FROM file_catalog WHERE data_type=2")?
+                .query_map([], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .unwrap();
     assert_eq!(remaining, vec![casualty]);
 }
 
@@ -679,7 +682,7 @@ async fn existing_media_delete_uses_shared_batches_and_refuses_blank_queries_bef
     let remaining = db
         .with_conn(|connection| {
             connection.query_row(
-                "SELECT COUNT(*) FROM media_items WHERE data_type=2",
+                "SELECT COUNT(*) FROM file_catalog WHERE data_type=2",
                 [],
                 |row| row.get::<_, i64>(0),
             )
@@ -693,7 +696,7 @@ async fn existing_media_delete_uses_shared_batches_and_refuses_blank_queries_bef
 }
 
 #[test]
-fn media_id_selection_preserves_opaque_values_without_adding_filters() {
+fn file_id_selection_preserves_opaque_values_without_adding_filters() {
     let fields = plain_rs::utils::search_dsl::parse(
         r#"ids:==opaque,17\ all:true,\"quoted\"\\path,媒体：42 trash:false"#,
     );

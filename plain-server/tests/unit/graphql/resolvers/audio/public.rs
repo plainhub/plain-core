@@ -2,8 +2,8 @@ use super::*;
 use crate::graphql::schemas::public::PublicSchema;
 use crate::host::bridge::Host;
 use plain_rs::db::Db;
-use plain_rs::prefs::Prefs;
 use plain_rs::media::play_history;
+use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ fn stub(host: Arc<Host>, db: Arc<Db>, handler: impl Fn(&str, Value) -> Value + S
                 Value::Null
             } else if request["method"] == "audioLibraryResolve" {
                 let params = &request["params"];
-                let mut rows = db.with_conn(|conn|conn.prepare("SELECT id,path,title,artist,duration_ms,cover_image_id FROM media_items WHERE data_type=1 UNION SELECT media_id,path,title,artist,duration_ms,album_id FROM platform_audio_media UNION SELECT id,path,title,artist,duration_ms,'' FROM media_items WHERE data_type=1").unwrap().query_map([],|row|Ok(json!({"mediaId":row.get::<_,String>(0)?,"path":row.get::<_,String>(1)?,"title":row.get::<_,String>(2)?,"artist":row.get::<_,String>(3)?,"durationMs":row.get::<_,i64>(4)?,"albumId":row.get::<_,String>(5)?,"aliases":[]}))).unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap());
+                let mut rows = db.with_conn(|conn|conn.prepare("SELECT id,path,title,artist,duration_ms,cover_image_id FROM file_catalog WHERE data_type=1 UNION SELECT file_id,path,title,artist,duration_ms,album_id FROM platform_audio_media UNION SELECT id,path,title,artist,duration_ms,'' FROM file_catalog WHERE data_type=1").unwrap().query_map([],|row|Ok(json!({"mediaId":row.get::<_,String>(0)?,"path":row.get::<_,String>(1)?,"title":row.get::<_,String>(2)?,"artist":row.get::<_,String>(3)?,"durationMs":row.get::<_,i64>(4)?,"albumId":row.get::<_,String>(5)?,"aliases":[]}))).unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap());
                 let mut paths = params["paths"].as_array().unwrap().clone();
                 if let Some(ids) = params["ids"].as_array() {
                     paths.extend(ids.iter().filter_map(|id| {
@@ -117,20 +117,20 @@ fn database(schema: &PublicSchema) -> &Arc<Db> {
 }
 
 async fn query(schema: &PublicSchema, document: &str) -> Value {
-    let request = async_graphql::Request::new(document)
-        .data(crate::graphql::executor::RequestOrigin::Remote);
+    let request =
+        async_graphql::Request::new(document).data(crate::graphql::executor::RequestOrigin::Remote);
     serde_json::to_value(schema.execute(request).await).unwrap()
 }
 
 async fn local_query(schema: &PublicSchema, document: &str) -> Value {
-    let request = async_graphql::Request::new(document)
-        .data(crate::graphql::executor::RequestOrigin::Local);
+    let request =
+        async_graphql::Request::new(document).data(crate::graphql::executor::RequestOrigin::Local);
     serde_json::to_value(schema.execute(request).await).unwrap()
 }
 
 fn track(path: &str, title: &str, artist: &str) -> AudioTrack {
     AudioTrack {
-        media_id: None,
+        file_id: None,
         path: path.to_string(),
         title: title.to_string(),
         artist: artist.to_string(),
@@ -145,7 +145,7 @@ fn seed_queue(schema: &PublicSchema, tracks: &[(&str, &str, &str)]) {
         .map(|(path, title, artist)| track(path, title, artist))
         .collect();
     for item in &items {
-        database(schema).with_conn(|conn|conn.execute("INSERT INTO media_items(id,data_type,path,mime_type,file_name,title,artist,bucket_id,size_bytes,duration_ms,cover_image_id,width,height,rotation,created_at,updated_at) VALUES(?1,1,?2,'audio/mpeg','song',?3,?4,'',1,?5,'',0,0,0,'now','now')",rusqlite::params![format!("test:{}",item.path),item.path,item.title,item.artist,item.duration_ms])).unwrap();
+        database(schema).with_conn(|conn|conn.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES(?1,?2,?3,?4,?5,'')",rusqlite::params![format!("test:{}",item.path),item.path,item.title,item.artist,item.duration_ms])).unwrap();
     }
     domain::enqueue(database(schema), &items, false).unwrap();
 }
@@ -717,7 +717,7 @@ async fn a_library_row_keeps_the_album_art_reference() {
     assert_eq!(row["artist"], "Band");
     assert_eq!(row["durationMs"], 1234);
     assert_eq!(row["size"], 42);
-    assert_eq!(row["bucketId"], "bucket-1");
+    assert_eq!(row["bucketId"], "/m");
     assert_eq!(row["tags"].as_array().map(Vec::len), Some(0));
 }
 
@@ -931,9 +931,7 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token(
     )
     .data(prefs.clone())
     .finish();
-    prefs
-        .remove(plain_rs::prefs::pref_keys::URL_TOKEN)
-        .unwrap();
+    prefs.remove(plain_rs::prefs::pref_keys::URL_TOKEN).unwrap();
     for document in [
         "{ audio { title } }",
         "{ audio { title albumFileId @skip(if: true) } }",
@@ -1072,7 +1070,7 @@ async fn playlist_covers_use_the_shared_catalog_without_platform_requests() {
     db.use_platform_audio_catalog().unwrap();
     db.cache_platform_audio(
         &[plain_rs::db::audio_catalog::AudioMedia {
-            media_id: Some("track".into()),
+            file_id: Some("track".into()),
             aliases: Vec::new(),
             track: AudioTrack {
                 album_id: "album".into(),
@@ -1083,7 +1081,7 @@ async fn playlist_covers_use_the_shared_catalog_without_platform_requests() {
     )
     .unwrap();
     db.with_conn(|conn| conn.execute(
-        "INSERT INTO audio_playlist_items(id,playlist_id,media_id,sort_order,added_at) VALUES('item','playlist','track',0,'now')", [],
+        "INSERT INTO audio_playlist_items(id,playlist_id,file_id,sort_order,added_at) VALUES('item','playlist','track',0,'now')", [],
     )).unwrap();
     let result = query(&schema, r#"query { audioPlaylistCovers(ids: ["playlist", "empty"]) { id albums { albumId trackCount candidatePaths } } }"#).await;
     assert!(result["errors"].is_null(), "{result}");
@@ -1132,11 +1130,11 @@ async fn browser_selection_advances_in_rust_without_dispatching_the_server_playe
     let duplicate = query(&schema, &document).await;
     assert!(duplicate["errors"].is_null(), "{duplicate}");
     assert!(duplicate["data"]["advanceAudioSelection"].is_null());
+    assert_eq!(domain::get_audio_current(&browser_db).unwrap(), "/two.mp3");
     assert_eq!(
-        domain::get_audio_current(&browser_db).unwrap(),
-        "/two.mp3"
+        plain_rs::media::audio::playback::snapshot(database(&schema)).unwrap(),
+        local_before
     );
-    assert_eq!(plain_rs::media::audio::playback::snapshot(database(&schema)).unwrap(), local_before);
     let mode = query(
         &schema,
         "mutation { updateAudioPlayMode(mode: REPEAT_ONE) }",
@@ -1188,12 +1186,48 @@ async fn overview_projects_the_authoritative_catalog_without_sdk_metadata_calls(
         count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         json!(["AUDIO_LIBRARY"])
     });
-    seed_queue(
-        &schema,
-        &[("/one.mp3", "One", "Artist"), ("/two.mp3", "Two", "Artist")],
-    );
-    database(&schema)
-        .media_play_history_record(plain_rs::enums::DataType::Audio, "test:/two.mp3", 0)
+    let db = database(&schema);
+    let rows = db
+        .record_media_files(&[
+            plain_rs::db::MediaFileMetadata {
+                data_type: plain_rs::enums::DataType::Audio,
+                path: "/one.mp3".into(),
+                title: "One".into(),
+                artist: "Artist".into(),
+                album: String::new(),
+                album_artist: String::new(),
+                bucket_id: String::new(),
+                size_bytes: 1,
+                duration_ms: 0,
+                cover_image_id: None,
+                width: 0,
+                height: 0,
+                rotation: 0,
+                taken_at: None,
+                created_at: "2026-01-01T00:00:00Z".into(),
+                updated_at: "2026-01-01T00:00:00Z".into(),
+            },
+            plain_rs::db::MediaFileMetadata {
+                data_type: plain_rs::enums::DataType::Audio,
+                path: "/two.mp3".into(),
+                title: "Two".into(),
+                artist: "Artist".into(),
+                album: String::new(),
+                album_artist: String::new(),
+                bucket_id: String::new(),
+                size_bytes: 1,
+                duration_ms: 0,
+                cover_image_id: None,
+                width: 0,
+                height: 0,
+                rotation: 0,
+                taken_at: None,
+                created_at: "2026-01-01T00:00:00Z".into(),
+                updated_at: "2026-01-01T00:00:00Z".into(),
+            },
+        ])
+        .unwrap();
+    db.media_play_history_record(plain_rs::enums::DataType::Audio, &rows[1].id, 0)
         .unwrap();
     let result = query(&schema,"{ audioOverview { artists { name itemCount playCount samplePath } recentItems { id path } } }").await;
     assert!(result["errors"].is_null(), "{result}");
@@ -1205,7 +1239,7 @@ async fn overview_projects_the_authoritative_catalog_without_sdk_metadata_calls(
     );
     assert_eq!(
         result["data"]["audioOverview"]["recentItems"],
-        json!([{"id":"test:/two.mp3","path":"/two.mp3"}])
+        json!([{"id":rows[1].id,"path":"/two.mp3"}])
     );
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
@@ -1287,8 +1321,7 @@ async fn browser_history_writes_do_not_change_the_current_player_or_control_the_
         ("recordMediaPlay", 123),
         ("saveMediaPlayProgress", 234),
         ("saveMediaPlayProgress", 456),
-    ]
-    {
+    ] {
         let response = query(&schema, &format!(r#"mutation {{ {method}(mediaId:"test:/one.mp3",type:AUDIO,positionMs:{position}) }}"#)).await;
         assert!(response["errors"].is_null(), "{response}");
         assert_eq!(response["data"][method], true);
@@ -1297,10 +1330,17 @@ async fn browser_history_writes_do_not_change_the_current_player_or_control_the_
     let history = play_history::matching(db, &[]).unwrap();
     assert_eq!(history[0].play_count, 1);
     assert_eq!(history[0].position_ms, 456);
-    let next = query(&schema, r#"mutation { recordMediaPlay(mediaId:"test:/one.mp3",type:AUDIO,positionMs:0) }"#).await;
+    let next = query(
+        &schema,
+        r#"mutation { recordMediaPlay(mediaId:"test:/one.mp3",type:AUDIO,positionMs:0) }"#,
+    )
+    .await;
     assert!(next["errors"].is_null(), "{next}");
     assert_eq!(play_history::matching(db, &[]).unwrap()[0].play_count, 2);
-    assert_eq!(plain_rs::media::audio::playback::snapshot(database(&schema)).unwrap(), local_before);
+    assert_eq!(
+        plain_rs::media::audio::playback::snapshot(database(&schema)).unwrap(),
+        local_before
+    );
 }
 
 #[tokio::test]

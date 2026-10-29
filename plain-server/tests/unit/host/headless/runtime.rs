@@ -180,11 +180,18 @@ async fn media_buckets_are_served_by_the_core_catalog() {
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
-    assert_eq!(data["mediaBuckets"][0]["id"], directory.0.to_str().unwrap());
+    assert_eq!(
+        data["mediaBuckets"][0]["id"],
+        directory.0.canonicalize().unwrap().to_str().unwrap()
+    );
     assert_eq!(data["mediaBuckets"][0]["itemCount"], 1);
     assert_eq!(
         data["mediaBuckets"][0]["topItemPaths"],
-        serde_json::json!([path])
+        serde_json::json!([directory
+            .0
+            .canonicalize()
+            .unwrap()
+            .join(path.file_name().unwrap())])
     );
     core.stop_core().await;
     runner.await.unwrap().unwrap();
@@ -288,7 +295,7 @@ async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
                 width: 4,
                 height: 4,
                 center_crop: true,
-                media_id: String::new(),
+                file_id: String::new(),
                 file_name: "photo.png".into(),
                 if_none_match: None,
             },

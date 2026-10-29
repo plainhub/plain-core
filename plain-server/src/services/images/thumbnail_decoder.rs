@@ -2,7 +2,7 @@ use super::thumbnails::Request;
 
 pub(crate) fn uses_system_thumbnail(request: &Request) -> bool {
     cfg!(any(target_os = "android", target_os = "ios"))
-        && !request.media_id.is_empty()
+        && !request.file_id.is_empty()
         && request.width <= 512
 }
 

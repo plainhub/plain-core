@@ -155,9 +155,18 @@ fn insert_native_audio(
     created: &str,
 ) -> rusqlite::Result<usize> {
     connection.execute(
-        "INSERT INTO media_items(id,data_type,path,title,artist,created_at,updated_at,mime_type,file_name,bucket_id,size_bytes,duration_ms,width,height,rotation) VALUES(?1,1,?2,?1,?3,?4,?4,'audio/mpeg',?1,'',1,1000,0,0,0)",
-        rusqlite::params![id, format!("/{id}"), artist, created],
-    )
+        "INSERT OR IGNORE INTO volumes(id,identity,path,is_available) VALUES(1,'TEST','/',1)",
+        [],
+    )?;
+    let number = match id {
+        "one" => 1,
+        "two" => 2,
+        "three" => 3,
+        "trash" => 4,
+        "video" => 5,
+        _ => 100 + id.strip_prefix("track-").unwrap().parse::<i64>().unwrap(),
+    };
+    connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,title,artist,created_at,updated_at,size_bytes,duration_ms) VALUES(?1,1,?2,?2,'AUDIO',?2,?3,?4,?4,1,1000)",rusqlite::params![number,id,artist,created])
 }
 
 fn native_database(path: &std::path::Path) -> Db {
@@ -165,7 +174,7 @@ fn native_database(path: &std::path::Path) -> Db {
     db.with_conn(|connection| -> rusqlite::Result<()> {
         insert_native_audio(connection, "one", "Old Artist", "2026-01-01T00:00:00Z")?;
         insert_native_audio(connection, "two", "Old Artist", "2026-01-02T00:00:00Z")?;
-        connection.execute("INSERT INTO media_play_history(media_type,media_id,position_ms,play_count,played_at) VALUES(1,'one',0,5,'2026-01-02T00:00:00Z')", [])?;
+        connection.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES(1,'1',0,5,'2026-01-02T00:00:00Z')", [])?;
         Ok(())
     }).unwrap();
     db
@@ -182,9 +191,9 @@ fn native_history_and_catalog_share_one_snapshot_during_external_writes() {
             writer
                 .execute_batch(
                     "BEGIN;
-             UPDATE media_play_history SET play_count=99 WHERE media_id='one';
-             UPDATE media_items SET artist='New Artist' WHERE id='one';
-             DELETE FROM media_items WHERE id='two';",
+             UPDATE media_play_history SET play_count=99 WHERE file_id='1';
+             UPDATE files SET artist='New Artist' WHERE id=1;
+             DELETE FROM files WHERE id=2;",
                 )
                 .unwrap();
             insert_native_audio(&writer, "three", "New Artist", "2026-01-03T00:00:00Z").unwrap();
@@ -220,8 +229,11 @@ fn native_scan_covers_more_than_a_page_and_excludes_trash_and_other_media() {
         }
         insert_native_audio(&transaction, "trash", "Excluded", "2026-01-03T00:00:00Z")?;
         insert_native_audio(&transaction, "video", "Excluded", "2026-01-03T00:00:00Z")?;
-        transaction.execute("UPDATE media_items SET trashed=1 WHERE id='trash'", [])?;
-        transaction.execute("UPDATE media_items SET data_type=2 WHERE id='video'", [])?;
+        transaction.execute(
+            "UPDATE files SET trashed_at='2026-01-01T00:00:00Z',original_path=path WHERE id=4",
+            [],
+        )?;
+        transaction.execute("UPDATE files SET kind='VIDEO' WHERE id=5", [])?;
         transaction.commit()
     })
     .unwrap();
@@ -241,7 +253,7 @@ fn native_scan_covers_more_than_a_page_and_excludes_trash_and_other_media() {
             .any(|artist| artist.name == "Excluded")
     );
     assert_eq!(summary.recent_items.len(), 1);
-    assert_eq!(summary.recent_items[0].id, "one");
+    assert_eq!(summary.recent_items[0].id, "1");
     db.with_conn(|connection| connection.execute("DELETE FROM media_play_history", []))
         .unwrap();
     let fallback = native(&db).unwrap();
@@ -250,6 +262,6 @@ fn native_scan_covers_more_than_a_page_and_excludes_trash_and_other_media() {
         fallback
             .recent_items
             .iter()
-            .all(|row| row.id.starts_with("track-"))
+            .all(|row| row.path.starts_with("/track-"))
     );
 }

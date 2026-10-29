@@ -14,7 +14,8 @@ use crate::utils::shortid;
 #[serde(rename_all = "camelCase")]
 pub struct AudioTrack {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub media_id: Option<String>,
+    #[serde(rename = "mediaId")]
+    pub file_id: Option<String>,
     pub title: String,
     pub artist: String,
     pub path: String,
@@ -31,7 +32,7 @@ impl AudioTrack {
             .unwrap_or(&path)
             .to_string();
         Self {
-            media_id: None,
+            file_id: None,
             title,
             artist: String::new(),
             path,
@@ -44,7 +45,7 @@ impl AudioTrack {
 impl From<QueueItem> for AudioTrack {
     fn from(item: QueueItem) -> Self {
         Self {
-            media_id: Some(item.media_id),
+            file_id: Some(item.file_id),
             title: item.title,
             artist: item.artist,
             path: item.path,
@@ -63,7 +64,7 @@ impl From<&QueueItem> for AudioTrack {
 impl From<&PlaylistItem> for AudioTrack {
     fn from(i: &PlaylistItem) -> Self {
         Self {
-            media_id: Some(i.media_id.clone()),
+            file_id: Some(i.file_id.clone()),
             title: i.title.clone(),
             artist: i.artist.clone(),
             path: i.audio_path.clone(),
@@ -164,10 +165,10 @@ pub(crate) fn enqueue_conn(
             |row| row.get(0),
         )?;
         for track in items {
-            let resolved = if let Some(id) = &track.media_id {
+            let resolved = if let Some(id) = &track.file_id {
                 let path: Option<String> = c
                     .query_row(
-                        "SELECT path FROM audio_media WHERE media_id=?1",
+                        "SELECT path FROM audio_media WHERE file_id=?1",
                         [id],
                         |row| row.get(0),
                     )
@@ -178,9 +179,9 @@ pub(crate) fn enqueue_conn(
             } else {
                 io::audio_by_path(c, &track.path)?
             };
-            if let Some(id) = resolved.and_then(|track| track.media_id) {
+            if let Some(id) = resolved.and_then(|track| track.file_id) {
                 if c.execute(
-                    "INSERT OR IGNORE INTO audio_queue_items(media_id,sort_order) VALUES(?1,?2)",
+                    "INSERT OR IGNORE INTO audio_queue_items(file_id,sort_order) VALUES(?1,?2)",
                     rusqlite::params![id, order],
                 )? > 0
                 {
@@ -201,7 +202,7 @@ pub(crate) fn enqueue_conn(
             continue;
         }
         incoming.push(QueueItem {
-            media_id: item.media_id.clone().unwrap(),
+            file_id: item.file_id.clone().unwrap(),
             path: item.path.clone(),
             sort_order: 0,
             title: item.title.clone(),
@@ -221,39 +222,36 @@ pub(crate) fn enqueue_conn(
     Ok(())
 }
 
-pub fn remove_queued(db: &Db, media_id: &str) -> DomainResult<bool> {
+pub fn remove_queued(db: &Db, file_id: &str) -> DomainResult<bool> {
     transaction(db, |c, state| {
-        let removed = c.execute(
-            "DELETE FROM audio_queue_items WHERE media_id=?1",
-            [media_id],
-        )? > 0;
-        if removed && state.current_media_id.as_deref() == Some(media_id) {
+        let removed = c.execute("DELETE FROM audio_queue_items WHERE file_id=?1", [file_id])? > 0;
+        if removed && state.current_file_id.as_deref() == Some(file_id) {
             state.select("")?;
         }
         Ok(removed)
     })
 }
 
-pub fn reorder_queued(db: &Db, media_ids: &[String]) -> DomainResult<()> {
+pub fn reorder_queued(db: &Db, file_ids: &[String]) -> DomainResult<()> {
     transaction(db, |c, _| {
         let mut seen = HashSet::new();
         let exists = c
-            .prepare("SELECT media_id FROM audio_queue_items ORDER BY sort_order,media_id")?
+            .prepare("SELECT file_id FROM audio_queue_items ORDER BY sort_order,file_id")?
             .query_map([], |row| row.get::<_, String>(0))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        if media_ids
+        if file_ids
             .iter()
             .any(|id| !seen.insert(id.clone()) || !exists.contains(id))
         {
             return Err(DomainError::Other("invalid queue media IDs".into()));
         }
-        let ordered = media_ids
+        let ordered = file_ids
             .iter()
             .cloned()
             .chain(exists.into_iter().filter(|id| !seen.contains(id)));
         for (order, id) in ordered.enumerate() {
             c.execute(
-                "UPDATE audio_queue_items SET sort_order=?1 WHERE media_id=?2",
+                "UPDATE audio_queue_items SET sort_order=?1 WHERE file_id=?2",
                 rusqlite::params![order as i64, id],
             )?;
         }
@@ -282,7 +280,7 @@ pub(crate) fn remove_root_paths_except_conn(
     retained_ids: &[String],
 ) -> DomainResult<()> {
     let prefix = format!("{}/", root.trim_end_matches('/'));
-    let mut statement = c.prepare("SELECT path FROM audio_media WHERE media_id IN (SELECT media_id FROM audio_queue_items UNION SELECT media_id FROM audio_playlist_items UNION SELECT media_id FROM media_play_history WHERE media_type=1) AND media_id NOT IN (SELECT value FROM json_each(?3)) AND (path=?1 OR substr(path,1,length(?2))=?2)")?;
+    let mut statement = c.prepare("SELECT path FROM audio_media WHERE file_id IN (SELECT file_id FROM audio_queue_items UNION SELECT file_id FROM audio_playlist_items UNION SELECT file_id FROM media_play_history WHERE media_type=1) AND file_id NOT IN (SELECT value FROM json_each(?3)) AND (path=?1 OR substr(path,1,length(?2))=?2)")?;
     let mut paths = statement
         .query_map(
             rusqlite::params![
@@ -300,7 +298,7 @@ pub(crate) fn remove_root_paths_except_conn(
         .unwrap_or_else(|| state.playback.path.clone());
     if (current == root || current.starts_with(&prefix))
         && !state
-            .current_media_id
+            .current_file_id
             .as_ref()
             .is_some_and(|id| retained_ids.contains(id))
     {
@@ -341,7 +339,7 @@ pub fn select_next(db: &Db, is_next: bool, shuffle: bool) -> DomainResult<Option
         }
         let current = items
             .iter()
-            .position(|item| Some(item.media_id.as_str()) == state.current_media_id.as_deref());
+            .position(|item| Some(item.file_id.as_str()) == state.current_file_id.as_deref());
         let index = if shuffle {
             use rand::Rng;
             if items.len() > 1 {
@@ -363,7 +361,7 @@ pub fn select_next(db: &Db, is_next: bool, shuffle: bool) -> DomainResult<Option
                 .unwrap_or(items.len() - 1)
         };
         let track = AudioTrack::from(&items[index]);
-        state.current_media_id = track.media_id.clone();
+        state.current_file_id = track.file_id.clone();
         state.select(&track.path)?;
         Ok(Some(track))
     })
@@ -372,9 +370,9 @@ pub fn select_next(db: &Db, is_next: bool, shuffle: bool) -> DomainResult<Option
 pub fn queue_total(db: &Db) -> DomainResult<usize> {
     Ok(db.with_conn(|c| {
         c.query_row(
-            "SELECT COUNT(*) FROM audio_queue_items q JOIN audio_media m USING(media_id)",
+            "SELECT COUNT(*) FROM audio_queue_items q JOIN audio_media m USING(file_id)",
             [],
-            |row| row.get(0),
+            |row| crate::db::read_count(row, 0),
         )
     })?)
 }
@@ -401,7 +399,7 @@ pub fn matches_query(track: &AudioTrack, query: &str) -> bool {
     crate::utils::search_dsl::parse(query).iter().all(|field| {
         let matched = match field.name.as_str() {
             "ids" => track
-                .media_id
+                .file_id
                 .as_ref()
                 .is_some_and(|id| field.value.split(',').any(|value| value == id)),
             "text" => {
@@ -420,11 +418,11 @@ pub fn matches_query(track: &AudioTrack, query: &str) -> bool {
     })
 }
 
-pub fn track_by_id(db: &Db, media_id: &str) -> DomainResult<AudioTrack> {
+pub fn track_by_id(db: &Db, file_id: &str) -> DomainResult<AudioTrack> {
     db.with_conn(|c| {
         c.query_row(
-            "SELECT path FROM audio_media WHERE media_id=?1",
-            [media_id],
+            "SELECT path FROM audio_media WHERE file_id=?1",
+            [file_id],
             |row| row.get::<_, String>(0),
         )
         .optional()
@@ -504,7 +502,7 @@ pub fn add_playlist_items(db: &Db, playlist_id: &str, items: &[AudioTrack]) -> D
                 continue;
             }
             let row = PlaylistItem {
-                media_id: a.media_id.clone().unwrap(),
+                file_id: a.file_id.clone().unwrap(),
                 id: shortid::new_id(),
                 playlist_id: playlist_id.into(),
                 audio_path: a.path.clone(),
@@ -571,8 +569,8 @@ pub fn remove_playlist_query(db: &Db, playlist_id: &str, query: &str) -> DomainR
         for row in io::playlist_items(c, playlist_id)? {
             if matches_query(&AudioTrack::from(&row), query) {
                 count += c.execute(
-                    "DELETE FROM audio_playlist_items WHERE playlist_id=?1 AND media_id=?2",
-                    rusqlite::params![playlist_id, row.media_id],
+                    "DELETE FROM audio_playlist_items WHERE playlist_id=?1 AND file_id=?2",
+                    rusqlite::params![playlist_id, row.file_id],
                 )?;
             }
         }
@@ -598,11 +596,11 @@ fn validate_duration(value: i64) -> DomainResult<()> {
     Ok(())
 }
 pub(crate) fn record_history_conn(c: &rusqlite::Connection, path: &str) -> DomainResult<()> {
-    let media_id = c.query_row("SELECT media_id FROM audio_media WHERE path=?1 UNION SELECT a.media_id FROM platform_audio_aliases a JOIN audio_media m USING(media_id) WHERE a.path=?1",[path],|row|row.get::<_,String>(0)).optional()?;
-    let Some(media_id) = media_id else {
+    let file_id = c.query_row("SELECT file_id FROM audio_media WHERE path=?1 UNION SELECT a.file_id FROM platform_audio_aliases a JOIN audio_media m USING(file_id) WHERE a.path=?1",[path],|row|row.get::<_,String>(0)).optional()?;
+    let Some(file_id) = file_id else {
         return Ok(());
     };
-    crate::db::media_play_history::record_play(c, crate::enums::DataType::Audio, &media_id, 0)?;
+    crate::db::media_play_history::record_play(c, crate::enums::DataType::Audio, &file_id, 0)?;
     Ok(())
 }
 

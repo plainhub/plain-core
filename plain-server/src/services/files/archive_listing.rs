@@ -100,7 +100,7 @@ pub(crate) fn list(reference: &str) -> Result<Vec<FileRecord>> {
                 },
                 is_dir: directory,
                 child_count: 0,
-                media_id: String::new(),
+                file_id: String::new(),
             },
         );
     }

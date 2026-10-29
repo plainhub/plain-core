@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS archived_sms_conversations (
 );
 
 CREATE TABLE IF NOT EXISTS audio_queue_items (
-    media_id TEXT NOT NULL PRIMARY KEY CHECK(length(media_id)>0),
+    file_id TEXT NOT NULL PRIMARY KEY CHECK(length(file_id)>0),
     sort_order INTEGER NOT NULL CHECK(sort_order>=0)
 );
 
@@ -40,12 +40,12 @@ CREATE TABLE IF NOT EXISTS audio_playlists (
 CREATE TABLE IF NOT EXISTS audio_playlist_items (
     id TEXT NOT NULL PRIMARY KEY CHECK(length(id)>0),
     playlist_id TEXT NOT NULL,
-    media_id TEXT NOT NULL,
+    file_id TEXT NOT NULL,
     sort_order INTEGER NOT NULL CHECK(sort_order>=0),
     added_at TEXT NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uidx_audio_playlist_items_playlist_id_media_id ON audio_playlist_items(playlist_id, media_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uidx_audio_playlist_items_playlist_id_file_id ON audio_playlist_items(playlist_id, file_id);
 
 CREATE INDEX IF NOT EXISTS idx_audio_playlist_items_playlist_id_sort_order ON audio_playlist_items(playlist_id, sort_order);
 
@@ -179,6 +179,86 @@ CREATE INDEX IF NOT EXISTS idx_feed_entries_feed_id ON feed_entries(feed_id);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uidx_feed_entries_feed_id_source_entry_id ON feed_entries(feed_id, source_entry_id);
 
+CREATE TABLE IF NOT EXISTS volumes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    identity TEXT NOT NULL UNIQUE CHECK(length(identity)>0),
+    path TEXT NOT NULL CHECK(length(path)>0),
+    is_available INTEGER NOT NULL CHECK(is_available IN (0,1))
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    volume_id INTEGER NOT NULL REFERENCES volumes(id) ON DELETE RESTRICT,
+    path TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK(kind IN ('FILE','DIRECTORY','IMAGE','VIDEO','AUDIO','DOC')),
+    file_identity TEXT,
+    mime_type TEXT,
+    size_bytes INTEGER CHECK(size_bytes>=0),
+    created_at TEXT,
+    updated_at TEXT NOT NULL,
+    missing INTEGER NOT NULL DEFAULT 0 CHECK(missing IN (0,1)),
+    favorited INTEGER NOT NULL DEFAULT 0 CHECK(favorited IN (0,1)),
+    trashed_at TEXT,
+    original_path TEXT,
+    duration_ms INTEGER CHECK(duration_ms>=0),
+    width INTEGER CHECK(width>=0),
+    height INTEGER CHECK(height>=0),
+    rotation INTEGER CHECK(rotation IN (0,90,180,270)),
+    taken_at TEXT,
+    title TEXT,
+    artist TEXT,
+    album TEXT,
+    album_artist TEXT,
+    album_id TEXT,
+    cover_image_id TEXT,
+    CHECK(path<>'' OR kind='DIRECTORY'),
+    CHECK(substr(path,1,1)<>'/'),
+    CHECK(instr(path,char(92))=0 AND instr(path,char(0))=0),
+    CHECK(instr('/'||path||'/','/../')=0 AND instr('/'||path||'/','/./')=0),
+    CHECK(instr(path,'//')=0 AND (path='' OR substr(path,-1)<>'/')),
+    CHECK((trashed_at IS NULL)=(original_path IS NULL)),
+    CHECK(original_path IS NULL OR (
+    substr(original_path,1,1)<>'/' AND instr(original_path,char(92))=0
+    AND instr(original_path,char(0))=0
+    AND instr('/'||original_path||'/','/../')=0
+    AND instr('/'||original_path||'/','/./')=0
+    AND instr(original_path,'//')=0
+    AND (original_path='' OR substr(original_path,-1)<>'/')
+    ))
+) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uidx_files_volume_id_path ON files(volume_id,path)
+WHERE missing=0;
+
+CREATE INDEX IF NOT EXISTS idx_files_volume_id_file_identity ON files(volume_id,file_identity)
+WHERE file_identity IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_files_kind_updated_at_id ON files(kind,updated_at,id)
+WHERE missing=0 AND trashed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_files_kind_id ON files(kind,id) WHERE missing=0 AND trashed_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_files_trashed_at_id ON files(trashed_at,id) WHERE trashed_at IS NOT NULL;
+
+CREATE VIRTUAL TABLE IF NOT EXISTS file_names_fts USING fts5(
+    file_name, content='files', content_rowid='id', tokenize='trigram'
+);
+
+CREATE TRIGGER IF NOT EXISTS files_after_insert AFTER INSERT ON files BEGIN
+    INSERT INTO file_names_fts(rowid,file_name) VALUES(new.id,new.file_name);
+END;
+
+CREATE TRIGGER IF NOT EXISTS files_after_delete AFTER DELETE ON files BEGIN
+    INSERT INTO file_names_fts(file_names_fts,rowid,file_name) VALUES('delete',old.id,old.file_name);
+END;
+
+CREATE TRIGGER IF NOT EXISTS files_after_file_name_update AFTER UPDATE OF file_name ON files
+    WHEN old.file_name IS NOT new.file_name BEGIN
+    INSERT INTO file_names_fts(file_names_fts,rowid,file_name) VALUES('delete',old.id,old.file_name);
+    INSERT INTO file_names_fts(rowid,file_name) VALUES(new.id,new.file_name);
+END;
+
 CREATE TABLE IF NOT EXISTS image_editor_projects (
     id TEXT NOT NULL PRIMARY KEY CHECK(length(id)>0),
     state_b64 TEXT NOT NULL,
@@ -193,50 +273,17 @@ CREATE TABLE IF NOT EXISTS image_editor_projects (
 CREATE INDEX IF NOT EXISTS idx_image_editor_projects_updated_at ON image_editor_projects(updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS image_embeddings (
-    id TEXT NOT NULL PRIMARY KEY CHECK(length(id)>0),
+    file_id TEXT NOT NULL PRIMARY KEY CHECK(length(file_id)>0),
     path TEXT NOT NULL,
     embedding BLOB NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS media_items (
-    id TEXT PRIMARY KEY NOT NULL CHECK(length(id)>0),
-    data_type INTEGER NOT NULL CHECK(data_type IN (1,2,3,24)),
-    path TEXT NOT NULL CHECK(length(path)>0),
-    file_identity TEXT NOT NULL DEFAULT '',
-    mime_type TEXT NOT NULL,
-    file_name TEXT NOT NULL,
-    title TEXT NOT NULL,
-    artist TEXT NOT NULL,
-    album TEXT NOT NULL DEFAULT '',
-    album_artist TEXT NOT NULL DEFAULT '',
-    album_id TEXT NOT NULL DEFAULT '',
-    bucket_id TEXT NOT NULL,
-    size_bytes INTEGER NOT NULL CHECK(size_bytes>=0),
-    duration_ms INTEGER NOT NULL CHECK(duration_ms>=0),
-    cover_image_id TEXT,
-    width INTEGER NOT NULL CHECK(width>=0),
-    height INTEGER NOT NULL CHECK(height>=0),
-    rotation INTEGER NOT NULL CHECK(rotation IN (0,90,180,270)),
-    taken_at TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    favorited INTEGER NOT NULL DEFAULT 0 CHECK(favorited IN (0,1)),
-    trashed INTEGER NOT NULL DEFAULT 0 CHECK(trashed IN (0,1)),
-    original_path TEXT
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uidx_media_items_data_type_path ON media_items(data_type,path);
-
-CREATE INDEX IF NOT EXISTS idx_media_items_data_type_trashed_updated_at ON media_items(data_type,trashed,updated_at);
-
-CREATE INDEX IF NOT EXISTS idx_media_items_data_type_file_identity ON media_items(data_type,file_identity) WHERE file_identity<>'';
-
-CREATE INDEX IF NOT EXISTS idx_media_items_data_type_trashed_id ON media_items(data_type,trashed,id);
+CREATE TABLE IF NOT EXISTS key_values (key TEXT PRIMARY KEY NOT NULL,value TEXT NOT NULL) STRICT, WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS media_play_history (
-    media_id TEXT NOT NULL PRIMARY KEY CHECK(length(media_id)>0),
+    file_id TEXT NOT NULL PRIMARY KEY CHECK(length(file_id)>0),
     media_type INTEGER NOT NULL CHECK(media_type IN (1,2)),
     position_ms INTEGER NOT NULL CHECK(position_ms>=0),
     play_count INTEGER NOT NULL CHECK(play_count>=0),

@@ -83,9 +83,16 @@ fn restarting_the_core_plays_the_remembered_track_from_zero() {
     command(&db, &prefs, &mut engine, Action::Next, 0, 1.0).unwrap();
     command(&db, &prefs, &mut engine, Action::Seek, 123_456, 1.0).unwrap();
     command(&db, &prefs, &mut engine, Action::Pause, 0, 1.0).unwrap();
-    assert_eq!(db.audio_current_media_id().unwrap(), "test:two");
+    assert_eq!(db.audio_current_file_id().unwrap(), "test:two");
     drop(db);
     let db = Db::open(&path).unwrap();
+    fixtures::register_audio_tracks(
+        &db,
+        &[
+            AudioTrack::from_path_stem("one"),
+            AudioTrack::from_path_stem("two"),
+        ],
+    );
     audio_playback::invalidate(&db).unwrap();
     let restored = command(&db, &prefs, &mut engine, Action::Play, 0, 1.0).unwrap();
     assert_eq!(restored.path, "two");
@@ -105,7 +112,7 @@ fn path_playback_is_temporary_and_never_enqueues_or_fabricates_an_id() {
     };
     let playback = play_path(&db, &prefs, &mut engine, "/unindexed.mp3").unwrap();
     assert_eq!(playback.path, "/unindexed.mp3");
-    assert_eq!(db.audio_current_media_id(), None);
+    assert_eq!(db.audio_current_file_id(), None);
     assert_eq!(audio_queue::queue_total(&db).unwrap(), 0);
     let track = AudioTrack::from_path_stem("/unindexed.mp3");
     assert!(audio_playback::started(&db, &track, playback.revision).unwrap());

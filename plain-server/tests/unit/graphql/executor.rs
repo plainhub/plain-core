@@ -128,8 +128,8 @@ fn cache_only_and_task_owned_mutations_skip_the_generic_content_broadcast() {
     for query in [
         "mutation { preview: cacheSharedFile }",
         "mutation { deleted: deleteClipboardItems(query: \"all:true\") { affectedCount } }",
-        "mutation { cacheRemoteFile cacheZipEntry cacheAudioCover exportAppLogs }",
-        "mutation { ...Cache } fragment Cache on Mutation { cacheRemoteFile }",
+        "mutation { cacheSharedFile cacheZipEntry cacheAudioCover exportAppLogs }",
+        "mutation { ...Cache } fragment Cache on Mutation { cacheSharedFile }",
         "mutation { ... on Mutation { copyFileToDirectory copyFile moveFile renameFile } }",
         "mutation { createFileTask }",
         "mutation { ...Copy } fragment Copy on Mutation { copied: setClipboard(text: \"fixture\") }",
@@ -137,7 +137,7 @@ fn cache_only_and_task_owned_mutations_skip_the_generic_content_broadcast() {
         assert!(!content_changes(&Request::new(query)), "{query}");
     }
     assert!(content_changes(&Request::new(
-        "mutation { cacheRemoteFile createNote }"
+        "mutation { cacheSharedFile createNote }"
     )));
     assert!(content_changes(&Request::new("mutation { clearAppLogs }")));
     assert!(content_changes(&Request::new("mutation { clearAppLogs }")));
@@ -196,7 +196,9 @@ fn runtime_controls_and_viewer_exports_do_not_trigger_generic_content_refreshes(
     ] {
         assert!(!content_changes(&Request::new(document)), "{document}");
     }
-    assert!(content_changes(&Request::new("mutation{releaseDiscovery(token:\"token\") createNote}")));
+    assert!(content_changes(&Request::new(
+        "mutation{releaseDiscovery(token:\"token\") createNote}"
+    )));
 }
 
 #[test]

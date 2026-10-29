@@ -7,7 +7,6 @@ fn all_platforms_derive_one_layout_from_the_data_root() {
     for (actual, relative) in [
         (paths.database(), "plain.db"),
         (paths.prefs(), "prefs.json"),
-        (paths.kv(), "fjall"),
         (paths.note_images(), "note-images"),
         (paths.audio(), "audio"),
         (paths.logs(), "logs"),

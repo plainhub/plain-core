@@ -27,7 +27,7 @@ pub use repositories::browse;
 pub use repositories::devtools;
 #[cfg(feature = "library")]
 pub use repositories::{
-    audio_catalog, audio_queue, favorite_folder, image_catalog, image_editor_project,
+    audio_catalog, audio_queue, favorite_folder, files, image_catalog, image_editor_project,
     media_play_history, notes_feeds, tag,
 };
 #[cfg(feature = "chat")]
@@ -37,9 +37,9 @@ pub use repositories::{bookmark, chat_store};
 pub use crate::sqlite_browse::TableColumnMeta;
 #[cfg(feature = "library")]
 pub use models::{
-    ArchivedConversationRow, AuditEventRow, ClipboardRow, FavoriteFolderRow, HISTORY_KEEP,
-    ImageEmbeddingRow, MediaPlayHistoryRow, Playlist, PlaylistItem, PomodoroItemRow, QueueItem,
-    SessionRow, ShareRow, TagRelationRow, TagRow, TrashedMessageRow,
+    ArchivedConversationRow, AuditEventRow, ClipboardRow, FavoriteFolderRow, FileKind, FileRow,
+    HISTORY_KEEP, ImageEmbeddingRow, MediaPlayHistoryRow, Playlist, PlaylistItem, PomodoroItemRow,
+    QueueItem, SessionRow, ShareRow, TagRelationRow, TagRow, TrashedMessageRow, VolumeRow,
 };
 #[cfg(feature = "chat")]
 pub use models::{DAppFile, DChannel, DChat, DNearbyDeviceCache, DPeer};
@@ -52,57 +52,65 @@ pub struct Db(
     Arc<state::State>,
     #[cfg(feature = "library")] Arc<crate::media::audio::state::Runtime>,
     #[cfg(feature = "library")] Arc<crate::media::audio::state::Runtime>,
+    #[cfg(feature = "library")] Arc<crate::kv::Db>,
 );
 
 impl Db {
     pub fn open(db_path: &Path) -> rusqlite::Result<Self> {
         #[cfg(feature = "library")]
         {
-            let store = if db_path == Path::new(":memory:") { None } else {
-                Some(Arc::new(crate::kv::Db::open(&crate::data_paths::DataPaths::new(
-                    db_path.parent().unwrap_or(Path::new("."))).kv())
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(e.into()))?))
-            };
-            Self::open_audio(db_path, store)
+            Self::open_audio(db_path)
         }
         #[cfg(not(feature = "library"))]
         {
-            let connection = Self::open_connection(db_path)?;
-            let state = state::State::new(&connection);
+            let mut connection = Self::open_connection(db_path)?;
+            let state = state::State::new(&mut connection)?;
             Ok(Self(Arc::new(Mutex::new(connection)), Arc::new(state)))
         }
     }
 
     #[cfg(feature = "library")]
-    pub fn open_with_kv(db_path: &Path, store: Arc<crate::kv::Db>) -> rusqlite::Result<Self> {
-        Self::open_audio(db_path, Some(store))
-    }
-
-    #[cfg(feature = "library")]
-    fn open_audio(db_path: &Path, store: Option<Arc<crate::kv::Db>>) -> rusqlite::Result<Self> {
-        let connection = Self::open_connection(db_path)?;
-        let state = state::State::new(&connection);
-        let runtime = |key| crate::media::audio::state::Runtime::new(store.clone(), key)
-            .map(Arc::new).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)));
-        Ok(Self(Arc::new(Mutex::new(connection)), Arc::new(state),
-            runtime("local_audio_current_media_id")?, runtime("remote_audio_current_media_id")?))
+    fn open_audio(db_path: &Path) -> rusqlite::Result<Self> {
+        let mut connection = Self::open_connection(db_path)?;
+        let state = state::State::new(&mut connection)?;
+        let connection = Arc::new(Mutex::new(connection));
+        let store = Arc::new(crate::kv::Db::from_connection(connection.clone()));
+        let runtime = |key| {
+            let current_id = store
+                .get(key)
+                .map_err(|error| rusqlite::Error::ToSqlConversionFailure(error.into()))?;
+            Ok::<_, rusqlite::Error>(Arc::new(crate::media::audio::state::Runtime::new(
+                key, current_id,
+            )))
+        };
+        let local = runtime("local_audio_current_file_id")?;
+        let remote = runtime("remote_audio_current_file_id")?;
+        Ok(Self(connection, Arc::new(state), local, remote, store))
     }
 
     #[cfg(feature = "library")]
     // The queue and library stay shared; only playback state changes.
     pub fn remote_audio(&self) -> Self {
-        Self(self.0.clone(), self.1.clone(), self.3.clone(), self.2.clone())
+        Self(
+            self.0.clone(),
+            self.1.clone(),
+            self.3.clone(),
+            self.2.clone(),
+            self.4.clone(),
+        )
     }
 
     #[cfg(feature = "library")]
     pub fn audio_selected_ids(&self) -> Vec<String> {
-        [&self.2, &self.3].iter()
-            .filter_map(|runtime| runtime.read(|state| state.current_media_id.clone())).collect()
+        [&self.2, &self.3]
+            .iter()
+            .filter_map(|runtime| runtime.read(|state| state.current_file_id.clone()))
+            .collect()
     }
 
     #[cfg(feature = "library")]
-    pub fn key_values(&self) -> Option<Arc<crate::kv::Db>> {
-        self.audio().key_values()
+    pub fn key_values(&self) -> Arc<crate::kv::Db> {
+        self.4.clone()
     }
 
     #[cfg(feature = "library")]
@@ -122,30 +130,17 @@ impl Db {
     }
 
     fn open_connection(db_path: &Path) -> rusqlite::Result<Connection> {
-        if let Some(parent) = db_path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                rusqlite::Error::SqliteFailure(
-                    rusqlite::ffi::Error {
-                        code: rusqlite::ffi::ErrorCode::CannotOpen,
-                        extended_code: 0,
-                    },
-                    Some(format!(
-                        "failed to create database parent dir {}: {e}",
-                        parent.display()
-                    )),
-                )
-            })?;
-        }
-        let conn = Connection::open(db_path)?;
-        conn.execute_batch(
-            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;",
-        )?;
+        let conn = crate::sqlite::open(db_path)?;
         #[cfg(any(feature = "chat", feature = "library"))]
         schema::init(&conn)?;
+        #[cfg(feature = "library")]
+        repositories::media_file::init(&conn)?;
         #[cfg(feature = "library")]
         repositories::audio_catalog::init(&conn)?;
         #[cfg(feature = "library")]
         repositories::image_catalog::init(&conn)?;
+        #[cfg(feature = "library")]
+        repositories::files::recover_path_changes(&conn)?;
         Ok(conn)
     }
 
@@ -202,10 +197,10 @@ impl Db {
 
     pub fn with_conn<F, T>(&self, f: F) -> T
     where
-        F: FnOnce(&Connection) -> T,
+        F: FnOnce(&mut Connection) -> T,
     {
-        let conn = self.0.lock().unwrap();
-        f(&conn)
+        let mut conn = self.0.lock().unwrap();
+        f(&mut conn)
     }
 }
 
@@ -250,3 +245,13 @@ mod design_tests;
 #[cfg(test)]
 #[path = "../../tests/unit/db/backup.rs"]
 mod backup_tests;
+
+pub(crate) fn read_count(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<usize> {
+    usize::try_from(row.get::<_, i64>(index)?).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            index,
+            rusqlite::types::Type::Integer,
+            error.into(),
+        )
+    })
+}

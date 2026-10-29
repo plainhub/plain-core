@@ -114,6 +114,14 @@ pub use utils::hostname::platform_hostname;
 pub mod sessions;
 
 #[cfg(feature = "kv")]
-pub mod sms_sends;
-#[cfg(feature = "kv")]
 pub mod recent_files;
+#[cfg(feature = "kv")]
+pub mod sms_sends;
+
+#[cfg(any(
+    feature = "kv",
+    feature = "chat",
+    feature = "library",
+    feature = "sqlite_browse"
+))]
+mod sqlite;

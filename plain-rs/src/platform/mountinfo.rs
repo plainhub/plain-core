@@ -1,5 +1,3 @@
-#[cfg(target_os = "linux")]
-use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -8,45 +6,15 @@ pub struct MountInfoEntry {
 }
 
 #[cfg(target_os = "linux")]
-fn decode_mount_escapes(s: &str) -> String {
-    s.replace("\\040", " ")
-        .replace("\\011", "\t")
-        .replace("\\012", "\n")
-        .replace("\\134", "\\")
-}
-
-#[cfg(target_os = "linux")]
 pub fn read_mountinfo() -> anyhow::Result<Vec<MountInfoEntry>> {
-    let raw = fs::read_to_string("/proc/self/mountinfo")?;
-    let mut out = Vec::new();
-    for line in raw.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let (left, _right) = match line.split_once(" - ") {
-            Some(v) => v,
-            None => continue,
-        };
-        let mut parts = left.split_whitespace();
-        parts.next(); // mount id
-        parts.next(); // parent id
-        parts.next(); // dev
-        parts.next(); // source
-        let mp_raw = match parts.next() {
-            Some(v) => v,
-            None => continue,
-        };
-        let mp = decode_mount_escapes(mp_raw);
-        if mp.is_empty() {
-            continue;
-        }
-        out.push(MountInfoEntry { mount_point: mp });
-    }
-    if out.is_empty() {
-        anyhow::bail!("no mountinfo entries");
-    }
-    Ok(out)
+    let mounts = super::volumes::linux::mounts()?;
+    anyhow::ensure!(!mounts.is_empty(), "No mount information entries");
+    Ok(mounts
+        .into_iter()
+        .map(|mount| MountInfoEntry {
+            mount_point: mount.path.to_string_lossy().into_owned(),
+        })
+        .collect())
 }
 
 #[cfg(not(target_os = "linux"))]

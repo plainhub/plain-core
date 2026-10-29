@@ -2,8 +2,8 @@ use super::*;
 #[test]
 fn deleted_receipts_cascade_atomically_and_preserve_failed_and_foreign_records() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('video','old',2,'first'),('foreign','old',6,'first'),('file','/root/deleted',22,'first'),('failed','/root/failed',22,'first'),('sibling','/root_sibling/file',22,'first'); INSERT INTO media_play_history(media_type,media_id,position_ms,played_at,play_count) VALUES(2,'old',4000000001,'first',0),(2,'keep',4000000002,'first',0); INSERT INTO media_items(id,data_type,path,mime_type,file_name,title,artist,bucket_id,size_bytes,duration_ms,cover_image_id,width,height,rotation,created_at,updated_at) VALUES('test:/root/deleted',1,'/root/deleted','audio/mpeg','song','gone','','',1,1,'',0,0,0,'now','now'),('test:/root/failed',1,'/root/failed','audio/mpeg','song','keep','','',1,1,'',0,0,0,'now','now'),('test:/root_sibling/file',1,'/root_sibling/file','audio/mpeg','song','keep','','',1,1,'',0,0,0,'now','now'); INSERT INTO audio_queue_items(media_id,sort_order) VALUES('test:/root/deleted',0),('test:/root/failed',1),('test:/root_sibling/file',2);")).unwrap();
-    db.with_conn(|c|c.execute_batch("INSERT INTO image_embeddings(id,path,embedding,created_at,updated_at) VALUES('private','/root/deleted',x'3f800000','first','first'),('pending','/root/failed',x'3f800000','first','first'),('sibling','/root_sibling/file',x'3f800000','first','first');")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('video','old',2,'first'),('foreign','old',6,'first'),('file','/root/deleted',22,'first'),('failed','/root/failed',22,'first'),('sibling','/root_sibling/file',22,'first'); INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,'old',4000000001,'first',0),(2,'keep',4000000002,'first',0); INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES('test:/root/deleted','/root/deleted','gone','',1,''),('test:/root/failed','/root/failed','keep','',1,''),('test:/root_sibling/file','/root_sibling/file','keep','',1,''); INSERT INTO audio_queue_items(file_id,sort_order) VALUES('test:/root/deleted',0),('test:/root/failed',1),('test:/root_sibling/file',2);")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('private','/root/deleted',x'3f800000','first','first'),('pending','/root/failed',x'3f800000','first','first'),('sibling','/root_sibling/file',x'3f800000','first','first');")).unwrap();
     cleanup(
         &db,
         &[Item {
@@ -99,7 +99,7 @@ fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_f
     let video = &created[0].id;
     db.with_conn(|c| -> rusqlite::Result<()> {
         c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media',?1,2,'first'),('foreign',?1,6,'first')",[video])?;
-        c.execute("INSERT INTO media_play_history(media_type,media_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",[video])?;
+        c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",[video])?;
         Ok(())
     }).unwrap();
     cleanup(&db, &[], &["/root/deleted.mp4".into()], &[]).unwrap();
@@ -183,8 +183,8 @@ fn catalog_deletion_failure_rolls_back_all_associated_state_cleanup() {
         .remove(0);
     db.with_conn(|c| -> rusqlite::Result<()> {
         c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media',?1,2,'first')",[&created.id])?;
-        c.execute("INSERT INTO media_play_history(media_type,media_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",[&created.id])?;
-        c.execute_batch("CREATE TRIGGER reject_catalog_delete BEFORE DELETE ON media_items BEGIN SELECT RAISE(ABORT,'catalog delete rejected'); END;")?;
+        c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",[&created.id])?;
+        c.execute_batch("CREATE TRIGGER reject_catalog_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABORT,'catalog delete rejected'); END;")?;
         Ok(())
     }).unwrap();
     assert!(cleanup(&db, &[], &[created.path.clone()], &[]).is_err());
@@ -212,11 +212,8 @@ fn directory_prefix_uses_the_same_separator_as_native_canonical_paths() {
     assert_eq!(directory_prefix("C:/root"), "C:/root/");
 }
 
-/// A watcher sees the file leave the filesystem and reports the one path.
-/// Everything keyed to that row has to go with it, or the catalog keeps
-/// offering media that no longer exists.
 #[test]
-fn forgetting_a_path_drops_the_row_and_its_associated_state() {
+fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     db.record_media_files(&[
         catalog_file(DataType::Video, "/root/gone.mp4"),
@@ -233,11 +230,11 @@ fn forgetting_a_path_drops_the_row_and_its_associated_state() {
             [&gone.id],
         )?;
         c.execute(
-            "INSERT INTO media_play_history(media_type,media_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",
+            "INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",
             [&gone.id],
         )?;
         c.execute(
-            "INSERT INTO image_embeddings(id,path,embedding,created_at,updated_at) VALUES(?1,?2,x'3f800000','first','first')",
+            "INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES(?1,?2,x'3f800000','first','first')",
             params![&gone.id, &gone.path],
         )?;
         Ok(())
@@ -263,16 +260,16 @@ fn forgetting_a_path_drops_the_row_and_its_associated_state() {
             |row| row.get(0),
         )?;
         let progress: i64 = c.query_row(
-            "SELECT COUNT(*) FROM media_play_history WHERE media_id=?1",
+            "SELECT COUNT(*) FROM media_play_history WHERE file_id=?1",
             [&gone.id],
             |row| row.get(0),
         )?;
         let embeddings: i64 = c.query_row(
-            "SELECT COUNT(*) FROM image_embeddings WHERE id=?1",
+            "SELECT COUNT(*) FROM image_embeddings WHERE file_id=?1",
             [&gone.id],
             |row| row.get(0),
         )?;
-        assert_eq!((tags, progress, embeddings), (0, 0, 0));
+        assert_eq!((tags, progress, embeddings), (1, 1, 1));
         Ok(())
     })
     .unwrap();
@@ -297,7 +294,7 @@ fn retired_identity_preserves_replacement_and_file_tags_at_the_same_path() {
         .remove(0);
     db.with_conn(|connection| {
         connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('old',?1,2,'first'),('replacement',?2,3,'first'),('file','/root/replaced.mp4',22,'first'),('neighbor','/root/neighbor',22,'first')", params![old.id,new.id])?;
-        connection.execute("INSERT INTO media_play_history(media_id,media_type,position_ms,played_at,play_count) VALUES(?1,2,123,'first',0)", [&old.id])?;
+        connection.execute("INSERT INTO media_play_history(file_id,media_type,position_ms,played_at,play_count) VALUES(?1,2,123,'first',0)", [&old.id])?;
         Ok::<_,rusqlite::Error>(())
     }).unwrap();
     retire_identity(

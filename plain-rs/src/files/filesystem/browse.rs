@@ -195,7 +195,7 @@ impl Plan {
                 },
                 is_dir: meta.is_dir(),
                 child_count: 0,
-                media_id: String::new(),
+                file_id: String::new(),
             };
             if self.matches(&record, false) {
                 count += 1;

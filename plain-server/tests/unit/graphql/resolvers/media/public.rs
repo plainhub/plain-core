@@ -179,11 +179,8 @@ async fn images_carry_their_row_and_their_tags() {
     let tag = plain_rs::tags::create_tag(&db, kind, "holiday").unwrap();
     let rows = db.media_file_list(DataType::Image, 10, 0).unwrap();
     db.with_conn(|conn| {
-        conn.execute(
-            "UPDATE media_items SET favorited=1 WHERE id=?1",
-            [&rows[0].id],
-        )
-        .unwrap();
+        conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [&rows[0].id])
+            .unwrap();
     });
     let relations = (0..7)
         .map(|i| {
@@ -210,7 +207,7 @@ async fn images_carry_their_row_and_their_tags() {
     let items = data["images"].as_array().unwrap();
     assert_eq!(items.len(), 2);
     assert_eq!(items[0]["title"], "i1");
-    assert_eq!(items[0]["bucketId"], "b1");
+    assert_eq!(items[0]["bucketId"], "/storage/DCIM");
     assert_eq!(items[0]["size"], 2048);
     assert_eq!(items[0]["isFavorite"], true);
     assert_eq!(items[0]["takenAt"], "2026-01-01T00:00:00.000Z");
@@ -421,10 +418,10 @@ async fn buckets_collapse_rows_into_folders() {
     let buckets = data["mediaBuckets"].as_array().unwrap();
     assert_eq!(buckets.len(), 2);
     // Camera sorts before Movies.
-    assert_eq!(buckets[0]["id"], "b1");
+    assert_eq!(buckets[0]["id"], "/storage/Camera");
     assert_eq!(buckets[0]["itemCount"], 1);
     assert_eq!(buckets[0]["size"], 10);
-    assert_eq!(buckets[1]["id"], "b2");
+    assert_eq!(buckets[1]["id"], "/storage/Movies");
     assert_eq!(buckets[1]["itemCount"], 5);
     assert_eq!(buckets[1]["size"], 50);
     // Five rows in, but only four samples out — the grid never needs more.
@@ -558,7 +555,7 @@ async fn all_media_lists_accept_the_original_shared_interface_fragment() {
     for field in ["audios", "videos", "docs"] {
         assert_eq!(data[field][0]["title"], "Media", "{field}: {data}");
         assert_eq!(data[field][0]["size"], 2048, "{field}: {data}");
-        assert_eq!(data[field][0]["bucketId"], "bucket-1", "{field}: {data}");
+        assert_eq!(data[field][0]["bucketId"], "/media", "{field}: {data}");
         assert_eq!(
             data[field][0].as_object().unwrap().len(),
             7,
@@ -649,7 +646,7 @@ async fn image_search_uses_the_original_query_for_text_filters_paging_and_count(
                 ),
                 media(
                     DataType::Image,
-                    "/fixture/c.jpg",
+                    "/other-fixture/c.jpg",
                     "sunset blue c",
                     100,
                     "b2",
@@ -666,7 +663,7 @@ async fn image_search_uses_the_original_query_for_text_filters_paging_and_count(
                 "query($query:String!){images(query:$query,offset:1,limit:1,sortBy:NAME_ASC){title} imageCount(query:$query)}",
             )
             .variables(async_graphql::Variables::from_json(json!({
-                "query": "text:\"sunset blue\" bucket_id:b1 trash:false"
+                "query": "text:\"sunset blue\" bucket_id:/fixture trash:false"
             }))),
         )
         .await;
@@ -725,13 +722,19 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
             ),
             media(DataType::Image, "/fixture/c.jpg", "not a match", 100, "b1"),
             media(DataType::Image, "/fixture/d.jpg", "untagged", 100, "b1"),
-            media(DataType::Image, "/fixture/e.jpg", "other folder", 100, "b2"),
+            media(
+                DataType::Image,
+                "/other-fixture/e.jpg",
+                "other folder",
+                100,
+                "b2",
+            ),
             media(DataType::Image, "/fixture/f.jpg", "in trash", 100, "b1"),
         ])
         .unwrap();
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE media_items SET trashed=1 WHERE id=?1",
+            "UPDATE files SET trashed_at='2026-01-01T00:00:00Z',original_path=path WHERE id=?1",
             [&stored[6].id],
         )
     })
@@ -771,11 +774,11 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     embeddings::save(&db, &embeddings).unwrap();
     assert_eq!(models.search("cat", 50).await.unwrap().len(), 7);
 
-    let active = format!("text:cat tag_id:{} bucket_id:b1 trash:false", tag.id);
+    let active = format!("text:cat tag_id:{} bucket_id:/fixture trash:false", tag.id);
     let cases = [
         (active.clone(), 0, 10, vec![0, 1, 2], 3),
         (
-            format!("text:cat tag_id:{} bucket_id:b1", tag.id),
+            format!("text:cat tag_id:{} bucket_id:/fixture", tag.id),
             0,
             10,
             vec![0, 1, 2],
@@ -794,7 +797,7 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
         (active.clone(), 0, 0, vec![], 3),
         (format!("{active} size:>150"), 0, 10, vec![2], 1),
         (
-            format!("text:cat tag_id:{} bucket_id:b1 trash:true", tag.id),
+            format!("text:cat tag_id:{} bucket_id:/fixture trash:true", tag.id),
             0,
             10,
             vec![6],
@@ -808,7 +811,10 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
             1,
         ),
         (
-            format!("text:cat tag_id:{} bucket_id:b1 trash:false", empty_tag.id),
+            format!(
+                "text:cat tag_id:{} bucket_id:/fixture trash:false",
+                empty_tag.id
+            ),
             0,
             10,
             vec![],

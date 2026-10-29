@@ -14,7 +14,7 @@ fn provider_types_are_projected_to_domain_types_without_confusing_their_numeric_
     .unwrap();
     assert_eq!(
         rows.iter()
-            .map(|row| (row.media_id.as_str(), row.media_type))
+            .map(|row| (row.file_id.as_str(), row.media_type))
             .collect::<Vec<_>>(),
         vec![
             ("image", DataType::Image.kind()),

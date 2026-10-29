@@ -6,11 +6,9 @@ use plain_rs::{
     media::actions::{Action, Item, Outcome},
 };
 use rusqlite::OptionalExtension;
+use std::path::{Path, PathBuf};
 #[cfg(feature = "media")]
 use std::sync::Arc;
-use std::{
-    path::{Path, PathBuf},
-};
 
 pub fn capabilities() -> &'static [&'static str] {
     if cfg!(any(target_os = "android", target_os = "ios")) {
@@ -166,7 +164,7 @@ fn files(
     };
     let rows = db.with_conn(|connection| {
         let mut statement = connection
-            .prepare("SELECT path,trashed FROM media_items WHERE id=?1 AND data_type=?2")?;
+            .prepare("SELECT path,trashed FROM file_catalog WHERE id=?1 AND data_type=?2")?;
         ids.iter()
             .map(|id| {
                 statement

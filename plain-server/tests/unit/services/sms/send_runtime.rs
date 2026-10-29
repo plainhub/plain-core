@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn native_part_reports_publish_one_result_and_replay_the_durable_outbox() {
     let directory = tempfile::tempdir().unwrap();
-    let store = Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("fjall")));
+    let store = Arc::new(plain_rs::kv::LazyDb::new(directory.path().join("plain.db")));
     let (events, mut received) = broadcast::channel(16);
     let runtime = Runtime::new(store.clone(), events.clone());
     runtime

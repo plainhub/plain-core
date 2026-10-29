@@ -181,8 +181,8 @@ async fn media_move_case(missing_destination: bool) {
             c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES(?1,?2,?3,'first')",rusqlite::params![tag,id,kind])?;
         }
         c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('file',?1,22,'first')",[source.join("document").to_str().unwrap()])?;
-        c.execute_batch("INSERT INTO media_play_history(media_type,media_id,position_ms,play_count,played_at) VALUES(2,'2',4000000001,0,'first');")?;
-        c.execute("INSERT INTO audio_queue_items(media_id,sort_order) SELECT id,0 FROM media_items WHERE path=?1",[&audio_path])?;
+        c.execute_batch("INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES(2,'2',4000000001,0,'first');")?;
+        c.execute("INSERT INTO audio_queue_items(file_id,sort_order) SELECT id,0 FROM file_catalog WHERE path=?1",[&audio_path])?;
 
         Ok(())
     }).unwrap();
@@ -191,7 +191,7 @@ async fn media_move_case(missing_destination: bool) {
     duration_cache
         .save(plain_rs::media::duration_cache::Duration {
             media_type: "audio".into(),
-            media_id: "1".into(),
+            file_id: "1".into(),
             path: audio_path.clone(),
             size_bytes: 7,
             modified_at: "2026-01-01T00:00:00.000Z".into(),
@@ -202,7 +202,7 @@ async fn media_move_case(missing_destination: bool) {
     db.use_platform_audio_catalog().unwrap();
     db.cache_platform_audio(
         &[plain_rs::db::audio_catalog::AudioMedia {
-            media_id: Some("1".into()),
+            file_id: Some("1".into()),
             aliases: Vec::new(),
             track: plain_rs::media::audio::queue::AudioTrack::from_path_stem(&audio_path),
         }],
@@ -211,7 +211,7 @@ async fn media_move_case(missing_destination: bool) {
     .unwrap();
     db.with_conn(|conn| {
         conn.execute(
-            "INSERT INTO audio_queue_items(media_id,sort_order) VALUES('1',0)",
+            "INSERT INTO audio_queue_items(file_id,sort_order) VALUES('1',0)",
             [],
         )
     })
@@ -365,14 +365,14 @@ async fn media_move_case(missing_destination: bool) {
             );
             assert_eq!(
                 c.query_row(
-                    "SELECT position_ms FROM media_play_history WHERE media_id='12'",
+                    "SELECT position_ms FROM media_play_history WHERE file_id='12'",
                     [],
                     |r| r.get::<_, i64>(0)
                 )?,
                 4000000001
             );
             assert_eq!(
-                c.query_row("SELECT media_id FROM audio_queue_items", [], |r| r
+                c.query_row("SELECT file_id FROM audio_queue_items", [], |r| r
                     .get::<_, String>(0))?,
                 "11"
             );

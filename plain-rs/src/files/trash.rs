@@ -1,30 +1,19 @@
-use crate::utils::shortid;
+use crate::db::{Db, files::PathChange};
+use crate::platform::mountinfo::{self, CleanPath};
 use anyhow::{Context, Result, anyhow, bail};
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::LazyLock as Lazy;
-use std::sync::Mutex;
-
-use crate::platform::mountinfo;
-use crate::platform::mountinfo::CleanPath;
-
-const NS_ITEM: &str = "trash:item:";
-const NS_BY_DELETED: &str = "trash:by_deleted_at:";
-const NS_BY_DELETED_DF: &str = "trash:by_deleted_at_df:";
-const NS_BY_NAME_DF: &str = "trash:by_name_df:";
-const NS_BY_SIZE_DF: &str = "trash:by_size_df:";
-const REVERSED_MAX: i64 = i64::MAX;
+use std::sync::{Arc, LazyLock as Lazy, Mutex};
 
 #[cfg(unix)]
 fn owner_mode(meta: &std::fs::Metadata) -> (u32, u32, u32) {
     (meta.uid(), meta.gid(), meta.mode())
 }
-
 #[cfg(not(unix))]
 fn owner_mode(_meta: &std::fs::Metadata) -> (u32, u32, u32) {
     (0, 0, 0)
@@ -34,11 +23,11 @@ fn owner_mode(_meta: &std::fs::Metadata) -> (u32, u32, u32) {
 pub struct TrashItem {
     pub id: String,
     #[serde(rename = "type")]
-    pub kind: String, // "file" | "dir"
+    pub kind: String,
     pub original_path: String,
     pub disk: String,
     pub trash_rel_path: String,
-    pub deleted_at: i64, // unix seconds (UTC)
+    pub deleted_at: i64,
     pub uid: u32,
     pub gid: u32,
     pub mode: u32,
@@ -46,248 +35,174 @@ pub struct TrashItem {
     pub entry_count: Option<i64>,
 }
 
-fn item_key(id: &str) -> String {
-    format!("{NS_ITEM}{id}")
-}
-fn by_deleted_key(deleted_at: i64, id: &str) -> String {
-    let rev = REVERSED_MAX - deleted_at;
-    format!("{NS_BY_DELETED}{rev:020}:{id}")
-}
-fn by_deleted_df_key(deleted_at: i64, dir_flag: &str, id: &str) -> String {
-    let rev = REVERSED_MAX - deleted_at;
-    format!("{NS_BY_DELETED_DF}{dir_flag}:{rev:020}:{id}")
-}
-fn by_name_df_key(dir_flag: &str, name_lower: &str, id: &str) -> String {
-    format!("{NS_BY_NAME_DF}{dir_flag}:{name_lower}:{id}")
-}
-fn by_size_df_key(dir_flag: &str, size: i64, id: &str) -> String {
-    format!("{NS_BY_SIZE_DF}{dir_flag}:{size:020}:{id}")
-}
-fn dir_flag(it: &TrashItem) -> &'static str {
-    if it.kind == "dir" { "0" } else { "1" }
-}
-fn display_name_lower(it: &TrashItem) -> String {
-    Path::new(&it.original_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("")
-        .to_lowercase()
-        .trim()
-        .to_string()
-}
-fn sort_size(it: &TrashItem) -> i64 {
-    it.size.unwrap_or(0)
-}
-
-fn validate_item(item: &TrashItem) -> Result<()> {
-    let disk = Path::new(&item.disk);
-    let original = Path::new(&item.original_path);
-    let relative = Path::new(&item.trash_rel_path);
-    if item.id.is_empty()
-        || item.id.contains(['/', '\\'])
-        || !matches!(item.kind.as_str(), "file" | "dir")
-        || !disk.is_absolute()
-        || !original.is_absolute()
-        || !original.starts_with(disk)
-        || relative.is_absolute()
-        || !relative.starts_with("data")
-        || relative
-            .components()
-            .any(|part| !matches!(part, std::path::Component::Normal(_)))
-        || parse_trash_id_from_path(relative).as_deref() != Some(&item.id)
-    {
-        bail!("invalid owned trash metadata");
-    }
-    Ok(())
-}
-
 pub struct Trash {
-    db: Arc<crate::kv::Db>,
+    db: Arc<Db>,
+}
+
+const TOP_LEVEL: &str = "trashed=1 AND is_available=1 AND missing=0 AND NOT EXISTS(SELECT 1 FROM file_catalog parent WHERE parent.volume_id=file_catalog.volume_id AND parent.trashed=1 AND parent.file_id<>file_catalog.file_id AND substr(file_catalog.path,1,length(parent.path)+1)=parent.path||'/')";
+
+fn trash_item(row: &rusqlite::Row<'_>) -> rusqlite::Result<TrashItem> {
+    let path: String = row.get(1)?;
+    let absolute = Path::new(&path);
+    let root = absolute
+        .ancestors()
+        .find(|part| part.file_name().is_some_and(|name| name == ".plain-trash"))
+        .ok_or(rusqlite::Error::InvalidQuery)?;
+    let disk = root
+        .parent()
+        .and_then(Path::to_str)
+        .ok_or(rusqlite::Error::InvalidQuery)?
+        .to_owned();
+    let relative = absolute
+        .strip_prefix(root)
+        .map_err(crate::db::files::sql_error)?
+        .to_str()
+        .ok_or(rusqlite::Error::InvalidQuery)?
+        .to_owned();
+    let time: String = row.get(4)?;
+    let deleted_at = DateTime::parse_from_rfc3339(&time)
+        .map_err(crate::db::files::sql_error)?
+        .timestamp();
+    let (uid, gid, mode) = std::fs::symlink_metadata(absolute)
+        .map(|metadata| owner_mode(&metadata))
+        .unwrap_or_default();
+    Ok(TrashItem {
+        id: row.get(0)?,
+        kind: if row.get::<_, String>(3)? == "DIRECTORY" {
+            "dir"
+        } else {
+            "file"
+        }
+        .into(),
+        original_path: row.get(2)?,
+        disk,
+        trash_rel_path: relative,
+        deleted_at,
+        uid,
+        gid,
+        mode,
+        size: row.get(5)?,
+        entry_count: None,
+    })
 }
 
 impl Trash {
-    pub fn new(db: Arc<crate::kv::Db>) -> Self {
+    pub fn new(db: Arc<Db>) -> Self {
         Self { db }
     }
 
     pub fn load_item(&self, id: &str) -> Result<Option<TrashItem>> {
-        let db = &self.db;
-        match db.get(item_key(id))? {
-            Some(ivec) => {
-                let v: TrashItem = serde_json::from_slice(&ivec)?;
-                validate_item(&v)?;
-                if v.id != id {
-                    bail!("trash identity mismatch");
-                }
-                Ok(Some(v))
-            }
-            None => Ok(None),
-        }
-    }
-
-    pub fn store_item(&self, it: &TrashItem) -> Result<()> {
-        validate_item(it)?;
-        let df = dir_flag(it);
-        let name_lc = display_name_lower(it);
-        let size = sort_size(it);
-        let json = serde_json::to_vec(it)?;
-        let db = &self.db;
-        let mut batch = db.batch_with_capacity(5);
-        batch.insert(item_key(&it.id), json);
-        batch.insert(by_deleted_key(it.deleted_at, &it.id), b"");
-        batch.insert(by_deleted_df_key(it.deleted_at, df, &it.id), b"");
-        batch.insert(by_name_df_key(df, &name_lc, &it.id), b"");
-        batch.insert(by_size_df_key(df, size, &it.id), b"");
-        db.apply_batch(batch)?;
-        db.flush()?;
-        Ok(())
-    }
-
-    pub fn delete_item_keys(&self, it: &TrashItem) -> Result<()> {
-        let df = dir_flag(it);
-        let rev = REVERSED_MAX - it.deleted_at;
-        let name_lc = display_name_lower(it);
-        let size = sort_size(it);
-        let db = &self.db;
-        let mut batch = db.batch_with_capacity(5);
-        batch.remove(item_key(&it.id));
-        batch.remove(format!("{NS_BY_DELETED}{rev:020}:{}", it.id));
-        batch.remove(format!("{NS_BY_DELETED_DF}{df}:{rev:020}:{}", it.id));
-        batch.remove(format!("{NS_BY_NAME_DF}{df}:{name_lc}:{}", it.id));
-        batch.remove(format!("{NS_BY_SIZE_DF}{df}:{size:020}:{}", it.id));
-        db.apply_batch(batch)?;
-        db.flush()?;
-        Ok(())
+        Ok(self.db.with_conn(|conn|conn.query_row("SELECT id,path,original_path,kind,trashed_at,size_bytes FROM file_catalog WHERE id=?1 AND trashed=1",[id],trash_item).optional())?)
     }
 
     pub async fn trash_paths(&self, paths: Vec<String>) -> Result<Vec<String>> {
-        let mut out = Vec::with_capacity(paths.len());
+        let mut result = Vec::with_capacity(paths.len());
         for raw in paths {
-            let src = PathBuf::from(&raw).clean_path();
-            validate_trashable_path(&src)?;
-            let meta = std::fs::symlink_metadata(&src)?;
-            let kind = if meta.is_dir() { "dir" } else { "file" };
-            let now = Utc::now();
-            let deleted_at = now.timestamp();
-            let id = shortid::new_id();
-
-            let probe = if meta.file_type().is_symlink() {
-                src.parent().unwrap_or(&src).to_path_buf()
-            } else {
-                src.clone()
-            };
-            let disk_mount = match mountinfo::resolve_mount_point(&probe) {
-                Ok(m) => m,
-                Err(_) => {
-                    let canon = std::fs::canonicalize(&probe).unwrap_or(probe.clone());
-                    let parent = canon.parent().map(|p| p.to_path_buf()).unwrap_or(canon);
-                    parent.to_string_lossy().to_string()
-                }
-            };
-            let base = src
+            let source = crate::db::files::locate(&raw)?.path;
+            validate_trashable_path(&source)?;
+            let metadata = std::fs::symlink_metadata(&source)?;
+            let source_text = source.to_str().context("Invalid file path encoding")?;
+            let file = self
+                .db
+                .record_file_paths(&[source_text.into()], None)?
+                .remove(0);
+            let kind = if metadata.is_dir() { "dir" } else { "file" };
+            let mount =
+                mountinfo::resolve_mount_point(source.parent().context("File parent required")?)?;
+            let name = source
                 .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_string();
-            let rel = compute_bucket_rel_path(kind, &id, &base, now);
-            let disk_mount =
-                writable_disk(&src, &disk_mount, |disk| prepare_trash_parent(disk, &rel))?;
-            let dst = abs_trash_path(&disk_mount, &rel);
-
-            let lock = lock_for_disk(&disk_mount);
-            let _g = lock.lock().await;
-            match std::fs::rename(&src, &dst) {
-            Ok(()) => {}
-            Err(e) if e.raw_os_error() == Some(18) /* EXDEV */ => {
-                bail!("cross-filesystem rename forbidden: {e}");
+                .and_then(|name| name.to_str())
+                .context("File name required")?;
+            let relative = compute_bucket_rel_path(kind, &file.id.to_string(), name, Utc::now());
+            let disk = writable_disk(&source, &mount, |disk| {
+                prepare_trash_parent(disk, &relative)
+            })?;
+            let destination = abs_trash_path(&disk, &relative);
+            let target = destination
+                .to_str()
+                .context("Invalid trash path encoding")?;
+            let lock = lock_for_disk(&disk);
+            let _guard = lock.lock().await;
+            self.db
+                .prepare_file_path_change(file.id, source_text, target, PathChange::Trash)?;
+            if let Err(error) = crate::files::filesystem::rename::no_replace(&source, &destination)
+            {
+                self.db
+                    .key_values()
+                    .remove(format!("file_path_change:{}", file.id))?;
+                return Err(error.into());
             }
-            Err(e) => bail!("rename failed: {e}"),
+            self.db
+                .finish_file_path_change(file.id, source_text, target, PathChange::Trash)?;
+            result.push(target.into());
         }
-            let (uid, gid, mode) = owner_mode(&meta);
-            let item = TrashItem {
-                id: id.clone(),
-                kind: kind.to_string(),
-                original_path: src.to_string_lossy().to_string(),
-                disk: disk_mount.clone(),
-                trash_rel_path: rel,
-                deleted_at,
-                uid,
-                gid,
-                mode,
-                size: None,
-                entry_count: None,
-            };
-            if let Err(e) = self.store_item(&item) {
-                let _ = std::fs::rename(&dst, &src);
-                bail!("failed to write trash metadata: {e}");
-            }
-            out.push(dst.to_string_lossy().to_string());
-        }
-        Ok(out)
+        Ok(result)
     }
 
-    pub async fn restore_paths(&self, trashed_paths: Vec<String>) -> Result<Vec<String>> {
-        let mut out = Vec::with_capacity(trashed_paths.len());
-        for raw in trashed_paths {
-            let src = PathBuf::from(&raw).clean_path();
-            let id = validate_restore_path(&src)?;
+    pub async fn restore_paths(&self, paths: Vec<String>) -> Result<Vec<String>> {
+        let mut result = Vec::with_capacity(paths.len());
+        for reference in paths {
             let item = self
-                .load_item(&id)?
-                .ok_or_else(|| anyhow!("trash item not found"))?;
-            let trash_path = abs_trash_path(&item.disk, &item.trash_rel_path);
-            let target = PathBuf::from(&item.original_path).clean_path();
-            if target.as_os_str().is_empty()
-                || target == PathBuf::from(".")
-                || target == PathBuf::from("/")
-            {
-                bail!("invalid original path");
-            }
-            if !target.starts_with(Path::new(&item.disk)) {
-                bail!("restore target must be on original disk");
-            }
-            let lock = lock_for_disk(&item.disk);
-            let _g = lock.lock().await;
+                .resolve_item(&reference)?
+                .context("Trash item not found")?;
+            let source = Self::physical_path(&item);
+            let target = Path::new(&item.original_path);
             if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent).ok();
+                std::fs::create_dir_all(parent)?;
             }
-            let mut final_target = target.clone();
-            if final_target.exists() {
-                final_target = unique_restored_path(&final_target);
+            let target = crate::utils::unique_path::unique_sibling(target)?;
+            let source_text = source.to_str().context("Invalid trash path encoding")?;
+            let target_text = target.to_str().context("Invalid restore path encoding")?;
+            let lock = lock_for_disk(&item.disk);
+            let _guard = lock.lock().await;
+            let id = item.id.parse()?;
+            self.db
+                .prepare_file_path_change(id, source_text, target_text, PathChange::Restore)?;
+            if let Err(error) = crate::files::filesystem::rename::no_replace(&source, &target) {
+                self.db
+                    .key_values()
+                    .remove(format!("file_path_change:{id}"))?;
+                return Err(error.into());
             }
-            std::fs::rename(&trash_path, &final_target).context("rename from trash")?;
-            #[cfg(unix)]
-            {
-                let _ = std::os::unix::fs::chown(&final_target, Some(item.uid), Some(item.gid));
-                let _ = std::fs::set_permissions(
-                    &final_target,
-                    std::fs::Permissions::from_mode(item.mode),
-                );
-            }
-            if let Err(e) = self.delete_item_keys(&item) {
-                let _ = std::fs::rename(&final_target, &trash_path);
-                bail!("failed to delete trash metadata: {e}");
-            }
-            out.push(final_target.to_string_lossy().to_string());
+            self.db
+                .finish_file_path_change(id, source_text, target_text, PathChange::Restore)?;
+            result.push(target_text.into());
         }
-        Ok(out)
+        Ok(result)
     }
 
-    pub async fn delete_trash_by_path(&self, trashed_path: &str) -> Result<()> {
-        let id = validate_restore_path(&PathBuf::from(trashed_path).clean_path())?;
-        let it = self
-            .load_item(&id)?
-            .ok_or_else(|| anyhow!("trash item not found"))?;
-        let lock = lock_for_disk(&it.disk);
+    pub async fn delete_trash_by_path(&self, reference: &str) -> Result<()> {
+        let item = self
+            .resolve_item(reference)?
+            .context("Trash item not found")?;
+        let physical = Self::physical_path(&item);
+        let lock = lock_for_disk(&item.disk);
         let _guard = lock.lock().await;
-        let abs = abs_trash_path(&it.disk, &it.trash_rel_path);
-        crate::files::filesystem::remove(&abs).await?;
-        self.delete_item_keys(&it)?;
+        crate::files::filesystem::remove(&physical).await?;
+        let path = physical
+            .to_str()
+            .context("Invalid trash path encoding")?
+            .to_owned();
+        crate::files::deletes::cleanup(
+            &self.db,
+            &[],
+            std::slice::from_ref(&path),
+            std::slice::from_ref(&path),
+        )?;
         Ok(())
     }
 
     pub fn resolve_item(&self, reference: &str) -> Result<Option<TrashItem>> {
-        let id = validate_restore_path(&PathBuf::from(reference).clean_path())?;
-        self.load_item(&id)
+        let id = validate_restore_path(Path::new(reference))?;
+        let item = self.load_item(&id)?;
+        if Path::new(reference).is_absolute()
+            && item
+                .as_ref()
+                .is_some_and(|item| Self::physical_path(item) != Path::new(reference).clean_path())
+        {
+            bail!("Trash path does not match file identity");
+        }
+        Ok(item)
     }
 
     pub fn physical_path(item: &TrashItem) -> PathBuf {
@@ -301,74 +216,47 @@ impl Trash {
         text: &str,
         order: SortOrder,
     ) -> Result<Vec<TrashItem>> {
-        let db = &self.db;
         let needle = text.trim().to_lowercase();
-        let mut items: Vec<TrashItem> = Vec::new();
-        for kv in db.iter() {
-            let (k, _v) = kv?;
-            let k = String::from_utf8_lossy(&k).to_string();
-            if !k.starts_with(NS_ITEM) {
-                continue;
-            }
-            let v = db.get(&k)?.ok_or_else(|| anyhow!("missing item body"))?;
-            let it: TrashItem = serde_json::from_slice(&v)?;
-            if !needle.is_empty() {
-                let hay = it.original_path.to_lowercase();
-                if !hay.contains(&needle) {
-                    continue;
+        let mut items=self.db.with_conn(|conn|conn.prepare(&format!("SELECT id,path,original_path,kind,trashed_at,size_bytes FROM file_catalog WHERE {TOP_LEVEL}"))?
+            .query_map([],trash_item)?.collect::<rusqlite::Result<Vec<_>>>())?;
+        items.retain(|item| item.original_path.to_lowercase().contains(&needle));
+        let name = |item: &TrashItem| {
+            Path::new(&item.original_path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("")
+                .to_lowercase()
+                .trim()
+                .to_owned()
+        };
+        items.sort_by(|a, b| {
+            let directories = (b.kind == "dir").cmp(&(a.kind == "dir"));
+            let order = match order {
+                SortOrder::DeletedAtNewest => b.deleted_at.cmp(&a.deleted_at),
+                SortOrder::DeletedAtOldest => a.deleted_at.cmp(&b.deleted_at),
+                SortOrder::NameAsc => directories.then_with(|| name(a).cmp(&name(b))),
+                SortOrder::NameDesc => directories.then_with(|| name(b).cmp(&name(a))),
+                SortOrder::SizeAsc => {
+                    directories.then(a.size.unwrap_or(0).cmp(&b.size.unwrap_or(0)))
                 }
-            }
-            items.push(it);
-        }
-        match order {
-            SortOrder::DeletedAtNewest => {
-                items.sort_by(|a, b| b.deleted_at.cmp(&a.deleted_at).then(a.id.cmp(&b.id)))
-            }
-            SortOrder::DeletedAtOldest => {
-                items.sort_by(|a, b| a.deleted_at.cmp(&b.deleted_at).then(a.id.cmp(&b.id)))
-            }
-            SortOrder::NameAsc => items.sort_by(|a, b| {
-                dir_flag(a)
-                    .cmp(dir_flag(b))
-                    .then(display_name_lower(a).cmp(&display_name_lower(b)))
-                    .then(a.id.cmp(&b.id))
-            }),
-            SortOrder::NameDesc => items.sort_by(|a, b| {
-                dir_flag(a)
-                    .cmp(dir_flag(b))
-                    .then(display_name_lower(b).cmp(&display_name_lower(a)))
-                    .then(a.id.cmp(&b.id))
-            }),
-            SortOrder::SizeAsc => items.sort_by(|a, b| {
-                dir_flag(a)
-                    .cmp(dir_flag(b))
-                    .then(sort_size(a).cmp(&sort_size(b)))
-                    .then(a.id.cmp(&b.id))
-            }),
-            SortOrder::SizeDesc => items.sort_by(|a, b| {
-                dir_flag(a)
-                    .cmp(dir_flag(b))
-                    .then(sort_size(b).cmp(&sort_size(a)))
-                    .then(a.id.cmp(&b.id))
-            }),
-        }
-        let end = offset.saturating_add(limit).min(items.len());
-        if offset >= items.len() {
-            return Ok(vec![]);
-        }
-        Ok(items.drain(offset..end).collect())
+                SortOrder::SizeDesc => {
+                    directories.then(b.size.unwrap_or(0).cmp(&a.size.unwrap_or(0)))
+                }
+            };
+            order.then(a.id.cmp(&b.id))
+        });
+        Ok(items.into_iter().skip(offset).take(limit).collect())
     }
 
     pub fn trash_count(&self) -> Result<usize> {
-        let db = &self.db;
-        let mut n = 0;
-        for kv in db.scan_prefix(NS_ITEM) {
-            let (k, _) = kv?;
-            if String::from_utf8_lossy(&k).starts_with(NS_ITEM) {
-                n += 1;
-            }
-        }
-        Ok(n)
+        let total = self.db.with_conn(|conn| {
+            conn.query_row(
+                &format!("SELECT count(*) FROM file_catalog WHERE {TOP_LEVEL}"),
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+        })?;
+        Ok(usize::try_from(total)?)
     }
 }
 
@@ -399,15 +287,40 @@ fn prepare_trash_parent(disk: &str, relative: &str) -> std::io::Result<()> {
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
         Err(error) => return Err(error),
     }
-    if !std::fs::symlink_metadata(&root)?.file_type().is_dir() {
+    let metadata = std::fs::symlink_metadata(&root)?;
+    if !metadata.file_type().is_dir() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "trash root must be a real directory",
+            "Trash root must be a real directory",
         ));
     }
-    std::fs::create_dir_all(abs_trash_path(disk, relative).parent().ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "trash parent required")
-    })?)
+    #[cfg(unix)]
+    if metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o077 != 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Trash root must be private and owned by the current user",
+        ));
+    }
+    let mut parent = root;
+    for component in Path::new(relative)
+        .parent()
+        .unwrap_or(Path::new(""))
+        .components()
+    {
+        parent.push(component.as_os_str());
+        match std::fs::create_dir(&parent) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
+        if !std::fs::symlink_metadata(&parent)?.file_type().is_dir() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Trash parent must be a real directory",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn writable_disk(
@@ -485,29 +398,6 @@ fn validate_trashable_path(p: &Path) -> Result<()> {
     Ok(())
 }
 
-fn unique_restored_path(target: &Path) -> PathBuf {
-    if !target.exists() {
-        return target.to_path_buf();
-    }
-    let parent = target.parent().unwrap_or_else(|| Path::new("."));
-    let base = target.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    let (name, ext) = match base.rfind('.') {
-        Some(i) if i > 0 => (&base[..i], &base[i..]),
-        _ => (base, ""),
-    };
-    let first = parent.join(format!("{name} (restored){ext}"));
-    if !first.exists() {
-        return first;
-    }
-    for i in 2.. {
-        let cand = parent.join(format!("{name} (restored {i}){ext}"));
-        if !cand.exists() {
-            return cand;
-        }
-    }
-    target.to_path_buf()
-}
-
 fn validate_restore_path(p: &Path) -> Result<String> {
     let cleaned = p.clean_path();
     if is_in_plain_trash(&cleaned) {
@@ -583,11 +473,6 @@ fn count_entries(p: &Path) -> i64 {
         .into_iter()
         .filter_map(|e| e.ok())
         .count() as i64
-}
-
-#[allow(unused)]
-fn _unix_to_datetime(t: i64) -> DateTime<Utc> {
-    Utc.timestamp_opt(t, 0).single().unwrap_or_else(Utc::now)
 }
 
 #[cfg(test)]

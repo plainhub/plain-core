@@ -54,7 +54,10 @@ fn installed_schema_matches_generated_definitions() {
         .execute_batch(include_str!("../../../../schema/database.sql"))
         .unwrap();
     let db = Db::open(Path::new(":memory:")).unwrap();
-    assert_eq!(db.with_conn(definitions), definitions(&expected));
+    assert_eq!(
+        db.with_conn(|conn| definitions(conn)),
+        definitions(&expected)
+    );
 }
 
 #[test]
@@ -65,8 +68,12 @@ fn current_track_reopens_from_kv_without_playback_progress() {
     let id = register(&db);
     crate::media::audio::queue::save_audio_current(&db, "/track.mp3").unwrap();
     crate::media::audio::playback::seek(&db, 123).unwrap();
-    let stored = db.key_values().unwrap().get("local_audio_current_media_id").unwrap().unwrap();
-    assert_eq!(std::str::from_utf8(&stored).unwrap(), id);
+    let stored = db
+        .key_values()
+        .get("local_audio_current_file_id")
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored, id);
     drop(db);
     let reopened = Db::open(&path).unwrap();
     assert_eq!(
@@ -75,9 +82,8 @@ fn current_track_reopens_from_kv_without_playback_progress() {
             .position_ms,
         0
     );
-    assert_eq!(reopened.audio_current_media_id(), Some(id));
+    assert_eq!(reopened.audio_current_file_id(), Some(id));
 }
-
 
 #[test]
 fn sms_and_mms_with_equal_ids_restore_independently() {
@@ -115,17 +121,14 @@ fn media_storage_uses_nullable_cover_and_canonical_utc_times() {
         for assignment in [
             "id=''",
             "favorited=2",
-            "trashed=-1",
+            "missing=-1",
             "rotation=45",
             "size_bytes=-1",
             "duration_ms=-1",
         ] {
             assert!(
-                conn.execute(
-                    &format!("UPDATE media_items SET {assignment} WHERE id=?1"),
-                    [&id]
-                )
-                .is_err(),
+                conn.execute(&format!("UPDATE files SET {assignment} WHERE id=?1"), [&id])
+                    .is_err(),
                 "{assignment}"
             );
         }
@@ -143,7 +146,7 @@ fn embedding_storage_rejects_invalid_vectors() {
     ] {
         assert!(
             db.embedding_save(&crate::db::ImageEmbeddingRow {
-                id: "image".into(),
+                file_id: "image".into(),
                 path: "/image.jpg".into(),
                 embedding_base64: crate::utils::base64::base64_encode(&bytes),
                 created_at: "2026-01-01T00:00:00.000Z".into(),

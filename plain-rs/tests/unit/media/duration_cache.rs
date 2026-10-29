@@ -3,7 +3,7 @@ use super::*;
 fn value(kind: &str, id: &str, path: &str, duration_ms: i64) -> Duration {
     Duration {
         media_type: kind.into(),
-        media_id: id.into(),
+        file_id: id.into(),
         path: path.into(),
         size_bytes: 42,
         modified_at: "2026-01-01T00:00:00Z".into(),
@@ -59,15 +59,15 @@ fn path_invalidation_respects_directory_boundaries_and_other_prefixes() {
     cache
         .save(value("video", "failed", "/other/failed", 40))
         .unwrap();
-    let db = Db::open(&crate::kv::default_db_path(directory.path())).unwrap();
-    db.insert("session:keep", b"not a duration").unwrap();
+    let db = Db::open(&crate::data_paths::DataPaths::new(directory.path()).database()).unwrap();
+    db.insert("session:keep", "not a duration").unwrap();
     cache.invalidate_paths(&["/root/song".into()], &[]).unwrap();
     assert_eq!(cache.all().unwrap().len(), 3);
     cache.invalidate_paths(&[], &["/root".into()]).unwrap();
     assert_eq!(cache.all().unwrap().len(), 2);
     assert_eq!(
         db.get("session:keep").unwrap().as_deref(),
-        Some(&b"not a duration"[..])
+        Some("not a duration")
     );
 }
 
@@ -95,12 +95,16 @@ fn invalid_entries_do_not_replace_valid_cache() {
 #[test]
 fn malformed_cache_is_reported_and_open_failure_is_not_an_empty_list() {
     let directory = tempfile::tempdir().unwrap();
-    let db = Db::open(&crate::kv::default_db_path(directory.path())).unwrap();
-    db.insert(format!("{PREFIX}audio:bad"), b"invalid JSON")
+    let db = Db::open(&crate::data_paths::DataPaths::new(directory.path()).database()).unwrap();
+    db.insert(format!("{PREFIX}audio:bad"), "invalid JSON")
         .unwrap();
     assert!(DurationCache::new(directory.path()).all().is_err());
     let blocked = tempfile::tempdir().unwrap();
-    std::fs::write(crate::kv::default_db_path(blocked.path()), b"file").unwrap();
+    std::fs::write(
+        crate::data_paths::DataPaths::new(blocked.path()).database(),
+        b"file",
+    )
+    .unwrap();
     assert!(DurationCache::new(blocked.path()).all().is_err());
 }
 
@@ -128,7 +132,7 @@ fn matching_requires_the_same_kind_path_size_and_provider_second() {
         .unwrap();
     let item = Identity {
         media_type: "video".into(),
-        media_id: "same".into(),
+        file_id: "same".into(),
         path: "/video".into(),
         size_bytes: 42,
         modified_at: "2026-01-01T00:00:00.999Z".into(),
@@ -182,7 +186,9 @@ fn removal_and_path_invalidation_prevent_inflight_probes_from_resurrecting_entri
 #[test]
 fn unrelated_removals_cancel_pending_probes_without_committing_or_flushing() {
     let directory = tempfile::tempdir().unwrap();
-    let store = Arc::new(LazyDb::new(crate::kv::default_db_path(directory.path())));
+    let store = Arc::new(LazyDb::new(
+        crate::data_paths::DataPaths::new(directory.path()).database(),
+    ));
     let cache = DurationCache::with_store(store.clone());
     cache
         .save(value("audio", "kept", "/kept/song", 5000))
@@ -217,6 +223,6 @@ fn unrelated_removals_cancel_pending_probes_without_committing_or_flushing() {
 
     db.set_write_failure_for_test(false);
     cache.invalidate_paths(&[], &["/kept".into()]).unwrap();
-    assert_eq!(db.write_attempts_for_test(), writes + 3);
+    assert_eq!(db.write_attempts_for_test(), writes + 2);
     assert!(cache.all().unwrap().is_empty());
 }

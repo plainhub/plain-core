@@ -8,7 +8,7 @@ fn native_catalog_ids_do_not_select_the_sdk_thumbnail_route() {
         width: 80,
         height: 60,
         center_crop: true,
-        media_id: "catalog-id".into(),
+        file_id: "catalog-id".into(),
         file_name: "image.jpg".into(),
         if_none_match: None,
     };
@@ -35,7 +35,7 @@ async fn core_only_thumbnail_crops_without_host_requests_or_output_tokens() {
         width: 2,
         height: 2,
         center_crop: true,
-        media_id: "catalog-id".into(),
+        file_id: "catalog-id".into(),
         file_name: "image.png".into(),
         if_none_match: None,
     };
@@ -73,7 +73,7 @@ async fn core_only_thumbnail_applies_exif_orientation_before_sizing() {
         width: 2,
         height: 3,
         center_crop: false,
-        media_id: String::new(),
+        file_id: String::new(),
         file_name: "rotated.jpg".into(),
         if_none_match: None,
     };

@@ -32,7 +32,7 @@ pub fn matching(db: &Db, fields: &[FilterField]) -> DomainResult<Vec<MediaPlayHi
                     )
                 } else {
                     (
-                        "media_id",
+                        "file_id",
                         serde_json::to_string(&entries)
                             .map_err(|error| invalid(&error.to_string()))?,
                     )
@@ -103,21 +103,21 @@ pub fn matches_text(fields: &[FilterField], values: &[&str]) -> bool {
     })
 }
 
-pub fn record(db: &Db, media_type: DataType, media_id: &str, position_ms: i64) -> DomainResult<()> {
-    validate(media_type, media_id, position_ms)?;
-    Ok(db.media_play_history_record(media_type, media_id, position_ms)?)
+pub fn record(db: &Db, media_type: DataType, file_id: &str, position_ms: i64) -> DomainResult<()> {
+    validate(media_type, file_id, position_ms)?;
+    Ok(db.media_play_history_record(media_type, file_id, position_ms)?)
 }
 
-pub fn save(db: &Db, media_type: DataType, media_id: &str, position_ms: i64) -> DomainResult<()> {
-    validate(media_type, media_id, position_ms)?;
-    Ok(db.media_play_history_save(media_type, media_id, position_ms)?)
+pub fn save(db: &Db, media_type: DataType, file_id: &str, position_ms: i64) -> DomainResult<()> {
+    validate(media_type, file_id, position_ms)?;
+    Ok(db.media_play_history_save(media_type, file_id, position_ms)?)
 }
 
-fn validate(media_type: DataType, media_id: &str, position_ms: i64) -> DomainResult<()> {
+fn validate(media_type: DataType, file_id: &str, position_ms: i64) -> DomainResult<()> {
     if !matches!(media_type, DataType::Audio | DataType::Video) {
         return Err(invalid("Media history type must be AUDIO or VIDEO"));
     }
-    if media_id.trim().is_empty() || position_ms < 0 {
+    if file_id.trim().is_empty() || position_ms < 0 {
         return Err(invalid("Invalid media play history"));
     }
     Ok(())

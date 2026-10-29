@@ -1,6 +1,6 @@
-use crate::host::bridge::Host;
 use super::*;
 use crate::graphql::schemas::public::PublicSchema;
+use crate::host::bridge::Host;
 use plain_rs::db::Db;
 use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
@@ -396,8 +396,16 @@ async fn recent_files_are_gated_and_projected_from_the_store() {
         .data::<Arc<plain_rs::prefs::Prefs>>()
         .unwrap()
         .clone();
-    plain_rs::recent_files::add(schema.data::<Arc<Db>>().unwrap().key_values().unwrap().as_ref(), &first.to_string_lossy()).unwrap();
-    plain_rs::recent_files::add(schema.data::<Arc<Db>>().unwrap().key_values().unwrap().as_ref(), &second.to_string_lossy()).unwrap();
+    plain_rs::recent_files::add(
+        schema.data::<Arc<Db>>().unwrap().key_values().as_ref(),
+        &first.to_string_lossy(),
+    )
+    .unwrap();
+    plain_rs::recent_files::add(
+        schema.data::<Arc<Db>>().unwrap().key_values().as_ref(),
+        &second.to_string_lossy(),
+    )
+    .unwrap();
 
     let response = schema
         .execute(r#"query { recentFiles { name path mediaId size isDir } }"#)
@@ -561,8 +569,20 @@ async fn batched_file_paths_use_native_rust_data_without_platform_requests() {
     let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
-    let paths = vec!["app://icons/image.png", "app://../outside", "fid:invalid", "file:///tmp/file%20name.png", "app://icons/image.png"];
-    let values = serde_json::to_value(core.native_management().unwrap().file_paths(paths.into_iter().map(str::to_owned).collect()).unwrap()).unwrap();
+    let paths = vec![
+        "app://icons/image.png",
+        "app://../outside",
+        "fid:invalid",
+        "file:///tmp/file%20name.png",
+        "app://icons/image.png",
+    ];
+    let values = serde_json::to_value(
+        core.native_management()
+            .unwrap()
+            .file_paths(paths.into_iter().map(str::to_owned).collect())
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         values[0],
         directory
@@ -602,9 +622,17 @@ async fn native_file_actions_resolve_registered_attachments_without_graphql() {
         .to_str()
         .unwrap();
     let (_generation, mut requests) = state.host.connect();
-    let paths = serde_json::to_value(core.native_management().unwrap().file_paths(vec![
-        format!("fid:{suffix}"), format!("fid:{}.wrong", file.id), "documents/plain.txt".into(),
-    ]).unwrap()).unwrap();
+    let paths = serde_json::to_value(
+        core.native_management()
+            .unwrap()
+            .file_paths(vec![
+                format!("fid:{suffix}"),
+                format!("fid:{}.wrong", file.id),
+                "documents/plain.txt".into(),
+            ])
+            .unwrap(),
+    )
+    .unwrap();
     let resolved = std::path::PathBuf::from(paths[0].as_str().unwrap());
     assert!(resolved.is_absolute());
     assert_eq!(std::fs::read(resolved).unwrap(), b"attachment");
@@ -619,7 +647,13 @@ async fn native_file_actions_resolve_registered_attachments_without_graphql() {
         &state.directory,
         &file.id,
     ).unwrap());
-    assert_eq!(core.native_management().unwrap().file_paths(vec![format!("fid:{suffix}")]).unwrap(), vec![None]);
+    assert_eq!(
+        core.native_management()
+            .unwrap()
+            .file_paths(vec![format!("fid:{suffix}")])
+            .unwrap(),
+        vec![None]
+    );
     assert!(requests.try_recv().is_err());
     core.stop_core().await;
 }

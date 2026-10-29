@@ -89,15 +89,15 @@ fn matching_combines_ids_counts_and_positions_without_reordering_history() {
     .unwrap();
     assert_eq!(
         rows.iter()
-            .map(|row| row.media_id.as_str())
+            .map(|row| row.file_id.as_str())
             .collect::<Vec<_>>(),
         ["last", "first"]
     );
     let rows = matching(&db, &parse("type:AUDIO play_count:>1")).unwrap();
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].media_id, "last");
+    assert_eq!(rows[0].file_id, "last");
     assert_eq!(
-        matching(&db, &parse("NOT type:AUDIO")).unwrap()[0].media_id,
+        matching(&db, &parse("NOT type:AUDIO")).unwrap()[0].file_id,
         "video"
     );
 }

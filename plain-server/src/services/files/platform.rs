@@ -12,8 +12,8 @@ use std::{
 };
 
 pub(crate) struct FilePlatform {
-    host: Arc<Host>,
-    db: Arc<Db>,
+    pub(super) host: Arc<Host>,
+    pub(super) db: Arc<Db>,
     directory: PathBuf,
     cache: PathBuf,
     private_roots: std::result::Result<[PathBuf; 2], String>,
@@ -151,11 +151,16 @@ impl FilePlatform {
                 )
                 .map_err(Into::into);
             }
-            let volumes = self.host
+            let volumes = self
+                .host
                 .call(crate::host::platform::SYSTEM_MOUNT_FACTS, json!({}))
-                .await.map_err(anyhow::Error::msg)?;
-            let root = volumes.as_array().ok_or_else(|| anyhow!("Invalid storage volumes"))?
-                .iter().find(|volume| volume["driveType"] == "INTERNAL_STORAGE")
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let root = volumes
+                .as_array()
+                .ok_or_else(|| anyhow!("Invalid storage volumes"))?
+                .iter()
+                .find(|volume| volume["driveType"] == "INTERNAL_STORAGE")
                 .and_then(|volume| volume["path"].as_str())
                 .ok_or_else(|| anyhow!("Primary storage directory unavailable"))?;
             if !Path::new(root).is_absolute() {
@@ -164,7 +169,8 @@ impl FilePlatform {
             let root = PathBuf::from(root);
             let entries = tokio::task::spawn_blocking(move || {
                 plain_rs::files::filesystem::recent::list(&root, 100)
-            }).await?;
+            })
+            .await?;
             return Ok(entries.into_iter().map(|entry| json!({
                 "name":Path::new(&entry.path).file_name().and_then(|name| name.to_str()).unwrap_or_default(),
                 "path":entry.path,"permission":"","mediaId":null,"createdAt":null,
@@ -173,7 +179,7 @@ impl FilePlatform {
             })).collect());
         }
         let mut items = Vec::new();
-        for path in plain_rs::recent_files::list(self.db.key_values().ok_or_else(|| anyhow!("KV store unavailable"))?.as_ref(), 500)? {
+        for path in plain_rs::recent_files::list(self.db.key_values().as_ref(), 500)? {
             let Ok(entry) = plain_rs::files::filesystem::stat(Path::new(&path)).await else {
                 continue;
             };
@@ -316,8 +322,8 @@ impl FilePlatform {
         let db = self.db.clone();
         let paths = serde_json::to_string(paths)?;
         Ok(tokio::task::spawn_blocking(move || db.with_conn(|connection| {
-            connection.prepare("SELECT data_type,id,path FROM media_items WHERE data_type IN (1,2,3,24) AND path IN (SELECT value FROM json_each(?1))")?
-                .query_map([paths], |row| Ok(super::file_task_media::Identity { media_type: row.get(0)?, media_id: row.get(1)?, path: row.get(2)? }))?
+            connection.prepare("SELECT data_type,id,path FROM file_catalog WHERE data_type IN (1,2,3,22,24) AND path IN (SELECT value FROM json_each(?1))")?
+                .query_map([paths], |row| Ok(super::file_task_media::Identity { media_type: row.get(0)?, file_id: row.get(1)?, path: row.get(2)? }))?
                 .collect::<rusqlite::Result<Vec<_>>>()
         })).await??)
     }
@@ -339,7 +345,9 @@ impl FilePlatform {
                 let mut existing = Vec::new();
                 for path in paths {
                     match std::fs::metadata(&path) {
-                        Ok(metadata) if metadata.is_file() => existing.push(path),
+                        Ok(metadata) if metadata.is_file() || metadata.is_dir() => {
+                            existing.push(path)
+                        }
                         Ok(_) => {}
                         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                         Err(error) => return Err(error.to_string()),
@@ -361,17 +369,23 @@ impl FilePlatform {
                 let mut existing = Vec::new();
                 for path in paths {
                     match std::fs::metadata(&path) {
-                        Ok(metadata) if metadata.is_file() => existing.push(path),
+                        Ok(metadata) if metadata.is_file() || metadata.is_dir() => {
+                            existing.push(path)
+                        }
                         Ok(_) => {}
                         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                         Err(error) => return Err(error.to_string()),
                     }
                 }
                 let reads = super::media_index::read_files(&directory, &cache, &[], existing)?;
+                let generic_types = super::media_index::record_generic(&db, &reads.generic)?;
                 let rows = db
-                    .record_media_file_reads(&reads)
+                    .record_media_file_reads(&reads.media)
                     .map_err(|error| error.to_string())?;
-                super::catalog_events::publish(&events, rows.iter().map(|row| row.data_type));
+                super::catalog_events::publish(
+                    &events,
+                    rows.iter().map(|row| row.data_type).chain(generic_types),
+                );
                 Ok::<_, String>(())
             })
             .await?

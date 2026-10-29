@@ -11,12 +11,10 @@ async fn native_cache_accounting_and_clear_preserve_application_data_without_hos
     let persistent = [
         paths.database(),
         paths.prefs(),
-        paths.prefs(),
         paths.note_images().join("note.png"),
         paths.audio().join("sound.mp3"),
         paths.tls_identity(),
         directory.path().join("ai_models/model.onnx"),
-        paths.kv().join("data"),
         directory.path().join("uploads/active/chunk"),
         directory.path().join("archives/active.zip"),
     ];
@@ -115,7 +113,8 @@ async fn cache_settings_execute_the_main_contract_without_platform_operations() 
     let mut events = server.runtime_state().events.subscribe();
     let cache = server.cache_paths().clone();
     std::fs::write(cache.root().join("scratch"), b"cached bytes").unwrap();
-    let (_generation, mut requests) = crate::test_support::HostRequests::connect(&server.runtime_state().host);
+    let (_generation, mut requests) =
+        crate::test_support::HostRequests::connect(&server.runtime_state().host);
     let response = native
         .execute(async_graphql::Request::new("{appCacheSize}"))
         .await;

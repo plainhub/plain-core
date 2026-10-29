@@ -31,6 +31,21 @@ const EXCLUDED_DIR_NAMES: &[&str] = &["node_modules"];
 
 const PROFILE_CACHE_NAMES: &[&str] = &["cache", "caches", "gpucache", "code cache", "cachestorage"];
 
+pub fn is_file_excluded_at(
+    path: &str,
+    data_dir: &Path,
+    cache_dir: &Path,
+    extra_roots: &[String],
+) -> bool {
+    let path = Path::new(path);
+    path.starts_with(data_dir)
+        || path.starts_with(cache_dir)
+        || path
+            .components()
+            .any(|part| part.as_os_str() == ".plain-trash")
+        || extra_roots.iter().any(|root| path.starts_with(root))
+}
+
 pub fn is_media_excluded_at(
     path: &str,
     data_dir: &Path,

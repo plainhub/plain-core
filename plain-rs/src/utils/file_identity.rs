@@ -1,28 +1,60 @@
 use std::{io, path::Path};
 
 pub fn key(path: &Path) -> io::Result<Option<String>> {
-    let (file, created) = sample(path)?;
-    Ok(created.map(|created| format!("{file}:{created}")))
+    let identity = sample(path, true)?;
+    Ok(identity
+        .created
+        .map(|created| format!("{}:{}:{created}", identity.volume, identity.file)))
 }
 
 pub fn same(left: &Path, right: &Path) -> io::Result<bool> {
-    Ok(sample(left)?.0 == sample(right)?.0)
+    let left = sample(left, true)?;
+    let right = sample(right, true)?;
+    Ok(left.volume == right.volume && left.file == right.file)
+}
+
+pub fn within_volume_key(path: &Path) -> io::Result<Option<String>> {
+    let identity = sample(path, true)?;
+    Ok(identity
+        .created
+        .map(|created| format!("{}:{created}", identity.file)))
+}
+
+pub fn within_volume_entry_key(path: &Path) -> io::Result<Option<String>> {
+    let identity = sample(path, false)?;
+    Ok(identity
+        .created
+        .map(|created| format!("{}:{created}", identity.file)))
+}
+
+struct Identity {
+    volume: String,
+    file: String,
+    created: Option<String>,
 }
 
 #[cfg(unix)]
-fn sample(path: &Path) -> io::Result<(String, Option<String>)> {
+fn sample(path: &Path, follow: bool) -> io::Result<Identity> {
     use std::os::unix::fs::MetadataExt;
-    let metadata = std::fs::metadata(path)?;
+    let metadata = if follow {
+        std::fs::metadata(path)?
+    } else {
+        std::fs::symlink_metadata(path)?
+    };
     let created = metadata
         .created()
         .ok()
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|time| time.as_nanos().to_string());
-    Ok((format!("{}:{}", metadata.dev(), metadata.ino()), created))
+    Ok(Identity {
+        volume: metadata.dev().to_string(),
+        file: metadata.ino().to_string(),
+        created,
+    })
 }
 
 #[cfg(windows)]
-fn sample(path: &Path) -> io::Result<(String, Option<String>)> {
+fn sample(path: &Path, follow: bool) -> io::Result<Identity> {
     use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
     #[repr(C)]
     #[derive(Default)]
@@ -46,20 +78,21 @@ fn sample(path: &Path) -> io::Result<(String, Option<String>)> {
     let file = std::fs::OpenOptions::new()
         .access_mode(0)
         .share_mode(7)
-        .custom_flags(0x02000000)
+        .custom_flags(0x02000000 | if follow { 0 } else { 0x00200000 })
         .open(path)?;
     let mut info = Information::default();
     if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) } == 0 {
         return Err(io::Error::last_os_error());
     }
-    Ok((
-        format!("{}:{}:{}", info.volume, info.index_high, info.index_low),
-        Some(format!("{}:{}", info.created[1], info.created[0])),
-    ))
+    Ok(Identity {
+        volume: info.volume.to_string(),
+        file: format!("{}:{}", info.index_high, info.index_low),
+        created: Some(format!("{}:{}", info.created[1], info.created[0])),
+    })
 }
 
 #[cfg(not(any(unix, windows)))]
-fn sample(_path: &Path) -> io::Result<(String, Option<String>)> {
+fn sample(_path: &Path, _follow: bool) -> io::Result<Identity> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
         "filesystem identity unavailable",

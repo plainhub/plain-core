@@ -12,13 +12,13 @@ pub struct History {
 }
 
 pub fn history(db: &Db) -> DomainResult<Vec<History>> {
-    db.with_conn(history_from_connection)
+    db.with_conn(|conn| history_from_connection(conn))
 }
 
 fn history_from_connection(conn: &rusqlite::Connection) -> DomainResult<Vec<History>> {
     Ok(conn
         .prepare(
-            "SELECT media_id,play_count FROM media_play_history WHERE media_type=1 ORDER BY played_at DESC,rowid DESC",
+            "SELECT file_id,play_count FROM media_play_history WHERE media_type=1 ORDER BY played_at DESC,rowid DESC",
         )?
         .query_map([], |row| {
             Ok(History {
@@ -40,7 +40,7 @@ pub fn native(db: &Db) -> DomainResult<Overview<crate::db::MediaFileRow>> {
         });
         {
             let mut statement = transaction.prepare(&format!(
-                "SELECT {} FROM media_items WHERE data_type=1 AND trashed=0 ORDER BY title COLLATE NOCASE ASC,id",
+                "SELECT {} FROM file_catalog WHERE data_type=1 AND trashed=0 AND missing=0 AND is_available=1 ORDER BY title COLLATE NOCASE ASC,id",
                 crate::db::media_file::COLUMNS,
             ))?;
             let mut rows = statement.query([])?;

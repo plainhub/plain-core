@@ -292,9 +292,7 @@ impl ContentServer {
         if !directory.is_absolute() {
             return Err("Absolute core data directory required".into());
         }
-        let host = Arc::new(crate::host::bridge::Host::with_startup_config(
-            config,
-        )?);
+        let host = Arc::new(crate::host::bridge::Host::with_startup_config(config)?);
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
         let cache_directory = match host.startup().cache_dir.as_deref() {
             Some(path) => PathBuf::from(path),
@@ -303,9 +301,7 @@ impl ContentServer {
         let data_directory =
             crate::assembly::data_directory::DataDirectory::open(directory, &cache_directory)?;
         let paths = plain_rs::data_paths::DataPaths::new(directory);
-        let db = Arc::new(
-            Db::open_with_kv(&paths.database(), Arc::new(plain_rs::kv::Db::open(&paths.kv()).map_err(|e| e.to_string())?)).map_err(|e| e.to_string())?,
-        );
+        let db = Arc::new(Db::open(&paths.database()).map_err(|e| e.to_string())?);
         let (events, _) = broadcast::channel(256);
         Self::build_state_with(
             crate::assembly::core_dependencies::CoreDependencies::new(

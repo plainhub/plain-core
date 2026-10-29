@@ -41,6 +41,8 @@ mod clipboard;
 pub mod chat_store;
 
 #[cfg(feature = "library")]
+pub mod files;
+#[cfg(feature = "library")]
 pub mod media_file;
 
 #[cfg(feature = "library")]

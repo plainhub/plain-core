@@ -3,12 +3,21 @@ use std::path::{Path, PathBuf};
 pub(crate) struct FileWalker {
     next: Option<PathBuf>,
     directories: Vec<tokio::fs::ReadDir>,
+    include_directories: bool,
 }
 impl FileWalker {
     pub fn new(root: &Path) -> Self {
         Self {
             next: Some(root.to_owned()),
             directories: Vec::new(),
+            include_directories: false,
+        }
+    }
+    pub fn entries(root: &Path) -> Self {
+        Self {
+            next: Some(root.to_owned()),
+            directories: Vec::new(),
+            include_directories: true,
         }
     }
     pub async fn next(&mut self) -> Result<Option<PathBuf>> {
@@ -29,6 +38,9 @@ impl FileWalker {
             let info = tokio::fs::symlink_metadata(&path).await?;
             if info.is_dir() {
                 self.directories.push(tokio::fs::read_dir(&path).await?);
+                if self.include_directories {
+                    return Ok(Some(path));
+                }
             } else if info.is_file() {
                 return Ok(Some(path));
             }

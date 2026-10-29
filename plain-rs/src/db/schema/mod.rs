@@ -1,6 +1,7 @@
 #[cfg(feature = "library")]
 mod audit_event;
 use rusqlite::Connection;
+mod key_values;
 
 pub(crate) const VERSION: i32 = 1;
 
@@ -21,11 +22,13 @@ mod favorite_folder;
 #[cfg(feature = "library")]
 mod feeds;
 #[cfg(feature = "library")]
+mod files;
+#[cfg(feature = "library")]
 mod image_editor_project;
 #[cfg(feature = "library")]
 mod image_embedding;
 #[cfg(feature = "library")]
-mod media_file;
+mod media_play_history;
 #[cfg(feature = "chat")]
 mod nearby_device;
 #[cfg(feature = "library")]
@@ -34,6 +37,7 @@ mod notes;
 mod peer;
 #[cfg(feature = "library")]
 mod pomodoro;
+mod scan_history;
 #[cfg(feature = "library")]
 mod session;
 #[cfg(feature = "library")]
@@ -42,11 +46,9 @@ mod share;
 mod tag;
 #[cfg(feature = "library")]
 mod trashed_sms;
-#[cfg(feature = "library")]
-mod media_play_history;
-mod scan_history;
 
 pub(crate) fn init(conn: &Connection) -> rusqlite::Result<()> {
+    key_values::init(conn)?;
     scan_history::init(conn)?;
     #[cfg(feature = "library")]
     audit_event::init(conn)?;
@@ -71,7 +73,7 @@ pub(crate) fn init(conn: &Connection) -> rusqlite::Result<()> {
     #[cfg(feature = "library")]
     tag::init(conn)?;
     #[cfg(feature = "library")]
-    media_file::init(conn)?;
+    files::init(conn)?;
     #[cfg(feature = "library")]
     pomodoro::init(conn)?;
     #[cfg(feature = "library")]

@@ -121,7 +121,7 @@ fn rows_page_values(
 ) -> Result<Vec<String>> {
     check_table(table)?;
     let mut stmt = conn.prepare(&format!("SELECT * FROM `{table}` LIMIT ?1 OFFSET ?2"))?;
-    let col_names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+    let col_names: Vec<String> = stmt.column_names().map(|s| s.to_string()).collect();
     let mut rows = stmt.query_map(rusqlite::params![limit, offset], |row| {
         let mut obj = serde_json::Map::new();
         for (i, col) in col_names.iter().enumerate() {

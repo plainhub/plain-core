@@ -12,7 +12,7 @@ fn variant(base: &Request, center_crop: Option<bool>, if_none_match: Option<&str
             width: base.width,
             height: base.height,
             center_crop: base.center_crop,
-            media_id: base.media_id.clone(),
+            file_id: base.file_id.clone(),
             file_name: base.file_name.clone(),
             if_none_match: None,
         }
@@ -25,7 +25,7 @@ fn request_for(path: &std::path::Path) -> Request {
         width: 80,
         height: 60,
         center_crop: true,
-        media_id: String::new(),
+        file_id: String::new(),
         file_name: String::new(),
         if_none_match: None,
     }
@@ -288,7 +288,7 @@ async fn sdk_decode_validates_receipts_and_cleans_every_output_token() {
                 .unwrap();
         });
         let mut request = request_for(std::path::Path::new("/image.jpg"));
-        request.media_id = "sdk-id".into();
+        request.file_id = "sdk-id".into();
         let actual = super::decode_sdk(&state, &request, true).await;
         assert_eq!(
             actual

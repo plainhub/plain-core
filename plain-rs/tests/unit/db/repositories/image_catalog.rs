@@ -1,30 +1,32 @@
 use super::*;
 
 fn add(connection: &Connection, id: &str, kind: i32, trashed: bool) {
-    connection.execute("INSERT INTO media_items(id,data_type,path,mime_type,file_name,title,artist,bucket_id,size_bytes,duration_ms,width,height,rotation,created_at,updated_at,trashed) VALUES(?1,?2,?3,'image/png',?1,?1,'','',1,0,1,1,0,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z',?4)", params![id,kind,format!("/catalog/{id}.png"),trashed]).unwrap();
+    let id = id.parse::<i64>().unwrap();
+    connection.execute("INSERT OR IGNORE INTO volumes(id,identity,path,is_available) VALUES(1,'TEST','/catalog',1)",[]).unwrap();
+    connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,size_bytes,width,height,created_at,updated_at,trashed_at,original_path) VALUES(?1,1,?2,?2,?3,1,1,1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z',CASE WHEN ?4 THEN '2026-01-01T00:00:00Z' END,CASE WHEN ?4 THEN ?2 END)",params![id,format!("{id}.png"),if kind==3 {"IMAGE"} else {"AUDIO"},trashed]).unwrap();
 }
 
 #[test]
 fn native_pages_are_bounded_keyset_pages_of_live_images_and_resolve_current_ids() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     db.with_conn(|connection| {
-        for n in (0..256).rev() {
-            add(connection, &format!("image-{n:04}"), 3, false);
+        for n in (1..=256).rev() {
+            add(connection, &n.to_string(), 3, false);
         }
-        add(connection, "audio", 1, false);
-        add(connection, "trashed", 3, true);
+        add(connection, "258", 1, false);
+        add(connection, "257", 3, true);
     });
     let catalog = snapshot(&db).unwrap();
     assert_eq!(catalog.total, 256);
     let first = page(&db, &catalog.revision, "", 128).unwrap();
     assert_eq!(first.items.len(), 128);
-    assert_eq!(first.items[0].id, "image-0000");
-    assert_eq!(first.next_cursor, "image-0127");
+    assert_eq!(first.items[0].id, "1");
+    assert_eq!(first.next_cursor, "128");
     assert!(!first.done);
     let second = page(&db, &catalog.revision, &first.next_cursor, 128).unwrap();
     assert_eq!(second.items.len(), 128);
-    assert_eq!(second.items[0].id, "image-0128");
-    assert_eq!(second.next_cursor, "image-0255");
+    assert_eq!(second.items[0].id, "129");
+    assert_eq!(second.next_cursor, "256");
     let end = page(&db, &catalog.revision, &second.next_cursor, 128).unwrap();
     assert!(end.done);
     assert!(end.items.is_empty());
@@ -32,11 +34,11 @@ fn native_pages_are_bounded_keyset_pages_of_live_images_and_resolve_current_ids(
         &db,
         &catalog.revision,
         &[
-            "image-0255".into(),
-            "trashed".into(),
-            "missing".into(),
-            "audio".into(),
-            "image-0000".into(),
+            "256".into(),
+            "257".into(),
+            "999".into(),
+            "258".into(),
+            "1".into(),
         ],
     )
     .unwrap();
@@ -45,41 +47,38 @@ fn native_pages_are_bounded_keyset_pages_of_live_images_and_resolve_current_ids(
             .iter()
             .map(|image| image.id.as_str())
             .collect::<Vec<_>>(),
-        ["image-0000", "image-0255"]
+        ["1", "256"]
     );
     assert!(page(&db, &catalog.revision, "", 0).is_err());
     assert!(page(&db, &catalog.revision, "", 129).is_err());
-    assert!(resolve(&db, &catalog.revision, &vec!["image-0000".into(); 101]).is_err());
+    assert!(resolve(&db, &catalog.revision, &vec!["1".into(); 101]).is_err());
 }
 
 #[test]
 fn catalog_writes_invalidate_revision_but_embedding_writes_do_not_invalidate_the_scan() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    db.with_conn(|connection| add(connection, "one", 3, false));
+    db.with_conn(|connection| add(connection, "1", 3, false));
     let original = snapshot(&db).unwrap();
     crate::media::images::embeddings::save(
         &db,
         &[crate::media::images::embeddings::EmbeddingInput {
-            id: "one".into(),
-            path: "/catalog/one.png".into(),
+            id: "1".into(),
+            path: "/catalog/1.png".into(),
             embedding_base64: crate::utils::base64::base64_encode(&1.0f32.to_be_bytes()),
         }],
     )
     .unwrap();
     verify(&db, &original.revision).unwrap();
     db.with_conn(|connection| {
-        connection.execute(
-            "UPDATE media_items SET path='/catalog/changed.png' WHERE id='one'",
-            [],
-        )
+        connection.execute("UPDATE files SET path='changed.png' WHERE id=1", [])
     })
     .unwrap();
     assert!(verify(&db, &original.revision).is_err());
     assert!(page(&db, &original.revision, "", 128).is_err());
-    assert!(resolve(&db, &original.revision, &["one".into()]).is_err());
+    assert!(resolve(&db, &original.revision, &["1".into()]).is_err());
     let current = snapshot(&db).unwrap();
     assert_eq!(
-        resolve(&db, &current.revision, &["one".into()]).unwrap()[0].path,
+        resolve(&db, &current.revision, &["1".into()]).unwrap()[0].path,
         "/catalog/changed.png"
     );
 }
@@ -89,16 +88,16 @@ fn commits_from_another_connection_invalidate_before_more_rows_or_pruning_are_ac
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("catalog.db");
     let db = Db::open(&path).unwrap();
-    db.with_conn(|connection| add(connection, "one", 3, false));
+    db.with_conn(|connection| add(connection, "1", 3, false));
     let original = snapshot(&db).unwrap();
     let external = Connection::open(&path).unwrap();
-    add(&external, "two", 3, false);
+    add(&external, "2", 3, false);
     assert!(verify(&db, &original.revision).is_err());
     assert!(page(&db, &original.revision, "", 128).is_err());
     let current = snapshot(&db).unwrap();
     assert_eq!(current.total, 2);
     external
-        .execute("DELETE FROM media_items WHERE id='one'", [])
+        .execute("DELETE FROM files WHERE id=1", [])
         .unwrap();
     assert!(verify(&db, &current.revision).is_err());
     assert_eq!(snapshot(&db).unwrap().total, 1);
@@ -108,12 +107,11 @@ fn commits_from_another_connection_invalidate_before_more_rows_or_pruning_are_ac
 fn keyset_page_uses_the_catalog_order_index_without_a_temporary_sort() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let plan = db.with_conn(|connection| {
-        connection.prepare("EXPLAIN QUERY PLAN SELECT id,path FROM media_items WHERE data_type=?1 AND trashed=0 AND id>?2 ORDER BY id LIMIT ?3").unwrap()
-            .query_map(params![3,"cursor",128], |row| row.get::<_,String>(3)).unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap()
+        connection.prepare("EXPLAIN QUERY PLAN SELECT id,path FROM files WHERE kind=?1 AND missing=0 AND trashed_at IS NULL AND id>?2 ORDER BY id LIMIT ?3").unwrap()
+            .query_map(params!["IMAGE",0,128], |row| row.get::<_,String>(3)).unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap()
     });
     assert!(
-        plan.iter()
-            .any(|step| step.contains("idx_media_items_data_type_trashed_id")),
+        plan.iter().any(|step| step.contains("idx_files_kind_id")),
         "{plan:?}"
     );
     assert!(
@@ -126,32 +124,26 @@ fn keyset_page_uses_the_catalog_order_index_without_a_temporary_sort() {
 fn rollback_noop_and_other_media_updates_do_not_invalidate_an_image_pass() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     db.with_conn(|connection| {
-        add(connection, "image", 3, false);
-        add(connection, "audio", 1, false);
+        add(connection, "1", 3, false);
+        add(connection, "258", 1, false);
     });
     let original = snapshot(&db).unwrap();
     db.with_conn(|connection| {
         connection
-            .execute(
-                "UPDATE media_items SET path='/audio/changed.mp3' WHERE id='audio'",
-                [],
-            )
+            .execute("UPDATE files SET path='changed.mp3' WHERE id=258", [])
             .unwrap();
         connection
-            .execute(
-                "UPDATE media_items SET updated_at=updated_at WHERE id='image'",
-                [],
-            )
+            .execute("UPDATE files SET updated_at=updated_at WHERE id=1", [])
             .unwrap();
         let transaction = connection.unchecked_transaction().unwrap();
         transaction
-            .execute("DELETE FROM media_items WHERE id='image'", [])
+            .execute("DELETE FROM files WHERE id=1", [])
             .unwrap();
         transaction.rollback().unwrap();
     });
     verify(&db, &original.revision).unwrap();
     assert_eq!(
         page(&db, &original.revision, "", 128).unwrap().items[0].id,
-        "image"
+        "1"
     );
 }

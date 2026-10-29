@@ -9,10 +9,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{Read, Seek, Write},
     path::{Component, Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::AtomicBool,
-    },
+    sync::{Arc, atomic::AtomicBool},
 };
 use tokio::sync::watch;
 
@@ -132,11 +129,7 @@ fn sync_tree(path: &Path) -> Result<(), String> {
 }
 fn validate(payload: &Path) -> Result<(), String> {
     let paths = plain_rs::data_paths::DataPaths::new(payload);
-    for path in [
-        paths.database(),
-        paths.prefs(),
-        paths.kv().join("version"),
-    ] {
+    for path in [paths.database(), paths.prefs()] {
         if !std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file()) {
             return Err("Backup is missing a required data file".into());
         }
@@ -152,12 +145,11 @@ fn validate(payload: &Path) -> Result<(), String> {
     if check != "ok" {
         return Err(format!("Invalid backup database: {check}"));
     }
-    let prefs = plain_rs::prefs::Prefs::load(&paths.prefs())
-        .map_err(|error| error.to_string())?;
+    let prefs = plain_rs::prefs::Prefs::load(&paths.prefs()).map_err(|error| error.to_string())?;
     plain_rs::prefs::settings::snapshot(&prefs).map_err(|error| error.to_string())?;
     plain_rs::prefs::security::snapshot(&prefs).map_err(|error| error.to_string())?;
-    plain_rs::kv::Db::open(&paths.kv())
-        .and_then(|database| database.flush())
+    database
+        .prepare("SELECT key,value FROM key_values LIMIT 0")
         .map_err(|error| error.to_string())?;
     Ok(())
 }
@@ -291,7 +283,7 @@ pub(crate) fn apply(directory: &Path) -> Result<(), String> {
             return Err("Invalid restore plan".into());
         }
     }
-    if !["plain.db", "prefs.json", "fjall"]
+    if !["plain.db", "prefs.json"]
         .iter()
         .all(|name| names.contains(*name))
     {

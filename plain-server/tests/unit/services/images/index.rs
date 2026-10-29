@@ -141,11 +141,27 @@ async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without
     let unsupported = directory.path().join("unsupported.image");
     std::fs::write(&supported, b"supported").unwrap();
     std::fs::write(&unsupported, b"unsupported").unwrap();
-    db.with_conn(|connection| {
-        for (id, path) in [("first", &supported), ("second", &unsupported)] {
-            connection.execute("INSERT INTO media_items(id,data_type,path,mime_type,file_name,title,artist,bucket_id,size_bytes,duration_ms,width,height,rotation,created_at,updated_at) VALUES(?1,3,?2,'image/png',?1,?1,'','',1,0,1,1,0,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')", rusqlite::params![id,path.to_string_lossy()]).unwrap();
-        }
-    });
+    for path in [&supported, &unsupported] {
+        db.record_media_files(&[plain_rs::db::MediaFileMetadata {
+            data_type: plain_rs::enums::DataType::Image,
+            path: path.to_str().unwrap().into(),
+            title: String::new(),
+            artist: String::new(),
+            album: String::new(),
+            album_artist: String::new(),
+            bucket_id: String::new(),
+            size_bytes: 1,
+            duration_ms: 0,
+            cover_image_id: None,
+            width: 1,
+            height: 1,
+            rotation: 0,
+            taken_at: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: "2026-01-01T00:00:00Z".into(),
+        }])
+        .unwrap();
+    }
     image_embeddings::save(
         &db,
         &[EmbeddingInput {
@@ -169,7 +185,7 @@ async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without
     service.set_encoder(Some(Arc::new(Encoder)));
     service.start(true).unwrap();
     wait(&service).await;
-    assert_eq!(image_embeddings::ids(&db).unwrap(), ["first"]);
+    assert_eq!(image_embeddings::ids(&db).unwrap(), ["1"]);
     assert_eq!(service.status().total_images, 2);
     assert_eq!(service.status().skipped_images, 1);
     assert!(requests.try_recv().is_err());
@@ -178,7 +194,7 @@ async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without
         .selected(vec!["first".into(), "missing".into()])
         .unwrap();
     wait(&service).await;
-    assert_eq!(image_embeddings::ids(&db).unwrap(), ["first"]);
+    assert_eq!(image_embeddings::ids(&db).unwrap(), ["1"]);
     assert!(requests.try_recv().is_err());
     assert!(!directory.path().join("cache").exists());
 }

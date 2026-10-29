@@ -22,7 +22,7 @@ fn normalized_audio_reads_live_catalog_metadata_and_keeps_video_history() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let mut track = crate::media::audio::queue::AudioTrack::from_path_stem("/music/one.mp3");
     track.title = "Original".into();
-    fixtures::register_audio(&db, &track);
+    fixtures::register_native_audio(&db, &track);
     let playlist = crate::media::audio::queue::create_playlist(&db, "Saved").unwrap();
     crate::media::audio::queue::enqueue(&db, std::slice::from_ref(&track), false).unwrap();
     crate::media::audio::queue::add_playlist_items(&db, &playlist.id, std::slice::from_ref(&track))
@@ -31,7 +31,7 @@ fn normalized_audio_reads_live_catalog_metadata_and_keeps_video_history() {
     db.media_play_history_record(crate::enums::DataType::Video, "video", 987)
         .unwrap();
     track.title = "Updated".into();
-    fixtures::register_audio(&db, &track);
+    fixtures::register_native_audio(&db, &track);
     assert_eq!(
         crate::db::audio_queue::all_queue_items(&db).unwrap()[0].title,
         "Updated"
@@ -113,7 +113,7 @@ fn platform_system_ids_and_uri_aliases_are_used_without_persisting_metadata() {
     let uri = "content://media/external/audio/media/42";
     db.cache_platform_audio(
         &[crate::db::audio_catalog::AudioMedia {
-            media_id: Some("42".into()),
+            file_id: Some("42".into()),
             aliases: vec![uri.into()],
             track: crate::media::audio::queue::AudioTrack::from_path_stem("/music/one.mp3"),
         }],
@@ -133,15 +133,13 @@ fn platform_system_ids_and_uri_aliases_are_used_without_persisting_metadata() {
     assert_eq!(row.position_ms, 3_000_000_123);
     db.with_conn(|conn| {
         assert_eq!(
-            conn.query_row("SELECT media_id FROM audio_queue_items", [], |row| row
-                .get::<_, String>(
-                0
-            ))
-            .unwrap(),
+            conn.query_row("SELECT file_id FROM audio_queue_items", [], |row| row
+                .get::<_, String>(0))
+                .unwrap(),
             "42"
         );
         assert_eq!(
-            conn.query_row("SELECT COUNT(*) FROM media_items", [], |row| row
+            conn.query_row("SELECT COUNT(*) FROM file_catalog", [], |row| row
                 .get::<_, i64>(0))
                 .unwrap(),
             0
@@ -155,7 +153,7 @@ fn current_system_media_is_restored_after_the_platform_catalog_resolves_it() {
     db.use_platform_audio_catalog().unwrap();
     db.audio()
         .update(|state| {
-            state.current_media_id = Some("42".into());
+            state.current_file_id = Some("42".into());
             Ok(())
         })
         .unwrap();
@@ -167,7 +165,7 @@ fn current_system_media_is_restored_after_the_platform_catalog_resolves_it() {
     );
     db.cache_platform_audio(
         &[crate::db::audio_catalog::AudioMedia {
-            media_id: Some("42".into()),
+            file_id: Some("42".into()),
             aliases: Vec::new(),
             track: crate::media::audio::queue::AudioTrack::from_path_stem("/music/one.mp3"),
         }],
@@ -184,7 +182,7 @@ fn current_system_media_is_restored_after_the_platform_catalog_resolves_it() {
 fn moving_audio_keeps_its_queue_playlist_history_and_current_reference() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let track = crate::media::audio::queue::AudioTrack::from_path_stem("/music/one.mp3");
-    fixtures::register_audio(&db, &track);
+    fixtures::register_native_audio(&db, &track);
     let id = db
         .media_file_by_path(crate::enums::DataType::Audio, &track.path)
         .unwrap()
@@ -237,7 +235,7 @@ fn moving_audio_keeps_its_queue_playlist_history_and_current_reference() {
             .unwrap()
             .is_empty()
     );
-    assert!(fixtures::history_row(&db, &id).is_none());
+    assert!(fixtures::history_row(&db, &id).is_some());
 }
 
 #[test]
@@ -246,7 +244,7 @@ fn aliases_of_one_system_media_are_deduplicated_in_queue_and_playlist() {
     db.use_platform_audio_catalog().unwrap();
     let uri = "content://media/external/audio/media/42";
     let mut media = crate::db::audio_catalog::AudioMedia {
-        media_id: Some("42".into()),
+        file_id: Some("42".into()),
         aliases: vec![uri.into()],
         track: crate::media::audio::queue::AudioTrack::from_path_stem("/music/one.mp3"),
     };
@@ -284,7 +282,7 @@ fn overflowing_play_counts_leave_the_existing_record_unchanged() {
         .unwrap();
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE media_play_history SET play_count=?1 WHERE media_type=2 AND media_id='video'",
+            "UPDATE media_play_history SET play_count=?1 WHERE media_type=2 AND file_id='video'",
             [i64::MAX],
         )
     })
@@ -328,7 +326,7 @@ fn explicit_media_type_classifies_history_without_a_loaded_audio_catalog() {
         crate::media::play_history::matching(&db, &crate::utils::search_dsl::parse("type:VIDEO"))
             .unwrap();
     assert_eq!(recent.len(), 1);
-    assert_eq!(recent[0].media_id, "video");
+    assert_eq!(recent[0].file_id, "video");
     let history = crate::media::audio::overview::history(&db).unwrap();
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].id, "audio");
@@ -348,7 +346,7 @@ fn explicit_media_type_classifies_history_without_a_loaded_audio_catalog() {
 }
 
 #[test]
-fn history_requires_explicit_types_and_globally_unique_media_ids() {
+fn history_requires_explicit_types_and_globally_unique_file_ids() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     assert!(
         db.media_play_history_record(DataType::Image, "image", 0)
@@ -359,9 +357,9 @@ fn history_requires_explicit_types_and_globally_unique_media_ids() {
     let audio = fixtures::history_row(&db, "audio");
     db.with_conn(|conn| {
         for sql in [
-            "INSERT INTO media_play_history(media_id,position_ms,play_count,played_at) VALUES('missing',0,0,'now')",
-            "INSERT INTO media_play_history(media_id,media_type,position_ms,play_count,played_at) VALUES('invalid',3,0,0,'now')",
-            "INSERT INTO media_play_history(media_id,media_type,position_ms,play_count,played_at) VALUES('audio',2,0,0,'now')",
+            "INSERT INTO media_play_history(file_id,position_ms,play_count,played_at) VALUES('missing',0,0,'now')",
+            "INSERT INTO media_play_history(file_id,media_type,position_ms,play_count,played_at) VALUES('invalid',3,0,0,'now')",
+            "INSERT INTO media_play_history(file_id,media_type,position_ms,play_count,played_at) VALUES('audio',2,0,0,'now')",
         ] {
             assert!(conn.execute(sql, []).is_err());
         }

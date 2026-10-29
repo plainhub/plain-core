@@ -93,7 +93,7 @@ async fn an_acknowledged_start_notifies_the_library_once_without_echoing_the_sdk
         .db
         .cache_platform_audio(
             &[plain_rs::db::audio_catalog::AudioMedia {
-                media_id: Some("track".into()),
+                file_id: Some("track".into()),
                 aliases: vec![],
                 track: AudioTrack::from_path_stem("one"),
             }],
@@ -110,7 +110,10 @@ async fn an_acknowledged_start_notifies_the_library_once_without_echoing_the_sdk
         .unwrap();
     let callback = requests.try_recv().unwrap();
     assert_eq!(callback["method"], "audioLibraryRefresh");
-    state.host.reply(generation, json!({"id":callback["id"],"result":null})).unwrap();
+    state
+        .host
+        .reply(generation, json!({"id":callback["id"],"result":null}))
+        .unwrap();
     assert!(events.try_recv().is_err());
     accept(&state, generation, "AUDIO_STARTED_REPORTED", &payload)
         .await

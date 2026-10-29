@@ -87,22 +87,23 @@ pub fn cleanup(
         .map(|item| item.path.clone())
         .collect::<Vec<_>>();
     db.audio_transaction(|tx, state| {
-        if kind==DataType::Audio && matches!(action,Action::Trash|Action::Delete) {
+        if kind==DataType::Audio && action==Action::Delete {
             for table in ["audio_queue_items","audio_playlist_items"] {
-                tx.execute(&format!("DELETE FROM {table} WHERE media_id IN (SELECT value FROM json_each(?1))"),[&ids])?;
+                tx.execute(&format!("DELETE FROM {table} WHERE file_id IN (SELECT value FROM json_each(?1))"),[&ids])?;
             }
         }
         for item in successful { update_catalog(&tx, kind, action, item)?; }
-        if action!=Action::Move && action!=Action::Restore {
+        if action==Action::Delete {
             tx.execute("DELETE FROM tag_relations WHERE type=?1 AND target_key IN (SELECT value FROM json_each(?2))",params![kind.kind(),ids])?;
             if matches!(kind,DataType::Audio|DataType::Video) {
-                tx.execute("DELETE FROM media_play_history WHERE media_type=?2 AND media_id IN (SELECT value FROM json_each(?1))",params![ids,kind.kind()])?;
+                tx.execute("DELETE FROM media_play_history WHERE media_type=?2 AND file_id IN (SELECT value FROM json_each(?1))",params![ids,kind.kind()])?;
             }
         }
-        if kind==DataType::Image && action!=Action::Restore {
-            tx.execute("DELETE FROM image_embeddings WHERE id IN (SELECT value FROM json_each(?1))",[&ids])?;
+        if kind==DataType::Image && matches!(action,Action::Delete|Action::Move) {
+            tx.execute("DELETE FROM image_embeddings WHERE file_id IN (SELECT value FROM json_each(?1))",[&ids])?;
         }
-        if kind==DataType::Audio && matches!(action,Action::Trash|Action::Delete) { audio_queue::remove_paths_conn(&tx,&paths, state)?; }
+        if kind==DataType::Audio && action==Action::Delete { audio_queue::remove_paths_conn(&tx,&paths, state)?; }
+        if kind==DataType::Audio && action==Action::Trash && successful.iter().any(|item|state.current_file_id.as_deref()==Some(&item.id)) { state.select("")?; }
         if kind==DataType::Audio && action==Action::Move {
             if let Some(item)=successful.iter().find(|item|item.path==state.playback.path) {
                 crate::db::audio_queue::io::save_current(tx,&item.destination_path,state)?;
@@ -119,66 +120,72 @@ fn update_catalog(
     action: Action,
     item: &Item,
 ) -> rusqlite::Result<()> {
-    let row: Option<(String, Option<String>, bool)> = tx
-        .query_row(
-            "SELECT path,original_path,trashed FROM media_items WHERE id=?1 AND data_type=?2",
-            params![item.id, kind.kind()],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .optional()?;
-    let Some((path, original_path, trashed)) = row else {
+    let row: Option<(i64,String,Option<String>,bool)> = tx.query_row(
+        "SELECT file_id,path,original_path,trashed FROM file_catalog WHERE id=?1 AND data_type=?2",
+        params![item.id,kind.kind()],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?)),
+    ).optional()?;
+    let Some((id, path, original, trashed)) = row else {
         return Ok(());
     };
     if path != item.path {
+        if path == item.destination_path
+            && matches!(
+                (action, trashed),
+                (Action::Trash, true) | (Action::Restore, false)
+            )
+        {
+            return Ok(());
+        }
         return Err(rusqlite::Error::InvalidQuery);
     }
     if action == Action::Delete {
-        tx.execute(
-            "DELETE FROM media_items WHERE id=?1 AND data_type=?2 AND path=?3",
-            params![item.id, kind.kind(), item.path],
-        )?;
+        tx.execute("DELETE FROM files WHERE id=?1", [id])?;
         return Ok(());
     }
-    let (destination, next_original, next_trashed) = match action {
-        Action::Trash if !trashed => (
+    let destination = match action {
+        Action::Trash if !trashed => {
             if item.destination_path.is_empty() {
                 path.clone()
             } else {
                 item.destination_path.clone()
-            },
-            Some(path),
-            true,
-        ),
-        Action::Restore if trashed => (
+            }
+        }
+        Action::Restore if trashed => {
             if item.destination_path.is_empty() {
-                original_path.unwrap_or(path)
+                original.ok_or(rusqlite::Error::InvalidQuery)?
             } else {
                 item.destination_path.clone()
-            },
-            None,
-            false,
-        ),
+            }
+        }
         Action::Move if !trashed && !item.destination_path.is_empty() => {
-            (item.destination_path.clone(), None, false)
+            item.destination_path.clone()
         }
         _ => return Err(rusqlite::Error::InvalidQuery),
     };
-    let destination_path = std::path::Path::new(&destination);
-    if !destination_path.is_absolute() {
+    let location = crate::db::files::locate(&destination)?;
+    let (volume_id, relative) = crate::db::files::bind_volume(tx, &location)?;
+    let previous: (i64, String) = tx.query_row(
+        "SELECT volume_id,path FROM files WHERE id=?1",
+        [id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    if action == Action::Trash && volume_id != previous.0 {
         return Err(rusqlite::Error::InvalidQuery);
     }
-    let parent = destination_path
-        .parent()
-        .and_then(|path| path.to_str())
-        .ok_or(rusqlite::Error::InvalidQuery)?;
-    let name = destination_path
+    let name = location
+        .path
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or(rusqlite::Error::InvalidQuery)?;
-    tx.execute(
-        "UPDATE media_items SET path=?1,file_name=?2,mime_type=?3,bucket_id=?4,trashed=?5,original_path=?6 WHERE id=?7 AND data_type=?8 AND path=?9",
-        params![destination,name,crate::utils::mime::mime_from_ext(&destination),parent,next_trashed,next_original,item.id,kind.kind(),item.path],
-    )?;
+    let (time, original) = if action == Action::Trash {
+        (
+            Some(crate::utils::dbtime::now_iso_millis()),
+            Some(previous.1),
+        )
+    } else {
+        (None, None)
+    };
+    tx.execute("UPDATE files SET volume_id=?1,path=?2,file_name=?3,trashed_at=?4,original_path=?5,missing=0 WHERE id=?6",params![volume_id,relative,name,time,original,id])?;
     Ok(())
 }
 

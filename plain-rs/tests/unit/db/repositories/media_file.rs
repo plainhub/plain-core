@@ -30,7 +30,7 @@ fn rescanning_preserves_identity_created_time_and_business_flags() {
     let original = db.record_media_files(&[file.clone()]).unwrap().remove(0);
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE media_items SET favorited=1,trashed=1,original_path=path WHERE id=?1",
+            "UPDATE files SET favorited=1,trashed_at='2026-01-01T00:00:00Z',original_path=path WHERE id=?1",
             [&original.id],
         )
     })
@@ -55,7 +55,7 @@ fn rescanning_preserves_identity_created_time_and_business_flags() {
 }
 
 #[test]
-fn batches_rollback_on_invalid_metadata_and_domains_are_separate() {
+fn batches_rollback_on_invalid_metadata_and_one_file_has_one_current_kind() {
     let directory = tempfile::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let first = metadata("/photos/one.jpg");
@@ -67,8 +67,8 @@ fn batches_rollback_on_invalid_metadata_and_domains_are_separate() {
     let mut audio = first;
     audio.data_type = DataType::Audio;
     let audio = db.record_media_files(&[audio]).unwrap().remove(0);
-    assert_ne!(image.id, audio.id);
-    assert_eq!(db.media_file_count(DataType::Image).unwrap(), 1);
+    assert_eq!(image.id, audio.id);
+    assert_eq!(db.media_file_count(DataType::Image).unwrap(), 0);
     assert_eq!(db.media_file_count(DataType::Audio).unwrap(), 1);
     assert!(
         db.media_file_by_path(DataType::Image, "/absent")
@@ -190,7 +190,7 @@ fn forgetting_returns_the_exact_committed_types_and_retains_the_count_contract()
     db.record_media_files(&[image, audio]).unwrap();
     let mut types = db.forget_media_file_types("/shared").unwrap();
     types.sort_unstable();
-    assert_eq!(types, [1, 3]);
+    assert_eq!(types, [1]);
     assert_eq!(db.forget_media_file("/shared").unwrap(), 0);
     db.record_media_files(&[metadata("/another")]).unwrap();
     assert_eq!(db.forget_media_file("/another").unwrap(), 1);
@@ -285,7 +285,7 @@ fn observed_file(path: &std::path::Path, identity: &str) -> MediaFileMetadataRea
 }
 
 #[test]
-fn filesystem_rename_preserves_media_identity_flags_and_both_tag_kinds() {
+fn filesystem_rename_preserves_file_identity_flags_and_both_tag_kinds() {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("source.jpg");
     let destination = directory.path().join("destination.jpg");
@@ -296,9 +296,9 @@ fn filesystem_rename_preserves_media_identity_flags_and_both_tag_kinds() {
         .unwrap()
         .remove(0);
     db.with_conn(|connection| {
-        connection.execute("UPDATE media_items SET favorited=1 WHERE id=?1", [&first.id])?;
+        connection.execute("UPDATE files SET favorited=1 WHERE id=?1", [&first.id])?;
         connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media-tag',?1,?2,'2026-10-21T00:00:00.000Z'),('file-tag',?3,?4,'2026-10-21T00:00:00.000Z')",
-            params![first.id,DataType::Image.kind(),source.to_str().unwrap(),DataType::File.kind()])?;
+            params![first.id,DataType::Image.kind(),first.path,DataType::File.kind()])?;
         Ok::<_, rusqlite::Error>(())
     }).unwrap();
     std::fs::rename(&source, &destination).unwrap();
@@ -326,14 +326,14 @@ fn filesystem_rename_preserves_media_identity_flags_and_both_tag_kinds() {
             |row| row.get(0),
         )?;
         assert_eq!(media, first.id);
-        assert_eq!(file, destination.to_str().unwrap());
+        assert_eq!(file, moved.path);
         Ok::<_, rusqlite::Error>(())
     })
     .unwrap();
 }
 
 #[test]
-fn live_hard_links_and_ambiguous_missing_links_never_steal_another_media_id() {
+fn live_hard_links_and_ambiguous_missing_links_never_steal_another_file_id() {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("source.jpg");
     let linked = directory.path().join("linked.jpg");
@@ -362,7 +362,7 @@ fn live_hard_links_and_ambiguous_missing_links_never_steal_another_media_id() {
 }
 
 #[test]
-fn content_replacement_retains_path_identity_and_unknown_metadata_does_not_erase_file_identity() {
+fn content_replacement_gets_a_new_id_and_unknown_metadata_preserves_its_identity() {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("source.jpg");
     std::fs::write(&source, b"before").unwrap();
@@ -375,14 +375,14 @@ fn content_replacement_retains_path_identity_and_unknown_metadata_does_not_erase
         .record_media_file_reads(&[observed_file(&source, "replacement-file")])
         .unwrap()
         .remove(0);
-    assert_eq!(before.id, changed.id);
+    assert_ne!(before.id, changed.id);
     db.record_media_files(&[metadata(source.to_str().unwrap())])
         .unwrap();
     let key: String = db
         .with_conn(|connection| {
             connection.query_row(
-                "SELECT file_identity FROM media_items WHERE id=?1",
-                [&before.id],
+                "SELECT file_identity FROM file_catalog WHERE id=?1",
+                [&changed.id],
                 |row| row.get(0),
             )
         })
@@ -391,7 +391,7 @@ fn content_replacement_retains_path_identity_and_unknown_metadata_does_not_erase
 }
 
 #[test]
-fn media_type_and_file_generation_must_match_before_relocation() {
+fn file_generation_qualifies_relocation_across_media_kind_changes() {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("source.jpg");
     let destination = directory.path().join("replacement.jpg");
@@ -410,5 +410,5 @@ fn media_type_and_file_generation_must_match_before_relocation() {
     let mut audio = observed_file(&destination, "volume:file:old-birth");
     audio.metadata.data_type = DataType::Audio;
     let audio = db.record_media_file_reads(&[audio]).unwrap().remove(0);
-    assert_ne!(before.id, audio.id);
+    assert_eq!(before.id, audio.id);
 }

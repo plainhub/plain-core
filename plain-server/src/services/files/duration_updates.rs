@@ -57,12 +57,12 @@ fn identity(kind: DataType, row: &Value) -> Option<Identity> {
         .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     let item = Identity {
         media_type: kind.into(),
-        media_id: row["id"].as_str()?.into(),
+        file_id: row["id"].as_str()?.into(),
         path: row["path"].as_str()?.into(),
         size_bytes: row["size"].as_i64()?,
         modified_at,
     };
-    (!item.media_id.is_empty() && Path::new(&item.path).is_absolute() && item.size_bytes >= 0)
+    (!item.file_id.is_empty() && Path::new(&item.path).is_absolute() && item.size_bytes >= 0)
         .then_some(item)
 }
 impl Runtime {
@@ -181,7 +181,7 @@ impl Runtime {
         };
         if self.provider_catalog {
             let mut plan = Plan::default();
-            plan.ids("_id", vec![item.media_id.clone()]);
+            plan.ids("_id", vec![item.file_id.clone()]);
             let rows = self
                 .host
                 .call(
@@ -215,7 +215,7 @@ impl Runtime {
             cache.save_at_revision(
                 Duration {
                     media_type: item.media_type,
-                    media_id: item.media_id,
+                    file_id: item.file_id,
                     path: item.path,
                     size_bytes: item.size_bytes,
                     modified_at: item.modified_at,

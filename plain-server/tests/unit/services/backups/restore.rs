@@ -9,18 +9,13 @@ fn archive() -> Vec<u8> {
     prefs.set("device_name", "restored device").unwrap();
     let db = plain_rs::db::Db::open(&paths.database()).unwrap();
     db.with_conn(|conn| conn.execute_batch("CREATE TABLE restore_fixture (value TEXT); INSERT INTO restore_fixture VALUES ('snapshot');").unwrap());
-    let store = plain_rs::kv::LazyDb::new(paths.kv());
-    store
-        .get()
-        .unwrap()
-        .insert(b"restored", b"snapshot")
-        .unwrap();
+    let store = plain_rs::kv::LazyDb::new(paths.database());
+    store.get().unwrap().insert("restored", "snapshot").unwrap();
     std::fs::create_dir(source.path().join("files")).unwrap();
     std::fs::write(source.path().join("files/blob"), b"attachment").unwrap();
     let (_staging, files) = super::super::snapshot(
         &db,
         &prefs,
-        &store,
         source.path(),
         &super::super::roots(source.path(), &source.path().join("cache")),
         || false,
@@ -69,9 +64,9 @@ fn assert_restored(directory: &Path) {
         prefs.get::<String>("device_name").unwrap().as_deref(),
         Some("restored device")
     );
-    let kv = plain_rs::kv::Db::open(&paths.kv()).unwrap();
-    assert_eq!(kv.get(b"restored").unwrap().unwrap().as_ref(), b"snapshot");
-    assert!(kv.get(b"old-only").unwrap().is_none());
+    let kv = plain_rs::kv::Db::open(&paths.database()).unwrap();
+    assert_eq!(kv.get("restored").unwrap().unwrap(), "snapshot");
+    assert!(kv.get("old-only").unwrap().is_none());
     assert_eq!(
         std::fs::read(directory.join("files/blob")).unwrap(),
         b"attachment"
@@ -86,8 +81,8 @@ fn staging_keeps_live_stores_untouched_and_startup_replaces_closed_stores() {
     prefs.set("device_name", "live device").unwrap();
     let db = plain_rs::db::Db::open(&paths.database()).unwrap();
     db.with_conn(|conn| conn.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE live_fixture (value TEXT); INSERT INTO live_fixture VALUES ('live');").unwrap());
-    let kv = plain_rs::kv::Db::open(&paths.kv()).unwrap();
-    kv.insert(b"old-only", b"live").unwrap();
+    let kv = plain_rs::kv::Db::open(&paths.database()).unwrap();
+    kv.insert("old-only", "live").unwrap();
     prepare(archive(), directory.path()).unwrap();
     assert_eq!(
         db.with_conn(
@@ -101,7 +96,7 @@ fn staging_keeps_live_stores_untouched_and_startup_replaces_closed_stores() {
         prefs.get::<String>("device_name").unwrap().as_deref(),
         Some("live device")
     );
-    assert!(kv.get(b"restored").unwrap().is_none());
+    assert!(kv.get("restored").unwrap().is_none());
     assert!(paths.pending_restore().exists());
     drop(kv);
     drop(db);

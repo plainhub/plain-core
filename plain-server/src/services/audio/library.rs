@@ -34,7 +34,9 @@ impl HostLibrary {
             self.db.use_platform_audio_catalog()?;
             let mut ids = self.db.audio_reference_ids()?;
             for id in self.db.audio_selected_ids() {
-                if !ids.contains(&id) { ids.push(id); }
+                if !ids.contains(&id) {
+                    ids.push(id);
+                }
             }
             let rows: Vec<AudioMedia> = if ids.is_empty() {
                 Vec::new()
@@ -51,7 +53,7 @@ impl HostLibrary {
         if self.host.uses_system_media_catalog() {
             self.db.use_platform_audio_catalog()?;
             if self.db.audio_restore_needed() {
-                let id = self.db.audio_current_media_id();
+                let id = self.db.audio_current_file_id();
                 if let Some(id) = id.filter(|id| !id.is_empty()) {
                     let rows: Vec<AudioMedia> = self.resolve(&[id], &[])?;
                     self.db.cache_platform_audio(&rows, false)?;

@@ -1,5 +1,5 @@
 pub(crate) mod restore;
-use plain_rs::{db::Db, kv::LazyDb, prefs::Prefs};
+use plain_rs::{db::Db, prefs::Prefs};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -94,7 +94,6 @@ fn collect(
 fn snapshot(
     db: &Db,
     prefs: &Prefs,
-    store: &LazyDb,
     directory: &Path,
     roots: &Roots,
     cancelled: impl Fn() -> bool,
@@ -120,10 +119,8 @@ fn snapshot(
     {
         return Err("Backup database is outside the data directory".into());
     }
-    let source_kv = plain_rs::kv::default_db_path(directory);
     let mut excluded = HashSet::from([
         source_db.clone(),
-        source_kv.clone(),
         prefs.path().to_path_buf(),
         roots.cache.clone(),
     ]);
@@ -137,24 +134,7 @@ fn snapshot(
     let database = staging.path().join("database.db");
     db.backup_to(&database, &cancelled)?;
     files.push((database, name(&source_db, &roots.folders)?));
-    let kv = staging.path().join("fjall");
-    store
-        .get()
-        .map_err(|error| error.to_string())?
-        .backup_to(&kv, &cancelled)
-        .map_err(|error| error.to_string())?;
-    let mut kv_files = Vec::new();
-    collect(
-        &kv,
-        &[(kv.clone(), name(&source_kv, &roots.folders)?)],
-        &HashSet::new(),
-        &mut kv_files,
-        &cancelled,
-    )?;
-    files.extend(kv_files);
-    for (index, path, entries) in [
-        (0, prefs.path(), prefs.entries()),
-    ] {
+    for (index, path, entries) in [(0, prefs.path(), prefs.entries())] {
         if cancelled() {
             return Err("Backup cancelled".into());
         }
@@ -179,7 +159,6 @@ fn snapshot(
 pub(crate) async fn export(
     db: Arc<Db>,
     prefs: Arc<Prefs>,
-    store: Arc<LazyDb>,
     directory: PathBuf,
     cache: PathBuf,
     mut stop: watch::Receiver<bool>,
@@ -190,7 +169,7 @@ pub(crate) async fn export(
     let cancelled = cancel.0.clone();
     let stopped = stop.clone();
     let preparation = tokio::task::spawn_blocking(move || {
-        snapshot(&db, &prefs, &store, &directory, &roots, || {
+        snapshot(&db, &prefs, &directory, &roots, || {
             cancelled.load(Ordering::Acquire) || *stopped.borrow()
         })
     });

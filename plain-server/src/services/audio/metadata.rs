@@ -21,7 +21,7 @@ pub(crate) async fn read_uri(
 
 fn track(path: &str, facts: plain_rs::media::probe::ProbedMeta) -> AudioTrack {
     AudioTrack {
-        media_id: None,
+        file_id: None,
         path: path.to_owned(),
         title: if facts.title.is_empty() {
             AudioTrack::from_path_stem(path).title
@@ -41,10 +41,10 @@ fn track(path: &str, facts: plain_rs::media::probe::ProbedMeta) -> AudioTrack {
 #[cfg(test)]
 pub(crate) fn from_row(row: MediaFileRow) -> AudioMedia {
     AudioMedia {
-        media_id: Some(row.id),
+        file_id: Some(row.id),
         aliases: Vec::new(),
         track: AudioTrack {
-            media_id: None,
+            file_id: None,
             path: row.path.clone(),
             title: if row.title.is_empty() {
                 AudioTrack::from_path_stem(&row.path).title

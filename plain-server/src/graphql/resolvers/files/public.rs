@@ -31,7 +31,6 @@ pub struct FilesQuery;
 
 #[Object]
 impl FilesQuery {
-
     async fn indexed_files(
         &self,
         ctx: &Context<'_>,
@@ -214,7 +213,6 @@ enum PathKind {
     Dir,
 }
 
-
 /// The probe is chosen by file *name*, not by sniffing: the client may pass
 /// a display name that differs from the on-disk one, and plain-app keys off
 /// the extension either way.
@@ -369,7 +367,7 @@ fn is_audio(extension: &str) -> bool {
 fn file(item: &Value) -> File {
     File {
         permission: text(item, "permission"),
-        media_id: item["mediaId"]
+        file_id: item["mediaId"]
             .as_str()
             .filter(|value| !value.is_empty())
             .map(|value| async_graphql::ID::from(value)),

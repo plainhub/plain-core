@@ -74,21 +74,21 @@ async fn native_summary_streams_the_full_database_and_projects_selected_rows_onl
     let directory = tempfile::tempdir().unwrap();
     let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());
     db.with_conn(|connection| connection.execute_batch(
-        "WITH RECURSIVE entries(n) AS (VALUES(0) UNION ALL SELECT n+1 FROM entries WHERE n<1099)
-         INSERT INTO media_items(id,data_type,path,title,artist,mime_type,file_name,bucket_id,size_bytes,duration_ms,width,height,rotation,created_at,updated_at,album_id,favorited)
-         SELECT printf('track-%d',n),1,printf('/music/%d.mp3',n),printf('Song %d',n),'Artist','audio/mpeg','song.mp3','bucket',123,456,0,0,0,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z','album',1 FROM entries;
-         INSERT INTO media_play_history(media_type,media_id,position_ms,play_count,played_at) VALUES(1,'track-1099',0,7,'2026-01-02T00:00:00Z');"
+        "INSERT INTO volumes(id,identity,path,is_available) VALUES(1,'TEST','/music',1); WITH RECURSIVE entries(n) AS (VALUES(0) UNION ALL SELECT n+1 FROM entries WHERE n<1099)
+         INSERT INTO files(id,volume_id,path,file_name,kind,title,artist,size_bytes,duration_ms,width,height,rotation,created_at,updated_at,album_id,favorited)
+         SELECT n+1,1,printf('%d.mp3',n),printf('%d.mp3',n),'AUDIO',printf('Song %d',n),'Artist',123,456,0,0,0,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z','album',1 FROM entries;
+         INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES(1,'1100',0,7,'2026-01-02T00:00:00Z');"
     )).unwrap();
     let summary = read(db.clone(), MediaCatalog::Native(db)).await.unwrap();
     assert_eq!(summary.artists[0].item_count, 1100);
     assert_eq!(summary.artists[0].play_count, 7);
     assert_eq!(summary.recent_items.len(), 1);
     let recent = &summary.recent_items[0];
-    assert_eq!(recent["id"], "track-1099");
+    assert_eq!(recent["id"], "1100");
     assert_eq!(recent["path"], "/music/1099.mp3");
     assert_eq!(recent["albumId"], "album");
     assert_eq!(recent["durationMs"], 456);
-    assert_eq!(recent["bucketId"], "bucket");
+    assert_eq!(recent["bucketId"], "/music");
     assert_eq!(recent["isFavorite"], true);
 }
 

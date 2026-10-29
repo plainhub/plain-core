@@ -112,7 +112,7 @@ async fn pause_is_a_commit_barrier_and_resume_keeps_the_same_session() {
     assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Paused);
     assert!(scans.begin(1).is_err());
     let writes = AtomicUsize::new(0);
-    let mut record = Box::pin(session.record_when_running(|| {
+    let mut record = Box::pin(session.record_when_running(1, || {
         writes.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }));
@@ -138,7 +138,7 @@ async fn cancelling_or_closing_a_paused_scan_wakes_it_without_a_write() {
         let session = scans.begin(1).unwrap();
         scans.pause().unwrap();
         let writes = AtomicUsize::new(0);
-        let mut record = Box::pin(session.record_when_running(|| {
+        let mut record = Box::pin(session.record_when_running(1, || {
             writes.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }));

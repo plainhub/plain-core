@@ -5,10 +5,10 @@ mod fixtures;
 fn add(db: &Db, playlist: &str, id: &str, album: &str, order: i64) {
     db.cache_platform_audio(
         &[crate::db::audio_catalog::AudioMedia {
-            media_id: Some(id.into()),
+            file_id: Some(id.into()),
             aliases: Vec::new(),
             track: crate::media::audio::queue::AudioTrack {
-                media_id: None,
+                file_id: None,
                 path: format!("/{id}.mp3"),
                 title: id.into(),
                 artist: String::new(),
@@ -20,7 +20,7 @@ fn add(db: &Db, playlist: &str, id: &str, album: &str, order: i64) {
     )
     .unwrap();
     db.with_conn(|conn| conn.execute(
-        "INSERT INTO audio_playlist_items(id,playlist_id,media_id,sort_order,added_at) VALUES(?1,?2,?3,?4,'now')",
+        "INSERT INTO audio_playlist_items(id,playlist_id,file_id,sort_order,added_at) VALUES(?1,?2,?3,?4,'now')",
         rusqlite::params![format!("{playlist}-{id}"),playlist,id,order],
     )).unwrap();
 }

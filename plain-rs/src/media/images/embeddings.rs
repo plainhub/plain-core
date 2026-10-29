@@ -40,7 +40,7 @@ pub fn save(db: &Db, items: &[EmbeddingInput]) -> DomainResult<()> {
     db.with_conn(|c| {
         let tx=c.unchecked_transaction()?;
         for (i,blob) in items.iter().zip(blobs) {
-            tx.execute("INSERT INTO image_embeddings (id,path,embedding,created_at,updated_at) VALUES (?1,?2,?3,?4,?4) ON CONFLICT(id) DO UPDATE SET path=excluded.path,embedding=excluded.embedding,updated_at=excluded.updated_at",params![i.id,i.path,blob,crate::utils::dbtime::now_iso_millis()])?;
+            tx.execute("INSERT INTO image_embeddings (file_id,path,embedding,created_at,updated_at) VALUES (?1,?2,?3,?4,?4) ON CONFLICT(file_id) DO UPDATE SET path=excluded.path,embedding=excluded.embedding,updated_at=excluded.updated_at",params![i.id,i.path,blob,crate::utils::dbtime::now_iso_millis()])?;
         }
         tx.commit()?;Ok(())
     })
@@ -65,7 +65,8 @@ pub fn search_with_score(
         return Ok(Vec::new());
     }
     db.with_conn(|c| {
-        let mut statement = c.prepare("SELECT id,embedding FROM image_embeddings ORDER BY id")?;
+        let mut statement =
+            c.prepare("SELECT file_id,embedding FROM image_embeddings ORDER BY file_id")?;
         let mut rows = statement.query([])?;
         let mut top = Vec::<SearchResult>::new();
         while let Some(row) = rows.next()? {

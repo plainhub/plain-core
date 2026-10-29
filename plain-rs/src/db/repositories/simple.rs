@@ -15,7 +15,7 @@ const SHARE_COLUMNS: &str = "id, name, password, url_token, expires_at, read_onl
      created_at, updated_at";
 const POMODORO_COLUMNS: &str =
     "id, date, completed_count, total_work_secs, total_break_secs, created_at, updated_at";
-const EMBEDDING_COLUMNS: &str = "id, path, embedding, created_at, updated_at";
+const EMBEDDING_COLUMNS: &str = "file_id, path, embedding, created_at, updated_at";
 
 fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
     Ok(SessionRow {
@@ -63,7 +63,7 @@ fn pomodoro_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PomodoroItemRo
 fn embedding_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ImageEmbeddingRow> {
     let blob: Vec<u8> = row.get(2)?;
     Ok(ImageEmbeddingRow {
-        id: row.get(0)?,
+        file_id: row.get(0)?,
         path: row.get(1)?,
         embedding_base64: crate::utils::base64::base64_encode(&blob),
         created_at: row.get(3)?,
@@ -306,7 +306,7 @@ impl Db {
 
     pub fn embedding_ids(&self) -> rusqlite::Result<Vec<String>> {
         self.with_conn(|c| {
-            let mut stmt = c.prepare("SELECT id FROM image_embeddings")?;
+            let mut stmt = c.prepare("SELECT file_id FROM image_embeddings")?;
             stmt.query_map([], |r| r.get(0))?.collect()
         })
     }
@@ -322,9 +322,9 @@ impl Db {
             .map_err(rusqlite::Error::InvalidParameterName)?;
         self.with_conn(|c| {
             c.execute(
-                "INSERT OR REPLACE INTO image_embeddings (id, path, embedding, created_at, updated_at)
+                "INSERT OR REPLACE INTO image_embeddings (file_id, path, embedding, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![row.id, row.path, blob, crate::utils::dbtime::normalize(&row.created_at)?, crate::utils::dbtime::normalize(&row.updated_at)?],
+                params![row.file_id, row.path, blob, crate::utils::dbtime::normalize(&row.created_at)?, crate::utils::dbtime::normalize(&row.updated_at)?],
             )?;
             Ok(())
         })
@@ -335,7 +335,7 @@ impl Db {
     }
 
     pub fn embedding_delete_by_ids(&self, ids: &[String]) -> rusqlite::Result<usize> {
-        let (clause, values) = in_clause("id", ids);
+        let (clause, values) = in_clause("file_id", ids);
         self.with_conn(|c| {
             c.execute(
                 &format!("DELETE FROM image_embeddings WHERE {clause}"),
