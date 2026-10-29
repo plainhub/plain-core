@@ -9,6 +9,15 @@ pub struct EventSpec {
 }
 pub const EVENTS: &[EventSpec] = &[
     EventSpec {
+        field: "dlnaSenderChanged",
+        event: "DLNA_SENDER_CHANGED",
+        aliases: &[],
+        invalidation: false,
+        selection: "{ version devices { id hostAddress name location } currentDevice { id hostAddress name location } items { path title albumArt artist durationMs audio } currentUri playing progressMs durationMs supportsCallback }",
+        permissions: &[],
+        capability: None,
+    },
+    EventSpec {
         field: "preferencesChanged",
         event: "PREFS_UPDATED",
         aliases: &[],

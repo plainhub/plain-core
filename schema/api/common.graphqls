@@ -228,6 +228,7 @@ type Subscription {
 	pairingCanceled: PairingProgressNotice!
 	pomodoroSettingsChanged: Boolean!
 	pomodoroAction: PomodoroAction!
+	dlnaSenderChanged: DlnaSenderState!
 	deviceNameUpdated: String!
 	permissionsUpdated: Boolean!
 	contentChanged: Boolean!

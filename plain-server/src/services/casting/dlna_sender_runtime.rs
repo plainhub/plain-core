@@ -89,7 +89,11 @@ impl Runtime {
             let mut snapshot = self.snapshot.lock().unwrap();
             snapshot.version = snapshot.version.saturating_add(1);
         }
-        if let Err(error) = state.host.notify("dlnaSenderChanged", self.host_snapshot()) {
+        let snapshot = self.host_snapshot();
+        let _ = state.events.send(plain_rs::events::WsEvent::broadcast(
+            "DLNA_SENDER_CHANGED", snapshot.to_string(),
+        ));
+        if let Err(error) = state.host.notify("dlnaSenderChanged", snapshot) {
             log::warn!("DLNA sender callback: {error}");
             if *recovering || !state.host.connected() { return; }
             *recovering = true;

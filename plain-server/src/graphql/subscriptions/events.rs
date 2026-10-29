@@ -133,6 +133,8 @@ async fn snapshot(state: &ServerState, name: &str) -> Result<Option<String>> {
         "SCREEN_MIRRORING" | "SCREEN_MIRROR_VIDEO_CODEC" => {
             return mirror_snapshot(state, name).await.map(Some);
         }
+        "DLNA_SENDER_CHANGED" => serde_json::to_string(&state.cast.snapshot())
+            .map_err(|error| async_graphql::Error::new(error.to_string()))?,
         "IMAGE_MODELS_UPDATED" => state.image_models.snapshot().event().payload,
         _ => return Ok(None),
     };

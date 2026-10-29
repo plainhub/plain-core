@@ -63,4 +63,5 @@ extend type Mutation {
 
 extend type Query {
 	dlnaRenderers: [DlnaRenderer!]!
+	dlnaSenderState: DlnaSenderState!
 }

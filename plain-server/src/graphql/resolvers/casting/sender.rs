@@ -109,6 +109,10 @@ async fn command(ctx: &Context<'_>, command: Command) -> Result<DlnaSenderState>
 pub struct DlnaSenderQuery;
 #[Object]
 impl DlnaSenderQuery {
+    async fn dlna_sender_state(&self, ctx: &Context<'_>) -> Result<DlnaSenderState> {
+        ctx.data::<ServerState>()?.cast.snapshot().try_into()
+    }
+
     async fn dlna_renderers(&self, ctx: &Context<'_>) -> Result<Vec<DlnaRenderer>> {
         let state = ctx.data::<ServerState>()?;
         let devices = state
