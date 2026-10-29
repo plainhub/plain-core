@@ -6,7 +6,7 @@
 //! 2. small-image passthrough: an image that already fits the target box
 //!    (and is ≤1 MiB) is served byte-identical — zero decode, zero encode,
 //! 3. hot LRU, then the deterministic file cache
-//!    (`{cache_dir}/thumbs/XX/<sha1>.jpg`),
+//!    (`{cache_dir}/thumbs/XX/<sha512>.jpg`),
 //! 4. single-flight per cache key — concurrent duplicate requests coalesce,
 //! 5. two-tier admission (CPU permits + decoded-pixel byte budget),
 //! 6. decode (IDCT-scaled JPEG for big→small, `image` crate otherwise)
@@ -431,7 +431,7 @@ fn cache_dir() -> std::path::PathBuf {
 
 /// Compute the deterministic cache file path for a thumbnail.
 ///
-/// Layout: `{cache_dir}/thumbs/XX/<sha1>.jpg` where XX = first 2 hex chars
+/// Layout: `{cache_dir}/thumbs/XX/<sha512>.jpg` where XX = first 2 hex chars
 /// (256 shard directories). The hash covers source_path|w|h|q|mtime|size so
 /// any source change produces a new path: file existence == valid cache.
 pub fn thumb_cache_path(
@@ -443,12 +443,9 @@ pub fn thumb_cache_path(
     mod_unix: i64,
     file_size: i64,
 ) -> std::path::PathBuf {
-    use sha1::{Digest, Sha1};
-    let mut hasher = Sha1::new();
-    hasher.update(source_path.as_bytes());
-    hasher.update(b"|jpg1|");
-    hasher.update(format!("{w}x{h}|q{quality}|m{mod_unix}|s{file_size}").as_bytes());
-    let hex = plain_rs::utils::hex::bytes_to_hex(&hasher.finalize());
+    let hex = plain_rs::crypto::sha512_hex(&format!(
+        "{source_path}|jpg1|{w}x{h}|q{quality}|m{mod_unix}|s{file_size}"
+    ));
     cache_dir
         .join("thumbs")
         .join(&hex[..2])

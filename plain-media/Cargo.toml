@@ -14,7 +14,6 @@ description = "Shared Plain media scanning, indexing and thumbnails"
 
 [dependencies]
 "log" = "0.4"
-"serde" = { "version" = "1", "features" = ["derive"] }
 "serde_json" = { "version" = "1" }
 "anyhow" = { "version" = "1" }
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"] }
@@ -23,7 +22,6 @@ description = "Shared Plain media scanning, indexing and thumbnails"
 "rusty_h264-decoder" = { "version" = "=0.16.0", "default-features" = false, "features" = ["std"] }
 "rusty_h264-common" = { "version" = "=0.16.0", "default-features" = false, "features" = ["std"] }
 "tempfile" = { "version" = "3" }
-"sha1" = { "version" = "0.10" }
 "parking_lot" = { "version" = "0.12" }
 "libc" = "0.2"
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["rt", "process", "sync", "time", "fs", "macros", "io-util"] }

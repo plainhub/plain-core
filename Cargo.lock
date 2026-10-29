@@ -2797,9 +2797,7 @@ dependencies = [
  "plain-rs",
  "rusty_h264-common",
  "rusty_h264-decoder",
- "serde",
  "serde_json",
- "sha1 0.10.7",
  "tempfile",
  "tokio",
 ]

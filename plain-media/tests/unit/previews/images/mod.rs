@@ -112,18 +112,20 @@ fn cache_path_determinism_and_invalidation() {
         a,
         thumb_cache_path(dir, "/a/b.jpg", 256, 256, 75, 1000, 5000)
     );
-    // The format marker changed from the webp era: old and new keys
-    // must not collide.
-    use sha1::{Digest, Sha1};
-    let mut h = Sha1::new();
-    h.update(b"/a/b.jpg|webp|200x200|q75|m1000|s5000");
-    let old = plain_rs::utils::hex::bytes_to_hex(&h.finalize());
-    assert_ne!(
-        a.file_name().unwrap().to_str().unwrap(),
-        format!("{old}.webp")
-    );
+    assert_eq!(a, dir.join("thumbs").join("71").join("71a2b618449793c9b1069e1339ebd8e7cb1c4ca69d6749ce3093c69e7e199d759c6c0fc2533775ce9af4b3619d8be971322c95126eeda5890ddad9f8b10a211f.jpg"));
+    for changed in [
+        thumb_cache_path(dir, "/other/b.jpg", 200, 200, 75, 1000, 5000),
+        thumb_cache_path(dir, "/a/b.jpg", 200, 201, 75, 1000, 5000),
+        thumb_cache_path(dir, "/a/b.jpg", 200, 200, 76, 1000, 5000),
+        thumb_cache_path(dir, "/a/b.jpg", 200, 200, 75, 1000, 5001),
+    ] {
+        assert_ne!(a, changed);
+    }
     let etag = cache_etag(&a);
-    assert!(etag.starts_with("\"t") && etag.ends_with('"'));
+    assert_eq!(
+        etag,
+        "\"t71a2b618449793c9b1069e1339ebd8e7cb1c4ca69d6749ce3093c69e7e199d759c6c0fc2533775ce9af4b3619d8be971322c95126eeda5890ddad9f8b10a211f\""
+    );
     assert_eq!(etag, cache_etag(&b));
 }
 

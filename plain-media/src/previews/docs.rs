@@ -5,7 +5,6 @@
 //! caches the result on disk.
 
 use anyhow::Result;
-use sha1::{Digest, Sha1};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -97,11 +96,7 @@ fn which(name: &str) -> Option<PathBuf> {
 
 /// Compute the cache key for a PDF preview.
 fn pdf_preview_key(path: &str, mod_unix: i64, size: i64) -> String {
-    let mut h = Sha1::new();
-    h.update(path.as_bytes());
-    h.update(b"|");
-    h.update(format!("{mod_unix}|{size}").as_bytes());
-    plain_rs::utils::hex::bytes_to_hex(&h.finalize())
+    plain_rs::crypto::sha512_hex(&format!("{path}|{mod_unix}|{size}"))
 }
 
 fn pdf_preview_cache_dir(cache_dir: &Path) -> PathBuf {
@@ -203,3 +198,7 @@ pub async fn get_or_create_pdf_preview(
 
     Ok(out_path)
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/previews/docs.rs"]
+mod tests;
