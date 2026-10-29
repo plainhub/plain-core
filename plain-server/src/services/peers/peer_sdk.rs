@@ -2,8 +2,7 @@ use crate::assembly::server::ServerState;
 use crate::host::bridge::Host;
 use crate::services::peers::peer_lan::Failure;
 use anyhow::{Result, ensure};
-use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
+use axum::body::Body;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
@@ -88,6 +87,23 @@ async fn socket(state: &ServerState, peer: &plain_rs::db::DPeer) -> Result<(Dupl
     }));
     Ok((io, lease))
 }
+fn aware_request(
+    method: &str,
+    path: &str,
+    actor: &str,
+    channel: &str,
+    body: Vec<u8>,
+) -> Result<hyper::Request<Body>> {
+    Ok(hyper::Request::builder()
+        .method(method)
+        .uri(path)
+        .header("host", "plain-aware-peer")
+        .header("c-id", actor)
+        .header("c-cid", channel)
+        .header("content-type", "application/octet-stream")
+        .body(Body::from(body))?)
+}
+
 pub(crate) struct Response {
     pub status: u16,
     pub body: hyper::body::Incoming,
@@ -128,15 +144,8 @@ pub(crate) async fn aware(
         .map_err(|e| Failure::Fatal(e.to_string()))?
         .filter(|s| !s.is_empty())
         .ok_or_else(|| Failure::Fatal("Missing peer actor".into()))?;
-    let request = hyper::Request::builder()
-        .method(method)
-        .uri(path)
-        .header("host", "plain-aware-peer")
-        .header("c-id", actor)
-        .header("c-cid", channel)
-        .header("content-type", "application/octet-stream")
-        .body(Full::new(Bytes::from(body)))
-        .map_err(|e| Failure::Fatal(e.to_string()))?;
+    let request = aware_request(method, path, &actor, channel, body)
+        .map_err(|error| Failure::Fatal(error.to_string()))?;
     let response = sender
         .send_request(request)
         .await
@@ -161,17 +170,11 @@ pub(crate) async fn aware_send(
     async {
         let status = response.status;
         let _lease = response.lease;
-        let mut body = response.body;
-        let mut bytes = vec![];
-        while let Some(frame) = body.frame().await {
-            if let Ok(data) = frame?.into_data() {
-                ensure!(
-                    bytes.len() + data.len() <= 4 * 1024 * 1024,
-                    "Peer response exceeds limit"
-                );
-                bytes.extend_from_slice(&data);
-            }
-        }
+        let bytes = super::peer_lan::limited_chunks(
+            Body::new(response.body).into_data_stream(),
+            4 * 1024 * 1024,
+        )
+        .await?;
         decode_response(status, key, &context, &bytes)
     }
     .await

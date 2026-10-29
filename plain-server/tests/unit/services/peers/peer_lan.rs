@@ -129,3 +129,5 @@ async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
     a.shutdown().await;
     b.shutdown().await;
 }
+#[path = "peer_lan/body.rs"]
+mod body;

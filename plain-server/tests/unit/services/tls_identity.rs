@@ -138,3 +138,26 @@ fn configured_pem_identity_is_shared_by_restart_and_certificate_rotation() {
     assert_eq!(rotated.1, std::fs::read(key).unwrap());
     assert!(!directory.path().join("tls-identity.json").exists());
 }
+
+#[test]
+fn pkcs12_import_persists_a_matching_identity_and_failed_import_preserves_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let sources = [
+        IdentitySource::Json(directory.path().join("identity.json")),
+        IdentitySource::Pem { certificate: directory.path().join("cert.pem"), key: directory.path().join("key.pem") },
+    ];
+    let bytes = include_bytes!("../../../../plain-rs/testdata/crypto/pkcs12/aes-sha256.p12");
+    let data = plain_rs::utils::base64::base64_encode(bytes);
+    let expected = plain_rs::tls::decode_pkcs12(bytes, "password").unwrap();
+    for source in sources {
+        source.identity().unwrap();
+        let result = source.action(&json!({"action": "importPkcs12", "data": data, "password": "password"}).to_string()).unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&result).unwrap()["signature"], json!(signature(&expected.0).unwrap()));
+        assert_eq!(source.identity().unwrap(), expected);
+        config(&expected.0, &expected.1).unwrap();
+        for (data, password) in [(data.as_str(), "wrong"), ("invalid", "password")] {
+            assert!(source.action(&json!({"action": "importPkcs12", "data": data, "password": password}).to_string()).is_err());
+            assert_eq!(source.identity().unwrap(), expected);
+        }
+    }
+}

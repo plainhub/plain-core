@@ -1,12 +1,7 @@
-//! Thumbnail output encoding: pure-Rust baseline JPEG via `jpeg-encoder`.
-//!
-//! JPEG (quality < 90 defaults to 4:2:0 subsampling) is ~3× faster to encode
-//! than lossy WebP at comparable visual quality, needs no C library, and is
-//! universally renderable. Alpha is composited onto white first — JPEG has
-//! no alpha channel.
-
 use crate::previews::images::scale::Bitmap;
 use anyhow::{Result, bail};
+
+mod jpeg;
 
 /// Encode a bitmap as JPEG. `quality` is clamped to 1..=100.
 pub fn encode_jpeg(bm: Bitmap, quality: u8) -> Result<Vec<u8>> {
@@ -20,10 +15,18 @@ pub fn encode_jpeg(bm: Bitmap, quality: u8) -> Result<Vec<u8>> {
         unreachable!("flatten_to_rgb always yields Rgb8");
     };
 
-    let mut out = Vec::with_capacity(4096);
-    let encoder = jpeg_encoder::Encoder::new(&mut out, quality);
-    encoder.encode(data, w as u16, h as u16, jpeg_encoder::ColorType::Rgb)?;
-    Ok(out)
+    if quality < 90 {
+        jpeg::encode(data, w as u16, h as u16, quality)
+    } else {
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, quality).encode(
+            data,
+            w,
+            h,
+            image::ExtendedColorType::Rgb8,
+        )?;
+        Ok(bytes)
+    }
 }
 
 #[cfg(test)]

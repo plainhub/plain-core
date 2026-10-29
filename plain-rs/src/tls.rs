@@ -61,18 +61,7 @@ pub fn generate_pem(san_names: &[String]) -> io::Result<(Vec<u8>, Vec<u8>)> {
 }
 
 pub fn decode_pkcs12(bytes: &[u8], password: &str) -> Result<(Vec<u8>, Vec<u8>), String> {
-    let store = p12_keystore::KeyStore::from_pkcs12(
-        bytes,
-        password,
-        p12_keystore::Pkcs12ImportPolicy::Strict,
-    )
-    .map_err(|error| error.to_string())?;
-    let (_, chain) = store
-        .private_key_chain()
-        .ok_or("No private key found in certificate file")?;
-    if chain.certs().is_empty() {
-        return Err("No certificate chain found in certificate file".into());
-    }
+    let (chain, key) = pkcs12::decode(bytes, password)?;
     let pem = |label: &str, bytes: &[u8]| {
         let encoded = crate::utils::base64::base64_encode(bytes);
         let mut text = format!("-----BEGIN {label}-----\n");
@@ -84,83 +73,17 @@ pub fn decode_pkcs12(bytes: &[u8], password: &str) -> Result<(Vec<u8>, Vec<u8>),
         text
     };
     let certificates = chain
-        .certs()
         .iter()
-        .map(|cert| pem("CERTIFICATE", cert.as_der()))
+        .map(|cert| pem("CERTIFICATE", cert))
         .collect::<String>();
     Ok((
         certificates.into_bytes(),
-        pem("PRIVATE KEY", chain.key().as_der()).into_bytes(),
+        pem("PRIVATE KEY", &key).into_bytes(),
     ))
 }
 
+mod pkcs12;
+
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn tmp_dir(tag: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!(
-            "plain-rs-tls-{tag}-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&d).unwrap();
-        d
-    }
-
-    #[test]
-    fn generates_then_reloads() {
-        let dir = tmp_dir("gen");
-        let cert = dir.join("cert.pem");
-        let key = dir.join("key.pem");
-        let sans = vec!["localhost".to_string(), "127.0.0.1".to_string()];
-
-        let (c1, k1) = ensure_self_signed_pem(&cert, &key, &sans).unwrap();
-        assert!(c1.starts_with(b"-----BEGIN CERTIFICATE-----"));
-        assert!(k1.starts_with(b"-----BEGIN PRIVATE KEY-----"));
-        assert!(cert.exists() && key.exists());
-
-        // Second call must load from disk, not regenerate.
-        let (c2, k2) = ensure_self_signed_pem(&cert, &key, &sans).unwrap();
-        assert_eq!(c1, c2);
-        assert_eq!(k1, k2);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn regenerates_when_one_file_missing() {
-        let dir = tmp_dir("partial");
-        let cert = dir.join("cert.pem");
-        let key = dir.join("key.pem");
-        let sans = vec!["plainapp.local".to_string()];
-        let (c1, _) = ensure_self_signed_pem(&cert, &key, &sans).unwrap();
-        std::fs::remove_file(&key).unwrap();
-        let (c2, _) = ensure_self_signed_pem(&cert, &key, &sans).unwrap();
-        // Fresh pair — cert differs from the previous generation.
-        assert_ne!(c1, c2);
-        assert!(key.exists());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-    #[test]
-    fn pkcs12_roundtrip_and_wrong_password_are_handled_in_rust() {
-        use p12_keystore::{Certificate, KeyStore, KeyStoreEntry, PrivateKey, PrivateKeyChain};
-        let cert = generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-        let key = PrivateKey::from_der(&cert.key_pair.serialize_der()).unwrap();
-        let certificate = Certificate::from_der(cert.cert.der()).unwrap();
-        let mut store = KeyStore::new();
-        store.add_entry(
-            "server",
-            KeyStoreEntry::PrivateKeyChain(PrivateKeyChain::new(vec![1u8], key, vec![certificate])),
-        );
-        let bytes = store.writer("password").write().unwrap();
-        let (chain, private) = decode_pkcs12(&bytes, "password").unwrap();
-        assert_eq!(chain, cert.cert.pem().into_bytes());
-        assert_eq!(private, cert.key_pair.serialize_pem().into_bytes());
-        assert!(decode_pkcs12(&bytes, "wrong").is_err());
-        assert!(decode_pkcs12(b"invalid", "password").is_err());
-        let empty = KeyStore::new().writer("").write().unwrap();
-        assert!(decode_pkcs12(&empty, "").is_err());
-    }
-}
+#[path = "../tests/unit/tls.rs"]
+mod tests;

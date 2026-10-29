@@ -12,7 +12,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "ble" = ["dep:anyhow"]
 "ble-native" = ["ble", "chat", "dep:serde_json", "dep:jni"]
 "mdns" = ["dep:socket2"]
-"tls" = ["dep:rcgen", "dep:p12-keystore"]
+"tls" = ["dep:rcgen", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:x509-parser", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
 "chat" = ["rusqlite/hooks", "crypto", "mdns", "events", "dep:chrono", "dep:anyhow", "dep:serde_json", "dep:rusqlite", "sqlite_browse", "tokio/sync", "tokio/rt", "tokio/fs", "tokio/time"]
 "library" = ["dep:lofty", "kv", "dep:regex", "dep:rusqlite", "dep:chrono", "dep:anyhow", "prefs", "events", "tokio/rt", "tokio/fs", "tokio/time"]
 "sqlite_browse" = ["dep:rusqlite", "dep:serde_json", "dep:anyhow"]
@@ -48,7 +48,15 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "chacha20poly1305" = { "version" = "0.10", "optional" = true }
 "p256" = { "version" = "0.13", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
 "ed25519-dalek" = { "version" = "2", "features" = ["rand_core"], "optional" = true }
-"p12-keystore" = { "version" = "0.3.2", "optional" = true }
+"der" = { version = "0.8", features = ["std", "derive"], optional = true }
+"pkcs12" = { version = "=0.2.0-pre.0", features = ["kdf"], optional = true }
+"pkcs5" = { version = "0.8", features = ["alloc", "pbes2"], optional = true }
+"pkcs8" = { version = "0.11", optional = true }
+"x509-parser" = { version = "0.18", optional = true }
+"cbc" = { version = "0.2", features = ["block-padding", "alloc"], optional = true }
+"des" = { version = "0.9", optional = true }
+"rc2" = { version = "0.9", optional = true }
+"sha1" = { version = "0.11", optional = true }
 "sha2" = "0.10"
 "hmac" = { "version" = "0.13", "optional" = true }
 "sha2_mac" = { "package" = "sha2", "version" = "0.11", "optional" = true }

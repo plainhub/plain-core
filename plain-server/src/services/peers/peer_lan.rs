@@ -90,7 +90,15 @@ pub(crate) async fn limited(response: reqwest::Response, limit: usize) -> Result
         response.content_length().is_none_or(|n| n <= limit as u64),
         "Peer response exceeds limit"
     );
-    let mut chunks = response.bytes_stream();
+    limited_chunks(response.bytes_stream(), limit).await
+}
+
+pub(crate) async fn limited_chunks<S, E>(chunks: S, limit: usize) -> Result<Vec<u8>>
+where
+    S: futures_util::Stream<Item = std::result::Result<bytes::Bytes, E>>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    futures_util::pin_mut!(chunks);
     let mut body = vec![];
     while let Some(bytes) = chunks.next().await {
         let bytes = bytes?;

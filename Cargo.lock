@@ -1832,12 +1832,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e17592d60ebacc7d5e169f4663c5f84f9161cc90328abcfe8456f41e4dfcb284"
 
 [[package]]
-name = "hex"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
-
-[[package]]
 name = "hkdf"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2337,12 +2331,6 @@ checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
 dependencies = [
  "rayon",
 ]
-
-[[package]]
-name = "jpeg-encoder"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0370574b86f7eca156b9f298392b5e69a23f8c86f3f865add60bbc2e79467a6"
 
 [[package]]
 name = "js-sys"
@@ -2938,29 +2926,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "p12-keystore"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59710c89ee68e5cd17e8bac17a18e0a674bf959b11317531f481e612f567283c"
-dependencies = [
- "cbc",
- "cms",
- "der 0.8.2",
- "des",
- "hex",
- "hmac 0.13.0",
- "pkcs12",
- "pkcs5",
- "pkcs8 0.11.0",
- "rand 0.10.3",
- "rc2",
- "sha1 0.11.0",
- "sha2 0.11.0",
- "thiserror 2.0.21",
- "x509-parser",
-]
-
-[[package]]
 name = "p256"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3149,7 +3114,6 @@ dependencies = [
  "fast_image_resize",
  "image",
  "jpeg-decoder",
- "jpeg-encoder",
  "libc",
  "log",
  "notify",
@@ -3174,8 +3138,11 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "bytes",
+ "cbc",
  "chacha20poly1305",
  "chrono",
+ "der 0.8.2",
+ "des",
  "ed25519-dalek",
  "fjall",
  "flate2",
@@ -3187,15 +3154,19 @@ dependencies = [
  "libc",
  "lofty",
  "log",
- "p12-keystore",
  "p256",
+ "pkcs12",
+ "pkcs5",
+ "pkcs8 0.11.0",
  "rand 0.8.8",
+ "rc2",
  "rcgen",
  "regex",
  "reqwest",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha1 0.11.0",
  "sha2 0.10.9",
  "sha2 0.11.0",
  "socket2 0.5.10",
@@ -3203,6 +3174,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "uuid",
+ "x509-parser",
 ]
 
 [[package]]
@@ -3219,7 +3191,6 @@ dependencies = [
  "futures-util",
  "hmac 0.13.0",
  "http",
- "http-body-util",
  "hyper",
  "hyper-util",
  "image",

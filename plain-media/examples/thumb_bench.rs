@@ -291,17 +291,11 @@ fn fir_resize(bm: Bm, tw: u32, th: u32) -> Bm {
 }
 
 fn encode_jpeg(bm: &Bm, quality: u8) -> Vec<u8> {
-    let mut out = Vec::with_capacity(4096);
-    let encoder = jpeg_encoder::Encoder::new(&mut out, quality);
-    encoder
-        .encode(
-            &bm.data,
-            bm.w as u16,
-            bm.h as u16,
-            jpeg_encoder::ColorType::Rgb,
-        )
-        .expect("bench encode");
-    out
+    plain_media::previews::images::encode::encode_jpeg(
+        plain_media::previews::images::scale::Bitmap::new_rgb(bm.data.clone(), bm.w, bm.h),
+        quality,
+    )
+    .expect("bench encode")
 }
 
 // ── Header sniffing ────────────────────────────────────────────────────────

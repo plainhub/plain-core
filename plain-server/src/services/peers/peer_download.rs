@@ -2,7 +2,6 @@ use crate::assembly::server::ServerState;
 use crate::services::peers::peer_transport::Pending;
 use anyhow::{Result, ensure};
 use futures_util::StreamExt;
-use http_body_util::BodyExt;
 use plain_rs::transport::router::Outcome;
 use plain_rs::transport::router::TransportType;
 use std::time::Duration;
@@ -97,13 +96,11 @@ pub(crate) async fn run(
                             .transport
                             .finish(&pending.ticket, Outcome::Connected)?;
                         let _lease = response.lease;
-                        let mut body = response.body;
-                        while let Some(frame) =
-                            tokio::time::timeout(Duration::from_secs(30), body.frame()).await?
+                        let mut chunks = axum::body::Body::new(response.body).into_data_stream();
+                        while let Some(chunk) =
+                            tokio::time::timeout(Duration::from_secs(30), chunks.next()).await?
                         {
-                            if let Ok(chunk) = frame?.into_data() {
-                                write(state, task, &mut file, &mut bytes, &chunk).await?;
-                            }
+                            write(state, task, &mut file, &mut bytes, &chunk?).await?;
                         }
                         None
                     }
