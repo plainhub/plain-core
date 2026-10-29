@@ -71,7 +71,7 @@ pub fn patch(db: &Db, before: &DPeer, after: &DPeer) -> Result<Option<DPeer>> {
 pub fn unpair(db: &Db, id: &str) -> Result<bool> {
     Ok(db.with_conn(|c| {
         c.execute(
-            "UPDATE peers SET status='UNPAIRED',updated_at=?2 WHERE id=?1",
+            "UPDATE peers SET status='UNPAIRED',token='',updated_at=?2 WHERE id=?1",
             params![id, crate::db::now_iso()],
         )
     })? == 1)
