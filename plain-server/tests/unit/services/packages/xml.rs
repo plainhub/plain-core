@@ -270,3 +270,38 @@ fn resource_map_recovers_empty_framework_attribute_names_without_arsc() {
     assert!(!needs_resources(&bytes).unwrap());
     assert!(render(&bytes).unwrap().contains("android:label=\"Title\""));
 }
+
+#[test]
+fn text_nodes_use_the_raw_string_when_the_typed_value_is_empty() {
+    let text = node(0x104, [2u32.to_le_bytes().as_slice(), &[0; 8]].concat());
+    let bytes = document(
+        &["manifest", "unused", "A&B<雪"],
+        vec![start(u32::MAX, 0, &[]), text, pair(0x103, u32::MAX, 0)],
+    );
+    assert!(render(&bytes).unwrap().contains("A&amp;B&lt;雪\n"));
+}
+
+#[test]
+fn text_nodes_validate_the_representation_they_read() {
+    let render_text = |data| {
+        render(&document(
+            &["manifest", "text"],
+            vec![
+                start(u32::MAX, 0, &[]),
+                node(0x104, data),
+                pair(0x103, u32::MAX, 0),
+            ],
+        ))
+    };
+    let typed = [8u16.to_le_bytes().as_slice(), &[0, 3], &1u32.to_le_bytes()].concat();
+    let valid = [u32::MAX.to_le_bytes().as_slice(), typed.as_slice()].concat();
+    assert!(render_text(valid.clone()).unwrap().contains("text\n"));
+    let mut missing = valid.clone();
+    missing[4..6].copy_from_slice(&0u16.to_le_bytes());
+    assert!(render_text(missing).is_err());
+    let mut reserved = valid;
+    reserved[6] = 1;
+    assert!(render_text(reserved).is_err());
+    assert!(render_text([2u32.to_le_bytes().as_slice(), &[0; 8]].concat()).is_err());
+    assert!(render_text(1u32.to_le_bytes().to_vec()).is_err());
+}

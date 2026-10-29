@@ -447,14 +447,13 @@ pub(super) fn render_with(
                 }
                 0x104 => {
                     ensure!(!stack.is_empty(), "Manifest text outside root");
-                    ensure!(
-                        header + 12 <= length
-                            && u16_at(chunk, header + 4)? == 8
-                            && chunk[header + 6] == 0,
-                        "Invalid manifest text value"
-                    );
+                    ensure!(header + 12 <= length, "Invalid manifest text value");
                     let raw = u32_at(chunk, header)?;
                     let value = if raw == u32::MAX {
+                        ensure!(
+                            u16_at(chunk, header + 4)? == 8 && chunk[header + 6] == 0,
+                            "Invalid manifest text value"
+                        );
                         typed(pool, chunk[header + 7], u32_at(chunk, header + 8)?)?
                     } else {
                         pool.get(raw)?
