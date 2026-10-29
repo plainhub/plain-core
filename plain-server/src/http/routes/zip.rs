@@ -132,7 +132,7 @@ fn collect_archive_entries(
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().to_owned();
+        let name = entry.name()?.into_owned();
         let relative = if inner.is_empty() {
             name.clone()
         } else if let Some(rest) = name.strip_prefix(&format!("{inner}/")) {

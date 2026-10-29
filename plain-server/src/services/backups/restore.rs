@@ -184,7 +184,7 @@ fn stage_reader(
     for index in 0..zip.len() {
         running(stop, cancelled)?;
         let mut entry = zip.by_index(index).map_err(|error| error.to_string())?;
-        let name = relative(entry.name())?;
+        let name = relative(&entry.name().map_err(|error| error.to_string())?)?;
         if !names.insert(name.clone()) {
             return Err("Backup contains duplicate entries".into());
         }

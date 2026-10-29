@@ -278,3 +278,21 @@ const DOC_EXTRA_MIMES: [&str; 5] = [
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/javascript",
 ];
+
+pub fn selected_roots(root: String, source_dirs: &[String]) -> Vec<std::path::PathBuf> {
+    if root == "/" {
+        let sources = source_dirs
+            .iter()
+            .filter(|dir| !dir.is_empty())
+            .map(std::path::PathBuf::from)
+            .collect::<Vec<_>>();
+        if !sources.is_empty() {
+            return sources;
+        }
+    }
+    vec![std::path::PathBuf::from(root)]
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/media/catalog_paths.rs"]
+mod tests;

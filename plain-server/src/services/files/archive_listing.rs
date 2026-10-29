@@ -31,8 +31,8 @@ pub(crate) fn list(reference: &str) -> Result<Vec<FileRecord>> {
         if entry.enclosed_name().is_none() {
             continue;
         }
-        let Some(relative) = entry
-            .name()
+        let name = entry.name()?;
+        let Some(relative) = name
             .trim_start_matches('/')
             .strip_prefix(&prefix)
             .filter(|name| !name.is_empty())

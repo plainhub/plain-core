@@ -218,7 +218,7 @@ impl NativeMediaCatalog {
         }
         let policy = self.state.media_scans.policy()?;
         for path in event.paths {
-            let excluded = plain_media::scan::is_media_excluded_at(
+            let excluded = plain_rs::media::catalog_paths::is_media_excluded_at(
                 &path.to_string_lossy(),
                 &self.state.directory,
                 &policy.cache_directory,
@@ -283,7 +283,7 @@ impl NativeMediaCatalog {
     #[cfg(feature = "media")]
     fn source_references(&self, root: &str) -> Result<Vec<String>, String> {
         let sources = self.source_directories()?;
-        plain_media::scan::selected_roots(root.to_owned(), &sources)
+        plain_rs::media::catalog_paths::selected_roots(root.to_owned(), &sources)
             .into_iter()
             .map(|path| {
                 path.into_os_string()
@@ -374,7 +374,7 @@ impl NativeMediaCatalog {
                         &producer_root,
                         |path| {
                             path.to_str().is_some_and(|path| {
-                                plain_media::scan::is_media_excluded_at(
+                                plain_rs::media::catalog_paths::is_media_excluded_at(
                                     path,
                                     &directory,
                                     &policy.cache_directory,
@@ -392,7 +392,7 @@ impl NativeMediaCatalog {
                             let name = path.to_str().ok_or_else(|| {
                                 anyhow::anyhow!("Invalid media file path encoding")
                             })?;
-                            let kind = plain_media::scan::infer_type(name);
+                            let kind = plain_rs::media::catalog_paths::infer_type(name);
                             if let Some(data_type) = [
                                 DataType::Audio,
                                 DataType::Video,
@@ -466,7 +466,7 @@ impl NativeMediaCatalog {
                         }
                         Err(error) => return Err(error.to_string()),
                         Ok(_) => {
-                            if plain_media::scan::is_media_excluded_at(
+                            if plain_rs::media::catalog_paths::is_media_excluded_at(
                                 &item.path,
                                 &self.state.directory,
                                 &policy.cache_directory,

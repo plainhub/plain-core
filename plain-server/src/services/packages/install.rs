@@ -66,10 +66,10 @@ fn prepare(
     let mut names = std::collections::HashSet::new();
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index)?;
-        if entry.is_dir() || !entry.name().to_ascii_lowercase().ends_with(".apk") {
+        let name = entry.name()?.into_owned();
+        if entry.is_dir() || !name.to_ascii_lowercase().ends_with(".apk") {
             continue;
         }
-        let name = entry.name().to_owned();
         ensure!(names.insert(name.clone()), "Duplicate APK archive entry");
         ensure!(
             entry.enclosed_name().is_some()

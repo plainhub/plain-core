@@ -1,23 +1,9 @@
-//! Media stack shared by the server and the plain-desktop local API:
-//! fjall KV storage, file/media indexes, the media scanner, thumbnail
-//! engine, metadata extraction, file-management helpers, and the
-//! watcher. Ported from the previous Go implementation so every desktop platform
-//! (macOS / Windows / Linux) can browse local files through the same
-//! GraphQL surface the server serves.
-
-pub mod catalog;
 pub mod config;
 pub mod events;
 pub mod file_walk;
-pub mod index;
 pub mod metadata;
-pub mod scan;
-pub mod search;
-pub mod watch;
 
 pub mod previews;
-
-pub mod adapters;
 
 pub mod operations;
 

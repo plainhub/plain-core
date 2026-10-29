@@ -14,7 +14,7 @@ pub(crate) enum Effect {
 
 fn media_type_of(path: &Path) -> Option<DataType> {
     let name = path.file_name()?.to_str()?;
-    let kind = plain_media::scan::infer_type(name);
+    let kind = plain_rs::media::catalog_paths::infer_type(name);
     [
         DataType::Audio,
         DataType::Video,

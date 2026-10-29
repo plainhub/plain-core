@@ -1,5 +1,6 @@
-use p256::{PublicKey as P256PublicKey, SecretKey, pkcs8::DecodePublicKey};
-use rand::rngs::OsRng;
+use p256::{
+    PublicKey as P256PublicKey, SecretKey, elliptic_curve::Generate, pkcs8::DecodePublicKey,
+};
 use sha2::{Digest, Sha256};
 
 // ── ECDH P-256 ───────────────────────────────────────────────────────────────
@@ -16,10 +17,14 @@ pub struct EcdhSession {
     pub public_key_bytes: Vec<u8>,
 }
 
+#[cfg(test)]
+#[path = "../../tests/unit/crypto/ecdh.rs"]
+mod tests;
+
 impl EcdhSession {
     /// Generate a new ephemeral P-256 ECDH key pair.
     pub fn generate() -> Self {
-        let secret = SecretKey::random(&mut OsRng);
+        let secret = SecretKey::generate();
         let public_key = secret.public_key();
         // SEC1 uncompressed point: 0x04 || X(32) || Y(32) = 65 bytes.
         // Matches plain-app's `encodePublicKeyX963`.

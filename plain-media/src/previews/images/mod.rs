@@ -26,7 +26,6 @@ pub mod encode;
 pub mod exif;
 pub mod lru;
 pub mod pjpeg;
-pub mod prefetch;
 pub mod scale;
 pub mod singleflight;
 pub mod sniff;

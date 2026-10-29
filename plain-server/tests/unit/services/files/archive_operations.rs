@@ -353,3 +353,28 @@ fn special_entries_are_rejected_before_output_reservation() {
         assert_eq!(std::fs::read(neighbor).unwrap(), b"preserved neighbor");
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn extraction_does_not_restore_privileged_archive_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("source.zip");
+    archive(&source, "entry", b"plain file");
+    let mut bytes = std::fs::read(&source).unwrap();
+    let central = bytes
+        .windows(4)
+        .position(|value| value == b"PK\x01\x02")
+        .unwrap();
+    bytes[central + 5] = 3;
+    bytes[central + 38..central + 42].copy_from_slice(&(0o107777u32 << 16).to_le_bytes());
+    std::fs::write(&source, bytes).unwrap();
+    let (_sender, stop, cancelled) = running_state();
+    let (output, _) = unpack_files(&source, &directory.path().join("out"), &stop, &cancelled)
+        .unwrap()
+        .keep();
+    let file = output.join("entry");
+    assert_eq!(std::fs::read(&file).unwrap(), b"plain file");
+    assert_eq!(file.metadata().unwrap().permissions().mode() & 0o7000, 0);
+}

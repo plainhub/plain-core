@@ -14,19 +14,16 @@ description = "Shared Plain media scanning, indexing and thumbnails"
 
 [dependencies]
 "rand" = "0.8"
-"uuid" = { "version" = "1", "features" = ["v4"] }
 "log" = "0.4"
 "serde" = { "version" = "1", "features" = ["derive"] }
 "serde_json" = { "version" = "1" }
 "anyhow" = { "version" = "1" }
 "chrono" = { "version" = "0.4", "features" = ["serde"] }
-"tantivy" = { "version" = "0.22" }
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"] }
 "fast_image_resize" = { "version" = "5", "features" = ["rayon"] }
 "jpeg-decoder" = { "version" = "0.3", "default-features" = true }
 "rusty_h264-decoder" = { "version" = "=0.16.0", "default-features" = false, "features" = ["std"] }
 "rusty_h264-common" = { "version" = "=0.16.0", "default-features" = false, "features" = ["std"] }
-"notify" = { "version" = "7" }
 "tempfile" = { "version" = "3" }
 "sha1" = { "version" = "0.10" }
 "parking_lot" = { "version" = "0.12" }

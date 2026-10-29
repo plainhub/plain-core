@@ -411,7 +411,7 @@ fn unpack_files(
         {
             return Err("Unsupported archive entry type".into());
         }
-        entries.push(relative(entry.name())?);
+        entries.push(relative(&entry.name().map_err(|error| error.to_string())?)?);
     }
     let (mut output, _) = reserve(target, true)?;
     let root = output

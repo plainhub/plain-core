@@ -43,7 +43,7 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
     .await
     .unwrap();
     let mut zip = zip::ZipArchive::new(std::fs::File::open(&archive).unwrap()).unwrap();
-    let names: Vec<_> = zip.file_names().map(str::to_owned).collect();
+    let names: Vec<_> = zip.file_names().map(|name| name.unwrap().into_owned()).collect();
     assert!(names.contains(&"files/plain.db".into()));
     assert!(names.iter().any(|name| name.starts_with("files/fjall/")));
     assert!(names.iter().all(|name| !name.contains("cache/")

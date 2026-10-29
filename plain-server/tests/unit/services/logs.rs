@@ -255,7 +255,7 @@ async fn main_log_export_and_clear_cover_app_and_rust_log_families() {
     assert_eq!(exported.file_name().unwrap(), "logs (1).zip");
     assert_eq!(std::fs::read(existing).unwrap(), b"preserved archive");
     let mut zip = zip::ZipArchive::new(std::fs::File::open(exported).unwrap()).unwrap();
-    let mut names = zip.file_names().map(str::to_owned).collect::<Vec<_>>();
+    let mut names = zip.file_names().map(|name| name.unwrap().into_owned()).collect::<Vec<_>>();
     names.sort();
     assert_eq!(
         names,
@@ -347,7 +347,7 @@ async fn rust_logs_are_exported_without_app_logs_and_counted_once_for_a_shared_p
         .unwrap()
         .unwrap();
     let zip = zip::ZipArchive::new(std::fs::File::open(exported).unwrap()).unwrap();
-    let mut names = zip.file_names().collect::<Vec<_>>();
+    let mut names = zip.file_names().map(|name| name.unwrap().into_owned()).collect::<Vec<_>>();
     names.sort();
     assert_eq!(names, vec!["logs/rust.log", "logs/rust.log.bak"]);
     logs.set_path(paths.rust_log_file()).unwrap();

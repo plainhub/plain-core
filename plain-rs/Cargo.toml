@@ -46,7 +46,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "tempfile" = { "version" = "3", "optional" = true }
 "reqwest" = { version = "0.12", default-features = false, features = ["stream"], optional = true }
 "chacha20poly1305" = { "version" = "0.10", "optional" = true }
-"p256" = { "version" = "0.13", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
+"p256" = { "version" = "0.14", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
 "ed25519-dalek" = { "version" = "2", "features" = ["rand_core"], "optional" = true }
 "der" = { version = "0.8", features = ["std", "derive"], optional = true }
 "pkcs12" = { version = "=0.2.0-pre.0", default-features = false, features = ["kdf"], optional = true }
