@@ -1,8 +1,11 @@
 mod data;
 mod locale;
+mod number;
+mod plan;
+mod syntax;
 
 use locale::Locale;
-use rlibphonenumber::{PHONE_NUMBER_UTIL as util, PhoneNumber, PhoneNumberType as Type};
+use number::{Number, NumberType};
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
@@ -61,20 +64,13 @@ impl Service {
         #[cfg(test)]
         self.resolutions
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let parsed = util
-            .parse(number, region.to_ascii_uppercase().parse().ok())
-            .ok()?;
-        if !util.is_valid_number(&parsed) {
-            return None;
-        }
-        let country = util
-            .get_region_for_country_code(parsed.country_code)?
-            .to_string();
-        let number_type = util.get_number_type(&parsed);
+        let parsed = number::parse(number, region)?;
+        let country = number::main_region(&parsed).to_owned();
+        let number_type = parsed.kind;
         let locale = Locale::parse(language_tag);
         let carrier = if matches!(
             number_type,
-            Type::Mobile | Type::FixedLineOrMobile | Type::Pager
+            NumberType::Mobile | NumberType::FixedLineOrMobile | NumberType::Pager
         ) {
             self.prefix("carrier", &parsed, &locale)
         } else {
@@ -95,28 +91,21 @@ impl Service {
         })
     }
 
-    fn geographical_number(&self, number: &PhoneNumber) -> Option<PhoneNumber> {
-        let token = util.get_country_mobile_token(number.country_code)?;
-        let national = rlibphonenumber::get_national_significant_number_owned(number);
-        let national = national.strip_prefix(token)?;
-        util.parse(
-            national,
-            util.get_region_for_country_code(number.country_code),
-        )
-        .ok()
+    fn geographical_number(&self, number: &Number) -> Option<Number> {
+        if number.country_code != 54 {
+            return None;
+        }
+        let national = number.national.strip_prefix('9')?;
+        number::parse(national, number::main_region(number))
     }
 
-    fn prefix(&self, kind: &str, number: &PhoneNumber, locale: &Locale) -> String {
+    fn prefix(&self, kind: &str, number: &Number, locale: &Locale) -> String {
         let key = if number.country_code == 1 {
-            1000 + (number.national_number / 10_000_000) as i32
+            format!("1{}", &number.national[..3])
         } else {
-            number.country_code
+            number.country_code.to_string()
         };
-        let digits = format!(
-            "{}{}",
-            number.country_code,
-            rlibphonenumber::get_national_significant_number_owned(number)
-        );
+        let digits = format!("{}{}", number.country_code, number.national);
         let Ok(digits) = digits.parse() else {
             return String::new();
         };
@@ -150,44 +139,40 @@ impl Service {
         lookup("en")
     }
 
-    fn country_name(&self, number: &PhoneNumber, locale: &Locale) -> String {
-        let Some(regions) = util.get_regions_for_country_calling_code(number.country_code) else {
-            return String::new();
-        };
-        let mut valid = regions.filter(|region| util.is_valid_number_for_region(number, *region));
-        let Some(region) = valid.next() else {
+    fn country_name(&self, number: &Number, locale: &Locale) -> String {
+        let mut valid = number::regions(number.country_code)
+            .filter(|plan| plan.kind(&number.national).is_some());
+        let Some(region) = valid.next().map(|plan| plan.region.as_str()) else {
             return String::new();
         };
         if valid.next().is_some() {
             return String::new();
         }
-        let region = region.to_string();
-        if matches!(region.as_str(), "001" | "ZZ") {
+        if matches!(region, "001" | "ZZ") {
             return String::new();
         }
         for tag in locale.country_tags() {
             if let Some(map) = self.data.get(&format!("countries/{tag}")) {
-                return map.country(&region).to_owned();
+                return map.country(region).to_owned();
             }
         }
-        region
+        region.to_owned()
     }
 }
 
-fn type_name(kind: Type) -> &'static str {
+fn type_name(kind: NumberType) -> &'static str {
     match kind {
-        Type::FixedLine => "FIXED_LINE",
-        Type::Mobile => "MOBILE",
-        Type::FixedLineOrMobile => "FIXED_LINE_OR_MOBILE",
-        Type::TollFree => "TOLL_FREE",
-        Type::PremiumRate => "PREMIUM_RATE",
-        Type::SharedCost => "SHARED_COST",
-        Type::PersonalNumber => "PERSONAL_NUMBER",
-        Type::VoIP => "VOIP",
-        Type::Pager => "PAGER",
-        Type::UAN => "UAN",
-        Type::VoiceMail => "VOICEMAIL",
-        _ => "",
+        NumberType::FixedLine => "FIXED_LINE",
+        NumberType::Mobile => "MOBILE",
+        NumberType::FixedLineOrMobile => "FIXED_LINE_OR_MOBILE",
+        NumberType::TollFree => "TOLL_FREE",
+        NumberType::PremiumRate => "PREMIUM_RATE",
+        NumberType::SharedCost => "SHARED_COST",
+        NumberType::PersonalNumber => "PERSONAL_NUMBER",
+        NumberType::Voip => "VOIP",
+        NumberType::Pager => "PAGER",
+        NumberType::Uan => "UAN",
+        NumberType::Voicemail => "VOICEMAIL",
     }
 }
 

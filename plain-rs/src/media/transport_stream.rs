@@ -1,169 +1,128 @@
 use super::video_info::{StreamInfo, VideoInfo};
-use mpeg2ts_reader::{
-    StreamType,
-    demultiplex::{self, DemuxContext, FilterChangeset, FilterRequest, PacketFilter},
-    packet::{Packet, Pid},
-    pes, psi,
-};
 use std::io::{BufReader, Read, Seek, SeekFrom};
 
-const MAX_PACKETS: u64 = 4096;
-const MAX_ELEMENTARY_BYTES: usize = 64 * 1024;
+mod codec;
+mod packet;
+mod pes;
+use codec::{Codec, elementary};
+use packet::{Packet, Sections, valid_section};
+use pes::Consumer;
 
-enum Filter {
-    Pat(demultiplex::PatPacketFilter<Context>),
-    Pmt(demultiplex::PmtPacketFilter<Context>),
-    Pes(pes::PesPacketFilter<Context, Consumer>),
-    Null(demultiplex::NullPacketFilter<Context>),
+const MAX_PACKETS: u64 = 4096;
+
+#[derive(Clone, Copy)]
+struct Program {
+    number: u16,
+    pid: u16,
 }
-impl PacketFilter for Filter {
-    type Ctx = Context;
-    fn consume(&mut self, context: &mut Context, packet: &Packet<'_>) {
-        match self {
-            Self::Pat(filter) => filter.consume(context, packet),
-            Self::Pmt(filter) => filter.consume(context, packet),
-            Self::Pes(filter) => filter.consume(context, packet),
-            Self::Null(filter) => filter.consume(context, packet),
-        }
-    }
+struct Video {
+    pid: u16,
+    consumer: Consumer,
 }
 #[derive(Default)]
 struct Context {
-    changes: FilterChangeset<Filter>,
-    program: Option<Pid>,
-    video_pid: Option<Pid>,
-    video: Option<StreamInfo>,
+    pat: Sections,
+    pmt: Sections,
+    program: Option<Program>,
+    video: Option<Video>,
 }
-impl DemuxContext for Context {
-    type F = Filter;
-    fn filter_changeset(&mut self) -> &mut FilterChangeset<Filter> {
-        &mut self.changes
-    }
-    fn construct(&mut self, request: FilterRequest<'_, '_>) -> Filter {
-        match request {
-            FilterRequest::ByPid(psi::pat::PAT_PID) => Filter::Pat(Default::default()),
-            FilterRequest::Pmt {
-                pid,
-                program_number,
-            } if self.program.is_none() || self.program == Some(pid) => {
-                self.program = Some(pid);
-                Filter::Pmt(demultiplex::PmtPacketFilter::new(pid, program_number))
+
+impl Context {
+    fn packet(&mut self, bytes: &[u8; 188]) -> Option<StreamInfo> {
+        let packet = Packet::read(bytes)?;
+        if packet.pid == 0 {
+            for section in self.pat.packet(packet, bytes) {
+                self.pat(&section);
             }
-            FilterRequest::ByStream {
-                program_pid,
-                stream_type,
-                stream_info,
-                ..
-            } if self.program == Some(program_pid)
-                && (self.video_pid.is_none()
-                    || self.video_pid == Some(stream_info.elementary_pid()))
-                && matches!(
-                    stream_type,
-                    StreamType::H264
-                        | StreamType::H262
-                        | StreamType::ISO_11172_VIDEO
-                        | StreamType::H265
-                ) =>
-            {
-                self.video_pid = Some(stream_info.elementary_pid());
-                Filter::Pes(pes::PesPacketFilter::new(Consumer {
-                    codec: stream_type,
-                    prefix: Vec::new(),
-                }))
-            }
-            _ => Filter::Null(Default::default()),
-        }
-    }
-}
-struct Consumer {
-    codec: StreamType,
-    prefix: Vec<u8>,
-}
-impl Consumer {
-    fn push(&mut self, context: &mut Context, bytes: &[u8]) {
-        if context.video.is_some() {
-            return;
-        }
-        let available = MAX_ELEMENTARY_BYTES.saturating_sub(self.prefix.len());
-        if available == 0 || bytes.is_empty() {
-            return;
-        }
-        self.prefix
-            .extend_from_slice(&bytes[..bytes.len().min(available)]);
-        context.video = elementary(self.codec, &self.prefix);
-    }
-}
-impl pes::ElementaryStreamConsumer<Context> for Consumer {
-    fn start_stream(&mut self, _: &mut Context) {}
-    fn begin_packet(&mut self, context: &mut Context, header: pes::PesHeader<'_>) {
-        self.prefix.clear();
-        match header.contents() {
-            pes::PesContents::Parsed(Some(contents)) => self.push(context, contents.payload()),
-            pes::PesContents::Payload(bytes) => self.push(context, bytes),
-            pes::PesContents::Parsed(None) => {}
-        }
-    }
-    fn continue_packet(&mut self, context: &mut Context, data: &[u8]) {
-        self.push(context, data);
-    }
-    fn end_packet(&mut self, _: &mut Context) {}
-    fn continuity_error(&mut self, _: &mut Context) {
-        self.prefix.clear();
-    }
-}
-fn elementary(codec: StreamType, bytes: &[u8]) -> Option<StreamInfo> {
-    let mut offset = 0;
-    while offset + 4 <= bytes.len() {
-        if bytes.get(offset..offset + 3)? != [0, 0, 1] {
-            offset += 1;
-            continue;
-        }
-        let start = offset + 3;
-        offset = start;
-        if (codec == StreamType::H264 && bytes[start] & 31 == 7)
-            || (codec == StreamType::H265 && (bytes[start] >> 1) & 63 == 33)
+        } else if self
+            .program
+            .is_some_and(|program| program.pid == packet.pid)
         {
-            let end = bytes[start + 1..]
-                .windows(3)
-                .position(|value| value == [0, 0, 1])
-                .map(|position| start + 1 + position)
-                .unwrap_or(bytes.len());
-            let info = if codec == StreamType::H264 {
-                super::h264::sps(&bytes[start..end])
-            } else {
-                super::hevc::sps(&bytes[start..end])
-            };
-            if info.is_some() {
-                return info;
+            for section in self.pmt.packet(packet, bytes) {
+                self.pmt(&section);
+            }
+        } else if let Some(video) = &mut self.video {
+            if video.pid == packet.pid {
+                video.consumer.packet(packet, bytes);
+                return video.consumer.video.take();
             }
         }
-        if matches!(codec, StreamType::H262 | StreamType::ISO_11172_VIDEO) && bytes[start] == 0xb3 {
-            let mut bits = super::bits::Bits::new(bytes.get(start + 1..)?);
-            let width = bits.read(12)?;
-            let height = bits.read(12)?;
-            bits.read(4)?;
-            let rate = match bits.read(4)? {
-                1 => Some(24000.0 / 1001.0),
-                2 => Some(24.0),
-                3 => Some(25.0),
-                4 => Some(30000.0 / 1001.0),
-                5 => Some(30.0),
-                6 => Some(50.0),
-                7 => Some(60000.0 / 1001.0),
-                8 => Some(60.0),
-                _ => None,
+        None
+    }
+
+    fn pat(&mut self, bytes: &[u8]) {
+        if self.program.is_some() || !valid_section(bytes, 0, 12) {
+            return;
+        }
+        let entries = &bytes[8..bytes.len() - 4];
+        if entries.len() % 4 != 0 {
+            return;
+        }
+        for entry in entries.chunks_exact(4) {
+            let number = u16::from_be_bytes([entry[0], entry[1]]);
+            let pid = (u16::from(entry[2] & 31) << 8) | u16::from(entry[3]);
+            if number != 0 && pid != 0 && pid != 0x1fff {
+                self.program = Some(Program { number, pid });
+                break;
+            }
+        }
+    }
+
+    fn pmt(&mut self, bytes: &[u8]) {
+        if !valid_section(bytes, 2, 16) {
+            return;
+        }
+        let Some(program) = self.program else {
+            return;
+        };
+        if u16::from_be_bytes([bytes[3], bytes[4]]) != program.number {
+            return;
+        }
+        let end = bytes.len() - 4;
+        let mut offset = 12 + ((usize::from(bytes[10] & 15) << 8) | usize::from(bytes[11]));
+        if offset > end {
+            return;
+        }
+        let mut selected = None;
+        while offset < end {
+            if end - offset < 5 {
+                return;
+            }
+            let entry = &bytes[offset..end];
+            let pid = (u16::from(entry[1] & 31) << 8) | u16::from(entry[2]);
+            let length = (usize::from(entry[3] & 15) << 8) | usize::from(entry[4]);
+            offset += 5 + length;
+            if offset > end {
+                return;
+            }
+            let codec = match entry[0] {
+                0x1b => Codec::H264,
+                0x24 => Codec::H265,
+                1 | 2 => Codec::Mpeg,
+                _ => continue,
             };
-            if width > 0 && height > 0 {
-                return Some(StreamInfo {
-                    width,
-                    height,
-                    frame_rate: rate,
+            if selected.is_none()
+                && self.video.as_ref().is_none_or(|video| video.pid == pid)
+                && pid != 0x1fff
+            {
+                selected = Some((pid, codec));
+            }
+        }
+        if let Some((pid, codec)) = selected {
+            if self
+                .video
+                .as_ref()
+                .is_none_or(|video| video.pid != pid || video.consumer.codec != codec)
+            {
+                self.video = Some(Video {
+                    pid,
+                    consumer: Consumer::new(codec),
                 });
             }
         }
     }
-    None
 }
+
 fn layout(bytes: &[u8]) -> Option<(usize, usize)> {
     for stride in [188, 192, 204] {
         for offset in 0..stride {
@@ -184,15 +143,14 @@ pub(super) fn video(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
     let packets = length.checked_sub(offset as u64)?.checked_sub(188)? / stride as u64 + 1;
     let mut reader = BufReader::with_capacity(stride * 32, reader);
     let mut context = Context::default();
-    let mut demux = demultiplex::Demultiplex::new(&mut context);
-    let mut packet = [0; 204];
+    let mut packet = [0; 188];
+    let mut padding = [0; 16];
     for index in 0..packets.min(MAX_PACKETS) {
-        reader.read_exact(&mut packet[..188]).ok()?;
+        reader.read_exact(&mut packet).ok()?;
         if packet[0] != 0x47 {
             return None;
         }
-        demux.push(&mut context, &packet[..188]);
-        if let Some(video) = context.video.take() {
+        if let Some(video) = context.packet(&packet) {
             return Some(VideoInfo {
                 width: video.width,
                 height: video.height,
@@ -201,7 +159,7 @@ pub(super) fn video(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
             });
         }
         if index + 1 < packets {
-            reader.read_exact(&mut packet[..stride - 188]).ok()?;
+            reader.read_exact(&mut padding[..stride - 188]).ok()?;
         }
     }
     None

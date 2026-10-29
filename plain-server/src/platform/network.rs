@@ -1,50 +1,5 @@
 use crate::host::bridge::Host;
-
-#[cfg(any(target_os = "ios", all(test, target_os = "macos")))]
-mod ios;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum InterfaceType {
-    Wireless80211,
-    Ethernet,
-    Tunnel,
-    Ppp,
-    Unknown,
-}
-
-#[derive(Clone)]
-struct Interface {
-    if_type: InterfaceType,
-    ipv4: Vec<std::net::Ipv4Addr>,
-    up: bool,
-    loopback: bool,
-    tunnel: bool,
-}
-
-#[cfg(not(target_os = "ios"))]
-fn interfaces() -> Vec<Interface> {
-    use netdev::interface::types::InterfaceType as Kind;
-    netdev::get_interfaces()
-        .into_iter()
-        .map(|row| Interface {
-            if_type: match row.if_type {
-                Kind::Wireless80211 => InterfaceType::Wireless80211,
-                Kind::Ethernet
-                | Kind::Ethernet3Megabit
-                | Kind::FastEthernetT
-                | Kind::FastEthernetFx
-                | Kind::GigabitEthernet => InterfaceType::Ethernet,
-                Kind::Tunnel => InterfaceType::Tunnel,
-                Kind::Ppp => InterfaceType::Ppp,
-                _ => InterfaceType::Unknown,
-            },
-            ipv4: row.ipv4.iter().map(|ip| ip.addr()).collect(),
-            up: row.is_up(),
-            loopback: row.is_loopback(),
-            tunnel: row.is_tun(),
-        })
-        .collect()
-}
+use plain_rs::platform::network::{Interface, InterfaceType};
 
 pub(crate) async fn ipv4() -> Result<String, String> {
     let value = lan_ipv4().await?;
@@ -60,10 +15,8 @@ pub(crate) async fn ipv4() -> Result<String, String> {
 
 pub(crate) async fn lan_ipv4_addresses() -> Result<Vec<String>, String> {
     tokio::task::spawn_blocking(|| {
-        #[cfg(not(target_os = "ios"))]
-        let interfaces = interfaces();
-        #[cfg(target_os = "ios")]
-        let interfaces = ios::interfaces()?;
+        let interfaces =
+            plain_rs::platform::network::interfaces().map_err(|error| error.to_string())?;
         Ok(select_lan_ipv4_addresses(&interfaces))
     })
     .await
@@ -99,7 +52,7 @@ fn select_lan_ipv4_addresses(interfaces: &[Interface]) -> Vec<String> {
             interface
                 .ipv4
                 .iter()
-                .map(move |network| (priority, *network))
+                .map(move |network| (priority, network.ip))
         })
         .filter(|(_, address)| {
             !address.is_unspecified()
@@ -140,25 +93,25 @@ pub(crate) async fn network_type(host: &Host) -> Result<NetworkType, String> {
     {
         let _ = host;
         tokio::task::spawn_blocking(|| {
-            use netdev::interface::types::InterfaceType;
-            let Ok(interface) = netdev::get_default_interface() else {
-                return NetworkType::None;
-            };
-            match interface.if_type {
-                InterfaceType::Wireless80211 => NetworkType::Wifi,
-                InterfaceType::Wwan | InterfaceType::Wwanpp | InterfaceType::Wwanpp2 => {
-                    NetworkType::Cellular
-                }
-                InterfaceType::Ethernet
-                | InterfaceType::GigabitEthernet
-                | InterfaceType::FastEthernetT
-                | InterfaceType::FastEthernetFx => NetworkType::Ethernet,
-                _ => NetworkType::Other,
-            }
+            classify_network(
+                plain_rs::platform::network::default_interface()
+                    .map(|interface| interface.map(|interface| interface.if_type)),
+            )
         })
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?
     }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn classify_network(kind: std::io::Result<Option<InterfaceType>>) -> Result<NetworkType, String> {
+    Ok(match kind.map_err(|error| error.to_string())? {
+        Some(InterfaceType::Wireless80211) => NetworkType::Wifi,
+        Some(InterfaceType::Ethernet) => NetworkType::Ethernet,
+        Some(InterfaceType::Cellular) => NetworkType::Cellular,
+        Some(_) => NetworkType::Other,
+        None => NetworkType::None,
+    })
 }
 
 #[cfg(test)]

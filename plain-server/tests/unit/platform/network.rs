@@ -12,11 +12,15 @@ fn interface(kind: InterfaceType, addresses: &[&str]) -> Interface {
         if_type: kind,
         ipv4: addresses
             .iter()
-            .map(|value| value.split('/').next().unwrap().parse().unwrap())
+            .map(|value| plain_rs::platform::network::AddressV4 {
+                ip: value.split('/').next().unwrap().parse().unwrap(),
+                netmask: None,
+            })
             .collect(),
         up: true,
         loopback: false,
         tunnel: false,
+        ..Default::default()
     }
 }
 
@@ -85,5 +89,31 @@ fn network_sample_deduplicates_addresses_without_including_tunnels() {
     assert_eq!(
         select_lan_ipv4_addresses(&[wireless, tunnel]),
         ["203.0.113.1"]
+    );
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[test]
+fn default_interface_classification_keeps_absence_distinct_from_other_networks() {
+    for (kind, expected) in [
+        (Some(InterfaceType::Wireless80211), NetworkType::Wifi),
+        (Some(InterfaceType::Ethernet), NetworkType::Ethernet),
+        (Some(InterfaceType::Cellular), NetworkType::Cellular),
+        (Some(InterfaceType::Tunnel), NetworkType::Other),
+        (Some(InterfaceType::Ppp), NetworkType::Other),
+        (Some(InterfaceType::Unknown), NetworkType::Other),
+        (None, NetworkType::None),
+    ] {
+        assert_eq!(classify_network(Ok(kind)).unwrap(), expected);
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[test]
+fn native_query_errors_are_reported_instead_of_becoming_no_network() {
+    let error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "network query denied");
+    assert_eq!(
+        classify_network(Err(error)).unwrap_err(),
+        "network query denied"
     );
 }

@@ -8,6 +8,12 @@ Country display names are derived from Unicode CLDR v47 through OpenJDK 25.0.2.
 The embedded bundle contains public prefix descriptions and country names, not user data.
 Reproduction tools: plainapp-test/api-test/phone-reference/export.py and generate.py.
 
+Numbering patterns are from Google libphonenumber v9.0.41, commit b68df884d42d5e9860fc1956a99ce6afae361100.
+Numbering source SHA-256: 9d3b07b53c7e8a437ddc316249620b51d4090987026f9e8ffb9743aab4e4d5a6.
+Decimal digit data is from Unicode 16.0.0 UnicodeData.txt, SHA-256 ff58e5823bd095166564a006e47d111130813dcf8bf234ef79fa51a870edb48f.
+Reproduce numbering.json.gz with scripts/generate-phone-numbering.py; generation is not part of the build.
+
+
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/

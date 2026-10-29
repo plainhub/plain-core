@@ -51,10 +51,3 @@ fn parse_ssdp_headers_basic() {
     );
     assert_eq!(h.get("usn").unwrap(), "uuid:abc::upnp:rootdevice");
 }
-
-#[test]
-fn extra_destinations_default_port() {
-    // We can't change env vars in this test easily, but the parsing
-    // path is straightforward — `ssdp_extra_destinations` is unit-
-    // tested via the env var in the integration suite.
-}

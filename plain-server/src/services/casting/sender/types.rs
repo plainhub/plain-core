@@ -1,10 +1,3 @@
-//! Type definitions shared across the DLNA module.
-//!
-//! Public surface mirrors Go's `internal/dlna/types.go`. The public
-//! `Renderer` is what the GraphQL `DlnaRenderer` resolver returns; the
-//! internal `DiscoveredDevice` / `UpnpDiscovered` structs are intermediates
-//! produced during SSDP scanning and device-descriptor parsing.
-
 use serde::Serialize;
 
 /// One media renderer we know about (a TV, a stereo, etc.).
@@ -42,14 +35,6 @@ impl std::fmt::Display for MediaType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
-}
-
-/// Raw SSDP response — what we receive off the multicast socket before we
-/// have fetched and parsed the device descriptor.
-#[derive(Clone, Debug)]
-pub struct UpnpDiscovered {
-    pub location: String,
-    pub usn: String,
 }
 
 /// One UPnP service entry parsed from a device description XML document.

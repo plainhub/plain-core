@@ -1,91 +1,9 @@
-//! SOAP envelope builder + AVTransport control call.
-//!
-//! Mirrors `internal/dlna/soap.go`. The Go side hard-codes the three
-//! actions it actually issues (`Stop`, `SetAVTransportURI`, `Play`);
-//! callers pass the action name + the action body XML as a string.
-//! We follow the same shape.
-
+use super::types::DiscoveredDevice;
+use super::util::xml_escape;
 use std::time::Duration;
 
-use crate::services::casting::sender::types::DiscoveredDevice;
-#[cfg(feature = "system")]
-use crate::services::casting::sender::util::dlna_debug_enabled;
-#[cfg(feature = "system")]
-use crate::services::casting::sender::util::dlna_debug_payload_enabled;
-#[cfg(feature = "system")]
-use crate::services::casting::sender::util::truncate_for_log;
-use crate::services::casting::sender::util::xml_escape;
-#[cfg(feature = "system")]
-use std::io::Read;
-
-/// Per-call HTTP timeout (Go: 3s). Real TVs are often slow; the timeout
-/// exists to keep the GraphQL resolver bounded.
 const SOAP_TIMEOUT: Duration = Duration::from_secs(3);
-/// Cap on the SOAP response body. We never parse it (Go doesn't either
-/// — only the status code matters) but the limit prevents a malicious
-/// renderer from streaming forever.
 const SOAP_BODY_CAP: usize = 512 << 10;
-
-/// Issue a SOAP action against a renderer's AVTransport endpoint. The
-/// caller is responsible for building the `<action>` body XML (we only
-/// wrap it in the envelope and set the right headers). Mirrors Go
-/// `soapAVTransport(dev, action, paramsXML)`.
-#[cfg(feature = "system")]
-pub fn soap_av_transport(
-    dev: &DiscoveredDevice,
-    action: &str,
-    params_xml: &str,
-) -> Result<(), String> {
-    let svc = &dev.av_transport;
-    let st = svc.service_type.trim();
-    if st.is_empty() {
-        return Err("missing AVTransport serviceType".to_string());
-    }
-    let endpoint = resolve_service_endpoint(&dev.location, &svc.control_url)?;
-
-    let envelope = envelope(st, action, params_xml);
-
-    if dlna_debug_enabled() {
-        log::info!(
-            "soap: tx action={action} endpoint={endpoint} bytes={}",
-            envelope.len()
-        );
-        if dlna_debug_payload_enabled() {
-            log::debug!(
-                "soap: txBody action={action}\n{}",
-                truncate_for_log(&envelope, 4096)
-            );
-        }
-    }
-
-    let agent = ureq::AgentBuilder::new().timeout(SOAP_TIMEOUT).build();
-    let resp = agent
-        .post(&endpoint)
-        .set("Content-Type", "text/xml; charset=\"utf-8\"")
-        .set("SOAPAction", &format!("\"{st}#{action}\""))
-        .set("Connection", "close")
-        .send_string(&envelope);
-
-    let resp = match resp {
-        Ok(r) => r,
-        Err(ureq::Error::Status(s, r)) => {
-            let _ = r; // drop
-            return Err(format!("soap {action} http {s}"));
-        }
-        Err(ureq::Error::Transport(t)) => return Err(format!("soap {action} transport: {t}")),
-    };
-    let status = resp.status();
-    // Drain (capped) response body — we don't use it, but reading
-    // closes the connection cleanly.
-    let _ = resp
-        .into_reader()
-        .take(SOAP_BODY_CAP as u64)
-        .read_to_end(&mut Vec::new());
-    if !(200..300).contains(&status) {
-        return Err(format!("soap {action} http {status}"));
-    }
-    Ok(())
-}
 
 /// Resolve a device's `controlURL` (which can be relative or absolute)
 /// against its `Location` base. Mirrors Go `resolveServiceEndpoint`.

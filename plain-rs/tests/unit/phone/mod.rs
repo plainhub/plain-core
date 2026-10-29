@@ -3,15 +3,23 @@ use flate2::read::GzDecoder;
 use std::io::{BufRead, BufReader};
 use std::sync::atomic::Ordering;
 
-fn example(region: &str, kind: Type) -> String {
-    let number = util
-        .get_example_number_for_type_and_region(region.parse().unwrap(), kind)
-        .unwrap();
-    format!(
-        "+{}{}",
-        number.country_code,
-        rlibphonenumber::get_national_significant_number_owned(&number)
-    )
+pub(super) fn example(region: &str, kind: NumberType) -> String {
+    let bytes = include_bytes!("../../../testdata/phone/reference.jsonl.gz");
+    BufReader::new(GzDecoder::new(bytes.as_slice()))
+        .lines()
+        .skip(1)
+        .find_map(|line| {
+            let case: Reference = serde_json::from_str(&line.unwrap()).unwrap();
+            (case.region == region
+                && case
+                    .expected
+                    .as_ref()
+                    .is_some_and(|value| value.number_type == type_name(kind))
+                && case.number.starts_with('+')
+                && case.number[1..].bytes().all(|byte| byte.is_ascii_digit()))
+            .then_some(case.number)
+        })
+        .unwrap()
 }
 
 #[derive(serde::Deserialize)]
@@ -71,7 +79,7 @@ fn phone_results_match_independent_google_examples_in_every_exported_format_and_
 #[test]
 fn repeated_valid_and_invalid_numbers_reuse_results_but_locale_and_region_do_not() {
     let service = Service::default();
-    let number = example("CN", Type::Mobile);
+    let number = example("CN", NumberType::Mobile);
     let first = service.lookup(&number, "CN", "zh-CN").unwrap();
     assert_eq!(first.country, "CN");
     assert_eq!(first.number_type, "MOBILE");
@@ -90,9 +98,8 @@ fn repeated_valid_and_invalid_numbers_reuse_results_but_locale_and_region_do_not
 #[test]
 fn absent_region_never_guesses_national_numbers_and_explicit_country_codes_still_work() {
     let service = Service::default();
-    let international = example("CN", Type::Mobile);
-    let parsed = util.parse(&international, None).unwrap();
-    let national = rlibphonenumber::get_national_significant_number_owned(&parsed);
+    let international = example("CN", NumberType::Mobile);
+    let national = number::parse(&international, "").unwrap().national;
     assert!(service.lookup(&national, "", "en").is_none());
     assert_eq!(
         service.lookup(&international, "", "en").unwrap().country,
@@ -108,7 +115,7 @@ fn absent_region_never_guesses_national_numbers_and_explicit_country_codes_still
 #[test]
 fn carrier_is_not_attached_to_toll_free_or_fixed_line_numbers() {
     let service = Service::default();
-    for kind in [Type::TollFree, Type::FixedLine] {
+    for kind in [NumberType::TollFree, NumberType::FixedLine] {
         let number = example("GB", kind);
         let facts = service.lookup(&number, "GB", "en").unwrap();
         assert_eq!(facts.number_type, type_name(kind));

@@ -1,5 +1,4 @@
 use super::*;
-use mpeg2ts_reader::pes::ElementaryStreamConsumer;
 use std::io::Cursor;
 
 #[test]
@@ -98,23 +97,20 @@ fn corrupt_program_association_crc_cannot_be_bypassed_by_scanning_video_bytes() 
 }
 #[test]
 fn elementary_prefix_is_bounded_and_continuity_errors_discard_partial_headers() {
-    let mut context = Context::default();
-    let mut consumer = Consumer {
-        codec: StreamType::H262,
-        prefix: Vec::new(),
-    };
-    consumer.push(&mut context, &[0, 0]);
-    consumer.continuity_error(&mut context);
-    consumer.push(&mut context, &[1, 0xb3, 4, 0, 48, 0x23]);
-    assert!(context.video.is_none());
+    use pes::MAX_ELEMENTARY_BYTES;
+    let mut consumer = Consumer::new(Codec::Mpeg);
+    consumer.push(&[0, 0]);
+    consumer.reset();
+    consumer.push(&[1, 0xb3, 4, 0, 48, 0x23]);
+    assert!(consumer.video.is_none());
     consumer.prefix.clear();
-    consumer.push(&mut context, &[0, 0]);
-    consumer.push(&mut context, &[1, 0xb3, 4, 0, 48, 0x23]);
-    assert_eq!(context.video.take().unwrap().width, 64);
+    consumer.push(&[0, 0]);
+    consumer.push(&[1, 0xb3, 4, 0, 48, 0x23]);
+    assert_eq!(consumer.video.take().unwrap().width, 64);
     consumer.prefix.clear();
-    consumer.push(&mut context, &vec![255; MAX_ELEMENTARY_BYTES * 2]);
+    consumer.push(&vec![255; MAX_ELEMENTARY_BYTES * 2]);
     assert_eq!(consumer.prefix.len(), MAX_ELEMENTARY_BYTES);
-    consumer.push(&mut context, &[0, 0, 1, 0xb3]);
+    consumer.push(&[0, 0, 1, 0xb3]);
     assert_eq!(consumer.prefix.len(), MAX_ELEMENTARY_BYTES);
 }
 #[test]
@@ -136,4 +132,64 @@ fn real_hevc_transport_stream_keeps_conformance_dimensions_without_guessing_timi
         crate::media::probe::probe_duration_reader(&mut Cursor::new(bytes)),
         None
     );
+}
+
+#[derive(Clone, Copy, Debug)]
+enum InvalidPmt {
+    Crc,
+    Program,
+    Descriptors,
+    Codec,
+    Next,
+}
+
+#[test]
+fn invalid_program_maps_never_fall_back_to_scanning_unselected_video_bytes() {
+    for mode in [
+        InvalidPmt::Crc,
+        InvalidPmt::Program,
+        InvalidPmt::Descriptors,
+        InvalidPmt::Codec,
+        InvalidPmt::Next,
+    ] {
+        let mut bytes = include_bytes!("../../../testdata/video-h264.ts").to_vec();
+        let mut changed = 0;
+        for bytes in bytes.chunks_exact_mut(188) {
+            let raw: [u8; 188] = (&*bytes).try_into().unwrap();
+            let Some(packet) = Packet::read(&raw) else {
+                continue;
+            };
+            if !packet.start || packet.payload.is_empty() {
+                continue;
+            }
+            let start = 188 - packet.payload.len() + 1 + usize::from(packet.payload[0]);
+            if raw.get(start) != Some(&2) {
+                continue;
+            }
+            let length =
+                3 + ((usize::from(raw[start + 1] & 15) << 8) | usize::from(raw[start + 2]));
+            let section = &mut bytes[start..start + length];
+            let stream = 12 + ((usize::from(section[10] & 15) << 8) | usize::from(section[11]));
+            assert_eq!(section[stream], 0x1b);
+            match mode {
+                InvalidPmt::Crc => {}
+                InvalidPmt::Program => section[4] = section[4].wrapping_add(1),
+                InvalidPmt::Descriptors => {
+                    section[stream + 3] |= 15;
+                    section[stream + 4] = 255;
+                }
+                InvalidPmt::Codec => section[stream] = 0x0f,
+                InvalidPmt::Next => section[5] &= !1,
+            }
+            let end = section.len() - 4;
+            let crc = packet::crc(&section[..end]);
+            section[end..].copy_from_slice(&crc.to_be_bytes());
+            if matches!(mode, InvalidPmt::Crc) {
+                section[end] ^= 1;
+            }
+            changed += 1;
+        }
+        assert!(changed > 0);
+        assert!(video(&mut Cursor::new(bytes)).is_none(), "{mode:?}");
+    }
 }

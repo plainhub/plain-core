@@ -34,13 +34,6 @@ pub mod sqlite_browse {
 }
 #[cfg(feature = "kv")]
 pub mod kv;
-#[cfg(any(
-    feature = "linux-platform",
-    feature = "linux-system",
-    feature = "unix-platform",
-    feature = "storage-platform",
-    all(target_os = "android", feature = "library")
-))]
 pub mod platform;
 pub mod utils;
 #[cfg(feature = "crypto")]

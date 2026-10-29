@@ -33,7 +33,7 @@ pub(crate) fn config() -> StartupConfig {
         name: plain_rs::prefs::identity::default_device_name(),
         device_type: DeviceType::Computer,
         build_channel: "GITHUB".into(),
-        downloads_dir: dirs::download_dir()
+        downloads_dir: plain_rs::platform::download_directory::resolve()
             .and_then(|path| path.into_os_string().into_string().ok())
             .unwrap_or_default(),
         manufacturer,

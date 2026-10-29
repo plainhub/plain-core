@@ -10,3 +10,6 @@ pub mod local_socket;
 
 #[cfg(all(target_os = "android", feature = "library"))]
 pub mod android;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod download_directory;
+pub mod network;
