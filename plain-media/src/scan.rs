@@ -1167,9 +1167,8 @@ impl ScanQueue {
     }
 
     fn dir_done(&self) {
+        let _guard = self.stack.lock().unwrap();
         if self.active.fetch_sub(1, Ordering::SeqCst) == 1 {
-            // Last in-flight directory finished: wake all idle workers so
-            // they observe active == 0 and exit.
             self.cv.notify_all();
         }
     }

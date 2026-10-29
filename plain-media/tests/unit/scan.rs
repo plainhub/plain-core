@@ -1331,3 +1331,6 @@ fn the_default_scan_root_expands_to_all_configured_sources() {
         vec![std::path::PathBuf::from("/")]
     );
 }
+
+#[path = "scan/queue.rs"]
+mod queue;
