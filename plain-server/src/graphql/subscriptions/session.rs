@@ -23,7 +23,7 @@ pub(super) struct SubscriptionReady(pub watch::Sender<bool>);
 static NEXT: AtomicU64 = AtomicU64::new(1);
 #[derive(Default)]
 pub struct Sessions {
-    entries: Mutex<HashMap<u64, Arc<Session>>>,
+    entries: Mutex<HashMap<u64, SubscriptionSession>>,
     host_delivery: Mutex<bool>,
 }
 struct Operation {
@@ -51,6 +51,50 @@ pub struct Session {
     incoming: tokio::sync::Mutex<mpsc::Receiver<Queued>>,
     operations: Mutex<HashMap<String, Operation>>,
 }
+fn next_id() -> Result<u64, String> {
+    NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+        value.checked_add(1).filter(|next| *next <= i64::MAX as u64)
+    })
+    .map_err(|_| "Subscription handle exhausted".into())
+}
+
+#[derive(Clone)]
+pub enum SubscriptionSession {
+    Local(Arc<Session>),
+    Peer(Arc<crate::services::peers::subscriptions::PeerSubscription>),
+}
+impl SubscriptionSession {
+    pub fn send(&self, message: &str) -> Result<(), String> {
+        match self {
+            Self::Local(session) => session.send(message),
+            Self::Peer(session) => session.send(message),
+        }
+    }
+    pub async fn read(&self) -> Result<String, String> {
+        match self {
+            Self::Local(session) => session.read().await,
+            Self::Peer(session) => session.read().await,
+        }
+    }
+    pub fn close(&self) {
+        match self {
+            Self::Local(session) => session.close(),
+            Self::Peer(session) => session.close(),
+        }
+    }
+    pub fn scope_id(&self) -> &str {
+        match self {
+            Self::Local(session) => session.scope_id(),
+            Self::Peer(session) => session.scope_id(),
+        }
+    }
+    fn client_id(&self) -> &str {
+        match self {
+            Self::Local(session) => session.client_id(),
+            Self::Peer(session) => session.client_id(),
+        }
+    }
+}
 impl Sessions {
     pub(crate) fn open(
         self: &Arc<Self>,
@@ -60,11 +104,7 @@ impl Sessions {
         key: Option<Vec<u8>>,
         scope: NativeRequestScope,
     ) -> Result<Arc<Session>, String> {
-        let id = NEXT
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-                value.checked_add(1).filter(|next| *next <= i64::MAX as u64)
-            })
-            .map_err(|_| "Subscription handle exhausted")?;
+        let id = next_id()?;
         let (outgoing, incoming) = mpsc::channel(64);
         let (closed, _) = watch::channel(false);
         let origin = context.origin();
@@ -87,7 +127,7 @@ impl Sessions {
             if entries.len() >= 128 {
                 return Err("Subscription session capacity reached".into());
             }
-            entries.insert(id, session.clone());
+            entries.insert(id, SubscriptionSession::Local(session.clone()));
         }
         let sessions = Arc::downgrade(self);
         let mut stop = state.stop.clone();
@@ -100,7 +140,31 @@ impl Sessions {
         });
         Ok(session)
     }
-    pub fn get(&self, id: u64) -> Result<Arc<Session>, String> {
+    pub(crate) fn open_peer(
+        self: &Arc<Self>,
+        state: ServerState,
+        target: crate::native::graphql::PeerSubscriptionTarget,
+        scope: NativeRequestScope,
+    ) -> Result<u64, String> {
+        let id = next_id()?;
+        let session =
+            crate::services::peers::subscriptions::PeerSubscription::open(state, target, scope)?;
+        let mut entries = self.entries.lock().map_err(|error| error.to_string())?;
+        if entries.len() >= 128 {
+            session.close();
+            return Err("Subscription session capacity reached".into());
+        }
+        entries.insert(id, SubscriptionSession::Peer(session.clone()));
+        let sessions = Arc::downgrade(self);
+        tokio::spawn(async move {
+            session.wait_closed().await;
+            if let Some(sessions) = sessions.upgrade() {
+                sessions.close(id);
+            }
+        });
+        Ok(id)
+    }
+    pub fn get(&self, id: u64) -> Result<SubscriptionSession, String> {
         self.entries
             .lock()
             .map_err(|e| e.to_string())?
@@ -112,8 +176,10 @@ impl Sessions {
         let entries = self.entries.lock().unwrap();
         let mut clients: Vec<_> = entries
             .values()
-            .filter(|session| *session.online.lock().unwrap())
-            .map(|session| session.client.clone())
+            .filter_map(|session| match session {
+                SubscriptionSession::Local(session) if *session.online.lock().unwrap() => Some(session.client.clone()),
+                _ => None,
+            })
             .collect();
         clients.sort();
         clients.dedup();
@@ -158,7 +224,7 @@ impl Sessions {
             let mut entries = self.entries.lock().unwrap();
             let ids: Vec<_> = entries
                 .iter()
-                .filter(|(_, session)| client.is_none_or(|id| id == session.client))
+                .filter(|(_, session)| client.is_none_or(|id| id == session.client_id()))
                 .map(|(id, _)| *id)
                 .collect();
             ids.into_iter()

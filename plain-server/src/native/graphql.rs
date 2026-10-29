@@ -4,6 +4,13 @@ use crate::native::events::NativeEventStream;
 use async_graphql::{Request, Response};
 use tokio::sync::watch;
 
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PeerSubscriptionTarget {
+    pub peer_id: String,
+    pub public_key: String,
+}
+
 #[derive(Clone)]
 pub struct NativeGraphqlExecutor {
     executor: GraphqlExecutor,
@@ -36,10 +43,19 @@ impl NativeGraphqlExecutor {
             )
             .map(|session| session.id)
     }
+    pub fn open_peer_subscriptions(
+        &self,
+        target: PeerSubscriptionTarget,
+        scope: NativeRequestScope,
+    ) -> Result<u64, String> {
+        self.state
+            .subscription_sessions
+            .open_peer(self.state.clone(), target, scope)
+    }
     pub fn subscription_session(
         &self,
         id: u64,
-    ) -> Result<std::sync::Arc<crate::graphql::subscriptions::session::Session>, String> {
+    ) -> Result<crate::graphql::subscriptions::session::SubscriptionSession, String> {
         self.state.subscription_sessions.get(id)
     }
     pub fn close_subscriptions(&self, id: u64) {

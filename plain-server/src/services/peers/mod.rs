@@ -65,3 +65,6 @@ mod metadata;
 
 #[cfg(feature = "core")]
 mod clipboard;
+
+#[cfg(feature = "core")]
+pub mod subscriptions;

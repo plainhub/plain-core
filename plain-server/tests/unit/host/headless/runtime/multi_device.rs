@@ -9,7 +9,7 @@ struct Node {
     core: Arc<ContentServer>,
     host: tokio::task::JoinHandle<Result<(), String>>,
     native: NativeGraphqlExecutor,
-    pairing_changes: Arc<crate::graphql::subscriptions::session::Session>,
+    pairing_changes: crate::graphql::subscriptions::session::SubscriptionSession,
     scope: NativeRequestScope,
     port: u16,
     _directory: tempfile::TempDir,
@@ -173,6 +173,36 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
             .len(),
         32
     );
+    let controller_before = first.core.runtime_state().cast.snapshot().version;
+    let remote_scope = NativeRequestScope::default();
+    let remote_handle = first.native.open_peer_subscriptions(
+        crate::native::graphql::PeerSubscriptionTarget {
+            peer_id: second_id.into(),
+            public_key: first_peers["peers"][0]["publicKey"].as_str().unwrap().into(),
+        }, remote_scope.clone(),
+    ).unwrap();
+    let remote = first.native.subscription_session(remote_handle).unwrap();
+    remote.send(r#"{"type":"subscribe","id":"cast","payload":{"query":"subscription { dlnaSenderChanged { version items { path } } }"}}"#).unwrap();
+    async fn cast_snapshot(session: &crate::graphql::subscriptions::session::SubscriptionSession) -> Value {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let value: Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
+                assert_eq!(value["type"], "next", "{value}");
+                if value["payload"]["extensions"]["subscriptionReady"] == true { continue; }
+                return value["payload"]["data"]["dlnaSenderChanged"].clone();
+            }
+        }).await.unwrap()
+    }
+    let initial = cast_snapshot(&remote).await;
+    assert_eq!(initial["items"], json!([]));
+    query(&second.native, r#"mutation { addDlnaItem(item:{path:"/target/owned.mp3",title:"Owned"}) { version } }"#, json!({})).await;
+    let updated = cast_snapshot(&remote).await;
+    assert_eq!(updated["items"], json!([{"path":"/target/owned.mp3"}]));
+    assert!(updated["version"].as_u64().unwrap() > initial["version"].as_u64().unwrap());
+    assert_eq!(first.core.runtime_state().cast.snapshot().version, controller_before);
+    remote_scope.close();
+    assert!(tokio::time::timeout(Duration::from_secs(2), remote.read()).await.unwrap().is_err());
+    first.native.close_subscriptions(remote_handle);
     let content =
         json!({"type":"TEXT","value":{"text":"accepted native pairing message"}}).to_string();
     let sent = query(&first.native, "mutation($target:String!,$content:String!){sendChatItem(target:$target,content:$content){id status}}",
