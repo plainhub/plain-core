@@ -37,3 +37,5 @@ pub mod image_exif;
 pub mod range_reader;
 
 pub mod iso6709;
+
+pub mod xxh64;

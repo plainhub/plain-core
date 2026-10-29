@@ -31,7 +31,6 @@ description = "Shared Plain media scanning, indexing and thumbnails"
 "notify" = { "version" = "7" }
 "tempfile" = { "version" = "3" }
 "sha1" = { "version" = "0.10" }
-"xxhash-rust" = { "version" = "0.8", "features" = ["xxh64"] }
 "parking_lot" = { "version" = "0.12" }
 "libc" = "0.2"
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["rt", "process", "sync", "time", "fs", "macros", "io-util"] }

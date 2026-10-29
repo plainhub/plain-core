@@ -1,5 +1,4 @@
 use anyhow::Result;
-use clap::Parser;
 
 pub fn run() -> Result<()> {
     plain_server::assembly::headless::initialize_tls();

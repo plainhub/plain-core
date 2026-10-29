@@ -1,3 +1,7 @@
+mod help;
+mod options;
+mod parser;
+
 pub mod bench;
 pub mod install;
 pub mod login;
@@ -6,29 +10,32 @@ pub mod run;
 pub mod uninstall;
 pub mod update;
 
-use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-#[derive(Parser, Debug)]
-#[command(
-    name = "plainapp",
-    version,
-    about = "PlainApp server and command-line tools"
-)]
+#[derive(Debug)]
 pub(crate) struct Cli {
-    #[arg(long, global = true)]
     pub(crate) data_dir: Option<PathBuf>,
-    #[arg(long, global = true)]
     pub(crate) cache_dir: Option<PathBuf>,
-    #[arg(long, global = true)]
     pub(crate) tls_cert: Option<PathBuf>,
-    #[arg(long, global = true)]
     pub(crate) tls_key: Option<PathBuf>,
-    #[command(subcommand)]
     pub(crate) command: Cmd,
 }
 
 impl Cli {
+    pub(crate) fn parse() -> Self {
+        match Self::try_parse_from(std::env::args_os()) {
+            Ok(cli) => cli,
+            Err(error) => {
+                if error.code == 0 {
+                    print!("{}", error.message);
+                } else {
+                    eprint!("{}", error.message);
+                }
+                std::process::exit(error.code);
+            }
+        }
+    }
+
     pub(crate) fn paths(&self) -> anyhow::Result<plain_server::platform::system::consts::AppPaths> {
         let mut paths = plain_server::platform::system::consts::AppPaths::detect_with_directories(
             self.data_dir.clone(),
@@ -49,32 +56,24 @@ impl Cli {
     }
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Debug)]
 pub(crate) enum Cmd {
     Install {
-        #[arg(long)]
         with_libreoffice: bool,
     },
     Uninstall {
-        #[arg(long)]
         keep_config: bool,
-        #[arg(long)]
         keep_data: bool,
     },
     Run {
-        #[arg(long = "media-dir")]
         media_directories: Vec<PathBuf>,
-        #[arg(long)]
         web_root: Option<PathBuf>,
-        #[arg(long, help = "Mount Linux USB volumes automatically (requires root)")]
         automount: bool,
     },
     Passwd {
-        #[arg(long, help = "Read the new password from standard input")]
         stdin: bool,
     },
     Login {
-        #[command(subcommand)]
         command: login::Command,
     },
     Update,

@@ -1,23 +1,15 @@
 use anyhow::Result;
-use clap::Subcommand;
 use plain_server::{
     assembly::headless::login, native::management::NativeWebLoginRequests,
     platform::system::consts::AppPaths,
 };
 use std::io::{self, Write};
 
-#[derive(Debug, Subcommand)]
+#[derive(Debug)]
 pub enum Command {
-    Requests {
-        #[arg(long)]
-        after: Option<String>,
-    },
-    Allow {
-        request_id: String,
-    },
-    Deny {
-        request_id: String,
-    },
+    Requests { after: Option<String> },
+    Allow { request_id: String },
+    Deny { request_id: String },
 }
 
 pub async fn run(paths: &AppPaths, command: Command) -> Result<()> {

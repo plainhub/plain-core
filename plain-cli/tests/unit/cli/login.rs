@@ -1,6 +1,5 @@
 use super::*;
 use crate::cli::{Cli, Cmd};
-use clap::Parser;
 use plain_server::native::management::NativeWebLoginRequest;
 
 #[test]

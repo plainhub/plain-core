@@ -236,7 +236,7 @@ pub fn generate_uuid_from_metadata(
 
 /// Secondary-index key for (fsuuid, inode, ctime) → uuid.
 pub fn fid_key(fsuuid: &str, ino: u64, ctime: i64) -> String {
-    let hash = xxhash_rust::xxh64::xxh64(fsuuid.as_bytes(), 0);
+    let hash = plain_rs::utils::xxh64::hash(fsuuid.as_bytes());
     format!("{FID_INDEX_PREFIX}{hash:016x}:{ino}:{ctime}")
 }
 

@@ -3,6 +3,32 @@
 use super::*;
 
 #[test]
+fn filesystem_identity_keys_preserve_existing_xxh64_index_bytes() {
+    for (fsuuid, expected) in [
+        ("", "media:fid:ef46db3751d8e999:42:-1"),
+        ("/", "media:fid:e89cd67289eddaea:42:-1"),
+        ("abc-123", "media:fid:d8e7b1339ddd9706:42:-1"),
+        ("存储卷", "media:fid:35c46fe2093b7897:42:-1"),
+        (
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "media:fid:e8ffbbd2a30a89ca:42:-1",
+        ),
+    ] {
+        assert_eq!(fid_key(fsuuid, 42, -1), expected);
+        let directory = tempfile::tempdir().unwrap();
+        let db = crate::storage::kv::Db::open(directory.path()).unwrap();
+        db.insert(expected.as_bytes(), b"existing-media-id")
+            .unwrap();
+        assert_eq!(
+            find_uuid_by_fid(&db, fsuuid, 42, -1).as_deref(),
+            Some("existing-media-id")
+        );
+        assert_eq!(find_uuid_by_fid(&db, fsuuid, 43, -1), None);
+        assert_eq!(find_uuid_by_fid(&db, fsuuid, 42, 0), None);
+    }
+}
+
+#[test]
 fn uuid_from_triplet_deterministic() {
     let a = uuid_from_triplet("abc-123", 42, 1000);
     let b = uuid_from_triplet("abc-123", 42, 1000);
