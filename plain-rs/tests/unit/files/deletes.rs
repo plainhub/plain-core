@@ -73,7 +73,11 @@ fn catalog_file(data_type: DataType, path: &str) -> crate::db::MediaFileMetadata
         path: path.into(),
         title: "Title".into(),
         artist: String::new(),
-        bucket_id: "/root".into(),
+        bucket_id: std::path::Path::new(path)
+            .parent()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned(),
         size_bytes: 10,
         duration_ms: 0,
         cover_image_id: None,
@@ -88,12 +92,15 @@ fn catalog_file(data_type: DataType, path: &str) -> crate::db::MediaFileMetadata
 
 #[test]
 fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_foreign_types() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = crate::platform::volumes::locate(dir.path()).unwrap().path;
+    let path = |relative: &str| format!("{}/{relative}", root.display());
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let created = db
         .record_media_files(&[
-            catalog_file(DataType::Video, "/root/deleted.mp4"),
-            catalog_file(DataType::Image, "/root/failed.jpg"),
-            catalog_file(DataType::Image, "/root_sibling/keep.jpg"),
+            catalog_file(DataType::Video, &path("root/deleted.mp4")),
+            catalog_file(DataType::Image, &path("root/failed.jpg")),
+            catalog_file(DataType::Image, &path("root_sibling/keep.jpg")),
         ])
         .unwrap();
     let video = &created[0].id;
@@ -102,19 +109,19 @@ fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_f
         c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",[video])?;
         Ok(())
     }).unwrap();
-    cleanup(&db, &[], &["/root/deleted.mp4".into()], &[]).unwrap();
+    cleanup(&db, &[], &[path("root/deleted.mp4")], &[]).unwrap();
     assert!(
-        db.media_file_by_path(DataType::Video, "/root/deleted.mp4")
+        db.media_file_by_path(DataType::Video, &path("root/deleted.mp4"))
             .unwrap()
             .is_none()
     );
     assert!(
-        db.media_file_by_path(DataType::Image, "/root/failed.jpg")
+        db.media_file_by_path(DataType::Image, &path("root/failed.jpg"))
             .unwrap()
             .is_some()
     );
     assert!(
-        db.media_file_by_path(DataType::Image, "/root_sibling/keep.jpg")
+        db.media_file_by_path(DataType::Image, &path("root_sibling/keep.jpg"))
             .unwrap()
             .is_some()
     );
@@ -147,28 +154,31 @@ fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_f
 
 #[test]
 fn confirmed_directory_removal_cleans_descendants_using_literal_boundaries() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = crate::platform::volumes::locate(dir.path()).unwrap().path;
+    let path = |relative: &str| format!("{}/{relative}", root.display());
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     db.record_media_files(&[
-        catalog_file(DataType::Image, "/root_%/child.jpg"),
-        catalog_file(DataType::Image, "/root_%/nested/child.jpg"),
-        catalog_file(DataType::Image, "/root_%_sibling/keep.jpg"),
-        catalog_file(DataType::Image, "/rootAB/keep.jpg"),
+        catalog_file(DataType::Image, &path("root_%/child.jpg")),
+        catalog_file(DataType::Image, &path("root_%/nested/child.jpg")),
+        catalog_file(DataType::Image, &path("root_%_sibling/keep.jpg")),
+        catalog_file(DataType::Image, &path("rootAB/keep.jpg")),
     ])
     .unwrap();
-    cleanup(&db, &[], &["/root_%".into()], &["/root_%".into()]).unwrap();
+    cleanup(&db, &[], &[path("root_%")], &[path("root_%")]).unwrap();
     assert_eq!(db.media_file_count(DataType::Image).unwrap(), 2);
     assert!(
-        db.media_file_by_path(DataType::Image, "/root_%/child.jpg")
+        db.media_file_by_path(DataType::Image, &path("root_%/child.jpg"))
             .unwrap()
             .is_none()
     );
     assert!(
-        db.media_file_by_path(DataType::Image, "/root_%_sibling/keep.jpg")
+        db.media_file_by_path(DataType::Image, &path("root_%_sibling/keep.jpg"))
             .unwrap()
             .is_some()
     );
     assert!(
-        db.media_file_by_path(DataType::Image, "/rootAB/keep.jpg")
+        db.media_file_by_path(DataType::Image, &path("rootAB/keep.jpg"))
             .unwrap()
             .is_some()
     );
@@ -176,9 +186,12 @@ fn confirmed_directory_removal_cleans_descendants_using_literal_boundaries() {
 
 #[test]
 fn catalog_deletion_failure_rolls_back_all_associated_state_cleanup() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = crate::platform::volumes::locate(dir.path()).unwrap().path;
+    let path = |relative: &str| format!("{}/{relative}", root.display());
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let created = db
-        .record_media_files(&[catalog_file(DataType::Video, "/root/deleted.mp4")])
+        .record_media_files(&[catalog_file(DataType::Video, &path("root/deleted.mp4"))])
         .unwrap()
         .remove(0);
     db.with_conn(|c| -> rusqlite::Result<()> {
@@ -214,14 +227,17 @@ fn directory_prefix_uses_the_same_separator_as_native_canonical_paths() {
 
 #[test]
 fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = crate::platform::volumes::locate(dir.path()).unwrap().path;
+    let path = |relative: &str| format!("{}/{relative}", root.display());
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     db.record_media_files(&[
-        catalog_file(DataType::Video, "/root/gone.mp4"),
-        catalog_file(DataType::Video, "/root/kept.mp4"),
+        catalog_file(DataType::Video, &path("root/gone.mp4")),
+        catalog_file(DataType::Video, &path("root/kept.mp4")),
     ])
     .unwrap();
     let gone = db
-        .media_file_by_path(DataType::Video, "/root/gone.mp4")
+        .media_file_by_path(DataType::Video, &path("root/gone.mp4"))
         .unwrap()
         .unwrap();
     db.with_conn(|c| -> rusqlite::Result<()> {
@@ -241,14 +257,14 @@ fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
     })
     .unwrap();
 
-    assert_eq!(db.forget_media_file("/root/gone.mp4").unwrap(), 1);
+    assert_eq!(db.forget_media_file(&path("root/gone.mp4")).unwrap(), 1);
     assert!(
-        db.media_file_by_path(DataType::Video, "/root/gone.mp4")
+        db.media_file_by_path(DataType::Video, &path("root/gone.mp4"))
             .unwrap()
             .is_none()
     );
     assert!(
-        db.media_file_by_path(DataType::Video, "/root/kept.mp4")
+        db.media_file_by_path(DataType::Video, &path("root/kept.mp4"))
             .unwrap()
             .is_some(),
         "forgetting one path must not touch a sibling"
@@ -275,7 +291,7 @@ fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
     .unwrap();
 
     assert_eq!(
-        db.forget_media_file("/root/absent.mp4").unwrap(),
+        db.forget_media_file(&path("root/absent.mp4")).unwrap(),
         0,
         "a path that was never catalogued is not an error"
     );
@@ -283,17 +299,20 @@ fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
 
 #[test]
 fn retired_identity_preserves_replacement_and_file_tags_at_the_same_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = crate::platform::volumes::locate(dir.path()).unwrap().path;
+    let path = |relative: &str| format!("{}/{relative}", root.display());
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let old = db
-        .record_media_files(&[catalog_file(DataType::Video, "/root/replaced.mp4")])
+        .record_media_files(&[catalog_file(DataType::Video, &path("root/replaced.mp4"))])
         .unwrap()
         .remove(0);
     let new = db
-        .record_media_files(&[catalog_file(DataType::Image, "/root/replaced.mp4")])
+        .record_media_files(&[catalog_file(DataType::Image, &path("root/replaced.mp4"))])
         .unwrap()
         .remove(0);
     db.with_conn(|connection| {
-        connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('old',?1,2,'first'),('replacement',?2,3,'first'),('file','/root/replaced.mp4',22,'first'),('neighbor','/root/neighbor',22,'first')", params![old.id,new.id])?;
+        connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('old',?1,2,'first'),('replacement',?2,3,'first'),('file',?3,22,'first'),('neighbor',?4,22,'first')", params![old.id,new.id,path("root/replaced.mp4"),path("root/neighbor")])?;
         connection.execute("INSERT INTO media_play_history(file_id,media_type,position_ms,played_at,play_count) VALUES(?1,2,123,'first',0)", [&old.id])?;
         Ok::<_,rusqlite::Error>(())
     }).unwrap();
@@ -307,12 +326,12 @@ fn retired_identity_preserves_replacement_and_file_tags_at_the_same_path() {
     )
     .unwrap();
     assert!(
-        db.media_file_by_path(DataType::Video, "/root/replaced.mp4")
+        db.media_file_by_path(DataType::Video, &path("root/replaced.mp4"))
             .unwrap()
             .is_none()
     );
     assert_eq!(
-        db.media_file_by_path(DataType::Image, "/root/replaced.mp4")
+        db.media_file_by_path(DataType::Image, &path("root/replaced.mp4"))
             .unwrap()
             .unwrap()
             .id,
