@@ -157,9 +157,9 @@ fn cancellation_retires_a_queued_temporary_allocation_before_returning() {
             stopped,
         );
         tokio::pin!(preparing);
-        assert!(futures::poll!(&mut preparing).is_pending());
+        assert!(futures_util::poll!(&mut preparing).is_pending());
         stop.send_replace(true);
-        assert!(futures::poll!(&mut preparing).is_pending());
+        assert!(futures_util::poll!(&mut preparing).is_pending());
         release.send(()).unwrap();
         blocker.await.unwrap();
         assert!(preparing.await.is_err());

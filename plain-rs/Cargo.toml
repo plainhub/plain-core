@@ -49,7 +49,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "p256" = { "version" = "0.13", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
 "ed25519-dalek" = { "version" = "2", "features" = ["rand_core"], "optional" = true }
 "der" = { version = "0.8", features = ["std", "derive"], optional = true }
-"pkcs12" = { version = "=0.2.0-pre.0", features = ["kdf"], optional = true }
+"pkcs12" = { version = "=0.2.0-pre.0", default-features = false, features = ["kdf"], optional = true }
 "pkcs5" = { version = "0.8", features = ["alloc", "pbes2"], optional = true }
 "pkcs8" = { version = "0.11", optional = true }
 "x509-parser" = { version = "0.18", optional = true }
@@ -81,7 +81,6 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 [dev-dependencies]
 "serde_json" = "1"
 "tokio" = { "version" = "1", "features" = ["full"] }
-"futures" = "0.3"
 "tempfile" = "3"
 
 [target.'cfg(target_os = "android")'.dependencies]

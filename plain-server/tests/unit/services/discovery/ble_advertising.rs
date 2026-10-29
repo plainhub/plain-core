@@ -342,7 +342,7 @@ async fn queued_unavailability_prevents_a_stale_start_after_capability_sampling(
         },
     );
     tokio::pin!(unavailable);
-    assert!(futures::poll!(unavailable.as_mut()).is_pending());
+    assert!(futures_util::poll!(unavailable.as_mut()).is_pending());
     state
         .host
         .reply(

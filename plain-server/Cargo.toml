@@ -35,7 +35,7 @@ parking_lot = "0.12"
 "axum-server" = { "version" = "0.7", "features" = ["tls-rustls-no-provider"], "optional" = true }
 "reqwest" = { "version" = "0.12", "default-features" = false, "features" = ["stream"], "optional" = true }
 "tokio-tungstenite" = { "version" = "0.30", "default-features" = false, "features" = ["connect"], "optional" = true }
-"zip" = { "version" = "2", "default-features" = false, "features" = ["deflate"], "optional" = true }
+"zip" = { "version" = "2", "default-features" = false, "features" = ["deflate-flate2", "flate2"], "optional" = true }
 "http" = { "version" = "1", "optional" = true }
 "hyper" = { "version" = "1", "features" = ["client", "http1"], "optional" = true }
 "hyper-util" = { "version" = "0.1", "features" = ["tokio"], "optional" = true }
@@ -80,7 +80,6 @@ parking_lot = "0.12"
 "plain-rs" = { "path" = "../plain-rs", "default-features" = false, "features" = ["test-seams"] }
 "serde_json" = "1"
 "tokio" = { "version" = "1", "features" = ["full", "test-util"] }
-"futures" = "0.3"
 "tower" = { "version" = "0.5", "features" = ["util"] }
 "tempfile" = "3"
 "tokio-tungstenite" = { "version" = "0.30", "features" = ["connect", "rustls-tls-webpki-roots"] }
