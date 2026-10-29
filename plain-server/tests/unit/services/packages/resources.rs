@@ -229,7 +229,7 @@ fn malformed_extents_sparse_ids_and_entry_offsets_fail_without_panicking() {
     for end in 0..bytes.len() {
         assert!(Resources::parse(&bytes[..end]).is_err());
     }
-    assert!(chunk(&bytes, usize::MAX).is_err());
+    assert!(chunk(Bytes::Slice(&bytes), usize::MAX).is_err());
     let bytes = table(
         vec![typed(
             1,
@@ -259,8 +259,11 @@ fn invalid_selected_entry_offsets_are_rejected_lazily() {
     let (at, header) = {
         let resources = Resources::parse(&bytes).unwrap();
         let table = &resources.types[&0x7f01][0];
+        let Bytes::Slice(table_bytes) = table.bytes else {
+            panic!("Memory fixture required")
+        };
         (
-            table.bytes.as_ptr() as usize - bytes.as_ptr() as usize,
+            table_bytes.as_ptr() as usize - bytes.as_ptr() as usize,
             table.header,
         )
     };
@@ -270,5 +273,107 @@ fn invalid_selected_entry_offsets_are_rejected_lazily() {
             .unwrap()
             .resolve(0x7f010000)
             .is_err()
+    );
+}
+
+#[test]
+fn a_large_unused_chunk_does_not_consume_the_resource_read_budget() {
+    use super::super::input::{ReadAt, ResourceReader};
+    use std::{cell::Cell, io::Write};
+    struct Counted<'a> {
+        input: &'a dyn ReadAt,
+        read: Cell<usize>,
+    }
+    impl ReadAt for Counted<'_> {
+        fn read_at(&self, offset: usize, bytes: &mut [u8]) -> Result<()> {
+            self.read.set(self.read.get() + bytes.len());
+            self.input.read_at(offset, bytes)
+        }
+    }
+    let mut data = sample_resource_table();
+    let size = data.len() + 8 + 64 * 1024 * 1024;
+    data[4..8].copy_from_slice(&(size as u32).to_le_bytes());
+    data.extend(0x7777u16.to_le_bytes());
+    data.extend(8u16.to_le_bytes());
+    data.extend((64u32 * 1024 * 1024 + 8).to_le_bytes());
+    let mut file = tempfile::tempfile().unwrap();
+    file.write_all(&data).unwrap();
+    file.set_len(size as u64).unwrap();
+    let reader = ResourceReader::new(file).unwrap();
+    let counted = Counted {
+        input: &reader,
+        read: Cell::new(0),
+    };
+    let resources = Resources::from_bytes(Bytes::Reader {
+        reader: &counted,
+        offset: 0,
+        length: size,
+    })
+    .unwrap();
+    assert_eq!(
+        resources.resolve(0x7f010000).unwrap().as_deref(),
+        Some("Localized title")
+    );
+    assert!(
+        counted.read.get() < 4096,
+        "read {} bytes",
+        counted.read.get()
+    );
+}
+
+#[test]
+fn the_best_matching_configuration_does_not_read_lower_priority_entries() {
+    use super::super::input::ReadAt;
+    struct Counted<'a> {
+        bytes: &'a [u8],
+        reads: RefCell<Vec<std::ops::Range<usize>>>,
+    }
+    impl ReadAt for Counted<'_> {
+        fn read_at(&self, offset: usize, bytes: &mut [u8]) -> Result<()> {
+            let range = offset..offset + bytes.len();
+            bytes.copy_from_slice(&self.bytes[range.clone()]);
+            self.reads.borrow_mut().push(range);
+            Ok(())
+        }
+    }
+    let bytes = table(
+        vec![
+            typed(0, [0, 0], [0, 0], 0, &[(0, 3, 0, false), (1, 3, 0, false)]),
+            typed(0, *b"en", *b"US", 160, &[(0, 3, 1, false)]),
+            typed(0, *b"en", *b"US", 160, &[(0, 3, 2, false)]),
+        ],
+        &["default", "first US text", "second US text"],
+    );
+    let counted = Counted {
+        bytes: &bytes,
+        reads: RefCell::new(Vec::new()),
+    };
+    let resources = Resources::from_bytes(Bytes::Reader {
+        reader: &counted,
+        offset: 0,
+        length: bytes.len(),
+    })
+    .unwrap();
+    counted.reads.borrow_mut().clear();
+    let value = resources.value(0x7f010000).unwrap().unwrap();
+    assert_eq!(
+        value.data, 1,
+        "Equal configuration scores preserve their original order"
+    );
+    let Bytes::Reader { offset, length, .. } = value.table.bytes else {
+        panic!("Reader fixture required")
+    };
+    assert!(
+        counted
+            .reads
+            .borrow()
+            .iter()
+            .all(|range| range.start >= offset && range.end <= offset + length),
+        "Lower priority configurations were read"
+    );
+    assert_eq!(
+        resources.resolve(0x7f010001).unwrap().as_deref(),
+        Some("default"),
+        "A missing best-priority entry falls through to the next configuration"
     );
 }

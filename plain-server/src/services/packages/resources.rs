@@ -1,24 +1,19 @@
-use super::{
-    framework,
-    manifest::{Pool, u16_at, u32_at},
-    xml,
-};
+use super::{framework, input::Bytes, manifest::Pool, xml};
 use anyhow::{Result, anyhow, ensure};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
 };
 
-pub(super) const LIMIT: u64 = 64 * 1024 * 1024;
 struct Type<'a> {
-    bytes: &'a [u8],
+    bytes: Bytes<'a>,
     header: usize,
     count: usize,
     start: usize,
     flags: u8,
     score: (i32, i32),
-    type_name: Option<&'a [u8]>,
-    keys: Option<&'a [u8]>,
+    type_name: Option<Bytes<'a>>,
+    keys: Option<Bytes<'a>>,
     type_id: u8,
 }
 struct Value<'t, 'a> {
@@ -33,21 +28,21 @@ pub(super) struct Resources<'a> {
     types: HashMap<u16, Vec<Type<'a>>>,
     resolved: RefCell<HashMap<u32, Option<String>>>,
 }
-fn chunk(bytes: &[u8], offset: usize) -> Result<(&[u8], u16, usize)> {
+fn chunk<'a>(bytes: Bytes<'a>, offset: usize) -> Result<(Bytes<'a>, u16, usize)> {
     ensure!(
         offset <= bytes.len() && bytes.len() - offset >= 8,
         "Truncated APK resource header"
     );
-    let kind = u16_at(bytes, offset)?;
-    let header = u16_at(bytes, offset + 2)? as usize;
-    let size = u32_at(bytes, offset + 4)? as usize;
+    let kind = bytes.u16(offset)?;
+    let header = bytes.u16(offset + 2)? as usize;
+    let size = bytes.u32(offset + 4)? as usize;
     ensure!(
         header >= 8 && size >= header && size <= bytes.len().saturating_sub(offset),
         "Invalid APK resource chunk"
     );
-    Ok((&bytes[offset..offset + size], kind, header))
+    Ok((bytes.slice(offset..offset + size)?, kind, header))
 }
-fn pool_at(bytes: &[u8], offset: usize) -> Result<Option<&[u8]>> {
+fn pool_at<'a>(bytes: Bytes<'a>, offset: usize) -> Result<Option<Bytes<'a>>> {
     if offset == 0 {
         return Ok(None);
     }
@@ -62,29 +57,29 @@ impl<'a> Type<'a> {
             let mut high = self.count;
             while low < high {
                 let middle = low + (high - low) / 2;
-                let found = u16_at(self.bytes, self.header + middle * 4)? as usize;
+                let found = self.bytes.u16(self.header + middle * 4)? as usize;
                 if found < index {
                     low = middle + 1
                 } else {
                     high = middle
                 }
             }
-            if low == self.count || u16_at(self.bytes, self.header + low * 4)? as usize != index {
+            if low == self.count || self.bytes.u16(self.header + low * 4)? as usize != index {
                 return Ok(None);
             }
-            usize::from(u16_at(self.bytes, self.header + low * 4 + 2)?) * 4
+            usize::from(self.bytes.u16(self.header + low * 4 + 2)?) * 4
         } else {
             if index >= self.count {
                 return Ok(None);
             }
             if self.flags & 2 != 0 {
-                let offset = u16_at(self.bytes, self.header + index * 2)?;
+                let offset = self.bytes.u16(self.header + index * 2)?;
                 if offset == u16::MAX {
                     return Ok(None);
                 }
                 usize::from(offset) * 4
             } else {
-                let offset = u32_at(self.bytes, self.header + index * 4)?;
+                let offset = self.bytes.u32(self.header + index * 4)?;
                 if offset == u32::MAX {
                     return Ok(None);
                 }
@@ -99,26 +94,26 @@ impl<'a> Type<'a> {
             at.checked_add(8).is_some_and(|end| end <= self.bytes.len()),
             "Resource entry outside chunk"
         );
-        let flags = u16_at(self.bytes, at + 2)?;
+        let flags = self.bytes.u16(at + 2)?;
         if flags & 8 != 0 {
             ensure!(flags & 1 == 0, "Complex compact resource entry");
             return Ok(Some(Value {
                 kind: (flags >> 8) as u8,
-                data: u32_at(self.bytes, at + 4)?,
-                key: u16_at(self.bytes, at)? as u32,
+                data: self.bytes.u32(at + 4)?,
+                key: self.bytes.u16(at)? as u32,
                 complex: false,
                 table: self,
             }));
         }
-        let size = u16_at(self.bytes, at)? as usize;
+        let size = self.bytes.u16(at)? as usize;
         ensure!(
             size >= 8 && size <= self.bytes.len().saturating_sub(at),
             "Invalid resource entry size"
         );
-        let key = u32_at(self.bytes, at + 4)?;
+        let key = self.bytes.u32(at + 4)?;
         if flags & 1 != 0 {
             ensure!(size >= 16, "Invalid complex resource header");
-            let count = u32_at(self.bytes, at + 12)? as usize;
+            let count = self.bytes.u32(at + 12)? as usize;
             ensure!(
                 count <= (self.bytes.len() - at - size) / 12,
                 "Invalid complex resource extent"
@@ -133,15 +128,12 @@ impl<'a> Type<'a> {
         }
         let at = at + size;
         ensure!(
-            u16_at(self.bytes, at)? == 8 && self.bytes.get(at + 2) == Some(&0),
+            self.bytes.u16(at)? == 8 && self.bytes.byte(at + 2)? == 0,
             "Invalid resource value"
         );
         Ok(Some(Value {
-            kind: *self
-                .bytes
-                .get(at + 3)
-                .ok_or_else(|| anyhow!("Missing resource value type"))?,
-            data: u32_at(self.bytes, at + 4)?,
+            kind: self.bytes.byte(at + 3)?,
+            data: self.bytes.u32(at + 4)?,
             key,
             complex: false,
             table: self,
@@ -151,8 +143,8 @@ impl<'a> Type<'a> {
         let (Some(types), Some(keys)) = (self.type_name, self.keys) else {
             return Ok(None);
         };
-        let types = Pool::new(types, u16_at(types, 2)? as usize)?;
-        let keys = Pool::new(keys, u16_at(keys, 2)? as usize)?;
+        let types = Pool::from_bytes(types, types.u16(2)? as usize)?;
+        let keys = Pool::from_bytes(keys, keys.u16(2)? as usize)?;
         Ok(Some(format!(
             "@{}/{}",
             types.get(self.type_id as u32 - 1)?,
@@ -160,35 +152,31 @@ impl<'a> Type<'a> {
         )))
     }
 }
-fn score(bytes: &[u8], header: usize) -> Result<(i32, i32)> {
-    let size = u32_at(bytes, 20)? as usize;
+fn score(bytes: Bytes<'_>, header: usize) -> Result<(i32, i32)> {
+    let size = bytes.u32(20)? as usize;
     ensure!(
         size >= 4 && size <= header - 20,
         "Invalid resource configuration"
     );
     let mut locale = 1;
     if size >= 12 {
-        let language = bytes
-            .get(28..30)
-            .ok_or_else(|| anyhow!("Missing resource language"))?;
-        let country = bytes
-            .get(30..32)
-            .ok_or_else(|| anyhow!("Missing resource country"))?;
-        locale = if language == b"en" {
-            if country == b"US" {
+        let language = bytes.read(28, 2)?;
+        let country = bytes.read(30, 2)?;
+        locale = if language.as_ref() == b"en" {
+            if country.as_ref() == b"US" {
                 3
-            } else if country == [0, 0] {
+            } else if country.as_ref() == [0, 0] {
                 2
             } else {
                 0
             }
-        } else if language == [0, 0] || country == [0, 0] {
+        } else if language.as_ref() == [0, 0] || country.as_ref() == [0, 0] {
             1
         } else {
             0
         };
     }
-    let density = if size >= 16 { u16_at(bytes, 34)? } else { 0 };
+    let density = if size >= 16 { bytes.u16(34)? } else { 0 };
     Ok((
         locale,
         if matches!(density, 0xfffe | 0xffff) {
@@ -200,16 +188,15 @@ fn score(bytes: &[u8], header: usize) -> Result<(i32, i32)> {
 }
 impl<'a> Resources<'a> {
     pub(super) fn parse(bytes: &'a [u8]) -> Result<Self> {
-        ensure!(
-            bytes.len() as u64 <= LIMIT,
-            "APK resource table is too large"
-        );
+        Self::from_bytes(Bytes::Slice(bytes))
+    }
+    pub(super) fn from_bytes(bytes: Bytes<'a>) -> Result<Self> {
         let (table, kind, header) = chunk(bytes, 0)?;
         ensure!(
             kind == 2 && header >= 12 && table.len() == bytes.len(),
             "Invalid APK resource table"
         );
-        let expected = u32_at(bytes, 8)?;
+        let expected = bytes.u32(8)?;
         let mut packages = 0;
         let mut offset = header;
         let mut strings = None;
@@ -220,33 +207,33 @@ impl<'a> Resources<'a> {
             match kind {
                 1 => {
                     ensure!(strings.is_none(), "Duplicate resource value pool");
-                    strings = Some(Pool::new(part, header)?);
+                    strings = Some(Pool::from_bytes(part, header)?);
                 }
                 0x200 => {
                     ensure!(header >= 284, "Invalid resource package header");
-                    let package = u32_at(part, 8)?;
+                    let package = part.u32(8)?;
                     ensure!(package <= 255, "Invalid resource package ID");
-                    let offset_id = if header >= 288 { u32_at(part, 284)? } else { 0 };
-                    let type_names = pool_at(part, u32_at(part, 268)? as usize)?;
-                    let keys = pool_at(part, u32_at(part, 276)? as usize)?;
+                    let offset_id = if header >= 288 { part.u32(284)? } else { 0 };
+                    let type_names = pool_at(part, part.u32(268)? as usize)?;
+                    let keys = pool_at(part, part.u32(276)? as usize)?;
                     let mut position = header;
                     while position < part.len() {
                         let (body, kind, header) = chunk(part, position)?;
                         if kind == 0x201 {
                             ensure!(header >= 24, "Invalid resource type header");
-                            let type_id = body[8];
+                            let type_id = body.byte(8)?;
                             let id = u32::from(type_id)
                                 .checked_add(offset_id)
                                 .filter(|id| *id > 0 && *id <= 255)
                                 .ok_or_else(|| anyhow!("Invalid resource type ID"))?;
                             ensure!(type_id > 0, "Invalid resource type name index");
-                            let flags = body[9];
+                            let flags = body.byte(9)?;
                             ensure!(
                                 flags & !3 == 0 && flags & 3 != 3,
                                 "Invalid resource offset flags"
                             );
-                            let count = u32_at(body, 12)? as usize;
-                            let start = u32_at(body, 16)? as usize;
+                            let count = body.u32(12)? as usize;
+                            let start = body.u32(16)? as usize;
                             let width = if flags & 2 != 0 { 2 } else { 4 };
                             ensure!(
                                 start >= header
@@ -258,8 +245,8 @@ impl<'a> Resources<'a> {
                             if flags & 1 != 0 {
                                 for index in 1..count {
                                     ensure!(
-                                        u16_at(body, header + (index - 1) * 4)?
-                                            < u16_at(body, header + index * 4)?,
+                                        body.u16(header + (index - 1) * 4)?
+                                            < body.u16(header + index * 4)?,
                                         "Unordered sparse resource IDs"
                                     );
                                 }
@@ -293,6 +280,9 @@ impl<'a> Resources<'a> {
             offset += part.len();
         }
         ensure!(packages == expected, "Resource package count mismatch");
+        for configurations in types.values_mut() {
+            configurations.sort_by_key(|table| std::cmp::Reverse(table.score));
+        }
         Ok(Self {
             strings: strings.ok_or_else(|| anyhow!("Missing resource value pool"))?,
             types,
@@ -303,18 +293,12 @@ impl<'a> Resources<'a> {
         let Some(types) = self.types.get(&((id >> 16) as u16)) else {
             return Ok(None);
         };
-        let mut selected = None;
         for table in types {
             if let Some(value) = table.entry((id & 0xffff) as usize)? {
-                if selected
-                    .as_ref()
-                    .is_none_or(|old: &Value<'_, '_>| table.score > old.table.score)
-                {
-                    selected = Some(value);
-                }
+                return Ok(Some(value));
             }
         }
-        Ok(selected)
+        Ok(None)
     }
     pub(super) fn name(&self, id: u32) -> Result<Option<String>> {
         self.value(id)?

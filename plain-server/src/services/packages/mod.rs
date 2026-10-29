@@ -6,6 +6,7 @@ mod splits;
 
 mod attributes;
 mod framework;
+mod input;
 mod resources;
 mod xml;
 

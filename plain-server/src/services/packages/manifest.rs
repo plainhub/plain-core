@@ -1,3 +1,4 @@
+use super::input::Bytes;
 use anyhow::{Result, anyhow, ensure};
 use std::io::{Read, Seek};
 
@@ -61,7 +62,7 @@ fn length(bytes: &[u8], cursor: &mut usize, utf8: bool) -> Result<usize> {
     }
 }
 pub(super) struct Pool<'a> {
-    bytes: &'a [u8],
+    bytes: Bytes<'a>,
     header: usize,
     count: usize,
     start: usize,
@@ -70,11 +71,14 @@ pub(super) struct Pool<'a> {
 }
 impl<'a> Pool<'a> {
     pub(super) fn new(chunk: &'a [u8], header: usize) -> Result<Self> {
+        Self::from_bytes(Bytes::Slice(chunk), header)
+    }
+    pub(super) fn from_bytes(chunk: Bytes<'a>, header: usize) -> Result<Self> {
         ensure!(header >= 28, "Invalid manifest string pool");
-        let count = u32_at(chunk, 8)? as usize;
-        let styles = u32_at(chunk, 12)? as usize;
-        let start = u32_at(chunk, 20)? as usize;
-        let style_start = u32_at(chunk, 24)? as usize;
+        let count = chunk.u32(8)? as usize;
+        let styles = chunk.u32(12)? as usize;
+        let start = chunk.u32(20)? as usize;
+        let style_start = chunk.u32(24)? as usize;
         let table_end = header
             .checked_add(
                 count
@@ -97,11 +101,11 @@ impl<'a> Pool<'a> {
             "Invalid manifest style offset"
         );
         Ok(Self {
-            bytes: &chunk[..end],
+            bytes: chunk.slice(0..end)?,
             header,
             count,
             start,
-            utf8: u32_at(chunk, 16)? & 0x100 != 0,
+            utf8: chunk.u32(16)? & 0x100 != 0,
             remaining: std::cell::Cell::new(MANIFEST_LIMIT as usize),
         })
     }
@@ -112,42 +116,46 @@ impl<'a> Pool<'a> {
     pub(super) fn get(&self, index: u32) -> Result<String> {
         let index = index as usize;
         ensure!(index < self.count, "Invalid manifest string index");
-        let offset = u32_at(self.bytes, self.header + index * 4)? as usize;
-        let mut cursor = self
+        let offset = self.bytes.u32(self.header + index * 4)? as usize;
+        let start = self
             .start
             .checked_add(offset)
             .ok_or_else(|| anyhow!("Manifest string offset overflow"))?;
-        let utf16_len = length(self.bytes, &mut cursor, self.utf8)?;
+        let prefix = self
+            .bytes
+            .read(start, self.bytes.len().saturating_sub(start).min(8))?;
+        let mut cursor = 0;
+        let utf16_len = length(&prefix, &mut cursor, self.utf8)?;
         let size = if self.utf8 {
-            length(self.bytes, &mut cursor, true)?
+            length(&prefix, &mut cursor, true)?
         } else {
             utf16_len
                 .checked_mul(2)
                 .ok_or_else(|| anyhow!("Manifest string length overflow"))?
         };
-        let finish = cursor
-            .checked_add(size)
-            .ok_or_else(|| anyhow!("Manifest string length overflow"))?;
-        let text = self
-            .bytes
-            .get(cursor..finish)
-            .ok_or_else(|| anyhow!("Truncated manifest string"))?;
         self.remaining.set(
             self.remaining
                 .get()
                 .checked_sub(size)
                 .ok_or_else(|| anyhow!("Manifest string budget exceeded"))?,
         );
+        let cursor = start
+            .checked_add(cursor)
+            .ok_or_else(|| anyhow!("Manifest string offset overflow"))?;
+        let text = self.bytes.read(cursor, size)?;
+        let finish = cursor
+            .checked_add(size)
+            .ok_or_else(|| anyhow!("Manifest string length overflow"))?;
         if self.utf8 {
-            let text = std::str::from_utf8(text)?;
+            let text = std::str::from_utf8(&text)?;
             ensure!(
-                self.bytes.get(finish) == Some(&0) && text.encode_utf16().count() == utf16_len,
+                self.bytes.byte(finish)? == 0 && text.encode_utf16().count() == utf16_len,
                 "Invalid UTF-8 manifest string"
             );
             Ok(text.to_owned())
         } else {
             ensure!(
-                u16_at(self.bytes, finish)? == 0,
+                self.bytes.u16(finish)? == 0,
                 "Invalid UTF-16 manifest terminator"
             );
             Ok(String::from_utf16(
@@ -290,16 +298,44 @@ pub(super) fn xml(reader: impl Read + Seek) -> Result<String> {
     let mut archive = zip::ZipArchive::new(reader)?;
     let bytes = entry(&mut archive, "AndroidManifest.xml", MANIFEST_LIMIT)?
         .ok_or_else(|| anyhow!("APK manifest not found"))?;
-    let resources = if super::xml::needs_resources(&bytes)? {
-        entry(&mut archive, "resources.arsc", super::resources::LIMIT)?
-    } else {
-        None
+    if !super::xml::needs_resources(&bytes)? {
+        return super::xml::render_with(&bytes, None);
+    }
+    let (size, stored) = match archive.by_name("resources.arsc") {
+        Ok(entry) => (
+            entry.size(),
+            entry.compression() == zip::CompressionMethod::Stored,
+        ),
+        Err(zip::result::ZipError::FileNotFound) => return super::xml::render_with(&bytes, None),
+        Err(error) => return Err(error.into()),
     };
-    let resources = resources
-        .as_deref()
-        .map(super::resources::Resources::parse)
-        .transpose()?;
-    super::xml::render_with(&bytes, resources.as_ref())
+    if stored {
+        ensure!(
+            size <= u32::MAX as u64,
+            "APK resource table exceeds format extent"
+        );
+        let read = std::io::copy(
+            &mut archive.by_name("resources.arsc")?,
+            &mut std::io::sink(),
+        )?;
+        ensure!(read == size, "Invalid APK entry length");
+        let reader = super::input::ResourceReader::new(archive.by_name_seek("resources.arsc")?)?;
+        let resources = super::resources::Resources::from_bytes(Bytes::Reader {
+            reader: &reader,
+            offset: 0,
+            length: size as usize,
+        })?;
+        super::xml::render_with(&bytes, Some(&resources))
+    } else {
+        let resource_bytes = entry(
+            &mut archive,
+            "resources.arsc",
+            super::input::READ_LIMIT as u64,
+        )?
+        .ok_or_else(|| anyhow!("APK resources not found"))?;
+        let resources = super::resources::Resources::parse(&resource_bytes)?;
+        super::xml::render_with(&bytes, Some(&resources))
+    }
 }
 
 #[cfg(test)]

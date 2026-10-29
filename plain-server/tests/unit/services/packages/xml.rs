@@ -234,6 +234,20 @@ fn resource_and_framework_style_values_are_rendered_with_their_names() {
     let output = render_with(&bytes, Some(&resources)).unwrap();
     assert!(output.contains("android:label=\"Localized title\""));
     assert!(output.contains("android:theme=\"@android:style/Animation\""));
+    for compression in [
+        zip::CompressionMethod::Stored,
+        zip::CompressionMethod::Deflated,
+    ] {
+        use std::io::{Cursor, Write};
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default().compression_method(compression);
+        writer.start_file("AndroidManifest.xml", options).unwrap();
+        writer.write_all(&bytes).unwrap();
+        writer.start_file("resources.arsc", options).unwrap();
+        writer.write_all(&table).unwrap();
+        let actual = super::super::manifest::xml(writer.finish().unwrap()).unwrap();
+        assert_eq!(actual, output);
+    }
 }
 
 #[test]
@@ -304,4 +318,54 @@ fn text_nodes_validate_the_representation_they_read() {
     assert!(render_text(reserved).is_err());
     assert!(render_text([2u32.to_le_bytes().as_slice(), &[0; 8]].concat()).is_err());
     assert!(render_text(1u32.to_le_bytes().to_vec()).is_err());
+}
+
+#[test]
+fn stored_resource_tables_read_referenced_values_without_buffering_unused_chunks() {
+    use std::io::{Seek, SeekFrom, Write};
+    let manifest = document(
+        &["manifest", "label"],
+        vec![
+            start(u32::MAX, 0, &[(u32::MAX, 1, u32::MAX, 1, 0x7f010000)]),
+            pair(0x103, u32::MAX, 0),
+        ],
+    );
+    let mut table = super::super::resources::tests::sample_resource_table();
+    let padding = 64 * 1024 * 1024;
+    let total = table.len() + 8 + padding;
+    table[4..8].copy_from_slice(&(total as u32).to_le_bytes());
+    let mut writer = zip::ZipWriter::new(tempfile::tempfile().unwrap());
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("AndroidManifest.xml", options).unwrap();
+    writer.write_all(&manifest).unwrap();
+    writer.start_file("resources.arsc", options).unwrap();
+    writer.write_all(&table).unwrap();
+    writer.write_all(&0x7777u16.to_le_bytes()).unwrap();
+    writer.write_all(&8u16.to_le_bytes()).unwrap();
+    writer
+        .write_all(&((padding + 8) as u32).to_le_bytes())
+        .unwrap();
+    for _ in 0..padding / 65536 {
+        writer.write_all(&[0; 65536]).unwrap();
+    }
+    let mut file = writer.finish().unwrap();
+    let output = super::super::manifest::xml(&mut file).unwrap();
+    assert!(output.contains("label=\"Localized title\""));
+    let corrupt_at = {
+        let mut archive = zip::ZipArchive::new(&mut file).unwrap();
+        archive
+            .by_name("resources.arsc")
+            .unwrap()
+            .data_start()
+            .unwrap()
+            + table.len() as u64
+            + 9
+    };
+    file.seek(SeekFrom::Start(corrupt_at)).unwrap();
+    file.write_all(&[1]).unwrap();
+    assert!(
+        super::super::manifest::xml(file).is_err(),
+        "Skipped resource payload must still pass ZIP CRC verification"
+    );
 }
