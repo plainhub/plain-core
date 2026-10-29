@@ -43,44 +43,6 @@ fn avcc_to_annexb_converts_and_validates() {
     assert!(length_prefixed_to_annexb(&[1], 5, &mut Vec::new()).is_err());
 }
 
-/// Hand-built sample tables: 12 samples, stts runs + stss syncs.
-#[test]
-fn keyframe_location_matrix() {
-    // Uniform 1000-tick deltas, syncs at {1, 5, 9}.
-    let stts = [(6u64, 1000u64), (6, 1000)];
-    let syncs = [1u32, 5, 9];
-    // t=0 → sample 1 (sync).
-    assert_eq!(locate_keyframe_sample(&stts, Some(&syncs), 0), 1);
-    // t=1.5s → time sample 2, previous sync = 1.
-    assert_eq!(locate_keyframe_sample(&stts, Some(&syncs), 1_500), 1);
-    // t=4.9s → time sample 5 (itself sync) → 5.
-    assert_eq!(locate_keyframe_sample(&stts, Some(&syncs), 4_900), 5);
-    // t=7s → time sample 8, previous sync = 5.
-    assert_eq!(locate_keyframe_sample(&stts, Some(&syncs), 7_000), 5);
-    // t=9.999s → sample 10, sync 9.
-    assert_eq!(locate_keyframe_sample(&stts, Some(&syncs), 9_999), 9);
-    // Beyond the end → walk clamps past the last sample → sync 9.
-    assert_eq!(locate_keyframe_sample(&stts, Some(&syncs), 999_999), 9);
-
-    // No stss → every sample is sync: plain timestamp walk.
-    assert_eq!(locate_keyframe_sample(&stts, None, 7_000), 8);
-    assert_eq!(locate_keyframe_sample(&stts, None, 0), 1);
-
-    // Variable-delta runs: 2 samples @500 then 10 @1250.
-    let var = [(2u64, 500u64), (10, 1250)];
-    // t=600 → inside the first run → sample 2.
-    assert_eq!(locate_keyframe_sample(&var, None, 600), 2);
-    // t=1300: first run covers ticks [0,1000) samples 1-2; second run
-    // starts at sample 3 tick 1000, delta 1250 → (1300-1000)/1250=0 → 3.
-    assert_eq!(locate_keyframe_sample(&var, None, 1_300), 3);
-    // t=10000 → (10000-1000)/1250 = 7 → sample 10.
-    assert_eq!(locate_keyframe_sample(&var, None, 10_000), 10);
-
-    // Syncs not starting at 1 (open-GOP-ish): target before first sync.
-    let late_syncs = [5u32, 9];
-    assert_eq!(locate_keyframe_sample(&stts, Some(&late_syncs), 900), 5);
-}
-
 #[test]
 fn yuv_to_rgb_known_colors() {
     // Limited-range BT.601 anchors (see yuv420_to_rgb). 4×2 frame: left
@@ -189,4 +151,17 @@ fn long_video_targets_ten_percent_timepoint() {
     assert!(plan.estimated_bytes() > 0);
     let jpg = decode_plan_to_jpeg(plan, 256, 256, 75).unwrap();
     assert!(image::load_from_memory(&jpg).is_ok());
+}
+
+#[test]
+fn fragmented_mp4_preserves_the_existing_frame_access_units_and_decoded_pixels() {
+    let classic = plan_keyframe(&testdata("video-h264-baseline.mp4")).unwrap();
+    let fragmented = plan_keyframe(&testdata("video/video-h264-fragmented.mp4")).unwrap();
+    assert_eq!(fragmented.first_sample_id, classic.first_sample_id);
+    assert_eq!(fragmented.estimated_bytes(), classic.estimated_bytes());
+    assert_eq!(fragmented.access_units, classic.access_units);
+    assert!(fragmented.access_units.len() <= MAX_FOLLOW_SAMPLES as usize + 1);
+    let classic = decode_plan(classic).unwrap();
+    let fragmented = decode_plan(fragmented).unwrap();
+    assert_eq!(fragmented.raw(), classic.raw());
 }

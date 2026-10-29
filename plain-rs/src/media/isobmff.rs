@@ -354,3 +354,6 @@ pub fn video_reader(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
 }
 
 mod projection;
+
+mod samples;
+pub use samples::AvcTrack;

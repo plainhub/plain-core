@@ -61,22 +61,11 @@ pub fn generate_video_thumbnail(path: &str, w: u32, h: u32, quality: u8) -> Resu
 /// and the target samples only — the file is never loaded whole.
 pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
     let file = std::fs::File::open(path)?;
-    let size = file.metadata()?.len();
-    let mut reader = mp4::Mp4Reader::read_header(std::io::BufReader::new(file), size)?;
+    let mut reader = std::io::BufReader::new(file);
+    let track = plain_rs::media::isobmff::AvcTrack::read(&mut reader)?;
 
-    let track = reader
-        .tracks()
-        .values()
-        .find(|t| matches!(t.track_type(), Ok(mp4::TrackType::Video)))
-        .ok_or_else(|| anyhow::anyhow!("no video track"))?;
-    let track_id = track.track_id();
-    let stbl = &track.trak.mdia.minf.stbl;
-    let avc1 = stbl.stsd.avc1.as_ref().ok_or_else(|| {
-        anyhow::anyhow!("non-AVC video track (HEVC/VP9/…) has no pure-Rust decoder")
-    })?;
-
-    let frame_w = u32::from(avc1.width.max(1));
-    let frame_h = u32::from(avc1.height.max(1));
+    let frame_w = track.width;
+    let frame_h = track.height;
     if u64::from(frame_w) * u64::from(frame_h)
         > crate::previews::images::admission::MAX_SOURCE_PIXELS
     {
@@ -85,40 +74,18 @@ pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
 
     // Real duration straight from the track (mdhd) — the old CLI-based
     // call site passed a hard-coded 0, so every video thumb was frame 0.
-    let duration_secs = track.duration().as_secs() as u32;
+    let duration_secs = (track.duration_ticks / u64::from(track.timescale)) as u32;
     let timepoint = compute_video_timepoint(duration_secs);
-    let timescale = u64::from(track.timescale().max(1));
+    let timescale = u64::from(track.timescale);
     let target_tick = (timepoint * timescale as f64) as u64;
 
-    let sample_count = track.sample_count();
+    let sample_count = track.sample_count;
     if sample_count == 0 {
         bail!("video track has no samples");
     }
 
-    // Copy the small sample-table view out of the track so the `reader`
-    // borrow ends before read_sample needs it mutably.
-    let stts: Vec<(u64, u64)> = stbl
-        .stts
-        .entries
-        .iter()
-        .map(|e| (u64::from(e.sample_count), u64::from(e.sample_delta)))
-        .collect();
-    let stss: Option<Vec<u32>> = stbl.stss.as_ref().map(|s| s.entries.clone());
-    let start_id =
-        locate_keyframe_sample(&stts, stss.as_deref(), target_tick).clamp(1, sample_count);
-
-    // avcC carries SPS/PPS out-of-band; re-inject them in-band so the
-    // decoder can start at this mid-stream keyframe.
-    let mut param_sets: Vec<Vec<u8>> = Vec::new();
-    for nal in avc1
-        .avcc
-        .sequence_parameter_sets
-        .iter()
-        .chain(&avc1.avcc.picture_parameter_sets)
-    {
-        param_sets.push(nal.bytes.clone());
-    }
-    let nal_length_size = (avc1.avcc.length_size_minus_one & 0b11) as usize + 1;
+    let start_id = track.keyframe_at(target_tick);
+    let nal_length_size = track.nal_length_size;
 
     let mut access_units = Vec::new();
     let mut first = true;
@@ -127,22 +94,21 @@ pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
         .saturating_add(MAX_FOLLOW_SAMPLES)
         .min(sample_count);
     for id in start_id..=last_id {
-        let Some(sample) = reader.read_sample(track_id, id)? else {
+        let Some(sample) =
+            track.read_sample(&mut reader, id, (MAX_SAMPLE_BYTES - total) as usize)?
+        else {
             break;
         };
-        total += sample.bytes.len() as u64;
-        if total > MAX_SAMPLE_BYTES {
-            break;
-        }
-        let mut au = Vec::with_capacity(sample.bytes.len() + 64);
+        total += sample.len() as u64;
+        let mut au = Vec::with_capacity(sample.len() + 64);
         if first {
-            for nal in &param_sets {
+            for nal in &track.parameter_sets {
                 au.extend_from_slice(&[0, 0, 0, 1]);
                 au.extend_from_slice(nal);
             }
             first = false;
         }
-        length_prefixed_to_annexb(&sample.bytes, nal_length_size, &mut au)?;
+        length_prefixed_to_annexb(&sample, nal_length_size, &mut au)?;
         access_units.push(au);
     }
     if access_units.is_empty() {
@@ -198,49 +164,6 @@ fn compute_video_timepoint(duration_secs: u32) -> f64 {
         1.0
     } else {
         f64::from(duration_secs) * 0.1
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Sample-table walking (stts timestamps, stss sync samples)
-//
-// These operate on a copied `(count, delta)` view instead of the mp4 crate's
-// box types (which are `pub(crate)` there), which keeps the logic testable
-// with hand-built fixtures.
-// ---------------------------------------------------------------------------
-
-/// Sample id (1-based) whose decode timestamp is the last one ≤ `target_tick`.
-fn sample_at_or_before(stts: &[(u64, u64)], target_tick: u64) -> u32 {
-    let mut id = 1u32;
-    let mut elapsed = 0u64;
-    for &(count, delta) in stts {
-        let delta = delta.max(1);
-        let entry_ticks = count.saturating_mul(delta);
-        if target_tick < elapsed.saturating_add(entry_ticks) {
-            return id + u32::try_from((target_tick - elapsed) / delta).unwrap_or(u32::MAX);
-        }
-        id = id.saturating_add(u32::try_from(count).unwrap_or(u32::MAX));
-        elapsed = elapsed.saturating_add(entry_ticks);
-    }
-    id // target beyond the last sample → last sample
-}
-
-/// Keyframe sample id nearest (at or before) `target_tick`: the last stss
-/// sync sample with dts ≤ the sample that starts at the tick. `stss` = None
-/// means every sample is a sync sample (no stss box), so the plain
-/// timestamp walk suffices.
-fn locate_keyframe_sample(stts: &[(u64, u64)], stss: Option<&[u32]>, target_tick: u64) -> u32 {
-    let Some(syncs) = stss else {
-        return sample_at_or_before(stts, target_tick);
-    };
-    let candidate = sample_at_or_before(stts, target_tick);
-    let pos = syncs.partition_point(|&s| u64::from(s) <= u64::from(candidate));
-    if pos == 0 {
-        // Target before the first sync sample: take the first one (sample 1
-        // is sync by spec; a hostile file may disagree, the decoder copes).
-        syncs.first().copied().unwrap_or(1)
-    } else {
-        syncs[pos - 1]
     }
 }
 
