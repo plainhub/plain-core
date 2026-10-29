@@ -26,6 +26,7 @@ type App {
 	httpsPort: Int!
 	deviceName: String!
 	developerMode: Boolean!
+	tlsCertificateSha256: String
 	appDir: String!
 	deviceType: DeviceType!
 	capabilities: [Capability!]!

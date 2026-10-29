@@ -155,6 +155,18 @@ impl App {
 
 #[ComplexObject]
 impl App {
+    async fn tls_certificate_sha256(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<String>> {
+        #[cfg(feature = "http_transport")]
+        {
+            let state = ctx.data::<crate::assembly::server::ServerState>()?;
+            Ok(state.public_server.lock().await.as_ref().map(|server| server.tls_certificate_sha256.clone()))
+        }
+        #[cfg(not(feature = "http_transport"))]
+        {
+            let _ = ctx;
+            Ok(None)
+        }
+    }
     async fn app_dir(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         Ok(ctx
             .data::<crate::assembly::services::Services>()?

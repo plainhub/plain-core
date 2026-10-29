@@ -822,6 +822,7 @@ mod tests;
 
 #[cfg(feature = "http_transport")]
 pub(crate) struct PublicServer {
+    pub(crate) tls_certificate_sha256: String,
     pub(crate) discovery: crate::assembly::lifecycle::PublicDiscovery,
     pub(crate) listeners: crate::http::listeners::HttpListeners,
     pub(crate) stop: watch::Sender<bool>,

@@ -481,3 +481,28 @@ async fn embedded_web_assets_survive_cache_clear_without_extraction() {
     }
     server.stop_core().await;
 }
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn app_certificate_fingerprint_describes_the_active_listener() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = ContentServer::open(directory.path()).unwrap();
+    let api = core.native_graphql().unwrap();
+    let read = || async {
+        let response = api.execute(async_graphql::Request::new("{app{tlsCertificateSha256}}")).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        response.data.into_json().unwrap()["app"]["tlsCertificateSha256"].clone()
+    };
+    assert!(read().await.is_null());
+    core.state.prefs.set("http_port", 0).unwrap();
+    core.state.prefs.set("https_port", 0).unwrap();
+    core.start_configured_public().await.unwrap();
+    let (_, _, cert, _) = core.state.http_configuration().await.unwrap();
+    let expected = crate::services::tls_identity::certificate_sha256(&cert).unwrap();
+    assert_eq!(read().await, expected);
+    std::fs::write(directory.path().join("tls-identity.json"), "{}").unwrap();
+    assert_eq!(read().await, expected);
+    core.stop_public().await;
+    assert!(read().await.is_null());
+    core.stop_core().await;
+}

@@ -82,6 +82,15 @@ fn tlv<'a>(data: &mut &'a [u8], tag: u8) -> Result<&'a [u8], String> {
     *data = rest;
     Ok(value)
 }
+pub(crate) fn certificate_sha256(cert: &[u8]) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let der = CertificateDer::pem_slice_iter(cert)
+        .next()
+        .ok_or("Missing certificate")?
+        .map_err(|error| error.to_string())?;
+    Ok(plain_rs::utils::hex::bytes_to_hex(&Sha256::digest(der.as_ref())))
+}
+
 fn signature(cert: &[u8]) -> Result<Vec<u8>, String> {
     let der = CertificateDer::pem_slice_iter(cert)
         .next()

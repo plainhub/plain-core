@@ -16,8 +16,13 @@ impl ServerState {
         }
         let (stop, receiver) = watch::channel(false);
         let router = crate::http::routes::public::build_router(self.clone(), receiver.clone());
-        let listeners = match crate::http::listeners::HttpListeners::start(router, http, https, cert, key).await {
-            Ok(listeners) => listeners,
+        let started = async {
+            let fingerprint = crate::services::tls_identity::certificate_sha256(&cert)?;
+            let listeners = crate::http::listeners::HttpListeners::start(router, http, https, cert, key).await?;
+            Ok::<_, String>((listeners, fingerprint))
+        }.await;
+        let (listeners, tls_certificate_sha256) = match started {
+            Ok(started) => started,
             Err(error) => {
                 self.http_server.failed(error.clone());
                 self.publish_http_status();
@@ -51,6 +56,7 @@ impl ServerState {
         let discovery =
             crate::assembly::lifecycle::PublicDiscovery::start(self.clone(), receiver.clone());
         *guard = Some(PublicServer {
+            tls_certificate_sha256,
             discovery,
             listeners,
             stop,

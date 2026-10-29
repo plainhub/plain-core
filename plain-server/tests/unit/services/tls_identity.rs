@@ -161,3 +161,16 @@ fn pkcs12_import_persists_a_matching_identity_and_failed_import_preserves_it() {
         }
     }
 }
+
+#[test]
+fn certificate_fingerprint_hashes_the_leaf_der() {
+    use sha2::{Digest, Sha256};
+    let leaf = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let other = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let expected = plain_rs::utils::hex::bytes_to_hex(&Sha256::digest(leaf.cert.der().as_ref()));
+    assert_eq!(certificate_sha256(leaf.cert.pem().as_bytes()).unwrap(), expected);
+    let chain = format!("{}{}", leaf.cert.pem().replace('\n', "\r\n"), other.cert.pem());
+    assert_eq!(certificate_sha256(chain.as_bytes()).unwrap(), expected);
+    assert_ne!(certificate_sha256(other.cert.pem().as_bytes()).unwrap(), expected);
+    assert!(certificate_sha256(b"invalid certificate").is_err());
+}
