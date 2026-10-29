@@ -89,7 +89,6 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "mediaIds(",
         "pauseSharedDownload(",
         "resumeSharedDownload(",
-        "dlnaSenderState:",
         "type ActivePeerTransfer",
         "enum TransportType",
         "type ImageModelsState",
@@ -149,6 +148,15 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "images(query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): [Image!]!"
     ));
     assert!(sdl.contains("imageCount(query: String!): Int!"));
+    assert!(sdl.contains("dlnaSenderState: DlnaSenderState!"));
+    let subscription = sdl
+        .split("type Subscription {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert!(subscription.contains("dlnaSenderChanged: DlnaSenderState!"));
     let image = sdl
         .split("type Image implements MediaItem {")
         .nth(1)

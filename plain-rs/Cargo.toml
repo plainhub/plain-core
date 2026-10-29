@@ -88,3 +88,7 @@ jni = { "version" = "0.22", "optional" = true }
 [[example]]
 name = "discover_probe"
 required-features = ["mdns"]
+
+[[example]]
+name = "ble_uuids"
+required-features = ["ble"]
