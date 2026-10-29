@@ -18,25 +18,6 @@ pub struct DownloadMutation;
 
 #[Object]
 impl DownloadMutation {
-    async fn cache_remote_file(
-        &self,
-        ctx: &Context<'_>,
-        url: String,
-        name: String,
-    ) -> async_graphql::Result<String> {
-        crate::http::auth::public_gate::require(
-            ctx,
-            ctx.data::<Arc<plain_rs::prefs::Prefs>>()?,
-            &["WRITE_EXTERNAL_STORAGE"],
-        )?;
-        let state = ctx.data::<ServerState>()?;
-        ctx.data::<crate::assembly::services::Services>()?
-            .remote_cache
-            .download(&url, &name, None, state.stop.clone(), None)
-            .await
-            .map_err(async_graphql::Error::new)
-    }
-
     async fn pause_download(
         &self,
         ctx: &Context<'_>,

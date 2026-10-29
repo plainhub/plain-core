@@ -37,7 +37,6 @@ enum DownloadStatus {
 }
 
 extend type Mutation {
-	cacheRemoteFile(url: String!, name: String!): String!
 	downloadPeerFile(messageId: ID!, peerId: ID!): Boolean!
 	enqueueChatDownload(messageId: ID!, fileId: String!, peerId: ID!): Boolean!
 	pauseChatDownload(id: ID!): Boolean!
