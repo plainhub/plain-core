@@ -18,7 +18,7 @@ fn a_bundle_is_reached_through_a_shared_handle() {
     assert_eq!(bundle.read("missing.js"), None);
 }
 
-#[path = "../../../../build/web_assets.rs"]
+#[path = "../../../build/web_assets.rs"]
 mod build_web_assets;
 
 #[test]

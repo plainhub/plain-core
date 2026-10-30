@@ -77,7 +77,7 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
         );
     }
     let router =
-        crate::http::routes::public::build_router(server.state.clone(), server.stop.subscribe());
+        crate::http::router::build_router(server.state.clone(), server.stop.subscribe());
     use tower::ServiceExt;
     for peer in [None, Some("192.0.2.42:1234"), Some("127.0.0.1:1234")] {
         let mut request = axum::http::Request::builder()
@@ -414,7 +414,7 @@ async fn startup_device_name_initialization_is_shared_and_preserves_user_changes
 
 #[tokio::test]
 async fn embedded_web_assets_survive_cache_clear_without_extraction() {
-    use crate::http::routes::web_bundle::{SharedWebBundle, WebBundle};
+    use crate::http::web_bundle::{SharedWebBundle, WebBundle};
     struct Bundle;
     impl WebBundle for Bundle {
         fn read(&self, path: &str) -> Option<&'static [u8]> {
@@ -431,7 +431,7 @@ async fn embedded_web_assets_survive_cache_clear_without_extraction() {
     let server = ContentServer::open_with_cache(&data, &cache).unwrap();
     let state = server.runtime_state();
     let compiled = state.web_bundle.read().unwrap().clone().unwrap();
-    use crate::http::routes::web_bundle::EmbeddedBundle;
+    use crate::http::web_bundle::EmbeddedBundle;
     assert_eq!(
         compiled.read("index.html"),
         EmbeddedBundle.read("index.html")
@@ -453,7 +453,7 @@ async fn embedded_web_assets_survive_cache_clear_without_extraction() {
             ("/settings", "embedded"),
             ("/assets/app.js", "console.log('embedded')"),
         ] {
-            let response = crate::http::routes::static_host::fallback(
+            let response = crate::http::static_files::fallback(
                 axum::extract::State(server.runtime_state()),
                 axum::http::Request::builder()
                     .uri(path)

@@ -416,7 +416,7 @@ fn channel_fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServ
 }
 #[cfg(feature = "http_transport")]
 async fn channel_query(state: &crate::assembly::server::ServerState, document: &str) -> Value {
-    let bytes = crate::http::routes::graphql::run(
+    let bytes = crate::http::graphql::run(
         &state.public,
         &json!({"query":document}).to_string(),
         Some(state.clone()),

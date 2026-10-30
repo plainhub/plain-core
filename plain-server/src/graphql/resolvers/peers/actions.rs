@@ -7,7 +7,7 @@ fn changed(state: &ServerState, id: &str) {
         log::warn!("Peer status reconnect after mutation: {error}");
     }
     crate::services::peers::peer_transport::notify(state);
-    crate::services::peers::peer_status::emit(state, id, false);
+    crate::http::websocket::status::emit(state, id, false);
 }
 
 pub(crate) async fn remove(state: &ServerState, id: &str) -> anyhow::Result<bool> {

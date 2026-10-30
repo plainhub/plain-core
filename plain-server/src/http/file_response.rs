@@ -1,6 +1,6 @@
 use axum::{
-    http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    http::{HeaderMap, StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use std::path::Path;
 
@@ -80,6 +80,56 @@ pub(crate) async fn stream_file(
         output.insert(
             axum::http::header::CONTENT_RANGE,
             format!("bytes {start}-{end}/{size}").parse().unwrap(),
+        );
+    }
+    response
+}
+
+pub(crate) fn escape(value: &str) -> String {
+    value
+        .as_bytes()
+        .iter()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (*b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+fn disposition(name: &str, download: bool) -> String {
+    let name = escape(name);
+    format!(
+        "{}; filename=\"{name}\"; filename*=utf-8''{name}",
+        if download { "attachment" } else { "inline" }
+    )
+}
+pub(crate) fn secure(mut response: Response, name: Option<&str>, download: bool) -> Response {
+    response
+        .headers_mut()
+        .insert("x-content-type-options", "nosniff".parse().unwrap());
+    let mime = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .split(';')
+        .next()
+        .unwrap_or_default();
+    if mime == "text/html" || mime.ends_with("+xml") || mime.ends_with("/xml") {
+        response
+            .headers_mut()
+            .insert("content-security-policy", "sandbox".parse().unwrap());
+    }
+    if let Some(name) = name {
+        if let Ok(value) = disposition(name, download).parse() {
+            response
+                .headers_mut()
+                .insert(header::CONTENT_DISPOSITION, value);
+        }
+        response.headers_mut().insert(
+            "access-control-expose-headers",
+            "Content-Disposition".parse().unwrap(),
         );
     }
     response

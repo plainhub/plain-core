@@ -132,5 +132,8 @@ pub(crate) async fn proxy(url: &str, headers: &HeaderMap) -> Response {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/proxy/host.rs"]
+#[path = "../../tests/unit/http/proxy.rs"]
 mod tests;
+
+#[cfg(feature = "core")]
+pub mod local;

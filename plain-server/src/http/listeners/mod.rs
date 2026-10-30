@@ -34,10 +34,7 @@ impl HttpListeners {
         https_port: u16,
         tls: RustlsConfig,
     ) -> Result<Self, String> {
-        let router = router.route(
-            "/__plain_server_ready",
-            axum::routing::get(|| async { axum::http::StatusCode::NO_CONTENT }),
-        );
+        let router = crate::http::router::with_readiness(router);
         let http = bind::bind_listener_fallback(http_port, &bind::HTTP_PORTS)
             .map_err(|e| format!("HTTP bind failed: {e}"))?;
         let https = bind::bind_listener_fallback(https_port, &bind::HTTPS_PORTS)

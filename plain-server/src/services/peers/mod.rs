@@ -4,8 +4,6 @@ pub mod peer_address;
 #[cfg(feature = "core")]
 pub mod peer_download;
 
-#[cfg(feature = "core")]
-pub mod peer_files;
 
 #[cfg(feature = "core")]
 pub mod peer_lan;
@@ -13,8 +11,6 @@ pub mod peer_lan;
 #[cfg(feature = "core")]
 pub mod peer_sdk;
 
-#[cfg(feature = "core")]
-pub mod peer_status;
 #[cfg(feature = "core")]
 pub mod peer_status_controller;
 

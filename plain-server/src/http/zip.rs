@@ -56,7 +56,7 @@ fn plain(status: StatusCode, body: impl Into<String>) -> Response {
 /// plain-app percent-encodes the download name; the desktop route does the
 /// same before writing the `Content-Disposition`.
 fn url_escape(value: &str) -> String {
-    crate::host::filesystem::escape(value)
+    crate::http::file_response::escape(value)
 }
 
 /// Decrypt a urlToken-protected `id` into its plaintext payload.
@@ -513,5 +513,5 @@ pub(crate) async fn files(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/routes/zip.rs"]
+#[path = "../../tests/unit/http/zip.rs"]
 mod tests;

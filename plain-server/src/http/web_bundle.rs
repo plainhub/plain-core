@@ -23,5 +23,5 @@ impl WebBundle for EmbeddedBundle {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/routes/web_bundle.rs"]
+#[path = "../../tests/unit/http/web_bundle.rs"]
 mod tests;

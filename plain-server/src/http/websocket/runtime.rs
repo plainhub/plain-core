@@ -2,7 +2,7 @@ use crate::assembly::server::ServerState;
 use crate::services::confirmation_channel;
 use axum::{
     extract::{
-        ConnectInfo, Query, State, WebSocketUpgrade,
+        WebSocketUpgrade,
         ws::{CloseFrame, Message, WebSocket},
     },
     http::StatusCode,
@@ -59,7 +59,7 @@ impl Drop for UnauthenticatedConnection {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Channel {
+pub(super) enum Channel {
     Auth,
     Screen,
     ImageEditor,
@@ -167,34 +167,7 @@ pub(crate) struct Params {
     cid: String,
     auth: Option<String>,
 }
-pub(crate) async fn upgrade_auth(
-    State(state): State<ServerState>,
-    Query(params): Query<Params>,
-    ConnectInfo(remote): ConnectInfo<SocketAddr>,
-    ws: WebSocketUpgrade,
-) -> Response {
-    upgrade(state, params, remote, ws, Channel::Auth)
-}
-
-pub(crate) async fn upgrade_screen(
-    State(state): State<ServerState>,
-    Query(params): Query<Params>,
-    ConnectInfo(remote): ConnectInfo<SocketAddr>,
-    ws: WebSocketUpgrade,
-) -> Response {
-    upgrade(state, params, remote, ws, Channel::Screen)
-}
-
-pub(crate) async fn upgrade_image_editor(
-    State(state): State<ServerState>,
-    Query(params): Query<Params>,
-    ConnectInfo(remote): ConnectInfo<SocketAddr>,
-    ws: WebSocketUpgrade,
-) -> Response {
-    upgrade(state, params, remote, ws, Channel::ImageEditor)
-}
-
-fn upgrade(
+pub(super) fn upgrade(
     state: ServerState,
     params: Params,
     remote: SocketAddr,
@@ -581,5 +554,5 @@ fn controls(bytes: &[u8]) -> Vec<Value> {
     }
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/http/websocket/host.rs"]
+#[path = "../../../tests/unit/http/websocket/runtime.rs"]
 mod tests;

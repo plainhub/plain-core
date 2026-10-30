@@ -1,8 +1,6 @@
 #[cfg(feature = "core")]
 pub mod local;
 
-#[cfg(feature = "core")]
-pub mod ble_http;
 
 #[cfg(feature = "core")]
 pub mod ble_pairing;

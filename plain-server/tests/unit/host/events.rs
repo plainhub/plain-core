@@ -66,7 +66,7 @@ async fn native_events_enforce_direction_and_reconcile_lag() {
             assert!(public.try_recv().is_err(), "{kind}");
         } else {
             bridge.publish_text(kind, "{}".into()).await.unwrap();
-            let receiver = if crate::http::websocket::host::is_screen_event(kind) {
+            let receiver = if crate::http::websocket::runtime::is_screen_event(kind) {
                 &mut screen
             } else {
                 &mut public

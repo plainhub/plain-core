@@ -128,7 +128,7 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                     } else {
                         plain_rs::utils::base64::base64_decode(&channel_key)
                     };
-                    let body = crate::services::discovery::ble_http::test_peer_wire(&ble, p, &key);
+                    let body = crate::http::ble::test_peer_wire(&ble, p, &key);
                     let pieces: Vec<_> = body.splitn(3, '|').collect();
                     let public = plain_rs::utils::base64::base64_encode(
                         &crate::services::peers::peer_wire::signing_keypair(&prefs).unwrap()[32..],
@@ -164,7 +164,7 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                         );
                     }
                     attempts.push(wire["variables"]["type"].as_str().unwrap().to_owned());
-                    crate::services::discovery::ble_http::test_reply(
+                    crate::http::ble::test_reply(
                         &ble,
                         p,
                         json!({"data":{"channelSystemMessage":attempts.len()!=1}}),
@@ -291,7 +291,7 @@ async fn queued_send_and_decline_ack_cannot_act_on_replacement() {
         },
     )
     .unwrap();
-    state.host.reply(generation,json!({"id":attempt["id"],"result":crate::services::discovery::ble_http::test_reply(&state.ble_transport, &attempt["params"], json!({"data":{"channelSystemMessage":true}}),&[8;32])})).unwrap();
+    state.host.reply(generation,json!({"id":attempt["id"],"result":crate::http::ble::test_reply(&state.ble_transport, &attempt["params"], json!({"data":{"channelSystemMessage":true}}),&[8;32])})).unwrap();
     assert!(
         call.await
             .unwrap()
@@ -356,7 +356,7 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
             let result = match req["method"].as_str().unwrap() {
                 "peerTransportCapabilities" => json!(["BLE"]),
                 "peerTransportBleExchange" => {
-                    let body = crate::services::discovery::ble_http::test_peer_wire(
+                    let body = crate::http::ble::test_peer_wire(
                         &ble,
                         &req["params"],
                         &[9; 32],
@@ -372,7 +372,7 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
                         assert_eq!(payload["name"], "Actual tablet");
                     }
                     kinds.push(kind);
-                    crate::services::discovery::ble_http::test_reply(
+                    crate::http::ble::test_reply(
                         &ble,
                         &req["params"],
                         json!({"data":{"channelSystemMessage":true}}),

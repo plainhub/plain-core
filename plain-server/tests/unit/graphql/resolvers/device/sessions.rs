@@ -119,7 +119,7 @@ async fn authenticated_revocation_and_logout_remove_the_keys_used_by_http_authen
     let mut headers = axum::http::HeaderMap::new();
     headers.insert("c-id", "first".parse().unwrap());
     headers.insert("authorization", format!("Bearer {token}").parse().unwrap());
-    let response = crate::http::routes::graphql::call(
+    let response = crate::http::graphql::call(
         axum::extract::State(state.clone()),
         headers,
         axum::body::Bytes::from_static(br#"{"query":"{ sessions { clientId } }"}"#),

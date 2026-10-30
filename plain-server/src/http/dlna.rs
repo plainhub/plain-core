@@ -4,8 +4,8 @@ use crate::services::casting::receiver::control::emit;
 #[cfg(test)]
 use crate::services::casting::receiver::control::snapshot;
 use axum::{
-    extract::{ConnectInfo, Request as HttpRequest, State},
-    http::{HeaderMap, StatusCode},
+    extract::{ConnectInfo, Path, Request as HttpRequest, State},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
@@ -147,24 +147,113 @@ pub(crate) async fn receiver(
         .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
-/// The public router half. Grouped here so `start_public` only has to merge
-/// it; axum needs an explicit `MethodRouter` for SUBSCRIBE/UNSUBSCRIBE.
-pub(crate) fn router(state: ServerState) -> axum::Router {
-    use axum::routing::{any, get};
-    axum::Router::new()
-        .route("/description.xml", get(receiver))
-        .route("/AVTransport/scpd.xml", get(receiver))
-        .route("/RenderingControl/scpd.xml", get(receiver))
-        .route("/AVTransport/control", axum::routing::post(receiver))
-        .route("/RenderingControl/control", axum::routing::post(receiver))
-        // axum 0.7 can only route the ten standard methods, so the GENA
-        // event paths are registered for any method and the router answers
-        // SUBSCRIBE/UNSUBSCRIBE — anything else 404s, same as before.
-        .route("/AVTransport/event", any(receiver))
-        .route("/RenderingControl/event", any(receiver))
-        .with_state(state)
+#[cfg(all(test, feature = "http_transport"))]
+#[path = "../../tests/unit/http/dlna.rs"]
+mod tests;
+
+pub(crate) async fn media(
+    State(state): State<ServerState>,
+    Path(raw): Path<String>,
+    request: HttpRequest,
+) -> Response {
+    let id = raw.split('.').next().unwrap_or_default();
+    let Some((path, mime)) = crate::services::casting::media_alias::lookup(id) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return crate::http::file_response::secure(
+            crate::http::proxy::proxy(&path, request.headers()).await,
+            None,
+            false,
+        );
+    }
+    if path.starts_with("content://") {
+        #[cfg(feature = "http_transport")]
+        {
+            return match state.bridge.resource(&path, state.stop.clone()).await {
+                Ok(body) => crate::http::file_response::secure(body.into_response(), None, false),
+                Err(status) => status.into_response(),
+            };
+        }
+        #[cfg(not(feature = "http_transport"))]
+        {
+            return StatusCode::NOT_FOUND.into_response();
+        }
+    }
+    let path = match crate::services::files::references::resolve(state.db.clone(), state.directory.clone(), &path) {
+        Ok(path) => path,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+    let mut response = crate::http::file_response::stream_file(
+        std::path::Path::new(&path),
+        &mime,
+        request.headers(),
+    )
+    .await;
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
+    response
+        .headers_mut()
+        .insert("x-content-type-options", "nosniff".parse().unwrap());
+    if !mime.starts_with("image/")
+        && (response.status() == StatusCode::OK || response.status() == StatusCode::PARTIAL_CONTENT)
+    {
+        *response.status_mut() = StatusCode::PARTIAL_CONTENT;
+        response
+            .headers_mut()
+            .insert("realTimeInfo.dlna.org", "DLNA.ORG_TLAG=*".parse().unwrap());
+        response
+            .headers_mut()
+            .insert("Server", "DLNADOC/1.50 UPnP/1.0 Plain/1.0".parse().unwrap());
+        response
+            .headers_mut()
+            .insert("transfermode.dlna.org", "Streaming".parse().unwrap());
+        response
+            .headers_mut()
+            .insert("contentfeatures.dlna.org", "".parse().unwrap());
+    }
+    crate::http::file_response::secure(response, None, false)
 }
 
-#[cfg(all(test, feature = "http_transport"))]
-#[path = "../../../../tests/unit/graphql/resolvers/casting/control.rs"]
-mod tests;
+pub(crate) async fn callback(State(state): State<ServerState>, request: HttpRequest) -> Response {
+    if request.method().as_str() != "NOTIFY" {
+        return StatusCode::METHOD_NOT_ALLOWED.into_response();
+    }
+    let sid = request
+        .headers()
+        .get("SID")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+    let sequence = request
+        .headers()
+        .get("SEQ")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u32>().ok());
+    let Ok(body) = axum::body::to_bytes(request.into_body(), 1024 * 1024).await else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let xml = String::from_utf8_lossy(&body);
+    let fields = crate::services::casting::cast_runtime::attributes(&xml);
+    let _guard = state.cast.operations.lock().await;
+    if sid
+        .as_ref()
+        .is_some_and(|sid| sid != &state.cast.snapshot().sid)
+    {
+        return StatusCode::OK.into_response();
+    }
+    if let Some(sequence) = sequence {
+        let mut previous = state.cast.callback_sequence.lock().unwrap();
+        if previous.is_some_and(|previous| {
+            sequence.wrapping_sub(previous) == 0 || sequence.wrapping_sub(previous) >= (1 << 31)
+        }) {
+            return StatusCode::OK.into_response();
+        }
+        *previous = Some(sequence);
+    }
+    let outcome = crate::services::casting::cast_runtime::apply(&state, &fields).await;
+    if let Err(error) = outcome {
+        log::warn!("Cast callback failed: {error}");
+    }
+    StatusCode::OK.into_response()
+}

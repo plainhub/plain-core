@@ -120,5 +120,5 @@ pub(crate) async fn apply(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/routes/cors_host.rs"]
+#[path = "../../../tests/unit/http/auth/cors.rs"]
 mod tests;

@@ -199,7 +199,7 @@ async fn sender_controls_use_soap_and_release_the_original_subscription() {
         }
         builder.body(axum::body::Body::from(r#"<Event><InstanceID val="0"><TransportState val="STOPPED"/></InstanceID></Event>"#)).unwrap()
     };
-    let callback = crate::services::casting::cast_runtime::callback;
+    let callback = crate::http::dlna::callback;
     let before = calls.lock().unwrap().len();
     callback(axum::extract::State(state.clone()), notify(10, None)).await;
     assert_eq!(state.cast.snapshot().current_uri, "/next.mp4");

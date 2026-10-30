@@ -37,11 +37,11 @@ pub(crate) struct ServerState {
     pub(crate) build_debug: Arc<std::sync::atomic::AtomicBool>,
     pub(crate) web_root: Arc<std::sync::RwLock<Option<PathBuf>>>,
     pub(crate) web_bundle:
-        Arc<std::sync::RwLock<Option<crate::http::routes::web_bundle::SharedWebBundle>>>,
+        Arc<std::sync::RwLock<Option<crate::http::web_bundle::SharedWebBundle>>>,
     pub(crate) tls_identity: Arc<std::sync::RwLock<crate::services::tls_identity::IdentitySource>>,
     pub(crate) public: crate::graphql::schemas::public::PublicSchema,
     pub(crate) aware: Arc<crate::services::peers::aware::Runtime>,
-    pub(crate) peer_status: Arc<crate::services::peers::peer_status::Runtime>,
+    pub(crate) peer_status: Arc<crate::http::websocket::status::Runtime>,
     pub(crate) management: Arc<crate::services::peers::management::Runtime>,
     pub(crate) clipboard_changes: Arc<crate::services::clipboard::Changes>,
     pub(crate) network_revision: watch::Sender<u64>,
@@ -73,7 +73,7 @@ pub(crate) struct ServerState {
     pub(crate) downloads: Arc<plain_rs::chat::attachments::download_queue::Queue>,
     pub(crate) delivery: Arc<plain_rs::chat::delivery::Delivery>,
     pub(crate) channel_delivery: Arc<tokio::sync::Semaphore>,
-    pub(crate) ble_transport: Arc<crate::services::discovery::ble_http::Runtime>,
+    pub(crate) ble_transport: Arc<crate::http::ble::Runtime>,
     pub(crate) ble_pairing: Arc<crate::services::discovery::ble_pairing::Pairings>,
     pub(crate) pairing_runtime: Arc<crate::services::discovery::pairing_runtime::Runtime>,
     pub(crate) nearby_devices: Arc<plain_rs::discovery::nearby_devices::Devices>,
@@ -90,7 +90,7 @@ pub(crate) struct ServerState {
     pub(crate) cast: Arc<crate::services::casting::dlna_sender_runtime::Runtime>,
     pub(crate) audio: Arc<crate::services::audio::host::Audio>,
     pub(crate) subscription_sessions: Arc<crate::graphql::subscriptions::session::Sessions>,
-    pub(crate) main_ws: Arc<crate::http::websocket::host::Runtime>,
+    pub(crate) main_ws: Arc<crate::http::websocket::runtime::Runtime>,
     pub(crate) login_attempts: Arc<std::sync::Mutex<crate::http::auth::ws_login::LoginAttempts>>,
     pub(crate) directory: std::path::PathBuf,
     pub(crate) token: Arc<str>,
@@ -219,8 +219,7 @@ impl ContentServer {
         &self,
         path: &str,
     ) -> Result<crate::host::resources::NativeResourceReader, String> {
-        let path = crate::host::filesystem::resolve(&self.state, path)
-            .await
+        let path = crate::services::files::references::resolve(self.state.db.clone(), self.state.directory.clone(), path)
             .map_err(|error| error.to_string())?;
         self.state
             .bridge
@@ -442,7 +441,7 @@ impl ContentServer {
             lan,
             thumbnails: Arc::new(crate::services::images::thumbnails::Thumbnails::default()),
             aware: Arc::new(crate::services::peers::aware::Runtime::default()),
-            peer_status: Arc::new(crate::services::peers::peer_status::Runtime::default()),
+            peer_status: Arc::new(crate::http::websocket::status::Runtime::default()),
             management: Arc::new(crate::services::peers::management::Runtime::default()),
             clipboard_changes: Arc::new(crate::services::clipboard::Changes::default()),
             network_revision: watch::channel(0).0,
@@ -459,7 +458,7 @@ impl ContentServer {
             downloads,
             delivery: Arc::new(plain_rs::chat::delivery::Delivery::new((*db).clone())),
             channel_delivery: Arc::new(tokio::sync::Semaphore::new(4)),
-            ble_transport: Arc::new(crate::services::discovery::ble_http::Runtime::default()),
+            ble_transport: Arc::new(crate::http::ble::Runtime::default()),
             ble_pairing: Arc::new(crate::services::discovery::ble_pairing::Pairings::default()),
             pairing_runtime: Arc::new(
                 crate::services::discovery::pairing_runtime::Runtime::default(),
@@ -483,7 +482,7 @@ impl ContentServer {
             mobile,
             cast: Arc::new(crate::services::casting::dlna_sender_runtime::Runtime::default()),
             subscription_sessions: Arc::default(),
-            main_ws: Arc::new(crate::http::websocket::host::Runtime::default()),
+            main_ws: Arc::new(crate::http::websocket::runtime::Runtime::default()),
             login_attempts: Arc::new(std::sync::Mutex::new(
                 crate::http::auth::ws_login::LoginAttempts::default(),
             )),
@@ -492,7 +491,7 @@ impl ContentServer {
             build_debug: Arc::new(std::sync::atomic::AtomicBool::new(build_debug)),
             web_root: Arc::new(std::sync::RwLock::new(None)),
             web_bundle: Arc::new(std::sync::RwLock::new(Some(Arc::new(
-                crate::http::routes::web_bundle::EmbeddedBundle,
+                crate::http::web_bundle::EmbeddedBundle,
             )))),
             tls_identity: Arc::new(std::sync::RwLock::new(
                 crate::services::tls_identity::IdentitySource::Json(
@@ -624,7 +623,7 @@ impl ContentServer {
     ) -> Result<Self, String> {
         let (state, stop, mut receiver) =
             Self::build_state_with_config(directory, token, prefs, config)?;
-        let router = crate::http::routes::public::build_router(state.clone(), receiver.clone());
+        let router = crate::http::router::build_router(state.clone(), receiver.clone());
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(|e| e.to_string())?;
         let port = listener.local_addr().map_err(|e| e.to_string())?.port();
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
@@ -730,7 +729,7 @@ impl ContentServer {
     }
     /// The bundle compiled into this executable, used only when no web root
     /// is set.
-    pub fn set_web_bundle(&self, bundle: crate::http::routes::web_bundle::SharedWebBundle) {
+    pub fn set_web_bundle(&self, bundle: crate::http::web_bundle::SharedWebBundle) {
         if let Ok(mut guard) = self.state.web_bundle.write() {
             *guard = Some(bundle);
         }

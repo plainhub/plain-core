@@ -1,6 +1,6 @@
 use crate::assembly::server::ServerState;
-use crate::services::peers::peer_status::ConnectionGuard;
-use crate::services::peers::peer_status::emit;
+use crate::http::websocket::status::ConnectionGuard;
+use crate::http::websocket::status::emit;
 use anyhow::{Result, ensure};
 use futures_util::{SinkExt, StreamExt};
 use plain_rs::db::DPeer;

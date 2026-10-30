@@ -58,7 +58,7 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
                     matches!(ble.request_for_test(&request["params"]), plain_rs::protocols::ble::Request::PeerGraphql { channel_id, .. } if channel_id == "channel")
                 );
                 assert_eq!(
-                    crate::services::discovery::ble_http::test_peer_wire(
+                    crate::http::ble::test_peer_wire(
                         &ble,
                         &request["params"],
                         &[7; 32]
@@ -75,7 +75,7 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
                 };
                 host.reply(
                     generation,
-                    json!({"id":request["id"],"result":crate::services::discovery::ble_http::test_reply(&ble, &request["params"], json!({"data":data,"errors":errors}),&[7;32])}),
+                    json!({"id":request["id"],"result":crate::http::ble::test_reply(&ble, &request["params"], json!({"data":data,"errors":errors}),&[7;32])}),
                 )
                 .unwrap();
             }
@@ -166,7 +166,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
             let result = match request["method"].as_str().unwrap() {
                 "peerTransportCapabilities" => json!(["BLE"]),
                 "peerTransportBleExchange" => {
-                    let wire = crate::services::discovery::ble_http::test_peer_wire(
+                    let wire = crate::http::ble::test_peer_wire(
                         &ble,
                         &request["params"],
                         &[7; 32],
@@ -179,7 +179,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
                     );
                     assert_eq!(document["variables"]["content"], expected);
                     count.fetch_add(1, Ordering::SeqCst);
-                    crate::services::discovery::ble_http::test_reply(
+                    crate::http::ble::test_reply(
                         &ble,
                         &request["params"],
                         json!({"data":{"createChatItem":[]}}),

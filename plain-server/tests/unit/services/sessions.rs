@@ -1,7 +1,7 @@
 use super::*;
 use crate::assembly::server::ContentServer;
 use crate::http::auth::ws_login;
-use crate::http::routes::graphql;
+use crate::http::graphql;
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
@@ -316,7 +316,7 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
     let token = key(&state.db, "browser").unwrap().unwrap();
     let mut headers = HeaderMap::new();
     headers.insert("c-id", "browser".parse().unwrap());
-    let response = graphql::init(
+    let response = crate::http::init::init(
         State(state.clone()),
         axum::extract::ConnectInfo("127.0.0.1:1".parse().unwrap()),
         headers.clone(),
@@ -334,7 +334,7 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
     assert_eq!(response["passwordRequired"], true);
     assert!(!response["signaturePublicKey"].as_str().unwrap().is_empty());
     state.prefs.set("password_type", "NONE").unwrap();
-    let response = graphql::init(
+    let response = crate::http::init::init(
         State(state.clone()),
         axum::extract::ConnectInfo("127.0.0.1:1".parse().unwrap()),
         headers,

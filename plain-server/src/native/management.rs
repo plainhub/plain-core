@@ -115,7 +115,7 @@ impl NativeManagement {
             _ = stop.wait_for(|stopped| *stopped) => Err("BLE core stopped".into()),
             result = tokio::time::timeout(
                 std::time::Duration::from_secs(120),
-                crate::services::discovery::ble_http::dispatch_incoming(
+                crate::http::ble::dispatch_incoming(
                     self.state.clone(),
                     remote_host,
                     characteristic_uuid,

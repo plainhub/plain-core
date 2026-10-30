@@ -24,7 +24,7 @@ fn bundle() -> Bundle {
 
 struct MemoryBundle(&'static [(&'static str, &'static [u8])]);
 
-impl crate::http::routes::web_bundle::WebBundle for MemoryBundle {
+impl crate::http::web_bundle::WebBundle for MemoryBundle {
     fn read(&self, relative: &str) -> Option<&'static [u8]> {
         self.0
             .iter()

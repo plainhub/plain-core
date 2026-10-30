@@ -3,8 +3,7 @@ pub(crate) async fn resolve_native(
     reference: &str,
 ) -> Result<std::path::PathBuf, String> {
     state.native_client_id()?;
-    let path = crate::host::filesystem::resolve(state, reference)
-        .await
+    let path = crate::services::files::references::resolve(state.db.clone(), state.directory.clone(), reference)
         .map_err(|error| error.to_string())?;
     let path = std::path::PathBuf::from(path);
     if !path.is_absolute() {

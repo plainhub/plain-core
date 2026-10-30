@@ -552,5 +552,5 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/uploads/public.rs"]
+#[path = "../../tests/unit/http/upload.rs"]
 mod tests;

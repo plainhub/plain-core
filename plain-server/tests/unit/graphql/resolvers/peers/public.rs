@@ -73,7 +73,7 @@ fn fixture_with(
 }
 
 async fn query(schema: &PublicSchema, document: &str) -> Value {
-    let bytes = crate::http::routes::graphql::run(
+    let bytes = crate::http::graphql::run(
         &schema.state.public,
         &json!({"query":document}).to_string(),
         Some(schema.state.clone()),

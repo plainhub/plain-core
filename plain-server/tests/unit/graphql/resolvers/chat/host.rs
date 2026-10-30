@@ -230,7 +230,7 @@ async fn retry_returns_pending_before_platform_transport_completes() {
         .reply(generation, json!({"id":caps["id"],"result":["BLE"]}))
         .unwrap();
     let exchange = requests.recv().await.unwrap();
-    let result = crate::services::discovery::ble_http::test_reply(
+    let result = crate::http::ble::test_reply(
         &state.ble_transport,
         &exchange["params"],
         json!({"data":{"createChatItem":[]}}),

@@ -2,12 +2,6 @@ use crate::assembly::server::ServerState;
 use crate::graphql::resolvers::peers::query::Query;
 use crate::graphql::types::Instant;
 use async_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
-use axum::{
-    body::Bytes,
-    extract::State,
-    http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
-};
 use plain_rs::chat::enums::ChannelSystemMessageType;
 use plain_rs::chat::enums::ChatStatus;
 use plain_rs::db::DChat;
@@ -165,27 +159,6 @@ pub(crate) async fn execute(
             .unwrap_or((500, vec![])),
         Err(_) => (500, vec![]),
     }
-}
-pub(crate) async fn public(
-    State(state): State<ServerState>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
-    let id = headers
-        .get("c-id")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
-    let cid = headers
-        .get("c-cid")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
-    let (status, body) = execute(&state, id, cid, &body).await;
-    (
-        StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-        [("content-type", "application/octet-stream")],
-        body,
-    )
-        .into_response()
 }
 #[cfg(test)]
 #[path = "../../../tests/unit/graphql/schemas/peer_host.rs"]

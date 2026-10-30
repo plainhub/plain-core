@@ -1,80 +1,11 @@
 use crate::assembly::server::ServerState;
-use axum::{
-    extract::{Path, Request, State},
-    http::{StatusCode, header},
-    response::{IntoResponse, Response},
-};
 
 pub(crate) fn time_ms(time: &str) -> i64 {
     // Mobile playback reports whole seconds even when the renderer includes fractions.
     let time = time.split('.').next().unwrap_or_default();
     crate::services::casting::receiver::soap_handler::parse_dlna_time_to_ms(time).max(0)
 }
-pub(crate) async fn media(
-    State(state): State<ServerState>,
-    Path(raw): Path<String>,
-    request: Request,
-) -> Response {
-    let id = raw.split('.').next().unwrap_or_default();
-    let Some((path, mime)) = crate::services::casting::media_alias::lookup(id) else {
-        return StatusCode::BAD_REQUEST.into_response();
-    };
-    if path.starts_with("http://") || path.starts_with("https://") {
-        return crate::host::filesystem::secure(
-            crate::http::proxy::host::proxy(&path, request.headers()).await,
-            None,
-            false,
-        );
-    }
-    if path.starts_with("content://") {
-        #[cfg(feature = "http_transport")]
-        {
-            return match state.bridge.resource(&path, state.stop.clone()).await {
-                Ok(body) => crate::host::filesystem::secure(body.into_response(), None, false),
-                Err(status) => status.into_response(),
-            };
-        }
-        #[cfg(not(feature = "http_transport"))]
-        {
-            return StatusCode::NOT_FOUND.into_response();
-        }
-    }
-    let path = match crate::host::filesystem::resolve(&state, &path).await {
-        Ok(path) => path,
-        Err(_) => return StatusCode::NOT_FOUND.into_response(),
-    };
-    let mut response = crate::http::routes::files::stream_file(
-        std::path::Path::new(&path),
-        &mime,
-        request.headers(),
-    )
-    .await;
-    response
-        .headers_mut()
-        .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
-    response
-        .headers_mut()
-        .insert("x-content-type-options", "nosniff".parse().unwrap());
-    if !mime.starts_with("image/")
-        && (response.status() == StatusCode::OK || response.status() == StatusCode::PARTIAL_CONTENT)
-    {
-        *response.status_mut() = StatusCode::PARTIAL_CONTENT;
-        response
-            .headers_mut()
-            .insert("realTimeInfo.dlna.org", "DLNA.ORG_TLAG=*".parse().unwrap());
-        response
-            .headers_mut()
-            .insert("Server", "DLNADOC/1.50 UPnP/1.0 Plain/1.0".parse().unwrap());
-        response
-            .headers_mut()
-            .insert("transfermode.dlna.org", "Streaming".parse().unwrap());
-        response
-            .headers_mut()
-            .insert("contentfeatures.dlna.org", "".parse().unwrap());
-    }
-    crate::host::filesystem::secure(response, None, false)
-}
-fn attributes(xml: &str) -> std::collections::HashMap<String, String> {
+pub(crate) fn attributes(xml: &str) -> std::collections::HashMap<String, String> {
     use plain_rs::utils::xml::Event;
     use plain_rs::utils::xml::Reader;
     let mut values = std::collections::HashMap::new();
@@ -118,48 +49,7 @@ fn attributes(xml: &str) -> std::collections::HashMap<String, String> {
     }
     values
 }
-pub(crate) async fn callback(State(state): State<ServerState>, request: Request) -> Response {
-    if request.method().as_str() != "NOTIFY" {
-        return StatusCode::METHOD_NOT_ALLOWED.into_response();
-    }
-    let sid = request
-        .headers()
-        .get("SID")
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_owned);
-    let sequence = request
-        .headers()
-        .get("SEQ")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse::<u32>().ok());
-    let Ok(body) = axum::body::to_bytes(request.into_body(), 1024 * 1024).await else {
-        return StatusCode::BAD_REQUEST.into_response();
-    };
-    let xml = String::from_utf8_lossy(&body);
-    let fields = attributes(&xml);
-    let _guard = state.cast.operations.lock().await;
-    if sid
-        .as_ref()
-        .is_some_and(|sid| sid != &state.cast.snapshot().sid)
-    {
-        return StatusCode::OK.into_response();
-    }
-    if let Some(sequence) = sequence {
-        let mut previous = state.cast.callback_sequence.lock().unwrap();
-        if previous.is_some_and(|previous| {
-            sequence.wrapping_sub(previous) == 0 || sequence.wrapping_sub(previous) >= (1 << 31)
-        }) {
-            return StatusCode::OK.into_response();
-        }
-        *previous = Some(sequence);
-    }
-    let outcome = apply(&state, &fields).await;
-    if let Err(error) = outcome {
-        log::warn!("Cast callback failed: {error}");
-    }
-    StatusCode::OK.into_response()
-}
-async fn apply(
+pub(crate) async fn apply(
     state: &ServerState,
     fields: &std::collections::HashMap<String, String>,
 ) -> anyhow::Result<()> {

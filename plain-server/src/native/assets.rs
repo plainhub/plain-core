@@ -1,4 +1,4 @@
-use crate::http::routes::web_bundle::{EmbeddedBundle, WebBundle};
+use crate::http::web_bundle::{EmbeddedBundle, WebBundle};
 
 pub fn file_icon(extension: &str) -> &'static str {
     let selected = if extension.len() <= 128 {

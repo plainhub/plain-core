@@ -17,6 +17,67 @@ plain-core/
 Each `plain-*` directory is a Rust package managed by the root `Cargo.toml`.
 Desktop shell and mobile JNI/C ABI code live in plain-desktop and plain-app, respectively.
 
+## Server source layout
+
+HTTP entry points are named after the resources they serve. Start with
+[`plain-server/src/http/router.rs`](plain-server/src/http/router.rs) to find a URL's
+method, handler, request limits and middleware.
+
+```text
+plain-server/
+├── src/
+│   ├── assembly/             Core construction and server lifecycle
+│   ├── http/
+│   │   ├── router.rs         All HTTP route registrations
+│   │   ├── fs.rs             /fs: files and previews
+│   │   ├── file_response.rs  Shared file streaming, Range and response headers
+│   │   ├── zip.rs            /zip/dir and /zip/files
+│   │   ├── upload.rs         /upload and /upload_chunk
+│   │   ├── proxy.rs          /proxyfs and proxy transport
+│   │   ├── proxy/local/      Local proxy support
+│   │   ├── graphql.rs        Main, peer and guest GraphQL HTTP adapters
+│   │   ├── init.rs           /init
+│   │   ├── nearby.rs         /nearby
+│   │   ├── health.rs         Health and listener readiness handlers
+│   │   ├── dlna.rs           DLNA description, control, events, media and callbacks
+│   │   ├── static_files.rs   Web UI fallback and static files
+│   │   ├── web_bundle.rs     Embedded Web asset access
+│   │   ├── ble.rs            BLE adapter for the shared transfer routes
+│   │   ├── ble/nearby.rs     BLE nearby-device request handling
+│   │   ├── auth/            HTTP authorization and CORS middleware
+│   │   ├── listeners/       HTTP/TLS sockets and listener lifecycle
+│   │   └── websocket/       WebSocket entry points and transport
+│   │       ├── auth.rs      /auth upgrade
+│   │       ├── graphql.rs   /graphql upgrade and subscriptions
+│   │       ├── status.rs    /status and peer status connections
+│   │       ├── screen.rs    /screen upgrade
+│   │       ├── image_editor.rs  /image_editor upgrade
+│   │       ├── runtime.rs   Shared auth, screen and image-editor connections
+│   │       └── frames.rs    WebSocket frame encoding
+│   ├── graphql/
+│   │   ├── schemas/         Main, peer and guest schema construction
+│   │   ├── resolvers/       GraphQL queries and mutations by domain
+│   │   ├── subscriptions/   GraphQL subscriptions
+│   │   ├── types/           GraphQL types
+│   │   └── executor.rs      Shared schema execution
+│   ├── services/            Business operations by domain
+│   ├── host/                Platform requests, resources and event coordination
+│   └── native/              Native API entry points
+└── tests/unit/              Rust unit tests mirroring src/ paths
+```
+
+For example, `/fs` is registered in `http/router.rs`, handled by
+[`http/fs.rs`](plain-server/src/http/fs.rs), and uses
+[`http/file_response.rs`](plain-server/src/http/file_response.rs) for local file
+streaming and Range responses. File reference resolution belongs to
+[`services/files/references.rs`](plain-server/src/services/files/references.rs).
+GraphQL HTTP extraction and response handling belong to `http/graphql.rs`;
+schema definitions and resolvers belong to `graphql/`.
+
+`router.rs::transfer_routes` contains the `/fs`, `/peer_graphql` and
+`/guest_graphql` routes shared by HTTP and BLE. `http/ble.rs` reuses that router;
+it does not maintain a second set of handlers.
+
 ## Build
 
 Requires Rust 1.99+, Python 3.10+ and a C compiler.

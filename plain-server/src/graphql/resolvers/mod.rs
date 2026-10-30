@@ -28,7 +28,6 @@ pub mod discovery;
 
 pub mod downloads;
 
-pub mod uploads;
 
 pub mod media;
 

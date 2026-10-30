@@ -96,6 +96,7 @@ pub(crate) mod remote_cache;
 #[cfg(feature = "core")]
 pub(crate) mod info;
 
+#[cfg(feature = "core")]
 pub(crate) mod references;
 
 #[cfg(feature = "core")]

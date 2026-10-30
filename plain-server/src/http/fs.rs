@@ -1,3 +1,4 @@
+use crate::http::file_response::{escape, secure};
 use crate::assembly::server::ServerState;
 use axum::{
     body::Body,
@@ -100,10 +101,7 @@ async fn primitive(
         .await
         .map_err(anyhow::Error::msg)
 }
-pub(crate) async fn resolve(state: &ServerState, path: &str) -> anyhow::Result<String> {
-    crate::services::files::references::resolve(state.db.clone(), state.directory.clone(), path)
-}
-pub(crate) async fn file(State(state): State<ServerState>, request: Request) -> Response {
+pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
     let request = request.into_parts().0;
     let id = query(&request, "id").unwrap_or_default();
     if id.is_empty() {
@@ -130,14 +128,14 @@ pub(crate) async fn file(State(state): State<ServerState>, request: Request) -> 
         let plain = String::from_utf8(plain)?;
         if plain.starts_with('{') {
             let value: Value = serde_json::from_str(&plain)?;
-            let path = resolve(&state, value["path"].as_str().unwrap_or_default()).await?;
+            let path = crate::services::files::references::resolve(state.db.clone(), state.directory.clone(), value["path"].as_str().unwrap_or_default())?;
             Ok::<_, anyhow::Error>((
                 path,
                 value["mediaId"].as_str().unwrap_or_default().to_owned(),
                 value["name"].as_str().unwrap_or_default().to_owned(),
             ))
         } else {
-            Ok((resolve(&state, &plain).await?, String::new(), String::new()))
+            Ok((crate::services::files::references::resolve(state.db.clone(), state.directory.clone(), &plain)?, String::new(), String::new()))
         }
     }
     .await;
@@ -156,55 +154,6 @@ pub(crate) async fn file(State(state): State<ServerState>, request: Request) -> 
         )
             .into_response(),
     }
-}
-pub(crate) fn escape(value: &str) -> String {
-    value
-        .as_bytes()
-        .iter()
-        .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                (*b as char).to_string()
-            }
-            _ => format!("%{b:02X}"),
-        })
-        .collect()
-}
-fn disposition(name: &str, download: bool) -> String {
-    let name = escape(name);
-    format!(
-        "{}; filename=\"{name}\"; filename*=utf-8''{name}",
-        if download { "attachment" } else { "inline" }
-    )
-}
-pub(crate) fn secure(mut response: Response, name: Option<&str>, download: bool) -> Response {
-    response
-        .headers_mut()
-        .insert("x-content-type-options", "nosniff".parse().unwrap());
-    let mime = response
-        .headers()
-        .get(header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default()
-        .split(';')
-        .next()
-        .unwrap_or_default();
-    if mime == "text/html" || mime.ends_with("+xml") || mime.ends_with("/xml") {
-        response
-            .headers_mut()
-            .insert("content-security-policy", "sandbox".parse().unwrap());
-    }
-    if let Some(name) = name {
-        if let Ok(value) = disposition(name, download).parse() {
-            response
-                .headers_mut()
-                .insert(header::CONTENT_DISPOSITION, value);
-        }
-        response.headers_mut().insert(
-            "access-control-expose-headers",
-            "Content-Disposition".parse().unwrap(),
-        );
-    }
-    response
 }
 struct Temporary(PathBuf);
 impl Drop for Temporary {
@@ -227,7 +176,7 @@ async fn converted(
     if value.as_bool() != Some(true) {
         return Ok(None);
     }
-    let response = crate::http::routes::files::stream_file(&output, mime, headers).await;
+    let response = crate::http::file_response::stream_file(&output, mime, headers).await;
     let (parts, body) = response.into_parts();
     let stream = body.into_data_stream().map(move |chunk| {
         let _ = &temporary;
@@ -259,7 +208,7 @@ pub(crate) async fn serve(
         };
         let mime = plain_rs::utils::mime::mime_from_ext(&cached.to_string_lossy());
         let response =
-            crate::http::routes::files::stream_file(&cached, mime, &request.headers).await;
+            crate::http::file_response::stream_file(&cached, mime, &request.headers).await;
         return Ok(secure(response, Some(filename), download));
     }
     if let (Some(offset), Some(length)) = (
@@ -383,7 +332,7 @@ pub(crate) async fn serve(
             .and_then(|name| name.to_str())
             .unwrap_or("document");
         return Ok(secure(
-            crate::http::routes::files::stream_file(&pdf, "application/pdf", &request.headers)
+            crate::http::file_response::stream_file(&pdf, "application/pdf", &request.headers)
                 .await,
             Some(&format!("{filename}.pdf")),
             false,
@@ -461,7 +410,7 @@ pub(crate) async fn serve(
                             .unwrap_or(Value::Null);
                         return Ok(match output.as_str() {
                             Some(output) => secure(
-                                crate::http::routes::files::stream_file(
+                                crate::http::file_response::stream_file(
                                     Path::new(output),
                                     mime,
                                     &request.headers,
@@ -480,7 +429,7 @@ pub(crate) async fn serve(
                 }
                 if let Some(output) = primitive(state, "remux", path, json!({})).await?.as_str() {
                     return Ok(secure(
-                        crate::http::routes::files::stream_file(
+                        crate::http::file_response::stream_file(
                             Path::new(output),
                             mime,
                             &request.headers,
@@ -494,12 +443,12 @@ pub(crate) async fn serve(
         }
     }
     Ok(secure(
-        crate::http::routes::files::stream_file(Path::new(path), mime, &request.headers).await,
+        crate::http::file_response::stream_file(Path::new(path), mime, &request.headers).await,
         Some(filename),
         download,
     ))
 }
 
 #[cfg(all(test, not(any(target_os = "android", target_os = "ios"))))]
-#[path = "../../tests/unit/host/filesystem.rs"]
+#[path = "../../tests/unit/http/fs.rs"]
 mod tests;

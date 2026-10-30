@@ -31,7 +31,7 @@ async fn call_fs(state: &ServerState, query: &str, headers: &[(&HeaderName, &str
         builder = builder.header(*name, *value);
     }
     let req = builder.body(Body::empty()).unwrap();
-    super::file(axum::extract::State(state.clone()), req).await
+    super::get(axum::extract::State(state.clone()), req).await
 }
 
 async fn body_bytes(resp: Response) -> Vec<u8> {

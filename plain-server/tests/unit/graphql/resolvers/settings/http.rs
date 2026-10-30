@@ -1,5 +1,5 @@
 use crate::assembly::server::{ContentServer, ServerState};
-use crate::http::routes::graphql;
+use crate::http::graphql;
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},

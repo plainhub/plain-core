@@ -3,8 +3,8 @@ use super::*;
 #[test]
 fn only_http_peer_urls_can_be_proxied() {
     assert_eq!(
-        target_url("http://192.168.1.9:8080/fs?id=1").unwrap(),
-        "http://192.168.1.9:8080/fs?id=1"
+        target_url("http://192.0.2.9:8080/fs?id=1").unwrap(),
+        "http://192.0.2.9:8080/fs?id=1"
     );
     assert_eq!(
         target_url("  https://peer.local/fs  ").unwrap(),

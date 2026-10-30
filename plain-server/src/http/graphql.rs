@@ -1,14 +1,11 @@
-use plain_rs::prefs::security::PasswordType;
 use crate::assembly::server::ServerState;
 use axum::{
-    Json,
     body::Bytes,
-    extract::{ConnectInfo, State},
+    extract::State,
     http::{HeaderMap, StatusCode, header::CONTENT_TYPE},
     response::{IntoResponse, Response},
 };
 use serde_json::json;
-use std::net::SocketAddr;
 use subtle::ConstantTimeEq;
 
 fn bearer_value(value: &str) -> &str {
@@ -226,48 +223,95 @@ pub(crate) async fn call(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/routes/graphql.rs"]
+#[path = "../../tests/unit/http/graphql.rs"]
 mod tests;
 
-pub(crate) async fn health() -> &'static str {
-    "OK"
-}
 
-pub(crate) async fn init(
+pub(crate) async fn peer(
     State(state): State<ServerState>,
-    ConnectInfo(_remote): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let client_id = headers
+    let id = headers
         .get("c-id")
-        .and_then(|value| value.to_str().ok())
+        .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
-    if client_id.is_empty() {
-        return StatusCode::BAD_REQUEST.into_response();
-    }
-    if !state.prefs.get_or("desktop_access", true) {
-        return StatusCode::FORBIDDEN.into_response();
-    }
-    let key = crate::services::sessions::local_key(&state, client_id).or(
-        crate::services::sessions::key(&state.db, client_id)
-            .ok()
-            .flatten(),
-    );
-    let authenticated = key
-        .as_ref()
-        .is_some_and(|key| plain_rs::crypto::xchacha_decrypt_raw(key, &body).is_some());
-    let password_required = match plain_rs::prefs::security::password_type(&state.prefs) {
-        Ok(value) => value == PasswordType::Fixed,
-        Err(error) => {
-            log::error!("Invalid password type: {error}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
-    let pair = match crate::services::peers::peer_wire::signing_keypair(&state.prefs) {
-        Ok(pair) => pair,
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    };
-    Json(json!({"signaturePublicKey":plain_rs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required}))
+    let cid = headers
+        .get("c-cid")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    let (status, body) = crate::graphql::schemas::peer::execute(&state, id, cid, &body).await;
+    (
+        StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+        [("content-type", "application/octet-stream")],
+        body,
+    )
         .into_response()
 }
+
+async fn execute_guest(state: &ServerState, id: &str, body: &[u8]) -> (u16, Vec<u8>) {
+    if id.is_empty() {
+        return (401, vec![]);
+    }
+    let shares = plain_rs::files::shares::Service::new(state.db.clone(), state.prefs.clone());
+    if !matches!(shares.active(id, true), Ok(Some(_))) {
+        return (403, vec![]);
+    }
+    let key = match shares
+        .token(id)
+        .and_then(|key| plain_rs::utils::base64::base64_decode_checked(&key).map_err(Into::into))
+    {
+        Ok(key) => key,
+        Err(_) => return (500, vec![]),
+    };
+    let plain = match plain_rs::crypto::xchacha_decrypt_raw(&key, body)
+        .and_then(|p| String::from_utf8(p).ok())
+    {
+        Some(p) if !p.is_empty() => p,
+        _ => return (401, vec![]),
+    };
+    let context = plain_rs::transport::http_response::Context::new("/guest_graphql", body);
+    let now = chrono::Utc::now().timestamp_millis();
+    let body = match state.guest_replay.admit(id, &plain, now) {
+        Ok(p) => p,
+        Err(_) => return (400, vec![]),
+    };
+    let request: async_graphql::Request = match serde_json::from_str(body) {
+        Ok(p) => p,
+        Err(_) => return (400, vec![]),
+    };
+    if let Err(error) = state.host.notify("systemWebActivity", json!({})) {
+        log::warn!("Web activity callback: {error}");
+    }
+    let schema = crate::graphql::schemas::guest::schema(state.clone(), id.to_owned());
+    let result = schema.execute(request).await;
+    match serde_json::to_vec(&result)
+        .ok()
+        .and_then(|p| context.encrypt(&key, &p))
+    {
+        Some(body) => (200, body),
+        None => (500, vec![]),
+    }
+}
+
+pub(crate) async fn guest(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let id = headers
+        .get("c-id")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or_default();
+    let (status, body) = execute_guest(&state, id, &body).await;
+    (
+        StatusCode::from_u16(status).unwrap(),
+        [("content-type", "application/octet-stream")],
+        body,
+    )
+        .into_response()
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/http/graphql/guest.rs"]
+mod guest_tests;

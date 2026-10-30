@@ -131,7 +131,7 @@ pub(crate) async fn dispatch(
             .insert(crate::http::ConnectionScheme("https"));
     }
     use tower::ServiceExt;
-    let response = crate::http::routes::public::peer_router(state)
+    let response = crate::http::router::transfer_routes(state)
         .oneshot(req)
         .await?;
     let status = response.status().as_u16();
@@ -183,5 +183,5 @@ pub(crate) fn test_reply(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/ble_http.rs"]
+#[path = "../../tests/unit/http/ble.rs"]
 mod tests;

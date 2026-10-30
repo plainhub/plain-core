@@ -13,8 +13,6 @@ pub mod startup;
 #[cfg(feature = "core")]
 pub mod resources;
 
-#[cfg(feature = "core")]
-pub mod filesystem;
 
 #[cfg(feature = "core")]
 pub mod events;
