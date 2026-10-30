@@ -152,8 +152,6 @@ impl Walker {
             self.plan.targets.push(Target {
                 write_dir: if self.kind == Kind::Zip {
                     String::new()
-                } else if self.public && item.top {
-                    String::new()
                 } else {
                     join(&self.base, &item.parent)
                 },

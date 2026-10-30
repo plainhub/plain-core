@@ -192,3 +192,21 @@ fn selected_directories_accept_native_absolute_paths_without_a_unix_prefix_assum
         .is_err()
     );
 }
+
+#[test]
+fn public_file_download_resolves_its_absolute_write_directory() {
+    let root = tempfile::tempdir().unwrap();
+    let downloads = root.path().join("Downloads").join("PlainApp");
+    let downloads = downloads.to_str().unwrap();
+    let mut walker = Walker::new(
+        Kind::File,
+        vec![file("source", "file.txt", false, 3)],
+        "",
+        downloads,
+    )
+    .unwrap();
+    assert!(walker.next_directory().unwrap().is_none());
+    let plan = walker.finish().unwrap();
+    assert_eq!(plan.targets[0].write_dir, downloads);
+    assert!(plan.targets[0].store_to_downloads);
+}
