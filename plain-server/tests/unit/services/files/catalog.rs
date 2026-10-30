@@ -189,7 +189,7 @@ async fn semantic_image_candidates_intersect_platform_ids_and_keep_non_text_filt
         );
         assert_eq!(
             catalog
-                .image_search_matches(&query, &candidates)
+                .image_matches(&query, &candidates, false)
                 .await
                 .unwrap(),
             vec![json!({"id":"2"})]
@@ -199,7 +199,7 @@ async fn semantic_image_candidates_intersect_platform_ids_and_keep_non_text_filt
     for query in ["text:cat ids:", "text:cat ids:9", "text:cat tag_id:missing"] {
         assert!(
             catalog
-                .image_search_matches(query, &candidates)
+                .image_matches(query, &candidates, false)
                 .await
                 .unwrap()
                 .is_empty()
@@ -207,7 +207,7 @@ async fn semantic_image_candidates_intersect_platform_ids_and_keep_non_text_filt
     }
     assert!(
         catalog
-            .image_search_matches("text:cat unsupported:value", &candidates)
+            .image_matches("text:cat unsupported:value", &candidates, false)
             .await
             .is_err()
     );

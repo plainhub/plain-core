@@ -116,17 +116,16 @@ impl MediaCatalog {
         }
     }
 
-    /// Semantic matching replaces only the text predicate. Keep the current
-    /// catalog filters and intersect its ID selection with the candidate IDs.
-    pub(crate) async fn image_search_matches(
+    pub(crate) async fn image_matches(
         &self,
         query: &str,
         ids: &[String],
+        include_text: bool,
     ) -> Result<Vec<Value>, String> {
         let db = match self {
             Self::Native(db) | Self::Platform { db, .. } => db,
         };
-        let plan = image_search_plan(db, query, ids).map_err(|error| error.to_string())?;
+        let plan = image_search_plan(db, query, ids, include_text).map_err(|error| error.to_string())?;
         if plan.ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -238,12 +237,15 @@ fn image_search_plan(
     db: &Db,
     query: &str,
     ids: &[String],
+    include_text: bool,
 ) -> anyhow::Result<crate::host::query::Plan> {
     use crate::host::query::{self, Provider};
     use std::collections::HashSet;
 
     let mut fields = query::fields(db, query)?;
-    fields.retain(|field| field.name != "text");
+    if !include_text {
+        fields.retain(|field| field.name != "text");
+    }
     let mut plan = query::plan(
         Provider::Image,
         &fields,

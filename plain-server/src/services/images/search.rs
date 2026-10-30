@@ -45,7 +45,7 @@ async fn semantic_rows(
         .into_iter()
         .map(|row| row.image_id)
         .collect::<Vec<_>>();
-    let mut rows = catalog.image_search_matches(query, &ids).await?;
+    let mut rows = catalog.image_matches(query, &ids, false).await?;
     rows.sort_by_key(|row| {
         ids.iter()
             .position(|id| Some(id.as_str()) == row["id"].as_str())
@@ -70,21 +70,41 @@ pub(crate) async fn rows(
     if !enabled(models, text) {
         return filename_rows(catalog, query, offset, limit, sort).await;
     }
+    let mut items = filename_rows(catalog, query, offset, limit, sort).await?;
+    if items.len() == limit as usize {
+        return Ok(items);
+    }
+    let filename_count = catalog.count(DataType::Image, query).await?;
+    let extra = semantic_extras(catalog, models, text, query).await?;
+    let extra_offset = (i64::from(offset) - filename_count).max(0) as usize;
+    let remaining = limit as usize - items.len();
+    items.extend(extra.into_iter().skip(extra_offset).take(remaining));
+    Ok(items)
+}
+
+async fn semantic_extras(
+    catalog: &MediaCatalog,
+    models: &Runtime,
+    text: &str,
+    query: &str,
+) -> Result<Vec<Value>, String> {
     let semantic = semantic_rows(catalog, models, text, query).await?;
-    let mut items = filename_rows(catalog, query, 0, i32::MAX, sort).await?;
-    let ids = items
+    let candidates = semantic
+        .iter()
+        .filter_map(|row| row["id"].as_str().map(str::to_owned))
+        .collect::<Vec<_>>();
+    let matches = catalog.image_matches(query, &candidates, true).await?;
+    let filename_ids = matches
         .iter()
         .filter_map(|row| row["id"].as_str())
         .collect::<HashSet<_>>();
-    let extra = semantic
+    Ok(semantic
         .into_iter()
-        .filter(|row| row["id"].as_str().is_some_and(|id| !ids.contains(id)))
-        .collect::<Vec<_>>();
-    items.extend(extra);
-    Ok(items
-        .into_iter()
-        .skip(offset as usize)
-        .take(limit as usize)
+        .filter(|row| {
+            row["id"]
+                .as_str()
+                .is_some_and(|id| !filename_ids.contains(id))
+        })
         .collect())
 }
 
@@ -100,14 +120,7 @@ pub(crate) async fn count(
             .await
             .and_then(|count| i32::try_from(count).map_err(|error| error.to_string()));
     }
-    let semantic = semantic_rows(catalog, models, text, query).await?;
-    let ids = catalog.ids(DataType::Image, query, false).await?;
-    let mut ids = ids.into_iter().collect::<HashSet<_>>();
-    ids.extend(
-        semantic
-            .iter()
-            .filter_map(|row| row["id"].as_str())
-            .map(str::to_owned),
-    );
-    i32::try_from(ids.len()).map_err(|e| e.to_string())
+    let filename_count = catalog.count(DataType::Image, query).await?;
+    let extra = semantic_extras(catalog, models, text, query).await?;
+    i32::try_from(filename_count + extra.len() as i64).map_err(|error| error.to_string())
 }

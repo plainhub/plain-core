@@ -841,6 +841,26 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
             ));
         }
     }
+    let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let captured = calls.clone();
+    let host = Arc::new(Host::default());
+    stub(host.clone(), move |method, params| {
+        captured.lock().unwrap().push((method.to_owned(), params));
+        json!([{"id":"page-one"},{"id":"page-two"}])
+    });
+    let catalog = crate::services::files::catalog::MediaCatalog::Platform { db, host };
+    let page = crate::services::images::search::rows(
+        &catalog, models, "cat", "text:cat", 100, 2, "NAME_ASC",
+    )
+    .await
+    .unwrap();
+    assert_eq!(page.len(), 2);
+    let calls = calls.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, "systemMediaRows");
+    assert_eq!(calls[0].1["offset"], 100);
+    assert_eq!(calls[0].1["limit"], 2);
+    drop(calls);
     models.shutdown().await;
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
