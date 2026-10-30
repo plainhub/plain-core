@@ -259,8 +259,8 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
         .await
         .unwrap();
         if attempt >= 5 {
-            use crate::http::auth::login_channel::{Client, LoginMode};
-            let (_, hello) = Client::start(&cid, LoginMode::Password).unwrap();
+            use crate::services::confirmation_channel::{Client, ConfirmationMode};
+            let (_, hello) = Client::start(&cid, ConfirmationMode::Password).unwrap();
             socket
                 .send(ClientMessage::Text(
                     serde_json::to_string(&hello).unwrap().into(),
@@ -840,11 +840,11 @@ async fn password_keys(
     >,
     state: &ServerState,
     client_id: &str,
-) -> crate::http::auth::login_channel::Channel {
-    use crate::http::auth::login_channel::{Client, LoginMode};
+) -> crate::services::confirmation_channel::Channel {
+    use crate::services::confirmation_channel::{Client, ConfirmationMode};
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
-    let (client, hello) = Client::start(client_id, LoginMode::Password).unwrap();
+    let (client, hello) = Client::start(client_id, ConfirmationMode::Password).unwrap();
     socket
         .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
         .await

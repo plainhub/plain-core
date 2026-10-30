@@ -63,7 +63,7 @@ impl Attempts {
             .get(generation)
             .map(|a| a.state.clone())
     }
-    fn begin(
+    pub(super) fn begin(
         &self,
         context: Option<&ServerState>,
         id: Option<String>,

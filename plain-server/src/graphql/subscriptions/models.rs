@@ -104,6 +104,7 @@ pub struct PairingRequestNotice {
     pub signature: String,
     pub from_ip: String,
     pub aware_supported: bool,
+    pub verification_code: String,
 }
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]

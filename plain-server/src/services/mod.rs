@@ -62,3 +62,6 @@ pub(crate) mod http_server;
 
 #[cfg(feature = "core")]
 pub(crate) mod clipboard;
+
+#[cfg(feature = "core")]
+pub(crate) mod confirmation_channel;

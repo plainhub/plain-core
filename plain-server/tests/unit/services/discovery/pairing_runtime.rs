@@ -140,8 +140,16 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     };
     assert!(plain_rs::peers::pairing::security::verify_request(&request));
     assert_eq!(request.from_id, "local");
+    assert!(matches!(
+        received.recv().await.unwrap(),
+        Message::PairVerification(_)
+    ));
     let second = execute(&state, start()).await.unwrap();
     let _ = received.recv().await.unwrap();
+    assert!(matches!(
+        received.recv().await.unwrap(),
+        Message::PairVerification(_)
+    ));
     assert!(
         execute(
             &state,
@@ -251,6 +259,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         .await
         .is_err()
     );
+    super::super::pairing_confirmation::tests::verify_incoming(&state, &request);
     let (generation, mut calls) = state.host.connect();
     let host = state.host.clone();
     let responder = tokio::spawn(async move {
@@ -314,11 +323,21 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
 async fn native_main_pairing_queries_are_read_only_and_reject_stale_request_identity() {
     let (_dir, server) = fixture("fixture");
     let native = server.native_graphql().unwrap();
-    let response = native.execute(async_graphql::Request::new(r#"{ pairingStates { deviceId generation phase } }"#)).await;
+    let response = native
+        .execute(async_graphql::Request::new(
+            r#"{ pairingStates { deviceId generation phase } }"#,
+        ))
+        .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["pairingStates"], json!([]));
-    assert!(!server.native_management().unwrap().is_pairing_request_current("absent".into(), "stale".into()).unwrap());
+    assert!(
+        !server
+            .native_management()
+            .unwrap()
+            .is_pairing_request_current("absent".into(), "stale".into())
+            .unwrap()
+    );
     let response = native
         .execute(async_graphql::Request::new(
             r#"mutation { cancelPairing(generation:"absent") }"#,
@@ -367,9 +386,16 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
     for _ in 0..256 {
         let mut events = state.events.subscribe();
         let (generation, mut requests) = state.host.connect();
-        success(&state, &json!({"id":"peer","name":"Phone","key":"fixture-secret"}), "127.0.0.1");
+        success(
+            &state,
+            &json!({"id":"peer","name":"Phone","key":"fixture-secret"}),
+            "127.0.0.1",
+        );
         let public = events.recv().await.unwrap();
-        assert_eq!(public.event_type, plain_rs::chat::events::WS_PAIRING_SUCCESS);
+        assert_eq!(
+            public.event_type,
+            plain_rs::chat::events::WS_PAIRING_SUCCESS
+        );
         let payload: Value = serde_json::from_str(&public.payload).unwrap();
         assert!(payload.get("key").is_none());
         let request = tokio::time::timeout(Duration::from_secs(3), async {
@@ -378,12 +404,18 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
                 if request["method"] == "pairingSucceeded" {
                     break request;
                 }
-                state.host.reply(generation, json!({"id":request["id"],"result":null})).unwrap();
+                state
+                    .host
+                    .reply(generation, json!({"id":request["id"],"result":null}))
+                    .unwrap();
             }
         })
         .await
         .unwrap();
-        assert_eq!(request["params"], json!({"deviceId":"peer","key":"fixture-secret"}));
+        assert_eq!(
+            request["params"],
+            json!({"deviceId":"peer","key":"fixture-secret"})
+        );
         state.host.disconnect(generation);
         let (replacement, mut requests) = state.host.connect();
         let repeated = tokio::time::timeout(Duration::from_secs(3), async {
@@ -392,13 +424,19 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
                 if request["method"] == "pairingSucceeded" {
                     break request;
                 }
-                state.host.reply(replacement, json!({"id":request["id"],"result":null})).unwrap();
+                state
+                    .host
+                    .reply(replacement, json!({"id":request["id"],"result":null}))
+                    .unwrap();
             }
         })
         .await
         .unwrap();
         assert_eq!(repeated["params"], request["params"]);
-        state.host.reply(replacement, json!({"id":repeated["id"],"result":null})).unwrap();
+        state
+            .host
+            .reply(replacement, json!({"id":repeated["id"],"result":null}))
+            .unwrap();
         tokio::time::timeout(Duration::from_secs(3), async {
             loop {
                 if state.pairing_runtime.pending_success.lock().unwrap().requests.is_empty() {
@@ -421,4 +459,41 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
         state.host.disconnect(replacement);
     }
     server.stop_core().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn incoming_ble_message_succeeds_when_lan_address_is_invalid() {
+    let (_directory, server) = fixture("local");
+    let state = server.runtime_state();
+    let request: PairingRequest = serde_json::from_value(json!({"fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false})).unwrap();
+    state
+        .pairing_runtime
+        .remember(&request, "fixture-ble")
+        .unwrap();
+    let target = Target {
+        device_id: "peer".into(),
+        device_name: "Fixture".into(),
+        device_ip: "invalid host".into(),
+        device_port: 2443,
+    };
+    let (generation, mut calls) = state.host.connect();
+    let host = state.host.clone();
+    let reply = tokio::spawn(async move {
+        let call = calls.recv().await.unwrap();
+        assert_eq!(call["method"], "pairingNotification");
+        assert_eq!(call["params"]["address"], "fixture-ble");
+        host.reply(generation, json!({"id":call["id"],"result":true}))
+            .unwrap();
+    });
+    send_incoming(
+        &state,
+        &request,
+        &target,
+        Message::PairRequest(request.clone()),
+    )
+    .await
+    .unwrap();
+    reply.await.unwrap();
+    server.shutdown().await;
 }

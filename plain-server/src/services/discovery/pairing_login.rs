@@ -146,11 +146,11 @@ pub(super) async fn run(
         .await
         .map_err(|_| anyhow::anyhow!("failed_connect_ws"))?;
     let mode = if password_required {
-        crate::http::auth::login_channel::LoginMode::Password
+        crate::services::confirmation_channel::ConfirmationMode::Password
     } else {
-        crate::http::auth::login_channel::LoginMode::DeviceConfirmation
+        crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation
     };
-    let (client, hello) = crate::http::auth::login_channel::Client::start(&client_id, mode)?;
+    let (client, hello) = crate::services::confirmation_channel::Client::start(&client_id, mode)?;
     socket
         .send(tokio_tungstenite::tungstenite::Message::Text(
             serde_json::to_string(&hello)?.into(),
@@ -164,7 +164,7 @@ pub(super) async fn run(
             .ok_or_else(|| anyhow::anyhow!("failed_connect_ws"))??
         {
             Message::Text(text) => {
-                break serde_json::from_str::<crate::http::auth::login_channel::ServerHello>(
+                break serde_json::from_str::<crate::services::confirmation_channel::ServerHello>(
                     &text,
                 )?;
             }

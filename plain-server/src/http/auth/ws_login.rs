@@ -139,13 +139,13 @@ struct Pending {
 enum LoginProtection {
     Password {
         digest: String,
-        channel: super::login_channel::Channel,
+        channel: crate::services::confirmation_channel::Channel,
     },
-    DeviceConfirmation(super::login_channel::Channel),
+    DeviceConfirmation(crate::services::confirmation_channel::Channel),
 }
 
 impl LoginProtection {
-    fn channel(&self) -> &super::login_channel::Channel {
+    fn channel(&self) -> &crate::services::confirmation_channel::Channel {
         match self {
             Self::Password { channel, .. } | Self::DeviceConfirmation(channel) => channel,
         }
@@ -258,7 +258,7 @@ pub(crate) enum Request {
         client_id: String,
         client_ip: String,
         frame: String,
-        channel: super::login_channel::Channel,
+        channel: crate::services::confirmation_channel::Channel,
     },
     Complete {
         request_id: String,
@@ -527,11 +527,16 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             channel,
         } => {
             let protection = match channel.mode {
-                super::login_channel::LoginMode::Password => LoginProtection::Password {
-                    digest: password_digest(&state.prefs),
-                    channel,
-                },
-                super::login_channel::LoginMode::DeviceConfirmation => {
+                crate::services::confirmation_channel::ConfirmationMode::Password => {
+                    LoginProtection::Password {
+                        digest: password_digest(&state.prefs),
+                        channel,
+                    }
+                }
+                crate::services::confirmation_channel::ConfirmationMode::ChatPairing => {
+                    anyhow::bail!("Invalid login confirmation mode")
+                }
+                crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation => {
                     LoginProtection::DeviceConfirmation(channel)
                 }
             };

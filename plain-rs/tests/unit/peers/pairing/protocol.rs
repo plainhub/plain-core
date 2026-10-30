@@ -39,6 +39,7 @@ fn request_signature_data_format_is_locked() {
 #[test]
 fn response_signature_data_format_is_locked() {
     let resp = PairingResponse {
+        confirmation_proof: String::new(),
         request_signature: "REQUEST_SIGNATURE".into(),
         from_id: "client-b".to_string(),
         to_id: "client-a".to_string(),

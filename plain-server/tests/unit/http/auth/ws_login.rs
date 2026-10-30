@@ -266,7 +266,7 @@ async fn browser_login(
     password: Option<&str>,
 ) -> (
     LoginSocket,
-    super::super::login_channel::Channel,
+    crate::services::confirmation_channel::Channel,
     plain_rs::crypto::EcdhSession,
     Vec<u8>,
 ) {
@@ -279,11 +279,12 @@ async fn browser_login(
     .await
     .unwrap();
     let mode = if password.is_some() {
-        super::super::login_channel::LoginMode::Password
+        crate::services::confirmation_channel::ConfirmationMode::Password
     } else {
-        super::super::login_channel::LoginMode::DeviceConfirmation
+        crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation
     };
-    let (client, hello) = super::super::login_channel::Client::start(client_id, mode).unwrap();
+    let (client, hello) =
+        crate::services::confirmation_channel::Client::start(client_id, mode).unwrap();
     socket
         .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
         .await
@@ -396,9 +397,9 @@ async fn passwordless_hello_consumes_the_same_ip_limiter_before_key_exchange() {
     use futures_util::SinkExt;
     use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
-    let (_, hello) = super::super::login_channel::Client::start(
+    let (_, hello) = crate::services::confirmation_channel::Client::start(
         "browser",
-        crate::http::auth::login_channel::LoginMode::DeviceConfirmation,
+        crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
     )
     .unwrap();
     for index in 0..=LOGIN_ATTEMPT_LIMIT {
@@ -655,9 +656,9 @@ async fn successful_passwordless_logins_still_count_toward_the_rolling_ip_limit(
         tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid=blocked&auth=2"))
             .await
             .unwrap();
-    let (_, hello) = super::super::login_channel::Client::start(
+    let (_, hello) = crate::services::confirmation_channel::Client::start(
         "blocked",
-        crate::http::auth::login_channel::LoginMode::DeviceConfirmation,
+        crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
     )
     .unwrap();
     socket
@@ -747,9 +748,9 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
                 .await
                 .unwrap();
         } else {
-            let (client, hello) = super::super::login_channel::Client::start(
+            let (client, hello) = crate::services::confirmation_channel::Client::start(
                 "browser",
-                crate::http::auth::login_channel::LoginMode::DeviceConfirmation,
+                crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
             )
             .unwrap();
             socket
@@ -806,12 +807,12 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
 }
 
 fn password_protection(digest: &str) -> LoginProtection {
-    use super::super::login_channel::{Client, LoginMode, ServerHandshake};
+    use crate::services::confirmation_channel::{Client, ConfirmationMode, ServerHandshake};
     let (private, public) = plain_rs::crypto::ed25519_generate();
-    let (client, hello) = Client::start("browser", LoginMode::Password).unwrap();
+    let (client, hello) = Client::start("browser", ConfirmationMode::Password).unwrap();
     let (server, response) = ServerHandshake::start(
         "browser",
-        LoginMode::Password,
+        ConfirmationMode::Password,
         "device",
         &hello,
         &private,
@@ -835,7 +836,7 @@ fn password_protection(digest: &str) -> LoginProtection {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_encryption() {
-    use super::super::login_channel::{Client, LoginMode};
+    use crate::services::confirmation_channel::{Client, ConfirmationMode};
     use futures_util::SinkExt;
     use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
@@ -855,7 +856,7 @@ async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_
         .unwrap();
         let mut context = String::new();
         if handshake {
-            let (client, hello) = Client::start(client_id, LoginMode::Password).unwrap();
+            let (client, hello) = Client::start(client_id, ConfirmationMode::Password).unwrap();
             socket
                 .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
                 .await
@@ -1016,7 +1017,7 @@ async fn idle_connections_consume_the_login_budget_before_any_message() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn a_signed_hello_does_not_extend_the_initial_exchange_deadline() {
-    use super::super::login_channel::{Client, LoginMode};
+    use crate::services::confirmation_channel::{Client, ConfirmationMode};
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
@@ -1025,7 +1026,7 @@ async fn a_signed_hello_does_not_extend_the_initial_exchange_deadline() {
     ))
     .await
     .unwrap();
-    let (_, hello) = Client::start("incomplete", LoginMode::DeviceConfirmation).unwrap();
+    let (_, hello) = Client::start("incomplete", ConfirmationMode::DeviceConfirmation).unwrap();
     socket
         .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
         .await

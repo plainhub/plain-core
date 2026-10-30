@@ -22,6 +22,10 @@ pub(super) async fn dispatch(
             return ble::message(&[], reply.to_string().as_bytes());
         }
         Message::DiscoverReply(_) => return ble::message(&[], &[]),
+        Message::PairVerification(verification) => {
+            crate::services::discovery::pairing_confirmation::handle(state, verification).await?;
+            return ble::message(&[], &[]);
+        }
         Message::PairRequest(request) => pairing_runtime::Request::ReceiveRequest {
             request,
             address,

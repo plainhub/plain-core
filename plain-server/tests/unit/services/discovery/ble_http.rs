@@ -277,11 +277,16 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     .await
     .unwrap();
     assert_eq!(ble::nearby_body(&ack).unwrap(), b"1");
+    assert!(events.try_recv().is_err());
+    let verification_code =
+        crate::services::discovery::pairing_confirmation::tests::verify_incoming(&state, &request);
     let event = events.try_recv().unwrap();
     assert_eq!(event.event_type, "PAIRING_REQUEST_RECEIVED");
     let delivered: plain_rs::peers::pairing::protocol::PairingRequest =
         serde_json::from_str(&event.payload).unwrap();
     assert_eq!(delivered.signature, request.signature);
+    let notice: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+    assert_eq!(notice["verificationCode"], verification_code);
     assert_eq!(delivered.from_ip, "");
     assert!(plain_rs::peers::pairing::security::verify_request(
         &delivered

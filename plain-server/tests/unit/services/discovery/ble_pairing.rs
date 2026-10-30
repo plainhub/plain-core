@@ -62,7 +62,7 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
     let driver = tokio::spawn(async move {
         let mut body = None;
         let mut step = 0;
-        let mut response = None;
+        let mut notifications = std::collections::VecDeque::new();
         while let Some(effect) = effects.recv().await {
             let result = match effect["method"].as_str().unwrap() {
                 "blePairConnect" => {
@@ -75,53 +75,77 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                     json!(true)
                 }
                 "blePairSend" => {
-                    let request =
-                        match Message::parse(effect["params"]["body"].as_str().unwrap()).unwrap() {
-                            Message::PairRequest(r) => r,
-                            _ => panic!(),
-                        };
-                    assert!(plain_rs::peers::pairing::security::verify_request(&request));
-                    body = Some(request.clone());
-                    pairing::receive_request(&remote_state.pairing, &request).unwrap();
-                    let result = pairing::respond(
-                        &remote_state.db,
-                        &remote_state.prefs,
-                        &remote_state.pairing,
-                        request,
-                        true,
-                        device(),
-                    )
-                    .unwrap();
-                    response = Some(serde_json::from_value(result["response"].clone()).unwrap());
+                    match Message::parse(effect["params"]["body"].as_str().unwrap()).unwrap() {
+                        Message::PairRequest(request) => {
+                            assert!(plain_rs::peers::pairing::security::verify_request(&request));
+                            body = Some(request.clone());
+                            pairing::receive_request(&remote_state.pairing, &request).unwrap();
+                            remote_state
+                                .pairing_runtime
+                                .confirmations
+                                .register(&request)
+                                .unwrap();
+                        }
+                        Message::PairVerification(verification) => {
+                            match remote_state
+                                .pairing_runtime
+                                .confirmations
+                                .process(&remote_state, verification)
+                                .unwrap()
+                            {
+                                super::super::pairing_confirmation::Action::Notify {
+                                    message,
+                                    ..
+                                } => notifications.push_back(message.wire().unwrap()),
+                                super::super::pairing_confirmation::Action::Ready {
+                                    request,
+                                    code,
+                                } => {
+                                    assert_eq!(code.len(), 9);
+                                    let result = pairing::respond(
+                                        &remote_state.db,
+                                        &remote_state.prefs,
+                                        &remote_state.pairing,
+                                        request,
+                                        true,
+                                        device(),
+                                    )
+                                    .unwrap();
+                                    let mut response: plain_rs::peers::pairing::protocol::PairingResponse = serde_json::from_value(result["response"].clone()).unwrap();
+                                    remote_state
+                                        .pairing_runtime
+                                        .confirmations
+                                        .seal(&mut response)
+                                        .unwrap();
+                                    notifications.push_back("malformed".into());
+                                    let mut wrong = response.clone();
+                                    wrong.from_id = "unrelated".into();
+                                    notifications
+                                        .push_back(Message::PairResponse(wrong).wire().unwrap());
+                                    let mut invalid = response.clone();
+                                    invalid.signature = "invalid".into();
+                                    notifications
+                                        .push_back(Message::PairResponse(invalid).wire().unwrap());
+                                    notifications
+                                        .push_back(Message::PairResponse(response).wire().unwrap());
+                                }
+                                _ => panic!("Unexpected receiver verification action"),
+                            }
+                        }
+                        _ => panic!("Unexpected pairing wire message"),
+                    }
                     json!(true)
                 }
                 "blePairWait" => {
                     assert_eq!(local_state.pairing.states()[0].1, "PAIRING");
                     assert!(effect["params"]["timeoutMs"].as_u64().unwrap() <= 1000);
                     step += 1;
-                    let notification = match step {
-                        1 => "malformed".into(),
-                        2 => {
-                            let mut wrong: plain_rs::peers::pairing::protocol::PairingResponse =
-                                response.clone().unwrap();
-                            wrong.from_id = "unrelated".into();
-                            Message::PairResponse(wrong).wire().unwrap()
-                        }
-                        3 => {
-                            let mut invalid: plain_rs::peers::pairing::protocol::PairingResponse =
-                                response.clone().unwrap();
-                            invalid.signature = "invalid".into();
-                            Message::PairResponse(invalid).wire().unwrap()
-                        }
-                        _ => Message::PairResponse(response.clone().unwrap())
-                            .wire()
-                            .unwrap(),
-                    };
+                    let notification = notifications.pop_front().unwrap();
                     json!({"connected":true,"notification":notification})
                 }
                 "blePairClose" => {
                     assert!(body.is_some());
-                    assert_eq!(step, 4);
+                    assert_eq!(step, 5);
                     host.reply(generation, json!({"id":effect["id"],"result":true}))
                         .unwrap();
                     break;

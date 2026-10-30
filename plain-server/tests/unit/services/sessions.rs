@@ -38,17 +38,20 @@ fn offer(
     state: &ServerState,
     client: &plain_rs::crypto::EcdhSession,
     peer: Value,
-) -> (ws_login::Request, crate::http::auth::login_channel::Channel) {
+) -> (
+    ws_login::Request,
+    crate::services::confirmation_channel::Channel,
+) {
     use sha2::Digest;
     let digest = plain_rs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
-    use crate::http::auth::login_channel::{Client, LoginMode, ServerHandshake};
-    let (login, hello) = Client::start("browser", LoginMode::Password).unwrap();
+    use crate::services::confirmation_channel::{Client, ConfirmationMode, ServerHandshake};
+    let (login, hello) = Client::start("browser", ConfirmationMode::Password).unwrap();
     let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     let now = chrono::Utc::now().timestamp_millis() as u64;
     let device_id = state.native_client_id().unwrap();
     let (server, response) = ServerHandshake::start(
         "browser",
-        LoginMode::Password,
+        ConfirmationMode::Password,
         &device_id,
         &hello,
         &signing,

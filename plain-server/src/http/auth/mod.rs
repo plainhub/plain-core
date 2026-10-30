@@ -8,9 +8,6 @@ pub mod replay;
 pub mod ws_login;
 
 #[cfg(feature = "core")]
-pub(crate) mod login_channel;
-
-#[cfg(feature = "core")]
 pub mod guest_graphql;
 
 #[cfg(feature = "core")]

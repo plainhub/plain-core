@@ -54,13 +54,18 @@ pub(crate) fn start(
     };
     let ticket: Ticket = serde_json::from_value(value["ticket"].clone())?;
     let request = serde_json::from_value(value["request"].clone())?;
+    let verification = state
+        .pairing_runtime
+        .confirmations
+        .begin(&request, &ticket)?
+        .wire()?;
     let body = Message::PairRequest(request).wire()?;
     jobs.insert(ticket.target.device_id.clone(), ticket.clone());
     drop(jobs);
     let state = state.clone();
     let returned = ticket.clone();
     tokio::spawn(async move {
-        let result = run(&state, &ticket, &body).await;
+        let result = run(&state, &ticket, &body, &verification).await;
         if let Err(Cause::Failed(error)) = result {
             if state
                 .pairing
@@ -107,7 +112,12 @@ async fn host(
         }
     }
 }
-async fn run(state: &ServerState, ticket: &Ticket, body: &str) -> Result<(), Cause> {
+async fn run(
+    state: &ServerState,
+    ticket: &Ticket,
+    body: &str,
+    verification: &str,
+) -> Result<(), Cause> {
     let facts = json!({"generation":ticket.generation});
     let connect = json!({
         "generation": ticket.generation,
@@ -136,6 +146,11 @@ async fn run(state: &ServerState, ticket: &Ticket, body: &str) -> Result<(), Cau
         WS_PAIRING_STARTED,
         json!({"deviceId":ticket.target.device_id,"deviceName":ticket.target.device_name,"generation":ticket.generation}),
     );
+    let mut verify = facts.clone();
+    verify["body"] = json!(verification);
+    if host(state, ticket, "blePairSend", verify).await? != Value::Bool(true) {
+        return Err(Cause::Failed("Failed to send pairing verification".into()));
+    }
     loop {
         let Some(remaining) = state
             .pairing
@@ -155,7 +170,35 @@ async fn run(state: &ServerState, ticket: &Ticket, body: &str) -> Result<(), Cau
         if body.len() > 65536 {
             continue;
         }
-        let Ok(Message::PairResponse(response)) = Message::parse(body) else {
+        let message = match Message::parse(body) {
+            Ok(message) => message,
+            Err(_) => continue,
+        };
+        if let Message::PairVerification(verification) = message {
+            match state
+                .pairing_runtime
+                .confirmations
+                .process(state, verification)
+                .map_err(|e| Cause::Failed(e.to_string()))?
+            {
+                super::pairing_confirmation::Action::Send {
+                    ticket: reply_ticket,
+                    message,
+                } => {
+                    if reply_ticket.generation != ticket.generation {
+                        return Err(Cause::Stopped);
+                    }
+                    let mut send = facts.clone();
+                    send["body"] = json!(message.wire().map_err(|e| Cause::Failed(e.to_string()))?);
+                    if host(state, ticket, "blePairSend", send).await? != Value::Bool(true) {
+                        return Err(Cause::Failed("Failed to send pairing verification".into()));
+                    }
+                }
+                _ => return Err(Cause::Failed("Unexpected pairing verification step".into())),
+            }
+            continue;
+        }
+        let Message::PairResponse(response) = message else {
             continue;
         };
         if response.from_id != ticket.target.device_id {
@@ -170,6 +213,11 @@ async fn run(state: &ServerState, ticket: &Ticket, body: &str) -> Result<(), Cau
         {
             return Err(Cause::Stopped);
         }
+        state
+            .pairing_runtime
+            .confirmations
+            .response(&response)
+            .map_err(|e| Cause::Failed(e.to_string()))?;
         let result = pairing::complete_checked(
             &state.db,
             &state.prefs,

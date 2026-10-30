@@ -56,6 +56,7 @@ fn response(
     let kp = signing_keypair(prefs)?;
     let ecdh = accepted.then(EcdhSession::generate);
     let mut response = PairingResponse {
+        confirmation_proof: String::new(),
         request_signature: request.signature.clone(),
         from_id: actor(prefs)?,
         to_id: request.from_id,

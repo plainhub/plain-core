@@ -1,5 +1,5 @@
 use crate::assembly::server::ServerState;
-use crate::http::auth::login_channel;
+use crate::services::confirmation_channel;
 use axum::{
     extract::{
         ConnectInfo, Query, State, WebSocketUpgrade,
@@ -289,8 +289,8 @@ async fn run(
     let mut pending: Option<String> = None;
     enum LoginHandshake {
         AwaitingCommitment,
-        AwaitingReveal(login_channel::ServerHandshake),
-        Ready(login_channel::Channel),
+        AwaitingReveal(confirmation_channel::ServerHandshake),
+        Ready(confirmation_channel::Channel),
         Submitted,
     }
     let mut handshake = LoginHandshake::AwaitingCommitment;
@@ -322,19 +322,19 @@ async fn run(
                                 LoginHandshake::AwaitingCommitment => {
                                     let password_type = plain_rs::prefs::security::password_type(&state.prefs)?;
                                     let mode = match (params.auth.as_deref(), password_type) {
-                                        (Some("1"), PasswordType::Fixed) => login_channel::LoginMode::Password,
-                                        (Some("2"), PasswordType::None) => login_channel::LoginMode::DeviceConfirmation,
+                                        (Some("1"), PasswordType::Fixed) => confirmation_channel::ConfirmationMode::Password,
+                                        (Some("2"), PasswordType::None) => confirmation_channel::ConfirmationMode::DeviceConfirmation,
                                         _ => anyhow::bail!("invalid_login_request"),
                                     };
                                     anyhow::ensure!(enabled(&state), "desktop_access_disabled");
-                                    let request = serde_json::from_str::<login_channel::ClientHello>(&text)?;
+                                    let request = serde_json::from_str::<confirmation_channel::ClientHello>(&text)?;
                                     let device_id = state.prefs.get_or(
                                         plain_rs::prefs::pref_keys::CLIENT_ID,
                                         String::new(),
                                     );
                                     let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs)?;
                                     let now = chrono::Utc::now().timestamp_millis() as u64;
-                                    let (pending, response) = login_channel::ServerHandshake::start(
+                                    let (pending, response) = confirmation_channel::ServerHandshake::start(
                                         &params.cid,
                                         mode,
                                         &device_id,
@@ -346,7 +346,7 @@ async fn run(
                                     Ok(Some(response))
                                 }
                                 LoginHandshake::AwaitingReveal(pending) => {
-                                    let reveal = serde_json::from_str::<login_channel::ClientReveal>(&text)?;
+                                    let reveal = serde_json::from_str::<confirmation_channel::ClientReveal>(&text)?;
                                     let now = chrono::Utc::now().timestamp_millis() as u64;
                                     handshake = LoginHandshake::Ready(pending.finish(&reveal, now)?);
                                     Ok(None)

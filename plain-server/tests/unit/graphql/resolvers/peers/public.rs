@@ -33,7 +33,9 @@ fn fixture_with(
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();
-    prefs.set("api_permissions", vec!["READ_PHONE_NUMBERS"]).unwrap();
+    prefs
+        .set("api_permissions", vec!["READ_PHONE_NUMBERS"])
+        .unwrap();
     let server = crate::assembly::server::ContentServer::start(
         dir.path(),
         &plain_rs::utils::base64::base64_encode(&[3; 32]),
@@ -153,19 +155,24 @@ async fn pairing_sends_the_device_the_contract_described() {
 }
 
 #[tokio::test]
-async fn responding_to_a_pairing_request_passes_the_whole_handshake() {
+async fn responding_requires_a_verified_current_pairing_request() {
     let (_dir, schema) = fixture();
     let responded = query(
         &schema,
         r#"mutation { respondToPairing(input: {
             fromId: "peer-9", fromName: "Tablet", port: 4321, deviceType: TABLET,
             ecdhPublicKey: "ecdh", signaturePublicKey: "sig", timestamp: 1767322,
-            ips: ["10.0.0.5"], signature: "signed", fromIp: "10.0.0.5",
+            ips: ["192.0.2.5"], signature: "signed", fromIp: "192.0.2.5",
             awareSupported: true
         }, accepted: true) }"#,
     )
     .await;
-    assert_eq!(responded["data"]["respondToPairing"], true, "{responded}");
+    assert!(
+        responded["errors"]
+            .to_string()
+            .contains("Pairing verification required"),
+        "{responded}"
+    );
 }
 
 #[tokio::test]
@@ -249,8 +256,7 @@ async fn main_identity_rename_and_pairing_code_use_shared_preferences_and_refuse
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let value = response.data.into_json().unwrap();
     assert_eq!(value["app"]["clientId"], executor.client_id());
-    let settings =
-        core.native_management().unwrap().preferences().unwrap();
+    let settings = core.native_management().unwrap().preferences().unwrap();
     assert_eq!(
         plain_rs::utils::base64::base64_decode(settings["signature_public_key"].as_str().unwrap())
             .len(),
@@ -270,13 +276,19 @@ async fn main_identity_rename_and_pairing_code_use_shared_preferences_and_refuse
     let value = response.data.into_json().unwrap();
     assert_eq!(value["app"]["deviceName"], "Shared device");
     assert_eq!(
-        core.native_management().unwrap().preferences().unwrap()
-            ["signature_public_key"],
+        core.native_management().unwrap().preferences().unwrap()["signature_public_key"],
         public_key
     );
     let management = core.native_management().unwrap();
-    assert!(management.pairing_code().await.is_err(), "An inactive listener cannot produce a usable QR code");
-    assert!(!management.is_pairing_request_current("absent".into(), "stale".into()).unwrap());
+    assert!(
+        management.pairing_code().await.is_err(),
+        "An inactive listener cannot produce a usable QR code"
+    );
+    assert!(
+        !management
+            .is_pairing_request_current("absent".into(), "stale".into())
+            .unwrap()
+    );
     core.stop_core().await;
     for document in [
         identity,

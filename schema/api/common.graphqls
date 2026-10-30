@@ -165,6 +165,7 @@ type PairingRequestNotice {
 	signature: String!
 	fromIp: String!
 	awareSupported: Boolean!
+	verificationCode: String!
 }
 
 type Peer {

@@ -42,6 +42,7 @@ impl PairingRequest {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingResponse {
+    pub confirmation_proof: String,
     pub request_signature: String,
     pub from_id: String,
     pub to_id: String,

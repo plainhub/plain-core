@@ -23,6 +23,7 @@ struct Association {
 #[derive(Default)]
 pub(crate) struct Runtime {
     associations: Mutex<HashMap<String, Association>>,
+    pub(crate) confirmations: super::pairing_confirmation::Confirmations,
     pub(crate) attempts: super::pairing_attempts::Attempts,
     pub(crate) commit: Mutex<()>,
     pending_success: Mutex<PendingSuccess>,
@@ -66,6 +67,14 @@ impl Runtime {
             },
         );
         Ok(())
+    }
+    fn address(&self, id: &str, signature: &str) -> Option<String> {
+        self.associations
+            .lock()
+            .unwrap()
+            .get(id)
+            .filter(|a| a.signature == signature && a.received.elapsed() < Duration::from_secs(300))
+            .map(|a| a.address.clone())
     }
     fn take(&self, id: &str, signature: &str) -> Option<String> {
         let mut map = self.associations.lock().unwrap();
@@ -160,7 +169,9 @@ pub(crate) fn success(state: &ServerState, peer: &Value, ip: &str) {
     };
     let mut pending = state.pairing_runtime.pending_success.lock().unwrap();
     pending.requests.insert(id.to_owned(), key.to_owned());
-    if pending.running { return; }
+    if pending.running {
+        return;
+    }
     pending.running = true;
     let state = state.clone();
     tokio::spawn(async move { deliver_successes(state).await });
@@ -174,7 +185,10 @@ async fn deliver_successes(state: ServerState) {
             let mut pending = state.pairing_runtime.pending_success.lock().unwrap();
             match pending.requests.iter().next() {
                 Some((id, key)) => Some((id.clone(), key.clone())),
-                None => { pending.running = false; None }
+                None => {
+                    pending.running = false;
+                    None
+                }
             }
         };
         let Some((id, key)) = next else { return };
@@ -197,7 +211,9 @@ async fn deliver_successes(state: ServerState) {
         match response {
             Ok(_) => {
                 let mut pending = state.pairing_runtime.pending_success.lock().unwrap();
-                if pending.requests.get(&id) == Some(&key) { pending.requests.remove(&id); }
+                if pending.requests.get(&id) == Some(&key) {
+                    pending.requests.remove(&id);
+                }
             }
             Err(error) => {
                 log::warn!("Pairing host callback failed: {error}");
@@ -210,7 +226,12 @@ async fn deliver_successes(state: ServerState) {
             }
         }
     }
-    state.pairing_runtime.pending_success.lock().unwrap().running = false;
+    state
+        .pairing_runtime
+        .pending_success
+        .lock()
+        .unwrap()
+        .running = false;
 }
 pub(super) async fn local_device(state: &ServerState) -> anyhow::Result<Device> {
     let reply: plain_rs::discovery::nearby_wire::DiscoverReply = serde_json::from_value(
@@ -336,6 +357,10 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             };
             let ticket: Ticket = serde_json::from_value(result["ticket"].clone())?;
             let request: PairingRequest = serde_json::from_value(result["request"].clone())?;
+            let verification = state
+                .pairing_runtime
+                .confirmations
+                .begin(&request, &ticket)?;
             let sent = nearby_http::send(
                 &ticket.target.device_ip,
                 ticket.target.device_port,
@@ -361,6 +386,15 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                         json!({"deviceId":ticket.target.device_id,"deviceName":ticket.target.device_name,"generation":ticket.generation}),
                     );
                 }
+                anyhow::ensure!(
+                    nearby_http::send(
+                        &ticket.target.device_ip,
+                        ticket.target.device_port,
+                        &verification
+                    )
+                    .await?,
+                    "Failed to send pairing verification"
+                );
             } else if state
                 .pairing
                 .cancel(&ticket.target.device_id, Some(&ticket.generation))
@@ -423,11 +457,7 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                 }
             }
             if is_new {
-                event(
-                    state,
-                    plain_rs::chat::events::WS_PAIRING_REQUEST_RECEIVED,
-                    serde_json::to_value(&request)?,
-                );
+                state.pairing_runtime.confirmations.register(&request)?;
             }
             json!(is_new)
         }
@@ -464,6 +494,7 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             {
                 return Ok(Value::Null);
             }
+            state.pairing_runtime.confirmations.response(&response)?;
             let result = pairing::complete(
                 &state.db,
                 &state.prefs,
@@ -503,7 +534,8 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             let target = state
                 .pairing
                 .incoming_target(&request.from_id, &request.signature);
-            let result = pairing::respond(
+            state.pairing_runtime.confirmations.ready(&request)?;
+            let mut result = pairing::respond(
                 &state.db,
                 &state.prefs,
                 &state.pairing,
@@ -514,50 +546,19 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             if result.is_null() {
                 return Ok(Value::Null);
             }
-            let response: PairingResponse = serde_json::from_value(result["response"].clone())?;
+            let mut response: PairingResponse = serde_json::from_value(result["response"].clone())?;
+            state.pairing_runtime.confirmations.seal(&mut response)?;
+            result["response"] = serde_json::to_value(&response)?;
             let target = target.ok_or_else(|| anyhow::anyhow!("Incoming pairing disappeared"))?;
             if !result["peer"].is_null() {
                 success(state, &result["peer"], &target.device_ip);
             } else {
                 failed(state, &target, "Pairing request was rejected", None);
             }
-            let address = state
+            send_incoming(state, &request, &target, Message::PairResponse(response)).await?;
+            state
                 .pairing_runtime
                 .take(&request.from_id, &request.signature);
-            let lan_response = response.clone();
-            let lan = async {
-                if !target.device_ip.is_empty() {
-                    let _ = nearby_http::send(
-                        &target.device_ip,
-                        target.device_port,
-                        &Message::PairResponse(lan_response),
-                    )
-                    .await;
-                }
-            };
-            let ble = async {
-                if let Some(address) = address {
-                    let body = Message::PairResponse(response).wire()?;
-                    let sent = state
-                        .host
-                        .call(
-                            "pairingNotification",
-                            json!({"address":address,"body":body}),
-                        )
-                        .await;
-                    if !matches!(sent, Ok(Value::Bool(true))) {
-                        failed(
-                            state,
-                            &target,
-                            "Failed to send pairing response via BLE",
-                            None,
-                        );
-                    }
-                }
-                Ok::<_, anyhow::Error>(())
-            };
-            let (_, ble) = tokio::join!(lan, ble);
-            ble?;
             result
         }
     })
@@ -575,7 +576,12 @@ pub(crate) async fn handle_nearby_post(
         .unwrap_or_default();
     if !matches!(
         kind,
-        "PAIR_REQUEST" | "PAIR_RESPONSE" | "PAIR_CANCEL" | "DISCOVER" | "DISCOVER_REPLY"
+        "PAIR_REQUEST"
+            | "PAIR_RESPONSE"
+            | "PAIR_CANCEL"
+            | "PAIR_VERIFICATION"
+            | "DISCOVER"
+            | "DISCOVER_REPLY"
     ) {
         return Ok(false);
     }
@@ -600,6 +606,9 @@ pub(crate) async fn handle_nearby_post(
                 },
             )
             .await?;
+        }
+        Message::PairVerification(verification) => {
+            super::pairing_confirmation::handle(state, verification).await?;
         }
         Message::PairCancel(cancel) => {
             execute(state, Request::ReceiveCancel { cancel }).await?;
@@ -643,3 +652,40 @@ pub(crate) async fn accept_report(
 #[cfg(test)]
 #[path = "../../../tests/unit/services/discovery/pairing_runtime.rs"]
 mod tests;
+
+pub(crate) async fn send_incoming(
+    state: &ServerState,
+    request: &PairingRequest,
+    target: &Target,
+    message: Message,
+) -> anyhow::Result<()> {
+    let address = state
+        .pairing_runtime
+        .address(&request.from_id, &request.signature);
+    let body = message.wire()?;
+    let lan = async {
+        if target.device_ip.is_empty() {
+            return Ok(false);
+        }
+        nearby_http::send(&target.device_ip, target.device_port, &message).await
+    };
+    let ble = async {
+        match address {
+            Some(address) => state
+                .host
+                .call(
+                    "pairingNotification",
+                    json!({"address":address,"body":body}),
+                )
+                .await
+                .map(|value| value == Value::Bool(true))
+                .map_err(anyhow::Error::msg),
+            None => Ok(false),
+        }
+    };
+    let (lan, ble) = tokio::join!(lan, ble);
+    if matches!(&lan, Ok(true)) || matches!(&ble, Ok(true)) {
+        return Ok(());
+    }
+    anyhow::bail!("Failed to send pairing message: LAN {lan:?}, BLE {ble:?}")
+}
