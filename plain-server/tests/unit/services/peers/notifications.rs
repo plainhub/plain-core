@@ -827,3 +827,23 @@ async fn saturated_host_recovers_the_latest_snapshot_and_missed_alerts() {
     assert_eq!(recovery["groups"][0]["items"][0]["id"], "latest");
     assert_eq!(recovery["alerts"].as_array().unwrap().iter().map(|item| item["id"].as_str().unwrap()).collect::<Vec<_>>(), ["new", "latest"]);
 }
+#[tokio::test]
+async fn state_changes_before_host_attachment_are_delivered_as_the_initial_snapshot() {
+    let (store, peer, identity, host, mut callbacks) = fixture();
+    event(&mut callbacks);
+    host.disconnect(callbacks.generation);
+    drop(callbacks);
+    let before = host.callback_attempts.load(std::sync::atomic::Ordering::Relaxed);
+    store.apply(&peer.id, &identity, observation(vec![notification("before-attach")]), &host).unwrap();
+    assert_eq!(host.callback_attempts.load(std::sync::atomic::Ordering::Relaxed), before);
+    let mut current = CallbackReceiver::new(host.clone());
+    store.notify_snapshot(&host).unwrap();
+    let snapshot = event(&mut current);
+    assert_eq!(snapshot["groups"][0]["items"][0]["id"], "before-attach");
+    assert!(snapshot.get("alerts").is_none());
+    store.apply(&peer.id, &identity, observation(vec![notification("after-attach")]), &host).unwrap();
+    let update = event(&mut current);
+    assert_eq!(update["alerts"][0]["id"], "after-attach");
+    assert!(update["revision"].as_u64().unwrap() > snapshot["revision"].as_u64().unwrap());
+    host.disconnect(current.generation);
+}

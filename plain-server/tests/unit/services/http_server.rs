@@ -160,3 +160,22 @@ async fn native_restart_waiter_rejects_a_replaced_operation() {
     let finished = runtime.wait_finished(second.revision).await.unwrap();
     assert_eq!((finished.http_port, finished.https_port), (8180, 8543));
 }
+#[tokio::test]
+async fn state_changes_before_host_attachment_are_delivered_as_the_initial_snapshot() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let before = state.host.callback_attempts.load(std::sync::atomic::Ordering::Relaxed);
+    state.http_server.failed("listener startup failed".into());
+    state.publish_http_status();
+    assert_eq!(state.host.callback_attempts.load(std::sync::atomic::Ordering::Relaxed), before);
+    let (generation, mut requests) = state.host.connect();
+    state.http_server.notify_snapshot(&state.host).unwrap();
+    let request = requests.try_recv().unwrap();
+    assert_eq!(request["method"], "httpServerStatusChanged");
+    assert_eq!(request["params"]["state"], "error");
+    assert_eq!(request["params"]["message"], "listener startup failed");
+    state.host.reply(generation, json!({"id":request["id"],"result":null})).unwrap();
+    state.host.disconnect(generation);
+    core.stop_core().await;
+}

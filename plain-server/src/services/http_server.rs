@@ -29,9 +29,10 @@ struct HostStatus {
 impl ServerState {
     pub(crate) fn publish_http_status(&self) {
         let mut recovering = self.http_server.host_delivery.lock().unwrap();
+        if !self.host.connected() { return; }
         if let Err(error) = self.host.notify("httpServerStatusChanged", serde_json::json!(self.http_server.host_status())) {
             log::warn!("HTTP server status callback: {error}");
-            if *recovering || !self.host.connected() { return; }
+            if *recovering { return; }
             *recovering = true;
             let state = self.clone();
             tokio::spawn(async move {

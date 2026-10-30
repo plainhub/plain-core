@@ -22,6 +22,8 @@ struct PendingReply {
     _permit: tokio::sync::OwnedSemaphorePermit,
 }
 pub struct Host {
+    #[cfg(test)]
+    pub(crate) callback_attempts: std::sync::atomic::AtomicUsize,
     state: Arc<Mutex<State>>,
     ready: Notify,
     capacity: Arc<Semaphore>,
@@ -60,6 +62,8 @@ fn is_dynamic_property(key: &str) -> bool {
 impl Host {
     fn new(startup: super::startup::StartupConfig) -> Self {
         Self {
+            #[cfg(test)]
+            callback_attempts: std::sync::atomic::AtomicUsize::new(0),
             state: Arc::new(Mutex::new(State::default())),
             ready: Notify::new(),
             capacity: Arc::new(Semaphore::new(REQUEST_CAPACITY)),
@@ -156,6 +160,8 @@ impl Host {
     }
 
     pub(crate) fn notify(&self, method: &'static str, params: Value) -> Result<(), String> {
+        #[cfg(test)]
+        self.callback_attempts.fetch_add(1, Ordering::Relaxed);
         let activity = if method == "systemWebActivity" {
             if self.activity_in_flight.swap(true, Ordering::AcqRel) {
                 return Ok(());

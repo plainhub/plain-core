@@ -82,11 +82,11 @@ impl Store {
             state.missed_permissions_changed |= permissions_changed;
             return;
         }
+        if !host.connected() { return; }
         let group = state.peers.get(id).map(|peer| &peer.group);
         let params = json!({"revision":state.revision,"peerId":id,"group":group,"alerts":alerts,"permissionsChanged":permissions_changed});
         if let Err(error) = host.notify("peerNotificationsChanged", params) {
             log::warn!("Peer notifications callback: {error}");
-            if !host.connected() { return; }
             state.missed_alerts.extend(alerts);
             state.missed_permissions_changed |= permissions_changed;
             state.recovery_pending = true;
