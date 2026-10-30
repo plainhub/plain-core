@@ -649,3 +649,43 @@ fn ordinary_enqueue_keeps_its_existing_selection_behavior() {
     enqueue_selecting_if_idle(&db, &[audio("/unindexed.mp3", "Missing", 1000)]).unwrap();
     assert_eq!(get_audio_current(&db).unwrap(), "");
 }
+
+#[test]
+fn replacing_queue_selects_a_track_and_keeps_old_state_when_a_track_is_missing() {
+    let db = test_db("replace-queue");
+    let old = audio("/queue/old.mp3", "Old", 1);
+    indexed_enqueue(&db, &[old.clone()], false).unwrap();
+    indexed_current(&db, &old.path).unwrap();
+    let before = crate::media::audio::playback::snapshot(&db).unwrap();
+    let incoming = [
+        audio("/queue/one.mp3", "One", 1),
+        audio("/queue/two.mp3", "Two", 2),
+    ];
+    register_audio_tracks(&db, &incoming);
+    let mut broken = incoming.to_vec();
+    broken.push(audio("/queue/missing.mp3", "Missing", 1));
+    assert!(replace_queue(&db, &broken, false).is_err());
+    let mut changed = incoming[0].clone();
+    changed.file_id = Some("different-track".into());
+    assert!(replace_queue(&db, &[changed], false).is_err());
+    assert_eq!(
+        paths_of(&queue_page(&db, 0, 10, "").unwrap()),
+        vec![old.path]
+    );
+    assert_eq!(
+        crate::media::audio::playback::snapshot(&db).unwrap(),
+        before
+    );
+    let selected = replace_queue(&db, &incoming, false).unwrap().unwrap();
+    assert_eq!(selected.path, incoming[0].path);
+    assert_eq!(
+        paths_of(&queue_page(&db, 0, 10, "").unwrap()),
+        paths_of(&incoming)
+    );
+    assert_eq!(db.audio_current_file_id(), selected.file_id);
+    let selected = replace_queue(&db, &incoming, true).unwrap().unwrap();
+    assert!(incoming.iter().any(|track| track.path == selected.path));
+    assert!(replace_queue(&db, &[], false).unwrap().is_none());
+    assert_eq!(queue_total(&db).unwrap(), 0);
+    assert!(db.audio_current_file_id().is_none());
+}

@@ -324,6 +324,54 @@ pub(crate) fn remove_paths_conn(
     Ok(())
 }
 
+pub fn replace_queue(
+    db: &Db,
+    items: &[AudioTrack],
+    shuffle: bool,
+) -> DomainResult<Option<AudioTrack>> {
+    transaction(db, |connection, state| {
+        let mut seen = HashSet::new();
+        let mut queued = Vec::new();
+        for item in items {
+            let track = io::audio_by_path(connection, &item.path)?
+                .ok_or_else(|| DomainError::Other("audio track unavailable".into()))?;
+            if item
+                .file_id
+                .as_ref()
+                .is_some_and(|id| Some(id) != track.file_id.as_ref())
+            {
+                return Err(DomainError::Other("audio track identity changed".into()));
+            }
+            let file_id = track.file_id.unwrap();
+            if seen.insert(file_id.clone()) {
+                queued.push(QueueItem {
+                    file_id,
+                    path: track.path,
+                    title: track.title,
+                    artist: track.artist,
+                    duration_ms: track.duration_ms,
+                    sort_order: queued.len() as i64,
+                });
+            }
+        }
+        if shuffle {
+            use rand::seq::SliceRandom;
+            queued.shuffle(&mut rand::thread_rng());
+        }
+        let start = queued.first().map(AudioTrack::from);
+        io::replace_queue_items(connection, &queued)?;
+        state.select("")?;
+        state.select(
+            start
+                .as_ref()
+                .map(|track| track.path.as_str())
+                .unwrap_or_default(),
+        )?;
+        state.current_file_id = start.as_ref().and_then(|track| track.file_id.clone());
+        Ok(start)
+    })
+}
+
 pub fn clear_queue(db: &Db) -> DomainResult<()> {
     transaction(db, |c, state| {
         c.execute("DELETE FROM audio_queue_items", [])?;

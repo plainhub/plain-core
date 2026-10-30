@@ -421,6 +421,35 @@ impl AudioMutation {
         .await?;
         Ok(true)
     }
+    async fn replace_audio_queue(
+        &self,
+        ctx: &Context<'_>,
+        query: String,
+        shuffle: bool,
+    ) -> async_graphql::Result<Option<AudioItem>> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let tracks = search_tracks(ctx, &query).await?;
+        let prefs = prefs(ctx).clone();
+        let local = is_local(ctx);
+        let start = audio(ctx)?
+            .run(move |db, library| {
+                library.cache_ids(
+                    &tracks
+                        .iter()
+                        .filter_map(|track| track.file_id.clone())
+                        .collect::<Vec<_>>(),
+                )?;
+                let start = domain::replace_queue(db, &tracks, shuffle)?;
+                if local && start.is_none() {
+                    plain_rs::media::audio::commands::clear_engine(db, &prefs, library)?;
+                }
+                Ok(start)
+            })
+            .await?;
+        notify_playback(ctx)?;
+        Ok(start.map(item))
+    }
+
     async fn clear_audio_queue(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
         let prefs = prefs(ctx).clone();
         let local = is_local(ctx);

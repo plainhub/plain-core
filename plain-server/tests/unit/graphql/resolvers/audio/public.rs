@@ -1405,3 +1405,37 @@ async fn queue_query_id_selection_keeps_order_and_rejects_missing_ids_before_ins
         assert!(domain::queue_page(db, 0, 10, "").unwrap().is_empty());
     }
 }
+
+#[tokio::test]
+async fn replace_queue_returns_one_selected_track_and_keeps_remote_state_separate() {
+    let (_dir, schema) = fixture();
+    seed_queue(
+        &schema,
+        &[
+            ("/replace/one.mp3", "One", "Artist"),
+            ("/replace/two.mp3", "Two", "Artist"),
+        ],
+    );
+    let db = database(&schema);
+    let playlist = domain::create_playlist(db, "Replace").unwrap();
+    let tracks = domain::queue_page(db, 0, 10, "").unwrap();
+    domain::add_playlist_items(db, &playlist.id, &tracks).unwrap();
+    let selected = query(&schema, &format!(r#"mutation {{ replaceAudioQueue(query:"playlist_id:{}",shuffle:false) {{ mediaId title }} }}"#, playlist.id)).await;
+    assert_eq!(
+        selected["data"]["replaceAudioQueue"]["title"], "One",
+        "{selected}"
+    );
+    assert_eq!(
+        db.remote_audio().audio_current_file_id().as_deref(),
+        Some("test:/replace/one.mp3")
+    );
+    assert_eq!(domain::queue_total(&db.remote_audio()).unwrap(), 2);
+    assert!(db.audio_current_file_id().is_none());
+    let (_dir, denied) = fixture_with("[]", |method, _| panic!("unauthorized host call {method}"));
+    let result = query(
+        &denied,
+        r#"mutation { replaceAudioQueue(query:"playlist_id:unknown",shuffle:false) { mediaId } }"#,
+    )
+    .await;
+    assert_eq!(result["errors"][0]["message"], "no_permission");
+}
