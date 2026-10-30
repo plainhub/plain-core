@@ -2,10 +2,8 @@ use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::Instant;
 use crate::graphql::types::Long;
 use crate::graphql::types::facts::rows;
-use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Object, SimpleObject};
-use plain_rs::enums::DataType;
 use serde_json::json;
 use std::path::Path;
 
@@ -108,27 +106,10 @@ impl DocsQuery {
         if !public_gate::require_granted(ctx, &[STORAGE]).await? {
             return Ok(Vec::new());
         }
-        let rows = crate::graphql::resolvers::media::public::library_rows(
-            ctx,
-            DataType::Doc,
-            query,
-            crate::graphql::resolvers::files::types::FileSortBy::NameAsc,
-            0,
-            i32::MAX as u32,
-        )
-        .await?;
-        let mut counts: std::collections::BTreeMap<String, i32> = Default::default();
-        for row in rows {
-            let path = text(&row, "path");
-            let ext = Path::new(&path)
-                .extension()
-                .map(|value| value.to_string_lossy().to_uppercase())
-                .unwrap_or_default();
-            if !ext.is_empty() {
-                *counts.entry(ext).or_default() += 1;
-            }
-        }
-        Ok(counts
+        Ok(crate::graphql::resolvers::media::public::catalog(ctx)
+            .document_extensions(&query)
+            .await
+            .map_err(async_graphql::Error::new)?
             .into_iter()
             .map(|(ext, count)| DocExtGroup { ext, count })
             .collect())

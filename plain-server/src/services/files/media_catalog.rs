@@ -183,6 +183,34 @@ pub(crate) fn ids(
     })?)
 }
 
+pub(crate) fn document_extensions(db: &Db, query: &str) -> Result<Vec<(String, i32)>> {
+    let (sql, args) = selection(db, DataType::Doc, query)?;
+    Ok(db.with_conn(|conn| -> rusqlite::Result<_> {
+        let mut statement = conn.prepare(&sql.replace("{columns}", "file_name"))?;
+        let mut counts = std::collections::BTreeMap::new();
+        let paths =
+            statement.query_map(params_from_iter(args.iter()), |row| row.get::<_, String>(0))?;
+        for path in paths {
+            add_document_extension(&mut counts, &path?);
+        }
+        Ok(counts.into_iter().collect())
+    })?)
+}
+
+pub(crate) fn add_document_extension(
+    counts: &mut std::collections::BTreeMap<String, i32>,
+    path: &str,
+) {
+    if let Some(extension) = std::path::Path::new(path)
+        .extension()
+        .filter(|value| !value.is_empty())
+    {
+        *counts
+            .entry(extension.to_string_lossy().to_uppercase())
+            .or_default() += 1;
+    }
+}
+
 pub(crate) fn bucket_item_facts(db: &Db, data_type: DataType) -> Result<Vec<serde_json::Value>> {
     let (sql, args) = selection(db, data_type, "")?;
     let sql = format!(

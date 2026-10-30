@@ -223,3 +223,24 @@ fn bulk_selection_includes_every_row_beyond_ten_thousand_and_deduplicates_ids() 
     .unwrap();
     assert_eq!(selected, vec![rows[0].id.clone()]);
 }
+
+#[test]
+fn document_extensions_keep_filters_and_combine_extension_case() {
+    let directory = tempfile::tempdir().unwrap();
+    let db = Db::open(&directory.path().join("plain.db")).unwrap();
+    db.record_media_files(&[
+        file(DataType::Doc, "/documents/report.PDF", "Report", 30),
+        file(DataType::Doc, "/documents/other.pdf", "Other", 30),
+        file(DataType::Doc, "/elsewhere/notes.txt", "Notes", 30),
+    ])
+    .unwrap();
+    assert_eq!(
+        document_extensions(&db, "bucket_id:/documents").unwrap(),
+        vec![("PDF".into(), 2)]
+    );
+    assert_eq!(
+        document_extensions(&db, "text:report").unwrap(),
+        vec![("PDF".into(), 1)]
+    );
+    assert!(document_extensions(&db, "trash:true").unwrap().is_empty());
+}

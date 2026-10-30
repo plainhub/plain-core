@@ -125,7 +125,8 @@ impl MediaCatalog {
         let db = match self {
             Self::Native(db) | Self::Platform { db, .. } => db,
         };
-        let plan = image_search_plan(db, query, ids, include_text).map_err(|error| error.to_string())?;
+        let plan =
+            image_search_plan(db, query, ids, include_text).map_err(|error| error.to_string())?;
         if plan.ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -209,6 +210,43 @@ impl MediaCatalog {
                 })
                 .await
                 .map_err(|error| error.to_string())?
+            }
+        }
+    }
+
+    pub(crate) async fn document_extensions(
+        &self,
+        query: &str,
+    ) -> Result<Vec<(String, i32)>, String> {
+        match self {
+            Self::Native(db) => {
+                let db = db.clone();
+                let query = query.to_owned();
+                tokio::task::spawn_blocking(move || {
+                    media_catalog::document_extensions(&db, &query)
+                        .map_err(|error| error.to_string())
+                })
+                .await
+                .map_err(|error| error.to_string())?
+            }
+            Self::Platform { db, host } => {
+                let mut counts = std::collections::BTreeMap::new();
+                let mut offset = 0;
+                let page_size = 512;
+                loop {
+                    let facts = host.call("systemMediaRows", platform_params(db, DataType::Doc, query,
+                        json!({"dataType":DataType::Doc,"sortBy":"NAME_ASC","pathsOnly":true,"limit":page_size,"offset":offset}))?).await?;
+                    let paths: Vec<String> =
+                        serde_json::from_value(facts).map_err(|error| error.to_string())?;
+                    for path in &paths {
+                        media_catalog::add_document_extension(&mut counts, path);
+                    }
+                    if paths.len() < page_size {
+                        break;
+                    }
+                    offset += paths.len();
+                }
+                Ok(counts.into_iter().collect())
             }
         }
     }

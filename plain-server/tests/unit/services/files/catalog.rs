@@ -212,3 +212,52 @@ async fn semantic_image_candidates_intersect_platform_ids_and_keep_non_text_filt
             .is_err()
     );
 }
+
+#[tokio::test]
+async fn document_extensions_read_only_bounded_path_pages() {
+    let directory = tempfile::tempdir().unwrap();
+    let db = Arc::new(Db::open(&directory.path().join("data.db")).unwrap());
+    let host = Arc::new(Host::default());
+    let (generation, mut requests) = host.connect();
+    let replies = host.clone();
+    let worker = tokio::spawn(async move {
+        for offset in [0, 512] {
+            let request = requests.recv().await.unwrap();
+            assert_eq!(request["method"], "systemMediaRows");
+            let params = &request["params"];
+            assert_eq!(params["dataType"], "DOC");
+            assert_eq!(params["pathsOnly"], true);
+            assert_eq!(params["limit"], 512);
+            assert_eq!(params["offset"], offset);
+            assert_eq!(
+                params["plan"]["args"],
+                json!([
+                    "text/%",
+                    "application/pdf",
+                    "application/msword",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "application/javascript",
+                    "/documents",
+                ])
+            );
+            let paths = if offset == 0 {
+                vec!["/documents/report.PDF"; 512]
+            } else {
+                vec!["/documents/notes.txt", "/documents/no-extension"]
+            };
+            replies
+                .reply(generation, json!({"id":request["id"],"result":paths}))
+                .unwrap();
+        }
+    });
+    let catalog = MediaCatalog::Platform { db, host };
+    assert_eq!(
+        catalog
+            .document_extensions("bucket_id:/documents")
+            .await
+            .unwrap(),
+        vec![("PDF".into(), 512), ("TXT".into(), 1)]
+    );
+    worker.await.unwrap();
+}
