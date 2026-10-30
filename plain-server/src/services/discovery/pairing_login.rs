@@ -117,8 +117,11 @@ pub(super) async fn run(
     ensure!(local.port != 0, "chat_pairing_unavailable");
     let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs)?;
     let ecdh = EcdhSession::generate();
+    let startup = state.host.startup();
     let mut request = json!({
-        "browserName":"PlainApp","browserVersion":"","osName":"","osVersion":"","isMobile":false,
+        "browserName":"PlainApp","browserVersion":startup.app_version,
+        "osName":startup.os_name,"osVersion":startup.os_version,
+        "isMobile":matches!(startup.device_type, plain_rs::chat::enums::DeviceType::Phone | plain_rs::chat::enums::DeviceType::Tablet),
         "ecdhPublicKey":base64_encode(&ecdh.public_key_bytes),
         "peer":{"deviceName":local.name,"port":local.port,"deviceType":local.device_type,"ips":local.ips,"signaturePublicKey":base64_encode(&signing[32..])}
     });

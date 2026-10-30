@@ -132,6 +132,13 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
     .await
     .unwrap();
     let request = confirmation_request(&mut events).await;
+    let client = state.host.startup();
+    assert!(!client.os_name.is_empty());
+    assert!(!client.os_version.is_empty());
+    assert_eq!(request["request"]["osName"], client.os_name);
+    assert_eq!(request["request"]["osVersion"], client.os_version);
+    assert_eq!(request["request"]["browserVersion"], client.app_version);
+
     let waiting = phase(&state, &started.generation, &["WAITING_CONFIRMATION"]).await;
     assert_eq!(
         waiting.verification_code.as_deref(),
@@ -167,6 +174,11 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
             .unwrap()
             .token
     );
+    let session = remote_state.db.session_get(&local_id).unwrap().unwrap();
+    assert_eq!(session.os_name, client.os_name);
+    assert_eq!(session.os_version, client.os_version);
+    assert_eq!(session.browser_name, "PlainApp");
+    assert_eq!(session.browser_version, client.app_version);
     assert_eq!(base64_decode(&peer.key).len(), 32);
     assert_ne!(peer.key, peer.token);
     local.shutdown().await;
