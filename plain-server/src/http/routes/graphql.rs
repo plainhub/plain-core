@@ -233,34 +233,6 @@ pub(crate) async fn health() -> &'static str {
     "OK"
 }
 
-fn shutdown_allowed(address: SocketAddr) -> bool {
-    matches!(address.ip(), std::net::IpAddr::V4(ip) if ip == std::net::Ipv4Addr::LOCALHOST)
-        || matches!(address.ip(), std::net::IpAddr::V6(ip) if ip == std::net::Ipv6Addr::LOCALHOST)
-}
-
-pub(crate) async fn shutdown(
-    State(state): State<ServerState>,
-    ConnectInfo(address): ConnectInfo<SocketAddr>,
-) -> Response {
-    if !shutdown_allowed(address) {
-        return StatusCode::FORBIDDEN.into_response();
-    }
-    match crate::services::settings::preferences::Preferences::from_server(&state)
-        .patch(plain_rs::prefs::settings::SettingsPatch {
-            desktop_access: Some(false),
-            ..Default::default()
-        })
-        .await
-    {
-        Ok(_) => {}
-        Err(error) => {
-            log::error!("Desktop access shutdown failed: {error:?}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    }
-    StatusCode::GONE.into_response()
-}
-
 pub(crate) async fn init(
     State(state): State<ServerState>,
     ConnectInfo(_remote): ConnectInfo<SocketAddr>,

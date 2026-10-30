@@ -48,7 +48,6 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
             axum::routing::any(crate::services::casting::cast_runtime::callback),
         )
         .route("/init", post(crate::http::routes::graphql::init))
-        .route("/shutdown", get(crate::http::routes::graphql::shutdown))
         .layer(DefaultBodyLimit::max(32 * 1024 * 1024))
         .with_state(state.clone());
     Router::new()

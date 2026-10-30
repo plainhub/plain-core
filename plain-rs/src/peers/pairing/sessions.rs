@@ -246,6 +246,12 @@ impl Sessions {
             pending.started -= by;
         }
     }
+    #[cfg(feature = "test-seams")]
+    pub fn age_incoming_for_test(&self, id: &str, by: Duration) {
+        if let Some(incoming) = self.1.lock().unwrap().get_mut(id) {
+            incoming.received -= by;
+        }
+    }
     pub fn take_checked(&self, id: &str, generation: Option<&str>) -> Option<Pending> {
         let mut pending = self.0.lock().unwrap();
         if generation.is_some_and(|g| pending.get(id).is_none_or(|p| p.ticket.generation != g)) {

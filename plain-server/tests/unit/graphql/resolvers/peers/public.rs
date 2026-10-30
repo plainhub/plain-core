@@ -170,7 +170,7 @@ async fn responding_requires_a_verified_current_pairing_request() {
     assert!(
         responded["errors"]
             .to_string()
-            .contains("Pairing verification required"),
+            .contains("Pairing request expired or no longer available"),
         "{responded}"
     );
 }

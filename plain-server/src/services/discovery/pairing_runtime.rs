@@ -533,7 +533,8 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
         } => {
             let target = state
                 .pairing
-                .incoming_target(&request.from_id, &request.signature);
+                .incoming_target(&request.from_id, &request.signature)
+                .ok_or_else(|| anyhow::anyhow!("Pairing request expired or no longer available"))?;
             state.pairing_runtime.confirmations.ready(&request)?;
             let mut result = pairing::respond(
                 &state.db,
@@ -544,12 +545,11 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                 device,
             )?;
             if result.is_null() {
-                return Ok(Value::Null);
+                anyhow::bail!("Pairing request expired or no longer available");
             }
             let mut response: PairingResponse = serde_json::from_value(result["response"].clone())?;
             state.pairing_runtime.confirmations.seal(&mut response)?;
             result["response"] = serde_json::to_value(&response)?;
-            let target = target.ok_or_else(|| anyhow::anyhow!("Incoming pairing disappeared"))?;
             if !result["peer"].is_null() {
                 success(state, &result["peer"], &target.device_ip);
             } else {

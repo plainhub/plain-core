@@ -189,7 +189,7 @@ async fn dropping_core_releases_public_listeners() {
 }
 
 #[tokio::test]
-async fn health_and_loopback_shutdown_work_without_a_host() {
+async fn health_works_without_a_host() {
     let directory = tempfile::tempdir().unwrap();
     let token = plain_rs::utils::base64::base64_encode(&[14; 32]);
     let server = server(directory.path(), &token);
@@ -199,23 +199,6 @@ async fn health_and_loopback_shutdown_work_without_a_host() {
     let response = client.get(format!("{base}/health")).send().await.unwrap();
     assert_eq!(response.status(), 200);
     assert_eq!(response.text().await.unwrap(), "OK");
-    let response = client.get(format!("{base}/shutdown")).send().await.unwrap();
-    assert_eq!(response.status(), 410);
-    assert!(
-        !plain_rs::prefs::settings::snapshot(&server.runtime_state().prefs)
-            .unwrap()
-            .desktop_access
-    );
-    assert!(server.http_ports().await.is_some());
-    assert_eq!(
-        client
-            .get(format!("{base}/health"))
-            .send()
-            .await
-            .unwrap()
-            .status(),
-        200
-    );
     server.shutdown().await;
 }
 

@@ -47,6 +47,57 @@ fn device() -> Device {
 }
 #[cfg(feature = "http_transport")]
 #[tokio::test]
+async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
+    let (_local_dir, local) = fixture("local");
+    let (_remote_dir, remote) = fixture("remote");
+    let state = local.runtime_state();
+    let remote_state = remote.runtime_state();
+    let target = Target {
+        device_id: "local".into(),
+        device_name: "Local".into(),
+        device_ip: "127.0.0.1".into(),
+        device_port: 2443,
+    };
+    let started =
+        pairing::start(&remote_state.prefs, &remote_state.pairing, target, device()).unwrap();
+    let request: PairingRequest = serde_json::from_value(started["request"].clone()).unwrap();
+    execute(
+        &state,
+        Request::ReceiveRequest {
+            request: request.clone(),
+            address: "127.0.0.1".into(),
+            ble: false,
+        },
+    )
+    .await
+    .unwrap();
+    super::super::pairing_confirmation::tests::verify_incoming(&state, &request);
+    state.pairing.age_incoming_for_test(
+        &request.from_id,
+        plain_rs::peers::pairing::sessions::RESPONSE_TIMEOUT,
+    );
+    for accepted in [true, false] {
+        let error = execute(
+            &state,
+            Request::Respond {
+                request: request.clone(),
+                accepted,
+                device: device(),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Pairing request expired or no longer available"
+        );
+    }
+    assert!(plain_rs::db::chat_store::peers::all(&state.db).unwrap().is_empty());
+    local.shutdown().await;
+    remote.shutdown().await;
+}
+#[cfg(feature = "http_transport")]
+#[tokio::test]
 async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
     let (_dir, server) = fixture("local");
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
@@ -295,19 +346,22 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     )
     .unwrap();
     assert_eq!(accepted["peer"]["key"], completed["peer"]["key"]);
-    assert!(
-        execute(
+    for accepted in [true, false] {
+        let error = execute(
             &state,
             Request::Respond {
                 request: request.clone(),
-                accepted: true,
-                device: device()
-            }
+                accepted,
+                device: device(),
+            },
         )
         .await
-        .unwrap()
-        .is_null()
-    );
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Pairing request expired or no longer available"
+        );
+    }
     assert!(
         state
             .pairing_runtime
