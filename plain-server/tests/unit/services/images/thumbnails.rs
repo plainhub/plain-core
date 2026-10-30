@@ -3,10 +3,9 @@ use crate::services::images::thumbnails::Request;
 use sha2::Digest;
 use std::sync::{Arc, atomic::Ordering};
 
-fn variant(base: &Request, center_crop: Option<bool>, if_none_match: Option<&str>) -> Request {
+fn variant(base: &Request, center_crop: Option<bool>) -> Request {
     Request {
         center_crop: center_crop.unwrap_or(base.center_crop),
-        if_none_match: if_none_match.map(str::to_owned),
         ..Request {
             path: base.path.clone(),
             width: base.width,
@@ -14,7 +13,6 @@ fn variant(base: &Request, center_crop: Option<bool>, if_none_match: Option<&str
             center_crop: base.center_crop,
             file_id: base.file_id.clone(),
             file_name: base.file_name.clone(),
-            if_none_match: None,
         }
     }
 }
@@ -27,12 +25,20 @@ fn request_for(path: &std::path::Path) -> Request {
         center_crop: true,
         file_id: String::new(),
         file_name: String::new(),
-        if_none_match: None,
     }
 }
 
 async fn render(state: &ServerState, request: Request) -> (u16, axum::http::HeaderMap, Vec<u8>) {
-    let response = crate::services::images::thumbnails::response(state, request).await;
+    render_conditional(state, request, None).await
+}
+
+async fn render_conditional(
+    state: &ServerState,
+    request: Request,
+    conditional: Option<&str>,
+) -> (u16, axum::http::HeaderMap, Vec<u8>) {
+    let bytes = state.thumbnails.get(state, request).await;
+    let response = crate::http::file_response::thumbnail(bytes, conditional);
     let status = response.status().as_u16();
     let headers = response.headers().clone();
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
@@ -116,21 +122,21 @@ async fn a_changed_source_and_a_different_shape_both_invalidate() {
     write_image(&source, 160, 80);
 
     let base = request_for(&source);
-    let first = render(&state, variant(&base, None, None)).await;
+    let first = render(&state, variant(&base, None)).await;
     assert_eq!(first.0, 200);
 
-    let again = render(&state, variant(&base, None, None)).await;
+    let again = render(&state, variant(&base, None)).await;
     assert_eq!(again, first);
     assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
 
     write_image(&source, 240, 100);
-    let changed = render(&state, variant(&base, None, None)).await;
+    let changed = render(&state, variant(&base, None)).await;
     assert_ne!(
         changed.2, first.2,
         "a changed source must not serve the old bytes"
     );
 
-    let mut cropped = variant(&base, None, None);
+    let mut cropped = variant(&base, None);
     cropped.center_crop = false;
     let uncropped = render(&state, cropped).await;
     assert_ne!(
@@ -150,26 +156,33 @@ async fn a_matching_conditional_request_answers_not_modified() {
     write_image(&source, 160, 80);
 
     let base = request_for(&source);
-    let first = render(&state, variant(&base, None, None)).await;
+    let first = render(&state, variant(&base, None)).await;
     assert_eq!(first.0, 200);
     let etag = header(&first.1, "etag");
     assert_eq!(etag, format!("\"{}\"", hex(&first.2)));
 
-    let mut conditional = variant(&base, None, None);
-    conditional.if_none_match = Some(format!("\"old\", {etag}"));
-    let not_modified = render(&state, conditional).await;
+    let conditional = format!("\"old\", {etag}");
+    let not_modified = render_conditional(&state, variant(&base, None), Some(&conditional)).await;
     assert_eq!(not_modified.0, 304);
     assert!(not_modified.2.is_empty(), "304 carries no body");
 
-    let mut weak = variant(&base, None, None);
-    weak.if_none_match = Some(format!("W/{etag}"));
-    assert_eq!(render(&state, weak).await.0, 304);
+    let weak = format!("W/{etag}");
+    assert_eq!(
+        render_conditional(&state, variant(&base, None), Some(&weak))
+            .await
+            .0,
+        304
+    );
 
-    let mut other = variant(&base, None, None);
+    let mut other = variant(&base, None);
     other.center_crop = false;
-    let other_etag = header(&render(&state, variant(&other, None, None)).await.1, "etag");
-    let stale = variant(&other, None, Some(&etag));
-    assert_eq!(render(&state, stale).await.0, 200);
+    let other_etag = header(&render(&state, variant(&other, None)).await.1, "etag");
+    assert_eq!(
+        render_conditional(&state, variant(&other, None), Some(&etag))
+            .await
+            .0,
+        200
+    );
     assert_ne!(other_etag, etag);
 }
 

@@ -115,10 +115,20 @@ async fn fs_recent_tracked_once_per_view_not_per_chunk() {
     );
 
     call_fs(&state, &format!("id={id}"), &[range_header("bytes=0-9")]).await;
-    assert_eq!(recent::list(state.store.get().unwrap().as_ref(), 10).unwrap().len(), 1);
+    assert_eq!(
+        recent::list(state.store.get().unwrap().as_ref(), 10)
+            .unwrap()
+            .len(),
+        1
+    );
 
     call_fs(&state, &format!("id={id}"), &[]).await;
-    assert_eq!(recent::list(state.store.get().unwrap().as_ref(), 10).unwrap().len(), 1);
+    assert_eq!(
+        recent::list(state.store.get().unwrap().as_ref(), 10)
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[cfg(feature = "media")]
@@ -220,4 +230,116 @@ async fn fs_json_wrapped_image_reference_returns_decodable_thumbnail() {
     let thumbnail = image::load_from_memory(&body).unwrap();
     assert!(thumbnail.width() > 0 && thumbnail.width() <= 32);
     assert!(thumbnail.height() > 0 && thumbnail.height() <= 32);
+}
+
+#[tokio::test]
+async fn fs_rejects_missing_and_invalid_links_before_reading_files() {
+    let (_root, _core, state, _key) = test_state();
+    assert_eq!(
+        call_fs(&state, "", &[]).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        call_fs(&state, "id=invalid", &[]).await.status(),
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
+async fn fs_slice_queries_preserve_bounds_and_take_precedence_over_download_and_range() {
+    let (_root, _core, state, key) = test_state();
+    let (_dir, id) = temp_bin(&key);
+    let response = call_fs(
+        &state,
+        &format!("id={id}&offset=8&length=6&dl=1"),
+        &[range_header("bytes=0-1")],
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response
+            .headers()
+            .get(header::CONTENT_DISPOSITION)
+            .is_none()
+    );
+    assert_eq!(body_bytes(response).await, b"89");
+    for (extra, expected) in [
+        ("offset=-1&length=2", StatusCode::NOT_FOUND),
+        ("offset=0&length=262145", StatusCode::BAD_REQUEST),
+    ] {
+        assert_eq!(
+            call_fs(&state, &format!("id={id}&{extra}"), &[])
+                .await
+                .status(),
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion() {
+    let (_root, _core, state, _key) = test_state();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("shared.txt");
+    std::fs::write(&path, b"shared-payload").unwrap();
+    let shares = plain_rs::files::shares::Service::new(state.db.clone(), state.prefs.clone());
+    let share = shares
+        .create(
+            "fixture".into(),
+            vec![path.to_string_lossy().into_owned()],
+            true,
+            None,
+        )
+        .unwrap();
+    let key = plain_rs::utils::base64::base64_decode(&share.url_token);
+    let params = serde_json::json!({"sharedId":share.id,"virtualPath":"shared.txt"}).to_string();
+    let id = file_id(&key, &params);
+    let query = format!("id={id}&sid={}&dl=1", share.id);
+    let response = call_fs(&state, &query, &[range_header("bytes=0-5")]).await;
+    assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+    assert!(
+        response.headers()[header::CONTENT_DISPOSITION]
+            .to_str()
+            .unwrap()
+            .starts_with("attachment;")
+    );
+    assert_eq!(body_bytes(response).await, b"shared");
+    assert_eq!(
+        call_fs(&state, &format!("id={id}"), &[]).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    state.db.share_delete(&share.id).unwrap();
+    assert_eq!(
+        call_fs(&state, &query, &[]).await.status(),
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
+async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
+    let (_root, _core, state, key) = test_state();
+    let path = state.directory.join("preview.png");
+    image::RgbImage::new(64, 32).save(&path).unwrap();
+    let original = std::fs::read(&path).unwrap();
+    let id = file_id(&key, path.to_str().unwrap());
+    let query = format!("id={id}&w=16&h=16");
+    let response = call_fs(&state, &query, &[]).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let etag = response.headers()[header::ETAG]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let response = call_fs(&state, &query, &[(&header::IF_NONE_MATCH, &etag)]).await;
+    assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(response.headers()[header::ETAG], etag);
+    assert!(body_bytes(response).await.is_empty());
+    let response = call_fs(&state, &format!("{query}&dl=1"), &[]).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response.headers()[header::CONTENT_DISPOSITION]
+            .to_str()
+            .unwrap()
+            .starts_with("attachment;")
+    );
+    assert_eq!(body_bytes(response).await, original);
 }

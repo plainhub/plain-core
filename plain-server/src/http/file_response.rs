@@ -134,3 +134,72 @@ pub(crate) fn secure(mut response: Response, name: Option<&str>, download: bool)
     }
     response
 }
+
+pub(crate) async fn stream_temporary(
+    file: crate::services::files::previews::Temporary,
+    mime: &str,
+    headers: &HeaderMap,
+) -> Response {
+    use futures_util::StreamExt;
+    let response = stream_file(&file.0, mime, headers).await;
+    let (parts, body) = response.into_parts();
+    let stream = body.into_data_stream().map(move |chunk| {
+        let _ = &file;
+        chunk
+    });
+    Response::from_parts(parts, axum::body::Body::from_stream(stream))
+}
+
+pub(crate) fn thumbnail(
+    bytes: Result<Option<Vec<u8>>, String>,
+    conditional: Option<&str>,
+) -> Response {
+    use sha2::{Digest, Sha256};
+    match bytes {
+        Ok(Some(bytes)) => {
+            let mime = if bytes.starts_with(b"\x89PNG") {
+                "image/png"
+            } else {
+                "image/jpeg"
+            };
+            let etag = format!(
+                "\"{}\"",
+                plain_rs::utils::hex::bytes_to_hex(&Sha256::digest(&bytes))
+            );
+            if conditional.is_some_and(|value| {
+                value.split(',').any(|tag| {
+                    let tag = tag.trim();
+                    tag == "*" || tag.strip_prefix("W/").unwrap_or(tag) == etag
+                })
+            }) {
+                return (
+                    StatusCode::NOT_MODIFIED,
+                    [
+                        ("etag", etag),
+                        ("cache-control", "private, max-age=86400".to_string()),
+                    ],
+                )
+                    .into_response();
+            }
+            (
+                [
+                    ("content-type", mime.to_string()),
+                    ("etag", etag),
+                    ("cache-control", "private, max-age=86400".to_string()),
+                ],
+                bytes,
+            )
+                .into_response()
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(error) => (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({"error":error})),
+        )
+            .into_response(),
+    }
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/http/file_response.rs"]
+mod tests;

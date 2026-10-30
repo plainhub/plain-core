@@ -119,3 +119,12 @@ pub(crate) mod external_index;
 
 #[cfg(feature = "core")]
 mod watch_backend;
+
+#[cfg(feature = "core")]
+pub(crate) mod links;
+
+#[cfg(feature = "core")]
+pub(crate) mod content;
+
+#[cfg(feature = "core")]
+pub(crate) mod previews;

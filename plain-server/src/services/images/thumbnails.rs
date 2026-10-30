@@ -1,9 +1,4 @@
 use crate::assembly::server::ServerState;
-use axum::{
-    Json,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
 use plain_rs::utils::keyed_locks::KeyedLocks;
 use serde::Deserialize;
 use serde_json::json;
@@ -25,8 +20,6 @@ pub(crate) struct Request {
     #[serde(rename = "mediaId")]
     pub(crate) file_id: String,
     pub(crate) file_name: String,
-    #[serde(default)]
-    pub(crate) if_none_match: Option<String>,
 }
 pub(crate) struct Thumbnails {
     locks: KeyedLocks,
@@ -237,48 +230,6 @@ struct Temporary(PathBuf);
 impl Drop for Temporary {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
-    }
-}
-pub(crate) async fn response(state: &ServerState, request: Request) -> Response {
-    let conditional = request.if_none_match.clone();
-    match state.thumbnails.get(state, request).await {
-        Ok(Some(bytes)) => {
-            let mime = if bytes.starts_with(b"\x89PNG") {
-                "image/png"
-            } else {
-                "image/jpeg"
-            };
-            let etag = format!(
-                "\"{}\"",
-                plain_rs::utils::hex::bytes_to_hex(&Sha256::digest(&bytes))
-            );
-            if conditional.as_deref().is_some_and(|value| {
-                value.split(',').any(|tag| {
-                    let tag = tag.trim();
-                    tag == "*" || tag.strip_prefix("W/").unwrap_or(tag) == etag
-                })
-            }) {
-                return (
-                    StatusCode::NOT_MODIFIED,
-                    [
-                        ("etag", etag),
-                        ("cache-control", "private, max-age=86400".to_string()),
-                    ],
-                )
-                    .into_response();
-            }
-            (
-                [
-                    ("content-type", mime.to_string()),
-                    ("etag", etag),
-                    ("cache-control", "private, max-age=86400".to_string()),
-                ],
-                bytes,
-            )
-                .into_response()
-        }
-        Ok(None) => StatusCode::NOT_FOUND.into_response(),
-        Err(error) => (StatusCode::BAD_REQUEST, Json(json!({"error":error}))).into_response(),
     }
 }
 #[cfg(test)]

@@ -61,6 +61,11 @@ plain-server/
 │   │   ├── types/           GraphQL types
 │   │   └── executor.rs      Shared schema execution
 │   ├── services/            Business operations by domain
+│   │   └── files/
+│   │       ├── links.rs     Encrypted file links and share reference resolution
+│   │       ├── content.rs   File reads, previews and representation selection
+│   │       ├── previews.rs  Conversions and temporary preview ownership
+│   │       └── references.rs  Local paths, app:// and fid: references
 │   ├── host/                Platform requests, resources and event coordination
 │   └── native/              Native API entry points
 └── tests/unit/              Rust unit tests mirroring src/ paths
@@ -69,8 +74,14 @@ plain-server/
 For example, `/fs` is registered in `http/router.rs`, handled by
 [`http/fs.rs`](plain-server/src/http/fs.rs), and uses
 [`http/file_response.rs`](plain-server/src/http/file_response.rs) for local file
-streaming and Range responses. File reference resolution belongs to
-[`services/files/references.rs`](plain-server/src/services/files/references.rs).
+streaming and Range responses. The handler parses HTTP options, calls
+[`services/files/links.rs`](plain-server/src/services/files/links.rs) and
+[`services/files/content.rs`](plain-server/src/services/files/content.rs), then
+maps the result to an HTTP response. Conversions and temporary-file ownership live in
+[`services/files/previews.rs`](plain-server/src/services/files/previews.rs).
+[`services/files/references.rs`](plain-server/src/services/files/references.rs)
+resolves local paths, `app://` paths and `fid:` references. HTTP Range, thumbnail
+ETag/304 responses and download headers stay in `http/file_response.rs`.
 GraphQL HTTP extraction and response handling belong to `http/graphql.rs`;
 schema definitions and resolvers belong to `graphql/`.
 

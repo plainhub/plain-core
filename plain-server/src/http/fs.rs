@@ -1,452 +1,133 @@
-use crate::http::file_response::{escape, secure};
 use crate::assembly::server::ServerState;
+use crate::http::file_response::{self, secure};
+use crate::services::files::{
+    content::{self, Content, Options},
+    links,
+};
 use axum::{
-    body::Body,
     extract::{Request, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use futures_util::StreamExt;
-use serde_json::{Value, json};
-use std::path::{Path, PathBuf};
 
-fn query(request: &axum::http::request::Parts, key: &str) -> Option<String> {
-    plain_rs::utils::query::query_get(&request.uri.to_string(), key)
-}
-async fn primitive(
-    state: &ServerState,
-    operation: &str,
-    path: &str,
-    extra: Value,
-) -> anyhow::Result<Value> {
-    if operation == "convert3gp" {
-        if !crate::services::files::browser::capabilities().contains(&"VIDEO_3GP_CONVERT") {
-            return Ok(Value::Null);
-        }
-        let mime = crate::services::files::resources::read(&state.host, "mime", path, json!({}))
-            .await
-            .map_err(anyhow::Error::msg)?;
-        if !matches!(mime.as_str(), Some("video/3gpp" | "video/3gp")) {
-            return Ok(Value::Null);
-        }
-        let output = PathBuf::from(
-            extra["output"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Video output required"))?,
-        );
-        #[cfg(target_os = "android")]
-        let result = {
-            let input = state
-                .bridge
-                .read_file(path, state.stop.clone())
-                .await
-                .map_err(anyhow::Error::msg)?;
-            crate::services::files::browser::encode_android_file(
-                input,
-                output,
-                plain_rs::platform::android::media::Operation::Convert3gp,
-                state.stop.clone(),
-            )
-            .await
-            .map_err(anyhow::Error::msg)?
-        };
-        #[cfg(not(target_os = "android"))]
-        let input = {
-            let input = Temporary(
-                state
-                    .cache
-                    .root()
-                    .join(format!(".resource_input_{}", uuid::Uuid::new_v4())),
-            );
-            let body = state
-                .bridge
-                .resource(path, state.stop.clone())
-                .await
-                .map_err(|status| anyhow::anyhow!("Video source returned {status}"))?;
-            let mut chunks = body.into_data_stream();
-            use tokio::io::AsyncWriteExt;
-            let mut file = tokio::fs::File::create(&input.0).await?;
-            while let Some(chunk) = chunks.next().await {
-                file.write_all(&chunk?).await?;
-            }
-            file.flush().await?;
-            drop(file);
-            input
-        };
-        #[cfg(all(not(target_os = "android"), feature = "media"))]
-        let result = plain_media::previews::videos::encode_3gp(&input.0, &output).await?;
-        #[cfg(all(not(target_os = "android"), not(feature = "media")))]
-        let result = {
-            let _ = (input, output);
-            false
-        };
-        return Ok(Value::Bool(result));
-    }
-    if matches!(operation, "remux" | "transcode") {
-        let operation = if operation == "remux" {
-            crate::services::files::browser::Operation::Remux
-        } else {
-            crate::services::files::browser::Operation::Transcode
-        };
-        let output = state
-            .browser
-            .convert(path, operation)
-            .await
-            .map_err(anyhow::Error::msg)?;
-        return Ok(output
-            .map(|path| Value::String(path.to_string_lossy().into_owned()))
-            .unwrap_or(Value::Null));
-    }
-    crate::services::files::resources::read(&state.host, operation, path, extra)
-        .await
-        .map_err(anyhow::Error::msg)
-}
 pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
     let request = request.into_parts().0;
-    let id = query(&request, "id").unwrap_or_default();
+    let query = |key| plain_rs::utils::query::query_get(&request.uri.to_string(), key);
+    let id = query("id").unwrap_or_default();
     if id.is_empty() {
         return StatusCode::BAD_REQUEST.into_response();
     }
-    let resolved = async {
-        if let Some(sid) = query(&request, "sid") {
-            let shares =
-                plain_rs::files::shares::Service::new(state.db.clone(), state.prefs.clone());
-            let path = shares
-                .resolve_file(&sid, &id)?
-                .ok_or_else(|| anyhow::anyhow!("Shared file unavailable"))?;
-            return Ok((
-                path.clone(),
-                String::new(),
-                path.rsplit('/').next().unwrap_or_default().to_owned(),
-            ));
-        }
-        let plain = plain_rs::crypto::xchacha_decrypt(
-            &plain_rs::prefs::ensure_url_token(&state.prefs),
-            &plain_rs::utils::base64::base64_decode(&id),
-        )
-        .ok_or_else(|| anyhow::anyhow!("Invalid file id"))?;
-        let plain = String::from_utf8(plain)?;
-        if plain.starts_with('{') {
-            let value: Value = serde_json::from_str(&plain)?;
-            let path = crate::services::files::references::resolve(state.db.clone(), state.directory.clone(), value["path"].as_str().unwrap_or_default())?;
-            Ok::<_, anyhow::Error>((
-                path,
-                value["mediaId"].as_str().unwrap_or_default().to_owned(),
-                value["name"].as_str().unwrap_or_default().to_owned(),
-            ))
-        } else {
-            Ok((crate::services::files::references::resolve(state.db.clone(), state.directory.clone(), &plain)?, String::new(), String::new()))
-        }
-    }
-    .await;
-    match resolved {
-        Ok((path, media, name)) => match serve(&state, &request, &path, &media, &name).await {
-            Ok(response) => response,
-            Err(error) => (
-                StatusCode::FORBIDDEN,
-                format!("File is expired or does not exist. {error}"),
-            )
-                .into_response(),
-        },
-        Err(error) => (
-            StatusCode::FORBIDDEN,
-            format!("File is expired or does not exist. {error}"),
-        )
-            .into_response(),
-    }
-}
-struct Temporary(PathBuf);
-impl Drop for Temporary {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
-    }
-}
-async fn converted(
-    state: &ServerState,
-    operation: &str,
-    path: &str,
-    mime: &str,
-    headers: &HeaderMap,
-) -> anyhow::Result<Option<Response>> {
-    let output = state
-        .directory
-        .join(format!(".resource_{}", uuid::Uuid::new_v4()));
-    let temporary = Temporary(output.clone());
-    let value = primitive(state, operation, path, json!({"output":output})).await?;
-    if value.as_bool() != Some(true) {
-        return Ok(None);
-    }
-    let response = crate::http::file_response::stream_file(&output, mime, headers).await;
-    let (parts, body) = response.into_parts();
-    let stream = body.into_data_stream().map(move |chunk| {
-        let _ = &temporary;
-        chunk
-    });
-    Ok(Some(Response::from_parts(parts, Body::from_stream(stream))))
-}
-pub(crate) async fn serve(
-    state: &ServerState,
-    request: &axum::http::request::Parts,
-    path: &str,
-    file_id: &str,
-    name: &str,
-) -> anyhow::Result<Response> {
-    let download = query(request, "dl").as_deref() == Some("1");
-    if path.contains("!zip!/") {
-        let cached = state
-            .archives
-            .preview(&state.file_platform, path.to_owned())
-            .await
-            .map_err(anyhow::Error::msg)?;
-        let filename = if name.is_empty() {
-            path.trim_end_matches('/')
-                .rsplit('/')
-                .next()
-                .unwrap_or_default()
-        } else {
-            name
-        };
-        let mime = plain_rs::utils::mime::mime_from_ext(&cached.to_string_lossy());
-        let response =
-            crate::http::file_response::stream_file(&cached, mime, &request.headers).await;
-        return Ok(secure(response, Some(filename), download));
-    }
-    if let (Some(offset), Some(length)) = (
-        query(request, "offset").and_then(|v| v.parse::<i64>().ok()),
-        query(request, "length").and_then(|v| v.parse::<usize>().ok()),
-    ) {
-        if length > 0 && !path.starts_with("content://") && !path.starts_with("pkgicon://") {
-            if length > 256 * 1024 {
-                return Ok((StatusCode::BAD_REQUEST, "range length is too large").into_response());
-            }
-            use tokio::io::{AsyncReadExt, AsyncSeekExt};
-            if offset < 0 {
-                return Ok(StatusCode::NOT_FOUND.into_response());
-            }
-            let Ok(mut file) = tokio::fs::File::open(path).await else {
-                return Ok(StatusCode::NOT_FOUND.into_response());
-            };
-            file.seek(std::io::SeekFrom::Start(offset as u64)).await?;
-            let mut bytes = vec![0; length];
-            let mut n = 0;
-            while n < length {
-                let count = file.read(&mut bytes[n..]).await?;
-                if count == 0 {
-                    break;
-                }
-                n += count;
-            }
-            bytes.truncate(n);
-            return Ok(secure(
-                ([(header::CONTENT_TYPE, "application/octet-stream")], bytes).into_response(),
-                None,
-                false,
-            ));
-        }
-    }
-    if path.starts_with("content://") {
-        if let Some(response) =
-            converted(state, "convert3gp", path, "video/mp4", &request.headers).await?
-        {
-            return Ok(secure(response, None, false));
-        }
-        #[cfg(feature = "http_transport")]
-        {
-            let body = state
-                .bridge
-                .resource(path, state.stop.clone())
-                .await
-                .map_err(|s| anyhow::anyhow!("Resource stream failed: {s}"))?;
-            let response =
-                ([(header::CONTENT_TYPE, "application/octet-stream")], body).into_response();
-            let filename = if name.is_empty() {
-                path.rsplit('/').next().unwrap_or_default()
-            } else {
-                name
-            };
-            return Ok(secure(response, download.then_some(filename), download));
-        }
-        #[cfg(not(feature = "http_transport"))]
-        {
-            return Ok(StatusCode::NOT_FOUND.into_response());
-        }
-    }
-    if let Some(package) = path.strip_prefix("pkgicon://") {
-        return Ok(
-            match converted(
-                state,
-                "packageIcon",
-                package,
-                "application/octet-stream",
-                &request.headers,
-            )
-            .await?
-            {
-                Some(response) => secure(response, None, false),
-                None => StatusCode::NOT_FOUND.into_response(),
-            },
-        );
-    }
-    let meta = match tokio::fs::metadata(path).await {
-        Ok(meta) => meta,
-        Err(_) => return Ok(StatusCode::NOT_FOUND.into_response()),
-    };
-    if meta.is_dir() {
-        return Ok(StatusCode::BAD_REQUEST.into_response());
-    }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        let range = request
-            .headers
-            .get(header::RANGE)
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or_default();
-        let starts_view = range.is_empty()
+    let range = request
+        .headers
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    let options = Options {
+        download: query("dl").as_deref() == Some("1"),
+        offset: query("offset").and_then(|v| v.parse().ok()),
+        length: query("length").and_then(|v| v.parse().ok()),
+        width: query("w").and_then(|v| v.parse().ok()),
+        height: query("h").and_then(|v| v.parse().ok()),
+        center_crop: query("cc").as_deref() != Some("false"),
+        #[cfg(feature = "media")]
+        pdf: query("preview").as_deref() == Some("pdf"),
+        probe: query("probe").as_deref() == Some("1"),
+        transcode: query("tr").as_deref() == Some("1"),
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        starts_view: range.is_empty()
             || matches!(
                 plain_rs::utils::http::parse_range_header(range, u64::MAX),
                 plain_rs::utils::http::RangeParse::Full
                     | plain_rs::utils::http::RangeParse::Partial(0, _)
-            );
-        let thumbnail = query(request, "w").and_then(|value| value.parse::<u32>().ok());
-        if starts_view && thumbnail.is_none_or(|width| width > 200) {
-            if let Err(error) = plain_rs::recent_files::add(state.store.get()?.as_ref(), path) {
-                log::warn!("Recent file update failed: {error}");
-            }
-        }
-    }
-    #[cfg(feature = "media")]
-    if !download && query(request, "preview").as_deref() == Some("pdf") {
-        let modified = meta
-            .modified()?
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs() as i64;
-        let pdf = plain_media::previews::docs::get_or_create_pdf_preview(
-            state.cache.root(),
-            path,
-            modified,
-            meta.len() as i64,
-        )
-        .await?;
-        let filename = Path::new(if name.is_empty() { path } else { name })
-            .file_stem()
-            .and_then(|name| name.to_str())
-            .unwrap_or("document");
-        return Ok(secure(
-            crate::http::file_response::stream_file(&pdf, "application/pdf", &request.headers)
-                .await,
-            Some(&format!("{filename}.pdf")),
-            false,
-        ));
-    }
-    let filename = if name.is_empty() {
-        path.rsplit('/').next().unwrap_or_default()
-    } else {
-        name
+            ),
     };
-    let mime = plain_rs::utils::mime::mime_from_ext(path);
-    if query(request, "probe").as_deref() == Some("1") {
-        let codec = primitive(state, "probe", path, json!({})).await?;
-        let codec: String = codec
-            .as_str()
-            .unwrap_or_default()
-            .chars()
-            .filter(|ch| ch.is_alphanumeric())
-            .collect();
-        return Ok(secure(
-            axum::Json(json!({"codec":codec})).into_response(),
-            None,
-            false,
-        ));
-    }
-    if !download {
-        let animated = if mime.starts_with("image/") {
-            primitive(
-                state,
-                "animated",
+    let result = async {
+        let file = links::resolve(&state, &id, query("sid").as_deref())?;
+        let content = content::read(&state, file, options).await?;
+        let response = match content {
+            Content::File {
                 path,
-                json!({"fileName":escape(filename)}),
+                mime,
+                name,
+                download,
+            } => secure(
+                file_response::stream_file(&path, &mime, &request.headers).await,
+                Some(&name),
+                download,
+            ),
+            Content::Temporary { file, mime, name } => secure(
+                file_response::stream_temporary(file, mime, &request.headers).await,
+                name.as_deref(),
+                false,
+            ),
+            Content::Resource {
+                path,
+                name,
+                download,
+            } => {
+                #[cfg(feature = "http_transport")]
+                {
+                    let body = state
+                        .bridge
+                        .resource(&path, state.stop.clone())
+                        .await
+                        .map_err(|s| anyhow::anyhow!("Resource stream failed: {s}"))?;
+                    secure(
+                        ([(header::CONTENT_TYPE, "application/octet-stream")], body)
+                            .into_response(),
+                        name.as_deref(),
+                        download,
+                    )
+                }
+                #[cfg(not(feature = "http_transport"))]
+                {
+                    let _ = (path, name, download);
+                    StatusCode::NOT_FOUND.into_response()
+                }
+            }
+            Content::Bytes(bytes) => secure(
+                ([(header::CONTENT_TYPE, "application/octet-stream")], bytes).into_response(),
+                None,
+                false,
+            ),
+            Content::Codec(codec) => secure(
+                axum::Json(serde_json::json!({"codec":codec})).into_response(),
+                None,
+                false,
+            ),
+            Content::Thumbnail { bytes, name } => secure(
+                file_response::thumbnail(
+                    bytes,
+                    request
+                        .headers
+                        .get(header::IF_NONE_MATCH)
+                        .and_then(|v| v.to_str().ok()),
+                ),
+                Some(&name),
+                false,
+            ),
+            Content::NotFound => StatusCode::NOT_FOUND.into_response(),
+            Content::Directory => StatusCode::BAD_REQUEST.into_response(),
+            Content::SliceTooLarge => {
+                (StatusCode::BAD_REQUEST, "range length is too large").into_response()
+            }
+            Content::TranscodingUnavailable => (
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "video transcoding is not available for this file",
             )
-            .await?
-            .as_bool()
-                == Some(true)
-        } else {
-            false
+                .into_response(),
         };
-        if !animated {
-            if let (Some(width), Some(height)) = (
-                query(request, "w").and_then(|v| v.parse::<u32>().ok()),
-                query(request, "h").and_then(|v| v.parse::<u32>().ok()),
-            ) {
-                let response = crate::services::images::thumbnails::response(
-                    state,
-                    crate::services::images::thumbnails::Request {
-                        path: path.to_owned(),
-                        width,
-                        height,
-                        center_crop: query(request, "cc").as_deref() != Some("false"),
-                        file_id: file_id.to_owned(),
-                        file_name: escape(filename),
-                        if_none_match: request
-                            .headers
-                            .get(header::IF_NONE_MATCH)
-                            .and_then(|v| v.to_str().ok())
-                            .map(str::to_owned),
-                    },
-                )
-                .await;
-                return Ok(secure(response, Some(filename), false));
-            }
-            if let Some(response) =
-                converted(state, "decodePng", path, "image/png", &request.headers).await?
-            {
-                return Ok(secure(response, Some(filename), false));
-            }
-            if mime == "video/mp4" {
-                if query(request, "tr").as_deref() == Some("1") {
-                    let codec = primitive(state, "probe", path, json!({})).await?;
-                    if matches!(codec.as_str(), Some("hvc1" | "hev1")) {
-                        let output = primitive(state, "transcode", path, json!({}))
-                            .await
-                            .unwrap_or(Value::Null);
-                        return Ok(match output.as_str() {
-                            Some(output) => secure(
-                                crate::http::file_response::stream_file(
-                                    Path::new(output),
-                                    mime,
-                                    &request.headers,
-                                )
-                                .await,
-                                Some(filename),
-                                false,
-                            ),
-                            None => (
-                                StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                                "video transcoding is not available for this file",
-                            )
-                                .into_response(),
-                        });
-                    }
-                }
-                if let Some(output) = primitive(state, "remux", path, json!({})).await?.as_str() {
-                    return Ok(secure(
-                        crate::http::file_response::stream_file(
-                            Path::new(output),
-                            mime,
-                            &request.headers,
-                        )
-                        .await,
-                        Some(filename),
-                        false,
-                    ));
-                }
-            }
-        }
+        Ok::<_, anyhow::Error>(response)
     }
-    Ok(secure(
-        crate::http::file_response::stream_file(Path::new(path), mime, &request.headers).await,
-        Some(filename),
-        download,
-    ))
+    .await;
+    result.unwrap_or_else(|error| {
+        (
+            StatusCode::FORBIDDEN,
+            format!("File is expired or does not exist. {error}"),
+        )
+            .into_response()
+    })
 }
 
 #[cfg(all(test, not(any(target_os = "android", target_os = "ios"))))]

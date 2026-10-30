@@ -297,7 +297,6 @@ async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
                 center_crop: true,
                 file_id: String::new(),
                 file_name: "photo.png".into(),
-                if_none_match: None,
             },
         )
         .await
