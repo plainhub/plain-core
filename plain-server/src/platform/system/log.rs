@@ -69,6 +69,15 @@ pub fn enabled(level: Level) -> bool {
     level.to_filter() <= log::max_level()
 }
 
+pub fn metadata_enabled(metadata: &log::Metadata<'_>) -> bool {
+    enabled(from_facade_level(metadata.level()))
+        && (metadata.level() <= log::Level::Info
+            || !matches!(
+                metadata.target().split("::").next(),
+                Some("fjall" | "lsm_tree")
+            ))
+}
+
 /// Current level. Tests save/restore it around level-sensitive assertions.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn level() -> Level {
@@ -247,12 +256,12 @@ static FILE_LOGGER: FileLogger = FileLogger;
 
 impl log::Log for FileLogger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
-        enabled(from_facade_level(metadata.level()))
+        metadata_enabled(metadata)
     }
 
     fn log(&self, record: &log::Record) {
         let level = from_facade_level(record.level());
-        if !enabled(level) {
+        if !self.enabled(record.metadata()) {
             return;
         }
         write_log(level, &format!("{}", record.args()));

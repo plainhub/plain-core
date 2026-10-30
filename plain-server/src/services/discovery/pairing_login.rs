@@ -145,60 +145,64 @@ pub(super) async fn run(
     let mut socket = crate::services::peers::status_socket::connect(url.as_str())
         .await
         .map_err(|_| anyhow::anyhow!("failed_connect_ws"))?;
-    let channel = if password_required {
-        None
+    let mode = if password_required {
+        crate::http::auth::login_channel::LoginMode::Password
     } else {
-        let (client, hello) = crate::http::auth::login_channel::Client::start(&client_id)?;
-        socket
-            .send(tokio_tungstenite::tungstenite::Message::Text(
-                serde_json::to_string(&hello)?.into(),
-            ))
-            .await?;
-        let response = loop {
-            use tokio_tungstenite::tungstenite::Message;
-            match socket
-                .next()
-                .await
-                .ok_or_else(|| anyhow::anyhow!("failed_connect_ws"))??
-            {
-                Message::Text(text) => {
-                    break serde_json::from_str::<crate::http::auth::login_channel::ServerHello>(
-                        &text,
-                    )?;
-                }
-                Message::Ping(bytes) => socket.send(Message::Pong(bytes)).await?,
-                _ => anyhow::bail!("invalid_auth_response"),
+        crate::http::auth::login_channel::LoginMode::DeviceConfirmation
+    };
+    let (client, hello) = crate::http::auth::login_channel::Client::start(&client_id, mode)?;
+    socket
+        .send(tokio_tungstenite::tungstenite::Message::Text(
+            serde_json::to_string(&hello)?.into(),
+        ))
+        .await?;
+    let response = loop {
+        use tokio_tungstenite::tungstenite::Message;
+        match socket
+            .next()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("failed_connect_ws"))??
+        {
+            Message::Text(text) => {
+                break serde_json::from_str::<crate::http::auth::login_channel::ServerHello>(
+                    &text,
+                )?;
             }
-        };
-        let (channel, reveal) = client.accept(
-            &response,
-            &public_key,
-            &target.target.device_id,
-            chrono::Utc::now().timestamp_millis() as u64,
-        )?;
-        socket
-            .send(tokio_tungstenite::tungstenite::Message::Text(
-                serde_json::to_string(&reveal)?.into(),
-            ))
-            .await?;
-        request["loginContext"] = json!(channel.context);
+            Message::Ping(bytes) => socket.send(Message::Pong(bytes)).await?,
+            _ => anyhow::bail!("invalid_auth_response"),
+        }
+    };
+    let (channel, reveal) = client.accept(
+        &response,
+        &public_key,
+        &target.target.device_id,
+        chrono::Utc::now().timestamp_millis() as u64,
+    )?;
+    socket
+        .send(tokio_tungstenite::tungstenite::Message::Text(
+            serde_json::to_string(&reveal)?.into(),
+        ))
+        .await?;
+    request["loginContext"] = json!(channel.context);
+    if !password_required {
         state.pairing_runtime.attempts.set_verification_code(
             state,
             generation,
             &channel.verification_code,
         );
-        Some(channel)
-    };
-    let encrypted = match &channel {
-        Some(channel) => channel.encrypt_request(
-            &serde_json::to_vec(&request)?,
+    }
+
+    let request_bytes = serde_json::to_vec(&request)?;
+    let encrypted = if let Some(digest) = &digest {
+        let password_encrypted =
+            crypto::xchacha_encrypt_raw(&digest.as_bytes()[..32], &request_bytes)
+                .ok_or_else(|| anyhow::anyhow!("invalid_password"))?;
+        channel.encrypt_request(
+            &password_encrypted,
             chrono::Utc::now().timestamp_millis() as u64,
-        )?,
-        None => crypto::xchacha_encrypt_raw(
-            &digest.as_ref().unwrap().as_bytes()[..32],
-            &serde_json::to_vec(&request)?,
-        )
-        .ok_or_else(|| anyhow::anyhow!("invalid_password"))?,
+        )?
+    } else {
+        channel.encrypt_request(&request_bytes, chrono::Utc::now().timestamp_millis() as u64)?
     };
     socket
         .send(tokio_tungstenite::tungstenite::Message::Binary(
@@ -215,14 +219,13 @@ pub(super) async fn run(
         use tokio_tungstenite::tungstenite::Message;
         match frame {
             Message::Binary(data) => {
-                let plain = match &channel {
-                    Some(channel) => channel
-                        .decrypt_response(&data, chrono::Utc::now().timestamp_millis() as u64)?,
-                    None => crypto::xchacha_decrypt_raw(
-                        &digest.as_ref().unwrap().as_bytes()[..32],
-                        &data,
-                    )
-                    .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))?,
+                let decrypted = channel
+                    .decrypt_response(&data, chrono::Utc::now().timestamp_millis() as u64)?;
+                let plain = if let Some(digest) = &digest {
+                    crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &decrypted)
+                        .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))?
+                } else {
+                    decrypted
                 };
                 let response: Value = serde_json::from_slice(&plain)
                     .map_err(|_| anyhow::anyhow!("invalid_auth_response"))?;
@@ -254,16 +257,10 @@ pub(super) async fn run(
             _ => anyhow::bail!("invalid_auth_response"),
         }
     };
-    match &channel {
-        Some(channel) => ensure!(
-            response["loginContext"].as_str() == Some(channel.context.as_str()),
-            "invalid_auth_response"
-        ),
-        None => ensure!(
-            response.get("loginContext").is_none(),
-            "invalid_auth_response"
-        ),
-    }
+    ensure!(
+        response["loginContext"].as_str() == Some(channel.context.as_str()),
+        "invalid_auth_response"
+    );
     let remote_id = verify_response(
         &response,
         &target.target.device_id,

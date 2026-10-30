@@ -104,7 +104,9 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     let (callbacks, mut incoming) = tokio::sync::mpsc::unbounded_channel();
     let consumer = tokio::spawn(async move {
         while let Some(request) = host.next_request().await {
-            if request["method"] == "systemWebLoginRequested" { callbacks.send(request["params"].clone()).unwrap(); }
+            if request["method"] == "systemWebLoginRequested" {
+                callbacks.send(request["params"].clone()).unwrap();
+            }
             host.reply(json!({"id":request["id"],"result":null}))
                 .unwrap();
         }
@@ -121,17 +123,27 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         .unwrap();
     let digest = plain_rs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
     let client = plain_rs::crypto::EcdhSession::generate();
-    let request = json!({"password":digest,"browserName":"Test","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::utils::base64::base64_encode(&client.public_key_bytes),"peer":null});
-    let frame = plain_rs::crypto::xchacha_encrypt_raw(
-        &digest.as_bytes()[..32],
-        &serde_json::to_vec(&request).unwrap(),
-    )
-    .unwrap();
     for (cid, allowed) in [("rejected-browser", false), ("accepted-browser", true)] {
-        let (mut socket, _) =
-            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid={cid}&auth=1"))
-                .await
-                .unwrap();
+        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/auth?cid={cid}&auth=1"
+        ))
+        .await
+        .unwrap();
+        let keys = password_keys(&mut socket, &server.runtime_state(), cid).await;
+        let request = json!({
+            "password":digest, "loginContext":keys.context,
+            "browserName":"Test", "browserVersion":"1", "osName":"Fixture", "osVersion":"1",
+            "isMobile":false, "ecdhPublicKey":plain_rs::utils::base64::base64_encode(&client.public_key_bytes),
+            "peer":null,
+        });
+        let inner = plain_rs::crypto::xchacha_encrypt_raw(
+            &digest.as_bytes()[..32],
+            &serde_json::to_vec(&request).unwrap(),
+        )
+        .unwrap();
+        let frame = keys
+            .encrypt_request(&inner, chrono::Utc::now().timestamp_millis() as u64)
+            .unwrap();
         socket
             .send(ClientMessage::Binary(frame.clone().into()))
             .await
@@ -142,7 +154,10 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             .unwrap()
             .unwrap();
         assert!(matches!(response, ClientMessage::Binary(_)));
-        let payload = tokio::time::timeout(Duration::from_secs(3), incoming.recv()).await.unwrap().unwrap();
+        let payload = tokio::time::timeout(Duration::from_secs(3), incoming.recv())
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(payload["clientId"], cid);
         assert_eq!(payload["request"]["password"], "");
         assert_eq!(payload["request"]["browserName"], "Test");
@@ -157,23 +172,18 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             let ClientMessage::Binary(frame) = response else {
                 panic!("expected completed auth frame")
             };
+            let inner = keys
+                .decrypt_response(&frame, chrono::Utc::now().timestamp_millis() as u64)
+                .unwrap();
             let decrypted =
-                plain_rs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &frame).unwrap();
+                plain_rs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &inner).unwrap();
             let result: Value = serde_json::from_slice(&decrypted).unwrap();
             assert_eq!(result["status"], "COMPLETED");
             let state = server.runtime_state();
             for _ in 0..3 {
-                crate::http::auth::ws_login::admit_attempt(
-                    &state,
-                    cid,
-                    "127.0.0.1",
-                )
-                .unwrap();
+                crate::http::auth::ws_login::admit_attempt(&state, cid, "127.0.0.1").unwrap();
             }
-            assert!(
-                crate::http::auth::ws_login::admit_attempt(&state, cid, "127.0.0.1")
-                    .is_err()
-            );
+            assert!(crate::http::auth::ws_login::admit_attempt(&state, cid, "127.0.0.1").is_err());
             assert!(
                 server
                     .runtime_state()
@@ -240,13 +250,6 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
     state.prefs.set("login_require_approval", false).unwrap();
     let digest = plain_rs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
     let client = plain_rs::crypto::EcdhSession::generate();
-    let request = json!({"password":digest,"browserName":"Test","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::utils::base64::base64_encode(&client.public_key_bytes),"peer":null});
-    let valid_frame = plain_rs::crypto::xchacha_encrypt_raw(
-        &digest.as_bytes()[..32],
-        &serde_json::to_vec(&request).unwrap(),
-    )
-    .unwrap();
-
     for attempt in 0..7 {
         let cid = format!("login-limit-{attempt}");
         let (mut socket, _) = tokio_tungstenite::connect_async(format!(
@@ -255,46 +258,78 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
         ))
         .await
         .unwrap();
-        socket
-            .send(ClientMessage::Binary(
-                if attempt == 0 || attempt == 6 {
-                    valid_frame.clone()
-                } else {
-                    b"invalid".to_vec()
-                }
-                .into(),
-            ))
-            .await
-            .unwrap();
+        if attempt >= 5 {
+            use crate::http::auth::login_channel::{Client, LoginMode};
+            let (_, hello) = Client::start(&cid, LoginMode::Password).unwrap();
+            socket
+                .send(ClientMessage::Text(
+                    serde_json::to_string(&hello).unwrap().into(),
+                ))
+                .await
+                .unwrap();
+        } else {
+            let keys = password_keys(&mut socket, &state, &cid).await;
+            let request = json!({
+                "password":digest, "loginContext":keys.context,
+                "browserName":"Test", "browserVersion":"1", "osName":"Fixture", "osVersion":"1",
+                "isMobile":false, "ecdhPublicKey":plain_rs::utils::base64::base64_encode(&client.public_key_bytes),
+                "peer":null,
+            });
+            let inner = if attempt == 0 {
+                plain_rs::crypto::xchacha_encrypt_raw(
+                    &digest.as_bytes()[..32],
+                    &serde_json::to_vec(&request).unwrap(),
+                )
+                .unwrap()
+            } else {
+                b"invalid".to_vec()
+            };
+            let frame = keys
+                .encrypt_request(&inner, chrono::Utc::now().timestamp_millis() as u64)
+                .unwrap();
+            socket
+                .send(ClientMessage::Binary(frame.into()))
+                .await
+                .unwrap();
+            let response = tokio::time::timeout(Duration::from_secs(3), socket.next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            if attempt == 0 {
+                let ClientMessage::Binary(frame) = response else {
+                    panic!("expected completed login")
+                };
+                let inner = keys
+                    .decrypt_response(&frame, chrono::Utc::now().timestamp_millis() as u64)
+                    .unwrap();
+                let plaintext =
+                    plain_rs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &inner)
+                        .unwrap();
+                let result: Value = serde_json::from_slice(&plaintext).unwrap();
+                assert_eq!(result["status"], "COMPLETED");
+                assert_eq!(result["loginContext"], keys.context);
+                assert!(state.db.session_get(&cid).unwrap().is_some());
+            } else {
+                assert!(
+                    matches!(response, ClientMessage::Close(Some(frame)) if frame.reason == "invalid_password")
+                );
+                assert!(state.db.session_get(&cid).unwrap().is_none());
+            }
+            socket.close(None).await.ok();
+            assert_eq!(state.db.session_list().unwrap().len(), 1);
+            continue;
+        }
         let response = tokio::time::timeout(Duration::from_secs(3), socket.next())
             .await
             .unwrap()
             .unwrap()
             .unwrap();
-        if attempt == 0 {
-            let ClientMessage::Binary(frame) = response else {
-                panic!("expected completed login");
-            };
-            let decrypted =
-                plain_rs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &frame).unwrap();
-            let result: Value = serde_json::from_slice(&decrypted).unwrap();
-            assert_eq!(result["status"], "COMPLETED");
-            assert!(state.db.session_get(&cid).unwrap().is_some());
-        } else {
-            let ClientMessage::Close(Some(frame)) = response else {
-                panic!("expected rejected login");
-            };
-            assert_eq!(u16::from(frame.code), 1013);
-            assert_eq!(
-                frame.reason,
-                if attempt >= 5 {
-                    "too_many_login_attempts"
-                } else {
-                    "invalid_password"
-                }
-            );
-            assert!(state.db.session_get(&cid).unwrap().is_none());
-        }
+        let ClientMessage::Close(Some(frame)) = response else {
+            panic!("expected rate-limited login")
+        };
+        assert_eq!(frame.reason, "too_many_login_attempts");
+        assert!(state.db.session_get(&cid).unwrap().is_none());
         socket.close(None).await.ok();
         assert_eq!(state.db.session_list().unwrap().len(), 1);
     }
@@ -321,13 +356,14 @@ async fn root_serves_the_spa_and_old_ws_path_never_upgrades() {
         assert!(response.text().await.unwrap().contains("fixture"));
     }
     for path in ["/?cid=browser", "/ws?cid=browser"] {
-    let denied = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{}{path}", core.port)).await;
-    match denied {
-        Err(tokio_tungstenite::tungstenite::Error::Http(response)) => {
-            assert_eq!(response.status(), 200)
+        let denied =
+            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{}{path}", core.port)).await;
+        match denied {
+            Err(tokio_tungstenite::tungstenite::Error::Http(response)) => {
+                assert_eq!(response.status(), 200)
+            }
+            _ => panic!("the retired event endpoint must never upgrade"),
         }
-        _ => panic!("the retired event endpoint must never upgrade"),
-    }
     }
     core.shutdown().await;
 }
@@ -373,10 +409,12 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
             let _ = host.reply(generation, json!({"id":request["id"],"result":result}));
         }
     });
-    let (mut socket, _) =
-        tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{}/screen?cid={client}", core.port))
-            .await
-            .unwrap();
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://127.0.0.1:{}/screen?cid={client}",
+        core.port
+    ))
+    .await
+    .unwrap();
     socket
         .send(ClientMessage::Binary(
             plain_rs::crypto::xchacha_encrypt_raw(
@@ -435,12 +473,19 @@ async fn host_replacement_restores_only_authenticated_online_clients() {
     let directory = tempfile::tempdir().unwrap();
     let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
-    let session = state.subscription_sessions.open(
-        state.clone(),
-        crate::graphql::executor::RequestContext::authenticated_remote(state.clone(), "remote".into()),
-        "remote".into(), Some(vec![1; 32]),
-        crate::native::graphql::NativeRequestScope::default(),
-    ).unwrap();
+    let session = state
+        .subscription_sessions
+        .open(
+            state.clone(),
+            crate::graphql::executor::RequestContext::authenticated_remote(
+                state.clone(),
+                "remote".into(),
+            ),
+            "remote".into(),
+            Some(vec![1; 32]),
+            crate::native::graphql::NativeRequestScope::default(),
+        )
+        .unwrap();
     session.mark_online().unwrap();
     let first = core.host_events().unwrap();
     let initial = host_online(&first, json!(["remote"])).await;
@@ -458,30 +503,38 @@ async fn saturated_host_recovers_online_clients_without_counting_native_sessions
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
     let native = core.native_graphql().unwrap();
-    let native_id = native.open_subscriptions(crate::native::graphql::NativeRequestScope::default()).unwrap();
+    let native_id = native
+        .open_subscriptions(crate::native::graphql::NativeRequestScope::default())
+        .unwrap();
     let host = core.host_events().unwrap();
     host_online(&host, json!([])).await;
     let status = host.next_request().await.unwrap();
     assert_eq!(status["method"], "httpServerStatusChanged");
-    host.reply(json!({"id":status["id"],"result":null})).unwrap();
+    host.reply(json!({"id":status["id"],"result":null}))
+        .unwrap();
     let clipboard = host.next_request().await.unwrap();
     assert_eq!(clipboard["method"], "clipboardHistoryRefresh");
-    host.reply(json!({"id":clipboard["id"],"result":null})).unwrap();
+    host.reply(json!({"id":clipboard["id"],"result":null}))
+        .unwrap();
     let dlna = host.next_request().await.unwrap();
     assert_eq!(dlna["method"], "dlnaRendererRefresh");
     host.reply(json!({"id":dlna["id"],"result":null})).unwrap();
     let downloads = host.next_request().await.unwrap();
     assert_eq!(downloads["method"], "sharedFolderDownloadsRefresh");
-    host.reply(json!({"id":downloads["id"],"result":null})).unwrap();
+    host.reply(json!({"id":downloads["id"],"result":null}))
+        .unwrap();
     let transports = host.next_request().await.unwrap();
     assert_eq!(transports["method"], "peerTransportsChanged");
-    host.reply(json!({"id":transports["id"],"result":null})).unwrap();
+    host.reply(json!({"id":transports["id"],"result":null}))
+        .unwrap();
     let update = host.next_request().await.unwrap();
     assert_eq!(update["method"], "appUpdateDownloadChanged");
-    host.reply(json!({"id":update["id"],"result":null})).unwrap();
+    host.reply(json!({"id":update["id"],"result":null}))
+        .unwrap();
     let sender = host.next_request().await.unwrap();
     assert_eq!(sender["method"], "dlnaSenderChanged");
-    host.reply(json!({"id":sender["id"],"result":null})).unwrap();
+    host.reply(json!({"id":sender["id"],"result":null}))
+        .unwrap();
     let feeds = host.next_request().await.unwrap();
     assert_eq!(feeds["method"], "feedSyncChanged");
     host.reply(json!({"id":feeds["id"],"result":null})).unwrap();
@@ -490,18 +543,28 @@ async fn saturated_host_recovers_online_clients_without_counting_native_sessions
     host.reply(json!({"id":audio["id"],"result":null})).unwrap();
     let library = host.next_request().await.unwrap();
     assert_eq!(library["method"], "audioLibraryRefresh");
-    host.reply(json!({"id":library["id"],"result":null})).unwrap();
+    host.reply(json!({"id":library["id"],"result":null}))
+        .unwrap();
     let network = host.next_request().await.unwrap();
     assert_eq!(network["method"], "networkInterfacesChanged");
-    host.reply(json!({"id":network["id"],"result":null})).unwrap();
+    host.reply(json!({"id":network["id"],"result":null}))
+        .unwrap();
     for _ in 0..crate::host::bridge::REQUEST_CAPACITY {
         state.host.notify("blocked", json!({})).unwrap();
     }
-    let session = state.subscription_sessions.open(
-        state.clone(),
-        crate::graphql::executor::RequestContext::authenticated_remote(state.clone(), "remote".into()),
-        "remote".into(), Some(vec![1; 32]), crate::native::graphql::NativeRequestScope::default(),
-    ).unwrap();
+    let session = state
+        .subscription_sessions
+        .open(
+            state.clone(),
+            crate::graphql::executor::RequestContext::authenticated_remote(
+                state.clone(),
+                "remote".into(),
+            ),
+            "remote".into(),
+            Some(vec![1; 32]),
+            crate::native::graphql::NativeRequestScope::default(),
+        )
+        .unwrap();
     session.mark_online().unwrap();
     host_online(&host, json!(["remote"])).await;
     native.close_subscriptions(native_id);
@@ -512,12 +575,17 @@ async fn host_online(host: &crate::host::events::HostEvents, expected: Value) ->
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
             let request = host.next_request().await.unwrap();
-            host.reply(json!({"id":request["id"],"result":null})).unwrap();
-            if request["method"] == "onlineClientsChanged" && request["params"]["clientIds"] == expected {
+            host.reply(json!({"id":request["id"],"result":null}))
+                .unwrap();
+            if request["method"] == "onlineClientsChanged"
+                && request["params"]["clientIds"] == expected
+            {
                 return request["params"]["clientIds"].clone();
             }
         }
-    }).await.unwrap()
+    })
+    .await
+    .unwrap()
 }
 
 #[tokio::test]
@@ -539,11 +607,22 @@ async fn online_clients_follow_authenticated_graphql_connections() {
     host_online(&host, json!([])).await;
     assert!(state.subscription_sessions.snapshot().is_empty());
     let mut invalid_request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
-        .into_client_request().unwrap();
-    invalid_request.headers_mut().insert("Sec-WebSocket-Protocol", "plain-graphql-ws-v1".parse().unwrap());
-    let (mut invalid, _) = tokio_tungstenite::connect_async(invalid_request).await.unwrap();
-    invalid.send(Frame::Binary(vec![0; 64].into())).await.unwrap();
-    let reply = tokio::time::timeout(Duration::from_secs(3), invalid.next()).await.unwrap();
+        .into_client_request()
+        .unwrap();
+    invalid_request.headers_mut().insert(
+        "Sec-WebSocket-Protocol",
+        "plain-graphql-ws-v1".parse().unwrap(),
+    );
+    let (mut invalid, _) = tokio_tungstenite::connect_async(invalid_request)
+        .await
+        .unwrap();
+    invalid
+        .send(Frame::Binary(vec![0; 64].into()))
+        .await
+        .unwrap();
+    let reply = tokio::time::timeout(Duration::from_secs(3), invalid.next())
+        .await
+        .unwrap();
     assert!(matches!(reply, Some(Ok(Frame::Close(_)))));
     assert!(state.subscription_sessions.snapshot().is_empty());
     let connect = |nonce: &str| {
@@ -621,40 +700,78 @@ async fn online_clients_follow_authenticated_graphql_connections() {
 async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_names() {
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
-    let credentials = core.native_management().unwrap().create_session("Pairing subscription test".into()).unwrap();
+    let credentials = core
+        .native_management()
+        .unwrap()
+        .create_session("Pairing subscription test".into())
+        .unwrap();
     let client = credentials.client_id;
-    let session = state.subscription_sessions.open(
-        state.clone(),
-        crate::graphql::executor::RequestContext::authenticated_remote(state.clone(), client.clone()),
-        client,
-        Some(plain_rs::base64_decode(&credentials.token)),
-        crate::native::graphql::NativeRequestScope::default(),
-    ).unwrap();
+    let session = state
+        .subscription_sessions
+        .open(
+            state.clone(),
+            crate::graphql::executor::RequestContext::authenticated_remote(
+                state.clone(),
+                client.clone(),
+            ),
+            client,
+            Some(plain_rs::base64_decode(&credentials.token)),
+            crate::native::graphql::NativeRequestScope::default(),
+        )
+        .unwrap();
     session.send(r#"{"type":"subscribe","id":"public","payload":{"query":"subscription { pairingCompleted { deviceId deviceName ip } }"}}"#).unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
             let response: Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
-            if response["payload"]["extensions"]["subscriptionReady"] == true { break; }
+            if response["payload"]["extensions"]["subscriptionReady"] == true {
+                break;
+            }
             assert_ne!(response["type"], "error");
         }
-    }).await.unwrap();
-    state.events.send(WsEvent::broadcast("PAIRING_SUCCESS", json!({"deviceId":"peer","deviceName":"Peer","ip":"host","key":"secret"}).to_string())).unwrap();
-    let message = tokio::time::timeout(Duration::from_secs(3), session.read()).await.unwrap().unwrap();
+    })
+    .await
+    .unwrap();
+    state
+        .events
+        .send(WsEvent::broadcast(
+            "PAIRING_SUCCESS",
+            json!({"deviceId":"peer","deviceName":"Peer","ip":"host","key":"secret"}).to_string(),
+        ))
+        .unwrap();
+    let message = tokio::time::timeout(Duration::from_secs(3), session.read())
+        .await
+        .unwrap()
+        .unwrap();
     let response: Value = serde_json::from_str(&message).unwrap();
-    assert_eq!(response["payload"]["data"]["pairingCompleted"], json!({"deviceId":"peer","deviceName":"Peer","ip":"host"}));
+    assert_eq!(
+        response["payload"]["data"]["pairingCompleted"],
+        json!({"deviceId":"peer","deviceName":"Peer","ip":"host"})
+    );
     assert!(!response.to_string().contains("secret"));
     session.send(r#"{"type":"subscribe","id":"channels","payload":{"query":"subscription { channelsChanged { changed invite { channelId channelName ownerPeerId ownerPeerName } cancel { channelId } } }"}}"#).unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
             let response: Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
-            if response["id"] == "channels" && response["payload"]["extensions"]["subscriptionReady"] == true { break; }
+            if response["id"] == "channels"
+                && response["payload"]["extensions"]["subscriptionReady"] == true
+            {
+                break;
+            }
             assert_ne!(response["type"], "error");
         }
-    }).await.unwrap();
+    })
+    .await
+    .unwrap();
     state.events.send(WsEvent::broadcast("CHANNELS_UPDATED", json!({"changed":true,"invite":{"channelId":"channel","channelName":"Channel","ownerPeerId":"peer","ownerPeerName":"Peer"},"cancel":null}).to_string())).unwrap();
-    let message = tokio::time::timeout(Duration::from_secs(3), session.read()).await.unwrap().unwrap();
+    let message = tokio::time::timeout(Duration::from_secs(3), session.read())
+        .await
+        .unwrap()
+        .unwrap();
     let response: Value = serde_json::from_str(&message).unwrap();
-    assert_eq!(response["payload"]["data"]["channelsChanged"]["invite"]["channelName"], "Channel");
+    assert_eq!(
+        response["payload"]["data"]["channelsChanged"]["invite"]["channelName"],
+        "Channel"
+    );
     state.subscription_sessions.close(session.id);
     core.shutdown().await;
 }
@@ -672,27 +789,211 @@ async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
                 "systemPermissionFacts" => json!({"granted":{"SEND_SMS":true}}),
                 method => panic!("Unexpected host request {method}"),
             };
-            host.reply(generation, json!({"id":request["id"],"result":result})).unwrap();
+            host.reply(generation, json!({"id":request["id"],"result":result}))
+                .unwrap();
         }
     });
-    state.sms_sends.register("send".into(), Some("request".into()), 1).unwrap();
-    state.sms_sends.report(serde_json::from_value(json!({
-        "requestId":"send", "partIndex":0, "partCount":1, "success":true, "resultCode":-1
-    })).unwrap()).unwrap();
+    state
+        .sms_sends
+        .register("send".into(), Some("request".into()), 1)
+        .unwrap();
+    state
+        .sms_sends
+        .report(
+            serde_json::from_value(json!({
+                "requestId":"send", "partIndex":0, "partCount":1, "success":true, "resultCode":-1
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     let native = core.native_graphql().unwrap();
-    let id = native.open_subscriptions(crate::native::graphql::NativeRequestScope::default()).unwrap();
+    let id = native
+        .open_subscriptions(crate::native::graphql::NativeRequestScope::default())
+        .unwrap();
     let session = native.subscription_session(id).unwrap();
     session.send(r#"{"type":"subscribe","id":"sms","payload":{"query":"subscription { smsSendResult { requestId success resultCode } }"}}"#).unwrap();
     let result = tokio::time::timeout(Duration::from_secs(3), async {
         loop {
             let response: Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
             assert_ne!(response["type"], "error");
-            if response["payload"]["data"]["smsSendResult"].is_object() { break response; }
+            if response["payload"]["data"]["smsSendResult"].is_object() {
+                break response;
+            }
         }
-    }).await.unwrap();
-    assert_eq!(result["payload"]["data"]["smsSendResult"], json!({"requestId":"request","success":true,"resultCode":-1}));
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        result["payload"]["data"]["smsSendResult"],
+        json!({"requestId":"request","success":true,"resultCode":-1})
+    );
     native.close_subscriptions(id);
     state.host.disconnect(generation);
     responder.abort();
     core.shutdown().await;
+}
+
+#[cfg(feature = "http_transport")]
+async fn password_keys(
+    socket: &mut tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+    state: &ServerState,
+    client_id: &str,
+) -> crate::http::auth::login_channel::Channel {
+    use crate::http::auth::login_channel::{Client, LoginMode};
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let (client, hello) = Client::start(client_id, LoginMode::Password).unwrap();
+    socket
+        .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
+        .await
+        .unwrap();
+    let response = tokio::time::timeout(Duration::from_secs(3), socket.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let Message::Text(response) = response else {
+        panic!("signed password challenge required")
+    };
+    let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    let (keys, reveal) = client
+        .accept(
+            &serde_json::from_str(&response).unwrap(),
+            &plain_rs::utils::base64::base64_encode(&signing[32..]),
+            &state.native_client_id().unwrap(),
+            chrono::Utc::now().timestamp_millis() as u64,
+        )
+        .unwrap();
+    socket
+        .send(Message::Text(
+            serde_json::to_string(&reveal).unwrap().into(),
+        ))
+        .await
+        .unwrap();
+    keys
+}
+
+#[test]
+fn unauthenticated_connection_limits_release_only_the_owning_source_slot() {
+    let runtime = Arc::new(Runtime::default());
+    let first: IpAddr = "192.0.2.1".parse().unwrap();
+    let second: IpAddr = "192.0.2.2".parse().unwrap();
+    let mut permits = Vec::new();
+    for _ in 0..MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP {
+        permits.push(runtime.reserve_unauthenticated(first).unwrap());
+    }
+    assert!(runtime.reserve_unauthenticated(first).is_none());
+    let other = runtime.reserve_unauthenticated(second).unwrap();
+    drop(permits.pop());
+    let replacement = runtime.reserve_unauthenticated(first).unwrap();
+    assert_eq!(
+        runtime.unauthenticated.lock().unwrap().get(&second),
+        Some(&1)
+    );
+    drop((permits, other, replacement));
+    assert!(runtime.unauthenticated.lock().unwrap().is_empty());
+}
+
+#[test]
+fn unauthenticated_connections_have_a_global_limit_across_sources() {
+    let runtime = Arc::new(Runtime::default());
+    let mut permits = Vec::new();
+    for source in 0..MAX_UNAUTHENTICATED_CONNECTIONS {
+        let ip = IpAddr::V4(std::net::Ipv4Addr::new(192, 0, 2, source as u8));
+        permits.push(runtime.reserve_unauthenticated(ip).unwrap());
+    }
+    let next: IpAddr = "192.0.2.254".parse().unwrap();
+    assert!(runtime.reserve_unauthenticated(next).is_none());
+    drop(permits.pop());
+    let permit = runtime.reserve_unauthenticated(next).unwrap();
+    drop((permits, permit));
+    assert!(runtime.unauthenticated.lock().unwrap().is_empty());
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn idle_auth_screen_and_editor_connections_expire_before_authentication() {
+    use futures_util::StreamExt;
+    use tokio_tungstenite::tungstenite::Message;
+    let (_directory, server) = public_fixture();
+    let mut sockets = Vec::new();
+    for path in [
+        "auth?cid=idle&auth=2",
+        "screen?cid=idle",
+        "image_editor?cid=idle",
+    ] {
+        let (socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{}/{path}", server.port,))
+                .await
+                .unwrap();
+        sockets.push(socket);
+    }
+    for socket in &mut sockets {
+        let message = tokio::time::timeout(
+            INITIAL_MESSAGE_TIMEOUT + Duration::from_secs(2),
+            socket.next(),
+        )
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+        assert!(matches!(message, Message::Close(Some(frame)) if frame.reason == "timeout"));
+    }
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while !server
+            .runtime_state()
+            .main_ws
+            .unauthenticated
+            .lock()
+            .unwrap()
+            .is_empty()
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    server.shutdown().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn authenticated_editor_connections_release_unauthenticated_slots() {
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let (_directory, server) = public_fixture();
+    let state = server.runtime_state();
+    let client_id = state.native_client_id().unwrap();
+    let key = plain_rs::utils::base64::base64_decode(&plain_rs::prefs::identity::ensure_url_token(
+        &state.prefs,
+    ));
+    let mut sockets = Vec::new();
+    for _ in 0..=MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP {
+        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{}/image_editor?cid={client_id}",
+            server.port,
+        ))
+        .await
+        .unwrap();
+        let proof = plain_rs::crypto::xchacha_encrypt_raw(
+            &key,
+            chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        )
+        .unwrap();
+        socket.send(Message::Binary(proof.into())).await.unwrap();
+        let response = tokio::time::timeout(Duration::from_secs(3), socket.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(matches!(response, Message::Binary(_)));
+        sockets.push(socket);
+    }
+    assert!(state.main_ws.unauthenticated.lock().unwrap().is_empty());
+    for mut socket in sockets {
+        socket.close(None).await.unwrap();
+    }
+    server.shutdown().await;
 }

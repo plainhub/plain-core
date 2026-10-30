@@ -192,7 +192,6 @@ async fn deliver_successes(state: ServerState) {
         };
         let response = tokio::select! {
             _ = stop.changed() => break,
-            result = connection.changed() => { if result.is_err() { break; } continue; },
             result = state.host.call_reserved_current(generation, "pairingSucceeded", json!({"deviceId":id,"key":key}), permit) => result,
         };
         match response {

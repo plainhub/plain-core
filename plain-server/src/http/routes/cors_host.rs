@@ -6,23 +6,44 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+fn is_potentially_trustworthy(scheme: &str, host: &str) -> bool {
+    if scheme == "https" {
+        return true;
+    }
+    let Ok(url) = reqwest::Url::parse(&format!("{scheme}://{host}")) else {
+        return false;
+    };
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let host = host.strip_suffix('.').unwrap_or(host);
+    host == "localhost"
+        || host.ends_with(".localhost")
+        || host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
+}
+
 pub(crate) async fn apply(
     State(state): State<ServerState>,
     request: Request,
     next: Next,
 ) -> Response {
+    let scheme = request
+        .extensions()
+        .get::<crate::http::ConnectionScheme>()
+        .map_or("http", |scheme| scheme.0);
+    let host = request
+        .headers()
+        .get(header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    let trustworthy = is_potentially_trustworthy(scheme, host);
     let origin = request.headers().get(header::ORIGIN).cloned();
     let mut allow_headers = None;
     if let Some(origin) = &origin {
-        let scheme = request
-            .extensions()
-            .get::<crate::http::ConnectionScheme>()
-            .map_or("http", |scheme| scheme.0);
-        let host = request
-            .headers()
-            .get(header::HOST)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or_default();
         let same_origin = origin
             .to_str()
             .ok()
@@ -72,11 +93,13 @@ pub(crate) async fn apply(
             .parse()
             .unwrap(),
     );
-    headers.insert("cross-origin-opener-policy", "same-origin".parse().unwrap());
-    headers.insert(
-        "cross-origin-embedder-policy",
-        "credentialless".parse().unwrap(),
-    );
+    if trustworthy {
+        headers.insert("cross-origin-opener-policy", "same-origin".parse().unwrap());
+        headers.insert(
+            "cross-origin-embedder-policy",
+            "credentialless".parse().unwrap(),
+        );
+    }
     if let Some(origin) = origin {
         headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
         headers.append(header::VARY, "Origin".parse().unwrap());

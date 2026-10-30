@@ -1,9 +1,11 @@
 use crate::assembly::server::ServerState;
+use crate::http::auth::login_channel;
 use axum::{
     extract::{
         ConnectInfo, Query, State, WebSocketUpgrade,
         ws::{CloseFrame, Message, WebSocket},
     },
+    http::StatusCode,
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
@@ -11,20 +13,47 @@ use plain_rs::events::WsEvent;
 use plain_rs::prefs::security::PasswordType;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::{collections::HashMap, net::SocketAddr, sync::Mutex, time::Duration};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, SocketAddr},
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tokio::sync::mpsc;
+
+const MAX_UNAUTHENTICATED_CONNECTIONS: usize = 128;
+const MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP: usize = 5;
+const INITIAL_MESSAGE_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) struct Runtime {
     pub(crate) screen_events: tokio::sync::broadcast::Sender<WsEvent>,
     connections: Mutex<HashMap<String, Connection>>,
+    unauthenticated: Mutex<HashMap<IpAddr, usize>>,
     replay: crate::http::auth::replay::Replay,
 }
 impl Default for Runtime {
     fn default() -> Self {
         Self {
             connections: Mutex::default(),
+            unauthenticated: Mutex::default(),
             replay: Default::default(),
             screen_events: tokio::sync::broadcast::channel(256).0,
+        }
+    }
+}
+
+struct UnauthenticatedConnection {
+    runtime: Arc<Runtime>,
+    ip: IpAddr,
+}
+
+impl Drop for UnauthenticatedConnection {
+    fn drop(&mut self) {
+        let mut active = self.runtime.unauthenticated.lock().unwrap();
+        let count = active.get_mut(&self.ip).unwrap();
+        *count -= 1;
+        if *count == 0 {
+            active.remove(&self.ip);
         }
     }
 }
@@ -49,6 +78,20 @@ struct Connection {
     closing: tokio::sync::watch::Sender<Option<(u16, &'static str)>>,
 }
 impl Runtime {
+    fn reserve_unauthenticated(self: &Arc<Self>, ip: IpAddr) -> Option<UnauthenticatedConnection> {
+        let mut active = self.unauthenticated.lock().unwrap();
+        if active.get(&ip).copied().unwrap_or(0) >= MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP
+            || active.values().sum::<usize>() >= MAX_UNAUTHENTICATED_CONNECTIONS
+        {
+            return None;
+        }
+        *active.entry(ip).or_default() += 1;
+        Some(UnauthenticatedConnection {
+            runtime: self.clone(),
+            ip,
+        })
+    }
+
     pub(crate) fn login_pending(&self, request_id: &str) -> bool {
         self.connections.lock().unwrap().values().any(|connection| {
             connection.pending.as_deref() == Some(request_id)
@@ -130,33 +173,49 @@ pub(crate) async fn upgrade_auth(
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    ws.on_upgrade(move |socket| {
-        run(
-            socket,
-            state,
-            params,
-            remote.ip().to_string(),
-            Channel::Auth,
-        )
-    })
-    .into_response()
+    upgrade(state, params, remote, ws, Channel::Auth)
 }
 
 pub(crate) async fn upgrade_screen(
     State(state): State<ServerState>,
     Query(params): Query<Params>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    ws.on_upgrade(move |socket| run(socket, state, params, String::new(), Channel::Screen))
-        .into_response()
+    upgrade(state, params, remote, ws, Channel::Screen)
 }
 
 pub(crate) async fn upgrade_image_editor(
     State(state): State<ServerState>,
     Query(params): Query<Params>,
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    ws.on_upgrade(move |socket| run(socket, state, params, String::new(), Channel::ImageEditor))
+    upgrade(state, params, remote, ws, Channel::ImageEditor)
+}
+
+fn upgrade(
+    state: ServerState,
+    params: Params,
+    remote: SocketAddr,
+    ws: WebSocketUpgrade,
+    channel: Channel,
+) -> Response {
+    let Some(permit) = state.main_ws.reserve_unauthenticated(remote.ip()) else {
+        return (StatusCode::TOO_MANY_REQUESTS, "too_many_login_connections").into_response();
+    };
+    ws.max_message_size(65536)
+        .max_frame_size(65536)
+        .on_upgrade(move |socket| {
+            run(
+                socket,
+                state,
+                params,
+                remote.ip().to_string(),
+                channel,
+                permit,
+            )
+        })
         .into_response()
 }
 
@@ -178,7 +237,9 @@ async fn run(
     params: Params,
     ip: String,
     channel: Channel,
+    permit: UnauthenticatedConnection,
 ) {
+    let mut permit = Some(permit);
     if (channel == Channel::Auth && !matches!(params.auth.as_deref(), Some("1" | "2")))
         || (channel != Channel::Auth && params.auth.is_some())
     {
@@ -193,6 +254,17 @@ async fn run(
         };
         let _ = socket.send(close(1008, reason)).await;
         return;
+    }
+    if channel == Channel::Auth {
+        if let Err(error) = crate::http::auth::ws_login::admit_attempt(&state, &params.cid, &ip) {
+            let reason = if error.to_string() == "too_many_login_attempts" {
+                "too_many_login_attempts"
+            } else {
+                "invalid_login_request"
+            };
+            let _ = socket.send(close(1013, reason)).await;
+            return;
+        }
     }
     let id = uuid::Uuid::new_v4().to_string();
     let (sender, mut outgoing) = mpsc::channel(8);
@@ -217,16 +289,22 @@ async fn run(
     let mut pending: Option<String> = None;
     enum LoginHandshake {
         AwaitingCommitment,
-        AwaitingReveal(crate::http::auth::login_channel::ServerHandshake),
-        Ready(crate::http::auth::login_channel::Channel),
+        AwaitingReveal(login_channel::ServerHandshake),
+        Ready(login_channel::Channel),
         Submitted,
     }
     let mut handshake = LoginHandshake::AwaitingCommitment;
+    let initial_deadline = tokio::time::sleep(INITIAL_MESSAGE_TIMEOUT);
+    tokio::pin!(initial_deadline);
     let deadline = tokio::time::sleep(Duration::from_secs(300));
     tokio::pin!(deadline);
     loop {
         let message = tokio::select! {
             _ = state.stop.changed() => break,
+            _ = &mut initial_deadline, if !registered && !matches!(handshake, LoginHandshake::Submitted) => {
+                let _ = socket.send(close(1008, "timeout")).await;
+                break;
+            },
             _ = &mut deadline, if matches!(params.auth.as_deref(), Some("1" | "2")) => { let _ = socket.send(close(1008, "login_expired")).await; break; },
             _ = closed.changed() => { let (code, reason) = (*closed.borrow()).unwrap_or((1000, "")); let _ = socket.send(close(code, reason)).await; break; },
             message = outgoing.recv() => match message { Some(message) => message, None => break },
@@ -234,7 +312,7 @@ async fn run(
                 let frame = match incoming {
                     Some(Ok(Message::Binary(frame))) => frame,
                     Some(Ok(Message::Ping(bytes))) => { if socket.send(Message::Pong(bytes)).await.is_err() { break; } continue; },
-                    Some(Ok(Message::Text(text))) if params.auth.as_deref() == Some("2") => {
+                    Some(Ok(Message::Text(text))) if matches!(params.auth.as_deref(), Some("1" | "2")) => {
                         if text.len() > 4096 {
                             let _ = socket.send(close(1008, "invalid_login_request")).await;
                             break;
@@ -242,19 +320,35 @@ async fn run(
                         let accepted = (|| -> anyhow::Result<_> {
                             match std::mem::replace(&mut handshake, LoginHandshake::Submitted) {
                                 LoginHandshake::AwaitingCommitment => {
-                                    anyhow::ensure!(plain_rs::prefs::security::password_type(&state.prefs)? == PasswordType::None, "invalid_login_request");
+                                    let password_type = plain_rs::prefs::security::password_type(&state.prefs)?;
+                                    let mode = match (params.auth.as_deref(), password_type) {
+                                        (Some("1"), PasswordType::Fixed) => login_channel::LoginMode::Password,
+                                        (Some("2"), PasswordType::None) => login_channel::LoginMode::DeviceConfirmation,
+                                        _ => anyhow::bail!("invalid_login_request"),
+                                    };
                                     anyhow::ensure!(enabled(&state), "desktop_access_disabled");
-                                    crate::http::auth::ws_login::admit_attempt(&state, &params.cid, &ip)?;
-                                    let request = serde_json::from_str::<crate::http::auth::login_channel::ClientHello>(&text)?;
-                                    let device_id = state.prefs.get_or(plain_rs::prefs::pref_keys::CLIENT_ID, String::new());
+                                    let request = serde_json::from_str::<login_channel::ClientHello>(&text)?;
+                                    let device_id = state.prefs.get_or(
+                                        plain_rs::prefs::pref_keys::CLIENT_ID,
+                                        String::new(),
+                                    );
                                     let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs)?;
-                                    let (pending, response) = crate::http::auth::login_channel::ServerHandshake::start(&params.cid, &device_id, &request, &signing, chrono::Utc::now().timestamp_millis() as u64)?;
+                                    let now = chrono::Utc::now().timestamp_millis() as u64;
+                                    let (pending, response) = login_channel::ServerHandshake::start(
+                                        &params.cid,
+                                        mode,
+                                        &device_id,
+                                        &request,
+                                        &signing,
+                                        now,
+                                    )?;
                                     handshake = LoginHandshake::AwaitingReveal(pending);
                                     Ok(Some(response))
                                 }
                                 LoginHandshake::AwaitingReveal(pending) => {
-                                    let reveal = serde_json::from_str::<crate::http::auth::login_channel::ClientReveal>(&text)?;
-                                    handshake = LoginHandshake::Ready(pending.finish(&reveal, chrono::Utc::now().timestamp_millis() as u64)?);
+                                    let reveal = serde_json::from_str::<login_channel::ClientReveal>(&text)?;
+                                    let now = chrono::Utc::now().timestamp_millis() as u64;
+                                    handshake = LoginHandshake::Ready(pending.finish(&reveal, now)?);
                                     Ok(None)
                                 }
                                 _ => anyhow::bail!("invalid_login_request"),
@@ -277,19 +371,15 @@ async fn run(
                 if !enabled(&state) { let _ = socket.send(close(1008,"desktop_access_disabled")).await; break; }
                 if matches!(params.auth.as_deref(), Some("1" | "2")) {
                     if let Some(request_id) = pending.take() { let _ = crate::http::auth::ws_login::execute(&state, crate::http::auth::ws_login::Request::Cancel { request_id }).await; }
-                    let request = if params.auth.as_deref() == Some("2") {
-                        let LoginHandshake::Ready(channel) = std::mem::replace(&mut handshake, LoginHandshake::Submitted) else {
-                            let _ = socket.send(close(1008, "invalid_login_request")).await;
-                            break;
-                        };
-                        crate::http::auth::ws_login::Request::IssueTemporary { client_id: params.cid.clone(), client_ip: ip.clone(), frame: plain_rs::utils::base64::base64_encode(&frame), channel }
-                    } else {
-                        if let Err(error) = crate::http::auth::ws_login::admit_attempt(&state, &params.cid, &ip) {
-                            let reason = if error.to_string() == "too_many_login_attempts" { "too_many_login_attempts" } else { "invalid_login_request" };
-                            let _ = socket.send(close(1013, reason)).await;
-                            break;
-                        }
-                        crate::http::auth::ws_login::Request::Issue { client_id: params.cid.clone(), client_ip: ip.clone(), frame: plain_rs::utils::base64::base64_encode(&frame) }
+                    let LoginHandshake::Ready(channel) = std::mem::replace(&mut handshake, LoginHandshake::Submitted) else {
+                        let _ = socket.send(close(1008, "invalid_login_request")).await;
+                        break;
+                    };
+                    let request = crate::http::auth::ws_login::Request::Issue {
+                        client_id: params.cid.clone(),
+                        client_ip: ip.clone(),
+                        frame: plain_rs::utils::base64::base64_encode(&frame),
+                        channel,
                     };
                     match crate::http::auth::ws_login::execute(&state, request).await {
                         Ok(result) => {
@@ -332,6 +422,7 @@ async fn run(
                     }
                     stream = Some(plain_rs::protocols::websocket::Stream::new(&frame));
                     registered = true;
+                    permit.take();
                     if let Some(c) = state.main_ws.connections.lock().unwrap().get_mut(&id) { c.registered = true; }
                     if channel == Channel::ImageEditor {
                         let Some(bytes) = stream.as_mut().and_then(|stream| stream.encode("IMAGE_EDITOR_READY", b"", &key)) else { break; };

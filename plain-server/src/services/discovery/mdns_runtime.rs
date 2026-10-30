@@ -301,7 +301,7 @@ impl Runtime {
                             version: found.version,
                             platform: found.platform,
                             last_seen_at: plain_rs::db::now_iso(),
-                            discovery_methods: vec!["DNS_SD".into()],
+                            discovery_methods: vec!["LAN".into()],
                         };
                         match system_observer.seen(
                             device,

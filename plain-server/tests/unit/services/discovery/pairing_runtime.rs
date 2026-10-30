@@ -363,37 +363,62 @@ async fn raw_ble_reports_are_validated_in_rust_before_platform_calls() {
 async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect() {
     let (_directory, server) = fixture("local");
     let state = server.runtime_state();
-    let mut events = state.events.subscribe();
-    let (generation, mut requests) = state.host.connect();
-    success(&state, &json!({"id":"peer","name":"Phone","key":"fixture-secret"}), "127.0.0.1");
-    let public = events.recv().await.unwrap();
-    assert_eq!(public.event_type, plain_rs::chat::events::WS_PAIRING_SUCCESS);
-    let payload: Value = serde_json::from_str(&public.payload).unwrap();
-    assert!(payload.get("key").is_none());
-    let request = tokio::time::timeout(Duration::from_secs(3), async {
-        loop {
-            let request = requests.recv().await.unwrap();
-            if request["method"] == "pairingSucceeded" { break request; }
-            state.host.reply(generation, json!({"id":request["id"],"result":null})).unwrap();
-        }
-    }).await.unwrap();
-    assert_eq!(request["params"], json!({"deviceId":"peer","key":"fixture-secret"}));
-    state.host.disconnect(generation);
-    let (replacement, mut requests) = state.host.connect();
-    let repeated = tokio::time::timeout(Duration::from_secs(3), async {
-        loop {
-            let request = requests.recv().await.unwrap();
-            if request["method"] == "pairingSucceeded" { break request; }
-            state.host.reply(replacement, json!({"id":request["id"],"result":null})).unwrap();
-        }
-    }).await.unwrap();
-    assert_eq!(repeated["params"], request["params"]);
-    state.host.reply(replacement, json!({"id":repeated["id"],"result":null})).unwrap();
-    tokio::time::timeout(Duration::from_secs(3), async {
-        loop {
-            if state.pairing_runtime.pending_success.lock().unwrap().requests.is_empty() { break; }
-            tokio::task::yield_now().await;
-        }
-    }).await.unwrap();
+    // Repeat reconnections to cover both ready-branch orders in select!.
+    for _ in 0..256 {
+        let mut events = state.events.subscribe();
+        let (generation, mut requests) = state.host.connect();
+        success(&state, &json!({"id":"peer","name":"Phone","key":"fixture-secret"}), "127.0.0.1");
+        let public = events.recv().await.unwrap();
+        assert_eq!(public.event_type, plain_rs::chat::events::WS_PAIRING_SUCCESS);
+        let payload: Value = serde_json::from_str(&public.payload).unwrap();
+        assert!(payload.get("key").is_none());
+        let request = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let request = requests.recv().await.unwrap();
+                if request["method"] == "pairingSucceeded" {
+                    break request;
+                }
+                state.host.reply(generation, json!({"id":request["id"],"result":null})).unwrap();
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(request["params"], json!({"deviceId":"peer","key":"fixture-secret"}));
+        state.host.disconnect(generation);
+        let (replacement, mut requests) = state.host.connect();
+        let repeated = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let request = requests.recv().await.unwrap();
+                if request["method"] == "pairingSucceeded" {
+                    break request;
+                }
+                state.host.reply(replacement, json!({"id":request["id"],"result":null})).unwrap();
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(repeated["params"], request["params"]);
+        state.host.reply(replacement, json!({"id":repeated["id"],"result":null})).unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if state.pairing_runtime.pending_success.lock().unwrap().requests.is_empty() {
+                    break;
+                }
+                tokio::select! {
+                    request = requests.recv() => {
+                        let request = request.unwrap();
+                        assert_ne!(
+                            request["method"], "pairingSucceeded", "Acknowledged pairing callback was sent again"
+                        );
+                        state.host.reply(replacement, json!({"id":request["id"],"result":null})).unwrap();
+                    },
+                    _ = tokio::task::yield_now() => {},
+                }
+            }
+        })
+        .await
+        .unwrap();
+        state.host.disconnect(replacement);
+    }
     server.stop_core().await;
 }

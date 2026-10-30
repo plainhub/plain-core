@@ -8,7 +8,7 @@ fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
         attempts.pending.insert(format!("{index:032x}"), Pending {
             client_id: "界".repeat(200), client_ip: "fixture".into(),
             request: json!({"browserName":"界".repeat(200), "password":"fixture-password-secret", "token":"fixture-token-secret", "ecdhPublicKey":"fixture-key-secret", "verificationCode":"forged-code"}),
-            at: Instant::now(), protection: Protection::Password("fixture-digest-secret".into()),
+            at: Instant::now(), protection: password_protection("fixture-digest-secret"),
         });
     }
     attempts
@@ -64,7 +64,7 @@ async fn local_approval_socket_controls_real_passwordless_browser_sessions() {
         } else {
             "local-denied"
         };
-        let (mut socket, channel, session, _) = passwordless_browser(&state, port, client_id).await;
+        let (mut socket, channel, session, _) = browser_login(&state, port, client_id, None).await;
         let event = pending_event(&mut events).await;
         let page = login::requests(directory.path(), None).await.unwrap();
         assert_eq!(page.requests.len(), 1);
@@ -166,10 +166,7 @@ fn login_attempts_are_rate_limited_per_key() {
     for _ in 0..LOGIN_ATTEMPT_LIMIT {
         assert!(attempts.acquire("fixture-a"));
     }
-    assert!(
-        !attempts.acquire("fixture-a"),
-        "the window must lock out"
-    );
+    assert!(!attempts.acquire("fixture-a"), "the window must lock out");
     assert!(
         attempts.acquire("fixture-b"),
         "another address is unaffected"
@@ -262,10 +259,11 @@ async fn login_frame(socket: &mut LoginSocket) -> tokio_tungstenite::tungstenite
 }
 
 #[cfg(feature = "http_transport")]
-async fn passwordless_browser(
+async fn browser_login(
     state: &ServerState,
     port: u16,
     client_id: &str,
+    password: Option<&str>,
 ) -> (
     LoginSocket,
     super::super::login_channel::Channel,
@@ -274,11 +272,18 @@ async fn passwordless_browser(
 ) {
     use futures_util::SinkExt;
     use tokio_tungstenite::tungstenite::Message;
-    let (mut socket, _) =
-        tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid={client_id}&auth=2"))
-            .await
-            .unwrap();
-    let (client, hello) = super::super::login_channel::Client::start(client_id).unwrap();
+    let auth = if password.is_some() { "1" } else { "2" };
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://127.0.0.1:{port}/auth?cid={client_id}&auth={auth}"
+    ))
+    .await
+    .unwrap();
+    let mode = if password.is_some() {
+        super::super::login_channel::LoginMode::Password
+    } else {
+        super::super::login_channel::LoginMode::DeviceConfirmation
+    };
+    let (client, hello) = super::super::login_channel::Client::start(client_id, mode).unwrap();
     socket
         .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
         .await
@@ -295,12 +300,25 @@ async fn passwordless_browser(
             now_ms(),
         )
         .unwrap();
-    socket.send(Message::Text(serde_json::to_string(&reveal).unwrap().into())).await.unwrap();
-    let session = plain_rs::crypto::EcdhSession::generate();
-    let request = json!({"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
-    let encrypted = channel
-        .encrypt_request(&serde_json::to_vec(&request).unwrap(), now_ms())
+    socket
+        .send(Message::Text(
+            serde_json::to_string(&reveal).unwrap().into(),
+        ))
+        .await
         .unwrap();
+    let session = plain_rs::crypto::EcdhSession::generate();
+    let mut request = json!({"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
+    let digest = password.map(plain_rs::crypto::sha512_hex);
+    if let Some(digest) = &digest {
+        request["password"] = json!(digest);
+    }
+    let bytes = serde_json::to_vec(&request).unwrap();
+    let bytes = if let Some(digest) = &digest {
+        plain_rs::crypto::xchacha_encrypt_raw(&digest.as_bytes()[..32], &bytes).unwrap()
+    } else {
+        bytes
+    };
+    let encrypted = channel.encrypt_request(&bytes, now_ms()).unwrap();
     socket
         .send(Message::Binary(encrypted.clone().into()))
         .await
@@ -308,8 +326,13 @@ async fn passwordless_browser(
     let Message::Binary(pending) = login_frame(&mut socket).await else {
         panic!("encrypted login response required")
     };
-    let pending: Value =
-        serde_json::from_slice(&channel.decrypt_response(&pending, now_ms()).unwrap()).unwrap();
+    let pending = channel.decrypt_response(&pending, now_ms()).unwrap();
+    let pending = if let Some(digest) = &digest {
+        plain_rs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &pending).unwrap()
+    } else {
+        pending
+    };
+    let pending: Value = serde_json::from_slice(&pending).unwrap();
     assert_eq!(
         pending["status"],
         if state.prefs.get_or("login_require_approval", true) {
@@ -332,19 +355,27 @@ struct LoginCallbacks {
 impl LoginCallbacks {
     fn new(state: &ServerState) -> Self {
         let (generation, requests) = state.host.connect();
-        Self { host: state.host.clone(), generation, requests }
+        Self {
+            host: state.host.clone(),
+            generation,
+            requests,
+        }
     }
 
     async fn next(&mut self, method: &str) -> Value {
         tokio::time::timeout(Duration::from_secs(3), async {
             loop {
                 let request = self.requests.recv().await.unwrap();
-                self.host.reply(self.generation, json!({"id":request["id"],"result":null})).unwrap();
+                self.host
+                    .reply(self.generation, json!({"id":request["id"],"result":null}))
+                    .unwrap();
                 if request["method"] == method {
                     return request["params"].clone();
                 }
             }
-        }).await.unwrap()
+        })
+        .await
+        .unwrap()
     }
 }
 
@@ -365,12 +396,17 @@ async fn passwordless_hello_consumes_the_same_ip_limiter_before_key_exchange() {
     use futures_util::SinkExt;
     use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
-    let (_, hello) = super::super::login_channel::Client::start("browser").unwrap();
+    let (_, hello) = super::super::login_channel::Client::start(
+        "browser",
+        crate::http::auth::login_channel::LoginMode::DeviceConfirmation,
+    )
+    .unwrap();
     for index in 0..=LOGIN_ATTEMPT_LIMIT {
-        let (mut socket, _) =
-            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid=browser&auth=2"))
-                .await
-                .unwrap();
+        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/auth?cid=browser&auth=2"
+        ))
+        .await
+        .unwrap();
         socket
             .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
             .await
@@ -402,16 +438,20 @@ async fn replacing_a_pending_login_closes_the_old_request_before_announcing_the_
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
     let mut events = LoginCallbacks::new(&state);
-    let (_first, _, _, _) = passwordless_browser(&state, port, "same-browser").await;
+    let (_first, _, _, _) = browser_login(&state, port, "same-browser", None).await;
     let first = pending_event(&mut events).await;
     let first_id = first["requestId"].as_str().unwrap();
 
-    let (_second, _, _, _) = passwordless_browser(&state, port, "same-browser").await;
+    let (_second, _, _, _) = browser_login(&state, port, "same-browser", None).await;
     closed_event(&mut events, first_id).await;
     let second = pending_event(&mut events).await;
     let second_id = second["requestId"].as_str().unwrap();
     assert_ne!(first_id, second_id);
-    let pending = server.native_management().unwrap().web_login_requests(None).unwrap();
+    let pending = server
+        .native_management()
+        .unwrap()
+        .web_login_requests(None)
+        .unwrap();
     assert_eq!(pending.requests.len(), 1);
     assert_eq!(pending.requests[0].request_id, second_id);
     server.shutdown().await;
@@ -423,7 +463,7 @@ async fn reconnecting_host_receives_pending_login_before_its_close_callback() {
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
     let mut callbacks = LoginCallbacks::new(&state);
-    let (_socket, _, _, _) = passwordless_browser(&state, port, "reconnect-browser").await;
+    let (_socket, _, _, _) = browser_login(&state, port, "reconnect-browser", None).await;
     let request = pending_event(&mut callbacks).await;
     let request_id = request["requestId"].as_str().unwrap();
     let host = server.host_events().unwrap();
@@ -431,8 +471,14 @@ async fn reconnecting_host_receives_pending_login_before_its_close_callback() {
     assert_eq!(snapshot["method"], "systemWebLoginSnapshot");
     assert_eq!(snapshot["params"]["requests"][0]["requestId"], request_id);
     assert_eq!(snapshot["params"]["requests"][0]["request"]["password"], "");
-    host.reply(json!({"id":snapshot["id"],"result":null})).unwrap();
-    server.native_management().unwrap().confirm_web_login(request_id.into(), false).await.unwrap();
+    host.reply(json!({"id":snapshot["id"],"result":null}))
+        .unwrap();
+    server
+        .native_management()
+        .unwrap()
+        .confirm_web_login(request_id.into(), false)
+        .await
+        .unwrap();
     loop {
         let next = host.next_request().await.unwrap();
         host.reply(json!({"id":next["id"],"result":null})).unwrap();
@@ -453,7 +499,7 @@ async fn saturated_host_recovers_the_pending_login_snapshot() {
     for _ in 0..crate::host::bridge::REQUEST_CAPACITY {
         state.host.notify("blocked", json!({})).unwrap();
     }
-    let (_socket, _, _, _) = passwordless_browser(&state, port, "queued-browser").await;
+    let (_socket, _, _, _) = browser_login(&state, port, "queued-browser", None).await;
     let snapshot = callbacks.next("systemWebLoginSnapshot").await;
     assert_eq!(snapshot["requests"][0]["clientId"], "queued-browser");
     server.shutdown().await;
@@ -473,7 +519,7 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
         } else {
             "rejected-browser"
         };
-        let (mut socket, channel, session, _) = passwordless_browser(&state, port, client_id).await;
+        let (mut socket, channel, session, _) = browser_login(&state, port, client_id, None).await;
         let request = pending_event(&mut events).await;
         assert!(state.db.session_get(client_id).unwrap().is_none());
         assert_eq!(
@@ -539,7 +585,7 @@ async fn disconnect_expiry_mode_changes_and_repeated_requests_cannot_create_a_pa
         let (_directory, server, port) = passwordless_server().await;
         let state = server.runtime_state();
         let mut events = LoginCallbacks::new(&state);
-        let (mut socket, _, _, frame) = passwordless_browser(&state, port, "browser").await;
+        let (mut socket, _, _, frame) = browser_login(&state, port, "browser", None).await;
         let event = pending_event(&mut events).await;
         let id = event["requestId"].as_str().unwrap();
         match failure {
@@ -600,7 +646,7 @@ async fn successful_passwordless_logins_still_count_toward_the_rolling_ip_limit(
     state.prefs.set("login_require_approval", false).unwrap();
     for index in 0..LOGIN_ATTEMPT_LIMIT {
         let client_id = format!("successful-browser-{index}");
-        let (mut socket, _, _, _) = passwordless_browser(&state, port, &client_id).await;
+        let (mut socket, _, _, _) = browser_login(&state, port, &client_id, None).await;
         assert!(state.db.session_get(&client_id).unwrap().is_some());
         assert!(state.login_attempts.lock().unwrap().pending.is_empty());
         socket.close(None).await.unwrap();
@@ -609,7 +655,11 @@ async fn successful_passwordless_logins_still_count_toward_the_rolling_ip_limit(
         tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid=blocked&auth=2"))
             .await
             .unwrap();
-    let (_, hello) = super::super::login_channel::Client::start("blocked").unwrap();
+    let (_, hello) = super::super::login_channel::Client::start(
+        "blocked",
+        crate::http::auth::login_channel::LoginMode::DeviceConfirmation,
+    )
+    .unwrap();
     socket
         .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
         .await
@@ -647,10 +697,16 @@ fn recovery_requests_follow_creation_order_independent_of_hash_iteration() {
     let mut attempts = LoginAttempts::default();
     let now = Instant::now();
     for id in ["first", "second", "third"] {
-        attempts.pending.insert(id.into(), Pending {
-            client_id: id.into(), client_ip: String::new(), request: json!({"browserName":id}),
-            at: now, protection: Protection::Password(String::new()),
-        });
+        attempts.pending.insert(
+            id.into(),
+            Pending {
+                client_id: id.into(),
+                client_ip: String::new(),
+                request: json!({"browserName":id}),
+                at: now,
+                protection: password_protection(""),
+            },
+        );
     }
     let mut ids: Vec<_> = attempts.pending.keys().cloned().collect();
     for (index, id) in ids.iter().enumerate() {
@@ -658,8 +714,12 @@ fn recovery_requests_follow_creation_order_independent_of_hash_iteration() {
     }
     ids.reverse();
     let snapshot = attempts.host_snapshot();
-    let actual: Vec<_> = snapshot["requests"].as_array().unwrap().iter()
-        .map(|value| value["requestId"].as_str().unwrap()).collect();
+    let actual: Vec<_> = snapshot["requests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| value["requestId"].as_str().unwrap())
+        .collect();
     assert_eq!(actual, ids);
 }
 
@@ -687,7 +747,11 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
                 .await
                 .unwrap();
         } else {
-            let (client, hello) = super::super::login_channel::Client::start("browser").unwrap();
+            let (client, hello) = super::super::login_channel::Client::start(
+                "browser",
+                crate::http::auth::login_channel::LoginMode::DeviceConfirmation,
+            )
+            .unwrap();
             socket
                 .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
                 .await
@@ -739,4 +803,240 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
         assert!(state.login_attempts.lock().unwrap().pending.is_empty());
         server.shutdown().await;
     }
+}
+
+fn password_protection(digest: &str) -> LoginProtection {
+    use super::super::login_channel::{Client, LoginMode, ServerHandshake};
+    let (private, public) = plain_rs::crypto::ed25519_generate();
+    let (client, hello) = Client::start("browser", LoginMode::Password).unwrap();
+    let (server, response) = ServerHandshake::start(
+        "browser",
+        LoginMode::Password,
+        "device",
+        &hello,
+        &private,
+        now_ms(),
+    )
+    .unwrap();
+    let (_, reveal) = client
+        .accept(
+            &response,
+            &plain_rs::utils::base64::base64_encode(&public),
+            "device",
+            now_ms(),
+        )
+        .unwrap();
+    LoginProtection::Password {
+        digest: digest.into(),
+        channel: server.finish(&reveal, now_ms()).unwrap(),
+    }
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_encryption() {
+    use super::super::login_channel::{Client, LoginMode};
+    use futures_util::SinkExt;
+    use tokio_tungstenite::tungstenite::Message;
+    let (_directory, server, port) = passwordless_server().await;
+    let state = server.runtime_state();
+    state.prefs.set("password_type", "FIXED").unwrap();
+    let digest = password_digest(&state.prefs);
+    for handshake in [false, true] {
+        let client_id = if handshake {
+            "inner-only"
+        } else {
+            "no-exchange"
+        };
+        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/auth?cid={client_id}&auth=1",
+        ))
+        .await
+        .unwrap();
+        let mut context = String::new();
+        if handshake {
+            let (client, hello) = Client::start(client_id, LoginMode::Password).unwrap();
+            socket
+                .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
+                .await
+                .unwrap();
+            let Message::Text(hello) = login_frame(&mut socket).await else {
+                panic!("signed hello required")
+            };
+            let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+            let (keys, reveal) = client
+                .accept(
+                    &serde_json::from_str(&hello).unwrap(),
+                    &plain_rs::utils::base64::base64_encode(&signing[32..]),
+                    &state.native_client_id().unwrap(),
+                    now_ms(),
+                )
+                .unwrap();
+            context = keys.context;
+            socket
+                .send(Message::Text(
+                    serde_json::to_string(&reveal).unwrap().into(),
+                ))
+                .await
+                .unwrap();
+        }
+        let session = plain_rs::crypto::EcdhSession::generate();
+        let request = json!({
+            "password":digest, "loginContext":context,
+            "browserName":"Fixture", "browserVersion":"1", "osName":"Fixture", "osVersion":"1",
+            "isMobile":false, "ecdhPublicKey":plain_rs::utils::base64::base64_encode(&session.public_key_bytes),
+        });
+        let inner = plain_rs::crypto::xchacha_encrypt_raw(
+            &digest.as_bytes()[..32],
+            &serde_json::to_vec(&request).unwrap(),
+        )
+        .unwrap();
+        socket.send(Message::Binary(inner.into())).await.unwrap();
+        assert!(matches!(login_frame(&mut socket).await, Message::Close(_)));
+        assert!(state.db.session_get(client_id).unwrap().is_none());
+    }
+    assert!(state.db.session_list().unwrap().is_empty());
+    server.shutdown().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn password_change_mode_change_expiry_disconnect_and_replay_prevent_late_approval() {
+    use futures_util::SinkExt;
+    use tokio_tungstenite::tungstenite::Message;
+    for failure in ["password", "mode", "expiry", "disconnect", "replay"] {
+        let (_directory, server, port) = passwordless_server().await;
+        let state = server.runtime_state();
+        state.prefs.set("password_type", "FIXED").unwrap();
+        let mut events = LoginCallbacks::new(&state);
+        let (mut socket, _, _, frame) =
+            browser_login(&state, port, "browser", Some("unexposed-password")).await;
+        let event = pending_event(&mut events).await;
+        assert!(event["request"].get("verificationCode").is_none());
+        assert_eq!(event["request"]["password"], "");
+        let id = event["requestId"].as_str().unwrap();
+        match failure {
+            "password" => {
+                state.prefs.set("password", "changed-password").unwrap();
+            }
+            "mode" => {
+                state.prefs.set("password_type", "NONE").unwrap();
+            }
+            "expiry" => {
+                state
+                    .login_attempts
+                    .lock()
+                    .unwrap()
+                    .pending
+                    .get_mut(id)
+                    .unwrap()
+                    .at = Instant::now() - Duration::from_secs(301);
+            }
+            "disconnect" => {
+                socket.close(None).await.unwrap();
+                tokio::time::timeout(Duration::from_secs(3), async {
+                    while state.main_ws.login_pending(id) {
+                        tokio::task::yield_now().await;
+                    }
+                })
+                .await
+                .unwrap();
+            }
+            "replay" => {
+                socket.send(Message::Binary(frame.into())).await.unwrap();
+                assert!(matches!(login_frame(&mut socket).await, Message::Close(_)));
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            server
+                .native_management()
+                .unwrap()
+                .confirm_web_login(id.into(), true)
+                .await
+                .is_err()
+        );
+        assert!(state.db.session_get("browser").unwrap().is_none());
+        server.shutdown().await;
+    }
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn idle_connections_consume_the_login_budget_before_any_message() {
+    use tokio_tungstenite::tungstenite::Message;
+    let (_directory, server, port) = passwordless_server().await;
+    let mut sockets = Vec::new();
+    for index in 0..LOGIN_ATTEMPT_LIMIT {
+        let (socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/auth?cid=idle-{index}&auth=2"
+        ))
+        .await
+        .unwrap();
+        sockets.push(socket);
+    }
+    let rejected = tokio_tungstenite::connect_async(format!(
+        "ws://127.0.0.1:{port}/auth?cid=over-budget&auth=2"
+    ))
+    .await;
+    match rejected {
+        Ok((mut socket, _)) => {
+            assert!(
+                matches!(login_frame(&mut socket).await, Message::Close(Some(frame)) if frame.reason == "too_many_login_attempts")
+            );
+        }
+        Err(tokio_tungstenite::tungstenite::Error::Http(response)) => {
+            assert_eq!(response.status().as_u16(), 429);
+        }
+        Err(error) => panic!("unexpected connection failure: {error}"),
+    }
+    let state = server.runtime_state();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let count = state
+                .login_attempts
+                .lock()
+                .unwrap()
+                .entries
+                .get("127.0.0.1")
+                .map(Vec::len)
+                .unwrap_or(0);
+            if count == LOGIN_ATTEMPT_LIMIT {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(server.runtime_state().db.session_list().unwrap().is_empty());
+    server.shutdown().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn a_signed_hello_does_not_extend_the_initial_exchange_deadline() {
+    use super::super::login_channel::{Client, LoginMode};
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let (_directory, server, port) = passwordless_server().await;
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://127.0.0.1:{port}/auth?cid=incomplete&auth=2",
+    ))
+    .await
+    .unwrap();
+    let (_, hello) = Client::start("incomplete", LoginMode::DeviceConfirmation).unwrap();
+    socket
+        .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
+        .await
+        .unwrap();
+    assert!(matches!(login_frame(&mut socket).await, Message::Text(_)));
+    let response = tokio::time::timeout(Duration::from_secs(12), socket.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(matches!(response, Message::Close(Some(frame)) if frame.reason == "timeout"));
+    assert!(server.runtime_state().db.session_list().unwrap().is_empty());
+    server.shutdown().await;
 }

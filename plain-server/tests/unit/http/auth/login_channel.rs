@@ -7,12 +7,11 @@ fn vector() -> serde_json::Value {
     .unwrap()
 }
 
-#[test]
-fn browser_vector_binds_commitment_signature_transcript_keys_and_ciphertext_in_rust() {
-    let vector = vector();
+fn assert_browser_vector(vector: serde_json::Value, mode: LoginMode) {
     let hello: ServerHello = serde_json::from_value(vector["hello"].clone()).unwrap();
     let reveal: ClientReveal = serde_json::from_value(vector["reveal"].clone()).unwrap();
     let client = Client {
+        mode,
         client_id: hello.client_id.clone(),
         key: EcdhSession::from_private_key(&base64_decode(
             vector["clientPrivate"].as_str().unwrap(),
@@ -21,18 +20,19 @@ fn browser_vector_binds_commitment_signature_transcript_keys_and_ciphertext_in_r
         nonce: reveal.nonce.clone(),
     };
     assert_eq!(
-        reveal.commitment(&hello.client_id).unwrap(),
+        reveal.commitment(&hello.client_id, mode).unwrap(),
         vector["clientHello"]["commitment"]
     );
     assert_eq!(
-        hello.signed_transcript().unwrap(),
+        hello.signed_transcript(mode).unwrap(),
         vector["signedTranscript"].as_str().unwrap().as_bytes()
     );
     assert_eq!(
-        hello.transcript(&reveal).unwrap(),
+        hello.transcript(&reveal, mode).unwrap(),
         vector["transcript"].as_str().unwrap().as_bytes()
     );
     let server = ServerHandshake {
+        mode,
         key: EcdhSession::from_private_key(&base64_decode(
             vector["serverPrivate"].as_str().unwrap(),
         ))
@@ -54,7 +54,9 @@ fn browser_vector_binds_commitment_signature_transcript_keys_and_ciphertext_in_r
         channel.verification_code,
         vector["verificationCode"].as_str().unwrap()
     );
-    assert!(channel.verification_code.starts_with('0'));
+    if mode == LoginMode::DeviceConfirmation {
+        assert!(channel.verification_code.starts_with('0'));
+    }
     assert_eq!(channel.verification_code, server.verification_code);
     assert_eq!(
         base64_encode(&channel.request_key),
@@ -64,22 +66,58 @@ fn browser_vector_binds_commitment_signature_transcript_keys_and_ciphertext_in_r
         base64_encode(&channel.response_key),
         vector["responseKey"].as_str().unwrap()
     );
-    assert_eq!(
-        server
-            .decrypt_request(
-                &base64_decode(vector["requestFrame"].as_str().unwrap()),
-                1000
+    let frame = base64_decode(vector["requestFrame"].as_str().unwrap());
+    let decrypted = server.decrypt_request(&frame, 1000).unwrap();
+    let request = if mode == LoginMode::Password {
+        let digest = vector["passwordHash"].as_str().unwrap();
+        assert!(xchacha_decrypt_raw(&digest.as_bytes()[..32], &frame).is_none());
+        assert_eq!(
+            decrypted,
+            base64_decode(vector["passwordFrame"].as_str().unwrap())
+        );
+        let response = channel
+            .decrypt_response(
+                &base64_decode(vector["responseFrame"].as_str().unwrap()),
+                1000,
             )
-            .unwrap(),
-        vector["request"].as_str().unwrap().as_bytes()
-    );
+            .unwrap();
+        assert_eq!(
+            xchacha_decrypt_raw(&digest.as_bytes()[..32], &response).unwrap(),
+            vector["response"].as_str().unwrap().as_bytes(),
+        );
+        xchacha_decrypt_raw(&digest.as_bytes()[..32], &decrypted).unwrap()
+    } else {
+        decrypted
+    };
+    assert_eq!(request, vector["request"].as_str().unwrap().as_bytes());
+}
+
+#[test]
+fn browser_vector_binds_commitment_signature_transcript_keys_and_ciphertext_in_rust() {
+    assert_browser_vector(vector(), LoginMode::DeviceConfirmation);
+}
+
+#[test]
+fn password_browser_vector_requires_both_encryption_layers_and_agrees_with_rust() {
+    let vector = serde_json::from_str(include_str!(
+        "../../../../../plain-rs/testdata/crypto/web-password-login-vector.json"
+    ))
+    .unwrap();
+    assert_browser_vector(vector, LoginMode::Password);
 }
 
 fn pair() -> (Channel, Channel) {
     let (private, public) = plain_rs::crypto::ed25519_generate();
-    let (client, hello) = Client::start("browser").unwrap();
-    let (server, response) =
-        ServerHandshake::start("browser", "device", &hello, &private, 1000).unwrap();
+    let (client, hello) = Client::start("browser", LoginMode::DeviceConfirmation).unwrap();
+    let (server, response) = ServerHandshake::start(
+        "browser",
+        LoginMode::DeviceConfirmation,
+        "device",
+        &hello,
+        &private,
+        1000,
+    )
+    .unwrap();
     let (client, reveal) = client
         .accept(&response, &base64_encode(&public), "device", 1000)
         .unwrap();
@@ -154,9 +192,16 @@ fn every_signed_field_and_signature_reject_substitution() {
         "signature",
     ] {
         let (private, public) = plain_rs::crypto::ed25519_generate();
-        let (client, hello) = Client::start("browser").unwrap();
-        let (_, response) =
-            ServerHandshake::start("browser", "device", &hello, &private, 1000).unwrap();
+        let (client, hello) = Client::start("browser", LoginMode::DeviceConfirmation).unwrap();
+        let (_, response) = ServerHandshake::start(
+            "browser",
+            LoginMode::DeviceConfirmation,
+            "device",
+            &hello,
+            &private,
+            1000,
+        )
+        .unwrap();
         let mut value = serde_json::to_value(response).unwrap();
         value[field] = match field {
             "expiresAt" => serde_json::json!(301_001),
@@ -184,14 +229,22 @@ fn every_signed_field_and_signature_reject_substitution() {
 fn reveal_cannot_change_committed_key_nonce_or_client_identity() {
     for field in ["publicKey", "nonce", "clientId"] {
         let (private, _) = plain_rs::crypto::ed25519_generate();
-        let (client, hello) = Client::start("browser").unwrap();
+        let (client, hello) = Client::start("browser", LoginMode::DeviceConfirmation).unwrap();
         let reveal = client.reveal();
         let id = if field == "clientId" {
             "other-browser"
         } else {
             "browser"
         };
-        let (server, _) = ServerHandshake::start(id, "device", &hello, &private, 1000).unwrap();
+        let (server, _) = ServerHandshake::start(
+            id,
+            LoginMode::DeviceConfirmation,
+            "device",
+            &hello,
+            &private,
+            1000,
+        )
+        .unwrap();
         let mut value = serde_json::to_value(reveal).unwrap();
         if field == "publicKey" {
             value[field] =
@@ -211,7 +264,7 @@ fn reveal_cannot_change_committed_key_nonce_or_client_identity() {
 
 #[test]
 fn commitment_is_hiding_and_legacy_or_extra_hello_fields_are_rejected() {
-    let (_, hello) = Client::start("browser").unwrap();
+    let (_, hello) = Client::start("browser", LoginMode::DeviceConfirmation).unwrap();
     let value = serde_json::to_value(hello).unwrap();
     assert_eq!(value.as_object().unwrap().len(), 1);
     assert!(value.get("commitment").is_some());
@@ -236,6 +289,7 @@ fn commitment_is_hiding_and_legacy_or_extra_hello_fields_are_rejected() {
         assert!(
             ServerHandshake::start(
                 "browser",
+                LoginMode::DeviceConfirmation,
                 "device",
                 &ClientHello { commitment },
                 &private,
@@ -249,10 +303,17 @@ fn commitment_is_hiding_and_legacy_or_extra_hello_fields_are_rejected() {
 #[test]
 fn trusted_identity_and_fresh_commitment_cannot_be_replaced() {
     let (private, public) = plain_rs::crypto::ed25519_generate();
-    let (client, hello) = Client::start("browser").unwrap();
-    let (_, response) =
-        ServerHandshake::start("browser", "device", &hello, &private, 1000).unwrap();
-    let (other, _) = Client::start("browser").unwrap();
+    let (client, hello) = Client::start("browser", LoginMode::DeviceConfirmation).unwrap();
+    let (_, response) = ServerHandshake::start(
+        "browser",
+        LoginMode::DeviceConfirmation,
+        "device",
+        &hello,
+        &private,
+        1000,
+    )
+    .unwrap();
+    let (other, _) = Client::start("browser", LoginMode::DeviceConfirmation).unwrap();
     assert!(
         other
             .accept(&response, &base64_encode(&public), "device", 1000)
@@ -263,9 +324,16 @@ fn trusted_identity_and_fresh_commitment_cannot_be_replaced() {
             .accept(&response, &base64_encode(&public), "other-device", 1000)
             .is_err()
     );
-    let (client, hello) = Client::start("browser").unwrap();
-    let (_, response) =
-        ServerHandshake::start("browser", "device", &hello, &private, 1000).unwrap();
+    let (client, hello) = Client::start("browser", LoginMode::DeviceConfirmation).unwrap();
+    let (_, response) = ServerHandshake::start(
+        "browser",
+        LoginMode::DeviceConfirmation,
+        "device",
+        &hello,
+        &private,
+        1000,
+    )
+    .unwrap();
     let (_, replacement) = plain_rs::crypto::ed25519_generate();
     assert!(
         client
@@ -277,18 +345,32 @@ fn trusted_identity_and_fresh_commitment_cannot_be_replaced() {
 #[test]
 fn reveal_and_signed_hello_expire_and_client_clock_cannot_extend_lifetime() {
     let (private, public) = plain_rs::crypto::ed25519_generate();
-    let (client, hello) = Client::start("browser").unwrap();
-    let (server, response) =
-        ServerHandshake::start("browser", "device", &hello, &private, 1000).unwrap();
+    let (client, hello) = Client::start("browser", LoginMode::DeviceConfirmation).unwrap();
+    let (server, response) = ServerHandshake::start(
+        "browser",
+        LoginMode::DeviceConfirmation,
+        "device",
+        &hello,
+        &private,
+        1000,
+    )
+    .unwrap();
     let (channel, reveal) = client
         .accept(&response, &base64_encode(&public), "device", 900)
         .unwrap();
     assert!(server.finish(&reveal, 301_000).is_err());
     assert!(channel.encrypt_request(b"request", 300_899).is_ok());
     assert!(channel.encrypt_request(b"request", 300_900).is_err());
-    let (client, hello) = Client::start("browser").unwrap();
-    let (_, response) =
-        ServerHandshake::start("browser", "device", &hello, &private, 1000).unwrap();
+    let (client, hello) = Client::start("browser", LoginMode::DeviceConfirmation).unwrap();
+    let (_, response) = ServerHandshake::start(
+        "browser",
+        LoginMode::DeviceConfirmation,
+        "device",
+        &hello,
+        &private,
+        1000,
+    )
+    .unwrap();
     assert!(
         client
             .accept(&response, &base64_encode(&public), "device", 301_000)
@@ -308,14 +390,72 @@ fn server_rejects_invalid_committed_points_nonces_and_identities() {
     ] {
         let reveal = ClientReveal { public_key, nonce };
         let hello = ClientHello {
-            commitment: reveal.commitment("browser").unwrap(),
+            commitment: reveal
+                .commitment("browser", LoginMode::DeviceConfirmation)
+                .unwrap(),
         };
-        let (server, _) =
-            ServerHandshake::start("browser", "device", &hello, &private, 1000).unwrap();
+        let (server, _) = ServerHandshake::start(
+            "browser",
+            LoginMode::DeviceConfirmation,
+            "device",
+            &hello,
+            &private,
+            1000,
+        )
+        .unwrap();
         assert!(server.finish(&reveal, 1000).is_err());
     }
-    let (_, hello) = Client::start("browser").unwrap();
-    assert!(ServerHandshake::start("", "device", &hello, &private, 1000).is_err());
-    assert!(ServerHandshake::start("browser", "", &hello, &private, 1000).is_err());
-    assert!(ServerHandshake::start("browser", "device", &hello, &[0; 4], 1000).is_err());
+    let (_, hello) = Client::start("browser", LoginMode::DeviceConfirmation).unwrap();
+    assert!(
+        ServerHandshake::start(
+            "",
+            LoginMode::DeviceConfirmation,
+            "device",
+            &hello,
+            &private,
+            1000
+        )
+        .is_err()
+    );
+    assert!(
+        ServerHandshake::start(
+            "browser",
+            LoginMode::DeviceConfirmation,
+            "",
+            &hello,
+            &private,
+            1000
+        )
+        .is_err()
+    );
+    assert!(
+        ServerHandshake::start(
+            "browser",
+            LoginMode::DeviceConfirmation,
+            "device",
+            &hello,
+            &[0; 4],
+            1000
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn password_and_device_confirmation_cannot_substitute_each_others_challenges() {
+    let (private, public) = plain_rs::crypto::ed25519_generate();
+    for (client_mode, server_mode) in [
+        (LoginMode::Password, LoginMode::DeviceConfirmation),
+        (LoginMode::DeviceConfirmation, LoginMode::Password),
+    ] {
+        let (client, hello) = Client::start("browser", client_mode).unwrap();
+        let (_, response) =
+            ServerHandshake::start("browser", server_mode, "device", &hello, &private, 1000)
+                .unwrap();
+        assert!(
+            client
+                .accept(&response, &base64_encode(&public), "device", 1000)
+                .is_err()
+        );
+    }
 }

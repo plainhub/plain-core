@@ -99,7 +99,7 @@ impl LoginAttempts {
             let mut request = item.request.clone();
             request["password"] = json!("");
             request.as_object_mut().unwrap().remove("verificationCode");
-            if let Protection::Temporary(channel) = &item.protection {
+            if let LoginProtection::DeviceConfirmation(channel) = &item.protection {
                 request["verificationCode"] = json!(channel.verification_code);
             }
             json!({"requestId":id,"clientId":item.client_id,"clientIp":item.client_ip,"request":request})
@@ -133,46 +133,68 @@ struct Pending {
     client_ip: String,
     request: Value,
     at: Instant,
-    protection: Protection,
+    protection: LoginProtection,
 }
 
-enum Protection {
-    Password(String),
-    Temporary(super::login_channel::Channel),
+enum LoginProtection {
+    Password {
+        digest: String,
+        channel: super::login_channel::Channel,
+    },
+    DeviceConfirmation(super::login_channel::Channel),
 }
 
-impl Protection {
+impl LoginProtection {
+    fn channel(&self) -> &super::login_channel::Channel {
+        match self {
+            Self::Password { channel, .. } | Self::DeviceConfirmation(channel) => channel,
+        }
+    }
+
     fn validate(&self, state: &ServerState, request: &Value) -> anyhow::Result<()> {
+        let channel = self.channel();
+        channel.fresh(now_ms())?;
+        anyhow::ensure!(
+            text(request, "loginContext") == channel.context,
+            "invalid_login_request"
+        );
+
         let password_type = plain_rs::prefs::security::password_type(&state.prefs)?;
         match self {
-            Self::Password(digest) => anyhow::ensure!(
+            Self::Password { digest, .. } => anyhow::ensure!(
                 password_type == PasswordType::Fixed
                     && *digest == password_digest(&state.prefs)
                     && text(request, "password") == *digest,
                 "invalid_password"
             ),
-            Self::Temporary(channel) => {
-                anyhow::ensure!(
-                    password_type == PasswordType::None && request.get("password").is_none(),
-                    "invalid_login_request"
-                );
-                anyhow::ensure!(
-                    text(request, "loginContext") == channel.context,
-                    "invalid_login_request"
-                );
-                channel.fresh(now_ms())?;
-            }
+            Self::DeviceConfirmation(_) => anyhow::ensure!(
+                password_type == PasswordType::None && request.get("password").is_none(),
+                "invalid_login_request"
+            ),
         }
         Ok(())
     }
 
+    fn decrypt_request(&self, frame: &[u8]) -> anyhow::Result<Vec<u8>> {
+        let bytes = self.channel().decrypt_request(frame, now_ms())?;
+        match self {
+            Self::Password { digest, .. } => {
+                plain_rs::crypto::xchacha_decrypt_raw(&hash_to_token(digest), &bytes)
+                    .ok_or_else(|| anyhow::anyhow!("invalid_password"))
+            }
+            Self::DeviceConfirmation(_) => Ok(bytes),
+        }
+    }
+
     fn encrypt_response(&self, bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
         match self {
-            Self::Password(digest) => {
-                plain_rs::crypto::xchacha_encrypt_raw(&hash_to_token(digest), bytes)
-                    .ok_or_else(|| anyhow::anyhow!("Response encryption failed"))
+            Self::Password { digest, channel } => {
+                let encrypted =
+                    plain_rs::crypto::xchacha_encrypt_raw(&hash_to_token(digest), bytes)
+                        .ok_or_else(|| anyhow::anyhow!("Response encryption failed"))?;
+                channel.encrypt_response(&encrypted, now_ms())
             }
-            Self::Temporary(channel) => channel.encrypt_response(bytes, now_ms()),
+            Self::DeviceConfirmation(channel) => channel.encrypt_response(bytes, now_ms()),
         }
     }
 }
@@ -206,8 +228,10 @@ impl LoginAttempts {
                 os_name: display(&text(&request.request, "osName")),
                 os_version: display(&text(&request.request, "osVersion")),
                 verification_code: match &request.protection {
-                    Protection::Temporary(channel) => Some(channel.verification_code.clone()),
-                    Protection::Password(_) => None,
+                    LoginProtection::DeviceConfirmation(channel) => {
+                        Some(channel.verification_code.clone())
+                    }
+                    LoginProtection::Password { .. } => None,
                 },
             })
             .collect();
@@ -231,11 +255,6 @@ impl LoginAttempts {
 
 pub(crate) enum Request {
     Issue {
-        client_id: String,
-        client_ip: String,
-        frame: String,
-    },
-    IssueTemporary {
         client_id: String,
         client_ip: String,
         frame: String,
@@ -372,10 +391,9 @@ async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> 
         timestamp,
         chat_paired,
     );
-    if let Protection::Temporary(channel) = &request.protection {
-        signed.push('|');
-        signed.push_str(&channel.context);
-    }
+    let channel = request.protection.channel();
+    signed.push('|');
+    signed.push_str(&channel.context);
     let signature = sign(&state.prefs, &signed)?;
     let mut response = json!({
         "clientId": device_client_id,
@@ -385,9 +403,7 @@ async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> 
         "timestamp": timestamp,
         "chatPaired": chat_paired,
     });
-    if let Protection::Temporary(channel) = &request.protection {
-        response["loginContext"] = json!(channel.context);
-    }
+    response["loginContext"] = json!(channel.context);
     if chat_paired {
         let id = &request.client_id;
         let offered_key = text(&request.request["peer"], "signaturePublicKey");
@@ -468,10 +484,7 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> anyhow::Resul
 }
 
 pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Result<Value> {
-    if matches!(
-        &request,
-        Request::Issue { .. } | Request::IssueTemporary { .. } | Request::Complete { .. }
-    ) {
+    if matches!(&request, Request::Issue { .. } | Request::Complete { .. }) {
         anyhow::ensure!(
             state.prefs.get_or("desktop_access", true),
             "desktop_access_disabled"
@@ -507,41 +520,23 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             );
             (pending, request_id)
         }
-        incoming @ (Request::Issue { .. } | Request::IssueTemporary { .. }) => {
-            let (client_id, client_ip, frame, protection) = match incoming {
-                Request::Issue {
-                    client_id,
-                    client_ip,
-                    frame,
-                } => {
-                    anyhow::ensure!(
-                        plain_rs::prefs::security::password_type(&state.prefs)?
-                            == PasswordType::Fixed,
-                        "password_required"
-                    );
-                    (
-                        client_id,
-                        client_ip,
-                        frame,
-                        Protection::Password(password_digest(&state.prefs)),
-                    )
-                }
-                Request::IssueTemporary {
-                    client_id,
-                    client_ip,
-                    frame,
+        Request::Issue {
+            client_id,
+            client_ip,
+            frame,
+            channel,
+        } => {
+            let protection = match channel.mode {
+                super::login_channel::LoginMode::Password => LoginProtection::Password {
+                    digest: password_digest(&state.prefs),
                     channel,
-                } => (client_id, client_ip, frame, Protection::Temporary(channel)),
-                _ => unreachable!(),
+                },
+                super::login_channel::LoginMode::DeviceConfirmation => {
+                    LoginProtection::DeviceConfirmation(channel)
+                }
             };
             let frame = plain_rs::utils::base64::base64_decode(&frame);
-            let bytes = match &protection {
-                Protection::Password(digest) => {
-                    plain_rs::crypto::xchacha_decrypt_raw(&hash_to_token(digest), &frame)
-                        .ok_or_else(|| anyhow::anyhow!("invalid_password"))?
-                }
-                Protection::Temporary(channel) => channel.decrypt_request(&frame, now_ms())?,
-            };
+            let bytes = protection.decrypt_request(&frame)?;
             let request: Value = serde_json::from_slice(&bytes)?;
             for field in ["browserName", "browserVersion", "osName", "osVersion"] {
                 anyhow::ensure!(
@@ -590,7 +585,7 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                     .as_object_mut()
                     .unwrap()
                     .remove("verificationCode");
-                if let Protection::Temporary(channel) = &pending.protection {
+                if let LoginProtection::DeviceConfirmation(channel) = &pending.protection {
                     request_facts["verificationCode"] = json!(channel.verification_code);
                 }
                 {

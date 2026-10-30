@@ -38,21 +38,48 @@ fn offer(
     state: &ServerState,
     client: &plain_rs::crypto::EcdhSession,
     peer: Value,
-) -> ws_login::Request {
+) -> (ws_login::Request, crate::http::auth::login_channel::Channel) {
     use sha2::Digest;
     let digest = plain_rs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
-    let request = json!({"password":digest,"browserName":"Test","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::utils::base64::base64_encode(&client.public_key_bytes),"peer":peer});
+    use crate::http::auth::login_channel::{Client, LoginMode, ServerHandshake};
+    let (login, hello) = Client::start("browser", LoginMode::Password).unwrap();
+    let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    let now = chrono::Utc::now().timestamp_millis() as u64;
+    let device_id = state.native_client_id().unwrap();
+    let (server, response) = ServerHandshake::start(
+        "browser",
+        LoginMode::Password,
+        &device_id,
+        &hello,
+        &signing,
+        now,
+    )
+    .unwrap();
+    let (keys, reveal) = login
+        .accept(
+            &response,
+            &plain_rs::utils::base64::base64_encode(&signing[32..]),
+            &device_id,
+            now,
+        )
+        .unwrap();
+    let channel = server.finish(&reveal, now).unwrap();
+    let request = json!({"password":digest,"loginContext":keys.context,"browserName":"Test","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::utils::base64::base64_encode(&client.public_key_bytes),"peer":peer});
     let frame = plain_rs::crypto::xchacha_encrypt_raw(
         &digest.as_bytes()[..32],
         &serde_json::to_vec(&request).unwrap(),
     )
     .unwrap();
-    let _ = state;
-    ws_login::Request::Issue {
-        client_id: "browser".into(),
-        client_ip: "192.0.2.1".into(),
-        frame: plain_rs::utils::base64::base64_encode(&frame),
-    }
+    let frame = keys.encrypt_request(&frame, now).unwrap();
+    (
+        ws_login::Request::Issue {
+            client_id: "browser".into(),
+            client_ip: "192.0.2.1".into(),
+            frame: plain_rs::utils::base64::base64_encode(&frame),
+            channel,
+        },
+        keys,
+    )
 }
 
 #[tokio::test]
@@ -113,9 +140,8 @@ async fn web_login_ecdh_encrypted_response_signature_and_token_auth_survive_rest
     let (dir, server) = fixture();
     let state = server.runtime_state();
     let client = plain_rs::crypto::EcdhSession::generate();
-    let issued = ws_login::execute(&state, offer(&state, &client, Value::Null))
-        .await
-        .unwrap();
+    let (request, keys) = offer(&state, &client, Value::Null);
+    let issued = ws_login::execute(&state, request).await.unwrap();
     assert_eq!(issued["status"], "COMPLETED");
     let shared = client
         .compute_shared_key(&plain_rs::utils::base64::base64_decode(
@@ -139,20 +165,24 @@ async fn web_login_ecdh_encrypted_response_signature_and_token_auth_survive_rest
     );
     use sha2::Digest;
     let digest = plain_rs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
-    let decrypted = plain_rs::crypto::xchacha_decrypt_raw(
-        &digest.as_bytes()[..32],
-        &plain_rs::utils::base64::base64_decode(issued["frame"].as_str().unwrap()),
-    )
-    .unwrap();
+    let encrypted = keys
+        .decrypt_response(
+            &plain_rs::utils::base64::base64_decode(issued["frame"].as_str().unwrap()),
+            chrono::Utc::now().timestamp_millis() as u64,
+        )
+        .unwrap();
+    let decrypted =
+        plain_rs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &encrypted).unwrap();
     assert_eq!(
         serde_json::from_slice::<Value>(&decrypted).unwrap(),
         issued["response"]
     );
     let response = &issued["response"];
     let material = format!(
-        "phone|COMPLETED|{}|{}",
+        "phone|COMPLETED|{}|{}|{}",
         response["ecdhPublicKey"].as_str().unwrap(),
-        response["timestamp"].as_u64().unwrap()
+        response["timestamp"].as_u64().unwrap(),
+        keys.context,
     );
     let pair = plain_rs::prefs::security::signing_keypair(&state.prefs).unwrap();
     assert!(plain_rs::crypto::ed25519_verify(
@@ -199,7 +229,7 @@ async fn confirmation_is_once_only_and_cancel_or_revoke_prevents_issuance() {
     let state = server.runtime_state();
     state.prefs.set("login_require_approval", true).unwrap();
     let client = plain_rs::crypto::EcdhSession::generate();
-    let pending = ws_login::execute(&state, offer(&state, &client, Value::Null))
+    let pending = ws_login::execute(&state, offer(&state, &client, Value::Null).0)
         .await
         .unwrap();
     assert_eq!(pending["status"], "PENDING");
@@ -219,7 +249,7 @@ async fn confirmation_is_once_only_and_cancel_or_revoke_prevents_issuance() {
             .is_err()
     );
     for cancelled in [true, false] {
-        let pending = ws_login::execute(&state, offer(&state, &client, Value::Null))
+        let pending = ws_login::execute(&state, offer(&state, &client, Value::Null).0)
             .await
             .unwrap();
         let id = pending["requestId"].as_str().unwrap().to_owned();
@@ -250,7 +280,7 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
     let client = plain_rs::crypto::EcdhSession::generate();
     let (_, public) = plain_rs::crypto::ed25519_generate();
     let peer = json!({"port":8443,"signaturePublicKey":plain_rs::utils::base64::base64_encode(&public),"deviceName":"Desktop","deviceType":"COMPUTER","ips":["192.0.2.1"]});
-    let pending = ws_login::execute(&state, offer(&state, &client, peer))
+    let pending = ws_login::execute(&state, offer(&state, &client, peer).0)
         .await
         .unwrap();
     assert_eq!(

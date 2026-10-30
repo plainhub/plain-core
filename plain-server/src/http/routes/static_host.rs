@@ -178,16 +178,10 @@ pub(crate) async fn serve(
     } else {
         (bytes, cache_control(&resource))
     };
-    let mut response = Response::builder()
+    let response = Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, content_type(&resource))
         .header(header::CACHE_CONTROL, HeaderValue::from_static(cache));
-    if resource == "index.html" {
-        response = response.header(
-            "Cross-Origin-Opener-Policy",
-            HeaderValue::from_static("same-origin"),
-        );
-    }
     response.body(Body::from(body)).ok()
 }
 

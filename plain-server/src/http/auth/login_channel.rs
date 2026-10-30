@@ -8,7 +8,20 @@ use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-const DOMAIN: &str = "plain-web-login-v2";
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LoginMode {
+    Password,
+    DeviceConfirmation,
+}
+
+impl LoginMode {
+    fn domain(self) -> &'static str {
+        match self {
+            Self::Password => "plain-web-password-login-v1",
+            Self::DeviceConfirmation => "plain-web-login-v2",
+        }
+    }
+}
 const LIFETIME_MS: u64 = 300_000;
 
 #[derive(Serialize, Deserialize)]
@@ -25,9 +38,9 @@ pub(crate) struct ClientReveal {
 }
 
 impl ClientReveal {
-    fn commitment(&self, client_id: &str) -> Result<String> {
+    fn commitment(&self, client_id: &str, mode: LoginMode) -> Result<String> {
         Ok(base64_encode(&Sha256::digest(serde_json::to_vec(
-            &serde_json::json!([DOMAIN, client_id, self.public_key, self.nonce,]),
+            &serde_json::json!([mode.domain(), client_id, self.public_key, self.nonce]),
         )?)))
     }
 }
@@ -45,9 +58,9 @@ pub(crate) struct ServerHello {
 }
 
 impl ServerHello {
-    fn fields(&self) -> Vec<serde_json::Value> {
+    fn fields(&self, mode: LoginMode) -> Vec<serde_json::Value> {
         vec![
-            DOMAIN.into(),
+            mode.domain().into(),
             self.client_id.clone().into(),
             self.device_id.clone().into(),
             self.client_commitment.clone().into(),
@@ -57,12 +70,12 @@ impl ServerHello {
         ]
     }
 
-    fn signed_transcript(&self) -> Result<Vec<u8>> {
-        Ok(serde_json::to_vec(&self.fields())?)
+    fn signed_transcript(&self, mode: LoginMode) -> Result<Vec<u8>> {
+        Ok(serde_json::to_vec(&self.fields(mode))?)
     }
 
-    fn transcript(&self, reveal: &ClientReveal) -> Result<Vec<u8>> {
-        let mut fields = self.fields();
+    fn transcript(&self, reveal: &ClientReveal, mode: LoginMode) -> Result<Vec<u8>> {
+        let mut fields = self.fields(mode);
         fields.extend([
             reveal.public_key.clone().into(),
             reveal.nonce.clone().into(),
@@ -72,21 +85,23 @@ impl ServerHello {
 }
 
 pub(crate) struct Client {
+    mode: LoginMode,
     client_id: String,
     key: EcdhSession,
     nonce: String,
 }
 
 impl Client {
-    pub(crate) fn start(client_id: &str) -> Result<(Self, ClientHello)> {
+    pub(crate) fn start(client_id: &str, mode: LoginMode) -> Result<(Self, ClientHello)> {
         identity(client_id)?;
         let client = Self {
+            mode,
             client_id: client_id.into(),
             key: EcdhSession::generate(),
             nonce: nonce(),
         };
         let hello = ClientHello {
-            commitment: client.reveal().commitment(client_id)?,
+            commitment: client.reveal().commitment(client_id, mode)?,
         };
         Ok((client, hello))
     }
@@ -108,7 +123,7 @@ impl Client {
         let reveal = self.reveal();
         ensure!(hello.client_id == self.client_id, "invalid_auth_response");
         ensure!(
-            hello.client_commitment == reveal.commitment(&self.client_id)?,
+            hello.client_commitment == reveal.commitment(&self.client_id, self.mode)?,
             "invalid_auth_response"
         );
         identity(&hello.device_id)?;
@@ -121,7 +136,11 @@ impl Client {
         let server_public = canonical(&hello.server_public_key, 65)?;
         canonical(public_key, 32)?;
         ensure!(
-            ed25519_verify(public_key, &hello.signed_transcript()?, &hello.signature),
+            ed25519_verify(
+                public_key,
+                &hello.signed_transcript(self.mode)?,
+                &hello.signature
+            ),
             "signature_verification_failed"
         );
         let shared = self
@@ -131,7 +150,8 @@ impl Client {
         Ok((
             Channel::new(
                 &shared,
-                &hello.transcript(&reveal)?,
+                &hello.transcript(&reveal, self.mode)?,
+                self.mode,
                 hello.expires_at.min(now.saturating_add(LIFETIME_MS)),
             ),
             reveal,
@@ -140,6 +160,7 @@ impl Client {
 }
 
 pub(crate) struct ServerHandshake {
+    mode: LoginMode,
     key: EcdhSession,
     hello: ServerHello,
 }
@@ -147,6 +168,7 @@ pub(crate) struct ServerHandshake {
 impl ServerHandshake {
     pub(crate) fn start(
         client_id: &str,
+        mode: LoginMode,
         device_id: &str,
         hello: &ClientHello,
         signing_key: &[u8],
@@ -167,13 +189,14 @@ impl ServerHandshake {
                 .ok_or_else(|| anyhow::anyhow!("login_expired"))?,
             signature: String::new(),
         };
-        response.signature = ed25519_sign(signing_key, &response.signed_transcript()?);
+        response.signature = ed25519_sign(signing_key, &response.signed_transcript(mode)?);
         ensure!(
             !response.signature.is_empty(),
             "signature_verification_failed"
         );
         Ok((
             Self {
+                mode,
                 key,
                 hello: response.clone(),
             },
@@ -185,7 +208,7 @@ impl ServerHandshake {
         ensure!(now < self.hello.expires_at, "login_expired");
         canonical(&reveal.nonce, 32)?;
         ensure!(
-            reveal.commitment(&self.hello.client_id)? == self.hello.client_commitment,
+            reveal.commitment(&self.hello.client_id, self.mode)? == self.hello.client_commitment,
             "invalid_login_reveal"
         );
         let client_public = canonical(&reveal.public_key, 65)?;
@@ -195,13 +218,15 @@ impl ServerHandshake {
             .ok_or_else(|| anyhow::anyhow!("invalid_login_reveal"))?;
         Ok(Channel::new(
             &shared,
-            &self.hello.transcript(reveal)?,
+            &self.hello.transcript(reveal, self.mode)?,
+            self.mode,
             self.hello.expires_at,
         ))
     }
 }
 
 pub(crate) struct Channel {
+    pub mode: LoginMode,
     request_key: [u8; 32],
     response_key: [u8; 32],
     pub context: String,
@@ -210,16 +235,18 @@ pub(crate) struct Channel {
 }
 
 impl Channel {
-    fn new(shared: &[u8; 32], transcript: &[u8], expires_at: u64) -> Self {
+    fn new(shared: &[u8; 32], transcript: &[u8], mode: LoginMode, expires_at: u64) -> Self {
         let context = Sha256::digest(transcript);
-        let sas = derive(shared, &context, b"plain-web-login-v2/sas");
+        let domain = mode.domain();
+        let sas = derive(shared, &context, format!("{domain}/sas").as_bytes());
         let digits = format!(
             "{:08}",
             u64::from_be_bytes(sas[..8].try_into().unwrap()) % 100_000_000
         );
         Self {
-            request_key: derive(shared, &context, b"plain-web-login-v2/request"),
-            response_key: derive(shared, &context, b"plain-web-login-v2/response"),
+            mode,
+            request_key: derive(shared, &context, format!("{domain}/request").as_bytes()),
+            response_key: derive(shared, &context, format!("{domain}/response").as_bytes()),
             context: base64_encode(&context),
             verification_code: format!("{} {}", &digits[..4], &digits[4..]),
             expires_at,
