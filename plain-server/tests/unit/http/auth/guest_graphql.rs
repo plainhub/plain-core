@@ -14,7 +14,6 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
             plain_rs::utils::base64::base64_encode(&[11; 32]),
         )
         .unwrap();
-    prefs.set("background_service_enabled", true).unwrap();
     let server = ContentServer::start(
         dir.path(),
         &plain_rs::utils::base64::base64_encode(&[10; 32]),
@@ -87,7 +86,6 @@ async fn shared_file_rows_read_metadata_directly_without_host_dispatch() {
     std::fs::write(folder.join("cover.png"), b"image bytes").unwrap();
     let server = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = server.runtime_state();
-    state.prefs.set("background_service_enabled", true).unwrap();
     let shares = Service::new(state.db.clone(), state.prefs.clone());
     let share = shares
         .create(

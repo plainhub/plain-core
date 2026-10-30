@@ -10,7 +10,6 @@ fn fixture() -> (tempfile::TempDir, Arc<Service>) {
             crate::utils::base64::base64_encode(&[7; 32]),
         )
         .unwrap();
-    prefs.set("background_service_enabled", true).unwrap();
     (dir, Service::new(db, prefs))
 }
 fn create(service: &Service, paths: Vec<PathBuf>) -> ShareRow {
@@ -140,9 +139,9 @@ fn fresh_auth_revocation_expiry_and_disabled_service() {
             .len(),
         32
     );
-    s.prefs.set("background_service_enabled", false).unwrap();
+    s.prefs.set("desktop_access", false).unwrap();
     assert!(s.active(&row.id, true).unwrap().is_none());
-    s.prefs.set("background_service_enabled", true).unwrap();
+    s.prefs.set("desktop_access", true).unwrap();
     s.update(
         &row.id,
         "expired",
@@ -276,4 +275,26 @@ fn token_matches_standard_hmac_vector() {
     let expected = "198a607eb44bfbc69903a0f1cf2bbdc5ba0aa3f3d9ae3c1c7a3b1696a0b68cf7";
     let actual = crate::utils::base64::base64_decode_checked(&s.token(&row.id).unwrap()).unwrap();
     assert_eq!(crate::hex::bytes_to_hex(&actual), expected);
+}
+
+#[test]
+fn guest_access_uses_remote_access_without_requiring_background_service() {
+    let (dir, service) = fixture();
+    let root = dir.path().join("shared");
+    std::fs::create_dir(&root).unwrap();
+    let row = create(&service, vec![root]);
+    assert!(service.active(&row.id, true).unwrap().is_some());
+    for background in [false, true] {
+        service
+            .prefs
+            .set("background_service_enabled", background)
+            .unwrap();
+        for enabled in [false, true] {
+            service.prefs.set("desktop_access", enabled).unwrap();
+            assert_eq!(service.active(&row.id, true).unwrap().is_some(), enabled);
+            assert!(service.active(&row.id, false).unwrap().is_some());
+        }
+    }
+    service.prefs.set("desktop_access", "invalid").unwrap();
+    assert!(service.active(&row.id, true).is_err());
 }

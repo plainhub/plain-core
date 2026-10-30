@@ -113,7 +113,12 @@ impl Service {
             .ok_or_else(|| anyhow::anyhow!("share not found"))
     }
     pub fn active(&self, id: &str, guest: bool) -> anyhow::Result<Option<ShareRow>> {
-        if guest && !self.prefs.get::<bool>("background_service_enabled")?.unwrap_or(false) {
+        if guest
+            && !self
+                .prefs
+                .get::<bool>(crate::prefs::pref_keys::DESKTOP_ACCESS)?
+                .unwrap_or(true)
+        {
             return Ok(None);
         }
         Ok(self
