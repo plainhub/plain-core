@@ -49,7 +49,7 @@ async fn facts(state: &ServerState) -> Result<Facts> {
     let version = state.host.startup().app_version.clone();
     let (addresses, (aware_supported, aware_running)) = tokio::try_join!(
         async {
-            crate::platform::network::lan_ipv4_addresses()
+            crate::platform::network::lan_ipv4_addresses(&state.host)
                 .await
                 .map_err(anyhow::Error::msg)
         },

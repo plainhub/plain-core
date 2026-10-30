@@ -51,7 +51,7 @@ impl NativeManagement {
 
     pub async fn lan_ipv4_addresses(&self) -> Result<Vec<String>, String> {
         self.state.native_client_id()?;
-        crate::platform::network::lan_ipv4_addresses().await
+        crate::platform::network::lan_ipv4_addresses(&self.state.host).await
     }
 
     pub fn complete_onboarding(&self) -> Result<bool, String> {

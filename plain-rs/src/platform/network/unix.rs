@@ -1,9 +1,4 @@
-#[cfg(not(any(
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "linux",
-    target_os = "android"
-)))]
+#[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "linux")))]
 use super::InterfaceType;
 use super::{AddressV4, AddressV6, Interface};
 use std::{
@@ -27,27 +22,20 @@ pub(super) fn interfaces() -> io::Result<Vec<Interface>> {
     let _addresses = Addresses(head);
     #[cfg(target_os = "macos")]
     let kinds = super::macos::interface_types()?;
-    Ok(unsafe {
-        collect(
-            head,
-            |name| {
-                #[cfg(target_os = "macos")]
-                return kinds.get(name).copied().unwrap_or_default();
-                #[cfg(any(target_os = "linux", target_os = "android"))]
-                return super::linux::interface_type(name);
-                #[cfg(target_os = "ios")]
-                return super::ios::interface_type(name);
-                #[cfg(not(any(
-                    target_os = "macos",
-                    target_os = "ios",
-                    target_os = "linux",
-                    target_os = "android"
-                )))]
-                InterfaceType::Unknown
-            },
-            |name| libc::if_nametoindex(name.as_ptr()),
-        )
-    })
+    #[cfg(target_os = "android")]
+    let kind = |_: &str| InterfaceType::Unknown;
+    #[cfg(not(target_os = "android"))]
+    let kind = |name: &str| {
+        #[cfg(target_os = "macos")]
+        return kinds.get(name).copied().unwrap_or_default();
+        #[cfg(target_os = "linux")]
+        return super::linux::interface_type(name);
+        #[cfg(target_os = "ios")]
+        return super::ios::interface_type(name);
+        #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "linux")))]
+        InterfaceType::Unknown
+    };
+    Ok(unsafe { collect(head, kind, |name| libc::if_nametoindex(name.as_ptr())) })
 }
 
 unsafe fn collect(

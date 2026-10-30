@@ -1,8 +1,8 @@
 use crate::host::bridge::Host;
 use plain_rs::platform::network::{Interface, InterfaceType};
 
-pub(crate) async fn ipv4() -> Result<String, String> {
-    let value = lan_ipv4().await?;
+pub(crate) async fn ipv4(host: &Host) -> Result<String, String> {
+    let value = lan_ipv4(host).await?;
     if value.is_empty() {
         return Err("No LAN address available for casting".into());
     }
@@ -13,22 +13,63 @@ pub(crate) async fn ipv4() -> Result<String, String> {
     Ok(address.to_string())
 }
 
-pub(crate) async fn lan_ipv4_addresses() -> Result<Vec<String>, String> {
-    tokio::task::spawn_blocking(|| {
+pub(crate) async fn lan_ipv4_addresses(host: &Host) -> Result<Vec<String>, String> {
+    let interfaces = tokio::task::spawn_blocking(|| {
         let interfaces =
             plain_rs::platform::network::interfaces().map_err(|error| error.to_string())?;
-        Ok(select_lan_ipv4_addresses(&interfaces))
+        Ok::<_, String>(interfaces)
     })
     .await
-    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())??;
+    #[cfg(target_os = "android")]
+    let interfaces = {
+        let facts = serde_json::from_value(
+            host.call("systemNetworkInterfaceFacts", serde_json::json!({}))
+                .await?,
+        )
+        .map_err(|error| error.to_string())?;
+        apply_interface_facts(interfaces, facts)
+    };
+    #[cfg(not(target_os = "android"))]
+    let _ = host;
+    Ok(select_lan_ipv4_addresses(&interfaces))
 }
 
-pub(crate) async fn lan_ipv4() -> Result<String, String> {
-    Ok(lan_ipv4_addresses()
+pub(crate) async fn lan_ipv4(host: &Host) -> Result<String, String> {
+    Ok(lan_ipv4_addresses(host)
         .await?
         .into_iter()
         .next()
         .unwrap_or_default())
+}
+
+#[cfg(any(target_os = "android", test))]
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NetworkInterfaceFacts {
+    name: String,
+    network_type: NetworkType,
+    vpn: bool,
+}
+
+#[cfg(any(target_os = "android", test))]
+fn apply_interface_facts(
+    mut interfaces: Vec<Interface>,
+    facts: Vec<NetworkInterfaceFacts>,
+) -> Vec<Interface> {
+    for interface in &mut interfaces {
+        let matches = facts.iter().filter(|fact| fact.name == interface.name);
+        for fact in matches {
+            interface.tunnel |= fact.vpn;
+            interface.if_type = match fact.network_type {
+                NetworkType::Wifi => InterfaceType::Wireless80211,
+                NetworkType::Ethernet => InterfaceType::Ethernet,
+                NetworkType::Cellular => InterfaceType::Cellular,
+                NetworkType::None | NetworkType::Other => InterfaceType::Unknown,
+            };
+        }
+    }
+    interfaces
 }
 
 fn select_lan_ipv4_addresses(interfaces: &[Interface]) -> Vec<String> {

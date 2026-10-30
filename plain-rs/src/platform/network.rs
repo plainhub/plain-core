@@ -5,7 +5,7 @@ use std::{
 
 #[cfg(any(target_os = "ios", test))]
 mod ios;
-#[cfg(any(target_os = "linux", target_os = "android", test))]
+#[cfg(any(target_os = "linux", test))]
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;

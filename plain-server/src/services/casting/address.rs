@@ -22,7 +22,10 @@ fn http_base(ip: &str, port: u16) -> Result<String, String> {
 }
 
 pub(crate) async fn http_address(state: &ServerState) -> Result<(String, String), String> {
-    let (ip, name) = tokio::try_join!(crate::platform::network::ipv4(), device_name(state))?;
+    let (ip, name) = tokio::try_join!(
+        crate::platform::network::ipv4(&state.host),
+        device_name(state)
+    )?;
     let port = match state.public_ports().await {
         Some((http, _)) => http,
         None => u16::try_from(
