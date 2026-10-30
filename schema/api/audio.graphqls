@@ -98,7 +98,7 @@ extend type Mutation {
 	removeAudioFromQueue(mediaId: ID!): Boolean!
 	removeAudioPlaylistItem(id: ID!, query: String!): ActionResult!
 	reorderAudioQueue(mediaIds: [ID!]!): Boolean!
-	replaceAudioQueue(query: String!, shuffle: Boolean!): AudioItem
+	replaceAudioQueue(query: String!, sortBy: FileSortBy!, shuffle: Boolean!): AudioItem
 	updateAudioPlayMode(mode: MediaPlayMode!): Boolean!
 	updateAudioPlaylist(id: ID!, name: String!): AudioPlaylist!
 }

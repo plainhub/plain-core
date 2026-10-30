@@ -1,3 +1,4 @@
+use crate::graphql::resolvers::files::types::FileSortBy;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::Instant;
 use crate::graphql::types::Long;
@@ -195,7 +196,7 @@ impl AudioQuery {
         query: String,
         offset: i32,
         limit: i32,
-        sort_by: crate::graphql::resolvers::files::types::FileSortBy,
+        sort_by: FileSortBy,
     ) -> async_graphql::Result<Vec<Audio>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let items = crate::graphql::types::facts::rows(
@@ -425,10 +426,11 @@ impl AudioMutation {
         &self,
         ctx: &Context<'_>,
         query: String,
+        sort_by: FileSortBy,
         shuffle: bool,
     ) -> async_graphql::Result<Option<AudioItem>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        let tracks = search_tracks(ctx, &query).await?;
+        let tracks = search_tracks(ctx, &query, sort_by).await?;
         let prefs = prefs(ctx).clone();
         let local = is_local(ctx);
         let start = audio(ctx)?
@@ -502,7 +504,7 @@ impl AudioMutation {
             notify_playback(ctx)?;
             return Ok(true);
         }
-        let tracks = search_tracks(ctx, &query).await?;
+        let tracks = search_tracks(ctx, &query, library_sort(ctx)?).await?;
         audio(ctx)?
             .run(move |db, lib| {
                 lib.cache_ids(
@@ -602,7 +604,7 @@ impl AudioMutation {
                 .await?;
             return Ok(true);
         }
-        let tracks = search_tracks(ctx, &query).await?;
+        let tracks = search_tracks(ctx, &query, library_sort(ctx)?).await?;
         audio(ctx)?
             .run(move |db, lib| {
                 lib.cache_ids(
@@ -645,6 +647,7 @@ fn notify_playback(ctx: &Context<'_>) -> async_graphql::Result<()> {
 pub(crate) async fn search_tracks(
     ctx: &Context<'_>,
     query: &str,
+    sort_by: FileSortBy,
 ) -> async_graphql::Result<Vec<AudioTrack>> {
     if query.trim().is_empty() {
         return Err(async_graphql::Error::new("bulk_query_required"));
@@ -655,7 +658,6 @@ pub(crate) async fn search_tracks(
             .run(move |db, _| domain::playlist_items_page(db, &id, 0, i64::MAX, &query))
             .await;
     }
-    let sort_by = library_sort(ctx)?;
     let mut tracks = Vec::new();
     let mut offset = 0;
     loop {
@@ -739,9 +741,7 @@ pub(crate) fn audio(ctx: &Context<'_>) -> async_graphql::Result<AudioService> {
     })
 }
 
-fn library_sort(
-    ctx: &Context<'_>,
-) -> async_graphql::Result<crate::graphql::resolvers::files::types::FileSortBy> {
+fn library_sort(ctx: &Context<'_>) -> async_graphql::Result<FileSortBy> {
     Ok(plain_rs::prefs::settings::snapshot(prefs(ctx))?.audio_sort_by)
 }
 

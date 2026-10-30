@@ -1420,7 +1420,7 @@ async fn replace_queue_returns_one_selected_track_and_keeps_remote_state_separat
     let playlist = domain::create_playlist(db, "Replace").unwrap();
     let tracks = domain::queue_page(db, 0, 10, "").unwrap();
     domain::add_playlist_items(db, &playlist.id, &tracks).unwrap();
-    let selected = query(&schema, &format!(r#"mutation {{ replaceAudioQueue(query:"playlist_id:{}",shuffle:false) {{ mediaId title }} }}"#, playlist.id)).await;
+    let selected = query(&schema, &format!(r#"mutation {{ replaceAudioQueue(query:"playlist_id:{}",sortBy:NAME_DESC,shuffle:false) {{ mediaId title }} }}"#, playlist.id)).await;
     assert_eq!(
         selected["data"]["replaceAudioQueue"]["title"], "One",
         "{selected}"
@@ -1434,8 +1434,54 @@ async fn replace_queue_returns_one_selected_track_and_keeps_remote_state_separat
     let (_dir, denied) = fixture_with("[]", |method, _| panic!("unauthorized host call {method}"));
     let result = query(
         &denied,
-        r#"mutation { replaceAudioQueue(query:"playlist_id:unknown",shuffle:false) { mediaId } }"#,
+        r#"mutation { replaceAudioQueue(query:"playlist_id:unknown",sortBy:NAME_ASC,shuffle:false) { mediaId } }"#,
     )
     .await;
     assert_eq!(result["errors"][0]["message"], "no_permission");
+}
+
+#[tokio::test]
+async fn replace_queue_uses_the_requested_sort_instead_of_target_preferences() {
+    let (_directory, schema) = fixture();
+    schema
+        .data::<Arc<Prefs>>()
+        .unwrap()
+        .set("audio_sort_by", "NAME_ASC")
+        .unwrap();
+    let files = ["Alpha", "Zulu"].map(|title| plain_rs::db::MediaFileMetadata {
+        data_type: plain_rs::enums::DataType::Audio,
+        path: format!("/sorted/{title}.mp3"),
+        title: title.into(),
+        artist: "Sort Artist".into(),
+        album: String::new(),
+        album_artist: String::new(),
+        bucket_id: String::new(),
+        size_bytes: 1,
+        duration_ms: 1000,
+        cover_image_id: None,
+        width: 0,
+        height: 0,
+        rotation: 0,
+        taken_at: None,
+        created_at: "2026-10-30T00:00:00Z".into(),
+        updated_at: "2026-10-30T00:00:00Z".into(),
+    });
+    database(&schema).record_media_files(&files).unwrap();
+    let result = query(&schema, r#"mutation { replaceAudioQueue(query:"artist:=Sort\\ Artist",sortBy:NAME_DESC,shuffle:false) { title } }"#).await;
+    assert!(result["errors"].is_null(), "{result}");
+    assert_eq!(result["data"]["replaceAudioQueue"]["title"], "Zulu");
+    let queue = domain::queue_page(&database(&schema).remote_audio(), 0, 10, "").unwrap();
+    assert_eq!(
+        queue
+            .iter()
+            .map(|track| track.title.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Zulu", "Alpha"]
+    );
+    let missing_sort = query(
+        &schema,
+        r#"mutation { replaceAudioQueue(query:"artist:Artist",shuffle:false) { title } }"#,
+    )
+    .await;
+    assert!(!missing_sort["errors"].is_null(), "{missing_sort}");
 }
