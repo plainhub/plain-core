@@ -361,3 +361,72 @@ async fn stopped_core_rejects_every_typed_shared_operation_before_side_effects()
     server.shutdown().await;
     tls.abort();
 }
+
+#[tokio::test]
+async fn thumbnail_requests_keep_aspect_ratio_and_replace_cropped_cache_entries() {
+    let (directory, server, _) = root();
+    let state = server.runtime_state();
+    let (port, tls, _, _, _) = tls().await;
+    let link = Link::new(
+        "127.0.0.1",
+        port,
+        "fixture",
+        &plain_rs::base64_encode(&[7; 32]),
+    )
+    .unwrap();
+    let url_token = plain_rs::base64_encode(&[8; 32]);
+    let entry = plain_rs::files::shares::client::File {
+        name: "photo.jpg".into(),
+        virtual_path: "folder/ +?#中文%".into(),
+        is_dir: false,
+        size: 8,
+        mime_type: "image/jpeg".into(),
+        has_thumb: true,
+    };
+    let cache =
+        crate::services::files::remote_cache::RemoteCache::new(directory.path().join("cache"));
+    let old_key = json!({"host":link.host,"port":link.port,"shareId":link.shared_id,"token":link.token,"urlToken":url_token,"path":entry.virtual_path,"size":entry.size}).to_string();
+    let old_path = cache
+        .download(
+            &link
+                .file_url(&url_token, &entry.virtual_path, false)
+                .unwrap(),
+            "thumbnail",
+            Some(&old_key),
+            state.stop.clone(),
+            Some(&state.lan.client),
+        )
+        .await
+        .unwrap();
+    tokio::fs::write(&old_path, b"old cropped thumbnail")
+        .await
+        .unwrap();
+    let first = cache_file(
+        &state,
+        &cache,
+        link.clone(),
+        url_token.clone(),
+        entry.clone(),
+        true,
+    )
+    .await
+    .unwrap();
+    assert_ne!(
+        first, old_path,
+        "Cropped cached thumbnails must not be reused"
+    );
+    assert_eq!(tokio::fs::read(&first).await.unwrap(), b"download");
+    let second = cache_file(&state, &cache, link, url_token, entry, true)
+        .await
+        .unwrap();
+    assert_eq!(
+        first, second,
+        "Proportional thumbnails keep a stable cache key"
+    );
+    assert_eq!(
+        tokio::fs::read(&old_path).await.unwrap(),
+        b"old cropped thumbnail"
+    );
+    server.shutdown().await;
+    tls.abort();
+}

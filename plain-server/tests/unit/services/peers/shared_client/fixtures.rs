@@ -71,6 +71,11 @@ pub(super) async fn tls() -> (
         }
     })).route("/fs", get(|Query(params): Query<std::collections::HashMap<String, String>>| async move {
         assert_eq!(params["sid"], "fixture");
+        if params.contains_key("w") {
+            assert_eq!(params["w"], "200");
+            assert_eq!(params["h"], "200");
+            assert_eq!(params.get("cc").map(String::as_str), Some("false"));
+        }
         let plain = plain_rs::crypto::xchacha_decrypt_raw(&[8;32], &plain_rs::utils::base64::base64_decode(&params["id"])).unwrap();
         let decoded: Value = serde_json::from_slice(&plain).unwrap();
         assert_eq!(decoded["virtualPath"], "folder/ +?#中文%");
