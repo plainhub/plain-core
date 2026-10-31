@@ -95,6 +95,29 @@ async fn reads_come_from_the_rust_store() {
 }
 
 #[tokio::test]
+async fn remote_tools_receive_effective_app_home_features_without_local_settings() {
+    let (_directory, schema) = fixture(|method, _| panic!("Unexpected host call: {method}"));
+    let response = schema.execute("{prefs}").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["prefs"]["app_home_features"], "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS");
+    assert!(data["prefs"].get("http_port").is_none());
+    assert!(data["prefs"].get("password").is_none());
+
+    let response = schema.execute(async_graphql::Request::new(r#"mutation { setPref(key:"app_home_features", value:"NOTES|FILES") }"#)
+        .data(crate::graphql::executor::RequestOrigin::Local)).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    for mutation in [r#"mutation { setPref(key:"app_home_features", value:"FILES") }"#, r#"mutation { removePref(key:"app_home_features") }"#] {
+        let response = schema.execute(mutation).await;
+        assert_eq!(response.errors.len(), 1);
+        assert_eq!(response.errors[0].message, "Preference is not accessible");
+    }
+    let response = schema.execute("{prefs}").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["prefs"]["app_home_features"], "NOTES|FILES");
+}
+
+#[tokio::test]
 async fn preference_writes_and_removal_use_rust_storage_without_host_calls() {
     let (_directory, schema) = fixture(|method, _| panic!("Unexpected host call: {method}"));
     let response = schema
@@ -169,14 +192,14 @@ async fn a_value_just_under_the_cap_is_accepted() {
 
 #[test]
 fn only_registered_keys_are_accessible_for_each_origin() {
-    use plain_rs::prefs::pref_keys::accessible;
-    assert!(accessible("locale", false));
-    assert!(accessible("locale", true));
-    assert!(!accessible("http_port", false));
-    assert!(accessible("http_port", true));
+    use plain_rs::prefs::pref_keys::writable;
+    assert!(writable("locale", false));
+    assert!(writable("locale", true));
+    assert!(!writable("http_port", false));
+    assert!(writable("http_port", true));
     for key in ["master_secret", "client_id", "unknown", "", "admin:password"] {
-        assert!(!accessible(key, false));
-        assert!(!accessible(key, true));
+        assert!(!writable(key, false));
+        assert!(!writable(key, true));
     }
 }
 

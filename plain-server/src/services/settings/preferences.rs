@@ -28,7 +28,7 @@ impl<'a> Preferences<'a> {
 
     pub(crate) async fn set(&self, key: &str, value: Value) -> anyhow::Result<bool> {
         anyhow::ensure!(
-            plain_rs::prefs::pref_keys::accessible(key, true),
+            plain_rs::prefs::pref_keys::writable(key, true),
             "Preference is not accessible"
         );
         anyhow::ensure!(value.to_string().len() <= 65536, "invalid_pref_value");

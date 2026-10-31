@@ -2,6 +2,7 @@
 pub enum PrefAccess {
     Default,
     LocalOnly,
+    RemoteReadOnly,
     RustOnly,
 }
 
@@ -63,7 +64,6 @@ pref_keys! {
         VIDEO_GRID_CELLS_PER_ROW = "video_grid_cells_per_row",
         HTTPS = "https",
         WEB_ADDRESS_BAR_EXPANDED = "web_address_bar_expanded",
-        APP_HOME_FEATURES = "app_home_features",
         PASSWORD = "password",
         PASSWORD_TYPE = "password_type",
         LOGIN_REQUIRE_APPROVAL = "login_require_approval",
@@ -74,6 +74,9 @@ pref_keys! {
         LOG_LEVEL = "log_level",
         AUTO_CHECK_UPDATE = "auto_check_update",
         SKIP_VERSION = "skip_version",
+    }
+    RemoteReadOnly {
+        APP_HOME_FEATURES = "app_home_features",
     }
     RustOnly {
         CLIENT_ID = "client_id",
@@ -94,10 +97,17 @@ pub fn access(key: &str) -> Option<PrefAccess> {
         .iter()
         .find_map(|(name, access)| (*name == key).then_some(*access))
 }
-pub fn accessible(key: &str, local: bool) -> bool {
+pub fn readable(key: &str, local: bool) -> bool {
+    match access(key) {
+        Some(PrefAccess::Default | PrefAccess::RemoteReadOnly) => true,
+        Some(PrefAccess::LocalOnly) => local,
+        _ => false,
+    }
+}
+pub fn writable(key: &str, local: bool) -> bool {
     match access(key) {
         Some(PrefAccess::Default) => true,
-        Some(PrefAccess::LocalOnly) => local,
+        Some(PrefAccess::LocalOnly | PrefAccess::RemoteReadOnly) => local,
         _ => false,
     }
 }

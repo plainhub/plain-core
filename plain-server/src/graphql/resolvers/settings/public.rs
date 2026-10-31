@@ -1,6 +1,6 @@
 //! Public preference roots share the local Rust store and notify UI projections.
 
-use plain_rs::prefs::pref_keys::{AUTO_CHECK_UPDATE, SKIP_VERSION};
+use plain_rs::prefs::pref_keys::{APP_HOME_FEATURES, AUTO_CHECK_UPDATE, SKIP_VERSION};
 use async_graphql::{Context, Json, Object};
 use plain_rs::prefs::Prefs;
 use serde_json::Value;
@@ -24,11 +24,14 @@ impl PrefsQuery {
         let prefs = prefs(ctx);
         let mut values = serde_json::Map::new();
         for (key, value) in prefs.entries() {
-            if allowed(ctx, &key) {
+            if plain_rs::prefs::pref_keys::readable(&key, is_local(ctx)) {
                 let value = plain_rs::prefs::settings::get_entry(prefs, &key)?.unwrap_or(value);
                 values.insert(key, value);
             }
         }
+        values.entry(APP_HOME_FEATURES.to_owned()).or_insert_with(|| {
+            Value::String(plain_rs::prefs::settings::Settings::default().app_home_features)
+        });
         Ok(Json(Value::Object(values)))
     }
     async fn saved_value(&self, ctx: &Context<'_>, key: String) -> async_graphql::Result<Json<Value>> {
@@ -85,8 +88,11 @@ fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<Prefs> {
 #[path = "../../../../tests/unit/graphql/resolvers/settings/public.rs"]
 mod tests;
 
+fn is_local(ctx: &Context<'_>) -> bool {
+    ctx.data_opt::<crate::graphql::executor::RequestOrigin>() == Some(&crate::graphql::executor::RequestOrigin::Local)
+}
 pub(crate) fn allowed(ctx: &Context<'_>, key: &str) -> bool {
-    plain_rs::prefs::pref_keys::accessible(key, ctx.data_opt::<crate::graphql::executor::RequestOrigin>() == Some(&crate::graphql::executor::RequestOrigin::Local))
+    plain_rs::prefs::pref_keys::writable(key, is_local(ctx))
 }
 pub(crate) fn authorize(ctx: &Context<'_>, key: &str) -> async_graphql::Result<()> {
     if !allowed(ctx, key) { return Err(async_graphql::Error::new("Preference is not accessible")); }

@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn every_registered_key_keeps_its_original_access_policy() {
+fn every_registered_key_has_the_expected_read_and_write_policy() {
     let groups = [
         (PrefAccess::Default, "dlna device_name feed_auto_refresh feed_auto_refresh_interval feed_auto_refresh_only_wifi
             ai_image_search_enabled ai_image_search_model dlna_allowed_senders dlna_denied_senders
@@ -13,8 +13,9 @@ fn every_registered_key_keeps_its_original_access_policy() {
         (PrefAccess::LocalOnly, "http_port https_port keep_awake background_service_enabled desktop_access developer_mode
             allow_any_host nearby_discoverable notification_filter launcher_shortcuts
             image_grid_cells_per_row video_grid_cells_per_row https web_address_bar_expanded
-            app_home_features password password_type login_require_approval rotate_url_token_on_restart
+            password password_type login_require_approval rotate_url_token_on_restart
             api_permissions mdns_hostname dev_token log_level auto_check_update skip_version"),
+        (PrefAccess::RemoteReadOnly, "app_home_features"),
         (PrefAccess::RustOnly, "client_id url_token adb_token master_secret signature_key_pair"),
     ];
     let expected: Vec<_> = groups
@@ -24,13 +25,15 @@ fn every_registered_key_keeps_its_original_access_policy() {
     assert_eq!(PREF_KEYS, expected);
     for (key, policy) in expected {
         assert_eq!(access(key), Some(policy), "{key}");
+        assert_eq!(readable(key, false), matches!(policy, PrefAccess::Default | PrefAccess::RemoteReadOnly), "{key}");
+        assert_eq!(readable(key, true), policy != PrefAccess::RustOnly, "{key}");
         assert_eq!(
-            accessible(key, false),
+            writable(key, false),
             policy == PrefAccess::Default,
             "{key}"
         );
         assert_eq!(
-            accessible(key, true),
+            writable(key, true),
             policy != PrefAccess::RustOnly,
             "{key}"
         );
@@ -87,7 +90,6 @@ fn exported_constants_match_the_registered_keys() {
         VIDEO_GRID_CELLS_PER_ROW,
         HTTPS,
         WEB_ADDRESS_BAR_EXPANDED,
-        APP_HOME_FEATURES,
         PASSWORD,
         PASSWORD_TYPE,
         LOGIN_REQUIRE_APPROVAL,
@@ -98,8 +100,8 @@ fn exported_constants_match_the_registered_keys() {
         LOG_LEVEL,
         AUTO_CHECK_UPDATE,
         SKIP_VERSION,
-        CLIENT_ID,
-        URL_TOKEN,
+        APP_HOME_FEATURES,
+        CLIENT_ID,        URL_TOKEN,
         ADB_TOKEN,
         MASTER_SECRET,
         SIGNATURE_KEY_PAIR,
@@ -118,8 +120,10 @@ fn unknown_or_modified_keys_never_gain_access() {
         "admin:password",
     ] {
         assert_eq!(access(key), None, "{key}");
-        assert!(!accessible(key, false), "{key}");
-        assert!(!accessible(key, true), "{key}");
+        assert!(!readable(key, false), "{key}");
+        assert!(!readable(key, true), "{key}");
+        assert!(!writable(key, false), "{key}");
+        assert!(!writable(key, true), "{key}");
     }
 }
 
@@ -127,7 +131,9 @@ fn unknown_or_modified_keys_never_gain_access() {
 fn native_read_keys_do_not_allow_generic_preference_writes() {
     for key in [UPDATE_INFO, APP_UPDATE_AVAILABLE, ONBOARDING_COMPLETED, SIGNATURE_PUBLIC_KEY] {
         assert_eq!(access(key), None, "{key}");
-        assert!(!accessible(key, false), "{key}");
-        assert!(!accessible(key, true), "{key}");
+        assert!(!readable(key, false), "{key}");
+        assert!(!readable(key, true), "{key}");
+        assert!(!writable(key, false), "{key}");
+        assert!(!writable(key, true), "{key}");
     }
 }
