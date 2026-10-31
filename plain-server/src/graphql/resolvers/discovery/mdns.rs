@@ -33,7 +33,7 @@ struct MdnsService {
     complete: bool,
 }
 
-#[derive(Default, SimpleObject, Deserialize)]
+#[derive(SimpleObject, Deserialize)]
 #[graphql(complex)]
 #[serde(rename_all = "camelCase")]
 struct MdnsState {
@@ -41,13 +41,8 @@ struct MdnsState {
     packets_in: Vec<MdnsPacket>,
     packets_out: Vec<MdnsPacket>,
     revision: Long,
-    receiver: bool,
     running: bool,
     scanning: bool,
-    published: bool,
-    manual_scanning: bool,
-    debug_session_count: i32,
-    capturing: bool,
     services: Vec<MdnsService>,
 }
 
@@ -77,12 +72,6 @@ impl MdnsState {
     }
 }
 
-async fn control(ctx: &Context<'_>, request: Request) -> async_graphql::Result<MdnsState> {
-    let value = mdns_runtime::control(ctx.data::<ServerState>()?, request)
-        .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-    Ok(serde_json::from_value(value)?)
-}
 #[derive(Default)]
 pub struct MdnsQuery;
 #[Object]
@@ -92,22 +81,11 @@ impl MdnsQuery {
         if *state.stop.borrow() {
             return Err("Server stopped".into());
         }
-        if ctx
-            .field()
-            .selection_set()
-            .all(|field| matches!(field.name(), "services" | "activity" | "__typename"))
-        {
-            let services = if ctx.look_ahead().field("services").exists() {
-                serde_json::from_value(serde_json::to_value(state.mdns.browser_snapshot())?)?
-            } else {
-                Vec::new()
-            };
-            return Ok(MdnsState {
-                services,
-                ..Default::default()
-            });
-        }
-        control(ctx, Request::Snapshot {}).await
+        Ok(serde_json::from_value(state.mdns.snapshot_fields(
+            ctx.look_ahead().field("services").exists(),
+            ctx.look_ahead().field("packetsIn").exists()
+                || ctx.look_ahead().field("packetsOut").exists(),
+        ))?)
     }
 }
 #[derive(Default)]

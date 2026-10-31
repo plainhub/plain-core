@@ -16,13 +16,13 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
     )
     .unwrap();
     let native = server.native_graphql().unwrap();
-    let response = native.execute(async_graphql::Request::new("{ mdnsState { runtimeId revision receiver running scanning capturing debugSessionCount services { instanceFqdn } packetsIn { time } packetsOut { time } } }")).await;
+    let response = native.execute(async_graphql::Request::new("{ mdnsState { runtimeId revision running scanning services { instanceFqdn } packetsIn { time } packetsOut { time } } }")).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     let state = &data["mdnsState"];
     assert!(!state["runtimeId"].as_str().unwrap().is_empty());
     assert_eq!(state["revision"], 0);
-    assert_eq!(state["receiver"], false);
+    assert_eq!(state["running"], false);
     assert_eq!(state["services"], json!([]));
     assert_eq!(state["packetsIn"], json!([]));
     let response = native
@@ -32,13 +32,13 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
     assert_eq!(response.data.into_json().unwrap()["stopDiscovery"], true);
     let response = native
         .execute(async_graphql::Request::new(
-            "{ mdnsState { runtimeId receiver } }",
+            "{ mdnsState { runtimeId running } }",
         ))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let stopped = response.data.into_json().unwrap();
     assert_eq!(stopped["mdnsState"]["runtimeId"], state["runtimeId"]);
-    assert_eq!(stopped["mdnsState"]["receiver"], false);
+    assert_eq!(stopped["mdnsState"]["running"], false);
     let response = native
         .execute(async_graphql::Request::new(
             "{ chatRecords(query: \"peer:unknown-peer\", offset: 0, limit: 20) { id } }",
@@ -46,6 +46,20 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["chatRecords"], json!([]));
+    for field in [
+        "receiver",
+        "published",
+        "manualScanning",
+        "debugSessionCount",
+        "capturing",
+    ] {
+        let response = native
+            .execute(async_graphql::Request::new(format!(
+                "{{mdnsState{{{field}}}}}"
+            )))
+            .await;
+        assert!(!response.errors.is_empty(), "{field}");
+    }
     server.shutdown().await;
 }
 
@@ -114,12 +128,12 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
     );
     let response = executor
         .execute(async_graphql::Request::new(
-            "{mdnsState{receiver services{hostname} activity{time event detail}}}",
+            "{mdnsState{running services{hostname} activity{time event detail}}}",
         ))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let value = response.data.into_json().unwrap();
-    assert_eq!(value["mdnsState"]["receiver"], false);
+    assert_eq!(value["mdnsState"]["running"], false);
     assert_eq!(value["mdnsState"]["services"], json!([]));
     assert_eq!(value["mdnsState"]["activity"], json!([]));
     let invalid = executor
@@ -144,7 +158,7 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
     assert!(requests.try_recv().is_err());
     core.stop_core().await;
     for document in [
-        "{mdnsState{receiver}}",
+        "{mdnsState{running}}",
         "{mdnsState{services{hostname} activity{event}}}",
         r#"mutation{acquireMdnsDebugSession(token:"00000000-0000-0000-0000-000000000001"){revision}}"#,
         "{systemSettings{mdnsHostname}}",
@@ -160,7 +174,7 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
 }
 
 #[tokio::test]
-async fn lightweight_browser_query_does_not_collect_full_packet_capture_snapshots() {
+async fn status_and_browser_queries_do_not_collect_packet_capture_snapshots() {
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -169,12 +183,21 @@ async fn lightweight_browser_query_does_not_collect_full_packet_capture_snapshot
         "{mdnsState{services{hostname} activity{event}}}",
         "query { state:mdnsState { ...Snapshot } } fragment Snapshot on MdnsState { services{hostname} activity{event} }",
         "{mdnsState{activity{event}}}",
+        "{mdnsState{runtimeId revision running scanning}}",
+        "query { state:mdnsState { ...Status } } fragment Status on MdnsState { runtimeId revision running scanning }",
     ] {
         let response = executor
             .execute(async_graphql::Request::new(document))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
     }
+    let remote = crate::graphql::executor::execute_graphql(
+        &state.public,
+        async_graphql::Request::new("{mdnsState{runtimeId revision running scanning}}"),
+        crate::graphql::executor::RequestContext::remote(Some(state.clone())),
+    )
+    .await;
+    assert!(remote.errors.is_empty(), "{:?}", remote.errors);
     assert_eq!(
         state
             .mdns

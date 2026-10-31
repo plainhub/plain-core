@@ -137,16 +137,6 @@ impl Runtime {
             session.browser.send_ptr_query();
         }
     }
-    pub fn browser_snapshot(
-        &self,
-    ) -> Vec<plain_rs::protocols::mdns::service_browser::MdnsServiceSnapshot> {
-        self.session
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(browser_services)
-            .unwrap_or_default()
-    }
     pub fn browser_activity(&self) -> Vec<plain_rs::services::discovery::local::MdnsActivity> {
         #[cfg(target_os = "macos")]
         {
@@ -163,16 +153,26 @@ impl Runtime {
     }
 
     pub fn snapshot(&self) -> Value {
+        self.snapshot_fields(true, true)
+    }
+
+    pub fn snapshot_fields(&self, include_services: bool, include_packets: bool) -> Value {
         #[cfg(any(test, feature = "test-seams"))]
-        self.full_snapshot_count.fetch_add(1, Ordering::Relaxed);
+        if include_packets {
+            self.full_snapshot_count.fetch_add(1, Ordering::Relaxed);
+        }
         let guard = self.session.lock().unwrap();
         let session = guard.as_ref();
-        let (packets_in, packets_out) = if session.is_some() {
+        let (packets_in, packets_out) = if include_packets && session.is_some() {
             plain_rs::protocols::mdns::packet_capture::snapshot()
         } else {
             (vec![], vec![])
         };
-        let services = session.map(browser_services).unwrap_or_default();
+        let services = if include_services {
+            session.map(browser_services).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         json!({"runtimeId":self.id,"packetsIn":packets_in,"packetsOut":packets_out,"revision":self.revision.load(Ordering::SeqCst),"receiver":session.is_some(),"running":session.is_some() && host_responder::is_running(),"scanning":session.is_some_and(|s|s.scanning.load(Ordering::SeqCst)),"published":session.is_some_and(|s|s.published),"manualScanning":session.is_some_and(|s|s.manual_scanning),"debugSessionCount":session.map(|s|s.debug_sessions.len()).unwrap_or(0),"capturing":session.is_some_and(|s|!s.debug_sessions.is_empty()),"services":services})
     }
     async fn initialize(self: &Arc<Self>, state: &CoreRuntime) -> Result<()> {
