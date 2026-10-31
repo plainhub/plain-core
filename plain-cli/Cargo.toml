@@ -12,8 +12,22 @@ path = "src/main.rs"
 [dependencies]
 plain-rs = { path = "../plain-rs", default-features = false, features = ["unix-platform"] }
 plain_server = { path = "../plain-server", package = "plain-server" }
-tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "net", "signal", "time", "macros"] }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "net", "signal", "time", "macros", "io-util", "fs", "sync"] }
 anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+log = "0.4"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+sysinfo = { version = "0.32", default-features = false, features = ["disk"] }
+
+[dev-dependencies]
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+tempfile = "3"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+rcgen = { version = "0.13", default-features = false, features = ["pem", "ring"] }
+async-graphql = { version = "7", default-features = false, features = ["dataloader"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 plain-rs = { path = "../plain-rs", default-features = false, features = ["linux-platform"] }

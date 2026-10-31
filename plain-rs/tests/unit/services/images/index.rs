@@ -60,13 +60,13 @@ fn setup(
     ));
     service.use_system_catalog_for_test();
     struct Encoder(Arc<AtomicUsize>);
-    impl plain_inference::embedding::ImageEncoder for Encoder {
+    impl plain_rs::inference::embedding::ImageEncoder for Encoder {
         fn release(&self) {
             self.0.fetch_add(1, Ordering::SeqCst);
         }
         fn image_reader(
             &self,
-            _: &mut dyn plain_inference::embedding::ImageSource,
+            _: &mut dyn plain_rs::inference::embedding::ImageSource,
         ) -> Result<Option<Vec<f32>>, String> {
             panic!("Synthetic local images must use the direct file path")
         }
@@ -120,11 +120,11 @@ async fn cancelled_generation_cannot_resurrect_deleted_embeddings() {
 #[tokio::test]
 async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without_host_requests() {
     struct Encoder;
-    impl plain_inference::embedding::ImageEncoder for Encoder {
+    impl plain_rs::inference::embedding::ImageEncoder for Encoder {
         fn release(&self) {}
         fn image_reader(
             &self,
-            _: &mut dyn plain_inference::embedding::ImageSource,
+            _: &mut dyn plain_rs::inference::embedding::ImageSource,
         ) -> Result<Option<Vec<f32>>, String> {
             panic!("Native catalog must provide local file paths")
         }

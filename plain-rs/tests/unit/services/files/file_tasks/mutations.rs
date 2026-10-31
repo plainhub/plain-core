@@ -64,3 +64,19 @@ async fn deletion_scan_failure_is_visible_after_cleanup_and_a_repeat_does_not_re
     );
     core.stop_core().await;
 }
+
+#[tokio::test]
+async fn public_rename_rejects_traversal_and_keeps_the_original_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = ContentServer::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let source = directory.path().join("source");
+    std::fs::write(&source, b"source").unwrap();
+    for name in ["../outside", "/outside", "", ".", ".."] {
+        assert!(state.files.rename("rename-client", source.to_string_lossy().into_owned(), name.into()).await.unwrap().is_none());
+        assert_eq!(std::fs::read(&source).unwrap(), b"source");
+    }
+    assert!(!directory.path().join("outside").exists());
+    assert!(state.files.list("rename-client".into()).await.unwrap().is_empty());
+    core.stop_core().await;
+}

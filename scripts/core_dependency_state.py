@@ -8,8 +8,6 @@ URL = "https://github.com/plainhub/plain-core.git"
 PACKAGES = {
     "plain-rs": "plain-rs",
     "plain-server": "plain-server",
-    "plain-media": "plain-media",
-    "plain-inference": "plain-inference",
 }
 
 

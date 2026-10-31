@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Mutex,
 };
 use tokio::sync::{Semaphore, oneshot};
 
@@ -22,7 +22,6 @@ pub struct Request {
     pub file_name: String,
 }
 pub struct Thumbnails {
-    decoder: Option<Arc<dyn plain_rs::media::images::decoding::ThumbnailDecoder>>,
     locks: KeyedLocks,
     capacity: Semaphore,
     outputs: Mutex<HashMap<String, oneshot::Sender<Vec<u8>>>>,
@@ -32,7 +31,6 @@ pub struct Thumbnails {
 impl Default for Thumbnails {
     fn default() -> Self {
         Self {
-            decoder: None,
             locks: KeyedLocks::new(),
             capacity: Semaphore::new(4),
             outputs: Mutex::new(HashMap::new()),
@@ -84,20 +82,12 @@ async fn decode(
             .thumbnails
             .native_decodes
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let bytes = match state.thumbnails.decoder.as_ref() {
-            Some(decoder) => {
-                decoder
-                    .decode(
-                        &request.path,
-                        request.width,
-                        request.height,
-                        request.center_crop,
-                        cache,
-                    )
-                    .await?
-            }
-            None => plain_rs::services::images::thumbnail_decoder::native(request, cache).await?,
-        };
+        #[cfg(feature = "media")]
+        let bytes = plain_rs::media::thumbnails::render(
+            &request.path, request.width, request.height, request.center_crop, cache,
+        ).await?;
+        #[cfg(not(feature = "media"))]
+        let bytes = plain_rs::services::images::thumbnail_decoder::native(request, cache).await?;
         if let Some(bytes) = bytes.as_ref() {
             validate_output(bytes)?;
         }
@@ -148,15 +138,6 @@ impl Drop for Output<'_> {
     }
 }
 impl Thumbnails {
-    pub fn new(
-        decoder: Option<Arc<dyn plain_rs::media::images::decoding::ThumbnailDecoder>>,
-    ) -> Self {
-        Self {
-            decoder,
-            ..Self::default()
-        }
-    }
-
     pub fn submit(&self, token: &str, bytes: Vec<u8>) -> Result<(), String> {
         validate_output(&bytes)?;
         self.outputs

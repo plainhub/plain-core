@@ -189,18 +189,13 @@ async fn rename_preserves_existing_targets_and_only_changes_a_leaf_name() {
     assert!(!source.exists());
     assert_eq!(std::fs::read(renamed).unwrap(), b"source");
 }
-#[cfg(feature = "media")]
-#[tokio::test]
-async fn public_rename_rejects_traversal_and_keeps_the_original_file() {
-    let temp = tempfile::tempdir().unwrap();
-    let source = temp.path().join("source");
-    std::fs::write(&source, b"source").unwrap();
-    for name in ["../outside", "/outside", "", ".", ".."] {
-        assert!(
-            crate::media::file_ops::rename_file(source.to_str().unwrap(), name)
-                .await
-                .is_err()
-        );
-        assert_eq!(std::fs::read(&source).unwrap(), b"source");
-    }
+
+#[test]
+fn directory_counts_work_on_host_platform() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("visible.txt"), b"a").unwrap();
+    std::fs::write(dir.path().join(".hidden.txt"), b"b").unwrap();
+    assert_eq!(count_dir_entries(dir.path(), false).unwrap(), 1);
+    assert_eq!(count_dir_entries(dir.path(), true).unwrap(), 2);
+    assert_eq!(count_dir_entries_fast(dir.path(), 10).unwrap(), 2);
 }

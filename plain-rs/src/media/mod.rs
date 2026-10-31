@@ -46,3 +46,6 @@ mod hevc;
 
 #[cfg(feature = "image-metadata")]
 pub mod file_facts;
+
+#[cfg(feature = "media")]
+pub mod thumbnails;

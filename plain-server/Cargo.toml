@@ -13,58 +13,45 @@ description = "Shared Plain GraphQL, HTTP and native transport adapters"
 "library" = ["plain-rs/library"]
 "prefs" = ["plain-rs/prefs"]
 "sqlite_browse" = ["plain-rs/sqlite_browse"]
-"default" = ["headless"]
-"media" = ["plain-rs/runtime-media", "dep:plain-media", "library"]
+"default" = ["core", "http_transport", "media"]
+"media" = ["plain-rs/runtime-media", "library"]
 "media_gql" = ["media", "library", "dep:async-graphql", "plain-rs/graphql"]
 "image-inference" = ["plain-rs/runtime"]
-"http_transport" = ["dep:serde_json", "dep:reqwest", "reqwest/rustls-tls", "dep:axum", "dep:axum-server", "dep:rustls", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
+"http_transport" = ["dep:serde_json", "dep:reqwest", "reqwest/rustls-tls", "dep:axum", "dep:axum-server", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
 "api" = ["core"]
-"core" = ["plain-rs/phone", "dep:tempfile", "dep:sysinfo", "plain-rs/linux-system", "dep:serde_json", "dep:chrono", "dep:rusqlite", "ble", "crypto", "sqlite_browse", "dep:tower", "dep:zip", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:rustls", "dep:anyhow", "chat", "library", "dep:async-graphql", "dep:axum", "dep:reqwest", "reqwest/rustls-tls", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime", "plain-rs/filesystem", "plain-rs/trash", "plain-rs/html", "plain-rs/feeds", "plain-rs/tls", "plain-rs/graphql", "image-inference"]
-"mounts" = ["dep:sysinfo", "dep:serde_json"]
+"core" = ["plain-rs/phone", "plain-rs/linux-system", "dep:serde_json", "dep:chrono", "dep:rusqlite", "ble", "crypto", "sqlite_browse", "dep:tower", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:anyhow", "chat", "library", "dep:async-graphql", "dep:axum", "dep:reqwest", "reqwest/rustls-tls", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime", "plain-rs/filesystem", "plain-rs/trash", "plain-rs/html", "plain-rs/feeds", "plain-rs/tls", "plain-rs/graphql", "image-inference"]
 "mobile" = ["core"]
 "system" = ["api"]
 
-"headless" = ["core", "http_transport", "media", "mounts", "system"]
 
 [dependencies]
 "subtle" = { "version" = "2", "optional" = true }
 "futures-util" = { "version" = "0.3", "default-features" = false, "features" = ["sink", "std"], "optional" = true }
 "axum" = { "version" = "0.7", "default-features" = false, "features" = ["ws", "multipart", "json", "query", "tokio", "http1"], "optional" = true }
-"rustls" = { "version" = "0.23", "default-features" = false, "features" = ["ring", "std"], "optional" = true }
 "axum-server" = { "version" = "0.7", "features" = ["tls-rustls-no-provider"], "optional" = true }
 "reqwest" = { "version" = "0.12", "default-features" = false, "features" = ["stream"], "optional" = true }
 "tokio-tungstenite" = { "version" = "0.30", "default-features" = false, "features" = ["connect"], "optional" = true }
-"zip" = { "version" = "9", "default-features" = false, "features" = ["deflate-flate2"], "optional" = true }
 "tower" = { "version" = "0.5", "features" = ["util"], "optional" = true }
 "anyhow" = { "version" = "1", "optional" = true }
-"bytes" = "1"
 "chrono" = { "version" = "0.4", "features" = ["serde"], "optional" = true }
 "serde" = { "version" = "1", "features" = ["derive"] }
 "serde_json" = { "version" = "1", "optional" = true }
 "sha2" = "0.10"
 "uuid" = { "version" = "1", "features" = ["v4", "serde"] }
 "log" = "0.4"
-"libc" = "0.2"
 "rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "cache"], "optional" = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }
 "async-graphql" = { "version" = "7", "default-features" = false, "features" = ["dataloader"], "optional" = true }
-"sysinfo" = { "version" = "0.32", "default-features" = false, "features" = ["disk"], "optional" = true }
-"tempfile" = { "version" = "3", "optional" = true }
 "plain-rs" = { "path" = "../plain-rs", "default-features" = false }
-"plain-media" = { "path" = "../plain-media", "optional" = true }
 
 [dev-dependencies]
+"rustls" = { "version" = "0.23", "default-features" = false, "features" = ["ring", "std"] }
+"zip" = { "version" = "9", "default-features" = false, "features" = ["deflate-flate2"] }
 "socket2" = { "version" = "0.5", "features" = ["all"] }
 "hyper" = { "version" = "1", "features" = ["client", "http1"] }
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"] }
 "reqwest" = { "version" = "0.12", "default-features" = false, "features" = ["rustls-tls"] }
 "rcgen" = { "version" = "0.13", "default-features" = false, "features" = ["pem", "ring"] }
-# Test-only: exposes plain-media's `paths::pin_test_data_dir` seam, which
-# `#[cfg(test)]` in plain-media cannot reach from this crate's test binary.
-"plain-media" = { "path" = "../plain-media", "features" = ["test-seams"] }
-# Test-only: exposes plain-inference's `models::test_fixture` seam, which
-# `#[cfg(test)]` in plain-inference cannot reach from this crate's test binary.
-"plain-inference" = { "path" = "../plain-inference", "features" = ["test-seams"] }
 # Test-only: exposes plain-rs mdns packet-capture test seams, which
 # `#[cfg(test)]` in plain-rs cannot reach from this crate's test binary.
 "plain-rs" = { "path" = "../plain-rs", "default-features" = false, "features" = ["test-seams"] }
@@ -76,6 +63,3 @@ description = "Shared Plain GraphQL, HTTP and native transport adapters"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 plain-rs = { path = "../plain-rs", default-features = false, features = ["linux-platform"] }
-
-[target.'cfg(not(target_os = "ios"))'.dependencies]
-sysinfo = { version = "0.32", default-features = false, features = ["system"], optional = true }

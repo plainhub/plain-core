@@ -27,7 +27,7 @@ pub mod xml;
 #[cfg(feature = "html")]
 pub mod html_to_markdown;
 
-#[cfg(any(feature = "graphql", feature = "filesystem"))]
+#[cfg(any(feature = "graphql", feature = "filesystem", feature = "media"))]
 pub mod keyed_locks;
 
 pub mod vector;

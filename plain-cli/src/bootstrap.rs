@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 pub fn run() -> Result<()> {
-    plain_server::headless::initialize_tls();
+    initialize_tls();
 
     plain_rs::platform::version::set(
         crate::version::VERSION,
@@ -36,7 +36,7 @@ pub fn run() -> Result<()> {
                 .build()?;
             runtime.block_on(crate::cli::run::run(
                 &paths,
-                plain_server::headless::Options {
+                crate::service::Options {
                     media_directories,
                     web_root,
                     automount,
@@ -44,4 +44,8 @@ pub fn run() -> Result<()> {
             ))
         }
     }
+}
+
+pub(crate) fn initialize_tls() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
 }

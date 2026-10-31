@@ -39,8 +39,11 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "linux-platform" = ["linux-system", "prefs", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util"]
 
 "image-metadata" = ["library", "dep:image"]
-"runtime" = ["ble", "graphql","services", "phone", "filesystem", "trash", "html", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "dep:plain-inference", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros"]
-"runtime-media" = ["runtime", "image-metadata", "dep:notify", "tokio/process"]
+"runtime" = ["ble", "graphql","services", "phone", "filesystem", "trash", "html", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "inference", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros"]
+"runtime-media" = ["runtime", "media", "image-metadata", "dep:notify", "tokio/process"]
+
+"inference" = ["dep:tokenizers", "dep:image", "dep:serde_json", "dep:cc"]
+"media" = ["crypto", "library", "image-metadata", "dep:tempfile", "dep:fast_image_resize", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util"]
 
 [dependencies]
 "flate2" = { version = "1", optional = true }
@@ -92,10 +95,18 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "tokio-rustls" = { "version" = "0.26", "default-features" = false, "features" = ["ring"], "optional" = true }
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"], "optional" = true }
 "notify" = { "version" = "7", "optional" = true }
-"plain-inference" = { "path" = "../plain-inference", "optional" = true }
+
+"fast_image_resize" = { version = "5", features = ["rayon"], optional = true }
+"jpeg-decoder" = { version = "0.3", optional = true }
+"rusty_h264-decoder" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
+"rusty_h264-common" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
+"tokenizers" = { version = "0.22.2", default-features = false, features = ["fancy-regex"], optional = true }
+
+[build-dependencies]
+"cc" = { version = "1", optional = true }
 
 [dev-dependencies]
-"plain-inference" = { "path" = "../plain-inference", "features" = ["test-seams"] }
+"jpeg-decoder" = { version = "0.3", features = ["platform_independent"] }
 "axum" = { "version" = "0.7", "default-features" = false, "features" = ["ws", "multipart", "json", "query", "tokio", "http1"] }
 "axum-server" = { "version" = "0.7", "features" = ["tls-rustls-no-provider"] }
 "serde_json" = "1"
@@ -115,3 +126,11 @@ required-features = ["ble"]
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]
 sysinfo = { version = "0.32", default-features = false, features = ["system"], optional = true }
+
+[[example]]
+name = "image_search"
+required-features = ["inference"]
+
+[[example]]
+name = "thumb_bench"
+required-features = ["media"]

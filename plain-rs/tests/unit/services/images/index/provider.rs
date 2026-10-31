@@ -1,5 +1,5 @@
 use super::*;
-use plain_inference::embedding::{ImageEncoder, ImageSource};
+use plain_rs::inference::embedding::{ImageEncoder, ImageSource};
 use plain_rs::host::resource_stream::NativeResourceFile;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

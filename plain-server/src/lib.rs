@@ -4,8 +4,6 @@
 #![recursion_limit = "512"]
 
 pub mod graphql;
-#[cfg(feature = "headless")]
-pub mod headless;
 pub mod http;
 #[cfg(feature = "core")]
 pub mod native;

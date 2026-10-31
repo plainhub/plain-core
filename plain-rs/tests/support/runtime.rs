@@ -36,7 +36,7 @@ impl Core {
     ) -> Result<Self, String> {
         let host = Arc::new(crate::host::bridge::Host::with_startup_config(config)?);
         let (state, stop) =
-            crate::runtime::Runtime::open(directory, token, prefs, host, Arc::new(Clients), None)?;
+            crate::runtime::Runtime::open(directory, token, prefs, host, Arc::new(Clients))?;
         Ok(Self { state, stop })
     }
     pub fn open(directory: &Path) -> Result<Self, String> {

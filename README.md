@@ -4,12 +4,11 @@ Shared Rust code for PlainApp desktop, mobile and command-line hosts.
 
 ```text
 plain-core/
-├── Cargo.toml                Builds and tests the five packages together
-├── plain-rs/                 Domain services, storage, crypto and protocols
+├── Cargo.toml                Builds and tests the three packages together
+├── plain-rs/                 Domain services, storage, protocols, media and inference
 ├── plain-server/             GraphQL, HTTP and native transport adapters
-├── plain-media/              Media catalog, scanning and processing
-├── plain-inference/          Model inference
 ├── plain-cli/                The plainapp command-line executable
+├── assets/                   Shared Web bundle and canonical file icons
 ├── schema/                   GraphQL and SQLite definitions
 └── scripts/                  Development tools
 ```
@@ -17,7 +16,7 @@ plain-core/
 Each `plain-*` directory is a Rust package managed by the root `Cargo.toml`.
 Desktop shell and mobile JNI/C ABI code live in plain-desktop and plain-app, respectively.
 
-## Server source layout
+## Source layout
 
 HTTP entry points are named after the resources they serve. Start with
 [`plain-server/src/http/router.rs`](plain-server/src/http/router.rs) to find a URL's
@@ -31,16 +30,27 @@ plain-rs/src/
 │       ├── links.rs        Encrypted file links and share reference resolution
 │       ├── content.rs      File reads, previews and representation selection
 │       ├── previews.rs     Conversions and temporary preview ownership
-│       └── references.rs   Local paths, app:// and fid: references
+│       ├── references.rs   Local paths, app:// and fid: references
+│       └── archive_downloads.rs  ZIP selection, extraction and download creation
+├── media/thumbnails/       Shared image/video/cover thumbnail engine
+├── inference/              Model packages, preprocessing and ONNX sessions
 ├── platform/               Native system information, network and filesystem primitives
 ├── host/                   Host commands, resource streams and connection primitives
 ├── protocols/              Shared wire formats and cryptographic framing
 └── data_paths/directory.rs Validated data/cache roots, data lock and staged restore
 
+plain-cli/src/
+├── bootstrap.rs            Process initialization and command dispatch
+├── cli/                    Command parsing and terminal interaction
+├── service.rs              Background service startup, shutdown and failure handling
+├── host.rs                 CLI host capabilities and event handling
+├── host/linux.rs           Linux host command adapters
+├── login_socket.rs         Local login approval socket server and client
+└── storage.rs              Startup media sources and mount event wiring
+
 plain-server/
 ├── src/
 │   ├── server.rs             Compose core runtime, schemas and transport state
-│   ├── headless.rs           Headless service entry and lifecycle
 │   ├── http/
 │   │   ├── router.rs         All HTTP route registrations
 │   │   ├── fs.rs             /fs: files and previews
@@ -102,6 +112,12 @@ configuration live in `http/listeners/public_server.rs`, failure monitoring and
 shutdown in `lifecycle.rs`, and restart commands in `control.rs`. There is no
 separate assembly directory or duplicate service container.
 
+`plain-cli/src/service.rs` combines the server with CLI host adapters and local
+approval. Linux mounting, disk formatting and Samba implementations remain in
+`plain-rs/src/platform/linux/`. `plain-server` contains no CLI/headless runtime;
+its native APIs and `ContentServer::runtime()` provide the in-process entry points
+used by CLI, desktop and mobile hosts.
+
 `router.rs::transfer_routes` contains the `/fs`, `/peer_graphql` and
 `/guest_graphql` routes shared by HTTP and BLE. `http/ble.rs` reuses that router;
 it does not maintain a second set of handlers.
@@ -159,9 +175,9 @@ sudo systemctl enable --now plainapp
 
 `plainapp install` writes `/etc/systemd/system/plainapp.service`, whose `ExecStart` is `/usr/local/bin/plainapp run`, so that path is required. It does not copy the binary, and it neither enables nor starts the service.
 
-The Web UI is compiled into `plain-server` and shared by the CLI and mobile libraries. From the sibling `plain-desktop` checkout, run `bash build.sh` to build directly into `plain-core/plain-cli/src/web_dist`, then commit the generated assets with the corresponding core changes. Consumers receive the assets through their pinned core Git dependency; no separate mobile Web resource copy is needed.
+The Web UI is compiled into `plain-server` and shared by the CLI and mobile libraries. From the sibling `plain-desktop` checkout, run `bash build.sh` to build directly into `plain-core/assets/web`, then commit the generated assets with the corresponding core changes. Consumers receive the assets through their pinned core Git dependency; no separate mobile Web resource copy is needed.
 
-Set `PLAIN_WEB_DIST` to an absolute frontend build directory to override the embedded build input. Mobile Gradle builds also accept `-PplainWebDist=/absolute/path/to/dist`. Explicit inputs must exist and contain `index.html`; invalid inputs fail the build. A checkout without the default `plain-cli/src/web_dist` directory and without an override builds with API support only.
+Set `PLAIN_WEB_DIST` to an absolute frontend build directory to override the embedded build input. Mobile Gradle builds also accept `-PplainWebDist=/absolute/path/to/dist`. Explicit inputs must exist and contain `index.html`; invalid inputs fail the build. A checkout without the default `assets/web` directory and without an override builds with API support only.
 
 ### Configuration
 

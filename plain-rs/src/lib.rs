@@ -3,6 +3,9 @@
 // would resolve to the *mounting* crate.
 extern crate self as plain_rs;
 
+#[cfg(feature = "inference")]
+pub mod inference;
+
 pub mod cache_paths;
 pub mod data_paths;
 #[cfg(feature = "phone")]

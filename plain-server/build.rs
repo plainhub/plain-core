@@ -8,7 +8,7 @@ fn main() {
     let root = configured
         .as_ref()
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| manifest.join("../plain-cli/src/web_dist"));
+        .unwrap_or_else(|| manifest.join("../assets/web"));
     assert!(
         root.is_absolute(),
         "PLAIN_WEB_DIST must be an absolute directory"

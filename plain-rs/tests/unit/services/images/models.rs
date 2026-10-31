@@ -23,7 +23,7 @@ async fn settled(runtime: &Runtime) {
 async fn failed_replacement_preserves_active_package_index_and_search() {
     let directory = tempfile::tempdir().unwrap();
     let incoming = directory.path().join("ai_models/incoming");
-    let original = plain_inference::models::test_fixture::fixture(&incoming);
+    let original = plain_rs::inference::models::test_fixture::fixture(&incoming);
     let photo = directory.path().join("photo.png");
     image::RgbImage::from_pixel(64, 64, image::Rgb([128, 64, 32]))
         .save(&photo)
@@ -74,7 +74,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
     );
     assert_eq!(plain_rs::media::images::embeddings::count(&db).unwrap(), 1);
     assert_eq!(runtime.search("cat", 50).await.unwrap()[0].image_id, "one");
-    let mut replacement = plain_inference::models::test_fixture::fixture(&incoming);
+    let mut replacement = plain_rs::inference::models::test_fixture::fixture(&incoming);
     replacement.files[0].sha256 = "0".repeat(64);
     std::fs::write(
         incoming.join("manifest.json"),
@@ -89,7 +89,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
     );
     assert!(runtime.snapshot().status.error_message.contains("checksum"));
     assert_eq!(plain_rs::media::images::embeddings::count(&db).unwrap(), 1);
-    let active = plain_inference::models::manifest::Manifest::parse(
+    let active = plain_rs::inference::models::manifest::Manifest::parse(
         &std::fs::read(directory.path().join("ai_models/imported/manifest.json")).unwrap(),
     )
     .unwrap();
@@ -107,7 +107,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
     );
     assert!(runtime.snapshot().status.error_message.is_empty());
     assert_eq!(runtime.search("cat", 50).await.unwrap()[0].score, 1.0);
-    replacement = plain_inference::models::test_fixture::fixture(&incoming);
+    replacement = plain_rs::inference::models::test_fixture::fixture(&incoming);
     replacement.id = "different-space".into();
     std::fs::write(
         incoming.join("manifest.json"),
@@ -191,7 +191,7 @@ async fn catalog_changes_share_one_cancellable_timer_and_do_not_retain_the_runti
 #[tokio::test]
 async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_download() {
     let directory = tempfile::tempdir().unwrap();
-    plain_inference::models::test_fixture::fixture(&directory.path().join("ai_models/imported"));
+    plain_rs::inference::models::test_fixture::fixture(&directory.path().join("ai_models/imported"));
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
     let responder = host.clone();
@@ -264,7 +264,7 @@ async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_do
 #[tokio::test]
 async fn native_model_restore_and_shutdown_do_not_request_sdk_observers_or_catalogs() {
     let directory = tempfile::tempdir().unwrap();
-    plain_inference::models::test_fixture::fixture(&directory.path().join("ai_models/imported"));
+    plain_rs::inference::models::test_fixture::fixture(&directory.path().join("ai_models/imported"));
     let host = Arc::new(Host::default());
     let (_generation, mut requests) = host.connect();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());

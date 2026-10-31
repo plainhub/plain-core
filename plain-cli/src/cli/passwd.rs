@@ -10,7 +10,7 @@ pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
         prompt_password()?
     };
     anyhow::ensure!(!password.is_empty(), "Password cannot be empty");
-    plain_server::headless::set_password(&paths.data_dir, &paths.cache_dir, &password)?;
+    set_password(&paths.data_dir, &paths.cache_dir, &password)?;
     println!("Admin password updated.");
     Ok(())
 }
@@ -27,3 +27,22 @@ fn prompt_password() -> Result<String> {
 fn prompt_password() -> Result<String> {
     anyhow::bail!("Use passwd --stdin to read a password from standard input on this platform")
 }
+
+fn set_password(
+    directory: &std::path::Path,
+    cache: &std::path::Path,
+    password: &str,
+) -> Result<()> {
+    let _data_directory = plain_rs::data_paths::directory::DataDirectory::open(directory, cache)
+        .map_err(anyhow::Error::msg)?;
+    let prefs = plain_rs::prefs::Prefs::load(&plain_rs::prefs::default_path(directory))?;
+    plain_rs::prefs::security::Command::SetPassword {
+        password: password.to_owned(),
+    }
+    .apply(&prefs)?;
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/cli/passwd.rs"]
+mod tests;

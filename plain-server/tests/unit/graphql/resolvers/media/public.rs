@@ -689,7 +689,7 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     let models = schema.data::<Arc<Runtime>>().unwrap();
     let index = schema.data::<Arc<ImageIndex>>().unwrap();
     index.use_native_catalog_for_test();
-    plain_inference::models::test_fixture::fixture(&dir.path().join("ai_models/incoming"));
+    plain_rs::inference::models::test_fixture::fixture(&dir.path().join("ai_models/incoming"));
     models.import().await.unwrap();
     tokio::time::timeout(Duration::from_secs(10), async {
         while models.snapshot().status.status

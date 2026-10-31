@@ -1,4 +1,4 @@
-use bytes::Bytes;
+use axum::body::Bytes;
 use hyper::body::Frame;
 use plain_rs::services::peers::peer_lan::limited_chunks;
 use std::{

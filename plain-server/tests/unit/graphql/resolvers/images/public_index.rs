@@ -50,7 +50,7 @@ async fn image_search_status_is_owned_by_rust_without_platform_projection() {
     assert_eq!(row["status"], "UNAVAILABLE");
     assert_eq!(
         row["modelSize"],
-        plain_inference::models::default_model::manifest().size() as i64
+        plain_rs::inference::models::default_model::manifest().size() as i64
     );
     assert_eq!(
         row["modelDir"],

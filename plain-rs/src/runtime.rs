@@ -98,7 +98,6 @@ impl Runtime {
         prefs: Arc<plain_rs::prefs::Prefs>,
         host: Arc<plain_rs::host::bridge::Host>,
         clients: Arc<dyn plain_rs::host::client_connections::ClientConnections>,
-        decoder: Option<Arc<dyn plain_rs::media::images::decoding::ThumbnailDecoder>>,
     ) -> Result<(Self, watch::Sender<bool>), String> {
         if plain_rs::utils::base64::base64_decode(token).len() != 32 {
             return Err("token must contain 32 random bytes".into());
@@ -122,7 +121,6 @@ impl Runtime {
             prefs,
             host,
             clients,
-            decoder,
             db,
             data_directory,
             events,
@@ -134,7 +132,6 @@ impl Runtime {
         prefs: Arc<plain_rs::prefs::Prefs>,
         host: Arc<plain_rs::host::bridge::Host>,
         clients: Arc<dyn plain_rs::host::client_connections::ClientConnections>,
-        decoder: Option<Arc<dyn plain_rs::media::images::decoding::ThumbnailDecoder>>,
         db: Arc<Db>,
         data_directory: Arc<plain_rs::data_paths::directory::DataDirectory>,
         events: broadcast::Sender<WsEvent>,
@@ -396,9 +393,7 @@ impl Runtime {
             uploads,
             mms,
             clients,
-            thumbnails: Arc::new(plain_rs::services::images::thumbnails::Thumbnails::new(
-                decoder,
-            )),
+            thumbnails: Arc::new(plain_rs::services::images::thumbnails::Thumbnails::default()),
         };
         state
             .mms

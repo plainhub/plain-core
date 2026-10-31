@@ -47,9 +47,8 @@ pub struct ContentServer {
     stop: watch::Sender<bool>,
 }
 impl ContentServer {
-    #[cfg(feature = "headless")]
-    pub(crate) fn headless_state(&self) -> &ServerState {
-        &self.state
+    pub fn runtime(&self) -> &plain_rs::runtime::Runtime {
+        &self.state.core
     }
 
     pub fn shared_preferences(&self) -> Result<Arc<plain_rs::prefs::Prefs>, String> {
@@ -202,15 +201,8 @@ impl ContentServer {
             sockets: main_ws.clone(),
             login_attempts: login_attempts.clone(),
         });
-        #[cfg(feature = "media")]
-        let decoder = Some(Arc::new(plain_media::previews::images::ResourceDecoder)
-            as Arc<dyn plain_rs::media::images::decoding::ThumbnailDecoder>);
-        #[cfg(not(feature = "media"))]
-        let decoder = None;
         let (core, stop) =
-            plain_rs::runtime::Runtime::open(directory, token, prefs, host, clients, decoder)?;
-        #[cfg(feature = "media")]
-        plain_media::storage::paths::set(core.directory.clone(), core.cache.root().to_owned());
+            plain_rs::runtime::Runtime::open(directory, token, prefs, host, clients)?;
         let public = crate::graphql::schemas::public::build_with_runtime(core.clone());
         let receiver = core.stop.clone();
         let build_debug = core.host.startup().debug;

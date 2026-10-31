@@ -50,7 +50,7 @@ async fn multipart_upload(
     body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
     let chunks = body
         .chunks(32768)
-        .map(|chunk| Ok::<_, std::io::Error>(bytes::Bytes::copy_from_slice(chunk)))
+        .map(|chunk| Ok::<_, std::io::Error>(axum::body::Bytes::copy_from_slice(chunk)))
         .collect::<Vec<_>>();
     let mut request = reqwest::Client::new()
         .post(format!("http://127.0.0.1:{}{endpoint}", core.port))

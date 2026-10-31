@@ -27,7 +27,6 @@ fn runtime(
         prefs,
         host,
         Arc::new(Clients),
-        None,
         db,
         data,
         events,

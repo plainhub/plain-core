@@ -90,3 +90,5 @@ pub mod videos_preview;
 pub mod zip_entries;
 
 pub mod catalog_scan;
+
+pub mod archive_downloads;
