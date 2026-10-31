@@ -186,7 +186,7 @@ pub(crate) async fn serve(
 }
 
 pub(crate) async fn fallback(
-    State(state): State<crate::assembly::server::ServerState>,
+    State(state): State<crate::server::ServerState>,
     request: Request,
 ) -> Response {
     let root = state.web_root.read().ok().and_then(|guard| guard.clone());

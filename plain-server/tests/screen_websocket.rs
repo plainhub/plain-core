@@ -1,6 +1,6 @@
 #![cfg(all(feature = "core", feature = "http_transport"))]
 use futures_util::StreamExt;
-use plain_server::assembly::server::ContentServer;
+use plain_server::server::ContentServer;
 use serde_json::json;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc;
@@ -29,27 +29,58 @@ use tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClien
 #[tokio::test]
 async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
     let (_directory, core, prefs) = public_fixture();
-    let key = plain_rs::utils::base64::base64_decode(&plain_rs::prefs::identity::ensure_url_token(&prefs));
+    let key = plain_rs::utils::base64::base64_decode(&plain_rs::prefs::identity::ensure_url_token(
+        &prefs,
+    ));
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
     let url = format!("ws://127.0.0.1:{}/image_editor?cid={client}", core.port);
     let (mut denied, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
-    denied.send(ClientMessage::Binary(vec![1, 2, 3].into())).await.unwrap();
-    assert!(matches!(denied.next().await.unwrap().unwrap(), ClientMessage::Close(_)));
+    denied
+        .send(ClientMessage::Binary(vec![1, 2, 3].into()))
+        .await
+        .unwrap();
+    assert!(matches!(
+        denied.next().await.unwrap().unwrap(),
+        ClientMessage::Close(_)
+    ));
 
     let (mut socket, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
     let registration = plain_rs::crypto::xchacha_encrypt_raw(
-        &key, chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
-    ).unwrap();
+        &key,
+        chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+    )
+    .unwrap();
     let mut stream = plain_rs::protocols::websocket::Stream::new(&registration);
-    socket.send(ClientMessage::Binary(registration.into())).await.unwrap();
-    let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else { panic!("Expected encrypted ready") };
-    assert_eq!(stream.decode(&frame, &key).unwrap(), ("IMAGE_EDITOR_READY".into(), vec![]));
+    socket
+        .send(ClientMessage::Binary(registration.into()))
+        .await
+        .unwrap();
+    let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else {
+        panic!("Expected encrypted ready")
+    };
+    assert_eq!(
+        stream.decode(&frame, &key).unwrap(),
+        ("IMAGE_EDITOR_READY".into(), vec![])
+    );
     let request = async_graphql::Request::new("mutation($id: ID!, $update: String!) { broadcastImageEditorUpdate(id: $id, update: $update) }")
         .variables(async_graphql::Variables::from_json(json!({"id":"project", "update":"AQID"})));
     let response = core.native_graphql().unwrap().execute(request).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let ClientMessage::Binary(frame) = tokio::time::timeout(Duration::from_secs(3), socket.next()).await.unwrap().unwrap().unwrap() else { panic!("Expected encrypted update") };
-    assert_eq!(stream.decode(&frame, &key).unwrap(), ("IMAGE_EDITOR_UPDATE".into(), b"\x07project\x01\x02\x03".to_vec()));
+    let ClientMessage::Binary(frame) = tokio::time::timeout(Duration::from_secs(3), socket.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+    else {
+        panic!("Expected encrypted update")
+    };
+    assert_eq!(
+        stream.decode(&frame, &key).unwrap(),
+        (
+            "IMAGE_EDITOR_UPDATE".into(),
+            b"\x07project\x01\x02\x03".to_vec()
+        )
+    );
     core.shutdown().await;
 }
 
@@ -69,13 +100,27 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         while let Some(request) = host.next_request().await {
             let method = request["method"].as_str().unwrap();
             let result = match method {
-                "systemWebLoginRequested" | "systemWebLoginClosed" | "systemWebLoginCompleted" |
-                "systemWebLoginSnapshot" | "peerNotificationsChanged" | "peerClipboardChanged" |
-                "onlineClientsChanged" | "httpServerStatusChanged" | "clipboardHistoryRefresh" |
-                "dlnaRendererChanged" | "dlnaRendererRefresh" | "sharedFolderDownloadsRefresh" | "peerTransportsChanged" |
-                "appUpdateDownloadChanged" | "dlnaSenderChanged" | "feedSyncChanged" |
-                "audioPlaybackRefresh" | "audioLibraryRefresh" | "networkInterfacesChanged" |
-                "systemWebActivity" | "pairingSucceeded" => json!(null),
+                "systemWebLoginRequested"
+                | "systemWebLoginClosed"
+                | "systemWebLoginCompleted"
+                | "systemWebLoginSnapshot"
+                | "peerNotificationsChanged"
+                | "peerClipboardChanged"
+                | "onlineClientsChanged"
+                | "httpServerStatusChanged"
+                | "clipboardHistoryRefresh"
+                | "dlnaRendererChanged"
+                | "dlnaRendererRefresh"
+                | "sharedFolderDownloadsRefresh"
+                | "peerTransportsChanged"
+                | "appUpdateDownloadChanged"
+                | "dlnaSenderChanged"
+                | "feedSyncChanged"
+                | "audioPlaybackRefresh"
+                | "audioLibraryRefresh"
+                | "networkInterfacesChanged"
+                | "systemWebActivity"
+                | "pairingSucceeded" => json!(null),
                 "systemCapabilities" => json!(["SCREEN_MIRROR"]),
                 "systemScreenMirrorState" => mirror_host.lock().unwrap().clone(),
                 "systemScreenMirrorControls" | "systemScreenMirrorResetTouch" => {
@@ -422,7 +467,10 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
         serde_json::from_slice(&stream.decode(&frame, &key).unwrap()).unwrap();
     assert_eq!(response["id"], "private");
     assert_eq!(response["type"], "error");
-    assert_eq!(response["payload"][0]["message"], "Unknown subscription field");
+    assert_eq!(
+        response["payload"][0]["message"],
+        "Unknown subscription field"
+    );
     let query = json!({"type":"subscribe","id":"models","payload":{"query":"subscription { imageModelsUpdated { version status downloadProgress errorMessage modelSize modelDir isIndexing totalImages indexedImages } }"}}).to_string();
     socket
         .send(ClientMessage::Binary(
@@ -448,12 +496,17 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
     .await
     .unwrap();
     for (id, query) in [
-        ("pomodoro", "subscription { pomodoroAction { today { state isRunning } completedState } }"),
+        (
+            "pomodoro",
+            "subscription { pomodoroAction { today { state isRunning } completedState } }",
+        ),
         ("settings", "subscription { pomodoroSettingsChanged }"),
     ] {
         let command = json!({"type":"subscribe", "id":id, "payload":{"query":query}}).to_string();
         socket
-            .send(ClientMessage::Binary(stream.encode(command.as_bytes(), &key).unwrap().into()))
+            .send(ClientMessage::Binary(
+                stream.encode(command.as_bytes(), &key).unwrap().into(),
+            ))
             .await
             .unwrap();
     }
@@ -475,14 +528,20 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
     .unwrap();
     let native = core.native_graphql().unwrap();
     let settings = json!({"workDurationMin":26,"shortBreakDurationMin":5,"longBreakDurationMin":15,"pomodorosBeforeLongBreak":4,"showNotification":true,"playSoundOnComplete":true,"soundPath":"","originalSoundName":""});
-    let request = async_graphql::Request::new("mutation($value: JSON!) { setPref(key: \"pomodoro_settings\", value: $value) }")
-        .variables(async_graphql::Variables::from_json(json!({"value":settings})));
+    let request = async_graphql::Request::new(
+        "mutation($value: JSON!) { setPref(key: \"pomodoro_settings\", value: $value) }",
+    )
+    .variables(async_graphql::Variables::from_json(
+        json!({"value":settings}),
+    ));
     assert!(native.execute(request).await.errors.is_empty());
-    assert!(native
-        .execute("mutation { startPomodoro(durationSec:30) }".into())
-        .await
-        .errors
-        .is_empty());
+    assert!(
+        native
+            .execute("mutation { startPomodoro(durationSec:30) }".into())
+            .await
+            .errors
+            .is_empty()
+    );
     let mut received = std::collections::HashSet::new();
     tokio::time::timeout(Duration::from_secs(3), async {
         while received.len() < 2 {
@@ -492,10 +551,14 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
             let response: serde_json::Value =
                 serde_json::from_slice(&stream.decode(&frame, &key).unwrap()).unwrap();
             assert_ne!(response["type"], "error");
-            if response["id"] == "settings" && response["payload"]["data"]["pomodoroSettingsChanged"] == true {
+            if response["id"] == "settings"
+                && response["payload"]["data"]["pomodoroSettingsChanged"] == true
+            {
                 received.insert("settings");
             }
-            if response["id"] == "pomodoro" && response["payload"]["data"]["pomodoroAction"]["today"]["isRunning"] == true {
+            if response["id"] == "pomodoro"
+                && response["payload"]["data"]["pomodoroAction"]["today"]["isRunning"] == true
+            {
                 received.insert("pomodoro");
             }
         }

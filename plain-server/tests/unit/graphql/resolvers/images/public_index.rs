@@ -1,6 +1,7 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
-use crate::host::bridge::Host;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
+use plain_rs::host::bridge::Host;
+use plain_rs::services::images::status::ImageSearchStatusType;
 use serde_json::{Value, json};
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -29,7 +30,7 @@ fn fixture() -> (tempfile::TempDir, PublicSchema) {
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::graphql::schemas::public::build(host, events, prefs, db, directory),
+        crate::test_support::schema::build(host, events, prefs, db, directory),
     )
 }
 
@@ -68,7 +69,7 @@ async fn restore_without_enabled_model_does_not_contact_platform() {
         panic!("Unexpected platform operation: {method}")
     });
     let models = schema
-        .data::<Arc<crate::services::images::models::Runtime>>()
+        .data::<Arc<plain_rs::services::images::models::Runtime>>()
         .unwrap();
     models.enable(true).await.unwrap();
     assert_eq!(
@@ -80,14 +81,14 @@ async fn restore_without_enabled_model_does_not_contact_platform() {
 async fn cancel_index_mutates_the_same_index_queried_by_model_status() {
     let (_dir, schema) = fixture();
     let index = schema
-        .data::<Arc<crate::services::images::index::ImageIndex>>()
+        .data::<Arc<plain_rs::services::images::index::ImageIndex>>()
         .unwrap();
     let before = index.status().version;
     let response = schema.execute("mutation { cancelImageIndex }").await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert!(index.status().version > before);
     let models = schema
-        .data::<Arc<crate::services::images::models::Runtime>>()
+        .data::<Arc<plain_rs::services::images::models::Runtime>>()
         .unwrap();
     assert_eq!(
         models.snapshot().status.is_indexing,
@@ -106,7 +107,7 @@ async fn importing_without_a_complete_package_does_not_start_default_download() 
             .contains("complete model package")
     );
     let models = schema
-        .data::<Arc<crate::services::images::models::Runtime>>()
+        .data::<Arc<plain_rs::services::images::models::Runtime>>()
         .unwrap();
     assert_eq!(
         models.snapshot().status.status,

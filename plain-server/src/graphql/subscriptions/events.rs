@@ -1,11 +1,12 @@
-use super::registry::{EVENTS, EventSpec};
-use crate::assembly::server::ServerState;
 use crate::graphql::executor::{RequestClient, RequestOrigin};
+use crate::server::ServerState;
 use async_graphql::{Context, Result};
 use futures_util::{
     StreamExt,
     stream::{self, BoxStream},
 };
+use plain_rs::protocols::graphql::events::EVENTS;
+use plain_rs::protocols::graphql::events::EventSpec;
 use serde::de::DeserializeOwned;
 
 pub(super) async fn authorize(
@@ -14,12 +15,12 @@ pub(super) async fn authorize(
     spec: &EventSpec,
 ) -> Result<()> {
     if origin == RequestOrigin::Remote
-        && !crate::http::auth::public_gate::is_enabled(&state.prefs, spec.permissions)
+        && !plain_rs::services::device::access::is_enabled(&state.prefs, spec.permissions)
     {
         return Err("no_permission".into());
     }
     if let Some(capability) = spec.capability {
-        crate::services::capabilities::require(&state.host, capability)
+        plain_rs::services::capabilities::require(&state.host, capability)
             .await
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
     }
@@ -29,7 +30,7 @@ pub(super) async fn authorize(
             .iter()
             .map(|name| name.to_string())
             .collect::<Vec<_>>();
-        if !crate::http::auth::public_gate::granted(&state.host, &names)
+        if !plain_rs::services::device::access::granted(&state.host, &names)
             .await
             .map_err(|e| async_graphql::Error::new(e.to_string()))?
         {
@@ -80,8 +81,14 @@ pub(super) async fn stream<T: DeserializeOwned + Send + 'static>(
     let receiver = state.events.subscribe();
     authorize(&state, origin, spec).await?;
     match spec.field {
-        "smsSendResult" => state.sms_sends.replay().map_err(|error| async_graphql::Error::new(error.to_string()))?,
-        "mmsSendResult" => state.mobile.mms.replay().map_err(|error| async_graphql::Error::new(error.to_string()))?,
+        "smsSendResult" => state
+            .sms_sends
+            .replay()
+            .map_err(|error| async_graphql::Error::new(error.to_string()))?,
+        "mmsSendResult" => state
+            .mms
+            .replay()
+            .map_err(|error| async_graphql::Error::new(error.to_string()))?,
         _ => {}
     }
     let initial = snapshot(&state, name).await?;

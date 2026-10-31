@@ -1,8 +1,8 @@
 use super::client_inputs::{SharedEntryInput, SharedLinkInput};
 use super::client_models::{SharedEntry, SharedLink};
-use crate::assembly::server::ServerState;
-use crate::graphql::types::Long;
+use crate::server::ServerState;
 use async_graphql::{Context, Enum, InputObject, Object, SimpleObject};
+use plain_rs::types::Long;
 use serde::Deserialize;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Deserialize)]
@@ -107,7 +107,7 @@ impl SharedDownloadMutation {
     ) -> async_graphql::Result<async_graphql::ID> {
         let state = ctx.data::<ServerState>()?;
         let runtime = state.shared_batches.clone();
-        let downloads_base = crate::services::peers::shared_batch::downloads_directory(
+        let downloads_base = plain_rs::services::peers::shared_batch::downloads_directory(
             &state.host,
             &input.target_dir,
         )?;
@@ -131,7 +131,7 @@ impl SharedDownloadMutation {
         ctx: &Context<'_>,
         id: async_graphql::ID,
     ) -> async_graphql::Result<bool> {
-        crate::services::peers::shared_batch::control(ctx.data::<ServerState>()?, &id, "retry")
+        plain_rs::services::peers::shared_batch::control(ctx.data::<ServerState>()?, &id, "retry")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))
     }
@@ -140,7 +140,7 @@ impl SharedDownloadMutation {
         ctx: &Context<'_>,
         id: async_graphql::ID,
     ) -> async_graphql::Result<bool> {
-        crate::services::peers::shared_batch::control(ctx.data::<ServerState>()?, &id, "cancel")
+        plain_rs::services::peers::shared_batch::control(ctx.data::<ServerState>()?, &id, "cancel")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))
     }
@@ -149,7 +149,7 @@ impl SharedDownloadMutation {
         ctx: &Context<'_>,
         id: async_graphql::ID,
     ) -> async_graphql::Result<bool> {
-        crate::services::peers::shared_batch::control(ctx.data::<ServerState>()?, &id, "remove")
+        plain_rs::services::peers::shared_batch::control(ctx.data::<ServerState>()?, &id, "remove")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))
     }

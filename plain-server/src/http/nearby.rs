@@ -1,4 +1,4 @@
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use axum::{
     body::Bytes,
     extract::{ConnectInfo, State},
@@ -16,7 +16,7 @@ pub(crate) async fn call(
         Ok(body) => body,
         Err(_) => return (StatusCode::BAD_REQUEST, "invalid UTF-8").into_response(),
     };
-    match crate::services::discovery::pairing_runtime::handle_nearby_post(
+    match plain_rs::services::discovery::pairing_runtime::handle_nearby_post(
         &state,
         body,
         &remote.ip().to_string(),

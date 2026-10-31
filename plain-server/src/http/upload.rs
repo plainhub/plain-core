@@ -14,13 +14,13 @@
 //! chunk with no declared size keeps the legacy streaming path, because the
 //! shared writer cannot finish an unknown-length chunk.
 
-use crate::assembly::server::ServerState;
-use crate::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES;
+use crate::server::ServerState;
 use axum::{
     extract::{FromRequest, Multipart, Request, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use plain_rs::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
@@ -63,7 +63,7 @@ async fn session_key(state: &ServerState, headers: &HeaderMap) -> anyhow::Result
         .unwrap_or_default();
     anyhow::ensure!(!client_id.is_empty(), "c-id header is missing");
     if state.authenticated(headers) {
-        if let Some(key) = crate::services::sessions::local_key(state, client_id) {
+        if let Some(key) = plain_rs::services::sessions::local_key(state, client_id) {
             return Ok(key);
         }
     }

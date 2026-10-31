@@ -1,8 +1,7 @@
 use anyhow::Result;
-use plain_server::{
-    assembly::headless::{HeadlessService, Options},
-    platform::system::consts::AppPaths,
-};
+use plain_rs::platform::system::consts::AppPaths;
+use plain_server::headless::HeadlessService;
+use plain_server::headless::Options;
 
 pub async fn run(paths: &AppPaths, options: Options) -> Result<()> {
     #[cfg(unix)]

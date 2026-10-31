@@ -28,7 +28,6 @@ pub mod discovery;
 
 pub mod downloads;
 
-
 pub mod media;
 
 pub mod settings;
@@ -56,3 +55,5 @@ pub mod sms;
 
 #[cfg(feature = "core")]
 pub mod packages;
+
+pub mod mobile;

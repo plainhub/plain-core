@@ -1,5 +1,5 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
+use crate::test_support::schema::MobileFixture as PublicSchema;
 use serde_json::{Value, json};
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -31,7 +31,7 @@ fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema) {
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::graphql::schemas::public::build(host, events, prefs, db, directory),
+        crate::test_support::schema::build_mobile(host, events, prefs, db, directory),
     )
 }
 
@@ -303,7 +303,7 @@ async fn send_mms_allocates_one_rust_pending_id_and_launches_only_a_native_inten
         .to_owned();
     assert!(id.starts_with("pending_mms_"));
     let runtime = schema
-        .data::<Arc<crate::services::sms::mms::Runtime>>()
+        .data::<Arc<plain_rs::services::sms::mms::Runtime>>()
         .unwrap();
     let duplicate = schema
         .execute(r#"mutation {sendMms(number:"+1555",body:"hi",attachmentPaths:[],threadId:"t1")}"#)

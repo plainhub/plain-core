@@ -60,8 +60,7 @@ fn zip_files_requests_default_every_field() {
 #[tokio::test]
 async fn encrypted_media_download_resolves_selection_and_preserves_each_basename_and_byte() {
     let directory = tempfile::tempdir().unwrap();
-    let core =
-        crate::assembly::server::ContentServer::open(&directory.path().join("core")).unwrap();
+    let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
     let rows = (0..3)
@@ -242,8 +241,7 @@ fn an_unreadable_archive_leaves_no_staged_files_behind() {
 async fn shared_directory_download_preserves_empty_directories_and_excludes_outside_links() {
     for with_file in [false, true] {
         let directory = tempfile::tempdir().unwrap();
-        let core =
-            crate::assembly::server::ContentServer::open(&directory.path().join("core")).unwrap();
+        let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
         let state = core.runtime_state();
         let (_generation, mut requests) = state.host.connect();
         state.prefs.set("background_service_enabled", true).unwrap();
@@ -283,7 +281,10 @@ async fn shared_directory_download_preserves_empty_directories_and_excludes_outs
             .await
             .unwrap();
         let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
-        let mut names = archive.file_names().map(|name| name.unwrap().into_owned()).collect::<Vec<_>>();
+        let mut names = archive
+            .file_names()
+            .map(|name| name.unwrap().into_owned())
+            .collect::<Vec<_>>();
         names.sort();
         assert_eq!(
             names,

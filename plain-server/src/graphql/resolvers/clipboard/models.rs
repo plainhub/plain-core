@@ -1,6 +1,6 @@
-use crate::graphql::types::Instant;
 use async_graphql::{ID, Result, SimpleObject};
 use plain_rs::db::ClipboardRow;
+use plain_rs::types::Instant;
 
 #[derive(SimpleObject)]
 pub struct ClipboardItem {

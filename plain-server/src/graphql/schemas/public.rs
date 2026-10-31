@@ -1,8 +1,14 @@
 use crate::graphql::resolvers::docs::public::DocsQuery;
 use crate::graphql::resolvers::images::public::ImagesQuery;
+#[cfg(all(feature = "mobile", any(target_os = "android", target_os = "ios")))]
+use crate::graphql::resolvers::mobile::MobileMutation as MobileMutationImpl;
+#[cfg(all(feature = "mobile", any(target_os = "android", target_os = "ios")))]
+use crate::graphql::resolvers::mobile::MobileQuery as MobileQueryImpl;
 use crate::graphql::resolvers::videos::public::VideosQuery;
-use crate::mobile::graphql::MobileMutation as MobileMutationImpl;
-use crate::mobile::graphql::MobileQuery as MobileQueryImpl;
+#[cfg(not(all(feature = "mobile", any(target_os = "android", target_os = "ios"))))]
+use async_graphql::EmptyMutation as MobileMutationImpl;
+#[cfg(not(all(feature = "mobile", any(target_os = "android", target_os = "ios"))))]
+use async_graphql::EmptyMutation as MobileQueryImpl;
 
 use crate::graphql::resolvers::audio::public::AudioMutation;
 use crate::graphql::resolvers::audio::public::AudioQuery;
@@ -40,15 +46,12 @@ use crate::graphql::resolvers::settings::public::PrefsMutation;
 use crate::graphql::resolvers::settings::public::PrefsQuery;
 use crate::graphql::resolvers::tags::public::TagsMutation;
 use crate::graphql::resolvers::tags::public::TagsQuery;
-use crate::host::bridge::Host;
-use async_graphql::{MergedObject, Schema};
 use crate::graphql::subscriptions::Subscription;
-use plain_rs::db::Db;
-use plain_rs::prefs::Prefs;
+use async_graphql::{MergedObject, Schema};
 use std::sync::Arc;
 
 #[derive(MergedObject, Default)]
-pub struct Query(
+pub struct Query<Mobile: async_graphql::ObjectType + 'static = MobileQueryImpl>(
     crate::graphql::resolvers::app::cache::CacheQuery,
     crate::graphql::resolvers::peers::records::PeerRecordQuery,
     crate::graphql::resolvers::shares::queue::SharedDownloadQuery,
@@ -65,7 +68,7 @@ pub struct Query(
     crate::graphql::resolvers::device::sessions::SessionsQuery,
     crate::graphql::resolvers::media::scan::MediaScanQuery,
     crate::graphql::resolvers::app::platform::PlatformQuery,
-    MobileQueryImpl,
+    Mobile,
     crate::graphql::resolvers::files::app_file::AppFileQuery,
     crate::graphql::resolvers::bookmarks::bookmark::BookmarkQuery,
     crate::graphql::resolvers::bookmarks::metadata::PageMetadataQuery,
@@ -94,7 +97,7 @@ pub struct Query(
 );
 
 #[derive(MergedObject, Default)]
-pub struct Mutation(
+pub struct Mutation<Mobile: async_graphql::ObjectType + 'static = MobileMutationImpl>(
     crate::graphql::resolvers::app::cache::CacheMutation,
     crate::graphql::resolvers::shares::queue::SharedDownloadMutation,
     crate::graphql::resolvers::downloads::queue::ChatDownloadMutation,
@@ -112,7 +115,7 @@ pub struct Mutation(
     crate::graphql::resolvers::device::sessions::SessionsMutation,
     crate::graphql::resolvers::app::platform::PlatformMutation,
     crate::graphql::resolvers::media::scan::MediaScanMutation,
-    MobileMutationImpl,
+    Mobile,
     crate::graphql::resolvers::bookmarks::bookmark::BookmarkMutation,
     crate::graphql::resolvers::pomodoro::pomodoro::PomodoroMutation,
     crate::graphql::resolvers::images::image_editor_project::ImageEditorProjectMutation,
@@ -138,57 +141,60 @@ pub struct Mutation(
 
 pub type PublicSchema = Schema<Query, Mutation, Subscription>;
 
-#[cfg(test)]
-pub fn build(
-    host: Arc<Host>,
-    events: tokio::sync::broadcast::Sender<plain_rs::events::WsEvent>,
-    prefs: Arc<Prefs>,
-    db: Arc<Db>,
-    directory: std::path::PathBuf,
-) -> PublicSchema {
-    let services = crate::assembly::services::Services::new(
-        db.clone(),
-        host.clone(),
-        events.clone(),
-        prefs.clone(),
-        directory.clone(),
-        plain_rs::cache_paths::CachePaths::new(&directory.join("cache")),
-    );
-    let models = crate::services::images::models::Runtime::new(
-        directory.clone(),
-        host.clone(),
-        prefs.clone(),
-        services.store.clone(),
-        services.index.clone(),
-        events.clone(),
-    );
-    let mobile = crate::mobile::Runtime::new(
-        host.clone(),
-        db.clone(),
-        directory.clone(),
-        services.store.clone(),
-        events.clone(),
-    );
-    build_with_runtime(host, events, prefs, db, services, models, mobile)
+pub(crate) fn build_with_runtime(runtime: plain_rs::runtime::Runtime) -> PublicSchema {
+    configure_schema(
+        runtime,
+        Schema::build(
+            Query::default(),
+            Mutation::default(),
+            Subscription::default(),
+        ),
+    )
+    .finish()
 }
-pub(crate) fn build_with_runtime(
-    host: Arc<Host>,
-    events: tokio::sync::broadcast::Sender<plain_rs::events::WsEvent>,
-    prefs: Arc<Prefs>,
-    db: Arc<Db>,
-    services: crate::assembly::services::Services,
-    models: Arc<crate::services::images::models::Runtime>,
-    mobile: Arc<crate::mobile::Runtime>,
-) -> PublicSchema {
-    let builder = Schema::build(Query::default(), Mutation::default(), Subscription::default())
+pub(crate) fn configure_schema<
+    Q: async_graphql::ObjectType + 'static,
+    M: async_graphql::ObjectType + 'static,
+    S: async_graphql::SubscriptionType + 'static,
+>(
+    runtime: plain_rs::runtime::Runtime,
+    builder: async_graphql::SchemaBuilder<Q, M, S>,
+) -> async_graphql::SchemaBuilder<Q, M, S> {
+    builder
         .extension(crate::graphql::enum_literals::EnumLiteralValidation)
         .register_output_type::<crate::graphql::resolvers::media::item::MediaItem>()
-        .data(models);
-    let builder = services.configure_schema(builder, db, host, prefs, events);
-    let builder = crate::mobile::graphql::configure(builder, mobile);
-    builder.finish()
+        .data(runtime.clone())
+        .data(crate::graphql::resolvers::tags::loader::new(
+            runtime.db.clone(),
+        ))
+        .data(runtime.db)
+        .data(runtime.host)
+        .data(runtime.prefs)
+        .data(runtime.events)
+        .data(runtime.image_models)
+        .data(runtime.mms)
+        .data(Arc::new(plain_rs::phone::Service::default()))
+        .data(runtime.media_info)
+        .data(runtime.file_platform)
+        .data(runtime.sms)
+        .data(runtime.sms_sends)
+        .data(runtime.store)
+        .data(runtime.duration_cache)
+        .data(runtime.duration_updates)
+        .data(runtime.app_files)
+        .data(runtime.shares)
+        .data(runtime.media_actions)
+        .data(runtime.files)
+        .data(runtime.audio)
+        .data(runtime.index)
+        .data(runtime.pomodoro)
+        .data(runtime.image_updates)
+        .data(runtime.feeds)
+        .data(runtime.feed_assets)
+        .data(runtime.upload_chunks)
+        .data(runtime.uploads)
+        .data(runtime.temp_values)
 }
-
 #[cfg(test)]
 #[path = "../../../tests/unit/graphql/schemas/public.rs"]
 mod tests;

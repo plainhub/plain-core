@@ -5,7 +5,7 @@
 //! path inside an existing archive (`….zip!zip!/inner/path`), and a real
 //! directory. `/zip/files` zips a search result instead.
 
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use axum::{
     body::Body,
     extract::{Query, State},
@@ -366,11 +366,11 @@ async fn media_entries(
         other => anyhow::bail!("unsupported media catalog type: {other}"),
     };
     let rows =
-        crate::services::files::catalog::MediaCatalog::new(state.db.clone(), state.host.clone())
+        plain_rs::services::files::catalog::MediaCatalog::new(state.db.clone(), state.host.clone())
             .rows(
                 kind,
                 query,
-                crate::graphql::resolvers::files::types::FileSortBy::DateDesc,
+                plain_rs::prefs::settings::FileSortBy::DateDesc,
                 i32::MAX as u32,
                 0,
             )
@@ -386,14 +386,14 @@ async fn package_entries(
     state: &ServerState,
     query: &str,
 ) -> anyhow::Result<Vec<(PathBuf, String)>> {
-    crate::services::capabilities::require(&state.host, "PACKAGES").await?;
+    plain_rs::services::capabilities::require(&state.host, "PACKAGES").await?;
     let facts = state
         .host
         .call("systemPackageFacts", json!({}))
         .await
         .map_err(anyhow::Error::msg)?;
     let facts: Vec<Value> = serde_json::from_value(facts)?;
-    let items = crate::services::packages::query::packages(&state.db, facts, query, "NAME_ASC")?;
+    let items = plain_rs::services::packages::query::packages(&state.db, facts, query, "NAME_ASC")?;
     Ok(items
         .iter()
         .filter_map(|item| {

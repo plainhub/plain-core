@@ -3,7 +3,7 @@ use axum::{Router, body::Body, routing::post};
 use tower::ServiceExt;
 
 async fn preflight(
-    core: &crate::assembly::server::ContentServer,
+    core: &crate::server::ContentServer,
     origin: &str,
     scheme: &'static str,
 ) -> Response {
@@ -35,7 +35,7 @@ async fn preflight(
 #[tokio::test]
 async fn cors_uses_actual_scheme_authority_and_safe_preflight_headers() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     core.set_build_debug(false);
     let response = preflight(&core, "https://device.local", "https").await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -72,7 +72,7 @@ async fn cors_uses_actual_scheme_authority_and_safe_preflight_headers() {
 #[tokio::test]
 async fn cross_origin_access_follows_current_shared_preferences_or_debug_configuration() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     for (any_host, debug, allowed) in [
         (false, false, false),
         (true, false, true),

@@ -117,3 +117,29 @@ impl Stream {
         Some(plain)
     }
 }
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PeerSubscriptionTarget {
+    pub peer_id: String,
+    pub public_key: String,
+}
+
+#[cfg(feature = "graphql")]
+pub mod messages;
+
+use serde::{Deserialize, Serialize};
+pub const PROTOCOL: &str = "plain-graphql-ws-v1";
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Init {
+    pub timestamp_millis: i64,
+    pub client_nonce: String,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Ack {
+    pub server_nonce: String,
+}
+
+pub mod events;

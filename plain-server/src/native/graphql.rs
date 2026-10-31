@@ -1,15 +1,10 @@
-use crate::assembly::server::ServerState;
 use crate::graphql::executor::GraphqlExecutor;
 use crate::native::events::NativeEventStream;
+use crate::server::ServerState;
 use async_graphql::{Request, Response};
-use tokio::sync::watch;
-
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PeerSubscriptionTarget {
-    pub peer_id: String,
-    pub public_key: String,
-}
+use plain_rs::{
+    host::request_scope::NativeRequestScope, protocols::graphql::PeerSubscriptionTarget,
+};
 
 #[derive(Clone)]
 pub struct NativeGraphqlExecutor {
@@ -71,43 +66,9 @@ impl NativeGraphqlExecutor {
     }
 }
 
-#[derive(Clone)]
-pub struct NativeRequestScope {
-    id: String,
-    closed: watch::Sender<bool>,
-}
-
-impl Default for NativeRequestScope {
-    fn default() -> Self {
-        let (closed, _) = watch::channel(false);
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            closed,
-        }
-    }
-}
-
-impl NativeRequestScope {
-    pub(crate) async fn wait_closed(&self) {
-        let mut closed = self.closed.subscribe();
-        let _ = closed.wait_for(|closed| *closed).await;
-    }
-
-    pub fn is_closed(&self) -> bool {
-        *self.closed.borrow()
-    }
-
-    pub fn close(&self) {
-        self.closed.send_replace(true);
-    }
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-}
-
 impl NativeGraphqlExecutor {
     pub async fn execute_scoped(&self, request: Request, scope: NativeRequestScope) -> Response {
-        let mut closed = scope.closed.subscribe();
+        let mut closed = scope.cancellation();
         let rejected = || {
             Response::from_errors(vec![async_graphql::ServerError::new(
                 "Native request scope closed",

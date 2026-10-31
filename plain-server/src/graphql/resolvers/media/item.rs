@@ -1,7 +1,8 @@
 use crate::graphql::resolvers::{
     audio::public::Audio, docs::public::Doc, images::public::Image, videos::public::Video,
 };
-use crate::graphql::types::{Instant, Long};
+use plain_rs::types::{Instant, Long};
+
 use async_graphql::{ID, Interface};
 
 #[derive(Interface)]

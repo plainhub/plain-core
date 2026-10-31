@@ -1,9 +1,9 @@
 use crate::graphql::resolvers::clipboard::models::ClipboardItem;
 use crate::graphql::types::ActionResult;
-use crate::host::bridge::Host;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Object};
 use plain_rs::db::Db;
+use plain_rs::host::bridge::Host;
 use plain_rs::prefs::Prefs;
 use std::sync::Arc;
 
@@ -60,7 +60,7 @@ impl ClipboardMutation {
             .data_opt::<crate::graphql::executor::RequestClient>()
             .map(crate::graphql::executor::RequestClient::client_id)
             .unwrap_or_default();
-        crate::services::clipboard::record_history(
+        plain_rs::services::clipboard::record_history(
             ctx.data::<Arc<Db>>()?,
             ctx.data::<Arc<Host>>()?,
             &text,
@@ -68,7 +68,7 @@ impl ClipboardMutation {
             false,
         )
         .map_err(async_graphql::Error::new)?;
-        if let Some(state) = ctx.data_opt::<crate::assembly::server::ServerState>() {
+        if let Some(state) = ctx.data_opt::<crate::server::ServerState>() {
             state.clipboard_changes.received(&text);
         }
         let result = ctx
@@ -98,7 +98,8 @@ impl ClipboardMutation {
             .clipboard_delete_query(&query)
             .map_err(async_graphql::Error::new)?;
         if affected_count > 0 {
-            ctx.data::<Arc<Host>>()?.invalidate("clipboardHistoryRefresh");
+            ctx.data::<Arc<Host>>()?
+                .invalidate("clipboardHistoryRefresh");
         }
         Ok(ActionResult {
             affected_count: affected_count.try_into()?,
@@ -109,7 +110,10 @@ impl ClipboardMutation {
 fn enabled(ctx: &Context<'_>) -> async_graphql::Result<()> {
     // plain-app's clipboard roots raise their own error here, not `no_permission`.
     if public_gate::is_local(ctx)
-        || public_gate::is_enabled(ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])
+        || plain_rs::services::device::access::is_enabled(
+            ctx.data_unchecked::<Arc<Prefs>>(),
+            &[PERMISSION],
+        )
     {
         Ok(())
     } else {

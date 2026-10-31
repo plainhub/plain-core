@@ -1,4 +1,4 @@
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
 use serde_json::json;
 
 #[tokio::test]
@@ -65,11 +65,8 @@ async fn enabling_receiver_without_samba_uses_the_public_listeners_actual_bound_
     tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
             if request["method"] == "systemCapabilities" {
-                host.reply(
-                    generation,
-                    json!({"id":request["id"],"result":[]}),
-                )
-                .unwrap();
+                host.reply(generation, json!({"id":request["id"],"result":[]}))
+                    .unwrap();
                 continue;
             }
             assert_eq!(request["method"], "mdnsMulticast");

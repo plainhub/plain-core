@@ -1,6 +1,7 @@
-use crate::assembly::server::ContentServer;
 use crate::host::headless::runtime::Runtime;
-use crate::native::graphql::{NativeGraphqlExecutor, NativeRequestScope};
+use crate::native::graphql::NativeGraphqlExecutor;
+use crate::server::ContentServer;
+use plain_rs::host::request_scope::NativeRequestScope;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
@@ -116,7 +117,7 @@ async fn query(native: &NativeGraphqlExecutor, document: &str, variables: Value)
 #[tokio::test]
 async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_the_third_node() {
     let mut first = Node::start().await;
-    let mut second = Node::start().await;
+    let second = Node::start().await;
     let third = Node::start().await;
     query(
         &second.native,
@@ -138,11 +139,20 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     .await;
     let request_id = tokio::time::timeout(Duration::from_secs(15), async {
         loop {
-            let pending = second.core.native_management().unwrap().web_login_requests(None).unwrap();
-            if let Some(request) = pending.requests.first() { break request.request_id.clone(); }
+            let pending = second
+                .core
+                .native_management()
+                .unwrap()
+                .web_login_requests(None)
+                .unwrap();
+            if let Some(request) = pending.requests.first() {
+                break request.request_id.clone();
+            }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-    }).await.unwrap();
+    })
+    .await
+    .unwrap();
     second
         .core
         .native_management()
@@ -175,33 +185,59 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     );
     let controller_before = first.core.runtime_state().cast.snapshot().version;
     let remote_scope = NativeRequestScope::default();
-    let remote_handle = first.native.open_peer_subscriptions(
-        crate::native::graphql::PeerSubscriptionTarget {
-            peer_id: second_id.into(),
-            public_key: first_peers["peers"][0]["publicKey"].as_str().unwrap().into(),
-        }, remote_scope.clone(),
-    ).unwrap();
+    let remote_handle = first
+        .native
+        .open_peer_subscriptions(
+            plain_rs::protocols::graphql::PeerSubscriptionTarget {
+                peer_id: second_id.into(),
+                public_key: first_peers["peers"][0]["publicKey"]
+                    .as_str()
+                    .unwrap()
+                    .into(),
+            },
+            remote_scope.clone(),
+        )
+        .unwrap();
     let remote = first.native.subscription_session(remote_handle).unwrap();
     remote.send(r#"{"type":"subscribe","id":"cast","payload":{"query":"subscription { dlnaSenderChanged { version items { path } } }"}}"#).unwrap();
-    async fn cast_snapshot(session: &crate::graphql::subscriptions::session::SubscriptionSession) -> Value {
+    async fn cast_snapshot(
+        session: &crate::graphql::subscriptions::session::SubscriptionSession,
+    ) -> Value {
         tokio::time::timeout(Duration::from_secs(10), async {
             loop {
                 let value: Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
                 assert_eq!(value["type"], "next", "{value}");
-                if value["payload"]["extensions"]["subscriptionReady"] == true { continue; }
+                if value["payload"]["extensions"]["subscriptionReady"] == true {
+                    continue;
+                }
                 return value["payload"]["data"]["dlnaSenderChanged"].clone();
             }
-        }).await.unwrap()
+        })
+        .await
+        .unwrap()
     }
     let initial = cast_snapshot(&remote).await;
     assert_eq!(initial["items"], json!([]));
-    query(&second.native, r#"mutation { addDlnaItem(item:{path:"/target/owned.mp3",title:"Owned"}) { version } }"#, json!({})).await;
+    query(
+        &second.native,
+        r#"mutation { addDlnaItem(item:{path:"/target/owned.mp3",title:"Owned"}) { version } }"#,
+        json!({}),
+    )
+    .await;
     let updated = cast_snapshot(&remote).await;
     assert_eq!(updated["items"], json!([{"path":"/target/owned.mp3"}]));
     assert!(updated["version"].as_u64().unwrap() > initial["version"].as_u64().unwrap());
-    assert_eq!(first.core.runtime_state().cast.snapshot().version, controller_before);
+    assert_eq!(
+        first.core.runtime_state().cast.snapshot().version,
+        controller_before
+    );
     remote_scope.close();
-    assert!(tokio::time::timeout(Duration::from_secs(2), remote.read()).await.unwrap().is_err());
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), remote.read())
+            .await
+            .unwrap()
+            .is_err()
+    );
     first.native.close_subscriptions(remote_handle);
     let content =
         json!({"type":"TEXT","value":{"text":"accepted native pairing message"}}).to_string();

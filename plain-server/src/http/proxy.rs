@@ -5,7 +5,7 @@
 //! Only the client that holds the urlToken can mint one, so the decrypted value
 //! is a peer URL chosen by the UI, not attacker input.
 
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use axum::{
     body::Body,
     extract::{ConnectInfo, Query, State},

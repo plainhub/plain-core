@@ -1,14 +1,14 @@
-use crate::assembly::server::ServerState;
 use crate::http::file_response::{self, secure};
-use crate::services::files::{
-    content::{self, Content, Options},
-    links,
-};
+use crate::server::ServerState;
 use axum::{
     extract::{Request, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
+use plain_rs::services::files::content;
+use plain_rs::services::files::content::Content;
+use plain_rs::services::files::content::Options;
+use plain_rs::services::files::links;
 
 pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
     let request = request.into_parts().0;
@@ -68,9 +68,7 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
             } => {
                 #[cfg(feature = "http_transport")]
                 {
-                    let body = state
-                        .bridge
-                        .resource(&path, state.stop.clone())
+                    let body = file_response::resource(&state.resources, &path, state.stop.clone())
                         .await
                         .map_err(|s| anyhow::anyhow!("Resource stream failed: {s}"))?;
                     secure(

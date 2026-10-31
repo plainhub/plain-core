@@ -52,7 +52,7 @@ fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
 ))]
 #[tokio::test]
 async fn local_approval_socket_controls_real_passwordless_browser_sessions() {
-    use crate::assembly::headless::login;
+    use crate::headless::login;
     use tokio_tungstenite::tungstenite::Message;
     let (directory, server, port) = passwordless_server().await;
     let service = login::Service::start(&server).await.unwrap().unwrap();
@@ -224,13 +224,9 @@ type LoginSocket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 #[cfg(feature = "http_transport")]
-async fn passwordless_server() -> (
-    tempfile::TempDir,
-    crate::assembly::server::ContentServer,
-    u16,
-) {
+async fn passwordless_server() -> (tempfile::TempDir, crate::server::ContentServer, u16) {
     let directory = tempfile::tempdir().unwrap();
-    let server = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let server = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = server.runtime_state();
     state.prefs.set("password_type", "NONE").unwrap();
     state.prefs.set("login_require_approval", true).unwrap();
@@ -266,7 +262,7 @@ async fn browser_login(
     password: Option<&str>,
 ) -> (
     LoginSocket,
-    crate::services::confirmation_channel::Channel,
+    plain_rs::services::confirmation_channel::Channel,
     plain_rs::crypto::EcdhSession,
     Vec<u8>,
 ) {
@@ -279,12 +275,12 @@ async fn browser_login(
     .await
     .unwrap();
     let mode = if password.is_some() {
-        crate::services::confirmation_channel::ConfirmationMode::Password
+        plain_rs::services::confirmation_channel::ConfirmationMode::Password
     } else {
-        crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation
+        plain_rs::services::confirmation_channel::ConfirmationMode::DeviceConfirmation
     };
     let (client, hello) =
-        crate::services::confirmation_channel::Client::start(client_id, mode).unwrap();
+        plain_rs::services::confirmation_channel::Client::start(client_id, mode).unwrap();
     socket
         .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
         .await
@@ -292,7 +288,7 @@ async fn browser_login(
     let Message::Text(hello) = login_frame(&mut socket).await else {
         panic!("signed hello required")
     };
-    let public = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    let public = plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     let (channel, reveal) = client
         .accept(
             &serde_json::from_str(&hello).unwrap(),
@@ -347,7 +343,7 @@ async fn browser_login(
 
 #[cfg(feature = "http_transport")]
 struct LoginCallbacks {
-    host: std::sync::Arc<crate::host::bridge::Host>,
+    host: std::sync::Arc<plain_rs::host::bridge::Host>,
     generation: u64,
     requests: tokio::sync::mpsc::Receiver<Value>,
 }
@@ -397,9 +393,9 @@ async fn passwordless_hello_consumes_the_same_ip_limiter_before_key_exchange() {
     use futures_util::SinkExt;
     use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
-    let (_, hello) = crate::services::confirmation_channel::Client::start(
+    let (_, hello) = plain_rs::services::confirmation_channel::Client::start(
         "browser",
-        crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
+        plain_rs::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
     )
     .unwrap();
     for index in 0..=LOGIN_ATTEMPT_LIMIT {
@@ -497,7 +493,7 @@ async fn saturated_host_recovers_the_pending_login_snapshot() {
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
     let mut callbacks = LoginCallbacks::new(&state);
-    for _ in 0..crate::host::bridge::REQUEST_CAPACITY {
+    for _ in 0..plain_rs::host::bridge::REQUEST_CAPACITY {
         state.host.notify("blocked", json!({})).unwrap();
     }
     let (_socket, _, _, _) = browser_login(&state, port, "queued-browser", None).await;
@@ -559,7 +555,7 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
             state.db.session_get(client_id).unwrap().unwrap().token,
             plain_rs::utils::base64::base64_encode(&shared)
         );
-        let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+        let signing = plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
         let signed = format!(
             "{}|COMPLETED|{}|{}|{}",
             response["clientId"].as_str().unwrap(),
@@ -656,9 +652,9 @@ async fn successful_passwordless_logins_still_count_toward_the_rolling_ip_limit(
         tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid=blocked&auth=2"))
             .await
             .unwrap();
-    let (_, hello) = crate::services::confirmation_channel::Client::start(
+    let (_, hello) = plain_rs::services::confirmation_channel::Client::start(
         "blocked",
-        crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
+        plain_rs::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
     )
     .unwrap();
     socket
@@ -748,9 +744,9 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
                 .await
                 .unwrap();
         } else {
-            let (client, hello) = crate::services::confirmation_channel::Client::start(
+            let (client, hello) = plain_rs::services::confirmation_channel::Client::start(
                 "browser",
-                crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
+                plain_rs::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
             )
             .unwrap();
             socket
@@ -760,7 +756,8 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
             let Message::Text(response) = login_frame(&mut socket).await else {
                 panic!("signed challenge required")
             };
-            let keypair = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+            let keypair =
+                plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
             let (channel, mut reveal) = client
                 .accept(
                     &serde_json::from_str(&response).unwrap(),
@@ -807,7 +804,7 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
 }
 
 fn password_protection(digest: &str) -> LoginProtection {
-    use crate::services::confirmation_channel::{Client, ConfirmationMode, ServerHandshake};
+    use plain_rs::services::confirmation_channel::{Client, ConfirmationMode, ServerHandshake};
     let (private, public) = plain_rs::crypto::ed25519_generate();
     let (client, hello) = Client::start("browser", ConfirmationMode::Password).unwrap();
     let (server, response) = ServerHandshake::start(
@@ -836,8 +833,8 @@ fn password_protection(digest: &str) -> LoginProtection {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_encryption() {
-    use crate::services::confirmation_channel::{Client, ConfirmationMode};
     use futures_util::SinkExt;
+    use plain_rs::services::confirmation_channel::{Client, ConfirmationMode};
     use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
@@ -864,7 +861,8 @@ async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_
             let Message::Text(hello) = login_frame(&mut socket).await else {
                 panic!("signed hello required")
             };
-            let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+            let signing =
+                plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
             let (keys, reveal) = client
                 .accept(
                     &serde_json::from_str(&hello).unwrap(),
@@ -1017,8 +1015,8 @@ async fn idle_connections_consume_the_login_budget_before_any_message() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn a_signed_hello_does_not_extend_the_initial_exchange_deadline() {
-    use crate::services::confirmation_channel::{Client, ConfirmationMode};
     use futures_util::{SinkExt, StreamExt};
+    use plain_rs::services::confirmation_channel::{Client, ConfirmationMode};
     use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(

@@ -1,11 +1,11 @@
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use plain_rs::events::WsEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-pub use crate::services::http_server::HttpServerState;
-pub use crate::services::settings::update_download::AppUpdateDownload;
-pub use crate::services::settings::updates::AppUpdateStatus;
+pub use plain_rs::services::http_status::HttpServerState;
+pub use plain_rs::services::settings::update_download::AppUpdateDownload;
+pub use plain_rs::services::settings::updates::AppUpdateStatus;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,7 +51,7 @@ impl NativeManagement {
 
     pub async fn lan_ipv4_addresses(&self) -> Result<Vec<String>, String> {
         self.state.native_client_id()?;
-        crate::platform::network::lan_ipv4_addresses(&self.state.host).await
+        plain_rs::platform::network::host::lan_ipv4_addresses(&self.state.host).await
     }
 
     pub fn complete_onboarding(&self) -> Result<bool, String> {
@@ -75,7 +75,7 @@ impl NativeManagement {
 
     pub async fn toggle_notification_app(&self, package_name: String) -> Result<bool, String> {
         self.state.native_client_id()?;
-        crate::services::settings::preferences::Preferences {
+        plain_rs::services::settings::preferences::Preferences {
             prefs: &self.state.prefs,
             events: Some(&self.state.events),
             server: Some(&self.state),
@@ -93,7 +93,7 @@ impl NativeManagement {
         https_port: Option<u16>,
     ) -> Result<HttpServerState, String> {
         self.state.native_client_id()?;
-        let receipt = crate::services::http_server::restart(&self.state, http_port, https_port)?;
+        let receipt = crate::http::listeners::control::restart(&self.state, http_port, https_port)?;
         let mut stop = self.state.stop.clone();
         tokio::select! {
             biased;
@@ -167,14 +167,15 @@ impl NativeManagement {
 
     async fn certificate(&self, command: serde_json::Value) -> Result<Vec<u8>, String> {
         self.state.native_client_id()?;
-        let signature = crate::services::tls_identity::server_action(&self.state, command).await?;
+        let signature =
+            plain_rs::services::tls_identity::server_action(&self.state, command).await?;
         self.content_changed();
         Ok(signature)
     }
 
     pub fn create_session(&self, name: String) -> Result<NativeSession, String> {
         self.state.native_client_id()?;
-        let session = crate::services::sessions::create(&self.state, name)
+        let session = plain_rs::services::sessions::create(&self.state, name)
             .map_err(|error| error.to_string())?;
         self.content_changed();
         Ok(NativeSession {
@@ -215,11 +216,11 @@ impl NativeManagement {
             .file_platform
             .resolve_reference(&path)
             .map_err(|error| error.to_string())?;
-        crate::services::backups::restore::stage(
+        plain_rs::services::backups::restore::stage(
             path,
             self.state.directory.clone(),
             self.state.cache.root().to_owned(),
-            self.state.bridge.clone(),
+            self.state.resources.clone(),
             self.state.stop.clone(),
         )
         .await?;
@@ -228,7 +229,7 @@ impl NativeManagement {
 
     pub async fn export_app_backup(&self) -> Result<String, String> {
         self.state.native_client_id()?;
-        crate::services::backups::export(
+        plain_rs::services::backups::export(
             self.state.db.clone(),
             self.state.prefs.clone(),
             self.state.directory.clone(),
@@ -240,7 +241,7 @@ impl NativeManagement {
 
     pub async fn create_crash_report(&self, report: String) -> Result<String, String> {
         self.state.native_client_id()?;
-        crate::services::crash_reports::write(&self.state, report).await
+        plain_rs::services::crash_reports::write(&self.state, report).await
     }
 
     pub fn verify_adb_token(&self, token: String) -> Result<bool, String> {
@@ -251,9 +252,9 @@ impl NativeManagement {
 
     pub async fn start_app_update_download(&self) -> Result<AppUpdateDownload, String> {
         self.state.native_client_id()?;
-        let result = crate::services::settings::update_download::execute(
+        let result = plain_rs::services::settings::update_download::execute(
             &self.state,
-            crate::services::settings::update_download::Command::Start,
+            plain_rs::services::settings::update_download::Command::Start,
         )
         .await
         .map_err(|error| error.to_string())?;
@@ -263,9 +264,9 @@ impl NativeManagement {
 
     pub async fn cancel_app_update_download(&self) -> Result<AppUpdateDownload, String> {
         self.state.native_client_id()?;
-        let result = crate::services::settings::update_download::execute(
+        let result = plain_rs::services::settings::update_download::execute(
             &self.state,
-            crate::services::settings::update_download::Command::Cancel,
+            plain_rs::services::settings::update_download::Command::Cancel,
         )
         .await
         .map_err(|error| error.to_string())?;
@@ -275,7 +276,7 @@ impl NativeManagement {
 
     pub async fn check_app_update(&self, automatic: bool) -> Result<AppUpdateStatus, String> {
         self.state.native_client_id()?;
-        crate::services::settings::updates::check(&self.state, automatic)
+        plain_rs::services::settings::updates::check(&self.state, automatic)
             .await
             .map_err(|error| error.to_string())
     }

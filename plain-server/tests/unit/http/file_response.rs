@@ -1,5 +1,5 @@
 use super::*;
-use crate::services::files::previews::Temporary;
+use plain_rs::services::files::previews::Temporary;
 
 #[tokio::test]
 async fn temporary_output_survives_until_the_response_body_is_consumed_or_cancelled() {

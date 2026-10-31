@@ -1,9 +1,9 @@
 use super::client_inputs::{SharedEntryInput, SharedLinkInput, SharedMessageCardInput};
 use super::client_models::{SharedBrowseResult, SharedLink};
-use crate::assembly::{server::ServerState, services::Services};
-use crate::services::peers::shared_client;
+use crate::server::ServerState;
 use async_graphql::{Context, Object};
 use plain_rs::chat::messages::share_card;
+use plain_rs::services::peers::shared_client;
 
 fn error(value: anyhow::Error) -> async_graphql::Error {
     async_graphql::Error::new(value.to_string())
@@ -55,7 +55,7 @@ impl SharedClientMutation {
     ) -> async_graphql::Result<String> {
         shared_client::cache_file(
             ctx.data::<ServerState>()?,
-            &ctx.data::<Services>()?.remote_cache,
+            &ctx.data::<plain_rs::runtime::Runtime>()?.remote_cache,
             link.try_into()?,
             url_token,
             entry.into(),

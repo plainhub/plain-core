@@ -1,7 +1,7 @@
-pub use crate::services::pomodoro::PomodoroSettings;
-pub use crate::services::pomodoro::PomodoroToday;
-use crate::services::pomodoro::Service;
 use async_graphql::{Context, Object};
+pub use plain_rs::services::pomodoro::PomodoroSettings;
+pub use plain_rs::services::pomodoro::PomodoroToday;
+use plain_rs::services::pomodoro::Service;
 use std::sync::Arc;
 #[derive(Default)]
 pub struct PomodoroQuery;
@@ -21,7 +21,6 @@ impl PomodoroQuery {
 pub struct PomodoroMutation;
 #[Object]
 impl PomodoroMutation {
-
     async fn start_pomodoro(
         &self,
         ctx: &Context<'_>,

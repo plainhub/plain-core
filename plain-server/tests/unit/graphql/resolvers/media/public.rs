@@ -1,5 +1,5 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::db::Db;
 use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
@@ -68,7 +68,7 @@ fn fixture_seeded(
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::graphql::schemas::public::build(host, events, prefs, db.clone(), directory),
+        crate::test_support::schema::build(host, events, prefs, db.clone(), directory),
         db,
     )
 }
@@ -675,8 +675,9 @@ async fn image_search_uses_the_original_query_for_text_filters_paging_and_count(
 
 #[tokio::test]
 async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
-    use crate::services::images::{index::ImageIndex, models::Runtime};
     use plain_rs::media::images::embeddings::{self, EmbeddingInput};
+    use plain_rs::services::images::index::ImageIndex;
+    use plain_rs::services::images::models::Runtime;
     use std::time::Duration;
 
     let (dir, schema, db) = fixture_seeded(
@@ -692,7 +693,7 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     models.import().await.unwrap();
     tokio::time::timeout(Duration::from_secs(10), async {
         while models.snapshot().status.status
-            != crate::graphql::resolvers::images::public_index::ImageSearchStatusType::Ready
+            != plain_rs::services::images::status::ImageSearchStatusType::Ready
         {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
@@ -848,8 +849,8 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
         captured.lock().unwrap().push((method.to_owned(), params));
         json!([{"id":"page-one"},{"id":"page-two"}])
     });
-    let catalog = crate::services::files::catalog::MediaCatalog::Platform { db, host };
-    let page = crate::services::images::search::rows(
+    let catalog = plain_rs::services::files::catalog::MediaCatalog::Platform { db, host };
+    let page = plain_rs::services::images::search::rows(
         &catalog, models, "cat", "text:cat", 100, 2, "NAME_ASC",
     )
     .await

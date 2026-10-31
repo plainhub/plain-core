@@ -1,5 +1,5 @@
 use super::*;
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -122,7 +122,11 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
     assert_eq!(value["mdnsState"]["receiver"], false);
     assert_eq!(value["mdnsState"]["services"], json!([]));
     assert_eq!(value["mdnsState"]["activity"], json!([]));
-    let invalid = executor.execute(async_graphql::Request::new(r#"mutation{setPref(key:"mdns_hostname",value:"invalid.example")}"#)).await;
+    let invalid = executor
+        .execute(async_graphql::Request::new(
+            r#"mutation{setPref(key:"mdns_hostname",value:"invalid.example")}"#,
+        ))
+        .await;
     assert!(!invalid.errors.is_empty());
     assert_eq!(
         plain_rs::prefs::security::snapshot(&state.prefs)

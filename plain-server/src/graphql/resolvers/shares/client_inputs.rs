@@ -1,4 +1,5 @@
-use crate::graphql::types::{Instant, Long};
+use plain_rs::types::{Instant, Long};
+
 use async_graphql::{ID, InputObject};
 use chrono::SubsecRound;
 use plain_rs::{chat::messages::share_card, files::shares::client};

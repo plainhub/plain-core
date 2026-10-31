@@ -1,6 +1,5 @@
 #[path = "../../library/fixtures.rs"]
 mod fixtures;
-use crate::db::Db;
 use fixtures::*;
 
 use crate::db::models::simple::ArchivedConversationRow;

@@ -16,3 +16,21 @@ pub mod network;
 
 #[cfg(any(feature = "library", feature = "storage-platform"))]
 pub mod volumes;
+
+#[cfg(feature = "runtime")]
+pub mod system;
+
+#[cfg(feature = "runtime")]
+pub mod disks;
+
+#[cfg(feature = "runtime")]
+pub mod version;
+
+#[cfg(feature = "runtime")]
+pub mod image_catalog;
+
+#[cfg(feature = "runtime")]
+pub mod startup;
+
+#[cfg(feature = "runtime")]
+pub mod media_cache;

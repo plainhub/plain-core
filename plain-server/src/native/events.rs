@@ -1,4 +1,4 @@
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use plain_rs::events::WsEvent;
 use tokio::sync::broadcast;
 
@@ -6,19 +6,26 @@ pub struct NativeEventStream {
     state: ServerState,
     events: broadcast::Receiver<WsEvent>,
     client_id: String,
-    scope: super::graphql::NativeRequestScope,
+    scope: plain_rs::host::request_scope::NativeRequestScope,
 }
 
 impl NativeEventStream {
     pub(crate) fn scoped(
         state: ServerState,
         client_id: String,
-        scope: super::graphql::NativeRequestScope,
+        scope: plain_rs::host::request_scope::NativeRequestScope,
     ) -> Result<Self, String> {
         let key = plain_rs::utils::base64::base64_decode(&state.native_url_token()?);
-        let _: [u8; 32] = key.try_into().map_err(|_| "local event token unavailable".to_owned())?;
+        let _: [u8; 32] = key
+            .try_into()
+            .map_err(|_| "local event token unavailable".to_owned())?;
         let events = state.events.subscribe();
-        Ok(Self { state, events, client_id, scope })
+        Ok(Self {
+            state,
+            events,
+            client_id,
+            scope,
+        })
     }
 
     pub async fn next_ui_frame(&mut self) -> Result<Option<Vec<u8>>, String> {
@@ -41,13 +48,17 @@ impl NativeEventStream {
                 },
             };
             if event.is_host_event()
-                || event.target_cid.as_ref().is_some_and(|target| target != &self.client_id)
+                || event
+                    .target_cid
+                    .as_ref()
+                    .is_some_and(|target| target != &self.client_id)
             {
                 continue;
             }
             if let Some(payload) = event.binary_payload {
                 return plain_rs::protocols::websocket::encode_raw(event.event_type, &payload)
-                    .map(Some).ok_or_else(|| "invalid native event frame".into());
+                    .map(Some)
+                    .ok_or_else(|| "invalid native event frame".into());
             }
         }
     }

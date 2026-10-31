@@ -24,3 +24,7 @@ mod audio_moves;
 
 #[cfg(feature = "trash")]
 pub mod trash;
+
+pub mod walk;
+
+pub mod resource_id;

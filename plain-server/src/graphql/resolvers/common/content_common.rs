@@ -1,7 +1,7 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
-use crate::graphql::types::Instant;
 use async_graphql::{Context, ID};
 use chrono::{DateTime, Utc};
+use plain_rs::types::Instant;
 use std::sync::Arc;
 
 use plain_rs::db::Db;

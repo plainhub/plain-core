@@ -1,5 +1,4 @@
-use super::*;
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
 use async_graphql::{Request, Variables};
 use plain_rs::chat::enums::{DeviceType, PeerStatus};
 use plain_rs::db::{
@@ -83,7 +82,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
 #[tokio::test]
 async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let executor = core.native_graphql().unwrap();
     let resolver = core.peer_proxy_resolver();
@@ -109,7 +108,13 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
     let value = response.data.into_json().unwrap();
     assert_eq!(value["peers"][0]["port"], 9443);
     assert_eq!(value["peers"][0]["token"], "session");
-    assert!(core.native_management().unwrap().logout_peer("peer-a".into()).await.unwrap());
+    assert!(
+        core.native_management()
+            .unwrap()
+            .logout_peer("peer-a".into())
+            .await
+            .unwrap()
+    );
     let response = executor.execute(async_graphql::Request::new(query)).await;
     assert_eq!(
         response.data.into_json().unwrap()["peers"][0]["token"],
@@ -144,7 +149,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
 #[tokio::test]
 async fn remote_requests_cannot_access_or_change_local_login_sessions() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state
         .db
@@ -181,7 +186,7 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
 #[tokio::test]
 async fn retired_client_name_mirroring_is_not_available_through_any_main_transport() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let document = r#"mutation{updatePeerName(id:"peer",name:"untrusted")}"#;
     let native = core

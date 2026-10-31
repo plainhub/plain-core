@@ -1,5 +1,5 @@
 use super::*;
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
 use futures_util::{SinkExt, StreamExt};
 use plain_rs::chat::enums::DeviceType;
 use plain_rs::chat::enums::PeerStatus;
@@ -7,6 +7,7 @@ use plain_rs::db::DPeer;
 use plain_rs::db::Db;
 use plain_rs::db::chat_store::SaveMode;
 use plain_rs::db::chat_store::peers;
+use std::sync::Arc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 #[tokio::test]
@@ -35,7 +36,7 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
         )
         .await
         .unwrap();
-    let client = reqwest::Client::new();
+    let _client = reqwest::Client::new();
     for action in ["NOPE", "SNAPSHOT"] {
         assert!(control(&server, action).await.is_err());
     }

@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn init_requires_a_client_id_and_returns_forbidden_when_access_is_disabled() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let remote = ConnectInfo("127.0.0.1:12345".parse().unwrap());
     assert_eq!(
@@ -28,7 +28,7 @@ async fn init_requires_a_client_id_and_returns_forbidden_when_access_is_disabled
 async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_replacing_the_password()
  {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let id = state.native_client_id().unwrap();
     assert!(state.db.session_get(&id).unwrap().is_none());
@@ -66,10 +66,10 @@ async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_re
 #[tokio::test]
 async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_explicit_state() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state.prefs.set("password", "preserved-password").unwrap();
-    crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     for mode in ["FIXED", "NONE"] {
         state.prefs.set("password_type", mode).unwrap();
         let before = std::fs::read(directory.path().join("prefs.json")).unwrap();

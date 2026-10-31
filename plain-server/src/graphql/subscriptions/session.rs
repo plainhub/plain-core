@@ -1,14 +1,13 @@
-use super::{
-    events::authorize,
-    operation::{self, ClientMessage, ServerMessage},
-    registry::EventSpec,
-};
-use crate::{
-    assembly::server::ServerState,
-    graphql::executor::{RequestContext, RequestOrigin},
-    native::graphql::NativeRequestScope,
-};
+use super::events::authorize;
+use super::operation;
+use crate::graphql::executor::RequestContext;
+use crate::graphql::executor::RequestOrigin;
+use crate::server::ServerState;
 use futures_util::StreamExt;
+use plain_rs::host::request_scope::NativeRequestScope;
+use plain_rs::protocols::graphql::events::EventSpec;
+use plain_rs::protocols::graphql::messages::ClientMessage;
+use plain_rs::protocols::graphql::messages::ServerMessage;
 use std::{
     collections::HashMap,
     sync::{
@@ -52,7 +51,7 @@ pub struct Session {
     operations: Mutex<HashMap<String, Operation>>,
 }
 fn next_id() -> Result<u64, String> {
-    NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+    NEXT.try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
         value.checked_add(1).filter(|next| *next <= i64::MAX as u64)
     })
     .map_err(|_| "Subscription handle exhausted".into())
@@ -61,7 +60,7 @@ fn next_id() -> Result<u64, String> {
 #[derive(Clone)]
 pub enum SubscriptionSession {
     Local(Arc<Session>),
-    Peer(Arc<crate::services::peers::subscriptions::PeerSubscription>),
+    Peer(Arc<plain_rs::services::peers::subscriptions::PeerSubscription>),
 }
 impl SubscriptionSession {
     pub fn send(&self, message: &str) -> Result<(), String> {
@@ -143,12 +142,13 @@ impl Sessions {
     pub(crate) fn open_peer(
         self: &Arc<Self>,
         state: ServerState,
-        target: crate::native::graphql::PeerSubscriptionTarget,
+        target: plain_rs::protocols::graphql::PeerSubscriptionTarget,
         scope: NativeRequestScope,
     ) -> Result<u64, String> {
         let id = next_id()?;
-        let session =
-            crate::services::peers::subscriptions::PeerSubscription::open(state, target, scope)?;
+        let session = plain_rs::services::peers::subscriptions::PeerSubscription::open(
+            state.core, target, scope,
+        )?;
         let mut entries = self.entries.lock().map_err(|error| error.to_string())?;
         if entries.len() >= 128 {
             session.close();
@@ -177,7 +177,9 @@ impl Sessions {
         let mut clients: Vec<_> = entries
             .values()
             .filter_map(|session| match session {
-                SubscriptionSession::Local(session) if *session.online.lock().unwrap() => Some(session.client.clone()),
+                SubscriptionSession::Local(session) if *session.online.lock().unwrap() => {
+                    Some(session.client.clone())
+                }
                 _ => None,
             })
             .collect();
@@ -185,17 +187,28 @@ impl Sessions {
         clients.dedup();
         clients
     }
-    pub(crate) fn notify_snapshot(&self, host: &crate::host::bridge::Host) -> Result<(), String> {
+    pub(crate) fn notify_snapshot(
+        &self,
+        host: &plain_rs::host::bridge::Host,
+    ) -> Result<(), String> {
         let _delivery = self.host_delivery.lock().unwrap();
-        host.notify("onlineClientsChanged", serde_json::json!({"clientIds":self.snapshot()}))
+        host.notify(
+            "onlineClientsChanged",
+            serde_json::json!({"clientIds":self.snapshot()}),
+        )
     }
 
     fn notify(state: &ServerState) {
         let sessions = &state.subscription_sessions;
         let mut recovering = sessions.host_delivery.lock().unwrap();
-        if let Err(error) = state.host.notify("onlineClientsChanged", serde_json::json!({"clientIds":sessions.snapshot()})) {
+        if let Err(error) = state.host.notify(
+            "onlineClientsChanged",
+            serde_json::json!({"clientIds":sessions.snapshot()}),
+        ) {
             log::warn!("Online clients callback: {error}");
-            if *recovering || !state.host.connected() { return; }
+            if *recovering || !state.host.connected() {
+                return;
+            }
             *recovering = true;
             let state = state.clone();
             tokio::spawn(async move {
@@ -204,7 +217,9 @@ impl Sessions {
                 let mut recovering = sessions.host_delivery.lock().unwrap();
                 if let Ok(permit) = permit {
                     if let Err(error) = state.host.notify_reserved_callback(
-                        "onlineClientsChanged", serde_json::json!({"clientIds":sessions.snapshot()}), permit,
+                        "onlineClientsChanged",
+                        serde_json::json!({"clientIds":sessions.snapshot()}),
+                        permit,
                     ) {
                         log::warn!("Online clients snapshot callback: {error}");
                     }
@@ -279,8 +294,8 @@ impl Session {
             return false;
         }
         let current =
-            crate::services::sessions::local_key(&self.state, &self.client).or_else(|| {
-                crate::services::sessions::key(&self.state.db, &self.client)
+            plain_rs::services::sessions::local_key(&self.state, &self.client).or_else(|| {
+                plain_rs::services::sessions::key(&self.state.db, &self.client)
                     .ok()
                     .flatten()
             });

@@ -1,5 +1,5 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use serde_json::Value;
 use serde_json::json;
 fn fixture() -> (tempfile::TempDir, PublicSchema) {
@@ -9,10 +9,10 @@ fn fixture() -> (tempfile::TempDir, PublicSchema) {
         Arc::new(plain_rs::prefs::Prefs::load(&plain_rs::prefs::default_path(dir.path())).unwrap());
     let db = Arc::new(plain_rs::db::Db::open(&path).unwrap());
     db.with_conn(|conn| conn.execute_batch("CREATE TABLE test_rows (key TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT 'untitled', size INTEGER, ratio REAL, bytes BLOB); INSERT INTO test_rows VALUES('a','First',42,1.5,NULL),('b','Second',43,2.5,NULL);").unwrap());
-    let host = Arc::new(crate::host::bridge::Host::default());
+    let host = Arc::new(plain_rs::host::bridge::Host::default());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema =
-        crate::graphql::schemas::public::build(host, events, prefs, db, dir.path().to_path_buf());
+        crate::test_support::schema::build(host, events, prefs, db, dir.path().to_path_buf());
     (dir, schema)
 }
 

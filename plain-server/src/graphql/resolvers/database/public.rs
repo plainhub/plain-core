@@ -2,9 +2,9 @@
 //! view over the app's SQLite file.
 //!
 
-use crate::graphql::types::Long;
 use async_graphql::{Context, Enum, Object, SimpleObject};
 use plain_rs::db::devtools::SqliteFile;
+use plain_rs::types::Long;
 use std::sync::Arc;
 
 #[derive(SimpleObject, Clone, Debug, Default)]

@@ -1,7 +1,7 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
-use crate::host::bridge::Host;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::db::Db;
+use plain_rs::host::bridge::Host;
 use plain_rs::media::play_history;
 use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
@@ -108,7 +108,7 @@ fn fixture_with(
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::graphql::schemas::public::build(host, events, prefs, db, directory),
+        crate::test_support::schema::build(host, events, prefs, db, directory),
     )
 }
 
@@ -1099,7 +1099,7 @@ async fn browser_selection_advances_in_rust_without_dispatching_the_server_playe
     let (_dir, schema) = fixture_with(GRANTED, |method, _| panic!("unexpected host call {method}"));
     let browser_db = database(&schema).remote_audio();
     schema
-        .data::<Arc<crate::services::audio::host::Audio>>()
+        .data::<Arc<plain_rs::services::audio::host::Audio>>()
         .unwrap()
         .remote()
         .run_playback(|db, _| plain_rs::media::audio::playback::snapshot(db))
@@ -1154,7 +1154,7 @@ async fn playback_snapshot_reuses_identity_and_reads_sdk_playback_facts_once() {
         json!({"isPlaying":true,"positionMs":123})
     });
     schema
-        .data::<Arc<crate::services::audio::host::Audio>>()
+        .data::<Arc<plain_rs::services::audio::host::Audio>>()
         .unwrap()
         .run_playback(|db, _| plain_rs::media::audio::playback::snapshot(db))
         .await
@@ -1282,9 +1282,7 @@ async fn native_album_tags_reach_playlist_covers_without_platform_catalog_calls(
     std::fs::write(&second, guest).unwrap();
     let metadata = [&first, &second]
         .into_iter()
-        .map(|path| {
-            plain_media::metadata::file_facts::read_file_metadata(path, DataType::Audio).unwrap()
-        })
+        .map(|path| plain_rs::media::file_facts::read_file_metadata(path, DataType::Audio).unwrap())
         .collect::<Vec<_>>();
     let rows = database(&schema).record_media_files(&metadata).unwrap();
     assert_eq!(rows[0].artist, "Track Artist");

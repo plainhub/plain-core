@@ -1,20 +1,20 @@
-use super::build;
+use crate::test_support::schema::build;
+
 use plain_rs::db::Db;
 use plain_rs::prefs::Prefs;
 use std::sync::Arc;
 
 fn sdl() -> String {
-    let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
-    let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    let (events, _) = tokio::sync::broadcast::channel(16);
-    build(
-        Arc::new(crate::host::bridge::Host::default()),
-        events,
-        prefs,
-        db,
-        dir.path().to_path_buf(),
+    async_graphql::Schema::build(
+        super::Query::<crate::graphql::resolvers::mobile::MobileQuery>::default(),
+        super::Mutation::<crate::graphql::resolvers::mobile::MobileMutation>::default(),
+        crate::graphql::subscriptions::Subscription::<
+            crate::graphql::subscriptions::sms::SmsSubscriptions,
+        >::default(),
     )
+    .extension(crate::graphql::enum_literals::EnumLiteralValidation)
+    .register_output_type::<crate::graphql::resolvers::media::item::MediaItem>()
+    .finish()
     .sdl()
     .lines()
     .map(str::trim_end)
@@ -421,7 +421,7 @@ async fn public_schema_pomodoro_roots_execute() {
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema = build(
-        Arc::new(crate::host::bridge::Host::default()),
+        Arc::new(plain_rs::host::bridge::Host::default()),
         events,
         prefs,
         db,
@@ -572,7 +572,22 @@ fn base_type(ty: &str) -> String {
 
 #[tokio::test]
 async fn no_root_field_fails_for_unregistered_schema_data() {
-    let sdl = sdl();
+    let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
+    let dir = tempfile::tempdir().unwrap();
+    let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let (events, _) = tokio::sync::broadcast::channel(16);
+    let probe_prefs = prefs.clone();
+    let host = Arc::new(plain_rs::host::bridge::Host::default());
+    let (generation, mut requests) = host.connect();
+    let responses = host.clone();
+    let provider = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            responses.reply(generation, serde_json::json!({"id":request["id"],"error":"platform unavailable in schema registration probe"})).unwrap();
+        }
+    });
+    let schema = build(host.clone(), events, prefs, db, dir.path().to_path_buf());
+
+    let sdl = schema.sdl();
     let fields = sdl_fields(&sdl);
     let enums = sdl_enums(&sdl);
     let is_leaf = |ty: &str| PROBE_LEAVES.contains(&ty) || enums.iter().any(|e| e == ty);
@@ -593,30 +608,16 @@ async fn no_root_field_fails_for_unregistered_schema_data() {
         .map(|(_, name, ty)| (name.clone(), ty.clone()))
         .collect();
 
-    let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
-    let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    let (events, _) = tokio::sync::broadcast::channel(16);
-    let probe_prefs = prefs.clone();
-    let host = Arc::new(crate::host::bridge::Host::default());
-    let (generation, mut requests) = host.connect();
-    let responses = host.clone();
-    let provider = tokio::spawn(async move {
-        while let Some(request) = requests.recv().await {
-            responses.reply(generation, serde_json::json!({"id":request["id"],"error":"platform unavailable in schema registration probe"})).unwrap();
-        }
-    });
-    let schema = build(host.clone(), events, prefs, db, dir.path().to_path_buf());
-
     let mut unregistered = Vec::new();
     let mut unwalkable = Vec::new();
-    // `peers` resolves against `assembly::server::ServerState`, which the HTTP
-    // layer registers per request; without it the probe reports the root as
-    // unregistered. A real server instance provides the genuine type.
-    let server = crate::assembly::server::ContentServer::start(
+    // Request-scoped resolvers use a genuine server state.
+    let mut config = plain_rs::platform::startup::config();
+    config.cache_dir = Some(dir.path().join("cache").to_string_lossy().into_owned());
+    let server = crate::server::ContentServer::start_core_with_config(
         dir.path(),
         &plain_rs::utils::base64::base64_encode(&[7; 32]),
         probe_prefs,
+        config,
     )
     .expect("probe server");
     let state_host = server.runtime_state().host.clone();
@@ -731,5 +732,118 @@ fn media_types_preserve_the_shared_interface() {
         "updatedAt: Instant!",
     ] {
         assert!(interface.contains(field), "missing {field}");
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tokio::test]
+async fn deployed_non_mobile_schema_rejects_mobile_roots_even_with_mobile_feature() {
+    let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
+    let dir = tempfile::tempdir().unwrap();
+    let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let (events, _) = tokio::sync::broadcast::channel(16);
+    let schema = build(
+        Arc::new(plain_rs::host::bridge::Host::default()),
+        events,
+        prefs,
+        db,
+        dir.path().to_path_buf(),
+    );
+    let response = schema.execute("{ __schema { queryType { fields { name } } mutationType { fields { name } } subscriptionType { fields { name } } types { name } } }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let root = &data["__schema"];
+    for (kind, absent) in [
+        (
+            "queryType",
+            &[
+                "contacts",
+                "contactCount",
+                "calls",
+                "callCount",
+                "sms",
+                "smsCount",
+                "packages",
+            ][..],
+        ),
+        (
+            "mutationType",
+            &[
+                "sendSms",
+                "sendMms",
+                "deleteContacts",
+                "deleteCalls",
+                "uninstallPackage",
+            ][..],
+        ),
+        (
+            "subscriptionType",
+            &[
+                "smsProviderChanged",
+                "smsSendResult",
+                "mmsSendResult",
+                "mmsSent",
+            ][..],
+        ),
+    ] {
+        let fields: Vec<_> = root[kind]["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v["name"].as_str().unwrap())
+            .collect();
+        for field in absent {
+            assert!(!fields.contains(field), "{kind}.{field} exposed");
+        }
+    }
+    let names: Vec<_> = root["types"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["name"].as_str().unwrap())
+        .collect();
+    for name in ["Contact", "Call", "Sms", "SmsSendResult", "MmsSendResult"] {
+        assert!(!names.contains(&name), "mobile type {name} exposed");
+    }
+    for query in [
+        "{ contacts(query: \"\", offset: 0, limit: 1) { id } }",
+        "mutation { sendSms }",
+    ] {
+        let response = schema.execute(query).await;
+        assert!(
+            response
+                .errors
+                .iter()
+                .any(|error| error.message.contains("Unknown field")),
+            "{:?}",
+            response.errors
+        );
+    }
+    use futures_util::StreamExt;
+    let response = schema
+        .execute_stream("subscription { smsSendResult { requestId } }")
+        .next()
+        .await
+        .unwrap();
+    assert!(
+        response
+            .errors
+            .iter()
+            .any(|error| error.message.contains("Unknown field")),
+        "{:?}",
+        response.errors
+    );
+    for field in [
+        "smsProviderChanged",
+        "smsSendResult",
+        "mmsSendResult",
+        "mmsSent",
+    ] {
+        assert!(
+            crate::graphql::subscriptions::operation::spec(&async_graphql::Request::new(format!(
+                "subscription {{ {field} }}"
+            )))
+            .is_err()
+        );
     }
 }

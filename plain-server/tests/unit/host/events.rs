@@ -1,5 +1,5 @@
 use super::*;
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
 use std::{sync::Arc, time::Duration};
 
 fn server(dir: &tempfile::TempDir) -> ContentServer {
@@ -109,7 +109,11 @@ async fn native_requests_reply_and_replacement_cancel_pending_calls() {
         if request["method"] == "fixture" {
             break request;
         }
-        let result = if request["method"] == "systemCapabilities" { json!([]) } else { json!(null) };
+        let result = if request["method"] == "systemCapabilities" {
+            json!([])
+        } else {
+            json!(null)
+        };
         bridge
             .reply(json!({"id":request["id"],"result":result}))
             .unwrap();
@@ -124,7 +128,11 @@ async fn native_requests_reply_and_replacement_cancel_pending_calls() {
         if request["method"] == "fixture" {
             break;
         }
-        let result = if request["method"] == "systemCapabilities" { json!([]) } else { json!(null) };
+        let result = if request["method"] == "systemCapabilities" {
+            json!([])
+        } else {
+            json!(null)
+        };
         bridge
             .reply(json!({"id":request["id"],"result":result}))
             .unwrap();
@@ -156,10 +164,18 @@ async fn replacing_a_host_wakes_a_disconnection_waiter() {
     std::future::poll_fn(|context| {
         assert!(std::future::Future::poll(waiting.as_mut(), context).is_pending());
         std::task::Poll::Ready(())
-    }).await;
+    })
+    .await;
     let replacement = server.host_events().unwrap();
-    tokio::time::timeout(Duration::from_secs(3), waiting).await.unwrap();
-    assert!(server.runtime_state().host.is_current(replacement.generation));
+    tokio::time::timeout(Duration::from_secs(3), waiting)
+        .await
+        .unwrap();
+    assert!(
+        server
+            .runtime_state()
+            .host
+            .is_current(replacement.generation)
+    );
     server.shutdown().await;
 }
 

@@ -1,7 +1,7 @@
 use super::events;
-use crate::graphql::resolvers::notifications::types::Notification;
 use async_graphql::{Context, Result, Subscription};
 use futures_util::stream::BoxStream;
+use plain_rs::services::notifications::types::Notification;
 
 #[derive(Default)]
 pub struct NotificationsSubscriptions;

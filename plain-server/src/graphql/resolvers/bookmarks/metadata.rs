@@ -1,5 +1,6 @@
-use crate::services::bookmarks::{PageMetadata, fetch_page_metadata};
 use async_graphql::Object;
+use plain_rs::services::bookmarks::PageMetadata;
+use plain_rs::services::bookmarks::fetch_page_metadata;
 
 #[derive(Default)]
 pub struct PageMetadataQuery;

@@ -1,7 +1,7 @@
-use crate::services::settings::security_preferences::security_key;
-use crate::services::settings::security_preferences::SecurityPreferences;
-use crate::services::settings::preferences::Preferences;
 use async_graphql::{Context, Result};
+use plain_rs::services::settings::preferences::Preferences;
+use plain_rs::services::settings::security_preferences::SecurityPreferences;
+use plain_rs::services::settings::security_preferences::security_key;
 use plain_rs::{events::WsEvent, prefs::Prefs};
 use serde_json::Value;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ pub(crate) fn preferences<'a>(ctx: &'a Context<'_>) -> Result<Preferences<'a>> {
         prefs: prefs(ctx)?,
         events: events(ctx),
         #[cfg(feature = "core")]
-        server: ctx.data_opt::<crate::assembly::server::ServerState>(),
+        server: ctx.data_opt::<plain_rs::runtime::Runtime>(),
     })
 }
 
@@ -36,11 +36,22 @@ pub(crate) async fn update(
 ) -> Result<bool> {
     let fields = serde_json::to_value(&patch)?;
     for (field, value) in fields.as_object().unwrap() {
-        if value.is_null() { continue; }
+        if value.is_null() {
+            continue;
+        }
         let key = match field.as_str() {
             "feedAutoRefreshIntervalSec" => "feed_auto_refresh_interval".to_owned(),
             "packageSortBy" => "pkg_sort_by".to_owned(),
-            _ => field.chars().flat_map(|c| if c.is_ascii_uppercase() { vec!['_', c.to_ascii_lowercase()] } else { vec![c] }).collect(),
+            _ => field
+                .chars()
+                .flat_map(|c| {
+                    if c.is_ascii_uppercase() {
+                        vec!['_', c.to_ascii_lowercase()]
+                    } else {
+                        vec![c]
+                    }
+                })
+                .collect(),
         };
         super::public::authorize(ctx, &key)?;
     }
@@ -52,7 +63,7 @@ fn security_preferences<'a>(ctx: &'a Context<'_>) -> Result<SecurityPreferences<
         prefs: prefs(ctx)?,
         events: events(ctx),
         #[cfg(feature = "core")]
-        server: ctx.data_opt::<crate::assembly::server::ServerState>(),
+        server: ctx.data_opt::<plain_rs::runtime::Runtime>(),
     })
 }
 

@@ -1,7 +1,6 @@
 use crate::db::{Db, MediaFileMetadata, TrashedMessageRow};
 use crate::enums::DataType;
 use std::path::Path;
-use std::sync::Arc;
 
 fn register(db: &Db) -> String {
     db.record_media_files(&[MediaFileMetadata {

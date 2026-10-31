@@ -1,5 +1,5 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::db::Db;
 use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
@@ -49,19 +49,22 @@ fn fixture(
     prefs.set("device_name", "Pixel 8").unwrap();
     prefs.set("developer_mode", true).unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
-    let host = Arc::new(Host::with_startup_config(crate::host::startup::StartupConfig {
-        device_type: plain_rs::chat::enums::DeviceType::Phone,
-        build_channel: "GITHUB".into(),
-        downloads_dir: "/downloads".into(),
-        debug: false,
-        ..crate::platform::startup::config()
-    }).unwrap());
+    let host = Arc::new(
+        Host::with_startup_config(plain_rs::host::startup::StartupConfig {
+            device_type: plain_rs::chat::enums::DeviceType::Phone,
+            build_channel: "GITHUB".into(),
+            downloads_dir: "/downloads".into(),
+            debug: false,
+            ..plain_rs::platform::startup::config()
+        })
+        .unwrap(),
+    );
     stub(host.clone(), handler);
     let directory = dir.path().to_path_buf();
     let (events, _) = tokio::sync::broadcast::channel(16);
-    let schema = crate::graphql::schemas::public::build(host, events, prefs, db, directory);
+    let schema = crate::test_support::schema::build(host, events, prefs, db, directory);
     schema
-        .data::<crate::assembly::services::Services>()
+        .data::<plain_rs::runtime::Runtime>()
         .unwrap()
         .logs
         .set_path(dir.path().join("plain.log"))
@@ -323,13 +326,13 @@ async fn a_temp_value_is_echoed_rather_than_read_back() {
 
 #[tokio::test]
 async fn discovery_commands_use_the_shared_runtime_and_platform_multicast_lease() {
-    let _runtime = crate::services::discovery::mdns_runtime::TEST_LOCK
+    let _runtime = plain_rs::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("client_id", "discovery-test").unwrap();
-    let server = crate::assembly::server::ContentServer::start(
+    let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_rs::utils::base64::base64_encode(&[4; 32]),
         prefs,

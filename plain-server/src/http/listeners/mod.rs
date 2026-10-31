@@ -1,4 +1,10 @@
 pub mod bind;
+#[cfg(feature = "core")]
+pub(crate) mod control;
+#[cfg(feature = "core")]
+pub(crate) mod lifecycle;
+#[cfg(feature = "core")]
+mod public_server;
 
 use axum::{Extension, Router};
 
@@ -188,7 +194,7 @@ impl Drop for ListenerTaskGuard {
 
 pub fn tls_config(certificate_pem: &[u8], private_key_pem: &[u8]) -> Result<RustlsConfig, String> {
     Ok(RustlsConfig::from_config(std::sync::Arc::new(
-        crate::services::tls_identity::config(certificate_pem, private_key_pem)?,
+        plain_rs::services::tls_identity::config(certificate_pem, private_key_pem)?,
     )))
 }
 

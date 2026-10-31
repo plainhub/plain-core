@@ -125,3 +125,27 @@ pub mod sms_sends;
     feature = "sqlite_browse"
 ))]
 mod sqlite;
+
+#[cfg(feature = "runtime")]
+pub mod services;
+
+#[cfg(feature = "library")]
+pub mod types;
+
+#[cfg(feature = "runtime")]
+pub mod host;
+
+#[cfg(feature = "runtime")]
+pub mod runtime;
+
+#[cfg(all(test, feature = "runtime"))]
+#[path = "../tests/support/runtime.rs"]
+pub(crate) mod test_runtime;
+
+#[cfg(all(test, feature = "runtime"))]
+#[path = "../tests/support/host.rs"]
+pub(crate) mod test_support;
+
+#[cfg(all(feature = "runtime", any(test, feature = "test-seams")))]
+#[path = "../tests/support/apk.rs"]
+pub mod test_apk;

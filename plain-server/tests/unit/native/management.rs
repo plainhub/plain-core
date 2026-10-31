@@ -1,10 +1,9 @@
-use super::*;
 use crate::graphql::executor::{RequestContext, execute_graphql};
 
 #[tokio::test]
 async fn retired_management_roots_are_unavailable_to_local_and_authenticated_remote_graphql() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open_with_cache(
+    let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
     )
@@ -16,31 +15,76 @@ async fn retired_management_roots_are_unavailable_to_local_and_authenticated_rem
         ("resetPassword", r#"mutation{resetPassword}"#),
         ("resetUrlToken", r#"mutation{resetUrlToken}"#),
         ("resetAdbToken", r#"mutation{resetAdbToken}"#),
-        ("setNotificationFilterMode", r#"mutation{setNotificationFilterMode(mode:"allowlist"){affectedCount}}"#),
-        ("clearNotificationFilterApps", r#"mutation{clearNotificationFilterApps{affectedCount}}"#),
+        (
+            "setNotificationFilterMode",
+            r#"mutation{setNotificationFilterMode(mode:"allowlist"){affectedCount}}"#,
+        ),
+        (
+            "clearNotificationFilterApps",
+            r#"mutation{clearNotificationFilterApps{affectedCount}}"#,
+        ),
         ("pairingCode", r#"{pairingCode}"#),
-        ("isPairingRequestCurrent", r#"{isPairingRequestCurrent(id:"fixture",signature:"stale")}"#),
+        (
+            "isPairingRequestCurrent",
+            r#"{isPairingRequestCurrent(id:"fixture",signature:"stale")}"#,
+        ),
         ("logoutPeer", r#"mutation{logoutPeer(id:"fixture")}"#),
-        ("controlPeerStatus", r#"mutation{controlPeerStatus(action:RECONNECT)}"#),
+        (
+            "controlPeerStatus",
+            r#"mutation{controlPeerStatus(action:RECONNECT)}"#,
+        ),
         ("filePaths", r#"{filePaths(paths:[])}"#),
-        ("importNoteImage", r#"mutation{importNoteImage(source:"missing",fileName:"fixture.png")}"#),
-        ("importPomodoroSound", r#"mutation{importPomodoroSound(source:"missing")}"#),
+        (
+            "importNoteImage",
+            r#"mutation{importNoteImage(source:"missing",fileName:"fixture.png")}"#,
+        ),
+        (
+            "importPomodoroSound",
+            r#"mutation{importPomodoroSound(source:"missing")}"#,
+        ),
         ("dlnaReceiver", r#"{dlnaReceiver}"#),
-        ("controlDlnaReceiver", r#"mutation{controlDlnaReceiver(input:{action:RETRY})}"#),
+        (
+            "controlDlnaReceiver",
+            r#"mutation{controlDlnaReceiver(input:{action:RETRY})}"#,
+        ),
         ("scanHistory", r#"{scanHistory}"#),
-        ("addScanHistory", r#"mutation{addScanHistory(text:"fixture")}"#),
-        ("removeScanHistory", r#"mutation{removeScanHistory(text:"fixture")}"#),
-        ("acquireMdnsDebugSession", r#"mutation{acquireMdnsDebugSession(token:"fixture"){revision}}"#),
-        ("releaseMdnsDebugSession", r#"mutation{releaseMdnsDebugSession(token:"fixture"){revision}}"#),
+        (
+            "addScanHistory",
+            r#"mutation{addScanHistory(text:"fixture")}"#,
+        ),
+        (
+            "removeScanHistory",
+            r#"mutation{removeScanHistory(text:"fixture")}"#,
+        ),
+        (
+            "acquireMdnsDebugSession",
+            r#"mutation{acquireMdnsDebugSession(token:"fixture"){revision}}"#,
+        ),
+        (
+            "releaseMdnsDebugSession",
+            r#"mutation{releaseMdnsDebugSession(token:"fixture"){revision}}"#,
+        ),
         ("tlsCertificateSignature", "{tlsCertificateSignature}"),
         ("systemSettings", "{systemSettings{password}}"),
         ("userSettings", "{userSettings{service}}"),
         ("systemPrefs", "{systemPrefs}"),
         ("userPrefs", "{userPrefs}"),
-        ("setSystemPref", r#"mutation{setSystemPref(key:"locale",value:"en"){affectedCount}}"#),
-        ("setUserPref", r#"mutation{setUserPref(key:"locale",value:"en")}"#),
-        ("removeSystemPref", r#"mutation{removeSystemPref(key:"locale"){affectedCount}}"#),
-        ("removeUserPref", r#"mutation{removeUserPref(key:"locale")}"#),
+        (
+            "setSystemPref",
+            r#"mutation{setSystemPref(key:"locale",value:"en"){affectedCount}}"#,
+        ),
+        (
+            "setUserPref",
+            r#"mutation{setUserPref(key:"locale",value:"en")}"#,
+        ),
+        (
+            "removeSystemPref",
+            r#"mutation{removeSystemPref(key:"locale"){affectedCount}}"#,
+        ),
+        (
+            "removeUserPref",
+            r#"mutation{removeUserPref(key:"locale")}"#,
+        ),
         (
             "toggleNotificationApp",
             "mutation{toggleNotificationApp(packageName:\"fixture\"){affectedCount}}",
@@ -130,7 +174,7 @@ async fn retired_management_roots_are_unavailable_to_local_and_authenticated_rem
 #[tokio::test]
 async fn native_management_handles_reject_every_operation_after_core_shutdown() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open_with_cache(
+    let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
     )
@@ -147,13 +191,21 @@ async fn native_management_handles_reject_every_operation_after_core_shutdown() 
     stopped!(management.reset_password());
     stopped!(management.reset_url_token());
     stopped!(management.reset_adb_token());
-    stopped!(management.set_notification_filter_mode("allowlist".into()).await);
+    stopped!(
+        management
+            .set_notification_filter_mode("allowlist".into())
+            .await
+    );
     stopped!(management.clear_notification_filter_apps().await);
     stopped!(management.scan_history());
     stopped!(management.add_scan_history("stopped".into()));
     stopped!(management.remove_scan_history("stopped".into()));
     stopped!(management.file_paths(vec!["stopped".into()]));
-    stopped!(management.import_note_image("stopped".into(), "image.png".into()).await);
+    stopped!(
+        management
+            .import_note_image("stopped".into(), "image.png".into())
+            .await
+    );
     stopped!(management.import_pomodoro_sound("stopped".into()).await);
     stopped!(management.pairing_code().await);
     stopped!(management.is_pairing_request_current("stopped".into(), "signature".into()));
@@ -164,8 +216,16 @@ async fn native_management_handles_reject_every_operation_after_core_shutdown() 
     stopped!(management.remove_dlna_rule("stopped".into(), true).await);
     stopped!(management.accept_dlna_cast(false).await);
     stopped!(management.reject_dlna_cast(false).await);
-    stopped!(management.acquire_mdns_debug_session("stopped".into()).await);
-    stopped!(management.release_mdns_debug_session("stopped".into()).await);
+    stopped!(
+        management
+            .acquire_mdns_debug_session("stopped".into())
+            .await
+    );
+    stopped!(
+        management
+            .release_mdns_debug_session("stopped".into())
+            .await
+    );
     stopped!(management.regenerate_tls_certificate().await);
     stopped!(
         management
@@ -196,7 +256,7 @@ async fn native_management_handles_reject_every_operation_after_core_shutdown() 
 #[tokio::test]
 async fn native_preference_reads_and_notification_changes_preserve_shared_state_and_events() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open_with_cache(
+    let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
     )
@@ -214,15 +274,23 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
     for key in system.keys() {
         assert!(
             plain_rs::prefs::pref_keys::access(key).is_some()
-                || matches!(key.as_str(), plain_rs::prefs::pref_keys::SIGNATURE_PUBLIC_KEY | plain_rs::prefs::pref_keys::UPDATE_INFO | plain_rs::prefs::pref_keys::APP_UPDATE_AVAILABLE | plain_rs::prefs::pref_keys::ONBOARDING_COMPLETED),
+                || matches!(
+                    key.as_str(),
+                    plain_rs::prefs::pref_keys::SIGNATURE_PUBLIC_KEY
+                        | plain_rs::prefs::pref_keys::UPDATE_INFO
+                        | plain_rs::prefs::pref_keys::APP_UPDATE_AVAILABLE
+                        | plain_rs::prefs::pref_keys::ONBOARDING_COMPLETED
+                ),
             "Unexpected native preference key: {key}"
         );
     }
-    for private in ["signature_key_pair", "master_secret", "signatureKeyPair", "masterSecret"] {
-        assert!(
-            system.get(private)
-                .is_none()
-        );
+    for private in [
+        "signature_key_pair",
+        "master_secret",
+        "signatureKeyPair",
+        "masterSecret",
+    ] {
+        assert!(system.get(private).is_none());
     }
     let mut events = state.events.subscribe();
     for expected in [serde_json::json!(["fixture.app"]), serde_json::json!([])] {
@@ -252,7 +320,7 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
 #[tokio::test]
 async fn native_certificate_rotation_uses_the_server_identity_and_invalid_import_preserves_it() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open_with_cache(
+    let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
     )

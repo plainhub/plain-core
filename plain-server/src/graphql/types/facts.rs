@@ -6,9 +6,9 @@
 //! matching plain-app's `Instant.fromEpochMilliseconds(0)` for facts the
 //! platform could not fill in.
 
-use crate::graphql::types::Instant;
-use crate::host::bridge::Host;
 use async_graphql::{Context, ID};
+use plain_rs::host::bridge::Host;
+use plain_rs::types::Instant;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -28,11 +28,11 @@ pub(crate) async fn host_json(
 
 pub(crate) async fn provider_params(
     ctx: &Context<'_>,
-    provider: crate::host::query::Provider,
+    provider: plain_rs::services::files::provider_query::Provider,
     query: &str,
     params: Value,
 ) -> async_graphql::Result<Value> {
-    crate::host::query::params(
+    plain_rs::services::files::provider_query::params(
         ctx.data_unchecked::<Arc<plain_rs::db::Db>>(),
         provider,
         query,

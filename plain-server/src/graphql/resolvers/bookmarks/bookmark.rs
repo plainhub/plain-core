@@ -123,7 +123,7 @@ impl BookmarkMutation {
         bookmark.group_id = (!input.group_id.is_empty()).then(|| input.group_id.to_string());
         bookmark.pinned = input.pinned;
         bookmark.sort_order = input.sort_order;
-        let assets = ctx.data_unchecked::<Arc<crate::services::feeds::FeedAssets>>();
+        let assets = ctx.data_unchecked::<Arc<plain_rs::services::feeds::FeedAssets>>();
         let favicon_path = match input.favicon_url.as_deref() {
             None => None,
             Some("") => Some(String::new()),
@@ -157,7 +157,7 @@ impl BookmarkMutation {
         let ids = ids.into_iter().map(|id| id.to_string()).collect::<Vec<_>>();
         let removed = bookmark_db::delete_bookmarks_with_rows(db, &ids)?;
         let count = removed.len() as i32;
-        if let Ok(assets) = ctx.data::<Arc<crate::services::feeds::FeedAssets>>() {
+        if let Ok(assets) = ctx.data::<Arc<plain_rs::services::feeds::FeedAssets>>() {
             for item in removed {
                 assets.release(&item.favicon_path);
             }

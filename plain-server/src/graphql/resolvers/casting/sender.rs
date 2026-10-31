@@ -1,9 +1,10 @@
-use crate::assembly::server::ServerState;
 use crate::graphql::resolvers::app::capability_types::DlnaRenderer;
 use crate::graphql::resolvers::media::types::MediaDataType;
-use crate::graphql::types::Long;
-use crate::services::casting::dlna_sender_runtime::{self as sender, Command};
+use crate::server::ServerState;
 use async_graphql::{Context, InputObject, Object, Result, SimpleObject};
+use plain_rs::services::casting::dlna_sender_runtime as sender;
+use plain_rs::services::casting::dlna_sender_runtime::Command;
+use plain_rs::types::Long;
 
 #[derive(SimpleObject, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -156,7 +157,7 @@ impl DlnaSenderMutation {
         let _guard = runtime.operations.lock().await;
         let result = async {
             sender::execute(state, &runtime, Command::Select { id: renderer_udn }).await?;
-            crate::services::casting::dlna_sender_playback::cast_with_mime(
+            plain_rs::services::casting::dlna_sender_playback::cast_with_mime(
                 state,
                 sender::Item {
                     path: url,

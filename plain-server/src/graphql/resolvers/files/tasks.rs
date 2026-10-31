@@ -1,12 +1,12 @@
-use crate::graphql::types::Instant;
-use crate::graphql::types::Long;
-use crate::services::files::file_tasks::FileTasks;
 use async_graphql::{Context, ID, InputObject, Object, Result, SimpleObject};
 use plain_rs::files::tasks::CompletedOp;
 use plain_rs::files::tasks::FileTask;
 use plain_rs::files::tasks::FileTaskOp;
 use plain_rs::files::tasks::FileTaskStatus;
 use plain_rs::files::tasks::FileTaskType;
+use plain_rs::services::files::file_tasks::FileTasks;
+use plain_rs::types::Instant;
+use plain_rs::types::Long;
 use std::sync::Arc;
 #[derive(InputObject)]
 struct FileTaskOpInput {

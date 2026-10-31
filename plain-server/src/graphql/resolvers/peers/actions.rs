@@ -1,4 +1,4 @@
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 
 fn changed(state: &ServerState, id: &str) {
     state.transport.forget(id);
@@ -6,8 +6,8 @@ fn changed(state: &ServerState, id: &str) {
     if let Err(error) = state.peer_status.outgoing.reconnect(state) {
         log::warn!("Peer status reconnect after mutation: {error}");
     }
-    crate::services::peers::peer_transport::notify(state);
-    crate::http::websocket::status::emit(state, id, false);
+    plain_rs::services::peers::peer_transport::notify(state);
+    plain_rs::services::peers::status_runtime::emit(state, id, false);
 }
 
 pub(crate) async fn remove(state: &ServerState, id: &str) -> anyhow::Result<bool> {
@@ -28,7 +28,7 @@ fn remove_record(state: &ServerState, id: &str) -> anyhow::Result<bool> {
     )? != 0;
     if removed {
         changed(state, id);
-        crate::services::discovery::pairing_runtime::event(
+        plain_rs::services::discovery::pairing_runtime::event(
             state,
             plain_rs::chat::events::WS_MESSAGE_DELETED,
             serde_json::json!(format!("peer:{id}")),

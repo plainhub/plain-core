@@ -7,48 +7,10 @@
 //! for it (`require_granted`), which plain-app's
 //! `Permission.enabledAndIsGrantedAsync` does and `checkEnabledAsync` does not.
 
-use crate::host::bridge::Host;
 use async_graphql::Context;
+use plain_rs::host::bridge::Host;
 use plain_rs::prefs::Prefs;
-use serde_json::{Value, json};
-use std::{collections::HashSet, sync::Arc};
-
-/// `WRITE_CONTACTS` implies `READ_CONTACTS` and `WRITE_CALL_LOG` implies
-/// `READ_CALL_LOG`: the web UI only ever offers the wider permission, so
-/// asking for the narrower one must not fail.
-pub(crate) fn api_enabled(permissions: &[String], configured: &HashSet<String>) -> bool {
-    permissions.iter().all(|name| {
-        configured.contains(name)
-            || (name == "READ_CONTACTS" && configured.contains("WRITE_CONTACTS"))
-            || (name == "READ_CALL_LOG" && configured.contains("WRITE_CALL_LOG"))
-    })
-}
-
-fn configured(prefs: &Prefs) -> Vec<String> {
-    prefs.get_or(plain_rs::prefs::pref_keys::API_PERMISSIONS, Vec::new())
-}
-
-pub(crate) async fn granted(host: &Host, permissions: &[String]) -> anyhow::Result<bool> {
-    let facts = host
-        .call(
-            "systemPermissionFacts",
-            json!({ "permissions": permissions }),
-        )
-        .await
-        .map_err(anyhow::Error::msg)?;
-    let grants = facts["granted"]
-        .as_object()
-        .ok_or_else(|| anyhow::anyhow!("invalid permission facts"))?;
-    Ok(permissions
-        .iter()
-        .all(|name| grants.get(name).and_then(Value::as_bool) == Some(true)))
-}
-
-pub(crate) fn is_enabled(prefs: &Prefs, permissions: &[&str]) -> bool {
-    let names: Vec<String> = permissions.iter().map(|name| name.to_string()).collect();
-    let configured: HashSet<String> = configured(prefs).into_iter().collect();
-    api_enabled(&names, &configured)
-}
+use std::sync::Arc;
 
 /// plain-app's `checkEnabledAsync`: error out unless every named permission
 /// was handed to the web client.
@@ -83,7 +45,7 @@ pub(crate) fn require(
     if is_local(ctx) {
         return Ok(());
     }
-    if is_enabled(prefs, permissions) {
+    if plain_rs::services::device::access::is_enabled(prefs, permissions) {
         Ok(())
     } else {
         Err(async_graphql::Error::new("no_permission"))
@@ -97,10 +59,15 @@ pub(crate) async fn require_granted(
     ctx: &Context<'_>,
     permissions: &[&str],
 ) -> anyhow::Result<bool> {
-    if !is_local(ctx) && !is_enabled(ctx.data_unchecked::<Arc<Prefs>>(), permissions) {
+    if !is_local(ctx)
+        && !plain_rs::services::device::access::is_enabled(
+            ctx.data_unchecked::<Arc<Prefs>>(),
+            permissions,
+        )
+    {
         return Ok(false);
     }
-    granted(
+    plain_rs::services::device::access::granted(
         ctx.data_unchecked::<Arc<Host>>(),
         &permissions
             .iter()

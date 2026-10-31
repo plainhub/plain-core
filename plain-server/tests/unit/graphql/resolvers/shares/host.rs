@@ -1,4 +1,4 @@
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
 use async_graphql::Request;
 use serde_json::{Value, json};
 use std::sync::Arc;

@@ -1,8 +1,8 @@
-use crate::assembly::server::ServerState;
 use crate::graphql::resolvers::peers::public::Peer;
-use crate::graphql::types::Long;
+use crate::server::ServerState;
 use async_graphql::{Context, Object, SimpleObject};
 use plain_rs::chat::attachments::download_status::DownloadStatus;
+use plain_rs::types::Long;
 use serde::Deserialize;
 
 #[derive(SimpleObject)]

@@ -1,4 +1,4 @@
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
 use crate::test_support::{graphql_http as call, graphql_http_variables as call_variables};
 use plain_rs::db::Db;
 use std::sync::{
@@ -43,7 +43,9 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     assert_eq!(created["data"]["addBookmarks"].as_array().unwrap().len(), 1);
     let id = created["data"]["addBookmarks"][0]["id"].as_str().unwrap();
     let db = Arc::new(Db::open(&path).unwrap());
-    let before = plain_rs::db::bookmark::get_bookmark_by_id(&db, id).unwrap().unwrap();
+    let before = plain_rs::db::bookmark::get_bookmark_by_id(&db, id)
+        .unwrap()
+        .unwrap();
     let count_files = || {
         db.with_conn(|conn| {
             conn.query_row("SELECT COUNT(*) FROM app_files", [], |row| {
@@ -77,7 +79,9 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     .await;
     assert_eq!(repeated["data"], meta["data"]);
     assert_eq!(icon_requests.load(Ordering::SeqCst), 0);
-    let unchanged = plain_rs::db::bookmark::get_bookmark_by_id(&db, id).unwrap().unwrap();
+    let unchanged = plain_rs::db::bookmark::get_bookmark_by_id(&db, id)
+        .unwrap()
+        .unwrap();
     assert_eq!(unchanged.title, before.title);
     assert_eq!(unchanged.favicon_path, before.favicon_path);
     assert_eq!(unchanged.updated_at, before.updated_at);
@@ -166,7 +170,8 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     assert!(failed.get("errors").is_some(), "{failed}");
     assert_eq!(
         plain_rs::db::bookmark::get_bookmark_by_id(&db, id)
-            .unwrap().unwrap()
+            .unwrap()
+            .unwrap()
             .title,
         "Chosen title"
     );
@@ -195,7 +200,8 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     assert_eq!(repeated["data"], meta["data"]);
     assert_eq!(
         plain_rs::db::bookmark::get_bookmark_by_id(&db, id)
-            .unwrap().unwrap()
+            .unwrap()
+            .unwrap()
             .title,
         "Chosen title"
     );
@@ -205,7 +211,8 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     futures_util::future::join_all((0..20).map(|_| call(server.port, &token, &query))).await;
     assert_eq!(
         plain_rs::db::bookmark::get_bookmark_by_id(&db, id)
-            .unwrap().unwrap()
+            .unwrap()
+            .unwrap()
             .click_count,
         20
     );
@@ -216,7 +223,9 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         call(server.port, &token, &edit).await["data"]["updateBookmark"]["clickCount"],
         20
     );
-    let edited = plain_rs::db::bookmark::get_bookmark_by_id(&db, id).unwrap().unwrap();
+    let edited = plain_rs::db::bookmark::get_bookmark_by_id(&db, id)
+        .unwrap()
+        .unwrap();
     assert_eq!(edited.title, "Edited");
     assert_eq!(edited.favicon_path, icon);
     assert_eq!(db.get_app_file(file_id).unwrap().ref_count, 2);
@@ -230,7 +239,8 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     .await;
     assert_eq!(
         plain_rs::db::bookmark::get_bookmark_by_id(&db, id)
-            .unwrap().unwrap()
+            .unwrap()
+            .unwrap()
             .group_id,
         None
     );

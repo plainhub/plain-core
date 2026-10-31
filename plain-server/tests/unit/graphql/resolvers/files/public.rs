@@ -1,7 +1,7 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
-use crate::host::bridge::Host;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::db::Db;
+use plain_rs::host::bridge::Host;
 use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
 use std::{fs, sync::Arc};
@@ -51,7 +51,7 @@ fn fixture_with(
     let host = Arc::new(Host::default());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema =
-        crate::graphql::schemas::public::build(host.clone(), events, prefs, db, dir.path().into());
+        crate::test_support::schema::build(host.clone(), events, prefs, db, dir.path().into());
     stub(host, handler);
     (dir, schema)
 }
@@ -162,7 +162,7 @@ async fn file_info_combines_rust_gps_with_sdk_decode_bounds() {
             r#"query {{ fileInfo(path:{:?}) {{ path size updatedAt
                       data {{ ... on ImageFileInfo {{ width height location {{ latitude longitude }} }} }} }} }}"#,
             path.to_string_lossy()
-)).data(crate::services::files::info::Info::sdk(schema_host(&schema))))
+)).data(plain_rs::services::files::info::Info::sdk(schema_host(&schema))))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
@@ -193,7 +193,7 @@ async fn the_display_name_selects_the_media_type_and_rust_sniffs_the_container()
             r#"query {{ fileInfo(path:{:?}, fileName:"track.m4a")
                       {{ data {{ ... on AudioFileInfo {{ durationMs location {{ latitude longitude }} }} }} }} }}"#,
             path.to_string_lossy()
-)).data(crate::services::files::info::Info::sdk(schema_host(&schema))))
+)).data(plain_rs::services::files::info::Info::sdk(schema_host(&schema))))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
@@ -334,7 +334,7 @@ async fn mounts_and_favorites_need_no_storage_grant() {
         other => panic!("unexpected host call {other}"),
     });
     schema
-        .data::<Arc<crate::services::files::platform::FilePlatform>>()
+        .data::<Arc<plain_rs::services::files::platform::FilePlatform>>()
         .unwrap()
         .use_sdk_for_test();
     let response = schema
@@ -370,7 +370,7 @@ async fn favorite_folders_are_read_from_the_rust_store() {
         .unwrap();
     plain_rs::favorites::set_alias(&db, "/storage/emulated/0", "DCIM", "Camera").unwrap();
     let (events, _) = tokio::sync::broadcast::channel(16);
-    let schema = crate::graphql::schemas::public::build(host, events, prefs, db, dir.path().into());
+    let schema = crate::test_support::schema::build(host, events, prefs, db, dir.path().into());
 
     let response = schema
         .execute(r#"query { favoriteFolders { rootPath fullPath alias } }"#)
@@ -392,7 +392,7 @@ async fn recent_files_are_gated_and_projected_from_the_store() {
     let second = dir.path().join("b.mp4");
     std::fs::write(&first, b"hello world!").unwrap();
     std::fs::write(&second, vec![0u8; 4096]).unwrap();
-    let prefs = schema
+    let _prefs = schema
         .data::<Arc<plain_rs::prefs::Prefs>>()
         .unwrap()
         .clone();
@@ -516,7 +516,7 @@ async fn video_details_and_stat_only_aliases_use_rust_without_whole_host_metadat
     let execute = |query: &str| {
         async_graphql::Request::new(query)
             .variables(async_graphql::Variables::from_json(json!({"path":path})))
-            .data(crate::services::files::info::Info::sdk(schema_host(
+            .data(plain_rs::services::files::info::Info::sdk(schema_host(
                 &schema,
             )))
     };
@@ -547,8 +547,7 @@ async fn video_details_and_stat_only_aliases_use_rust_without_whole_host_metadat
 #[tokio::test]
 async fn native_main_image_info_reads_directly_without_media_host_dispatch() {
     let directory = tempfile::tempdir().unwrap();
-    let core =
-        crate::assembly::server::ContentServer::open(&directory.path().join("core")).unwrap();
+    let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let (_generation, mut requests) = core.runtime_state().host.connect();
     let path = directory.path().join("photo.png");
     image::RgbImage::new(3, 2).save(&path).unwrap();
@@ -566,7 +565,7 @@ async fn native_main_image_info_reads_directly_without_media_host_dispatch() {
 #[tokio::test]
 async fn batched_file_paths_use_native_rust_data_without_platform_requests() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
     let paths = vec![
@@ -603,8 +602,7 @@ async fn batched_file_paths_use_native_rust_data_without_platform_requests() {
 #[tokio::test]
 async fn native_file_actions_resolve_registered_attachments_without_graphql() {
     let directory = tempfile::tempdir().unwrap();
-    let core =
-        crate::assembly::server::ContentServer::open(&directory.path().join("core")).unwrap();
+    let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     let source = directory.path().join("document.txt");
     std::fs::write(&source, b"attachment").unwrap();
@@ -662,8 +660,7 @@ async fn native_file_actions_resolve_registered_attachments_without_graphql() {
 #[tokio::test]
 async fn native_main_audio_info_uses_shared_rust_parsing_without_the_media_feature_or_a_host() {
     let directory = tempfile::tempdir().unwrap();
-    let core =
-        crate::assembly::server::ContentServer::open(&directory.path().join("core")).unwrap();
+    let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let path = directory.path().join("audio.mp3");
     std::fs::copy(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -727,7 +724,7 @@ async fn duration_only_media_info_uses_shared_rust_probing_through_aliases_and_f
     let document = "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){metadata:data{__typename ...DurationOnly}}} fragment DurationOnly on AudioFileInfo{time:durationMs}";
     let request = async_graphql::Request::new(document)
         .variables(async_graphql::Variables::from_json(json!({"path":path})))
-        .data(crate::services::files::info::Info::sdk(schema_host(
+        .data(plain_rs::services::files::info::Info::sdk(schema_host(
             &schema,
         )));
     let response = schema.execute(request).await;
@@ -750,7 +747,7 @@ async fn type_only_media_info_never_requests_sdk_metadata() {
         let response = schema.execute(async_graphql::Request::new(
             "query($path:String!,$name:String!){fileInfo(path:$path,fileName:$name){data{__typename}}}"
         ).variables(async_graphql::Variables::from_json(json!({"path":path,"name":name})))
-            .data(crate::services::files::info::Info::sdk(schema_host(&schema))))
+            .data(plain_rs::services::files::info::Info::sdk(schema_host(&schema))))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(
@@ -772,7 +769,7 @@ async fn duration_only_video_info_does_not_read_stream_or_tag_metadata() {
     let response = schema.execute(async_graphql::Request::new(
         "query($path:String!){fileInfo(path:$path){metadata:data{... on VideoFileInfo{time:durationMs}}}}"
     ).variables(async_graphql::Variables::from_json(json!({"path":path})))
-        .data(crate::services::files::info::Info::sdk(schema_host(&schema))))
+        .data(plain_rs::services::files::info::Info::sdk(schema_host(&schema))))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
@@ -801,7 +798,7 @@ async fn unknown_duration_only_file_info_returns_null_without_platform_metadata(
     let response = schema.execute(async_graphql::Request::new(
         "query($path:String!){fileInfo(path:$path){data{... on VideoFileInfo{durationMs}}}}"
     ).variables(async_graphql::Variables::from_json(json!({"path":path})))
-        .data(crate::services::files::info::Info::sdk(schema_host(&schema))))
+        .data(plain_rs::services::files::info::Info::sdk(schema_host(&schema))))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert!(response.data.into_json().unwrap()["fileInfo"]["data"].is_null());
@@ -932,7 +929,7 @@ async fn audio_duration_selection_probes_unknown_file_names_without_sdk_metadata
         let response = schema.execute(async_graphql::Request::new(
             "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){data{... on AudioFileInfo{durationMs}}}}"
         ).variables(async_graphql::Variables::from_json(json!({"path":path})))
-            .data(crate::services::files::info::Info::sdk(schema_host(&schema))))
+            .data(plain_rs::services::files::info::Info::sdk(schema_host(&schema))))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(
@@ -963,7 +960,7 @@ async fn audio_duration_selection_keeps_null_for_missing_invalid_and_unknown_sou
         let response = schema.execute(async_graphql::Request::new(
             "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){data{... on AudioFileInfo{durationMs}}}}"
         ).variables(async_graphql::Variables::from_json(json!({"path":path})))
-            .data(crate::services::files::info::Info::sdk(schema_host(&schema))))
+            .data(plain_rs::services::files::info::Info::sdk(schema_host(&schema))))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert!(response.data.into_json().unwrap()["fileInfo"]["data"].is_null());
@@ -979,14 +976,14 @@ async fn audio_duration_selection_preserves_permission_and_probe_errors() {
     assert_eq!(response.errors.len(), 1);
     assert_eq!(response.errors[0].message, "no_permission");
     let (directory, schema) = fixture(GRANTED);
-    let path = directory.path().join("audio");
+    let path = directory.path().join("duration-source.mp3");
     fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-untagged.mp3"),
         &path,
     )
     .unwrap();
     schema
-        .data::<Arc<crate::services::files::duration_updates::Runtime>>()
+        .data::<Arc<plain_rs::services::files::duration_updates::Runtime>>()
         .unwrap()
         .shutdown()
         .await;

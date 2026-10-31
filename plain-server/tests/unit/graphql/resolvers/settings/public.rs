@@ -1,7 +1,6 @@
-use super::*;
-use crate::graphql::schemas::public::PublicSchema;
-use crate::host::bridge::Host;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::db::Db;
+use plain_rs::host::bridge::Host;
 use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -35,7 +34,7 @@ fn fixture(
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::graphql::schemas::public::build(host, events, prefs, db, directory),
+        crate::test_support::schema::build(host, events, prefs, db, directory),
     )
 }
 
@@ -50,25 +49,42 @@ async fn reads_come_from_the_rust_store() {
     });
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema =
-        crate::graphql::schemas::public::build(host, events, prefs.clone(), db, dir.path().into());
+        crate::test_support::schema::build(host, events, prefs.clone(), db, dir.path().into());
 
     prefs.set("device_name", "Pixel").unwrap();
     prefs.set("editor_wrap_content", json!(true)).unwrap();
     prefs.set("dark_theme", 2).unwrap();
     prefs.set("audio_play_mode", 2).unwrap();
-    for key in ["audio_sort_by", "video_sort_by", "image_sort_by", "doc_sort_by", "file_sort_by", "pkg_sort_by"] {
+    for key in [
+        "audio_sort_by",
+        "video_sort_by",
+        "image_sort_by",
+        "doc_sort_by",
+        "file_sort_by",
+        "pkg_sort_by",
+    ] {
         prefs.set(key, 2).unwrap();
     }
 
     let response = schema.execute(r#"query { prefs }"#).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
-    assert_eq!(prefs.get::<String>("device_name").unwrap().unwrap(), "Pixel");
+    assert_eq!(
+        prefs.get::<String>("device_name").unwrap().unwrap(),
+        "Pixel"
+    );
     assert_eq!(data["prefs"]["editor_wrap_content"], json!(true));
     assert_eq!(data["prefs"]["device_name"], "Pixel");
     assert_eq!(data["prefs"]["dark_theme"], "OFF");
     assert_eq!(data["prefs"]["audio_play_mode"], "SHUFFLE");
-    for key in ["audio_sort_by", "video_sort_by", "image_sort_by", "doc_sort_by", "file_sort_by", "pkg_sort_by"] {
+    for key in [
+        "audio_sort_by",
+        "video_sort_by",
+        "image_sort_by",
+        "doc_sort_by",
+        "file_sort_by",
+        "pkg_sort_by",
+    ] {
         assert_eq!(data["prefs"][key], "SIZE_ASC");
     }
     assert_eq!(prefs.get::<u64>("dark_theme").unwrap(), Some(2));
@@ -78,8 +94,12 @@ async fn reads_come_from_the_rust_store() {
     let data = response.data.into_json().unwrap();
     assert!(data["prefs"].get("http_port").is_none());
     assert!(data["prefs"].get("master_secret").is_none());
-    let response = schema.execute(async_graphql::Request::new("{prefs}")
-        .data(crate::graphql::executor::RequestOrigin::Local)).await;
+    let response = schema
+        .execute(
+            async_graphql::Request::new("{prefs}")
+                .data(crate::graphql::executor::RequestOrigin::Local),
+        )
+        .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["prefs"]["http_port"], 8080);
@@ -91,30 +111,6 @@ async fn reads_come_from_the_rust_store() {
     let response = schema.execute("{prefs}").await;
     assert!(!response.errors.is_empty());
     assert_eq!(prefs.get::<u64>("dark_theme").unwrap(), Some(99));
-
-}
-
-#[tokio::test]
-async fn remote_tools_receive_effective_app_home_features_without_local_settings() {
-    let (_directory, schema) = fixture(|method, _| panic!("Unexpected host call: {method}"));
-    let response = schema.execute("{prefs}").await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let data = response.data.into_json().unwrap();
-    assert_eq!(data["prefs"]["app_home_features"], "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS");
-    assert!(data["prefs"].get("http_port").is_none());
-    assert!(data["prefs"].get("password").is_none());
-
-    let response = schema.execute(async_graphql::Request::new(r#"mutation { setPref(key:"app_home_features", value:"NOTES|FILES") }"#)
-        .data(crate::graphql::executor::RequestOrigin::Local)).await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    for mutation in [r#"mutation { setPref(key:"app_home_features", value:"FILES") }"#, r#"mutation { removePref(key:"app_home_features") }"#] {
-        let response = schema.execute(mutation).await;
-        assert_eq!(response.errors.len(), 1);
-        assert_eq!(response.errors[0].message, "Preference is not accessible");
-    }
-    let response = schema.execute("{prefs}").await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(response.data.into_json().unwrap()["prefs"]["app_home_features"], "NOTES|FILES");
 }
 
 #[tokio::test]
@@ -155,7 +151,10 @@ async fn pref_keys_outside_the_safe_set_are_refused() {
             ))
             .await;
         assert_eq!(response.errors.len(), 1, "{key}");
-        assert_eq!(response.errors[0].message, "Preference is not accessible", "{key}");
+        assert_eq!(
+            response.errors[0].message, "Preference is not writable",
+            "{key}"
+        );
     }
     let response = schema
         .execute(&format!(
@@ -164,7 +163,7 @@ async fn pref_keys_outside_the_safe_set_are_refused() {
         ))
         .await;
     assert_eq!(response.errors.len(), 1);
-    assert_eq!(response.errors[0].message, "Preference is not accessible");
+    assert_eq!(response.errors[0].message, "Preference is not writable");
 }
 
 /// The cap is on bytes, not characters - a multi-byte value would slip past
@@ -191,13 +190,19 @@ async fn a_value_just_under_the_cap_is_accepted() {
 }
 
 #[test]
-fn only_registered_keys_are_accessible_for_each_origin() {
+fn only_registered_keys_are_writable_for_each_origin() {
     use plain_rs::prefs::pref_keys::writable;
     assert!(writable("locale", false));
     assert!(writable("locale", true));
     assert!(!writable("http_port", false));
     assert!(writable("http_port", true));
-    for key in ["master_secret", "client_id", "unknown", "", "admin:password"] {
+    for key in [
+        "master_secret",
+        "client_id",
+        "unknown",
+        "",
+        "admin:password",
+    ] {
         assert!(!writable(key, false));
         assert!(!writable(key, true));
     }
@@ -207,20 +212,81 @@ fn only_registered_keys_are_accessible_for_each_origin() {
 #[tokio::test]
 async fn saved_data_uses_kv_and_drafts_are_scoped_to_the_full_target() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let schema = core.native_graphql().unwrap();
-    for (key, value) in [("chat_input_text:peer:one", "peer draft"), ("chat_input_text:channel:one", "channel draft"), ("quick_note_draft", "note")] {
+    for (key, value) in [
+        ("chat_input_text:peer:one", "peer draft"),
+        ("chat_input_text:channel:one", "channel draft"),
+        ("quick_note_draft", "note"),
+    ] {
         let document = format!(r#"mutation {{ setSavedValue(key:{key:?},value:{value:?}) }}"#);
         let response = schema.execute(async_graphql::Request::new(document)).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
-        let response = schema.execute(async_graphql::Request::new(format!("{{savedValue(key:{key:?})}}"))).await;
+        let response = schema
+            .execute(async_graphql::Request::new(format!(
+                "{{savedValue(key:{key:?})}}"
+            )))
+            .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(response.data.into_json().unwrap()["savedValue"], value);
     }
-    assert!(core.runtime_state().prefs.get::<Value>("quick_note_draft").unwrap().is_none());
-    for key in ["chat_input_text:peer:", "chat_input_text:unknown:one", "master_secret", "http_port"] {
-        let response = schema.execute(async_graphql::Request::new(format!(r#"mutation {{ setSavedValue(key:{key:?},value:"x") }}"#))).await;
+    assert!(
+        core.runtime_state()
+            .prefs
+            .get::<Value>("quick_note_draft")
+            .unwrap()
+            .is_none()
+    );
+    for key in [
+        "chat_input_text:peer:",
+        "chat_input_text:unknown:one",
+        "master_secret",
+        "http_port",
+    ] {
+        let response = schema
+            .execute(async_graphql::Request::new(format!(
+                r#"mutation {{ setSavedValue(key:{key:?},value:"x") }}"#
+            )))
+            .await;
         assert!(!response.errors.is_empty(), "{key}");
     }
     core.stop_core().await;
+}
+
+#[tokio::test]
+async fn remote_tools_receive_effective_app_home_features_without_local_settings() {
+    let (_directory, schema) = fixture(|method, _| panic!("Unexpected host call: {method}"));
+    let response = schema.execute("{prefs}").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["prefs"]["app_home_features"],
+        "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS"
+    );
+    assert!(data["prefs"].get("http_port").is_none());
+    assert!(data["prefs"].get("password").is_none());
+
+    let response = schema
+        .execute(
+            async_graphql::Request::new(
+                r#"mutation { setPref(key:"app_home_features", value:"NOTES|FILES") }"#,
+            )
+            .data(crate::graphql::executor::RequestOrigin::Local),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    for mutation in [
+        r#"mutation { setPref(key:"app_home_features", value:"FILES") }"#,
+        r#"mutation { removePref(key:"app_home_features") }"#,
+    ] {
+        let response = schema.execute(mutation).await;
+        assert_eq!(response.errors.len(), 1);
+        assert_eq!(response.errors[0].message, "Preference is not accessible");
+    }
+    let response = schema.execute("{prefs}").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["prefs"]["app_home_features"],
+        "NOTES|FILES"
+    );
 }

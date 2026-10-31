@@ -1,5 +1,5 @@
 #[cfg(feature = "core")]
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use async_graphql::{ObjectType, Request, Response, Schema, SubscriptionType};
 #[cfg(feature = "core")]
 use plain_rs::events::WsEvent;

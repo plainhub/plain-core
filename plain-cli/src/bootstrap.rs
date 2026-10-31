@@ -1,14 +1,14 @@
 use anyhow::Result;
 
 pub fn run() -> Result<()> {
-    plain_server::assembly::headless::initialize_tls();
+    plain_server::headless::initialize_tls();
 
-    plain_server::platform::version::set(
+    plain_rs::platform::version::set(
         crate::version::VERSION,
         crate::version::COMMIT,
         crate::version::BUILD_TIME,
     );
-    plain_server::platform::system::log::init("info").map_err(anyhow::Error::msg)?;
+    plain_rs::platform::system::log::init("info").map_err(anyhow::Error::msg)?;
 
     let cli = crate::cli::Cli::parse();
     let paths = cli.paths()?;
@@ -36,7 +36,7 @@ pub fn run() -> Result<()> {
                 .build()?;
             runtime.block_on(crate::cli::run::run(
                 &paths,
-                plain_server::assembly::headless::Options {
+                plain_server::headless::Options {
                     media_directories,
                     web_root,
                     automount,

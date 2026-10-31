@@ -136,7 +136,7 @@ pub(crate) fn secure(mut response: Response, name: Option<&str>, download: bool)
 }
 
 pub(crate) async fn stream_temporary(
-    file: crate::services::files::previews::Temporary,
+    file: plain_rs::services::files::previews::Temporary,
     mime: &str,
     headers: &HeaderMap,
 ) -> Response {
@@ -203,3 +203,28 @@ pub(crate) fn thumbnail(
 #[cfg(test)]
 #[path = "../../tests/unit/http/file_response.rs"]
 mod tests;
+
+pub(crate) async fn resource(
+    resources: &plain_rs::host::resources::NativeResources,
+    path: &str,
+    stop: tokio::sync::watch::Receiver<bool>,
+) -> Result<axum::body::Body, StatusCode> {
+    use plain_rs::host::resources::ResourceError;
+    let reader = resources
+        .read_native(path, stop)
+        .await
+        .map_err(|error| match error {
+            ResourceError::Busy => StatusCode::TOO_MANY_REQUESTS,
+            ResourceError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+            ResourceError::Timeout => StatusCode::GATEWAY_TIMEOUT,
+            ResourceError::Closed => StatusCode::BAD_GATEWAY,
+        })?;
+    let stream = futures_util::stream::try_unfold(reader, |mut reader| async move {
+        reader
+            .read()
+            .await
+            .map(|bytes| bytes.map(|bytes| (bytes, reader)))
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::ConnectionAborted, error))
+    });
+    Ok(axum::body::Body::from_stream(stream))
+}

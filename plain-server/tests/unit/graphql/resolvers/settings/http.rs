@@ -1,5 +1,6 @@
-use crate::assembly::server::{ContentServer, ServerState};
 use crate::http::graphql;
+use crate::server::ContentServer;
+use crate::server::ServerState;
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
@@ -15,7 +16,7 @@ fn device() -> (tempfile::TempDir, ContentServer, HeaderMap) {
     let server =
         ContentServer::start(dir.path(), &plain_rs::base64_encode(&[3; 32]), prefs).unwrap();
     let session = serde_json::to_value(
-        crate::services::sessions::create(&server.runtime_state(), "Controller".into()).unwrap(),
+        plain_rs::services::sessions::create(&server.runtime_state(), "Controller".into()).unwrap(),
     )
     .unwrap();
     let mut headers = HeaderMap::new();
@@ -54,10 +55,7 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     assert_eq!(result["data"]["font"], true);
     let (_, result) = call(first.runtime_state(), &headers, "{prefs}").await;
     assert_eq!(result["data"]["prefs"]["editor_font_size"], 20);
-    assert_eq!(
-        result["data"]["prefs"]["feed_auto_refresh_interval"],
-        3600
-    );
+    assert_eq!(result["data"]["prefs"]["feed_auto_refresh_interval"], 3600);
     let (_, result) = call(second.runtime_state(), &other, "{prefs} ").await;
     assert!(result["data"]["prefs"]["editor_font_size"].is_null());
     let (_, result) = call(first.runtime_state(), &headers, "{systemPrefs}").await;
@@ -68,9 +66,7 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
             .contains("Unknown field")
     );
     assert_eq!(
-        call(second.runtime_state(), &headers, "{prefs}")
-            .await
-            .0,
+        call(second.runtime_state(), &headers, "{prefs}").await.0,
         StatusCode::UNAUTHORIZED
     );
     let (_, result) = call(
@@ -80,18 +76,32 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     )
     .await;
     assert!(result["errors"].is_array(), "{result}");
-    assert_eq!(call(first.runtime_state(), &headers, "{prefs}").await.0, StatusCode::OK);
+    assert_eq!(
+        call(first.runtime_state(), &headers, "{prefs}").await.0,
+        StatusCode::OK
+    );
     let native = first.native_graphql().unwrap();
-    let disabled = native.execute(async_graphql::Request::new(
-        r#"mutation { setPref(key:"desktop_access",value:false) }"#,
-    )).await;
+    let disabled = native
+        .execute(async_graphql::Request::new(
+            r#"mutation { setPref(key:"desktop_access",value:false) }"#,
+        ))
+        .await;
     assert!(disabled.errors.is_empty(), "{:?}", disabled.errors);
     assert_eq!(disabled.data.into_json().unwrap()["setPref"], true);
-    assert_eq!(call(first.runtime_state(), &headers, "{prefs}").await.0, StatusCode::NOT_FOUND);
-    assert_eq!(call(second.runtime_state(), &other, "{prefs}").await.0, StatusCode::OK);
+    assert_eq!(
+        call(first.runtime_state(), &headers, "{prefs}").await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(second.runtime_state(), &other, "{prefs}").await.0,
+        StatusCode::OK
+    );
     let snapshot = native.execute(async_graphql::Request::new("{prefs}")).await;
     assert!(snapshot.errors.is_empty(), "{:?}", snapshot.errors);
-    assert_eq!(snapshot.data.into_json().unwrap()["prefs"]["desktop_access"], false);
+    assert_eq!(
+        snapshot.data.into_json().unwrap()["prefs"]["desktop_access"],
+        false
+    );
     first.shutdown().await;
     second.shutdown().await;
 }

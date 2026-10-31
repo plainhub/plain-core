@@ -1,7 +1,7 @@
 use super::{
     MAX_RESOURCE_READ_BYTES, MAX_RESOURCE_RESPONSE_BYTES, NativeFileResources, ResourceInfo,
 };
-use crate::native::graphql::NativeRequestScope;
+use plain_rs::host::request_scope::NativeRequestScope;
 use std::{
     collections::HashMap,
     path::Path,

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
 use serde_json::Value;
 
 #[cfg(target_os = "linux")]
@@ -9,7 +9,7 @@ mod linux;
 pub struct Runtime {
     core: Arc<ContentServer>,
     capabilities: Vec<String>,
-    multicast: std::sync::Mutex<crate::host::multicast::MulticastLeases>,
+    multicast: std::sync::Mutex<plain_rs::host::multicast::MulticastLeases>,
     failure: tokio::sync::watch::Sender<Option<String>>,
 }
 
@@ -32,18 +32,39 @@ impl Runtime {
             "httpServerStatusChanged" => {
                 let status = self.core.http_status();
                 if status.state == "error" {
-                    self.failure.send_replace(Some(format!("HTTP server failed: {}", status.message)));
+                    self.failure
+                        .send_replace(Some(format!("HTTP server failed: {}", status.message)));
                 }
                 Ok(Value::Null)
             }
-            "systemWebLoginRequested" | "systemWebLoginClosed" | "systemWebLoginCompleted" | "systemWebLoginSnapshot" | "peerNotificationsChanged" | "peerClipboardChanged" | "clipboardHistoryRefresh" | "dlnaRendererChanged" | "dlnaRendererRefresh" | "sharedFolderDownloadsRefresh" | "peerTransportsChanged" | "appUpdateDownloadChanged" | "dlnaSenderChanged" | "feedSyncChanged" | "audioPlaybackRefresh" | "audioLibraryRefresh" | "pairingSucceeded" | "networkInterfacesChanged" | "onlineClientsChanged" | "systemWebActivity" => Ok(Value::Null),
+            "systemWebLoginRequested"
+            | "systemWebLoginClosed"
+            | "systemWebLoginCompleted"
+            | "systemWebLoginSnapshot"
+            | "peerNotificationsChanged"
+            | "peerClipboardChanged"
+            | "clipboardHistoryRefresh"
+            | "dlnaRendererChanged"
+            | "dlnaRendererRefresh"
+            | "sharedFolderDownloadsRefresh"
+            | "peerTransportsChanged"
+            | "appUpdateDownloadChanged"
+            | "dlnaSenderChanged"
+            | "feedSyncChanged"
+            | "audioPlaybackRefresh"
+            | "audioLibraryRefresh"
+            | "pairingSucceeded"
+            | "networkInterfacesChanged"
+            | "onlineClientsChanged"
+            | "systemWebActivity" => Ok(Value::Null),
             "systemCapabilities" => {
                 serde_json::to_value(&self.capabilities).map_err(|error| error.to_string())
             }
             "peerTransportCapabilities" => Ok(serde_json::json!([])),
-            "systemPermissionFacts" => {
-                crate::host::permission_facts::facts(&["WRITE_EXTERNAL_STORAGE".to_owned()], params)
-            }
+            "systemPermissionFacts" => plain_rs::host::permission_facts::facts(
+                &["WRITE_EXTERNAL_STORAGE".to_owned()],
+                params,
+            ),
             method if crate::native::audio::handles(method) => {
                 self.core.native_audio()?.handle(method, params).await
             }
@@ -62,7 +83,7 @@ impl Runtime {
     }
 
     pub async fn run(self: Arc<Self>) -> Result<(), String> {
-        let _multicast = crate::host::multicast::MulticastSession::new(&self.multicast);
+        let _multicast = plain_rs::host::multicast::MulticastSession::new(&self.multicast);
         let session = Arc::new(self.core.host_events()?);
         let mut failure = self.failure.subscribe();
         let requests = self.clone();

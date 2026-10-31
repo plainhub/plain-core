@@ -25,7 +25,7 @@ description = "Shared Plain media scanning, indexing and thumbnails"
 "parking_lot" = { "version" = "0.12" }
 "libc" = "0.2"
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["rt", "process", "sync", "time", "fs", "macros", "io-util"] }
-"plain-rs" = { "path" = "../plain-rs", default-features = false, "features" = ["crypto", "prefs", "library", "filesystem", "trash", "events", "test-seams", "storage-platform"] }
+"plain-rs" = { "path" = "../plain-rs", default-features = false, "features" = ["crypto", "prefs", "library", "image-metadata", "filesystem", "trash", "events", "test-seams", "storage-platform"] }
 
 [dev-dependencies]
 # Keep the exact thumbnail reference independent of CPU-specific SIMD rounding.

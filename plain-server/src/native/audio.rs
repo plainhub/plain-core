@@ -1,5 +1,5 @@
-use crate::assembly::server::ServerState;
-use crate::host::audio::{AudioPlaybackFacts, PLAYBACK_STATE};
+use crate::server::ServerState;
+use plain_rs::host::audio::{AudioPlaybackFacts, PLAYBACK_STATE};
 use serde_json::{Value, json};
 
 #[derive(Clone)]

@@ -15,3 +15,6 @@ pub(crate) mod enum_literals;
 
 #[cfg(feature = "core")]
 pub mod subscriptions;
+
+#[cfg(feature = "core")]
+pub mod enums;

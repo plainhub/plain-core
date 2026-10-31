@@ -1,11 +1,11 @@
-use crate::assembly::server::ServerState;
 use crate::graphql::resolvers::peers::query::Query;
-use crate::graphql::types::Instant;
+use crate::server::ServerState;
 use async_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
 use plain_rs::chat::enums::ChannelSystemMessageType;
 use plain_rs::chat::enums::ChatStatus;
 use plain_rs::db::DChat;
 use plain_rs::transport::auth::AuthenticatedPeer;
+use plain_rs::types::Instant;
 use serde_json::{Value, json};
 
 #[derive(SimpleObject)]
@@ -93,7 +93,7 @@ impl Mutation {
         payload: String,
     ) -> async_graphql::Result<bool> {
         let c = ctx.data_unchecked::<PeerContext>();
-        match crate::services::chat::channel_runtime::receive(
+        match plain_rs::services::chat::channel_runtime::receive(
             &c.state,
             &c.authenticated.peer.id,
             r#type,
@@ -120,7 +120,7 @@ pub(crate) type PeerSchema = Schema<Query, Mutation, EmptySubscription>;
 pub(crate) fn schema() -> PeerSchema {
     Schema::build(Query, Mutation, EmptySubscription)
         .extension(crate::graphql::enum_literals::EnumLiteralValidation)
-        .register_output_type::<crate::graphql::types::Long>()
+        .register_output_type::<plain_rs::types::Long>()
         .register_output_type::<plain_rs::chat::enums::PeerStatus>()
         .limit_depth(16)
         .limit_complexity(256)

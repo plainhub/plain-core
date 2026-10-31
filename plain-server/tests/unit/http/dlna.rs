@@ -1,14 +1,14 @@
-use serde_json::{json, Value};
 use super::*;
+use serde_json::{Value, json};
 #[cfg(feature = "http_transport")]
 const TOKEN: &str = "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=";
 
 #[cfg(feature = "http_transport")]
-fn fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServer) {
+fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let dir = tempfile::tempdir().unwrap();
     let prefs =
         std::sync::Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    let (key, public) = plain_rs::crypto::ed25519_generate();
+    let (key, _public) = plain_rs::crypto::ed25519_generate();
     prefs.set("client_id", "actor").unwrap();
     prefs
         .set(
@@ -16,7 +16,7 @@ fn fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServer) {
             plain_rs::utils::base64::base64_encode(&key),
         )
         .unwrap();
-    let server = crate::assembly::server::ContentServer::start(
+    let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_rs::utils::base64::base64_encode(&[3; 32]),
         prefs,
@@ -46,11 +46,7 @@ fn fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServer) {
 }
 
 #[cfg(feature = "http_transport")]
-async fn public_fixture() -> (
-    tempfile::TempDir,
-    crate::assembly::server::ContentServer,
-    u16,
-) {
+async fn public_fixture() -> (tempfile::TempDir, crate::server::ContentServer, u16) {
     let (dir, server) = fixture();
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let (http, _) = server
@@ -67,7 +63,7 @@ async fn public_fixture() -> (
 
 #[test]
 fn snapshot_omits_the_internal_pending_slot() {
-    let state = crate::services::casting::receiver::renderer_state::DlnaRendererState::default();
+    let state = plain_rs::services::casting::receiver::renderer_state::DlnaRendererState::default();
     let row = snapshot(&state);
     // The UI only ever needs the confirmed request; `raw_pending_cast_request`
     // is the rules input and must not leak into the host surface.
@@ -244,12 +240,12 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     // Seed a pending request, then let the host accept it and remember the
     // sender — the same two-step the cast dialog performs.
     state.dlna.state.write().await.pending_cast_request = Some(
-        crate::services::casting::receiver::types::PendingCastRequest {
+        plain_rs::services::casting::receiver::types::PendingCastRequest {
             sender_ip: "10.0.0.9".into(),
             sender_name: "TV".into(),
             media_uri: "http://example/a.mp4".into(),
             media_title: "a".into(),
-            media_type: crate::services::casting::receiver::types::DlnaMediaType::VIDEO,
+            media_type: plain_rs::services::casting::receiver::types::DlnaMediaType::VIDEO,
             album_art_uri: String::new(),
         },
     );
@@ -266,12 +262,12 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
 
     // A rejected request lands the opposite way.
     state.dlna.state.write().await.pending_cast_request = Some(
-        crate::services::casting::receiver::types::PendingCastRequest {
+        plain_rs::services::casting::receiver::types::PendingCastRequest {
             sender_ip: "10.0.0.8".into(),
             sender_name: "Other".into(),
             media_uri: "http://example/b.mp4".into(),
             media_title: "b".into(),
-            media_type: crate::services::casting::receiver::types::DlnaMediaType::AUDIO,
+            media_type: plain_rs::services::casting::receiver::types::DlnaMediaType::AUDIO,
             album_art_uri: String::new(),
         },
     );
@@ -455,10 +451,7 @@ async fn receiver_name_uses_the_native_default_and_current_core_setting_without_
         device_name(&state).await.unwrap(),
         plain_rs::prefs::identity::default_device_name()
     );
-    state
-        .prefs
-        .set("device_name", "Shared Renderer")
-        .unwrap();
+    state.prefs.set("device_name", "Shared Renderer").unwrap();
     assert_eq!(device_name(&state).await.unwrap(), "Shared Renderer");
     assert!(requests.try_recv().is_err());
     server.shutdown().await;
@@ -466,7 +459,7 @@ async fn receiver_name_uses_the_native_default_and_current_core_setting_without_
 
 struct MainDlnaClient(
     crate::native::graphql::NativeGraphqlExecutor,
-    crate::assembly::server::ServerState,
+    crate::server::ServerState,
 );
 impl MainDlnaClient {
     async fn execute_json(&self, command: &str) -> Result<String, String> {
@@ -488,7 +481,7 @@ impl MainDlnaClient {
             if let Some(error) = response.errors.first() {
                 return Err(error.message.clone());
             }
-            let mut value = crate::services::casting::receiver::control::snapshot(
+            let mut value = plain_rs::services::casting::receiver::control::snapshot(
                 &self.1.dlna.snapshot().await,
             );
             value["enabled"] = json!(plain_rs::prefs::dlna::enabled(&self.1.prefs));
@@ -509,19 +502,21 @@ impl MainDlnaClient {
                 input["positionMs"] = json!(renderer.seek_target_ms.unwrap());
             }
             drop(renderer);
-            crate::services::casting::receiver::reports::accept(
+            plain_rs::services::casting::receiver::reports::accept(
                 &self.1,
                 self.1.host.generation().unwrap(),
                 kind,
                 &input.to_string(),
             )
             .await?;
-            return serde_json::to_string(&crate::services::casting::receiver::control::snapshot(
-                &self.1.dlna.snapshot().await,
-            ))
+            return serde_json::to_string(
+                &plain_rs::services::casting::receiver::control::snapshot(
+                    &self.1.dlna.snapshot().await,
+                ),
+            )
             .map_err(|error| error.to_string());
         }
-        use crate::services::casting::receiver::control::Request;
+        use plain_rs::services::casting::receiver::control::Request;
         let request: Request = serde_json::from_value(input).map_err(|error| error.to_string())?;
         let management = crate::native::management::NativeManagement::new(self.1.clone());
         let result = match request {

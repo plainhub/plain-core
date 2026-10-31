@@ -1,8 +1,8 @@
-use crate::graphql::types::Instant;
-use crate::graphql::types::Long;
 use async_graphql::Enum;
 use async_graphql::ID;
 use async_graphql::SimpleObject;
+use plain_rs::types::Instant;
+use plain_rs::types::Long;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub enum DriveType {
@@ -83,7 +83,7 @@ pub struct ImageFileInfo {
     pub exposure_time: String,
     pub focal_length: String,
     pub iso_speed: i32,
-    pub taken_at: Option<crate::graphql::types::Instant>,
+    pub taken_at: Option<plain_rs::types::Instant>,
     pub flash: i32,
     pub f_number: f64,
     pub exposure_program: i32,
@@ -145,5 +145,3 @@ pub struct FileInfo {
     pub size: Long,
     pub data: Option<MediaFileInfo>,
 }
-
-pub use plain_rs::prefs::settings::FileSortBy;

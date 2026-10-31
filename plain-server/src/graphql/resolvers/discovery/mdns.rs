@@ -1,7 +1,8 @@
-use crate::assembly::server::ServerState;
-use crate::graphql::types::Long;
-use crate::services::discovery::mdns_runtime::{self, Request};
+use crate::server::ServerState;
 use async_graphql::{Context, Object, SimpleObject};
+use plain_rs::services::discovery::mdns_runtime;
+use plain_rs::services::discovery::mdns_runtime::Request;
+use plain_rs::types::Long;
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize)]
@@ -143,7 +144,6 @@ impl MdnsMutation {
         .await?;
         Ok(true)
     }
-
 }
 
 #[cfg(all(test, feature = "http_transport"))]
@@ -153,7 +153,7 @@ mod tests;
 fn discovery_owner(ctx: &Context<'_>) -> async_graphql::Result<String> {
     if crate::http::auth::public_gate::is_local(ctx) {
         return Ok(ctx
-            .data_opt::<crate::native::graphql::NativeRequestScope>()
+            .data_opt::<plain_rs::host::request_scope::NativeRequestScope>()
             .map(|scope| format!("native:{}", scope.id()))
             .unwrap_or_else(|| "native".into()));
     }

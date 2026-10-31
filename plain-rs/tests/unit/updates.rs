@@ -86,7 +86,7 @@ fn missing_asset_retains_release_details_without_silently_selecting_another_arch
 }
 #[test]
 fn automatic_checks_observe_user_setting_day_boundary_and_clock_rollback() {
-    let mut info = UpdateInfo {
+    let info = UpdateInfo {
         check_update_time: 100,
         ..Default::default()
     };
@@ -97,7 +97,7 @@ fn automatic_checks_observe_user_setting_day_boundary_and_clock_rollback() {
 }
 #[test]
 fn availability_uses_the_same_three_component_comparison_as_the_app_baseline() {
-    let mut info = UpdateInfo {
+    let info = UpdateInfo {
         new_version: "3.4.2".into(),
         ..Default::default()
     };

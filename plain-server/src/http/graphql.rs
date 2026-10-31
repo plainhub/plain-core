@@ -1,4 +1,4 @@
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use axum::{
     body::Bytes,
     extract::State,
@@ -117,7 +117,7 @@ async fn execute(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let (token_mode, key) = if authorization.is_none() {
-        let key = crate::services::sessions::key(&state.db, client_id)
+        let key = plain_rs::services::sessions::key(&state.db, client_id)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
             .ok_or(StatusCode::UNAUTHORIZED)?;
         (true, key)
@@ -147,7 +147,7 @@ async fn execute(
         String::from_utf8(body.to_vec()).map_err(|_| StatusCode::BAD_REQUEST)?
     };
 
-    crate::services::sessions::touch(state, client_id)
+    plain_rs::services::sessions::touch(state, client_id)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let result = run_with_context(
         &state.public,
@@ -225,7 +225,6 @@ pub(crate) async fn call(
 #[cfg(test)]
 #[path = "../../tests/unit/http/graphql.rs"]
 mod tests;
-
 
 pub(crate) async fn peer(
     State(state): State<ServerState>,

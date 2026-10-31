@@ -151,3 +151,13 @@ pub const WS_IMAGE_EDITOR_UPDATE: &'static str = "IMAGE_EDITOR_UPDATE";
 #[cfg(test)]
 #[path = "../tests/unit/events.rs"]
 mod tests;
+
+pub const WS_DEVICE_NAME_UPDATED: &str = "DEVICE_NAME_UPDATED";
+
+pub const WS_NEARBY_DEVICE_UNREACHABLE: &str = "NEARBY_DEVICE_UNREACHABLE";
+
+pub const WS_NEARBY_DISCOVERY_STARTED: &str = "NEARBY_DISCOVERY_STARTED";
+
+pub const WS_NEARBY_DISCOVERY_STOPPED: &str = "NEARBY_DISCOVERY_STOPPED";
+
+pub const WS_UPLOAD_MERGE_RESULT: &str = "UPLOAD_MERGE_RESULT";

@@ -1,7 +1,7 @@
 #[tokio::test]
 async fn nearby_snapshot_uses_the_main_contract_without_starting_discovery() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let native = core.native_graphql().unwrap();
     assert!(
         core.runtime_state()
@@ -50,7 +50,7 @@ async fn nearby_snapshot_uses_the_main_contract_without_starting_discovery() {
 #[tokio::test]
 async fn is_discovering_reports_the_manual_scan_loop() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let native = core.native_graphql().unwrap();
     let selection = "{ isDiscovering }";
     let response = native.execute(async_graphql::Request::new(selection)).await;
@@ -71,7 +71,7 @@ async fn is_discovering_reports_the_manual_scan_loop() {
 #[tokio::test]
 async fn pairing_code_query_returns_a_lan_ready_model_without_starting_discovery() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let native = core.native_graphql().unwrap();
     let response = native.execute(async_graphql::Request::new("{ parsePairingCode(code: \"plainapp://pair?id=fixture&name=Device&ips=192.0.2.1&port=8443\") { id name port discoveryMethods } }")).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

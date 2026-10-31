@@ -528,7 +528,7 @@ pub fn compute_target_size(src_w: u32, src_h: u32, w: u32, h: u32) -> (u32, u32)
 
 /// Configure engine globals (`[thumbnails]` section). Idempotent; the first
 /// call wins (startup before first request).
-pub fn init_from_config(cfg: &crate::config::Config) {
+pub fn init_from_config(cfg: &plain_rs::utils::config::Config) {
     admission::init_from_config(cfg);
     lru::init_from_config(cfg);
 }
@@ -536,3 +536,61 @@ pub fn init_from_config(cfg: &crate::config::Config) {
 #[cfg(test)]
 #[path = "../../../tests/unit/previews/images/mod.rs"]
 mod tests;
+
+pub struct ResourceDecoder;
+impl plain_rs::media::images::decoding::ThumbnailDecoder for ResourceDecoder {
+    fn decode<'a>(
+        &'a self,
+        path: &'a str,
+        width: u32,
+        height: u32,
+        center_crop: bool,
+        cache: &'a std::path::Path,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Option<Vec<u8>>, String>> + Send + 'a>,
+    > {
+        Box::pin(async move {
+            let meta = tokio::fs::metadata(path)
+                .await
+                .map_err(|error| error.to_string())?;
+            let modified = meta
+                .modified()
+                .map_err(|error| error.to_string())?
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
+            let spec = ThumbSpec::sanitize(
+                path,
+                i32::try_from(width).map_err(|error| error.to_string())?,
+                i32::try_from(height).map_err(|error| error.to_string())?,
+                85,
+                modified,
+                meta.len() as i64,
+            );
+            let outcome = get_thumbnail_with_cache(spec.clone(), cache)
+                .await
+                .map_err(|error| error.to_string())?;
+            let bytes = match outcome {
+                ThumbOutcome::Generated(bytes) => bytes,
+                ThumbOutcome::Original { data, .. } => data,
+            };
+            let bytes = if center_crop {
+                tokio::task::spawn_blocking(move || -> Result<Vec<u8>, String> {
+                    let image = image::load_from_memory(&bytes)
+                        .map_err(|error| error.to_string())?
+                        .resize_to_fill(spec.w, spec.h, image::imageops::FilterType::Lanczos3);
+                    let mut bytes = Vec::new();
+                    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85)
+                        .encode_image(&image)
+                        .map_err(|error| error.to_string())?;
+                    Ok(bytes)
+                })
+                .await
+                .map_err(|error| error.to_string())??
+            } else {
+                (*bytes).clone()
+            };
+            Ok(Some(bytes))
+        })
+    }
+}

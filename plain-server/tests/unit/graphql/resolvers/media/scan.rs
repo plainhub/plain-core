@@ -1,11 +1,10 @@
-use super::*;
 use async_graphql::Request;
 
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn native_media_controls_share_the_main_contract_and_remote_permissions() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();
@@ -68,7 +67,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
 #[tokio::test]
 async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let request = || Request::new("{ mediaSourceDirs scanProgress { indexed total state } }");
     let denied = crate::graphql::executor::execute_graphql(

@@ -1,14 +1,14 @@
-use crate::graphql::resolvers::notifications::types::Notification;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::flag;
 use crate::graphql::types::facts::id;
 use crate::graphql::types::facts::instant;
 use crate::graphql::types::facts::strings;
 use crate::graphql::types::facts::text;
-use crate::host::bridge::Host;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Object};
+use plain_rs::host::bridge::Host;
 use plain_rs::prefs::Prefs;
+use plain_rs::services::notifications::types::Notification;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -27,9 +27,12 @@ impl NotificationsQuery {
         limit: i32,
     ) -> async_graphql::Result<Vec<Notification>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
-        crate::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "NOTIFICATIONS")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        plain_rs::services::capabilities::require(
+            ctx.data_unchecked::<Arc<Host>>(),
+            "NOTIFICATIONS",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         let items = notification_items(ctx, &query).await?;
         Ok(items
             .into_iter()
@@ -45,9 +48,12 @@ impl NotificationsQuery {
         query: String,
     ) -> async_graphql::Result<i32> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
-        crate::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "NOTIFICATIONS")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        plain_rs::services::capabilities::require(
+            ctx.data_unchecked::<Arc<Host>>(),
+            "NOTIFICATIONS",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         Ok(notification_items(ctx, &query).await?.len() as i32)
     }
 }
@@ -63,9 +69,12 @@ impl NotificationsMutation {
         ids: Vec<async_graphql::ID>,
     ) -> async_graphql::Result<ActionResult> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
-        crate::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "NOTIFICATIONS")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        plain_rs::services::capabilities::require(
+            ctx.data_unchecked::<Arc<Host>>(),
+            "NOTIFICATIONS",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         let ids: Vec<String> = ids.iter().map(|id| id.0.clone()).collect();
         let receipt = ctx
             .data_unchecked::<Arc<Host>>()
@@ -110,9 +119,12 @@ impl NotificationsMutation {
         if action_index < 0 {
             return Err(async_graphql::Error::new("action_not_found"));
         }
-        crate::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "NOTIFICATIONS")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        plain_rs::services::capabilities::require(
+            ctx.data_unchecked::<Arc<Host>>(),
+            "NOTIFICATIONS",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         let receipt = ctx
             .data_unchecked::<Arc<Host>>()
             .call(
@@ -140,7 +152,7 @@ async fn notification_items(ctx: &Context<'_>, query: &str) -> async_graphql::Re
         .map_err(|error| async_graphql::Error::new(error))?;
     let facts: Vec<Value> = serde_json::from_value(facts)
         .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-    crate::services::notifications::query::notifications(
+    plain_rs::services::notifications::query::notifications(
         ctx.data_unchecked::<Arc<Prefs>>(),
         facts,
         query,
@@ -187,8 +199,8 @@ pub(crate) fn publish(
         _ => return Err("invalid notification event type".into()),
     };
     if kind != "NOTIFICATION_DELETED"
-        && (!public_gate::is_enabled(prefs, &[PERMISSION])
-            || crate::services::notifications::query::notifications(
+        && (!plain_rs::services::device::access::is_enabled(prefs, &[PERMISSION])
+            || plain_rs::services::notifications::query::notifications(
                 prefs,
                 vec![facts.notification.clone()],
                 "",
@@ -202,7 +214,7 @@ pub(crate) fn publish(
         .map_err(|error| error.to_string())?;
     let _ = events.send(plain_rs::events::WsEvent::broadcast(kind, payload));
     if kind != "NOTIFICATION_DELETED" {
-        crate::services::sms::provider_events::notification_changed(
+        plain_rs::services::sms::provider_events::notification_changed(
             events,
             facts.notification["appId"].as_str().unwrap_or_default(),
         );

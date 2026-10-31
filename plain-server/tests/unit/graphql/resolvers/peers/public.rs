@@ -1,10 +1,9 @@
-use super::*;
-use crate::assembly::server::ServerState;
-use crate::host::bridge::Host;
+use crate::server::ServerState;
+use plain_rs::host::bridge::Host;
 
 struct PublicSchema {
     state: ServerState,
-    _server: crate::assembly::server::ContentServer,
+    _server: crate::server::ContentServer,
 }
 use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
@@ -36,7 +35,7 @@ fn fixture_with(
     prefs
         .set("api_permissions", vec!["READ_PHONE_NUMBERS"])
         .unwrap();
-    let server = crate::assembly::server::ContentServer::start(
+    let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_rs::utils::base64::base64_encode(&[3; 32]),
         prefs,
@@ -246,8 +245,8 @@ async fn pairing_rejects_caller_supplied_discovery_metadata() {
 #[tokio::test]
 async fn main_identity_rename_and_pairing_code_use_shared_preferences_and_refuse_stopped_core() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
-    let state = core.runtime_state();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let _state = core.runtime_state();
     let executor = core.native_graphql().unwrap();
     let identity = "{app{clientId deviceName}}";
     let response = executor

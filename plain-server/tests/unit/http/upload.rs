@@ -14,7 +14,7 @@ fn upload_info_defaults_match_the_desktop_payload() {
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 async fn multipart_upload(
-    core: &crate::assembly::server::ContentServer,
+    core: &crate::server::ContentServer,
     endpoint: &str,
     client_id: &str,
     token: Option<&str>,
@@ -77,7 +77,7 @@ async fn multipart_regular_upload_streams_without_host_preserves_replacements_an
         plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs.set("desktop_access", true).unwrap();
-    let core = crate::assembly::server::ContentServer::start(
+    let core = crate::server::ContentServer::start(
         directory.path(),
         &plain_rs::utils::base64::base64_encode(&[7; 32]),
         prefs,
@@ -85,7 +85,7 @@ async fn multipart_regular_upload_streams_without_host_preserves_replacements_an
     .unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
-    let session = crate::services::sessions::create(&state, "upload fixture".into()).unwrap();
+    let session = plain_rs::services::sessions::create(&state, "upload fixture".into()).unwrap();
     let key = plain_rs::utils::base64::base64_decode(&session.token);
     let destination = directory.path().join("files");
     std::fs::create_dir(&destination).unwrap();
@@ -170,8 +170,7 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
     );
     prefs.set("desktop_access", true).unwrap();
     plain_rs::prefs::identity::ensure_url_token(&prefs);
-    let core =
-        crate::assembly::server::ContentServer::start(directory.path(), &token, prefs).unwrap();
+    let core = crate::server::ContentServer::start(directory.path(), &token, prefs).unwrap();
     let state = core.runtime_state();
     let client_id = state.native_client_id().unwrap();
     let key = plain_rs::utils::base64::base64_decode(&core.native_url_token().unwrap());

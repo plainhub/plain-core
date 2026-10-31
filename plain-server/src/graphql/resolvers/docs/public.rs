@@ -1,9 +1,9 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
-use crate::graphql::types::Instant;
-use crate::graphql::types::Long;
 use crate::graphql::types::facts::rows;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Object, SimpleObject};
+use plain_rs::types::Instant;
+use plain_rs::types::Long;
 use serde_json::json;
 use std::path::Path;
 
@@ -66,7 +66,7 @@ impl DocsQuery {
         query: String,
         offset: i32,
         limit: i32,
-        sort_by: crate::graphql::resolvers::files::types::FileSortBy,
+        sort_by: plain_rs::prefs::settings::FileSortBy,
     ) -> async_graphql::Result<Vec<Doc>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let items = media_rows(

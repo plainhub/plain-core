@@ -1,10 +1,10 @@
-use crate::graphql::types::Instant;
 use crate::graphql::types::parse_instant;
 use async_graphql::{Context, ID, Object, SimpleObject};
 use plain_rs::db::Db;
 use plain_rs::db::ShareRow;
 use plain_rs::files::shares::Root;
 use plain_rs::files::shares::Service;
+use plain_rs::types::Instant;
 use std::sync::Arc;
 
 #[derive(SimpleObject)]

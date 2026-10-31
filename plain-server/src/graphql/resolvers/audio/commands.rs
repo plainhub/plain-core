@@ -1,9 +1,9 @@
 use crate::graphql::resolvers::audio::public::AudioItem;
-use crate::graphql::types::Long;
-use crate::services::audio::host::Audio;
 use async_graphql::{Context, ID, Object, Result, SimpleObject};
 use plain_rs::media::audio::{commands, playback, queue};
 use plain_rs::prefs::Prefs;
+use plain_rs::services::audio::host::Audio;
+use plain_rs::types::Long;
 use std::sync::Arc;
 
 #[derive(SimpleObject)]

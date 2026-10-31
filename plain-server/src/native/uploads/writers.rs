@@ -1,5 +1,6 @@
 use super::NativeUploads;
-use crate::{native::graphql::NativeRequestScope, services::files::upload_chunks::UploadChunk};
+use plain_rs::host::request_scope::NativeRequestScope;
+use plain_rs::services::files::upload_chunks::UploadChunk;
 use std::{
     collections::HashMap,
     sync::{

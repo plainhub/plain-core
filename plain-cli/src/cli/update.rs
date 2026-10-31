@@ -1,5 +1,5 @@
 use anyhow::Result;
-use plain_server::platform::system::consts::AppPaths;
+use plain_rs::platform::system::consts::AppPaths;
 
 pub fn run(_paths: &AppPaths) -> Result<()> {
     println!(

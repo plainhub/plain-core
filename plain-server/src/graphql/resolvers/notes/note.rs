@@ -1,8 +1,8 @@
 use crate::graphql::resolvers::common::content_common;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::ActionResult;
-use crate::graphql::types::Instant;
 use async_graphql::{ComplexObject, Context, ID, InputObject, Object, SimpleObject};
+use plain_rs::types::Instant;
 use std::sync::Arc;
 
 use plain_rs::db::Db;

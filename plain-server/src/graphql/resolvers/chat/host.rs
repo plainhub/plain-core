@@ -1,7 +1,7 @@
 use super::public::{ChatItem, item};
-use crate::assembly::server::ServerState;
-use crate::services::chat::chat_actions;
+use crate::server::ServerState;
 use async_graphql::{Context, ID, Object, SimpleObject};
+use plain_rs::services::chat::chat_actions;
 
 #[derive(SimpleObject)]
 pub struct ChatConversation {
@@ -37,7 +37,7 @@ impl ChatHostQuery {
         let filter = filter(&query, offset, limit, false);
         let value = plain_rs::db::chat_store::messages::list(&state.db, &filter)?;
         let rows: Vec<plain_rs::db::DChat> = serde_json::from_value(value)?;
-        crate::services::chat::prewarm::prepare_conversation(state, &filter);
+        plain_rs::services::chat::prewarm::prepare_conversation(state, &filter);
         Ok(rows.iter().map(item).collect())
     }
     async fn chat_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
@@ -77,7 +77,7 @@ impl ChatHostMutation {
         targets: Vec<String>,
         share_id: ID,
     ) -> async_graphql::Result<Vec<ChatItem>> {
-        Ok(crate::services::chat::share_send::existing(
+        Ok(plain_rs::services::chat::share_send::existing(
             ctx.data::<ServerState>()?,
             ctx.data::<std::sync::Arc<plain_rs::files::shares::Service>>()?
                 .clone(),
@@ -96,9 +96,9 @@ impl ChatHostMutation {
         targets: Vec<String>,
         path: String,
         name: String,
-        expires_at: Option<crate::graphql::types::Instant>,
+        expires_at: Option<plain_rs::types::Instant>,
     ) -> async_graphql::Result<Vec<ChatItem>> {
-        Ok(crate::services::chat::share_send::folder(
+        Ok(plain_rs::services::chat::share_send::folder(
             ctx.data::<ServerState>()?,
             ctx.data::<std::sync::Arc<plain_rs::files::shares::Service>>()?
                 .clone(),
@@ -134,7 +134,7 @@ impl ChatHostMutation {
         recipients: Option<Vec<ID>>,
     ) -> async_graphql::Result<ChatItem> {
         let recipients = recipients.map(|ids| ids.into_iter().map(|id| id.to_string()).collect());
-        let receipt = crate::services::chat::chat_delivery::deliver(
+        let receipt = plain_rs::services::chat::chat_delivery::deliver(
             ctx.data::<ServerState>()?,
             id.as_str(),
             recipients,
@@ -151,8 +151,12 @@ impl ChatHostMutation {
         text: String,
     ) -> async_graphql::Result<ChatTextEdit> {
         let state = ctx.data::<ServerState>()?;
-        let result =
-            crate::services::link_preview::edit(&state.db, &state.directory, id.as_str(), &text)?;
+        let result = plain_rs::services::link_preview::edit(
+            &state.db,
+            &state.directory,
+            id.as_str(),
+            &text,
+        )?;
         state.previews.request(id.as_str());
         if result.changed {
             chat_actions::committed(

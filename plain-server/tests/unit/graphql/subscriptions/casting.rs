@@ -1,18 +1,28 @@
-use crate::assembly::server::ContentServer;
 use crate::native::graphql::NativeGraphqlExecutor;
+use crate::server::ContentServer;
 use serde_json::{Value, json};
 
 async fn snapshot(executor: &NativeGraphqlExecutor, handle: u64) -> Value {
     tokio::time::timeout(std::time::Duration::from_secs(2), async {
         loop {
             let message: Value = serde_json::from_str(
-                &executor.subscription_session(handle).unwrap().read().await.unwrap(),
-            ).unwrap();
+                &executor
+                    .subscription_session(handle)
+                    .unwrap()
+                    .read()
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
             assert_eq!(message["type"], "next", "{message}");
-            if message["payload"]["extensions"]["subscriptionReady"] == true { continue; }
+            if message["payload"]["extensions"]["subscriptionReady"] == true {
+                continue;
+            }
             return message["payload"]["data"]["dlnaSenderChanged"].clone();
         }
-    }).await.unwrap()
+    })
+    .await
+    .unwrap()
 }
 
 #[tokio::test]
@@ -23,7 +33,9 @@ async fn query_and_subscription_share_sender_state_without_starting_scan_or_chan
     let executor = server.native_graphql().unwrap();
     let fields = "version devices { id } items { path } playing progressMs durationMs";
     let before = state.cast.snapshot().version;
-    let response = executor.execute(format!("query {{ dlnaSenderState {{ {fields} }} }}").into()).await;
+    let response = executor
+        .execute(format!("query {{ dlnaSenderState {{ {fields} }} }}").into())
+        .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let queried = response.data.into_json().unwrap()["dlnaSenderState"].clone();
     assert_eq!(state.cast.snapshot().version, before);

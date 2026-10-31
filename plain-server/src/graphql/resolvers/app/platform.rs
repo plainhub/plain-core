@@ -1,15 +1,16 @@
-use crate::assembly::server::ServerState;
-use crate::graphql::resolvers::app::capability_types::{AppUpdate, Disk};
+use crate::graphql::resolvers::app::capability_types::Disk;
 use crate::graphql::resolvers::app::capability_types::{
     SambaSettings, SambaSettingsInput, SambaShare, SambaShareAuth,
 };
-use crate::graphql::types::Long;
-use crate::host::bridge::Host;
-use crate::host::platform::{
+use crate::server::ServerState;
+use async_graphql::{Context, Object, Result};
+use plain_rs::host::bridge::Host;
+use plain_rs::host::commands::{
     SYSTEM_SAMBA_APPLY, SYSTEM_SAMBA_PASSWORD, SYSTEM_SAMBA_SERVICE_FACTS, SambaApplyRequest,
     SambaPasswordRequest, SambaServiceFacts,
 };
-use async_graphql::{Context, Object, Result};
+use plain_rs::services::settings::types::AppUpdate;
+use plain_rs::types::Long;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -46,9 +47,7 @@ impl PlatformQuery {
                             r#type: kind,
                             message: row.message,
                             client_id: row.client_id,
-                            created_at: crate::graphql::types::Instant(
-                                at.with_timezone(&chrono::Utc),
-                            ),
+                            created_at: plain_rs::types::Instant(at.with_timezone(&chrono::Utc)),
                         })
                         .map_err(|error| async_graphql::Error::new(error.to_string())),
                 )
@@ -65,7 +64,7 @@ impl PlatformQuery {
 
     async fn disks(&self, ctx: &Context<'_>) -> Result<Vec<Disk>> {
         require_capability(ctx, "DISK_MANAGER").await?;
-        let disks = tokio::task::spawn_blocking(crate::platform::disks::list)
+        let disks = tokio::task::spawn_blocking(plain_rs::platform::disks::list)
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?
             .map_err(async_graphql::Error::new)?;
@@ -83,12 +82,12 @@ impl PlatformQuery {
     }
 
     async fn app_update(&self, ctx: &Context<'_>) -> Result<AppUpdate> {
-        Ok(crate::services::settings::updates::snapshot(ctx.data::<ServerState>()?).await?)
+        Ok(plain_rs::services::settings::updates::snapshot(ctx.data::<ServerState>()?).await?)
     }
 }
 
 async fn require_capability(ctx: &Context<'_>, name: &str) -> Result<()> {
-    crate::services::capabilities::require(ctx.data::<Arc<Host>>()?, name)
+    plain_rs::services::capabilities::require(ctx.data::<Arc<Host>>()?, name)
         .await
         .map_err(|error| async_graphql::Error::new(error.to_string()))
 }
@@ -165,14 +164,14 @@ impl PlatformMutation {
     async fn format_disk(&self, ctx: &Context<'_>, path: String) -> Result<bool> {
         require_capability(ctx, "DISK_MANAGER").await?;
         let state = ctx.data::<ServerState>()?;
-        let request = crate::host::platform::DiskFormatRequest {
+        let request = plain_rs::host::commands::DiskFormatRequest {
             path,
             client_id: ctx.data_opt::<String>().cloned().unwrap_or_default(),
         };
         let value = state
             .host
             .call_wait(
-                crate::host::platform::SYSTEM_DISK_FORMAT,
+                plain_rs::host::commands::SYSTEM_DISK_FORMAT,
                 serde_json::to_value(request)?,
             )
             .await
@@ -192,8 +191,8 @@ impl PlatformMutation {
         let value = state
             .host
             .call(
-                crate::host::platform::SYSTEM_HOSTNAME_SET,
-                serde_json::to_value(crate::host::platform::HostnameRequest {
+                plain_rs::host::commands::SYSTEM_HOSTNAME_SET,
+                serde_json::to_value(plain_rs::host::commands::HostnameRequest {
                     name: name.clone(),
                 })?,
             )

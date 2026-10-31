@@ -71,11 +71,7 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
             $(collect::<$ty>($root, $group, &mut owners, &mut types);)+
         };
     }
-    group!(
-        "Query",
-        "settings",
-        resolvers::settings::public::PrefsQuery
-    );
+    group!("Query", "settings", resolvers::settings::public::PrefsQuery);
     group!(
         "Query",
         "app",
@@ -134,11 +130,7 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
         resolvers::images::public::ImagesQuery
     );
     group!("Query", "audio", resolvers::audio::public::AudioQuery);
-    group!(
-        "Query",
-        "videos",
-        resolvers::videos::public::VideosQuery
-    );
+    group!("Query", "videos", resolvers::videos::public::VideosQuery);
     group!("Query", "tags", resolvers::tags::public::TagsQuery);
     group!(
         "Query",
@@ -166,13 +158,13 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!(
         "Query",
         "contacts",
-        crate::mobile::contacts::resolvers::ContactsQuery
+        crate::graphql::resolvers::mobile::contacts::resolvers::ContactsQuery
     );
     group!("Query", "sms", resolvers::sms::SmsQuery);
     group!(
         "Query",
         "calls",
-        crate::mobile::phone_calls::resolvers::CallsQuery
+        crate::graphql::resolvers::mobile::phone_calls::resolvers::CallsQuery
     );
     group!(
         "Query",
@@ -220,11 +212,7 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
         "casting",
         resolvers::casting::sender::DlnaSenderMutation
     );
-    group!(
-        "Mutation",
-        "peers",
-        resolvers::peers::public::PeersMutation
-    );
+    group!("Mutation", "peers", resolvers::peers::public::PeersMutation);
     group!(
         "Mutation",
         "shares",
@@ -307,13 +295,13 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!(
         "Mutation",
         "contacts",
-        crate::mobile::contacts::resolvers::ContactsMutation
+        crate::graphql::resolvers::mobile::contacts::resolvers::ContactsMutation
     );
     group!("Mutation", "sms", resolvers::sms::SmsMutation);
     group!(
         "Mutation",
         "calls",
-        crate::mobile::phone_calls::resolvers::CallsMutation
+        crate::graphql::resolvers::mobile::phone_calls::resolvers::CallsMutation
     );
     group!("Mutation", "notes", resolvers::notes::note::NoteMutation);
     group!("Mutation", "feeds", resolvers::feeds::feed::FeedMutation);

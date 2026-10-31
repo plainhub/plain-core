@@ -1,5 +1,5 @@
-use crate::graphql::types::Instant;
 use async_graphql::{Context, ID, InputObject, Object, SimpleObject};
+use plain_rs::types::Instant;
 use std::sync::Arc;
 
 use plain_rs::db::Db;

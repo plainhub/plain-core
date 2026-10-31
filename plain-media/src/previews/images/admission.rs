@@ -94,7 +94,7 @@ pub struct Permits {
 
 static GLOBAL: OnceLock<Admission> = OnceLock::new();
 
-fn build(cfg: &crate::config::Config) -> Admission {
+fn build(cfg: &plain_rs::utils::config::Config) -> Admission {
     let cpus = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
@@ -111,12 +111,12 @@ fn build(cfg: &crate::config::Config) -> Admission {
 
 /// Configure the global admission controller from `[thumbnails]` config.
 /// Called once at startup; the first call wins.
-pub fn init_from_config(cfg: &crate::config::Config) {
+pub fn init_from_config(cfg: &plain_rs::utils::config::Config) {
     let _ = GLOBAL.set(build(cfg));
 }
 
 pub fn global() -> &'static Admission {
-    GLOBAL.get_or_init(|| build(&crate::config::Config::default()))
+    GLOBAL.get_or_init(|| build(&plain_rs::utils::config::Config::default()))
 }
 
 #[cfg(test)]

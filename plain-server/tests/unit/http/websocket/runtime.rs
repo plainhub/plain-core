@@ -93,7 +93,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             plain_rs::utils::base64::base64_encode(&private),
         )
         .unwrap();
-    let server = crate::assembly::server::ContentServer::start(
+    let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_rs::utils::base64::base64_encode(&[3; 32]),
         prefs,
@@ -213,13 +213,13 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     consumer.await.unwrap();
 }
 
-fn public_fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServer) {
+fn public_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let directory = tempfile::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
         plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs.set("desktop_access", true).unwrap();
-    let core = crate::assembly::server::ContentServer::start(
+    let core = crate::server::ContentServer::start(
         directory.path(),
         &plain_rs::utils::base64::base64_encode(&[4; 32]),
         prefs,
@@ -259,7 +259,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
         .await
         .unwrap();
         if attempt >= 5 {
-            use crate::services::confirmation_channel::{Client, ConfirmationMode};
+            use plain_rs::services::confirmation_channel::{Client, ConfirmationMode};
             let (_, hello) = Client::start(&cid, ConfirmationMode::Password).unwrap();
             socket
                 .send(ClientMessage::Text(
@@ -369,7 +369,7 @@ async fn root_serves_the_spa_and_old_ws_path_never_upgrades() {
 }
 
 async fn confirm_login(
-    server: &crate::assembly::server::ContentServer,
+    server: &crate::server::ContentServer,
     id: &str,
     allowed: bool,
 ) -> Result<(), String> {
@@ -471,7 +471,7 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
 #[tokio::test]
 async fn host_replacement_restores_only_authenticated_online_clients() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let session = state
         .subscription_sessions
@@ -483,7 +483,7 @@ async fn host_replacement_restores_only_authenticated_online_clients() {
             ),
             "remote".into(),
             Some(vec![1; 32]),
-            crate::native::graphql::NativeRequestScope::default(),
+            plain_rs::host::request_scope::NativeRequestScope::default(),
         )
         .unwrap();
     session.mark_online().unwrap();
@@ -504,7 +504,7 @@ async fn saturated_host_recovers_online_clients_without_counting_native_sessions
     let state = core.runtime_state();
     let native = core.native_graphql().unwrap();
     let native_id = native
-        .open_subscriptions(crate::native::graphql::NativeRequestScope::default())
+        .open_subscriptions(plain_rs::host::request_scope::NativeRequestScope::default())
         .unwrap();
     let host = core.host_events().unwrap();
     host_online(&host, json!([])).await;
@@ -549,7 +549,7 @@ async fn saturated_host_recovers_online_clients_without_counting_native_sessions
     assert_eq!(network["method"], "networkInterfacesChanged");
     host.reply(json!({"id":network["id"],"result":null}))
         .unwrap();
-    for _ in 0..crate::host::bridge::REQUEST_CAPACITY {
+    for _ in 0..plain_rs::host::bridge::REQUEST_CAPACITY {
         state.host.notify("blocked", json!({})).unwrap();
     }
     let session = state
@@ -562,7 +562,7 @@ async fn saturated_host_recovers_online_clients_without_counting_native_sessions
             ),
             "remote".into(),
             Some(vec![1; 32]),
-            crate::native::graphql::NativeRequestScope::default(),
+            plain_rs::host::request_scope::NativeRequestScope::default(),
         )
         .unwrap();
     session.mark_online().unwrap();
@@ -601,7 +601,7 @@ async fn online_clients_follow_authenticated_graphql_connections() {
     ));
     let native = core.native_graphql().unwrap();
     let native_id = native
-        .open_subscriptions(crate::native::graphql::NativeRequestScope::default())
+        .open_subscriptions(plain_rs::host::request_scope::NativeRequestScope::default())
         .unwrap();
     let host = core.host_events().unwrap();
     host_online(&host, json!([])).await;
@@ -716,7 +716,7 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
             ),
             client,
             Some(plain_rs::base64_decode(&credentials.token)),
-            crate::native::graphql::NativeRequestScope::default(),
+            plain_rs::host::request_scope::NativeRequestScope::default(),
         )
         .unwrap();
     session.send(r#"{"type":"subscribe","id":"public","payload":{"query":"subscription { pairingCompleted { deviceId deviceName ip } }"}}"#).unwrap();
@@ -776,63 +776,6 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
     core.shutdown().await;
 }
 
-#[tokio::test]
-async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
-    let (_directory, core) = public_fixture();
-    let state = core.runtime_state();
-    let (generation, mut requests) = state.host.connect();
-    let host = state.host.clone();
-    let responder = tokio::spawn(async move {
-        while let Some(request) = requests.recv().await {
-            let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => json!(["SMS"]),
-                "systemPermissionFacts" => json!({"granted":{"SEND_SMS":true}}),
-                method => panic!("Unexpected host request {method}"),
-            };
-            host.reply(generation, json!({"id":request["id"],"result":result}))
-                .unwrap();
-        }
-    });
-    state
-        .sms_sends
-        .register("send".into(), Some("request".into()), 1)
-        .unwrap();
-    state
-        .sms_sends
-        .report(
-            serde_json::from_value(json!({
-                "requestId":"send", "partIndex":0, "partCount":1, "success":true, "resultCode":-1
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-    let native = core.native_graphql().unwrap();
-    let id = native
-        .open_subscriptions(crate::native::graphql::NativeRequestScope::default())
-        .unwrap();
-    let session = native.subscription_session(id).unwrap();
-    session.send(r#"{"type":"subscribe","id":"sms","payload":{"query":"subscription { smsSendResult { requestId success resultCode } }"}}"#).unwrap();
-    let result = tokio::time::timeout(Duration::from_secs(3), async {
-        loop {
-            let response: Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
-            assert_ne!(response["type"], "error");
-            if response["payload"]["data"]["smsSendResult"].is_object() {
-                break response;
-            }
-        }
-    })
-    .await
-    .unwrap();
-    assert_eq!(
-        result["payload"]["data"]["smsSendResult"],
-        json!({"requestId":"request","success":true,"resultCode":-1})
-    );
-    native.close_subscriptions(id);
-    state.host.disconnect(generation);
-    responder.abort();
-    core.shutdown().await;
-}
-
 #[cfg(feature = "http_transport")]
 async fn password_keys(
     socket: &mut tokio_tungstenite::WebSocketStream<
@@ -840,9 +783,9 @@ async fn password_keys(
     >,
     state: &ServerState,
     client_id: &str,
-) -> crate::services::confirmation_channel::Channel {
-    use crate::services::confirmation_channel::{Client, ConfirmationMode};
+) -> plain_rs::services::confirmation_channel::Channel {
     use futures_util::{SinkExt, StreamExt};
+    use plain_rs::services::confirmation_channel::{Client, ConfirmationMode};
     use tokio_tungstenite::tungstenite::Message;
     let (client, hello) = Client::start(client_id, ConfirmationMode::Password).unwrap();
     socket
@@ -857,7 +800,7 @@ async fn password_keys(
     let Message::Text(response) = response else {
         panic!("signed password challenge required")
     };
-    let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    let signing = plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     let (keys, reveal) = client
         .accept(
             &serde_json::from_str(&response).unwrap(),
@@ -996,4 +939,30 @@ async fn authenticated_editor_connections_release_unauthenticated_slots() {
         socket.close(None).await.unwrap();
     }
     server.shutdown().await;
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tokio::test]
+async fn non_mobile_native_subscriptions_reject_sms_fields() {
+    let (_directory, core) = public_fixture();
+    let native = core.native_graphql().unwrap();
+    let id = native
+        .open_subscriptions(plain_rs::host::request_scope::NativeRequestScope::default())
+        .unwrap();
+    let session = native.subscription_session(id).unwrap();
+    session.send(r#"{"type":"subscribe","id":"sms","payload":{"query":"subscription { smsSendResult { requestId } }"}}"#).unwrap();
+    let response: Value = serde_json::from_str(
+        &tokio::time::timeout(Duration::from_secs(3), session.read())
+            .await
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(response["type"], "error");
+    assert_eq!(
+        response["payload"][0]["message"],
+        "Unknown subscription field"
+    );
+    native.close_subscriptions(id);
+    core.stop_core().await;
 }

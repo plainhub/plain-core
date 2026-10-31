@@ -1,7 +1,7 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
-use crate::host::bridge::Host;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::db::Db;
+use plain_rs::host::bridge::Host;
 use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -52,7 +52,7 @@ fn fixture_with(
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::graphql::schemas::public::build(host, events, prefs, db, directory),
+        crate::test_support::schema::build(host, events, prefs, db, directory),
     )
 }
 
@@ -223,7 +223,7 @@ async fn copy_and_move_use_the_shared_file_tasks() {
         assert_eq!(std::fs::read_to_string(&destination).unwrap(), "new");
         assert_eq!(source.exists(), name == "copyFile");
         let tasks = schema
-            .data::<Arc<crate::services::files::file_tasks::FileTasks>>()
+            .data::<Arc<plain_rs::services::files::file_tasks::FileTasks>>()
             .unwrap()
             .list("file-test".into())
             .await
@@ -529,7 +529,7 @@ async fn a_media_action_refuses_a_query_that_selects_nothing_and_all_true_still_
 async fn media_batches_commit_successes_and_notify_only_confirmed_ids() {
     let (_dir, schema) = fixture(GRANTED);
     let rows = seed_media(&schema, plain_rs::enums::DataType::Video, 501, false, "mp4");
-    let selected = crate::services::files::catalog::MediaCatalog::new(
+    let selected = plain_rs::services::files::catalog::MediaCatalog::new(
         database(&schema).clone(),
         schema.data::<Arc<Host>>().unwrap().clone(),
     )
@@ -605,7 +605,7 @@ fn merge_results_preserve_status_output_size_and_failure() {
 #[tokio::test]
 async fn main_upload_resume_query_observes_only_completed_native_byte_streams() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
     let executor = core.native_graphql().unwrap();

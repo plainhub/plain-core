@@ -1,35 +1,8 @@
-use super::registry::{EVENTS, EventSpec};
-use async_graphql::{Request, Response};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use async_graphql::Request;
+use plain_rs::protocols::graphql::events::EVENTS;
+use plain_rs::protocols::graphql::events::EventSpec;
 
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-pub enum ClientMessage {
-    Subscribe { id: String, payload: Request },
-    Complete { id: String },
-    Ping { payload: Option<Value> },
-    Pong { payload: Option<Value> },
-}
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ServerMessage {
-    Next {
-        id: String,
-        payload: Response,
-    },
-    Error {
-        id: String,
-        payload: Vec<async_graphql::ServerError>,
-    },
-    Complete {
-        id: String,
-    },
-    Pong {
-        payload: Option<Value>,
-    },
-}
-pub(super) fn spec(request: &Request) -> Result<&'static EventSpec, String> {
+pub(crate) fn spec(request: &Request) -> Result<&'static EventSpec, String> {
     use async_graphql::parser::{
         parse_query,
         types::{OperationType, Selection},
@@ -84,6 +57,15 @@ pub(super) fn spec(request: &Request) -> Result<&'static EventSpec, String> {
     }
     EVENTS
         .iter()
+        .filter(|spec| {
+            !matches!(
+                spec.event,
+                "SMS_PROVIDER_CHANGED" | "SMS_SEND_RESULT" | "MMS_SEND_RESULT" | "MMS_SENT"
+            ) || cfg!(all(
+                feature = "mobile",
+                any(target_os = "android", target_os = "ios")
+            ))
+        })
         .find(|spec| names.iter().any(|(_, name)| *name == spec.field))
         .ok_or_else(|| "Unknown subscription field".into())
 }

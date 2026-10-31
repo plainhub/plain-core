@@ -1,6 +1,6 @@
 use super::*;
-use crate::assembly::server::ContentServer;
 use crate::graphql::executor::RequestOrigin;
+use crate::server::ContentServer;
 use async_graphql::Request;
 use plain_rs::sessions::SessionStore;
 
@@ -97,7 +97,7 @@ async fn authenticated_revocation_and_logout_remove_the_keys_used_by_http_authen
     .await;
     assert!(revoked.errors.is_empty(), "{:?}", revoked.errors);
     assert!(
-        crate::services::sessions::key(&state.db, "second")
+        plain_rs::services::sessions::key(&state.db, "second")
             .unwrap()
             .is_none()
     );
@@ -112,7 +112,7 @@ async fn authenticated_revocation_and_logout_remove_the_keys_used_by_http_authen
     assert!(logout.errors.is_empty(), "{:?}", logout.errors);
     assert_eq!(logout.data.into_json().unwrap()["logout"], true);
     assert!(
-        crate::services::sessions::key(&state.db, "first")
+        plain_rs::services::sessions::key(&state.db, "first")
             .unwrap()
             .is_none()
     );

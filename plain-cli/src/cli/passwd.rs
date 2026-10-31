@@ -1,5 +1,5 @@
 use anyhow::Result;
-use plain_server::platform::system::consts::AppPaths;
+use plain_rs::platform::system::consts::AppPaths;
 
 pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
     let password = if stdin {
@@ -10,7 +10,7 @@ pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
         prompt_password()?
     };
     anyhow::ensure!(!password.is_empty(), "Password cannot be empty");
-    plain_server::assembly::headless::set_password(&paths.data_dir, &paths.cache_dir, &password)?;
+    plain_server::headless::set_password(&paths.data_dir, &paths.cache_dir, &password)?;
     println!("Admin password updated.");
     Ok(())
 }

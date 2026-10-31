@@ -1,8 +1,8 @@
 //! Public preference roots share the local Rust store and notify UI projections.
 
-use plain_rs::prefs::pref_keys::{APP_HOME_FEATURES, AUTO_CHECK_UPDATE, SKIP_VERSION};
 use async_graphql::{Context, Json, Object};
 use plain_rs::prefs::Prefs;
+use plain_rs::prefs::pref_keys::{APP_HOME_FEATURES, AUTO_CHECK_UPDATE, SKIP_VERSION};
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -29,17 +29,24 @@ impl PrefsQuery {
                 values.insert(key, value);
             }
         }
-        values.entry(APP_HOME_FEATURES.to_owned()).or_insert_with(|| {
-            Value::String(plain_rs::prefs::settings::Settings::default().app_home_features)
-        });
+        values
+            .entry(APP_HOME_FEATURES.to_owned())
+            .or_insert_with(|| {
+                Value::String(plain_rs::prefs::settings::Settings::default().app_home_features)
+            });
         Ok(Json(Value::Object(values)))
     }
-    async fn saved_value(&self, ctx: &Context<'_>, key: String) -> async_graphql::Result<Json<Value>> {
+    async fn saved_value(
+        &self,
+        ctx: &Context<'_>,
+        key: String,
+    ) -> async_graphql::Result<Json<Value>> {
         saved_key(&key)?;
-        let state = ctx.data::<crate::assembly::server::ServerState>()?;
-        Ok(Json(state.store.get()?.get_json(&key)?.unwrap_or(Value::Null)))
+        let state = ctx.data::<crate::server::ServerState>()?;
+        Ok(Json(
+            state.store.get()?.get_json(&key)?.unwrap_or(Value::Null),
+        ))
     }
-
 }
 
 #[derive(Default)]
@@ -57,27 +64,31 @@ impl PrefsMutation {
         Ok(true)
     }
 
-    async fn remove_pref(
-        &self,
-        ctx: &Context<'_>,
-        key: String,
-    ) -> async_graphql::Result<bool> {
+    async fn remove_pref(&self, ctx: &Context<'_>, key: String) -> async_graphql::Result<bool> {
         authorize(ctx, &key)?;
         if matches!(key.as_str(), SKIP_VERSION | AUTO_CHECK_UPDATE) {
-            let default = if key == SKIP_VERSION { Value::String(String::new()) } else { Value::Bool(true) };
+            let default = if key == SKIP_VERSION {
+                Value::String(String::new())
+            } else {
+                Value::Bool(true)
+            };
             super::state::set_pref(ctx, &key, default).await?;
         } else {
             super::state::remove_pref(ctx, &key).await?;
         }
         Ok(true)
     }
-    async fn set_saved_value(&self, ctx: &Context<'_>, key: String, value: Json<Value>) -> async_graphql::Result<bool> {
+    async fn set_saved_value(
+        &self,
+        ctx: &Context<'_>,
+        key: String,
+        value: Json<Value>,
+    ) -> async_graphql::Result<bool> {
         saved_key(&key)?;
         validate_value(&value.0)?;
-        let state = ctx.data::<crate::assembly::server::ServerState>()?;
+        let state = ctx.data::<crate::server::ServerState>()?;
         Ok(state.store.get()?.set_json(&key, value.0)?)
     }
-
 }
 
 fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<Prefs> {
@@ -89,21 +100,29 @@ fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<Prefs> {
 mod tests;
 
 fn is_local(ctx: &Context<'_>) -> bool {
-    ctx.data_opt::<crate::graphql::executor::RequestOrigin>() == Some(&crate::graphql::executor::RequestOrigin::Local)
+    ctx.data_opt::<crate::graphql::executor::RequestOrigin>()
+        == Some(&crate::graphql::executor::RequestOrigin::Local)
 }
 pub(crate) fn allowed(ctx: &Context<'_>, key: &str) -> bool {
     plain_rs::prefs::pref_keys::writable(key, is_local(ctx))
 }
 pub(crate) fn authorize(ctx: &Context<'_>, key: &str) -> async_graphql::Result<()> {
-    if !allowed(ctx, key) { return Err(async_graphql::Error::new("Preference is not accessible")); }
+    if !allowed(ctx, key) {
+        return Err(async_graphql::Error::new("Preference is not accessible"));
+    }
     Ok(())
 }
 
 fn saved_key(key: &str) -> async_graphql::Result<()> {
-    if matches!(key, "last_file_path" | "quick_note_draft" | "recent_searches" | "recent_save_dirs") ||
-        key.strip_prefix("chat_input_text:").is_some_and(|target| {
-            (target.starts_with("channel:") || target.starts_with("peer:")) && target.split_once(':').is_some_and(|(_, id)| !id.is_empty())
-        }) {
+    if matches!(
+        key,
+        "last_file_path" | "quick_note_draft" | "recent_searches" | "recent_save_dirs"
+    ) || key.strip_prefix("chat_input_text:").is_some_and(|target| {
+        (target.starts_with("channel:") || target.starts_with("peer:"))
+            && target.split_once(':').is_some_and(|(_, id)| !id.is_empty())
+    }) {
         Ok(())
-    } else { Err(async_graphql::Error::new("Unknown saved data key")) }
+    } else {
+        Err(async_graphql::Error::new("Unknown saved data key"))
+    }
 }

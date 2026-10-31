@@ -1,7 +1,5 @@
-use crate::{
-    assembly::server::ServerState, graphql::executor::RequestContext,
-    native::graphql::NativeRequestScope,
-};
+use crate::graphql::executor::RequestContext;
+use crate::server::ServerState;
 use axum::{
     extract::{
         Query, State, WebSocketUpgrade,
@@ -11,22 +9,12 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
+use plain_rs::host::request_scope::NativeRequestScope;
 use plain_rs::protocols::graphql::{self, Role};
-use serde::{Deserialize, Serialize};
+use plain_rs::protocols::graphql::{Ack, Init, PROTOCOL};
+use serde::Deserialize;
 use std::time::Duration;
 
-pub const PROTOCOL: &str = "plain-graphql-ws-v1";
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Init {
-    pub timestamp_millis: i64,
-    pub client_nonce: String,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Ack {
-    pub server_nonce: String,
-}
 #[derive(Deserialize)]
 pub(crate) struct Params {
     cid: String,
@@ -64,11 +52,11 @@ async fn establish(
     if !state.prefs.get_or("desktop_access", true) {
         return Err("Access disabled".into());
     }
-    let local = crate::services::sessions::local_key(state, &client);
+    let local = plain_rs::services::sessions::local_key(state, &client);
     let key = local
         .clone()
         .or_else(|| {
-            crate::services::sessions::key(&state.db, &client)
+            plain_rs::services::sessions::key(&state.db, &client)
                 .ok()
                 .flatten()
         })
@@ -173,7 +161,11 @@ async fn run(mut socket: WebSocket, state: ServerState, client: String) {
                 Ok::<_, String>(())
             }.await;
             state.subscription_sessions.close(session.id);
-            if let Err(error) = state.mdns.release_discovery_client(&state, session.client_id()).await {
+            if let Err(error) = state
+                .mdns
+                .release_discovery_client(&state, session.client_id())
+                .await
+            {
                 log::warn!("Discovery client cleanup: {error}");
             }
             result

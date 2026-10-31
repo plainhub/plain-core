@@ -38,6 +38,10 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "linux-system" = ["dep:anyhow"]
 "linux-platform" = ["linux-system", "prefs", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util"]
 
+"image-metadata" = ["library", "dep:image"]
+"runtime" = ["ble", "graphql","services", "phone", "filesystem", "trash", "html", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "dep:plain-inference", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros"]
+"runtime-media" = ["runtime", "image-metadata", "dep:notify", "tokio/process"]
+
 [dependencies]
 "flate2" = { version = "1", optional = true }
 "kamadak-exif" = "=0.6.1"
@@ -60,7 +64,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "hmac" = { "version" = "0.13", "optional" = true }
 "sha2_mac" = { "package" = "sha2", "version" = "0.11", "optional" = true }
 "rand" = "0.8"
-"uuid" = { "version" = "1", "features" = ["v4"] }
+"uuid" = { "version" = "1", "features" = ["v4", "serde"] }
 "log" = "0.4"
 "socket2" = { "version" = "0.5", "optional" = true, "features" = ["all"] }
 "serde" = { "version" = "1", "features" = ["derive"] }
@@ -77,9 +81,25 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "regex" = { "version" = "1", "optional" = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }
 
+"parking_lot" = { "version" = "0.12", "optional" = true }
+"futures-util" = { "version" = "0.3", "default-features" = false, "features" = ["sink", "std"], "optional" = true }
+"rustls" = { "version" = "0.23", "default-features" = false, "features" = ["ring", "std"], "optional" = true }
+"tokio-tungstenite" = { "version" = "0.30", "default-features" = false, "features" = ["connect"], "optional" = true }
+"zip" = { "version" = "9", "default-features" = false, "features" = ["deflate-flate2"], "optional" = true }
+"http" = { "version" = "1", "optional" = true }
+"hyper" = { "version" = "1", "features" = ["client", "http1"], "optional" = true }
+"hyper-util" = { "version" = "0.1", "features" = ["tokio"], "optional" = true }
+"tokio-rustls" = { "version" = "0.26", "default-features" = false, "features" = ["ring"], "optional" = true }
+"image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"], "optional" = true }
+"notify" = { "version" = "7", "optional" = true }
+"plain-inference" = { "path" = "../plain-inference", "optional" = true }
+
 [dev-dependencies]
+"plain-inference" = { "path" = "../plain-inference", "features" = ["test-seams"] }
+"axum" = { "version" = "0.7", "default-features" = false, "features" = ["ws", "multipart", "json", "query", "tokio", "http1"] }
+"axum-server" = { "version" = "0.7", "features" = ["tls-rustls-no-provider"] }
 "serde_json" = "1"
-"tokio" = { "version" = "1", "features" = ["full"] }
+"tokio" = { "version" = "1", "features" = ["full", "test-util"] }
 "tempfile" = "3"
 
 [target.'cfg(target_os = "android")'.dependencies]
@@ -92,3 +112,6 @@ required-features = ["mdns"]
 [[example]]
 name = "ble_uuids"
 required-features = ["ble"]
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+sysinfo = { version = "0.32", default-features = false, features = ["system"], optional = true }

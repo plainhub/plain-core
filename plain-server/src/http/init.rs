@@ -1,6 +1,12 @@
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
+use axum::{
+    Json,
+    body::Bytes,
+    extract::{ConnectInfo, State},
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
+};
 use plain_rs::prefs::security::PasswordType;
-use axum::{Json, body::Bytes, extract::{ConnectInfo, State}, http::{HeaderMap, StatusCode}, response::{IntoResponse, Response}};
 use serde_json::json;
 use std::net::SocketAddr;
 
@@ -20,8 +26,8 @@ pub(crate) async fn init(
     if !state.prefs.get_or("desktop_access", true) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let key = crate::services::sessions::local_key(&state, client_id).or(
-        crate::services::sessions::key(&state.db, client_id)
+    let key = plain_rs::services::sessions::local_key(&state, client_id).or(
+        plain_rs::services::sessions::key(&state.db, client_id)
             .ok()
             .flatten(),
     );
@@ -35,7 +41,7 @@ pub(crate) async fn init(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
-    let pair = match crate::services::peers::peer_wire::signing_keypair(&state.prefs) {
+    let pair = match plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs) {
         Ok(pair) => pair,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };

@@ -1,5 +1,4 @@
-use crate::assembly::server::ServerState;
-use crate::services::confirmation_channel;
+use crate::server::ServerState;
 use axum::{
     extract::{
         WebSocketUpgrade,
@@ -11,6 +10,7 @@ use axum::{
 use futures_util::StreamExt;
 use plain_rs::events::WsEvent;
 use plain_rs::prefs::security::PasswordType;
+use plain_rs::services::confirmation_channel;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -98,8 +98,12 @@ impl Runtime {
                 && connection.closing.borrow().is_none()
         })
     }
-    pub(crate) fn close_client(&self, state: &ServerState, client_id: Option<&str>) {
-        state.subscription_sessions.close_client(client_id);
+    pub(crate) fn close_client(
+        &self,
+        sessions: &crate::graphql::subscriptions::session::Sessions,
+        client_id: Option<&str>,
+    ) {
+        sessions.close_client(client_id);
         let connections = self.connections.lock().unwrap();
         for c in connections
             .values()
@@ -206,7 +210,7 @@ async fn completed(state: &ServerState, result: &Value) {
 }
 async fn run(
     mut socket: WebSocket,
-    mut state: ServerState,
+    state: ServerState,
     params: Params,
     ip: String,
     channel: Channel,
@@ -271,9 +275,10 @@ async fn run(
     tokio::pin!(initial_deadline);
     let deadline = tokio::time::sleep(Duration::from_secs(300));
     tokio::pin!(deadline);
+    let mut stop = state.stop.clone();
     loop {
         let message = tokio::select! {
-            _ = state.stop.changed() => break,
+            _ = stop.changed() => break,
             _ = &mut initial_deadline, if !registered && !matches!(handshake, LoginHandshake::Submitted) => {
                 let _ = socket.send(close(1008, "timeout")).await;
                 break;
@@ -305,7 +310,7 @@ async fn run(
                                         plain_rs::prefs::pref_keys::CLIENT_ID,
                                         String::new(),
                                     );
-                                    let signing = crate::services::peers::peer_wire::signing_keypair(&state.prefs)?;
+                                    let signing = plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs)?;
                                     let now = chrono::Utc::now().timestamp_millis() as u64;
                                     let (pending, response) = confirmation_channel::ServerHandshake::start(
                                         &params.cid,
@@ -376,8 +381,8 @@ async fn run(
                         }
                     }
                 }
-                let Some(key) = crate::services::sessions::local_key(&state, &params.cid)
-                    .or_else(|| crate::services::sessions::key(&state.db, &params.cid).ok().flatten())
+                let Some(key) = plain_rs::services::sessions::local_key(&state, &params.cid)
+                    .or_else(|| plain_rs::services::sessions::key(&state.db, &params.cid).ok().flatten())
                     else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
                 let plain = plain_rs::crypto::xchacha_decrypt_raw(&key,&frame);
                 let Some(plain) = plain else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
@@ -387,7 +392,7 @@ async fn run(
                 };
                 if !registered {
                     if channel == Channel::Screen {
-                        if let Err(error) = crate::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
+                        if let Err(error) = plain_rs::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
                             log::warn!("Screen mirror connection: {error}");
                             let _ = socket.send(close(1008, "unsupported_capability")).await;
                             break;
@@ -408,7 +413,7 @@ async fn run(
                     }
                     let controls = controls(&plain);
                     if !controls.is_empty() {
-                        if let Err(error) = crate::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
+                        if let Err(error) = plain_rs::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
                             log::warn!("Screen mirror controls: {error}");
                             let _ = socket.send(close(1008, "unsupported_capability")).await;
                             break;
@@ -432,8 +437,8 @@ async fn run(
                 let Some(event) = event.into_public() else { continue; };
                 if !enabled(&state) { break; }
                 // Same key the inbound frames used: the shell holds no session.
-                let Some(key) = crate::services::sessions::local_key(&state, &params.cid)
-                    .or_else(|| crate::services::sessions::key(&state.db, &params.cid).ok().flatten())
+                let Some(key) = plain_rs::services::sessions::local_key(&state, &params.cid)
+                    .or_else(|| plain_rs::services::sessions::key(&state.db, &params.cid).ok().flatten())
                 else { break; };
                 let payload = if let Some(payload) = event.binary_payload {
                     payload
@@ -471,7 +476,7 @@ async fn run(
             .values()
             .any(|c| c.channel == Channel::Screen && c.registered)
     {
-        match crate::services::capabilities::snapshot(&state.host).await {
+        match plain_rs::services::capabilities::snapshot(&state.host).await {
             Ok(capabilities) if capabilities.iter().any(|value| value == "SCREEN_MIRROR") => {
                 if let Err(error) = state
                     .host
@@ -504,7 +509,8 @@ fn notify_login_request(
     let mut request = request.clone();
     request["password"] = json!("");
     attempts.notify_host(
-        state,
+        state.host.clone(),
+        state.login_attempts.clone(),
         "systemWebLoginRequested",
         json!({"clientId":client_id,"clientIp":client_ip,"requestId":request_id,"request":request}),
     );

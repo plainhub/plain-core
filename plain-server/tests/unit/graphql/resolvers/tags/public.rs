@@ -1,5 +1,5 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::db::Db;
 use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
@@ -40,7 +40,7 @@ fn fixture_with(
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::graphql::schemas::public::build(host, events, prefs, db, directory),
+        crate::test_support::schema::build(host, events, prefs, db, directory),
     )
 }
 

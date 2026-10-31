@@ -565,7 +565,7 @@ mod tests {
         gps_ifd.extend_from_slice(&4u16.to_le_bytes()); // 4 entries
         let lat_off: usize = 46 + 2 + 4 * 12 + 4;
         let lon_off: usize = lat_off + 24; // 3 RATIONals = 24 bytes
-        let mut e = |tag: u16, typ: u16, count: u32, value: u32, buf: &mut Vec<u8>| {
+        let e = |tag: u16, typ: u16, count: u32, value: u32, buf: &mut Vec<u8>| {
             buf.extend_from_slice(&tag.to_le_bytes());
             buf.extend_from_slice(&typ.to_le_bytes());
             buf.extend_from_slice(&count.to_le_bytes());

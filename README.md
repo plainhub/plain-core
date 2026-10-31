@@ -6,7 +6,7 @@ Shared Rust code for PlainApp desktop, mobile and command-line hosts.
 plain-core/
 ├── Cargo.toml                Builds and tests the five packages together
 ├── plain-rs/                 Domain services, storage, crypto and protocols
-├── plain-server/             Server, GraphQL and host communication
+├── plain-server/             GraphQL, HTTP and native transport adapters
 ├── plain-media/              Media catalog, scanning and processing
 ├── plain-inference/          Model inference
 ├── plain-cli/                The plainapp command-line executable
@@ -24,9 +24,23 @@ HTTP entry points are named after the resources they serve. Start with
 method, handler, request limits and middleware.
 
 ```text
+plain-rs/src/
+├── runtime.rs              Core construction, shared service handles and worker lifecycle
+├── services/               Business operations by domain (files, peers, chat, SMS, etc.)
+│   └── files/
+│       ├── links.rs        Encrypted file links and share reference resolution
+│       ├── content.rs      File reads, previews and representation selection
+│       ├── previews.rs     Conversions and temporary preview ownership
+│       └── references.rs   Local paths, app:// and fid: references
+├── platform/               Native system information, network and filesystem primitives
+├── host/                   Host commands, resource streams and connection primitives
+├── protocols/              Shared wire formats and cryptographic framing
+└── data_paths/directory.rs Validated data/cache roots, data lock and staged restore
+
 plain-server/
 ├── src/
-│   ├── assembly/             Core construction and server lifecycle
+│   ├── server.rs             Compose core runtime, schemas and transport state
+│   ├── headless.rs           Headless service entry and lifecycle
 │   ├── http/
 │   │   ├── router.rs         All HTTP route registrations
 │   │   ├── fs.rs             /fs: files and previews
@@ -57,16 +71,11 @@ plain-server/
 │   ├── graphql/
 │   │   ├── schemas/         Main, peer and guest schema construction
 │   │   ├── resolvers/       GraphQL queries and mutations by domain
+│   │   │   └── mobile/      Mobile GraphQL adapters (contacts and call log)
 │   │   ├── subscriptions/   GraphQL subscriptions
 │   │   ├── types/           GraphQL types
 │   │   └── executor.rs      Shared schema execution
-│   ├── services/            Business operations by domain
-│   │   └── files/
-│   │       ├── links.rs     Encrypted file links and share reference resolution
-│   │       ├── content.rs   File reads, previews and representation selection
-│   │       ├── previews.rs  Conversions and temporary preview ownership
-│   │       └── references.rs  Local paths, app:// and fid: references
-│   ├── host/                Platform requests, resources and event coordination
+│   ├── host/events.rs        Host event dispatch into the core services
 │   └── native/              Native API entry points
 └── tests/unit/              Rust unit tests mirroring src/ paths
 ```
@@ -75,15 +84,23 @@ For example, `/fs` is registered in `http/router.rs`, handled by
 [`http/fs.rs`](plain-server/src/http/fs.rs), and uses
 [`http/file_response.rs`](plain-server/src/http/file_response.rs) for local file
 streaming and Range responses. The handler parses HTTP options, calls
-[`services/files/links.rs`](plain-server/src/services/files/links.rs) and
-[`services/files/content.rs`](plain-server/src/services/files/content.rs), then
+[`plain-rs/services/files/links.rs`](plain-rs/src/services/files/links.rs) and
+[`plain-rs/services/files/content.rs`](plain-rs/src/services/files/content.rs), then
 maps the result to an HTTP response. Conversions and temporary-file ownership live in
-[`services/files/previews.rs`](plain-server/src/services/files/previews.rs).
-[`services/files/references.rs`](plain-server/src/services/files/references.rs)
+[`plain-rs/services/files/previews.rs`](plain-rs/src/services/files/previews.rs).
+[`plain-rs/services/files/references.rs`](plain-rs/src/services/files/references.rs)
 resolves local paths, `app://` paths and `fid:` references. HTTP Range, thumbnail
 ETag/304 responses and download headers stay in `http/file_response.rs`.
 GraphQL HTTP extraction and response handling belong to `http/graphql.rs`;
-schema definitions and resolvers belong to `graphql/`.
+schema definitions and resolvers belong to `graphql/`. The deployed main schema
+includes mobile queries, mutations, subscriptions and their types only on Android
+or iOS builds with the `mobile` feature. Native and HTTP use that same schema.
+
+`plain-rs/src/runtime.rs` owns each core service once. `plain-server/src/server.rs`
+adds schemas and transport connections to that runtime. HTTP listener startup and
+configuration live in `http/listeners/public_server.rs`, failure monitoring and
+shutdown in `lifecycle.rs`, and restart commands in `control.rs`. There is no
+separate assembly directory or duplicate service container.
 
 `router.rs::transfer_routes` contains the `/fs`, `/peer_graphql` and
 `/guest_graphql` routes shared by HTTP and BLE. `http/ble.rs` reuses that router;

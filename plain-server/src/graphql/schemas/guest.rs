@@ -1,7 +1,7 @@
-use crate::assembly::server::ServerState;
-use crate::graphql::types::Long;
+use crate::server::ServerState;
 use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject};
 use plain_rs::files::shares::Service;
+use plain_rs::types::Long;
 
 #[derive(SimpleObject)]
 struct SharedFile {
@@ -102,7 +102,10 @@ fn schema_builder() -> async_graphql::SchemaBuilder<Query, EmptyMutation, EmptyS
         .extension(crate::graphql::enum_literals::EnumLiteralValidation)
 }
 
-pub(crate) fn schema(state: ServerState, id: String) -> Schema<Query, EmptyMutation, EmptySubscription> {
+pub(crate) fn schema(
+    state: ServerState,
+    id: String,
+) -> Schema<Query, EmptyMutation, EmptySubscription> {
     schema_builder().data(Guest { state, id }).finish()
 }
 

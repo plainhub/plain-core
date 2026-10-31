@@ -34,7 +34,7 @@ impl MediaDataType {
     }
 }
 
-pub use crate::services::files::scanning::ScanState;
+pub use plain_rs::services::files::scanning::ScanState;
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
 pub struct ScanProgress {
@@ -47,7 +47,7 @@ pub struct ScanProgress {
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct MediaBucket {
-    pub size: crate::graphql::types::Long,
+    pub size: plain_rs::types::Long,
     pub id: ID,
     pub name: String,
     #[graphql(name = "itemCount")]

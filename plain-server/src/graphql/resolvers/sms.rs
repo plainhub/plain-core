@@ -6,14 +6,14 @@ use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::list;
 use crate::graphql::types::facts::strings;
 use crate::graphql::types::facts::text;
-use crate::host::bridge::Host;
 use crate::http::auth::public_gate;
-use crate::services::sms::query as sms_query;
-use crate::services::sms::send as sms_send;
-use crate::services::sms::state as sms_state;
 use async_graphql::{Context, Enum, ID, Object, SimpleObject};
 use plain_rs::db::Db;
+use plain_rs::host::bridge::Host;
 use plain_rs::prefs::Prefs;
+use plain_rs::services::sms::query as sms_query;
+use plain_rs::services::sms::send as sms_send;
+use plain_rs::services::sms::state as sms_state;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -60,7 +60,7 @@ pub struct Sms {
     pub body: String,
     pub address: String,
     #[graphql(name = "sentAt")]
-    pub sent_at: crate::graphql::types::Instant,
+    pub sent_at: plain_rs::types::Instant,
     #[graphql(name = "serviceCenter")]
     pub service_center: String,
     pub read: bool,
@@ -93,7 +93,7 @@ pub struct SmsConversation {
     pub address: String,
     pub snippet: String,
     #[graphql(name = "lastMessageAt")]
-    pub last_message_at: crate::graphql::types::Instant,
+    pub last_message_at: plain_rs::types::Instant,
     #[graphql(name = "messageCount")]
     pub message_count: i32,
     pub read: bool,
@@ -214,7 +214,7 @@ impl SmsMutation {
         &self,
         ctx: &Context<'_>,
         id: ID,
-        date: Option<crate::graphql::types::Instant>,
+        date: Option<plain_rs::types::Instant>,
     ) -> async_graphql::Result<bool> {
         let date = if let Some(date) = date {
             date.0.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
@@ -253,7 +253,12 @@ impl SmsMutation {
         ctx: &Context<'_>,
         query: String,
     ) -> async_graphql::Result<ActionResult> {
-        bulk(ctx, crate::services::sms::mutations::Action::Trash, query).await
+        bulk(
+            ctx,
+            plain_rs::services::sms::mutations::Action::Trash,
+            query,
+        )
+        .await
     }
 
     async fn restore_sms(
@@ -261,7 +266,12 @@ impl SmsMutation {
         ctx: &Context<'_>,
         query: String,
     ) -> async_graphql::Result<ActionResult> {
-        bulk(ctx, crate::services::sms::mutations::Action::Restore, query).await
+        bulk(
+            ctx,
+            plain_rs::services::sms::mutations::Action::Restore,
+            query,
+        )
+        .await
     }
 
     async fn delete_sms(
@@ -269,7 +279,12 @@ impl SmsMutation {
         ctx: &Context<'_>,
         query: String,
     ) -> async_graphql::Result<ActionResult> {
-        bulk(ctx, crate::services::sms::mutations::Action::Delete, query).await
+        bulk(
+            ctx,
+            plain_rs::services::sms::mutations::Action::Delete,
+            query,
+        )
+        .await
     }
 
     /// `subscriptionId` picks the SIM (-1 = system default, see `sims`);
@@ -285,7 +300,7 @@ impl SmsMutation {
         sms_send::execute(
             ctx.data_unchecked::<Arc<Prefs>>(),
             ctx.data_unchecked::<Arc<Host>>(),
-            ctx.data_unchecked::<Arc<crate::services::sms::send_runtime::Runtime>>(),
+            ctx.data_unchecked::<Arc<plain_rs::services::sms::send_runtime::Runtime>>(),
             sms_send::Request {
                 number,
                 body,
@@ -309,7 +324,7 @@ impl SmsMutation {
         attachment_paths: Vec<String>,
         thread_id: ID,
     ) -> async_graphql::Result<String> {
-        ctx.data_unchecked::<Arc<crate::services::sms::mms::Runtime>>()
+        ctx.data_unchecked::<Arc<plain_rs::services::sms::mms::Runtime>>()
             .send(number, body, attachment_paths, thread_id.0)
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))
@@ -362,11 +377,11 @@ async fn conversations(
 
 async fn bulk(
     ctx: &Context<'_>,
-    action: crate::services::sms::mutations::Action,
+    action: plain_rs::services::sms::mutations::Action,
     query: String,
 ) -> async_graphql::Result<ActionResult> {
     let affected_count = ctx
-        .data_unchecked::<Arc<crate::services::sms::mutations::Mutations>>()
+        .data_unchecked::<Arc<plain_rs::services::sms::mutations::Mutations>>()
         .execute(action, query)
         .await
         .map_err(|error| async_graphql::Error::new(error.to_string()))?;

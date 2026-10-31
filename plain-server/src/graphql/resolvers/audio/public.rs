@@ -1,16 +1,16 @@
-use crate::graphql::resolvers::files::types::FileSortBy;
 use crate::graphql::resolvers::tags::domain_types::Tag;
-use crate::graphql::types::Instant;
-use crate::graphql::types::Long;
-use crate::host::audio::AudioPlaybackFacts;
-use crate::host::bridge::Host;
 use crate::http::auth::public_gate;
-use crate::services::audio::host::Audio as AudioService;
 use async_graphql::{Context, Object, SimpleObject};
 use plain_rs::db::Playlist;
 use plain_rs::enums::DataType;
+use plain_rs::host::audio::AudioPlaybackFacts;
+use plain_rs::host::bridge::Host;
 use plain_rs::media::audio::queue as domain;
 use plain_rs::media::audio::queue::AudioTrack;
+use plain_rs::prefs::settings::FileSortBy;
+use plain_rs::services::audio::host::Audio as AudioService;
+use plain_rs::types::Instant;
+use plain_rs::types::Long;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -146,16 +146,16 @@ pub struct AudioQuery;
 impl AudioQuery {
     async fn audio_overview(&self, ctx: &Context<'_>) -> async_graphql::Result<AudioOverview> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        crate::services::capabilities::require(ctx.data::<Arc<Host>>()?, "AUDIO_LIBRARY")
+        plain_rs::services::capabilities::require(ctx.data::<Arc<Host>>()?, "AUDIO_LIBRARY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-        let mut summary = crate::services::audio::overview::read(
+        let mut summary = plain_rs::services::audio::overview::read(
             ctx.data::<Arc<plain_rs::db::Db>>()?.clone(),
             crate::graphql::resolvers::media::public::catalog(ctx),
         )
         .await
         .map_err(async_graphql::Error::new)?;
-        ctx.data::<Arc<crate::services::files::duration_updates::Runtime>>()?
+        ctx.data::<Arc<plain_rs::services::files::duration_updates::Runtime>>()?
             .enrich(DataType::Audio, &mut summary.recent_items)
             .await
             .map_err(async_graphql::Error::new)?;
@@ -219,10 +219,10 @@ impl AudioQuery {
         path: String,
     ) -> async_graphql::Result<Option<String>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        let state = ctx.data_opt::<crate::assembly::server::ServerState>();
-        let lyrics = crate::services::audio::lyrics::read_for_playback(
+        let state = ctx.data_opt::<crate::server::ServerState>();
+        let lyrics = plain_rs::services::audio::lyrics::read_for_playback(
             path,
-            state.map(|state| (state.bridge.as_ref(), state.stop.clone())),
+            state.map(|state| (state.resources.as_ref(), state.stop.clone())),
         )
         .await
         .map_err(async_graphql::Error::new)?;
@@ -656,7 +656,8 @@ pub(crate) async fn search_tracks(
         let query = query.to_owned();
         return audio(ctx)?
             .run(move |db, _| domain::playlist_items_page(db, &id, 0, i64::MAX, &query))
-            .await;
+            .await
+            .map_err(Into::into);
     }
     let mut tracks = Vec::new();
     let mut offset = 0;
@@ -688,10 +689,10 @@ pub(crate) async fn search_tracks(
 }
 
 async fn read_lyrics(ctx: &Context<'_>, path: String) -> async_graphql::Result<String> {
-    let state = ctx.data_opt::<crate::assembly::server::ServerState>();
-    crate::services::audio::lyrics::read(
+    let state = ctx.data_opt::<crate::server::ServerState>();
+    plain_rs::services::audio::lyrics::read(
         path,
-        state.map(|state| (state.bridge.as_ref(), state.stop.clone())),
+        state.map(|state| (state.resources.as_ref(), state.stop.clone())),
     )
     .await
     .map_err(async_graphql::Error::new)

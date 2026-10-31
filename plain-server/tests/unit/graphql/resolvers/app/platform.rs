@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn public_samba_settings_and_mutation_use_core_preferences_and_explicit_host_methods() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();
@@ -61,7 +61,7 @@ async fn public_samba_settings_and_mutation_use_core_preferences_and_explicit_ho
 #[tokio::test]
 async fn public_audit_events_read_the_core_database_without_host_or_legacy_store() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let id = state
         .db
@@ -107,7 +107,7 @@ async fn public_audit_events_read_the_core_database_without_host_or_legacy_store
 #[tokio::test]
 async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();
@@ -120,7 +120,10 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
         )
         .unwrap();
         let request = requests.recv().await.unwrap();
-        assert_eq!(request["method"], crate::host::platform::SYSTEM_DISK_FORMAT);
+        assert_eq!(
+            request["method"],
+            plain_rs::host::commands::SYSTEM_DISK_FORMAT
+        );
         assert_eq!(request["params"]["path"], "/dev/example");
         host.reply(
             generation,
@@ -130,7 +133,7 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
         let request = requests.recv().await.unwrap();
         assert_eq!(
             request["method"],
-            crate::host::platform::SYSTEM_HOSTNAME_SET
+            plain_rs::host::commands::SYSTEM_HOSTNAME_SET
         );
         assert_eq!(request["params"]["name"], "my-server");
         host.reply(
@@ -161,7 +164,7 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
 #[tokio::test]
 async fn public_mount_alias_uses_the_same_preferences_as_the_platform_adapter() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let result = core
         .native_graphql()
         .unwrap()
@@ -195,7 +198,7 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
         ),
     ] {
         let directory = tempfile::tempdir().unwrap();
-        let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+        let core = crate::server::ContentServer::open(directory.path()).unwrap();
         let state = core.runtime_state();
         let before =
             serde_json::to_value(plain_rs::prefs::samba::get_samba_settings(&state.prefs).unwrap())
@@ -239,7 +242,7 @@ fn hostname_sanitization_is_shared() {
 #[tokio::test]
 async fn disk_queries_read_native_rust_after_one_capability_check() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();

@@ -1,14 +1,14 @@
-use crate::graphql::types::Instant;
-use crate::graphql::types::Long;
 use crate::graphql::types::facts::id;
 use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::optional_instant;
 use crate::graphql::types::facts::text;
-use crate::host::bridge::Host;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Object};
 use chrono::{DateTime, Utc};
 use plain_rs::enums::DataType;
+use plain_rs::host::bridge::Host;
+use plain_rs::types::Instant;
+use plain_rs::types::Long;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -62,7 +62,7 @@ impl MediaQuery {
             .map_err(async_graphql::Error::new)?;
         let items = serde_json::from_value(facts)
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-        let buckets = crate::services::files::media_buckets::aggregate(r#type.as_str(), items)
+        let buckets = plain_rs::services::files::media_buckets::aggregate(r#type.as_str(), items)
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         buckets
             .into_iter()
@@ -124,7 +124,7 @@ pub(crate) async fn media_count(
 struct RowsRequest {
     data_type: DataType,
     query: String,
-    sort_by: crate::graphql::resolvers::files::types::FileSortBy,
+    sort_by: plain_rs::prefs::settings::FileSortBy,
     limit: u32,
     offset: u32,
 }
@@ -143,8 +143,8 @@ fn data_type_of(value: &str) -> async_graphql::Result<DataType> {
     })
 }
 
-pub(crate) fn catalog(ctx: &Context<'_>) -> crate::services::files::catalog::MediaCatalog {
-    crate::services::files::catalog::MediaCatalog::new(
+pub(crate) fn catalog(ctx: &Context<'_>) -> plain_rs::services::files::catalog::MediaCatalog {
+    plain_rs::services::files::catalog::MediaCatalog::new(
         ctx.data_unchecked::<Arc<plain_rs::db::Db>>().clone(),
         ctx.data_unchecked::<Arc<Host>>().clone(),
     )
@@ -154,7 +154,7 @@ pub(crate) async fn library_rows(
     ctx: &Context<'_>,
     data_type: DataType,
     query: String,
-    sort_by: crate::graphql::resolvers::files::types::FileSortBy,
+    sort_by: plain_rs::prefs::settings::FileSortBy,
     offset: u32,
     limit: u32,
 ) -> async_graphql::Result<Vec<Value>> {
@@ -162,7 +162,7 @@ pub(crate) async fn library_rows(
         .rows(data_type, &query, sort_by, limit, offset)
         .await
         .map_err(async_graphql::Error::new)?;
-    ctx.data::<Arc<crate::services::files::duration_updates::Runtime>>()?
+    ctx.data::<Arc<plain_rs::services::files::duration_updates::Runtime>>()?
         .enrich(data_type, &mut rows)
         .await
         .map_err(async_graphql::Error::new)?;

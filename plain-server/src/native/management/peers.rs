@@ -3,9 +3,9 @@ use super::NativeManagement;
 impl NativeManagement {
     pub async fn pairing_code(&self) -> Result<String, String> {
         self.state.native_client_id()?;
-        let reply = crate::services::discovery::discovery_advertisement::execute(
+        let reply = plain_rs::services::discovery::discovery_advertisement::execute(
             &self.state,
-            crate::services::discovery::discovery_advertisement::Request::Reply {},
+            plain_rs::services::discovery::discovery_advertisement::Request::Reply {},
         )
         .await
         .map_err(|error| error.to_string())?;
@@ -49,8 +49,8 @@ impl NativeManagement {
 
     pub async fn reconnect_peers(&self) -> Result<bool, String> {
         self.state.native_client_id()?;
-        crate::services::peers::peer_status_controller::Controller::new(self.state.clone())
-            .execute(crate::services::peers::peer_status_controller::Action::Reconnect)
+        plain_rs::services::peers::peer_status_controller::Controller::new(self.state.core.clone())
+            .execute(plain_rs::services::peers::peer_status_controller::Action::Reconnect)
             .await?;
         Ok(true)
     }

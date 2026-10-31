@@ -1,4 +1,4 @@
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use plain_rs::events::{HOST_BINARY_TYPES, HOST_TEXT_TYPES, WsEvent};
 use serde_json::{Value, json};
 use tokio::sync::{Mutex, mpsc};
@@ -25,17 +25,27 @@ impl HostEvents {
             crate::native::management::NativeManagement::new(state.clone()).preferences()?;
         let (generation, requests) = state.host.connect();
         let initial = (|| {
-            let attempts = state.login_attempts.lock().map_err(|_| "Login state unavailable")?;
-            state.host.notify("systemWebLoginSnapshot", attempts.host_snapshot())?;
+            let attempts = state
+                .login_attempts
+                .lock()
+                .map_err(|_| "Login state unavailable")?;
+            state
+                .host
+                .notify("systemWebLoginSnapshot", attempts.host_snapshot())?;
             drop(attempts);
-            state.management.notifications.notify_snapshot(&state.host)?;
+            state
+                .management
+                .notifications
+                .notify_snapshot(&state.host)?;
             state.management.notify_clipboard_snapshot(&state.host)?;
             state.subscription_sessions.notify_snapshot(&state.host)?;
             state.http_server.notify_snapshot(&state.host)?;
             state.host.notify("clipboardHistoryRefresh", json!({}))?;
             state.host.notify("dlnaRendererRefresh", json!({}))?;
-            state.host.notify("sharedFolderDownloadsRefresh", json!({}))?;
-            crate::services::peers::peer_transport::notify_snapshot(&state)?;
+            state
+                .host
+                .notify("sharedFolderDownloadsRefresh", json!({}))?;
+            plain_rs::services::peers::peer_transport::notify_snapshot(&state)?;
             state.update_checks.download.notify_snapshot(&state.host)?;
             state.cast.notify_snapshot(&state.host)?;
             state.feeds.notify_snapshot()?;
@@ -49,15 +59,15 @@ impl HostEvents {
         }
         state.ble_scans.set_owner(generation);
         state.ble_advertising.connect(generation);
-        crate::services::settings::update_download::Runtime::schedule_reconcile(&state);
-        let connected = state.clone();
+        plain_rs::services::settings::update_download::Runtime::schedule_reconcile(&state);
+        let connected = state.core.clone();
         tokio::spawn(async move {
             tokio::join!(
-                crate::services::discovery::mdns_runtime::Runtime::host_connected(
+                plain_rs::services::discovery::mdns_runtime::Runtime::host_connected(
                     connected.clone(),
                     generation
                 ),
-                crate::services::casting::receiver::lifecycle::host_connected(
+                plain_rs::services::casting::receiver::lifecycle::host_connected(
                     connected, generation
                 ),
             );
@@ -126,10 +136,7 @@ impl HostEvents {
         self.serve_connected(requests).await
     }
 
-    async fn serve_connected<Requests, Pending>(
-        &self,
-        requests: Requests,
-    ) -> Result<(), String>
+    async fn serve_connected<Requests, Pending>(&self, requests: Requests) -> Result<(), String>
     where
         Requests: Fn(String, Value) -> Pending,
         Pending: std::future::Future<Output = Result<Value, String>> + Send + 'static,
@@ -149,7 +156,7 @@ impl HostEvents {
                     };
                     self.reply(reply)?;
                 },
-                request = self.next_request(), if workers.len() < crate::host::bridge::REQUEST_CAPACITY => {
+                request = self.next_request(), if workers.len() < plain_rs::host::bridge::REQUEST_CAPACITY => {
                     let Some(request) = request else { break };
                     let id = request.get("id").and_then(Value::as_u64)
                         .ok_or("invalid host request ID")?;
@@ -182,8 +189,8 @@ impl HostEvents {
     pub fn attach_resource(
         &self,
         id: &str,
-    ) -> Result<crate::native::resource_stream::NativeResourceStream, String> {
-        self.state.bridge.attach_native(id, self.generation)
+    ) -> Result<plain_rs::host::resource_stream::NativeResourceStream, String> {
+        self.state.resources.attach_native(id, self.generation)
     }
 
     pub fn submit_thumbnail(&self, token: &str, bytes: Vec<u8>) -> Result<(), String> {
@@ -205,7 +212,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        crate::services::feeds::sync_service::schedule::grant(
+        plain_rs::services::feeds::sync_service::schedule::grant(
             &self.state,
             id,
             deadline_ms,
@@ -218,7 +225,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        crate::services::feeds::sync_service::schedule::revoke(&self.state, id).await;
+        plain_rs::services::feeds::sync_service::schedule::revoke(&self.state, id).await;
         Ok(())
     }
 
@@ -226,9 +233,9 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        crate::services::discovery::pairing_runtime::execute(
+        plain_rs::services::discovery::pairing_runtime::execute(
             &self.state,
-            crate::services::discovery::pairing_runtime::Request::Complete {
+            plain_rs::services::discovery::pairing_runtime::Request::Complete {
                 response: serde_json::from_str(&payload).map_err(|error| error.to_string())?,
                 sender_ip: String::new(),
             },
@@ -266,8 +273,10 @@ impl HostEvents {
         }
 
         serde_json::from_str::<()>(&payload).map_err(|error| error.to_string())?;
-        self.state.mdns.network_changed(self.state.clone());
-        self.state.network_revision.send_modify(|revision| *revision = revision.wrapping_add(1));
+        self.state.mdns.network_changed(self.state.core.clone());
+        self.state
+            .network_revision
+            .send_modify(|revision| *revision = revision.wrapping_add(1));
         self.state.host.invalidate("networkInterfacesChanged");
         return Ok(());
     }
@@ -285,7 +294,7 @@ impl HostEvents {
         }
         let value: Advertisement =
             serde_json::from_str(&payload).map_err(|error| error.to_string())?;
-        crate::services::discovery::ble_scan::seen(&self.state, &value.scan_id, &value.short_id)
+        plain_rs::services::discovery::ble_scan::seen(&self.state, &value.scan_id, &value.short_id)
             .await
             .map_err(|error| error.to_string())?;
         return Ok(());
@@ -358,7 +367,7 @@ impl HostEvents {
             return Err("host disconnected".into());
         }
 
-        return crate::services::clipboard::report(&self.state, &payload);
+        return plain_rs::services::clipboard::report(&self.state, &payload);
     }
 
     pub async fn report_permissions(&self, payload: String) -> Result<(), String> {
@@ -366,7 +375,7 @@ impl HostEvents {
             return Err("host disconnected".into());
         }
 
-        self.state.mdns.permissions_changed(self.state.clone());
+        self.state.mdns.permissions_changed(self.state.core.clone());
         if let Err(error) = self
             .state
             .ble_advertising
@@ -383,7 +392,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        crate::services::casting::receiver::reports::accept(
+        plain_rs::services::casting::receiver::reports::accept(
             &self.state,
             self.generation,
             "DLNA_POSITION_REPORTED",
@@ -397,7 +406,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        crate::services::casting::receiver::reports::accept(
+        plain_rs::services::casting::receiver::reports::accept(
             &self.state,
             self.generation,
             "DLNA_PLAYBACK_REPORTED",
@@ -411,7 +420,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        crate::services::casting::receiver::reports::accept(
+        plain_rs::services::casting::receiver::reports::accept(
             &self.state,
             self.generation,
             "DLNA_SEEK_CONSUMED_REPORTED",
@@ -425,7 +434,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        crate::services::casting::receiver::reports::accept(
+        plain_rs::services::casting::receiver::reports::accept(
             &self.state,
             self.generation,
             "DLNA_STOPPED_REPORTED",
@@ -439,7 +448,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        crate::services::audio::reports::accept(
+        plain_rs::services::audio::reports::accept(
             &self.state,
             self.generation,
             "AUDIO_STARTED_REPORTED",
@@ -453,7 +462,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        crate::services::audio::reports::accept(
+        plain_rs::services::audio::reports::accept(
             &self.state,
             self.generation,
             "AUDIO_COMPLETED_REPORTED",
@@ -467,7 +476,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        crate::services::audio::reports::accept(
+        plain_rs::services::audio::reports::accept(
             &self.state,
             self.generation,
             "AUDIO_PROGRESS_REPORTED",
@@ -512,7 +521,7 @@ impl HostEvents {
                 if !self.state.host.is_current(self.generation) {
                     return Err("host disconnected".into());
                 }
-                if crate::services::discovery::pairing_runtime::accept_report(
+                if plain_rs::services::discovery::pairing_runtime::accept_report(
                     &self.state,
                     kind,
                     &payload,
@@ -558,7 +567,7 @@ mod tests;
 pub(crate) struct TestHost(HostEvents);
 #[cfg(test)]
 impl TestHost {
-    pub(crate) fn new(server: &crate::assembly::server::ContentServer) -> Self {
+    pub(crate) fn new(server: &crate::server::ContentServer) -> Self {
         Self(server.host_events().unwrap())
     }
     pub(crate) async fn next(
@@ -566,8 +575,16 @@ impl TestHost {
     ) -> Option<Result<tokio_tungstenite::tungstenite::Message, String>> {
         loop {
             let value = self.0.next_request().await?;
-            if crate::test_support::acknowledge_host_callback(&self.0.state.host, self.0.generation, &value) { continue; }
-            return Some(Ok(tokio_tungstenite::tungstenite::Message::Text(value.to_string().into())));
+            if crate::test_support::acknowledge_host_callback(
+                &self.0.state.host,
+                self.0.generation,
+                &value,
+            ) {
+                continue;
+            }
+            return Some(Ok(tokio_tungstenite::tungstenite::Message::Text(
+                value.to_string().into(),
+            )));
         }
     }
     pub(crate) async fn send(

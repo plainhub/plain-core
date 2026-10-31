@@ -1,4 +1,4 @@
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
 
 #[tokio::test]
 async fn startup_loads_published_integer_enums_and_returns_names_to_the_app() {
@@ -122,7 +122,9 @@ async fn native_scan_history_preserves_order_and_scoped_deletion() {
     core.stop_core().await;
 }
 
-fn preference_updates(events: &mut tokio::sync::broadcast::Receiver<plain_rs::events::WsEvent>) -> usize {
+fn preference_updates(
+    events: &mut tokio::sync::broadcast::Receiver<plain_rs::events::WsEvent>,
+) -> usize {
     std::iter::from_fn(|| events.try_recv().ok())
         .filter(|event| event.event_type == "PREFS_UPDATED")
         .count()
@@ -142,10 +144,7 @@ async fn native_preference_writes_share_validation_and_commit_notifications() {
             .unwrap()
     );
     assert_eq!(preference_updates(&mut events), 1);
-    assert_eq!(
-        management.preferences().unwrap()["http_port"],
-        8181
-    );
+    assert_eq!(management.preferences().unwrap()["http_port"], 8181);
     assert!(
         !management
             .set_pref("http_port", serde_json::json!(8181))
@@ -189,14 +188,28 @@ async fn keyed_native_reads_observe_committed_writes_and_reject_private_or_unkno
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let management = core.native_management().unwrap();
-    assert_eq!(management.get_pref("http_port").unwrap(), serde_json::json!(8080));
-    assert!(management.set_pref("http_port", serde_json::json!(8282)).await.unwrap());
-    assert_eq!(management.get_pref("http_port").unwrap(), serde_json::json!(8282));
+    assert_eq!(
+        management.get_pref("http_port").unwrap(),
+        serde_json::json!(8080)
+    );
+    assert!(
+        management
+            .set_pref("http_port", serde_json::json!(8282))
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        management.get_pref("http_port").unwrap(),
+        serde_json::json!(8282)
+    );
     let keys = vec!["http_port".into(), "client_id".into()];
     let selected = management.get_prefs(&keys).unwrap();
     assert_eq!(selected.len(), 2);
     assert_eq!(selected["http_port"], serde_json::json!(8282));
-    assert_eq!(selected["client_id"], management.get_pref("client_id").unwrap());
+    assert_eq!(
+        selected["client_id"],
+        management.get_pref("client_id").unwrap()
+    );
     for key in ["unknown", "httpPort", "master_secret", "signature_key_pair"] {
         assert!(management.get_pref(key).is_err(), "{key}");
         assert!(management.get_prefs(&[key.into()]).is_err(), "{key}");
@@ -216,7 +229,12 @@ async fn derived_native_keys_are_readable_but_not_writable() {
     let management = core.native_management().unwrap();
     let before = state.prefs.entries_sorted();
     let mut events = state.events.subscribe();
-    for key in [keys::UPDATE_INFO, keys::APP_UPDATE_AVAILABLE, keys::ONBOARDING_COMPLETED, keys::SIGNATURE_PUBLIC_KEY] {
+    for key in [
+        keys::UPDATE_INFO,
+        keys::APP_UPDATE_AVAILABLE,
+        keys::ONBOARDING_COMPLETED,
+        keys::SIGNATURE_PUBLIC_KEY,
+    ] {
         let value = management.get_pref(key).unwrap();
         assert_eq!(management.get_prefs(&[key.into()]).unwrap()[key], value);
         assert!(management.set_pref(key, value).await.is_err(), "{key}");

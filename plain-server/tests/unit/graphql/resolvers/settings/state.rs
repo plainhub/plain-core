@@ -22,12 +22,11 @@ fn fixture() -> (
     (dir, schema, receiver)
 }
 
-
 #[tokio::test]
 async fn adb_token_verification_uses_native_management_and_has_no_graphql_oracle() {
     use crate::graphql::executor::RequestOrigin;
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open_with_cache(
+    let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
     )
@@ -69,21 +68,16 @@ async fn adb_token_verification_uses_native_management_and_has_no_graphql_oracle
 #[tokio::test]
 async fn native_preferences_preserve_defaults_and_use_storage_keys() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open_with_cache(
+    let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
     )
     .unwrap();
     let state = core.runtime_state();
     state.prefs.set("editor_font_size", 20).unwrap();
-    state
-        .prefs
-        .set("feed_auto_refresh_interval", 2345)
-        .unwrap();
-    let expected =
-        plain_rs::prefs::settings::values(&state.prefs).unwrap();
-    let actual =
-        core.native_management().unwrap().preferences().unwrap();
+    state.prefs.set("feed_auto_refresh_interval", 2345).unwrap();
+    let expected = plain_rs::prefs::settings::values(&state.prefs).unwrap();
+    let actual = core.native_management().unwrap().preferences().unwrap();
     for (key, value) in &expected {
         assert_eq!(&actual[key], value, "{key}");
     }
@@ -101,12 +95,7 @@ async fn graphql_settings_are_isolated_between_devices() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(events.recv().await.unwrap().event_type, "PREFS_UPDATED");
     let first = first.execute("{prefs}").await.data.into_json().unwrap();
-    let second = second
-        .execute("{prefs}")
-        .await
-        .data
-        .into_json()
-        .unwrap();
+    let second = second.execute("{prefs}").await.data.into_json().unwrap();
     assert_eq!(first["prefs"]["editor_font_size"], 20);
     assert!(second["prefs"]["editor_font_size"].is_null());
 }
@@ -139,9 +128,7 @@ async fn system_commands_validate_and_do_not_return_private_keys() {
 async fn runtime_security_preferences_validate_before_publishing() {
     let (_dir, schema, mut events) = fixture();
     for (key, value) in [("log_level", "\"debug\""), ("dev_token", "\"development\"")] {
-        let document = format!(
-            "mutation {{ setPref(key: \"{key}\", value: {value}) }}"
-        );
+        let document = format!("mutation {{ setPref(key: \"{key}\", value: {value}) }}");
         let response = schema.execute(document).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(events.try_recv().unwrap().event_type, "PREFS_UPDATED");
@@ -155,7 +142,6 @@ async fn runtime_security_preferences_validate_before_publishing() {
         assert!(events.try_recv().is_err());
     }
 }
-
 
 #[tokio::test]
 async fn result_only_user_patch_does_not_read_unselected_system_settings() {
@@ -196,10 +182,24 @@ async fn result_only_user_patch_does_not_read_unselected_system_settings() {
 #[tokio::test]
 async fn generic_writes_and_removals_reject_unknown_and_rust_owned_keys() {
     let (_directory, schema, mut events) = fixture();
-    for origin in [crate::graphql::executor::RequestOrigin::Local, crate::graphql::executor::RequestOrigin::Remote] {
-        for key in ["main_state:peer", "client_id", "signature_key_pair", "../preferences", "key with spaces"] {
-            for document in [format!(r#"mutation {{ setPref(key:{key:?},value: "changed") }}"#), format!("mutation {{ removePref(key:{key:?}) }}")] {
-                let response = schema.execute(async_graphql::Request::new(document).data(origin)).await;
+    for origin in [
+        crate::graphql::executor::RequestOrigin::Local,
+        crate::graphql::executor::RequestOrigin::Remote,
+    ] {
+        for key in [
+            "main_state:peer",
+            "client_id",
+            "signature_key_pair",
+            "../preferences",
+            "key with spaces",
+        ] {
+            for document in [
+                format!(r#"mutation {{ setPref(key:{key:?},value: "changed") }}"#),
+                format!("mutation {{ removePref(key:{key:?}) }}"),
+            ] {
+                let response = schema
+                    .execute(async_graphql::Request::new(document).data(origin))
+                    .await;
                 assert!(!response.errors.is_empty(), "{key}");
                 assert!(events.try_recv().is_err());
             }
@@ -213,10 +213,17 @@ async fn remote_cannot_write_remove_or_reset_local_security_settings() {
     for document in [
         r#"mutation { setPref(key:"http_port",value:8080) }"#,
         r#"mutation { removePref(key:"http_port") }"#,
-        "mutation { resetPassword }", "mutation { resetUrlToken }", "mutation { resetAdbToken }",
+        "mutation { resetPassword }",
+        "mutation { resetUrlToken }",
+        "mutation { resetAdbToken }",
         r#"mutation { setNotificationFilterMode(mode:"allowlist") { affectedCount } }"#,
     ] {
-        let response = schema.execute(async_graphql::Request::new(document).data(crate::graphql::executor::RequestOrigin::Remote)).await;
+        let response = schema
+            .execute(
+                async_graphql::Request::new(document)
+                    .data(crate::graphql::executor::RequestOrigin::Remote),
+            )
+            .await;
         assert!(!response.errors.is_empty(), "{document}");
         assert!(events.try_recv().is_err());
     }

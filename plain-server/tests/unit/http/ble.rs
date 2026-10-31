@@ -1,11 +1,12 @@
 use super::*;
 use std::sync::Arc;
-fn fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServer) {
+use std::time::Duration;
+fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();
     prefs.set("background_service_enabled", true).unwrap();
-    let server = crate::assembly::server::ContentServer::start(
+    let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_rs::utils::base64::base64_encode(&[3; 32]),
         prefs,
@@ -130,7 +131,7 @@ async fn incoming_preserves_file_bytes_without_host_bridge() {
     server.shutdown().await;
 }
 async fn incoming_exchange(
-    server: &crate::assembly::server::ContentServer,
+    server: &crate::server::ContentServer,
     characteristic: &str,
     address: &str,
     bytes: Vec<u8>,
@@ -234,8 +235,9 @@ fn signed_nearby_request() -> (plain_rs::peers::pairing::protocol::PairingReques
 
 #[tokio::test]
 async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address() {
-    use crate::services::discovery::{pairing, pairing_runtime};
     use plain_rs::discovery::nearby_wire::Message;
+    use plain_rs::services::discovery::pairing;
+    use plain_rs::services::discovery::pairing_runtime;
     let (_dir, server) = fixture();
     let state = server.runtime_state();
     let (local_key, _) = plain_rs::crypto::ed25519_generate();
@@ -279,7 +281,9 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     assert_eq!(ble::nearby_body(&ack).unwrap(), b"1");
     assert!(events.try_recv().is_err());
     let verification_code =
-        crate::services::discovery::pairing_confirmation::tests::verify_incoming(&state, &request);
+        plain_rs::services::discovery::pairing_confirmation::test_fixture::verify_incoming(
+            &state, &request,
+        );
     let event = events.try_recv().unwrap();
     assert_eq!(event.event_type, "PAIRING_REQUEST_RECEIVED");
     let delivered: plain_rs::peers::pairing::protocol::PairingRequest =

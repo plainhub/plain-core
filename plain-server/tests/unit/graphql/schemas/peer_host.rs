@@ -30,7 +30,7 @@ async fn peer_schema_preserves_required_arguments_and_empty_query() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
-    use crate::assembly::server::ContentServer;
+    use crate::server::ContentServer;
     use plain_rs::chat::enums::DeviceType;
     use plain_rs::chat::enums::PeerStatus;
     use plain_rs::db::DPeer;
@@ -102,7 +102,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                 "peerStopAware" => json!(true),
                 "peerTransportCapabilities" => json!(["BLE"]),
                 "peerTransportBleExchange" => {
-                    let wire = crate::http::ble::test_peer_wire(
+                    let wire = plain_rs::services::peers::ble_transport::test_peer_wire(
                         &ble,
                         &request["params"],
                         &[7; 32],
@@ -134,7 +134,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                     if let Some(done) = broadcast_done.take() {
                         let _ = done.send(());
                     }
-                    crate::http::ble::test_reply(
+                    plain_rs::services::peers::ble_transport::test_reply(
                         &ble,
                         &request["params"],
                         json!({"data":{"channelSystemMessage":true}}),

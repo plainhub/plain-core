@@ -1,8 +1,8 @@
 use crate::graphql::types::ActionResult;
-use crate::graphql::types::Instant;
 use async_graphql::{Context, Enum, Object, SimpleObject};
 use plain_rs::db::DChat;
 use plain_rs::db::Db;
+use plain_rs::types::Instant;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -51,7 +51,7 @@ pub struct ChatChannel {
     pub members: Vec<ChatChannelMember>,
     /// Monotonically increasing mutation counter; receivers ignore channel
     /// updates whose version is not greater than their local copy.
-    pub version: crate::graphql::types::Long,
+    pub version: plain_rs::types::Long,
     pub status: ChatChannelStatus,
     #[graphql(name = "createdAt")]
     pub created_at: Instant,
@@ -124,8 +124,8 @@ impl ChatQuery {
     ) -> async_graphql::Result<Vec<ChatItem>> {
         let text = text_of(&query);
         let rows = db(ctx)?.get_chats_page(&target, &text, offset, limit);
-        if let Some(state) = ctx.data_opt::<crate::assembly::server::ServerState>() {
-            crate::services::chat::prewarm::prepare_page(state, &target, &text, offset, limit);
+        if let Some(state) = ctx.data_opt::<crate::server::ServerState>() {
+            plain_rs::services::chat::prewarm::prepare_page(state, &target, &text, offset, limit);
         }
         Ok(rows.iter().map(item).collect())
     }
@@ -164,8 +164,8 @@ impl ChatMutation {
         target: String,
         content: String,
     ) -> async_graphql::Result<Vec<ChatItem>> {
-        let row = crate::services::chat::chat_actions::send(
-            ctx.data::<crate::assembly::server::ServerState>()?,
+        let row = plain_rs::services::chat::chat_actions::send(
+            ctx.data::<crate::server::ServerState>()?,
             &target,
             &content,
         )
@@ -180,8 +180,8 @@ impl ChatMutation {
         ctx: &Context<'_>,
         id: async_graphql::ID,
     ) -> async_graphql::Result<bool> {
-        crate::services::chat::chat_actions::delete(
-            ctx.data::<crate::assembly::server::ServerState>()?,
+        plain_rs::services::chat::chat_actions::delete(
+            ctx.data::<crate::server::ServerState>()?,
             vec![id.to_string()],
         )?;
         Ok(true)
@@ -192,8 +192,8 @@ impl ChatMutation {
         ctx: &Context<'_>,
         query: String,
     ) -> async_graphql::Result<ActionResult> {
-        let count = crate::services::chat::chat_actions::delete_query(
-            ctx.data::<crate::assembly::server::ServerState>()?,
+        let count = plain_rs::services::chat::chat_actions::delete_query(
+            ctx.data::<crate::server::ServerState>()?,
             &query,
         )?;
         Ok(ActionResult {
@@ -206,8 +206,8 @@ impl ChatMutation {
         ctx: &Context<'_>,
         id: async_graphql::ID,
     ) -> async_graphql::Result<ChatItem> {
-        let row = crate::services::chat::chat_actions::retry(
-            ctx.data::<crate::assembly::server::ServerState>()?,
+        let row = plain_rs::services::chat::chat_actions::retry(
+            ctx.data::<crate::server::ServerState>()?,
             id.to_string(),
         )
         .await?;
@@ -314,8 +314,8 @@ async fn action(
         params.insert((*key).to_string(), value.clone());
     }
     let request = serde_json::from_value(Value::Object(params))?;
-    let result = crate::services::chat::channel_runtime::execute(
-        ctx.data::<crate::assembly::server::ServerState>()?,
+    let result = plain_rs::services::chat::channel_runtime::execute(
+        ctx.data::<crate::server::ServerState>()?,
         request,
     )
     .await?;
@@ -340,8 +340,8 @@ async fn flag(
         params.insert((*key).to_string(), value.clone());
     }
     let request = serde_json::from_value(Value::Object(params))?;
-    crate::services::chat::channel_runtime::execute(
-        ctx.data::<crate::assembly::server::ServerState>()?,
+    plain_rs::services::chat::channel_runtime::execute(
+        ctx.data::<crate::server::ServerState>()?,
         request,
     )
     .await?;
@@ -395,9 +395,7 @@ fn channel(value: &Value) -> ChatChannel {
                 _ => ChannelMemberStatus::Joined,
             },
         }),
-        version: crate::graphql::types::Long(crate::graphql::types::facts::integer(
-            value, "version",
-        )),
+        version: plain_rs::types::Long(crate::graphql::types::facts::integer(value, "version")),
         status: match crate::graphql::types::facts::text(value, "status").as_str() {
             "LEFT" => ChatChannelStatus::Left,
             "KICKED" => ChatChannelStatus::Kicked,

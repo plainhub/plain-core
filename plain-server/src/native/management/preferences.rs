@@ -1,7 +1,6 @@
 use super::NativeManagement;
-use crate::services::settings::{
-    preferences::Preferences, security_preferences::SecurityPreferences,
-};
+use plain_rs::services::settings::preferences::Preferences;
+use plain_rs::services::settings::security_preferences::SecurityPreferences;
 
 use plain_rs::prefs::pref_keys as keys;
 use serde_json::{Map, Value, json};
@@ -29,11 +28,11 @@ impl NativeManagement {
         let state = &self.state;
         match key {
             keys::UPDATE_INFO => Ok(json!(
-                crate::services::settings::updates::info(state)
+                plain_rs::services::settings::updates::info(state)
                     .map_err(|error| error.to_string())?
             )),
             keys::APP_UPDATE_AVAILABLE => {
-                let info = crate::services::settings::updates::info(state)
+                let info = plain_rs::services::settings::updates::info(state)
                     .map_err(|error| error.to_string())?;
                 let version = &state.host.startup().app_version;
                 let skip_version = state
@@ -88,7 +87,7 @@ impl NativeManagement {
 
     pub async fn set_pref(&self, key: &str, value: serde_json::Value) -> Result<bool, String> {
         self.state.native_client_id()?;
-        crate::services::settings::preferences::Preferences::from_server(&self.state)
+        plain_rs::services::settings::preferences::Preferences::from_server(&self.state)
             .set(key, value)
             .await
             .map_err(|e| e.to_string())

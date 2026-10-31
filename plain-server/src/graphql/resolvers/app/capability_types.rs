@@ -1,6 +1,6 @@
-use crate::graphql::types::Instant;
-use crate::graphql::types::Long;
 use async_graphql::{Enum, ID, InputObject, SimpleObject};
+use plain_rs::types::Instant;
+use plain_rs::types::Long;
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct Disk {
@@ -54,16 +54,6 @@ pub struct AuditEvent {
     pub message: String,
     pub client_id: Option<String>,
     pub created_at: Instant,
-}
-
-#[derive(SimpleObject, Clone, Debug)]
-pub struct AppUpdate {
-    pub current_version: String,
-    pub latest_version: Option<String>,
-    pub release_name: String,
-    pub published_at: Option<Instant>,
-    pub has_update: bool,
-    pub url: Option<String>,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]

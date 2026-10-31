@@ -179,3 +179,9 @@ fn type_name(kind: NumberType) -> &'static str {
 #[cfg(test)]
 #[path = "../../tests/unit/phone/mod.rs"]
 mod tests;
+
+#[cfg(feature = "runtime")]
+pub mod query;
+
+#[cfg(feature = "runtime")]
+pub mod batch;

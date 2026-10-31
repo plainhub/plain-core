@@ -1,6 +1,4 @@
-pub mod config;
 pub mod events;
-pub mod file_walk;
 pub mod metadata;
 
 pub mod previews;

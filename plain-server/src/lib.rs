@@ -3,44 +3,14 @@
 // limit overflows long before the roots themselves do.
 #![recursion_limit = "512"]
 
-#[cfg(feature = "core")]
-pub mod assembly;
 pub mod graphql;
+#[cfg(feature = "headless")]
+pub mod headless;
 pub mod http;
 #[cfg(feature = "core")]
 pub mod native;
-pub mod platform;
-pub mod services;
-
-/// Test fixtures whose dir must outlive the helper that created it
-/// (`Db::open(dir)`, `ServerState`…) register it here instead of
-/// `mem::forget`-ing the TempDir: dirs stay alive for the whole test
-/// run and are deleted when the test process exits normally.
-#[cfg(test)]
-pub(crate) mod test_tempdirs {
-    use std::sync::Mutex;
-
-    static RETAINED: Mutex<Vec<tempfile::TempDir>> = Mutex::new(Vec::new());
-
-    pub(crate) fn retain(dir: tempfile::TempDir) {
-        static REGISTERED: std::sync::Once = std::sync::Once::new();
-        REGISTERED.call_once(|| unsafe {
-            libc::atexit(clear);
-        });
-        RETAINED.lock().unwrap().push(dir);
-    }
-
-    extern "C" fn clear() {
-        // Dropping the vec runs each TempDir's recursive delete; bail
-        // out if a thread still holds the lock at exit.
-        if let Ok(mut dirs) = RETAINED.try_lock() {
-            dirs.clear();
-        }
-    }
-}
-
 #[cfg(feature = "core")]
-pub mod mobile;
+pub mod server;
 
 #[cfg(feature = "core")]
 pub mod host;

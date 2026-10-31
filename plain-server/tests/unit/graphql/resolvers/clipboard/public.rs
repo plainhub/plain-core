@@ -1,5 +1,5 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::db::Db;
 use serde_json::{Value, json};
 
@@ -14,7 +14,7 @@ fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema, Arc<Db>) {
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::graphql::schemas::public::build(host, events, prefs, db.clone(), directory),
+        crate::test_support::schema::build(host, events, prefs, db.clone(), directory),
         db,
     )
 }
@@ -112,19 +112,16 @@ async fn clipboard_id_selection_deletes_only_selected_rows() {
     }
 }
 
-fn write_fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServer) {
+fn write_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", json!(["CLIPBOARD"])).unwrap();
     let token = plain_rs::utils::base64::base64_encode(&[9; 32]);
-    let server = crate::assembly::server::ContentServer::start(dir.path(), &token, prefs).unwrap();
+    let server = crate::server::ContentServer::start(dir.path(), &token, prefs).unwrap();
     (dir, server)
 }
 
-async fn write_request(
-    state: &crate::assembly::server::ServerState,
-    text: &str,
-) -> async_graphql::Response {
+async fn write_request(state: &crate::server::ServerState, text: &str) -> async_graphql::Response {
     crate::graphql::executor::execute_graphql(
         &state.public,
         async_graphql::Request::new("mutation($text:String!){setClipboard(text:$text)}")
@@ -138,7 +135,7 @@ async fn write_request(
 }
 
 fn write_host(
-    state: &crate::assembly::server::ServerState,
+    state: &crate::server::ServerState,
     result: Value,
 ) -> Arc<std::sync::Mutex<Vec<Option<plain_rs::db::ClipboardRow>>>> {
     let observations = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -199,7 +196,7 @@ async fn set_clipboard_records_authenticated_source_before_platform_write_and_su
     );
     drop(observations);
     let mut events = state.events.subscribe();
-    crate::services::clipboard::report(
+    plain_rs::services::clipboard::report(
         &state,
         &json!({"text":"received 🌍","sensitive":false}).to_string(),
     )

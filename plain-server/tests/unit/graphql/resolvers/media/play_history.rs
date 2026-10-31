@@ -1,6 +1,7 @@
 use super::*;
-use crate::graphql::{executor::RequestOrigin, schemas::public::PublicSchema};
-use crate::host::bridge::Host;
+use crate::graphql::executor::RequestOrigin;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
+use plain_rs::host::bridge::Host;
 use plain_rs::{enums::DataType, prefs::Prefs};
 use serde_json::{Value, json};
 
@@ -10,7 +11,7 @@ fn fixture(permissions: &[&str]) -> (tempfile::TempDir, Arc<Db>, PublicSchema) {
     prefs.set("api_permissions", permissions).unwrap();
     let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
-    let schema = crate::graphql::schemas::public::build(
+    let schema = crate::test_support::schema::build(
         Arc::new(Host::default()),
         events,
         prefs,

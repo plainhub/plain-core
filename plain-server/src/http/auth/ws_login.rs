@@ -1,4 +1,4 @@
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use plain_rs::db::SessionRow;
 use plain_rs::prefs::security::PasswordType;
 use serde_json::{Value, json};
@@ -58,19 +58,24 @@ pub(crate) struct LoginAttempts {
 }
 
 impl LoginAttempts {
-    pub(crate) fn notify_host(&mut self, state: &ServerState, method: &'static str, params: Value) {
-        if let Err(error) = state.host.notify(method, params) {
+    pub(crate) fn notify_host(
+        &mut self,
+        host: std::sync::Arc<plain_rs::host::bridge::Host>,
+        login_attempts: std::sync::Arc<std::sync::Mutex<LoginAttempts>>,
+        method: &'static str,
+        params: Value,
+    ) {
+        if let Err(error) = host.notify(method, params) {
             log::warn!("Web login callback {method}: {error}");
-            if self.recovery_pending || !state.host.connected() {
+            if self.recovery_pending || !host.connected() {
                 return;
             }
             self.recovery_pending = true;
-            let state = state.clone();
             tokio::spawn(async move {
-                let permit = state.host.reserve_callback().await;
-                let mut attempts = state.login_attempts.lock().unwrap();
+                let permit = host.reserve_callback().await;
+                let mut attempts = login_attempts.lock().unwrap();
                 if let Ok(permit) = permit {
-                    if let Err(error) = state.host.notify_reserved_callback(
+                    if let Err(error) = host.notify_reserved_callback(
                         "systemWebLoginSnapshot",
                         attempts.host_snapshot(),
                         permit,
@@ -139,13 +144,13 @@ struct Pending {
 enum LoginProtection {
     Password {
         digest: String,
-        channel: crate::services::confirmation_channel::Channel,
+        channel: plain_rs::services::confirmation_channel::Channel,
     },
-    DeviceConfirmation(crate::services::confirmation_channel::Channel),
+    DeviceConfirmation(plain_rs::services::confirmation_channel::Channel),
 }
 
 impl LoginProtection {
-    fn channel(&self) -> &crate::services::confirmation_channel::Channel {
+    fn channel(&self) -> &plain_rs::services::confirmation_channel::Channel {
         match self {
             Self::Password { channel, .. } | Self::DeviceConfirmation(channel) => channel,
         }
@@ -258,7 +263,7 @@ pub(crate) enum Request {
         client_id: String,
         client_ip: String,
         frame: String,
-        channel: crate::services::confirmation_channel::Channel,
+        channel: plain_rs::services::confirmation_channel::Channel,
     },
     Complete {
         request_id: String,
@@ -324,7 +329,8 @@ impl Confirmation {
 
 pub(crate) fn notify_closed(state: &ServerState, attempts: &mut LoginAttempts, request_id: &str) {
     attempts.notify_host(
-        state,
+        state.host.clone(),
+        state.login_attempts.clone(),
         "systemWebLoginClosed",
         json!({"requestId":request_id}),
     );
@@ -359,7 +365,7 @@ fn signature_data(
 }
 
 fn sign(prefs: &plain_rs::prefs::Prefs, text: &str) -> anyhow::Result<String> {
-    let keypair = crate::services::peers::peer_wire::signing_keypair(prefs)?;
+    let keypair = plain_rs::services::peers::peer_wire::signing_keypair(prefs)?;
     let signature = plain_rs::crypto::ed25519_sign(&keypair, text.as_bytes());
     anyhow::ensure!(
         !signature.is_empty(),
@@ -527,16 +533,16 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             channel,
         } => {
             let protection = match channel.mode {
-                crate::services::confirmation_channel::ConfirmationMode::Password => {
+                plain_rs::services::confirmation_channel::ConfirmationMode::Password => {
                     LoginProtection::Password {
                         digest: password_digest(&state.prefs),
                         channel,
                     }
                 }
-                crate::services::confirmation_channel::ConfirmationMode::ChatPairing => {
+                plain_rs::services::confirmation_channel::ConfirmationMode::ChatPairing => {
                     anyhow::bail!("Invalid login confirmation mode")
                 }
-                crate::services::confirmation_channel::ConfirmationMode::DeviceConfirmation => {
+                plain_rs::services::confirmation_channel::ConfirmationMode::DeviceConfirmation => {
                     LoginProtection::DeviceConfirmation(channel)
                 }
             };

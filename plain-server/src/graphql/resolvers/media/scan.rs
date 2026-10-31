@@ -1,7 +1,8 @@
 use super::types::ScanProgress;
-use crate::assembly::server::ServerState;
-use crate::services::files::scanning::{self, Command};
+use crate::server::ServerState;
 use async_graphql::{Context, Object, Result};
+use plain_rs::services::files::scanning;
+use plain_rs::services::files::scanning::Command;
 
 async fn state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
     let state = ctx.data::<ServerState>()?;
@@ -47,7 +48,14 @@ impl MediaScanMutation {
         ctx: &Context<'_>,
         #[graphql(name = "root")] _root: String,
     ) -> Result<bool> {
-        command(ctx, Command::Rebuild(#[cfg(feature = "media")] _root)).await
+        command(
+            ctx,
+            Command::Rebuild(
+                #[cfg(feature = "media")]
+                _root,
+            ),
+        )
+        .await
     }
     async fn pause_media_scan(&self, ctx: &Context<'_>) -> Result<bool> {
         command(ctx, Command::Pause).await
@@ -63,7 +71,14 @@ impl MediaScanMutation {
         ctx: &Context<'_>,
         #[graphql(name = "dirs")] _dirs: Vec<String>,
     ) -> Result<bool> {
-        command(ctx, Command::SetDirectories(#[cfg(feature = "media")] _dirs)).await
+        command(
+            ctx,
+            Command::SetDirectories(
+                #[cfg(feature = "media")]
+                _dirs,
+            ),
+        )
+        .await
     }
 }
 

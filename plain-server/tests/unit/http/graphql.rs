@@ -12,7 +12,7 @@ fn custom_bearer_requires_the_exact_second_header_token_and_a_custom_session() {
 
 fn contract_schema() -> (
     tempfile::TempDir,
-    crate::graphql::schemas::public::PublicSchema,
+    crate::test_support::schema::SchemaFixture,
 ) {
     use plain_rs::db::Db;
     use plain_rs::prefs::Prefs;
@@ -24,8 +24,8 @@ fn contract_schema() -> (
     let directory = dir.path().to_path_buf();
     (
         dir,
-        crate::graphql::schemas::public::build(
-            Arc::new(crate::host::bridge::Host::default()),
+        crate::test_support::schema::build(
+            Arc::new(plain_rs::host::bridge::Host::default()),
             events,
             prefs,
             db,
@@ -121,7 +121,7 @@ async fn an_unknown_field_is_reported_as_a_graphql_error() {
 #[tokio::test]
 async fn the_development_bearer_only_admits_the_exact_configured_token() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
 
     // Unset: no bearer of any kind opens the development path.
     assert!(
@@ -144,9 +144,7 @@ async fn the_development_bearer_only_admits_the_exact_configured_token() {
     assert!(!dev_bearer_matches(&state, "plainapp-dev").unwrap());
 
     // Clearing it takes the entry point away again.
-    prefs
-        .remove(plain_rs::prefs::pref_keys::DEV_TOKEN)
-        .unwrap();
+    prefs.remove(plain_rs::prefs::pref_keys::DEV_TOKEN).unwrap();
     assert!(!dev_bearer_matches(&state, "Bearer plainapp-dev").unwrap());
     core.stop_core().await;
 }
@@ -154,7 +152,7 @@ async fn the_development_bearer_only_admits_the_exact_configured_token() {
 #[tokio::test]
 async fn native_identity_without_the_private_transport_token_cannot_claim_local_origin() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::assembly::server::ContentServer::open(directory.path()).unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let mut headers = HeaderMap::new();
     headers.insert("c-id", state.native_client_id().unwrap().parse().unwrap());

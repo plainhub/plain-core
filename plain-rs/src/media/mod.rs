@@ -43,3 +43,6 @@ mod bits;
 mod transport_stream;
 
 mod hevc;
+
+#[cfg(feature = "image-metadata")]
+pub mod file_facts;

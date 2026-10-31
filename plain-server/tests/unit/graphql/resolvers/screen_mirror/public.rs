@@ -1,5 +1,5 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use serde_json::{Value, json};
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -30,7 +30,7 @@ fn fixture() -> (tempfile::TempDir, PublicSchema) {
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::graphql::schemas::public::build(host, events, prefs, db, directory),
+        crate::test_support::schema::build(host, events, prefs, db, directory),
     )
 }
 
@@ -127,8 +127,17 @@ async fn quality_is_read_from_the_single_rust_store() {
 #[tokio::test]
 async fn an_unknown_stored_quality_mode_reads_as_hd() {
     let (_dir, schema) = fixture();
-    schema.data::<Arc<plain_rs::prefs::Prefs>>().unwrap().set("screen_mirror_quality", json!({"mode":"WAT","resolution":1080})).unwrap();
-    stub(schema_host(&schema), |method, _| panic!("unexpected host call {method}"));
+    schema
+        .data::<Arc<plain_rs::prefs::Prefs>>()
+        .unwrap()
+        .set(
+            "screen_mirror_quality",
+            json!({"mode":"WAT","resolution":1080}),
+        )
+        .unwrap();
+    stub(schema_host(&schema), |method, _| {
+        panic!("unexpected host call {method}")
+    });
     let response = schema
         .execute(r#"query { screenMirrorQuality { mode resolution } }"#)
         .await;
@@ -179,7 +188,9 @@ async fn start_screen_mirror_passes_the_audio_choice_through() {
 #[tokio::test]
 async fn quality_updates_send_the_mode_name_the_store_understands() {
     let (_dir, schema) = fixture();
-    stub(schema_host(&schema), |method, _| panic!("unexpected host call {method}"));
+    stub(schema_host(&schema), |method, _| {
+        panic!("unexpected host call {method}")
+    });
     let response = schema
         .execute(r#"mutation { updateScreenMirrorQuality(mode:SMOOTH) }"#)
         .await;
@@ -188,7 +199,14 @@ async fn quality_updates_send_the_mode_name_the_store_understands() {
         response.data.into_json().unwrap()["updateScreenMirrorQuality"],
         true
     );
-    assert_eq!(schema.data::<Arc<plain_rs::prefs::Prefs>>().unwrap().get::<Value>("screen_mirror_quality").unwrap(), Some(json!({"mode":"SMOOTH","resolution":720})));
+    assert_eq!(
+        schema
+            .data::<Arc<plain_rs::prefs::Prefs>>()
+            .unwrap()
+            .get::<Value>("screen_mirror_quality")
+            .unwrap(),
+        Some(json!({"mode":"SMOOTH","resolution":720}))
+    );
 }
 
 #[tokio::test]

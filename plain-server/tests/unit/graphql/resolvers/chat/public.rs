@@ -1,7 +1,7 @@
 use super::*;
-use crate::graphql::schemas::public::PublicSchema;
-use crate::host::bridge::Host;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::db::Db;
+use plain_rs::host::bridge::Host;
 use plain_rs::prefs::Prefs;
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -35,7 +35,7 @@ fn fixture_with(
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::graphql::schemas::public::build(host, events, prefs, db, directory),
+        crate::test_support::schema::build(host, events, prefs, db, directory),
     )
 }
 
@@ -64,7 +64,8 @@ fn seed(db: &Arc<Db>, id: &str, from: &str, to: &str, channel: &str, content: &s
         status_data: None,
         created_at: at.to_string(),
         updated_at: at.to_string(),
-    });
+    })
+    .unwrap();
 }
 
 const T1: &str = "2026-01-02T03:04:05+00:00";
@@ -221,7 +222,7 @@ async fn the_latest_page_covers_every_conversation() {
 // ── the mutations, which are commands rather than store writes ──────────
 
 #[cfg(feature = "http_transport")]
-fn chat_fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServer) {
+fn chat_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let (dir, server) = channel_fixture();
     let (key, _) = plain_rs::crypto::ed25519_generate();
     server
@@ -402,11 +403,11 @@ async fn retrying_an_unknown_id_is_an_error() {
 
 // Channel roots execute against the same runtime as the mobile endpoint.
 #[cfg(feature = "http_transport")]
-fn channel_fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServer) {
+fn channel_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();
-    let server = crate::assembly::server::ContentServer::start(
+    let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_rs::utils::base64::base64_encode(&[3; 32]),
         prefs,
@@ -415,7 +416,7 @@ fn channel_fixture() -> (tempfile::TempDir, crate::assembly::server::ContentServ
     (dir, server)
 }
 #[cfg(feature = "http_transport")]
-async fn channel_query(state: &crate::assembly::server::ServerState, document: &str) -> Value {
+async fn channel_query(state: &crate::server::ServerState, document: &str) -> Value {
     let bytes = crate::http::graphql::run(
         &state.public,
         &json!({"query":document}).to_string(),

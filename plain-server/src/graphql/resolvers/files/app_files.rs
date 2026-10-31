@@ -7,7 +7,6 @@ use std::sync::Arc;
 pub struct AppFilesMutation;
 #[Object]
 impl AppFilesMutation {
-
     async fn import_app_file(
         &self,
         ctx: &Context<'_>,
@@ -22,12 +21,12 @@ impl AppFilesMutation {
             &["WRITE_EXTERNAL_STORAGE"],
         )?;
         let store = ctx.data::<Arc<FileStore>>()?;
-        let state = ctx.data::<crate::assembly::server::ServerState>()?;
-        let file = crate::services::files::imports::import(
+        let state = ctx.data::<crate::server::ServerState>()?;
+        let file = plain_rs::services::files::imports::import(
             store,
-            &state.bridge,
+            &state.resources,
             state.cache.root(),
-            crate::services::files::imports::Import {
+            plain_rs::services::files::imports::Import {
                 source,
                 name: file_name.clone(),
                 mime: mime_type,

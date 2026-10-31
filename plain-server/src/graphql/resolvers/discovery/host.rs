@@ -1,5 +1,5 @@
 use super::types::NearbyDevice;
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use async_graphql::{Context, Object};
 use std::collections::HashSet;
 

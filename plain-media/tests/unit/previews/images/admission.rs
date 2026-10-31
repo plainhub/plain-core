@@ -2,8 +2,8 @@
 //! as the `tests` child module via `#[cfg(test)] #[path]` there.
 use super::*;
 
-fn cfg(mb: i64) -> crate::config::Config {
-    crate::config::Config::parse(&format!("[thumbnails]\nmem_budget_mb = {mb}\n"))
+fn cfg(mb: i64) -> plain_rs::utils::config::Config {
+    plain_rs::utils::config::Config::parse(&format!("[thumbnails]\nmem_budget_mb = {mb}\n"))
 }
 
 #[test]
@@ -20,7 +20,7 @@ fn config_clamps_budget() {
     assert_eq!(build(&cfg(999_999)).mem_budget_mb(), 16_384);
     assert_eq!(build(&cfg(2048)).mem_budget_mb(), 2048);
     assert_eq!(
-        build(&crate::config::Config::default()).mem_budget_mb(),
+        build(&plain_rs::utils::config::Config::default()).mem_budget_mb(),
         2048,
         "default budget"
     );

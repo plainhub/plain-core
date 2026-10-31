@@ -1,0 +1,284 @@
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
+use serde_json::{Value, json};
+use std::{path::Path, sync::Mutex};
+static LOCK: Mutex<()> = Mutex::new(());
+
+pub fn identity(path: &Path) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let _guard = LOCK.lock().map_err(|e| e.to_string())?;
+    load(path)
+}
+fn load(path: &Path) -> Result<(Vec<u8>, Vec<u8>), String> {
+    match std::fs::read(path) {
+        Ok(data) => {
+            let v: Value = serde_json::from_slice(&data).map_err(|e| e.to_string())?;
+            let cert = v["certificatePem"]
+                .as_str()
+                .ok_or("Invalid TLS certificate")?
+                .as_bytes()
+                .to_vec();
+            let key = v["privateKeyPem"]
+                .as_str()
+                .ok_or("Invalid TLS key")?
+                .as_bytes()
+                .to_vec();
+            config(&cert, &key)?;
+            Ok((cert, key))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => generate(path),
+        Err(e) => Err(e.to_string()),
+    }
+}
+fn save(path: &Path, cert: &[u8], key: &[u8]) -> Result<(), String> {
+    config(cert, key)?;
+    let bytes = serde_json::to_vec(&json!({"certificatePem": std::str::from_utf8(cert).map_err(|e| e.to_string())?, "privateKeyPem": std::str::from_utf8(key).map_err(|e| e.to_string())?})).map_err(|e| e.to_string())?;
+    let temp = path.with_extension("tmp");
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    use std::io::Write;
+    let mut file = options.open(&temp).map_err(|e| e.to_string())?;
+    file.write_all(&bytes)
+        .and_then(|_| file.sync_all())
+        .map_err(|e| e.to_string())?;
+    std::fs::rename(temp, path).map_err(|e| e.to_string())
+}
+fn generate(path: &Path) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let pair = plain_rs::tls::generate_pem(&["localhost".into(), "127.0.0.1".into(), "::1".into()])
+        .map_err(|e| e.to_string())?;
+    save(path, &pair.0, &pair.1)?;
+    Ok(pair)
+}
+fn tlv<'a>(data: &mut &'a [u8], tag: u8) -> Result<&'a [u8], String> {
+    if data.len() < 2 || data[0] != tag {
+        return Err("Invalid X509 DER".into());
+    }
+    let n = data[1];
+    *data = &data[2..];
+    let length = if n < 128 {
+        n as usize
+    } else {
+        let count = (n & 127) as usize;
+        if count == 0 || count > std::mem::size_of::<usize>() || count > data.len() {
+            return Err("Invalid DER length".into());
+        }
+        let mut length = 0usize;
+        for byte in &data[..count] {
+            length = length
+                .checked_mul(256)
+                .and_then(|v| v.checked_add(*byte as usize))
+                .ok_or("DER length overflow")?;
+        }
+        *data = &data[count..];
+        length
+    };
+    if length > data.len() {
+        return Err("Truncated DER".into());
+    }
+    let (value, rest) = data.split_at(length);
+    *data = rest;
+    Ok(value)
+}
+pub fn certificate_sha256(cert: &[u8]) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let der = CertificateDer::pem_slice_iter(cert)
+        .next()
+        .ok_or("Missing certificate")?
+        .map_err(|error| error.to_string())?;
+    Ok(plain_rs::utils::hex::bytes_to_hex(&Sha256::digest(
+        der.as_ref(),
+    )))
+}
+
+fn signature(cert: &[u8]) -> Result<Vec<u8>, String> {
+    let der = CertificateDer::pem_slice_iter(cert)
+        .next()
+        .ok_or("Missing certificate")?
+        .map_err(|e| e.to_string())?;
+    let mut input = der.as_ref();
+    let mut sequence = tlv(&mut input, 0x30)?;
+    if !input.is_empty() {
+        return Err("Trailing certificate bytes".into());
+    }
+    tlv(&mut sequence, 0x30)?;
+    tlv(&mut sequence, 0x30)?;
+    let bits = tlv(&mut sequence, 0x03)?;
+    if !sequence.is_empty() || bits.len() < 2 || bits[0] != 0 {
+        return Err("Invalid certificate signature".into());
+    }
+    Ok(bits[1..].to_vec())
+}
+fn apply(
+    config: &str,
+    load_pair: impl Fn() -> Result<(Vec<u8>, Vec<u8>), String>,
+    save_pair: impl Fn(&[u8], &[u8]) -> Result<(), String>,
+    generate_pair: impl Fn() -> Result<(Vec<u8>, Vec<u8>), String>,
+) -> Result<String, String> {
+    let v: Value = serde_json::from_str(config).map_err(|e| e.to_string())?;
+    let _guard = LOCK.lock().map_err(|e| e.to_string())?;
+    let pair = match v["action"].as_str() {
+        Some("get") => load_pair()?,
+        Some("generate") => generate_pair()?,
+        Some("importPkcs12") => {
+            let bytes = plain_rs::utils::base64::base64_decode(
+                v["data"].as_str().ok_or("Missing certificate data")?,
+            );
+            let password = v["password"].as_str().ok_or("Missing password")?;
+            let (cert, key) = plain_rs::tls::decode_pkcs12(&bytes, password)?;
+            signature(&cert)?;
+            save_pair(&cert, &key)?;
+            (cert, key)
+        }
+        Some("import") => {
+            let cert = v["certificatePem"]
+                .as_str()
+                .ok_or("Missing certificate")?
+                .as_bytes()
+                .to_vec();
+            let key = v["privateKeyPem"]
+                .as_str()
+                .ok_or("Missing key")?
+                .as_bytes()
+                .to_vec();
+            signature(&cert)?;
+            save_pair(&cert, &key)?;
+            (cert, key)
+        }
+        _ => return Err("Unknown TLS action".into()),
+    };
+    Ok(json!({"signature": signature(&pair.0)?}).to_string())
+}
+
+#[derive(Clone)]
+pub enum IdentitySource {
+    Json(std::path::PathBuf),
+    Pem {
+        certificate: std::path::PathBuf,
+        key: std::path::PathBuf,
+    },
+}
+
+impl IdentitySource {
+    pub fn identity(&self) -> Result<(Vec<u8>, Vec<u8>), String> {
+        let _guard = LOCK.lock().map_err(|error| error.to_string())?;
+        self.load()
+    }
+
+    fn load(&self) -> Result<(Vec<u8>, Vec<u8>), String> {
+        match self {
+            Self::Json(path) => load(path),
+            Self::Pem { certificate, key } => {
+                let pair = plain_rs::tls::ensure_self_signed_pem(
+                    certificate,
+                    key,
+                    &["plainapp.local".into(), "localhost".into()],
+                )
+                .map_err(|error| error.to_string())?;
+                config(&pair.0, &pair.1)?;
+                Ok(pair)
+            }
+        }
+    }
+
+    fn save(&self, cert: &[u8], private_key: &[u8]) -> Result<(), String> {
+        match self {
+            Self::Json(path) => save(path, cert, private_key),
+            Self::Pem { certificate, key } => {
+                config(cert, private_key)?;
+                for (path, bytes) in [(key, private_key), (certificate, cert)] {
+                    if let Some(parent) = path.parent() {
+                        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+                    }
+                    let temp = path.with_extension("tmp");
+                    let mut options = std::fs::OpenOptions::new();
+                    options.write(true).create(true).truncate(true);
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::OpenOptionsExt;
+                        options.mode(0o600);
+                    }
+                    use std::io::Write;
+                    let mut file = options.open(&temp).map_err(|error| error.to_string())?;
+                    file.write_all(bytes)
+                        .and_then(|_| file.sync_all())
+                        .map_err(|error| error.to_string())?;
+                    std::fs::rename(temp, path).map_err(|error| error.to_string())?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn generate(&self) -> Result<(Vec<u8>, Vec<u8>), String> {
+        let pair =
+            plain_rs::tls::generate_pem(&["localhost".into(), "127.0.0.1".into(), "::1".into()])
+                .map_err(|error| error.to_string())?;
+        self.save(&pair.0, &pair.1)?;
+        Ok(pair)
+    }
+
+    pub fn action(&self, config: &str) -> Result<String, String> {
+        apply(
+            config,
+            || self.load(),
+            |cert, key| self.save(cert, key),
+            || self.generate(),
+        )
+    }
+}
+
+pub fn action(path: &Path, config: &str) -> Result<String, String> {
+    IdentitySource::Json(path.to_path_buf()).action(config)
+}
+
+pub fn config(
+    certificate_pem: &[u8],
+    private_key_pem: &[u8],
+) -> Result<rustls::ServerConfig, String> {
+    let certificates = CertificateDer::pem_slice_iter(certificate_pem)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    let key = PrivateKeyDer::pem_slice_iter(private_key_pem)
+        .next()
+        .transpose()
+        .map_err(|error| error.to_string())?
+        .ok_or("TLS private key is missing")?;
+    let mut config = rustls::ServerConfig::builder_with_provider(std::sync::Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .map_err(|error| error.to_string())?
+    .with_no_client_auth()
+    .with_single_cert(certificates, key)
+    .map_err(|error| error.to_string())?;
+    config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    Ok(config)
+}
+
+pub async fn server_action(
+    state: &plain_rs::runtime::Runtime,
+    command: serde_json::Value,
+) -> Result<Vec<u8>, String> {
+    let identity = state
+        .tls_identity
+        .read()
+        .map_err(|error| error.to_string())?
+        .clone();
+    let value = tokio::task::spawn_blocking(move || identity.action(&command.to_string()))
+        .await
+        .map_err(|error| error.to_string())??;
+    #[derive(serde::Deserialize)]
+    struct Signature {
+        signature: Vec<u8>,
+    }
+    serde_json::from_str::<Signature>(&value)
+        .map(|value| value.signature)
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/services/tls_identity.rs"]
+mod tests;

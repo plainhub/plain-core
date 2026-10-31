@@ -1,4 +1,4 @@
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
 use crate::test_support::graphql_http as call;
 use std::sync::Arc;
 
@@ -6,8 +6,7 @@ use std::sync::Arc;
 async fn file_import_dedupe_release_and_restart_use_core_storage() {
     let dir = tempfile::tempdir().unwrap();
     let token = plain_rs::utils::base64::base64_encode(&[14; 32]);
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs
         .set(
             "api_permissions",
@@ -174,7 +173,7 @@ async fn main_schema_import_accepts_platform_bytes_without_app_managed_paths() {
     let request = requests.recv().await.unwrap();
     assert_eq!(request["method"], "fileResourceStream");
     let stream = state
-        .bridge
+        .resources
         .attach_native(request["params"]["id"].as_str().unwrap(), generation)
         .unwrap();
     state

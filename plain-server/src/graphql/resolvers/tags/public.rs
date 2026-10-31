@@ -1,11 +1,11 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::resolvers::tags::domain_types::TagRelation;
-use crate::host::bridge::Host;
-use crate::services::capabilities;
 use async_graphql::{Context, Object};
 use plain_rs::db::Db;
 use plain_rs::db::TagRow;
 pub use plain_rs::enums::DataType;
+use plain_rs::host::bridge::Host;
+use plain_rs::services::capabilities;
 use plain_rs::tags;
 use serde_json::json;
 use std::sync::Arc;
@@ -169,10 +169,10 @@ async fn provider_query_keys(
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
     }
     if kind == DataType::Sms {
-        let facts = crate::services::sms::query::execute(
+        let facts = plain_rs::services::sms::query::execute(
             db(ctx),
             ctx.data_unchecked::<Arc<Host>>(),
-            crate::services::sms::query::Request::Ids {
+            plain_rs::services::sms::query::Request::Ids {
                 query: query.to_owned(),
                 include_trashed: false,
             },
@@ -190,7 +190,7 @@ async fn provider_query_keys(
     } else {
         "systemContactIds"
     };
-    let provider = crate::host::query::media_provider(kind)
+    let provider = plain_rs::services::files::provider_query::media_provider(kind)
         .map_err(|error| async_graphql::Error::new(error.to_string()))?;
     let params =
         crate::graphql::types::facts::provider_params(ctx, provider, query, json!({})).await?;

@@ -90,7 +90,7 @@ async fn native_app_query_uses_startup_data_and_live_capabilities_without_public
     );
     assert_eq!(data["app"]["deviceType"], "COMPUTER");
     let mut capabilities = vec!["MEDIA_SCAN"];
-    capabilities.extend(crate::services::files::browser::capabilities());
+    capabilities.extend(plain_rs::services::files::browser::capabilities());
     assert_eq!(data["app"]["capabilities"], serde_json::json!(capabilities));
     assert_eq!(data["app"]["httpPort"], 0);
     assert_eq!(data["app"]["httpsPort"], 0);
@@ -290,7 +290,7 @@ async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
         .thumbnails
         .get(
             state,
-            crate::services::images::thumbnails::Request {
+            plain_rs::services::images::thumbnails::Request {
                 path: image_path.to_string_lossy().into_owned(),
                 width: 4,
                 height: 4,

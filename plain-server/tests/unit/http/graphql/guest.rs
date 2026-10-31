@@ -1,8 +1,8 @@
 use super::*;
+use crate::server::ContentServer;
 use plain_rs::files::shares::Service;
-use serde_json::Value;
-use crate::assembly::server::ContentServer;
 use plain_rs::prefs::Prefs;
+use serde_json::Value;
 use std::sync::Arc;
 #[tokio::test]
 async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {

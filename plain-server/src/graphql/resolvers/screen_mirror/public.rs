@@ -2,8 +2,8 @@
 //!
 use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::text;
-use crate::host::bridge::Host;
 use async_graphql::{Context, Enum, Object, SimpleObject};
+use plain_rs::host::bridge::Host;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -80,12 +80,16 @@ impl ScreenMirrorQuery {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<ScreenMirrorQuality> {
-        crate::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "SCREEN_MIRROR")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-        let stored =
-            plain_rs::prefs::settings::snapshot(ctx.data_unchecked::<Arc<plain_rs::prefs::Prefs>>())?
-                .screen_mirror_quality;
+        plain_rs::services::capabilities::require(
+            ctx.data_unchecked::<Arc<Host>>(),
+            "SCREEN_MIRROR",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        let stored = plain_rs::prefs::settings::snapshot(
+            ctx.data_unchecked::<Arc<plain_rs::prefs::Prefs>>(),
+        )?
+        .screen_mirror_quality;
         Ok(quality(&stored))
     }
 }
@@ -115,9 +119,12 @@ impl ScreenMirrorMutation {
     /// Returns false when the device has not granted RECORD_AUDIO yet; the
     /// platform asks for it and the caller retries.
     async fn request_screen_mirror_audio(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        crate::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "SCREEN_MIRROR")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        plain_rs::services::capabilities::require(
+            ctx.data_unchecked::<Arc<Host>>(),
+            "SCREEN_MIRROR",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         let granted = ctx
             .data_unchecked::<Arc<Host>>()
             .call("systemRequestScreenMirrorAudio", serde_json::json!({}))
@@ -143,9 +150,12 @@ impl ScreenMirrorMutation {
         ctx: &Context<'_>,
         mode: ScreenMirrorMode,
     ) -> async_graphql::Result<bool> {
-        crate::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "SCREEN_MIRROR")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        plain_rs::services::capabilities::require(
+            ctx.data_unchecked::<Arc<Host>>(),
+            "SCREEN_MIRROR",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         let quality = serde_json::json!({"mode":mode.name(),"resolution":if mode==ScreenMirrorMode::Smooth {720}else{1080}});
         crate::graphql::resolvers::settings::state::preferences(ctx)?
             .set(plain_rs::prefs::pref_keys::SCREEN_MIRROR_QUALITY, quality)
@@ -219,7 +229,7 @@ impl WebSettingsFeature {
 }
 
 async fn state(ctx: &Context<'_>) -> async_graphql::Result<Value> {
-    crate::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "SCREEN_MIRROR")
+    plain_rs::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "SCREEN_MIRROR")
         .await
         .map_err(|error| async_graphql::Error::new(error.to_string()))?;
     ctx.data_unchecked::<Arc<Host>>()
@@ -229,7 +239,7 @@ async fn state(ctx: &Context<'_>) -> async_graphql::Result<Value> {
 }
 
 async fn dispatch(ctx: &Context<'_>, method: &str, params: Value) -> async_graphql::Result<bool> {
-    crate::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "SCREEN_MIRROR")
+    plain_rs::services::capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "SCREEN_MIRROR")
         .await
         .map_err(|error| async_graphql::Error::new(error.to_string()))?;
     ctx.data_unchecked::<Arc<Host>>()

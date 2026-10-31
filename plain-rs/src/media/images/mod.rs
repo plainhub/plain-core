@@ -4,3 +4,5 @@ pub mod editor;
 pub mod embeddings;
 
 pub mod indexing;
+
+pub mod decoding;

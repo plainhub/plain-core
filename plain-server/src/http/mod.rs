@@ -43,8 +43,11 @@ pub(crate) mod dlna;
 #[cfg(feature = "core")]
 pub(crate) mod ble;
 
-pub mod websocket;
 pub mod auth;
+pub mod websocket;
 
 #[derive(Clone)]
 pub(crate) struct ConnectionScheme(pub(crate) &'static str);
+
+#[cfg(feature = "core")]
+pub(crate) mod client_connections;

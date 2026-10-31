@@ -66,3 +66,6 @@ impl DataPaths {
 #[cfg(test)]
 #[path = "../tests/unit/data_paths.rs"]
 mod tests;
+
+#[cfg(feature = "runtime")]
+pub mod directory;

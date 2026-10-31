@@ -1,4 +1,4 @@
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use async_graphql::{Context, Object};
 use plain_rs::chat::attachments::download_queue::Queue;
 use std::sync::Arc;

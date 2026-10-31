@@ -1,8 +1,8 @@
-use crate::assembly::server::ServerState;
-use crate::graphql::types::Instant;
+use crate::server::ServerState;
 use async_graphql::{Context, Object, Result, SimpleObject};
 use plain_rs::db::Db;
 use plain_rs::sessions::SessionInfo;
+use plain_rs::types::Instant;
 use std::sync::Arc;
 
 #[derive(SimpleObject)]
@@ -88,7 +88,7 @@ impl SessionsMutation {
         name: String,
     ) -> Result<bool> {
         caller(ctx)?;
-        Ok(crate::services::sessions::rename(
+        Ok(plain_rs::services::sessions::rename(
             ctx.data::<ServerState>()?,
             &client_id,
             &name,
@@ -114,7 +114,7 @@ fn revoke(ctx: &Context<'_>, client_id: &str, action: &str) -> Result<bool> {
         .session_get(client_id)?
         .map(|row| row.name)
         .unwrap_or_default();
-    crate::services::sessions::delete(state, client_id)?;
+    plain_rs::services::sessions::delete(state, client_id)?;
     state.db.audit_event_add(action, &name, Some(client_id))?;
     Ok(true)
 }

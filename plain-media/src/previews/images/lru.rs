@@ -97,7 +97,7 @@ impl ThumbLru {
 static GLOBAL: std::sync::OnceLock<ThumbLru> = std::sync::OnceLock::new();
 
 /// Configure the global LRU from `[thumbnails] lru_mb`. First call wins.
-pub fn init_from_config(cfg: &crate::config::Config) {
+pub fn init_from_config(cfg: &plain_rs::utils::config::Config) {
     // Missing/invalid key (get_int → 0) falls back to the 32 MB default.
     let raw = cfg.get_int("thumbnails.lru_mb");
     let mb = if raw <= 0 { 32 } else { raw.clamp(1, 2048) } as usize;

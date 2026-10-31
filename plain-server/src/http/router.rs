@@ -1,8 +1,11 @@
 #[cfg(feature = "core")]
-use crate::assembly::server::ServerState;
+use crate::server::ServerState;
 use axum::{Router, routing::get};
 #[cfg(feature = "core")]
-use axum::{extract::DefaultBodyLimit, routing::{post, any}};
+use axum::{
+    extract::DefaultBodyLimit,
+    routing::{any, post},
+};
 #[cfg(feature = "core")]
 use tokio::sync::watch;
 
@@ -29,8 +32,7 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
         .route("/zip/files", get(crate::http::zip::files))
         .route(
             "/upload",
-            post(crate::http::upload::upload)
-                .layer(DefaultBodyLimit::max(15 * 60 * 1000 * 1000)),
+            post(crate::http::upload::upload).layer(DefaultBodyLimit::max(15 * 60 * 1000 * 1000)),
         )
         .route(
             "/upload_chunk",
@@ -39,11 +41,11 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
         )
         .route("/auth", get(crate::http::websocket::auth::upgrade))
         .route("/screen", get(crate::http::websocket::screen::upgrade))
-        .route("/image_editor", get(crate::http::websocket::image_editor::upgrade))
         .route(
-            "/media/:id",
-            get(crate::http::dlna::media),
+            "/image_editor",
+            get(crate::http::websocket::image_editor::upgrade),
         )
+        .route("/media/:id", get(crate::http::dlna::media))
         .route(
             "/callback/cast",
             axum::routing::any(crate::http::dlna::callback),
@@ -74,10 +76,7 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
 pub(crate) fn transfer_routes(state: ServerState) -> Router {
     Router::new()
         .route("/peer_graphql", post(crate::http::graphql::peer))
-        .route(
-            "/guest_graphql",
-            post(crate::http::graphql::guest),
-        )
+        .route("/guest_graphql", post(crate::http::graphql::guest))
         .route("/fs", get(crate::http::fs::get))
         .layer(DefaultBodyLimit::max(32 * 1024 * 1024))
         .with_state(state)
@@ -88,9 +87,15 @@ fn dlna_routes(state: ServerState) -> Router {
     Router::new()
         .route("/description.xml", get(crate::http::dlna::receiver))
         .route("/AVTransport/scpd.xml", get(crate::http::dlna::receiver))
-        .route("/RenderingControl/scpd.xml", get(crate::http::dlna::receiver))
+        .route(
+            "/RenderingControl/scpd.xml",
+            get(crate::http::dlna::receiver),
+        )
         .route("/AVTransport/control", post(crate::http::dlna::receiver))
-        .route("/RenderingControl/control", post(crate::http::dlna::receiver))
+        .route(
+            "/RenderingControl/control",
+            post(crate::http::dlna::receiver),
+        )
         .route("/AVTransport/event", any(crate::http::dlna::receiver))
         .route("/RenderingControl/event", any(crate::http::dlna::receiver))
         .with_state(state)

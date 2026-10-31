@@ -1,8 +1,8 @@
-use crate::graphql::types::Instant;
-use crate::graphql::types::Long;
 use async_graphql::Enum;
 use async_graphql::ID;
 use async_graphql::SimpleObject;
+use plain_rs::types::Instant;
+use plain_rs::types::Long;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub enum PackageType {

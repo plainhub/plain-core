@@ -1,5 +1,6 @@
 use super::*;
-use crate::assembly::server::ContentServer;
+use crate::server::ContentServer;
+use futures_util::StreamExt;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -225,4 +226,71 @@ fn shared_batch_chat_and_share_flows_own_their_events() {
     ] {
         assert!(!content_changes(&Request::new(query)));
     }
+}
+
+#[test]
+fn timer_controls_do_not_invalidate_unrelated_domains() {
+    for query in [
+        "mutation { startPomodoro(durationSec:30) }",
+        "mutation { named: adjustPomodoro(durationSec:30) {state} }",
+        "query {pomodoroToday {state}}",
+    ] {
+        assert!(!content_changes(&Request::new(query)));
+    }
+    assert!(content_changes(&Request::new(
+        "mutation {adjustPomodoro(durationSec:30) {state} deleteBookmarks(ids:[]) {affectedCount}}"
+    )));
+}
+
+#[tokio::test]
+async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let (generation, mut requests) = state.host.connect();
+    let host = state.host.clone();
+    let responder = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let result = match request["method"].as_str().unwrap() {
+                "systemCapabilities" => json!(["SMS"]),
+                "systemPermissionFacts" => json!({"granted":{"SEND_SMS":true}}),
+                method => panic!("Unexpected host request {method}"),
+            };
+            host.reply(generation, json!({"id":request["id"],"result":result}))
+                .unwrap();
+        }
+    });
+    state
+        .sms_sends
+        .register("send".into(), Some("request".into()), 1)
+        .unwrap();
+    state
+        .sms_sends
+        .report(
+            serde_json::from_value(json!({
+                "requestId":"send", "partIndex":0, "partCount":1, "success":true, "resultCode":-1
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let schema = crate::test_support::schema::mobile(state.core.clone());
+    let request = RequestContext::local(state.clone())
+        .prepare(Request::new(
+            "subscription { smsSendResult { requestId success resultCode } }",
+        ))
+        .unwrap();
+    let mut stream = schema.execute_stream(request);
+    let response = tokio::time::timeout(std::time::Duration::from_secs(3), stream.next())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["smsSendResult"],
+        json!({"requestId":"request","success":true,"resultCode":-1})
+    );
+    drop(stream);
+    state.host.disconnect(generation);
+    responder.abort();
+    core.shutdown().await;
 }
