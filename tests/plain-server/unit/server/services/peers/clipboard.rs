@@ -1,10 +1,10 @@
 use crate::server::ContentServer;
+use plain_rs::features::services::peers::clipboard::*;
+use plain_rs::features::services::peers::management::Identity;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_rs::services::peers::clipboard::*;
-use plain_rs::services::peers::management::Identity;
 use plain_rs::{
-    chat::enums::DeviceType,
-    db::{
+    features::chat::enums::DeviceType,
+    libs::db::{
         DPeer,
         chat_store::{SaveMode, peers},
     },
@@ -100,7 +100,7 @@ async fn fixture() -> (
             let _ = host.reply(generation, json!({"id":request["id"],"result":result}));
         }
     });
-    plain_rs::services::clipboard::report(
+    plain_rs::features::services::clipboard::report(
         &state,
         &json!({"text":"Fixture 🌍","sensitive":false}).to_string(),
     )
@@ -171,7 +171,7 @@ async fn sending_uses_the_real_encrypted_api_preserves_source_and_retries_platfo
     assert_eq!(row.source, state.native_client_id().unwrap());
     assert_eq!(row.text, "Fixture 🌍");
     let outgoing = remote_state.clipboard_changes.subscribe();
-    plain_rs::services::clipboard::report(
+    plain_rs::features::services::clipboard::report(
         &remote_state,
         &json!({"text":"Fixture 🌍","sensitive":false}).to_string(),
     )
@@ -331,7 +331,7 @@ async fn unconfirmed_or_unsupported_remote_capabilities_keep_automatic_pushes_ou
         &state, &peer.id, &identity, &cancelled, &changed, accessed,
     ));
     assert!(std::future::poll_fn(|cx| Poll::Ready(service.as_mut().poll(cx).is_pending())).await);
-    plain_rs::services::clipboard::report(
+    plain_rs::features::services::clipboard::report(
         &state,
         &json!({"text":"pending","sensitive":false}).to_string(),
     )
@@ -371,7 +371,7 @@ async fn automatic_push_coalesces_to_the_latest_local_fact_and_replaces_a_failed
     ));
     assert!(std::future::poll_fn(|cx| Poll::Ready(service.as_mut().poll(cx).is_pending())).await);
     for text in ["superseded", "first attempt"] {
-        plain_rs::services::clipboard::report(
+        plain_rs::features::services::clipboard::report(
             &state,
             &json!({"text":text,"sensitive":false}).to_string(),
         )
@@ -383,7 +383,7 @@ async fn automatic_push_coalesces_to_the_latest_local_fact_and_replaces_a_failed
     }
     assert_eq!(*writes.borrow(), vec!["first attempt"]);
     succeeds.store(true, Ordering::SeqCst);
-    plain_rs::services::clipboard::report(
+    plain_rs::features::services::clipboard::report(
         &state,
         &json!({"text":"latest attempt","sensitive":false}).to_string(),
     )

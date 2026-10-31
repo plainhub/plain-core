@@ -6,7 +6,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
-use plain_rs::prefs::security::PasswordType;
+use plain_rs::features::prefs::security::PasswordType;
 use serde_json::json;
 use std::net::SocketAddr;
 
@@ -26,26 +26,26 @@ pub(crate) async fn init(
     if !state.prefs.get_or("desktop_access", true) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let key = plain_rs::services::sessions::local_key(&state, client_id).or(
-        plain_rs::services::sessions::key(&state.db, client_id)
+    let key = plain_rs::features::services::sessions::local_key(&state, client_id).or(
+        plain_rs::features::services::sessions::key(&state.db, client_id)
             .ok()
             .flatten(),
     );
     let authenticated = key
         .as_ref()
-        .is_some_and(|key| plain_rs::crypto::xchacha_decrypt_raw(key, &body).is_some());
-    let password_required = match plain_rs::prefs::security::password_type(&state.prefs) {
+        .is_some_and(|key| plain_rs::libs::crypto::xchacha_decrypt_raw(key, &body).is_some());
+    let password_required = match plain_rs::features::prefs::security::password_type(&state.prefs) {
         Ok(value) => value == PasswordType::Fixed,
         Err(error) => {
             log::error!("Invalid password type: {error}");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
-    let pair = match plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs) {
+    let pair = match plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs) {
         Ok(pair) => pair,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    Json(json!({"signaturePublicKey":plain_rs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required}))
+    Json(json!({"signaturePublicKey":plain_rs::libs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required}))
         .into_response()
 }
 

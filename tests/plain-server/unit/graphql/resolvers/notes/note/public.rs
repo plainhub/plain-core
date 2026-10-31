@@ -1,9 +1,9 @@
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use async_graphql::Request;
-use plain_rs::db::Db;
-use plain_rs::enums::DataType;
-use plain_rs::host::bridge::Host;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::enums::DataType;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -136,7 +136,8 @@ async fn the_page_and_the_count_agree_on_the_search_dsl() {
 async fn a_tagged_note_reports_the_contract_tag_shape() {
     let (_dir, schema) = fixture();
     let library = database(&schema);
-    let tag = plain_rs::tags::create_tag(library, DataType::Note.kind(), "urgent").unwrap();
+    let tag =
+        plain_rs::features::tags::create_tag(library, DataType::Note.kind(), "urgent").unwrap();
     let created = query(
         &schema,
         r#"mutation { createNote(input: {title: "Taxes", content: ""}) { id } }"#,
@@ -146,7 +147,7 @@ async fn a_tagged_note_reports_the_contract_tag_shape() {
         .as_str()
         .unwrap()
         .to_string();
-    plain_rs::tags::add_relations(library, &[(tag.id.clone(), id.clone())]).unwrap();
+    plain_rs::features::tags::add_relations(library, &[(tag.id.clone(), id.clone())]).unwrap();
 
     let listed = rows(
         &schema,
@@ -297,7 +298,7 @@ async fn updating_a_note_replaces_both_fields() {
 async fn unselected_tags_do_not_query_the_tag_store() {
     let (_dir, schema) = fixture();
     let library = database(&schema);
-    plain_rs::notes::create(library, "Plain note", "").unwrap();
+    plain_rs::features::notes::create(library, "Plain note", "").unwrap();
     library
         .with_conn(|conn| conn.execute_batch("DROP TABLE tag_relations; DROP TABLE tags;"))
         .unwrap();
@@ -322,10 +323,11 @@ async fn selected_tags_batch_a_page_and_observe_later_edits() {
 
     let (_dir, schema) = fixture();
     let library = database(&schema);
-    let tag = plain_rs::tags::create_tag(library, DataType::Note.kind(), "urgent").unwrap();
+    let tag =
+        plain_rs::features::tags::create_tag(library, DataType::Note.kind(), "urgent").unwrap();
     for title in ["First", "Second", "Third"] {
-        let note = plain_rs::notes::create(library, title, "").unwrap();
-        plain_rs::tags::add_relations(library, &[(tag.id.clone(), note.id)]).unwrap();
+        let note = plain_rs::features::notes::create(library, title, "").unwrap();
+        plain_rs::features::tags::add_relations(library, &[(tag.id.clone(), note.id)]).unwrap();
     }
     let loader = schema.data::<DataLoader<TagsLoader>>().unwrap().loader();
     let plain = schema
@@ -348,7 +350,7 @@ async fn selected_tags_batch_a_page_and_observe_later_edits() {
     );
     assert_eq!(loader.loads.load(Ordering::Relaxed), 1);
 
-    plain_rs::tags::update_tag(library, &tag.id, "updated").unwrap();
+    plain_rs::features::tags::update_tag(library, &tag.id, "updated").unwrap();
     let changed = schema.execute(selection).await;
     assert!(changed.errors.is_empty(), "{:?}", changed.errors);
     let items = changed.data.into_json().unwrap();
@@ -372,8 +374,8 @@ async fn graphql_note_lifecycle_and_tags() {
         .as_str()
         .unwrap()
         .to_string();
-    let tag = plain_rs::tags::create_tag(&db, DataType::Note.kind(), "work").unwrap();
-    plain_rs::tags::add_relations(&db, &[(tag.id, id.clone())]).unwrap();
+    let tag = plain_rs::features::tags::create_tag(&db, DataType::Note.kind(), "work").unwrap();
+    plain_rs::features::tags::add_relations(&db, &[(tag.id, id.clone())]).unwrap();
     let response = schema.execute(Request::new(format!(r#"{{ note(id: "{id}") {{ title content tags {{ name }} }} noteCount(query: "text:needle") }}"#)).data(db.clone())).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();

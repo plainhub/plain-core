@@ -2,7 +2,7 @@
 use crate::server::ServerState;
 use async_graphql::{ObjectType, Request, Response, Schema, SubscriptionType};
 #[cfg(feature = "core")]
-use plain_rs::events::WsEvent;
+use plain_rs::libs::events::WsEvent;
 
 /// Where a GraphQL request came from, injected by the adapter that received
 /// it — never by the document or its variables.
@@ -30,19 +30,19 @@ impl RequestClient {
 #[cfg(feature = "core")]
 pub(crate) fn resource_credentials(
     ctx: &async_graphql::Context<'_>,
-) -> async_graphql::Result<(plain_rs::files::resource_link::Scope, String)> {
-    use plain_rs::files::resource_link::Scope;
+) -> async_graphql::Result<(plain_rs::features::files::resource_link::Scope, String)> {
+    use plain_rs::features::files::resource_link::Scope;
     if ctx.data_opt::<RequestOrigin>() == Some(&RequestOrigin::Remote) {
         let id = ctx.data::<RequestClient>()?.client_id();
         let row = ctx
-            .data::<std::sync::Arc<plain_rs::db::Db>>()?
+            .data::<std::sync::Arc<plain_rs::libs::db::Db>>()?
             .session_get(id)?
             .ok_or_else(|| async_graphql::Error::new("Session unavailable"))?;
         Ok((Scope::Session(id.into()), row.url_token))
     } else {
         let token = ctx
-            .data::<std::sync::Arc<plain_rs::prefs::Prefs>>()?
-            .get::<String>(plain_rs::prefs::pref_keys::URL_TOKEN)?
+            .data::<std::sync::Arc<plain_rs::features::prefs::Prefs>>()?
+            .get::<String>(plain_rs::features::prefs::pref_keys::URL_TOKEN)?
             .ok_or_else(|| async_graphql::Error::new("URL token unavailable"))?;
         Ok((Scope::Global, token))
     }

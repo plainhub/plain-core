@@ -4,15 +4,16 @@
 
 use plain_rs::runtime::Runtime as ServerState;
 
-use plain_rs::services::discovery::discovery_advertisement::*;
+use plain_rs::features::services::discovery::discovery_advertisement::*;
 
 fn core_with_host(directory: &std::path::Path) -> (crate::server::ContentServer, ServerState) {
-    let prefs =
-        std::sync::Arc::new(plain_rs::prefs::Prefs::load(&directory.join("system.json")).unwrap());
+    let prefs = std::sync::Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.join("system.json")).unwrap(),
+    );
     prefs.set("client_id", "fixture-root").unwrap();
     let core = crate::server::ContentServer::start_core(
         &directory,
-        &plain_rs::utils::base64::base64_encode(&[9; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[9; 32]),
         prefs,
     )
     .unwrap();
@@ -22,12 +23,12 @@ fn core_with_host(directory: &std::path::Path) -> (crate::server::ContentServer,
 
 #[tokio::test]
 async fn first_start_advertises_the_persisted_generated_mdns_name() {
-    let _runtime = plain_rs::services::discovery::mdns_runtime::TEST_LOCK
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
     let directory = tempfile::tempdir().unwrap();
     let (core, state) = core_with_host(directory.path());
-    let hostname = plain_rs::prefs::security::snapshot(&state.prefs)
+    let hostname = plain_rs::features::prefs::security::snapshot(&state.prefs)
         .unwrap()
         .mdns_hostname;
     let label = hostname.strip_suffix(".local").unwrap();
@@ -48,8 +49,11 @@ async fn first_start_advertises_the_persisted_generated_mdns_name() {
     .unwrap();
     let advertised = execute(&state, Request::Mdns {}).await.unwrap();
     assert_eq!(advertised["targetHostname"], hostname);
-    let reloaded = plain_rs::prefs::Prefs::load(state.prefs.path()).unwrap();
-    assert_eq!(plain_rs::prefs::ensure_mdns_hostname(&reloaded), hostname);
+    let reloaded = plain_rs::features::prefs::Prefs::load(state.prefs.path()).unwrap();
+    assert_eq!(
+        plain_rs::features::prefs::ensure_mdns_hostname(&reloaded),
+        hostname
+    );
     state
         .prefs
         .set("mdns_hostname", "custom-device.local")

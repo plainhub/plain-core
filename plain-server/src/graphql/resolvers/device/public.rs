@@ -2,10 +2,10 @@ use crate::graphql::resolvers::app::types::Capability;
 use crate::graphql::types::KeyValuePair;
 use crate::graphql::types::facts::flag;
 use async_graphql::{ComplexObject, Context, Object, SimpleObject};
-use plain_rs::host::bridge::Host;
-use plain_rs::services::device::permission::Permission;
-use plain_rs::services::device::types::*;
-use plain_rs::types::Long;
+use plain_rs::features::services::device::permission::Permission;
+use plain_rs::features::services::device::types::*;
+use plain_rs::libs::host::bridge::Host;
+use plain_rs::libs::types::Long;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -28,7 +28,7 @@ impl App {
         self.permissions_sample
             .get_or_init(|| async {
                 let host = ctx.data::<Arc<Host>>().map_err(|error| error.message)?;
-                plain_rs::services::device::permissions::granted(host).await
+                plain_rs::features::services::device::permissions::granted(host).await
             })
             .await
             .as_ref()
@@ -79,7 +79,7 @@ impl App {
         let mut names = self
             .capabilities_sample
             .get_or_init(|| async {
-                plain_rs::services::capabilities::snapshot(
+                plain_rs::features::services::capabilities::snapshot(
                     ctx.data::<Arc<Host>>().map_err(|error| error.message)?,
                 )
                 .await
@@ -90,7 +90,7 @@ impl App {
             .map_err(|error| async_graphql::Error::new(error.clone()))?
             .clone();
         names.extend(
-            plain_rs::services::files::browser::capabilities()
+            plain_rs::features::services::files::browser::capabilities()
                 .into_iter()
                 .map(str::to_owned),
         );
@@ -111,8 +111,8 @@ impl App {
         let names = if crate::http::auth::public_gate::is_local(ctx) {
             grants.clone()
         } else {
-            plain_rs::services::device::permissions::enabled(
-                ctx.data::<Arc<plain_rs::prefs::Prefs>>()?,
+            plain_rs::features::services::device::permissions::enabled(
+                ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?,
                 grants,
             )
             .map_err(async_graphql::Error::new)?
@@ -141,7 +141,7 @@ impl DeviceQuery {
             .device
             .collect(
                 ctx.data::<Arc<Host>>()?,
-                plain_rs::services::device::Selection {
+                plain_rs::features::services::device::Selection {
                     uptime: fields.field("uptimeSec").exists(),
                     battery: fields.field("batteryLevel").exists()
                         || fields.field("charging").exists(),
@@ -157,14 +157,20 @@ impl DeviceQuery {
 
     async fn device_info(&self, ctx: &Context<'_>) -> async_graphql::Result<DeviceInfo> {
         let look = ctx.look_ahead();
-        let mut fields: Vec<String> = plain_rs::services::device::info::FIELDS
+        let mut fields: Vec<String> = plain_rs::features::services::device::info::FIELDS
             .iter()
             .filter(|name| look.field(name).exists())
             .map(|name| (*name).to_owned())
             .collect();
         for (name, children) in [
-            ("display", plain_rs::services::device::info::DISPLAY_FIELDS),
-            ("android", plain_rs::services::device::info::ANDROID_FIELDS),
+            (
+                "display",
+                plain_rs::features::services::device::info::DISPLAY_FIELDS,
+            ),
+            (
+                "android",
+                plain_rs::features::services::device::info::ANDROID_FIELDS,
+            ),
         ] {
             if look.field(name).exists() {
                 fields.push(name.into());
@@ -175,7 +181,7 @@ impl DeviceQuery {
                 }
             }
         }
-        plain_rs::services::device::info::collect(
+        plain_rs::features::services::device::info::collect(
             ctx.data::<Arc<Host>>()?,
             ctx.data::<plain_rs::runtime::Runtime>()?
                 .device
@@ -194,9 +200,9 @@ impl DeviceQuery {
     /// Everything a client needs to reach this device: its identity, the
     /// port it listens on and the token that authorises it.
     async fn app(&self, ctx: &Context<'_>) -> async_graphql::Result<App> {
-        let prefs = ctx.data::<Arc<plain_rs::prefs::Prefs>>()?;
-        let user = plain_rs::prefs::settings::snapshot(prefs)?;
-        let system = plain_rs::prefs::security::snapshot(prefs)?;
+        let prefs = ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?;
+        let user = plain_rs::features::prefs::settings::snapshot(prefs)?;
+        let system = plain_rs::features::prefs::security::snapshot(prefs)?;
         let (http_port, https_port) = match ctx.data_opt::<crate::server::ServerState>() {
             Some(state) => state
                 .public_ports()
@@ -291,7 +297,7 @@ impl DeviceMutation {
         key: String,
         value: String,
     ) -> async_graphql::Result<KeyValuePair> {
-        ctx.data::<plain_rs::services::temp_values::TempValues>()?
+        ctx.data::<plain_rs::libs::temp_values::TempValues>()?
             .set(key.clone(), value.clone());
         Ok(KeyValuePair { key, value })
     }
@@ -299,9 +305,12 @@ impl DeviceMutation {
     /// The app restarts itself; the response only acknowledges that the
     /// request was accepted, since the connection dies with the process.
     async fn relaunch_app(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        plain_rs::services::capabilities::require(ctx.data::<Arc<Host>>()?, "APP_RELAUNCH")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        plain_rs::features::services::capabilities::require(
+            ctx.data::<Arc<Host>>()?,
+            "APP_RELAUNCH",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         host_call(ctx, "systemRelaunchApp", json!({})).await?;
         Ok(true)
     }
@@ -315,7 +324,7 @@ impl DeviceMutation {
     ) -> async_graphql::Result<bool> {
         crate::graphql::resolvers::settings::state::update(
             ctx,
-            plain_rs::prefs::settings::SettingsPatch {
+            plain_rs::features::prefs::settings::SettingsPatch {
                 device_name: Some(name),
                 ..Default::default()
             },
@@ -325,18 +334,18 @@ impl DeviceMutation {
     }
 
     async fn start_discovery(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        plain_rs::services::discovery::mdns_runtime::control(
+        plain_rs::features::services::discovery::mdns_runtime::control(
             ctx.data::<crate::server::ServerState>()?,
-            plain_rs::services::discovery::mdns_runtime::Request::Start {},
+            plain_rs::features::services::discovery::mdns_runtime::Request::Start {},
         )
         .await?;
         Ok(true)
     }
 
     async fn stop_discovery(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        plain_rs::services::discovery::mdns_runtime::control(
+        plain_rs::features::services::discovery::mdns_runtime::control(
             ctx.data::<crate::server::ServerState>()?,
-            plain_rs::services::discovery::mdns_runtime::Request::Stop {},
+            plain_rs::features::services::discovery::mdns_runtime::Request::Stop {},
         )
         .await?;
         Ok(true)
@@ -346,7 +355,7 @@ impl DeviceMutation {
 /// The `text` field of the search DSL, which is what the log view filters
 /// on. A query with other fields but no `text` still filters on nothing.
 fn text_of(query: &str) -> String {
-    plain_rs::utils::search_dsl::parse(query)
+    plain_rs::libs::utils::search_dsl::parse(query)
         .into_iter()
         .find(|field| field.name == "text")
         .map(|field| field.value)

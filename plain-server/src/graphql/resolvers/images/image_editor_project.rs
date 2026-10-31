@@ -1,10 +1,10 @@
 use async_graphql::{Context, ID, InputObject, Object, SimpleObject};
-use plain_rs::types::Instant;
+use plain_rs::libs::types::Instant;
 use std::sync::Arc;
 
-use plain_rs::db::Db;
-use plain_rs::db::image_editor_project as store;
-use plain_rs::media::images::editor::Updates;
+use plain_rs::features::media::images::editor::Updates;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::db::image_editor_project as store;
 
 #[derive(SimpleObject)]
 pub struct ImageEditorProject {
@@ -109,7 +109,7 @@ impl ImageEditorProjectMutation {
         if input.canvas_width < 0
             || input.canvas_height < 0
             || input.layer_count < 0
-            || input.state_b64.len() > plain_rs::media::images::editor::MAX_STATE_BYTES
+            || input.state_b64.len() > plain_rs::features::media::images::editor::MAX_STATE_BYTES
             || input
                 .thumbnail
                 .as_ref()
@@ -117,7 +117,7 @@ impl ImageEditorProjectMutation {
         {
             return Err(async_graphql::Error::new("invalid image editor project"));
         }
-        plain_rs::media::images::editor::decode(&input.state_b64)
+        plain_rs::features::media::images::editor::decode(&input.state_b64)
             .map_err(async_graphql::Error::new)?;
         let id = if id.is_empty() {
             uuid::Uuid::new_v4().to_string()

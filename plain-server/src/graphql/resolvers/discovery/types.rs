@@ -19,9 +19,11 @@ pub struct NearbyDevice {
 }
 
 impl NearbyDevice {
-    pub fn from_snapshot_device(device: plain_rs::discovery::nearby_devices::Device) -> Self {
-        let interfaces = plain_rs::transport::lan::local_interfaces();
-        let best_ip = plain_rs::transport::lan::best(&device.ips, &interfaces);
+    pub fn from_snapshot_device(
+        device: plain_rs::features::discovery::nearby_devices::Device,
+    ) -> Self {
+        let interfaces = plain_rs::libs::transport::lan::local_interfaces();
+        let best_ip = plain_rs::libs::transport::lan::best(&device.ips, &interfaces);
         Self {
             id: device.id.into(),
             name: device.name,

@@ -1,6 +1,6 @@
 use crate::server::ContentServer;
-use plain_rs::chat::messages::share_card::Card;
-use plain_rs::files::shares::client::Link;
+use plain_rs::features::chat::messages::share_card::Card;
+use plain_rs::features::files::shares::client::Link;
 use plain_rs::runtime::Runtime as ServerState;
 use serde_json::Value;
 use serde_json::json;
@@ -59,7 +59,7 @@ async fn authenticated_main_browse_caches_and_queues_real_tls_files_without_host
         "127.0.0.1",
         port,
         "fixture",
-        &plain_rs::utils::base64::base64_encode_url_safe(&[7; 32]),
+        &plain_rs::libs::utils::base64::base64_encode_url_safe(&[7; 32]),
     )
     .unwrap();
     let target = directory.path().join("queued");
@@ -120,13 +120,14 @@ async fn main_share_links_use_root_secret_ports_and_revocation_without_host() {
         .prefs
         .set(
             "master_secret",
-            plain_rs::utils::base64::base64_encode(&[5; 32]),
+            plain_rs::libs::utils::base64::base64_encode(&[5; 32]),
         )
         .unwrap();
     state.prefs.set("https_port", 2443).unwrap();
     let path = dir.path().join("file.txt");
     std::fs::write(&path, b"fixture").unwrap();
-    let service = plain_rs::files::shares::Service::new(state.db.clone(), state.prefs.clone());
+    let service =
+        plain_rs::features::files::shares::Service::new(state.db.clone(), state.prefs.clone());
     let share = service
         .create(
             "fixture".into(),

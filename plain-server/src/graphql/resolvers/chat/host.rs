@@ -1,7 +1,7 @@
 use super::public::{ChatItem, item};
 use crate::server::ServerState;
 use async_graphql::{Context, ID, Object, SimpleObject};
-use plain_rs::services::chat::chat_actions;
+use plain_rs::features::services::chat::chat_actions;
 
 #[derive(SimpleObject)]
 pub struct ChatConversation {
@@ -16,15 +16,15 @@ impl ChatHostQuery {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<ChatConversation>> {
-        Ok(
-            plain_rs::chat::cacher::ChatCacher::conversations(&ctx.data::<ServerState>()?.db)?
-                .into_iter()
-                .map(|(id, chat)| ChatConversation {
-                    id: ID::from(id),
-                    chat: item(&chat),
-                })
-                .collect(),
-        )
+        Ok(plain_rs::features::chat::cacher::ChatCacher::conversations(
+            &ctx.data::<ServerState>()?.db,
+        )?
+        .into_iter()
+        .map(|(id, chat)| ChatConversation {
+            id: ID::from(id),
+            chat: item(&chat),
+        })
+        .collect())
     }
     async fn chat_records(
         &self,
@@ -35,15 +35,15 @@ impl ChatHostQuery {
     ) -> async_graphql::Result<Vec<ChatItem>> {
         let state = ctx.data::<ServerState>()?;
         let filter = filter(&query, offset, limit, false);
-        let value = plain_rs::db::chat_store::messages::list(&state.db, &filter)?;
-        let rows: Vec<plain_rs::db::DChat> = serde_json::from_value(value)?;
-        plain_rs::services::chat::prewarm::prepare_conversation(state, &filter);
+        let value = plain_rs::libs::db::chat_store::messages::list(&state.db, &filter)?;
+        let rows: Vec<plain_rs::libs::db::DChat> = serde_json::from_value(value)?;
+        plain_rs::features::services::chat::prewarm::prepare_conversation(state, &filter);
         Ok(rows.iter().map(item).collect())
     }
     async fn chat_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
         let state = ctx.data::<ServerState>()?;
         let value =
-            plain_rs::db::chat_store::messages::list(&state.db, &filter(&query, 0, 0, true))?;
+            plain_rs::libs::db::chat_store::messages::list(&state.db, &filter(&query, 0, 0, true))?;
         Ok(i32::try_from(value.as_i64().unwrap_or_default())?)
     }
 }
@@ -77,9 +77,9 @@ impl ChatHostMutation {
         targets: Vec<String>,
         share_id: ID,
     ) -> async_graphql::Result<Vec<ChatItem>> {
-        Ok(plain_rs::services::chat::share_send::existing(
+        Ok(plain_rs::features::services::chat::share_send::existing(
             ctx.data::<ServerState>()?,
-            ctx.data::<std::sync::Arc<plain_rs::files::shares::Service>>()?
+            ctx.data::<std::sync::Arc<plain_rs::features::files::shares::Service>>()?
                 .clone(),
             targets,
             share_id.to_string(),
@@ -96,11 +96,11 @@ impl ChatHostMutation {
         targets: Vec<String>,
         path: String,
         name: String,
-        expires_at: Option<plain_rs::types::Instant>,
+        expires_at: Option<plain_rs::libs::types::Instant>,
     ) -> async_graphql::Result<Vec<ChatItem>> {
-        Ok(plain_rs::services::chat::share_send::folder(
+        Ok(plain_rs::features::services::chat::share_send::folder(
             ctx.data::<ServerState>()?,
-            ctx.data::<std::sync::Arc<plain_rs::files::shares::Service>>()?
+            ctx.data::<std::sync::Arc<plain_rs::features::files::shares::Service>>()?
                 .clone(),
             targets,
             path,
@@ -134,7 +134,7 @@ impl ChatHostMutation {
         recipients: Option<Vec<ID>>,
     ) -> async_graphql::Result<ChatItem> {
         let recipients = recipients.map(|ids| ids.into_iter().map(|id| id.to_string()).collect());
-        let receipt = plain_rs::services::chat::chat_delivery::deliver(
+        let receipt = plain_rs::features::services::chat::chat_delivery::deliver(
             ctx.data::<ServerState>()?,
             id.as_str(),
             recipients,
@@ -151,7 +151,7 @@ impl ChatHostMutation {
         text: String,
     ) -> async_graphql::Result<ChatTextEdit> {
         let state = ctx.data::<ServerState>()?;
-        let result = plain_rs::services::link_preview::edit(
+        let result = plain_rs::features::services::link_preview::edit(
             &state.db,
             &state.directory,
             id.as_str(),
@@ -162,7 +162,7 @@ impl ChatHostMutation {
             chat_actions::committed(
                 state,
                 &result.chat,
-                plain_rs::chat::events::WS_MESSAGE_UPDATED,
+                plain_rs::features::chat::events::WS_MESSAGE_UPDATED,
             );
         }
         Ok(ChatTextEdit {
@@ -177,15 +177,15 @@ fn filter(
     offset: i32,
     limit: i32,
     count_only: bool,
-) -> plain_rs::db::chat_store::messages::Filter {
-    let fields = plain_rs::utils::search_dsl::parse(query);
+) -> plain_rs::libs::db::chat_store::messages::Filter {
+    let fields = plain_rs::libs::utils::search_dsl::parse(query);
     let field = |name: &str| {
         fields
             .iter()
             .find(|field| field.name == name)
             .map(|field| field.value.clone())
     };
-    plain_rs::db::chat_store::messages::Filter {
+    plain_rs::libs::db::chat_store::messages::Filter {
         peer: field("peer"),
         channel: field("channel"),
         text: field("text").unwrap_or_default(),

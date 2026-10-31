@@ -1,7 +1,7 @@
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::db::Db;
-use plain_rs::host::bridge::Host;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -191,7 +191,7 @@ async fn a_value_just_under_the_cap_is_accepted() {
 
 #[test]
 fn only_registered_keys_are_writable_for_each_origin() {
-    use plain_rs::prefs::pref_keys::writable;
+    use plain_rs::features::prefs::pref_keys::writable;
     assert!(writable("locale", false));
     assert!(writable("locale", true));
     assert!(!writable("http_port", false));

@@ -38,7 +38,7 @@ mod tests;
 #[cfg(feature = "core")]
 pub mod utils;
 
-use plain_rs::utils::http::CORS;
+use plain_rs::libs::utils::http::CORS;
 use utils::{extract_proxy_params, ws_accept_key};
 
 // ─── Public state ─────────────────────────────────────────────────────────────

@@ -1,8 +1,8 @@
-use plain_rs::types::{Instant, Long};
+use plain_rs::libs::types::{Instant, Long};
 
 use async_graphql::{ID, InputObject};
 use chrono::SubsecRound;
-use plain_rs::{chat::messages::share_card, files::shares::client};
+use plain_rs::features::{chat::messages::share_card, files::shares::client};
 
 #[derive(InputObject)]
 pub(super) struct SharedLinkInput {

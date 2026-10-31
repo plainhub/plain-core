@@ -1,7 +1,7 @@
 use super::*;
 use crate::graphql::executor::RequestOrigin;
-use plain_rs::prefs::Prefs;
-use plain_rs::prefs::pref_keys::API_PERMISSIONS;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::features::prefs::pref_keys::API_PERMISSIONS;
 use std::sync::Arc;
 
 fn prefs_with(permissions: &[&str]) -> Arc<Prefs> {

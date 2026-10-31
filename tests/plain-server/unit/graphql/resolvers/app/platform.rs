@@ -50,7 +50,7 @@ async fn public_samba_settings_and_mutation_use_core_preferences_and_explicit_ho
     )).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert!(
-        plain_rs::prefs::samba::get_samba_settings(&state.prefs)
+        plain_rs::features::prefs::samba::get_samba_settings(&state.prefs)
             .unwrap()
             .enabled
     );
@@ -122,7 +122,7 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
         let request = requests.recv().await.unwrap();
         assert_eq!(
             request["method"],
-            plain_rs::host::commands::SYSTEM_DISK_FORMAT
+            plain_rs::libs::host::commands::SYSTEM_DISK_FORMAT
         );
         assert_eq!(request["params"]["path"], "/dev/example");
         host.reply(
@@ -133,7 +133,7 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
         let request = requests.recv().await.unwrap();
         assert_eq!(
             request["method"],
-            plain_rs::host::commands::SYSTEM_HOSTNAME_SET
+            plain_rs::libs::host::commands::SYSTEM_HOSTNAME_SET
         );
         assert_eq!(request["params"]["name"], "my-server");
         host.reply(
@@ -172,7 +172,7 @@ async fn public_mount_alias_uses_the_same_preferences_as_the_platform_adapter() 
         .await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert_eq!(
-        plain_rs::prefs::storage::get_map(core.preferences().unwrap())["volume-example"],
+        plain_rs::features::prefs::storage::get_map(core.preferences().unwrap())["volume-example"],
         "Photos"
     );
     core.stop_core().await;
@@ -200,9 +200,10 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
         let directory = tempfile::tempdir().unwrap();
         let core = crate::server::ContentServer::open(directory.path()).unwrap();
         let state = core.runtime_state();
-        let before =
-            serde_json::to_value(plain_rs::prefs::samba::get_samba_settings(&state.prefs).unwrap())
-                .unwrap();
+        let before = serde_json::to_value(
+            plain_rs::features::prefs::samba::get_samba_settings(&state.prefs).unwrap(),
+        )
+        .unwrap();
         let (generation, mut requests) = state.host.connect();
         let host = state.host.clone();
         let provider = tokio::spawn(async move {
@@ -224,8 +225,10 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
         let mut requests = provider.await.unwrap();
         assert!(requests.try_recv().is_err());
         assert_eq!(
-            serde_json::to_value(plain_rs::prefs::samba::get_samba_settings(&state.prefs).unwrap())
-                .unwrap(),
+            serde_json::to_value(
+                plain_rs::features::prefs::samba::get_samba_settings(&state.prefs).unwrap()
+            )
+            .unwrap(),
             before
         );
         assert!(state.db.audit_events(0, 10, None).unwrap().is_empty());
@@ -235,8 +238,14 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
 
 #[test]
 fn hostname_sanitization_is_shared() {
-    assert_eq!(plain_rs::platform_hostname("  Foo_. Bar-- "), "foo-bar");
-    assert_eq!(plain_rs::platform_hostname("!.."), "");
+    assert_eq!(
+        plain_rs::libs::utils::hostname::platform_hostname("  Foo_. Bar-- "),
+        "foo-bar"
+    );
+    assert_eq!(
+        plain_rs::libs::utils::hostname::platform_hostname("!.."),
+        ""
+    );
 }
 
 #[tokio::test]

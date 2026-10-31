@@ -1,5 +1,5 @@
 use crate::server::ServerState;
-use plain_rs::events::{HOST_BINARY_TYPES, HOST_TEXT_TYPES, WsEvent};
+use plain_rs::libs::events::{HOST_BINARY_TYPES, HOST_TEXT_TYPES, WsEvent};
 use serde_json::{Value, json};
 use tokio::sync::{Mutex, mpsc};
 
@@ -45,7 +45,7 @@ impl HostEvents {
             state
                 .host
                 .notify("sharedFolderDownloadsRefresh", json!({}))?;
-            plain_rs::services::peers::peer_transport::notify_snapshot(&state)?;
+            plain_rs::features::services::peers::peer_transport::notify_snapshot(&state)?;
             state.update_checks.download.notify_snapshot(&state.host)?;
             state.cast.notify_snapshot(&state.host)?;
             state.feeds.notify_snapshot()?;
@@ -59,15 +59,17 @@ impl HostEvents {
         }
         state.ble_scans.set_owner(generation);
         state.ble_advertising.connect(generation);
-        plain_rs::services::settings::update_download::Runtime::schedule_reconcile(&state);
+        plain_rs::features::services::settings::update_download::Runtime::schedule_reconcile(
+            &state,
+        );
         let connected = state.core.clone();
         tokio::spawn(async move {
             tokio::join!(
-                plain_rs::services::discovery::mdns_runtime::Runtime::host_connected(
+                plain_rs::features::services::discovery::mdns_runtime::Runtime::host_connected(
                     connected.clone(),
                     generation
                 ),
-                plain_rs::services::casting::receiver::lifecycle::host_connected(
+                plain_rs::features::services::casting::receiver::lifecycle::host_connected(
                     connected, generation
                 ),
             );
@@ -156,7 +158,7 @@ impl HostEvents {
                     };
                     self.reply(reply)?;
                 },
-                request = self.next_request(), if workers.len() < plain_rs::host::bridge::REQUEST_CAPACITY => {
+                request = self.next_request(), if workers.len() < plain_rs::libs::host::bridge::REQUEST_CAPACITY => {
                     let Some(request) = request else { break };
                     let id = request.get("id").and_then(Value::as_u64)
                         .ok_or("invalid host request ID")?;
@@ -189,7 +191,7 @@ impl HostEvents {
     pub fn attach_resource(
         &self,
         id: &str,
-    ) -> Result<plain_rs::host::resource_stream::NativeResourceStream, String> {
+    ) -> Result<plain_rs::libs::host::resource_stream::NativeResourceStream, String> {
         self.state.resources.attach_native(id, self.generation)
     }
 
@@ -212,7 +214,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        plain_rs::services::feeds::sync_service::schedule::grant(
+        plain_rs::features::services::feeds::sync_service::schedule::grant(
             &self.state,
             id,
             deadline_ms,
@@ -225,7 +227,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        plain_rs::services::feeds::sync_service::schedule::revoke(&self.state, id).await;
+        plain_rs::features::services::feeds::sync_service::schedule::revoke(&self.state, id).await;
         Ok(())
     }
 
@@ -233,9 +235,9 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        plain_rs::services::discovery::pairing_runtime::execute(
+        plain_rs::features::services::discovery::pairing_runtime::execute(
             &self.state,
-            plain_rs::services::discovery::pairing_runtime::Request::Complete {
+            plain_rs::features::services::discovery::pairing_runtime::Request::Complete {
                 response: serde_json::from_str(&payload).map_err(|error| error.to_string())?,
                 sender_ip: String::new(),
             },
@@ -294,9 +296,13 @@ impl HostEvents {
         }
         let value: Advertisement =
             serde_json::from_str(&payload).map_err(|error| error.to_string())?;
-        plain_rs::services::discovery::ble_scan::seen(&self.state, &value.scan_id, &value.short_id)
-            .await
-            .map_err(|error| error.to_string())?;
+        plain_rs::features::services::discovery::ble_scan::seen(
+            &self.state,
+            &value.scan_id,
+            &value.short_id,
+        )
+        .await
+        .map_err(|error| error.to_string())?;
         return Ok(());
     }
 
@@ -367,7 +373,7 @@ impl HostEvents {
             return Err("host disconnected".into());
         }
 
-        return plain_rs::services::clipboard::report(&self.state, &payload);
+        return plain_rs::features::services::clipboard::report(&self.state, &payload);
     }
 
     pub async fn report_permissions(&self, payload: String) -> Result<(), String> {
@@ -392,7 +398,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        plain_rs::services::casting::receiver::reports::accept(
+        plain_rs::features::services::casting::receiver::reports::accept(
             &self.state,
             self.generation,
             "DLNA_POSITION_REPORTED",
@@ -406,7 +412,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        plain_rs::services::casting::receiver::reports::accept(
+        plain_rs::features::services::casting::receiver::reports::accept(
             &self.state,
             self.generation,
             "DLNA_PLAYBACK_REPORTED",
@@ -420,7 +426,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        plain_rs::services::casting::receiver::reports::accept(
+        plain_rs::features::services::casting::receiver::reports::accept(
             &self.state,
             self.generation,
             "DLNA_SEEK_CONSUMED_REPORTED",
@@ -434,7 +440,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        plain_rs::services::casting::receiver::reports::accept(
+        plain_rs::features::services::casting::receiver::reports::accept(
             &self.state,
             self.generation,
             "DLNA_STOPPED_REPORTED",
@@ -448,7 +454,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        plain_rs::services::audio::reports::accept(
+        plain_rs::features::services::audio::reports::accept(
             &self.state,
             self.generation,
             "AUDIO_STARTED_REPORTED",
@@ -462,7 +468,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        plain_rs::services::audio::reports::accept(
+        plain_rs::features::services::audio::reports::accept(
             &self.state,
             self.generation,
             "AUDIO_COMPLETED_REPORTED",
@@ -476,7 +482,7 @@ impl HostEvents {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
         }
-        plain_rs::services::audio::reports::accept(
+        plain_rs::features::services::audio::reports::accept(
             &self.state,
             self.generation,
             "AUDIO_PROGRESS_REPORTED",
@@ -521,7 +527,7 @@ impl HostEvents {
                 if !self.state.host.is_current(self.generation) {
                     return Err("host disconnected".into());
                 }
-                if plain_rs::services::discovery::pairing_runtime::accept_report(
+                if plain_rs::features::services::discovery::pairing_runtime::accept_report(
                     &self.state,
                     kind,
                     &payload,

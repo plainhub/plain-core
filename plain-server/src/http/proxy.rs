@@ -46,7 +46,7 @@ fn target_url(plaintext: &str) -> anyhow::Result<&str> {
 }
 
 fn decode_target(state: &ServerState, id: &str) -> anyhow::Result<String> {
-    let url = String::from_utf8(plain_rs::services::files::links::decrypt(
+    let url = String::from_utf8(plain_rs::features::services::files::links::decrypt(
         state, id, "proxyfs",
     )?)?;
     Ok(target_url(&url)?.to_owned())

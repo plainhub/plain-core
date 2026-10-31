@@ -7,7 +7,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use plain_rs::services::peers::status_runtime::{ConnectionGuard, emit};
+use plain_rs::features::services::peers::status_runtime::{ConnectionGuard, emit};
 use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;

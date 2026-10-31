@@ -1,6 +1,6 @@
-use plain_rs::protocols::mdns::host_responder;
+use plain_rs::features::services::discovery::mdns_runtime::*;
+use plain_rs::libs::protocols::mdns::host_responder;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_rs::services::discovery::mdns_runtime::*;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
@@ -8,18 +8,19 @@ use std::sync::atomic::Ordering;
 
 #[tokio::test]
 async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner() {
-    let _runtime = plain_rs::services::discovery::mdns_runtime::TEST_LOCK
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
     use std::sync::atomic::AtomicBool;
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "fixture-mdns-root").unwrap();
     prefs
         .set("mdns_hostname", "fixture-mdns-root.local")
         .unwrap();
     prefs.set("https_port", 2443).unwrap();
-    let token = plain_rs::utils::base64::base64_encode(&[5; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[5; 32]);
     let server = crate::server::ContentServer::start(dir.path(), &token, prefs.clone()).unwrap();
     let state = server.runtime_state();
     // The advertised port is the live public listener's, so the test has to
@@ -109,8 +110,9 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
     receiver
         .set_read_timeout(Some(std::time::Duration::from_secs(1)))
         .unwrap();
-    let bytes = plain_rs::protocols::mdns::packet_codec::build_ptr_query("_plainapp._tcp.local");
-    plain_rs::protocols::mdns::host_responder::send_recorded(
+    let bytes =
+        plain_rs::libs::protocols::mdns::packet_codec::build_ptr_query("_plainapp._tcp.local");
+    plain_rs::libs::protocols::mdns::host_responder::send_recorded(
         &sender,
         &bytes,
         receiver.local_addr().unwrap(),
@@ -119,7 +121,11 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
     let mut buffer = [0; 1500];
     let (size, src) = receiver.recv_from(&mut buffer).unwrap();
     assert_eq!(&buffer[..size], bytes.as_slice());
-    plain_rs::protocols::mdns::host_responder::record_received(&receiver, src, &buffer[..size]);
+    plain_rs::libs::protocols::mdns::host_responder::record_received(
+        &receiver,
+        src,
+        &buffer[..size],
+    );
     let captured = state.mdns.snapshot();
     assert!(
         captured["packetsIn"]
@@ -203,7 +209,7 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
             ),
             "first".into(),
             Some(vec![1; 32]),
-            plain_rs::host::request_scope::NativeRequestScope::default(),
+            plain_rs::libs::host::request_scope::NativeRequestScope::default(),
         )
         .unwrap();
     subscription.mark_online().unwrap();

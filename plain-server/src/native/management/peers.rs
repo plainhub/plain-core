@@ -3,20 +3,20 @@ use super::NativeManagement;
 impl NativeManagement {
     pub async fn pairing_code(&self) -> Result<String, String> {
         self.state.native_client_id()?;
-        let reply = plain_rs::services::discovery::discovery_advertisement::execute(
+        let reply = plain_rs::features::services::discovery::discovery_advertisement::execute(
             &self.state,
-            plain_rs::services::discovery::discovery_advertisement::Request::Reply {},
+            plain_rs::features::services::discovery::discovery_advertisement::Request::Reply {},
         )
         .await
         .map_err(|error| error.to_string())?;
-        let mut payload: plain_rs::discovery::pairing_code::Payload =
+        let mut payload: plain_rs::features::discovery::pairing_code::Payload =
             serde_json::from_value(reply).map_err(|error| error.to_string())?;
         payload.ips.retain(|address| {
             address
                 .parse::<std::net::IpAddr>()
                 .is_ok_and(|address| !address.is_loopback() && !address.is_unspecified())
         });
-        plain_rs::discovery::pairing_code::format(&payload)
+        plain_rs::features::discovery::pairing_code::format(&payload)
             .ok_or_else(|| "Reachable pairing address and active listener required".to_owned())
     }
 
@@ -49,9 +49,11 @@ impl NativeManagement {
 
     pub async fn reconnect_peers(&self) -> Result<bool, String> {
         self.state.native_client_id()?;
-        plain_rs::services::peers::peer_status_controller::Controller::new(self.state.core.clone())
-            .execute(plain_rs::services::peers::peer_status_controller::Action::Reconnect)
-            .await?;
+        plain_rs::features::services::peers::peer_status_controller::Controller::new(
+            self.state.core.clone(),
+        )
+        .execute(plain_rs::features::services::peers::peer_status_controller::Action::Reconnect)
+        .await?;
         Ok(true)
     }
 }

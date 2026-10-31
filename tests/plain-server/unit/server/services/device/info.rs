@@ -3,9 +3,10 @@ async fn main_device_fields_keep_alias_fragment_and_nested_type_behavior_without
     let host = Arc::new(Host::default());
     let (_generation, mut requests) = host.connect();
     let directory = tempfile::tempdir().unwrap();
-    let db = Arc::new(plain_rs::db::Db::open(&directory.path().join("plain.db")).unwrap());
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let db = Arc::new(plain_rs::libs::db::Db::open(&directory.path().join("plain.db")).unwrap());
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema =
         crate::test_support::schema::build(host, events, prefs, db, directory.path().to_path_buf());
@@ -25,5 +26,5 @@ async fn main_device_fields_keep_alias_fragment_and_nested_type_behavior_without
     }
     assert!(requests.try_recv().is_err());
 }
-use plain_rs::host::bridge::Host;
+use plain_rs::libs::host::bridge::Host;
 use std::sync::Arc;

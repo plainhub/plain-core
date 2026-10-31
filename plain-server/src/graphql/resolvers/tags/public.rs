@@ -1,12 +1,12 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::resolvers::tags::domain_types::TagRelation;
 use async_graphql::{Context, Object};
-use plain_rs::db::Db;
-use plain_rs::db::TagRow;
-pub use plain_rs::enums::DataType;
-use plain_rs::host::bridge::Host;
-use plain_rs::services::capabilities;
-use plain_rs::tags;
+pub use plain_rs::features::enums::DataType;
+use plain_rs::features::services::capabilities;
+use plain_rs::features::tags;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::db::TagRow;
+use plain_rs::libs::host::bridge::Host;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -169,10 +169,10 @@ async fn provider_query_keys(
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
     }
     if kind == DataType::Sms {
-        let facts = plain_rs::services::sms::query::execute(
+        let facts = plain_rs::features::services::sms::query::execute(
             db(ctx),
             ctx.data_unchecked::<Arc<Host>>(),
-            plain_rs::services::sms::query::Request::Ids {
+            plain_rs::features::services::sms::query::Request::Ids {
                 query: query.to_owned(),
                 include_trashed: false,
             },
@@ -190,7 +190,7 @@ async fn provider_query_keys(
     } else {
         "systemContactIds"
     };
-    let provider = plain_rs::services::files::provider_query::media_provider(kind)
+    let provider = plain_rs::features::services::files::provider_query::media_provider(kind)
         .map_err(|error| async_graphql::Error::new(error.to_string()))?;
     let params =
         crate::graphql::types::facts::provider_params(ctx, provider, query, json!({})).await?;
@@ -260,7 +260,7 @@ fn tag(row: &TagRow) -> Tag {
     }
 }
 
-fn failed(error: plain_rs::error::DomainError) -> async_graphql::Error {
+fn failed(error: plain_rs::libs::error::DomainError) -> async_graphql::Error {
     async_graphql::Error::new(error.to_string())
 }
 

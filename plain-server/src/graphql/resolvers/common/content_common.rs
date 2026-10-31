@@ -1,10 +1,10 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use async_graphql::{Context, ID};
 use chrono::{DateTime, Utc};
-use plain_rs::types::Instant;
+use plain_rs::libs::types::Instant;
 use std::sync::Arc;
 
-use plain_rs::db::Db;
+use plain_rs::libs::db::Db;
 
 pub fn instant(value: &str) -> async_graphql::Result<Instant> {
     let date = DateTime::parse_from_rfc3339(value)
@@ -14,13 +14,15 @@ pub fn instant(value: &str) -> async_graphql::Result<Instant> {
 
 pub fn tags(ctx: &Context<'_>, id: &str, kind: i32) -> async_graphql::Result<Vec<Tag>> {
     let library = ctx.data::<Arc<Db>>()?;
-    Ok(plain_rs::tags::tags_for_key_of_kind(library, id, kind)?
-        .into_iter()
-        .map(|tag| Tag {
-            id: ID(tag.id),
-            name: tag.name,
-            r#type: tag.kind,
-            count: tag.count,
-        })
-        .collect())
+    Ok(
+        plain_rs::features::tags::tags_for_key_of_kind(library, id, kind)?
+            .into_iter()
+            .map(|tag| Tag {
+                id: ID(tag.id),
+                name: tag.name,
+                r#type: tag.kind,
+                count: tag.count,
+            })
+            .collect(),
+    )
 }

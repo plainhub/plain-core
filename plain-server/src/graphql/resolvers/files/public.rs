@@ -15,12 +15,12 @@ use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Enum, Object};
 use chrono::{DateTime, Utc};
-use plain_rs::files::filesystem::SortBy;
-use plain_rs::files::filesystem::browse::Request;
-use plain_rs::prefs::settings::FileSortBy;
-use plain_rs::services::files::browse as file_reads;
-use plain_rs::types::Instant;
-use plain_rs::types::Long;
+use plain_rs::features::prefs::settings::FileSortBy;
+use plain_rs::features::services::files::browse as file_reads;
+use plain_rs::libs::filesystem::SortBy;
+use plain_rs::libs::filesystem::browse::Request;
+use plain_rs::libs::types::Instant;
+use plain_rs::libs::types::Long;
 use serde_json::{Value, json};
 use std::{path::Path, sync::Arc};
 
@@ -43,7 +43,7 @@ impl FilesQuery {
             return Ok(Vec::new());
         }
         let items = ctx
-            .data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?
+            .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .indexed_files(query, offset, limit, sort_by, false)
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
@@ -58,7 +58,7 @@ impl FilesQuery {
             return Ok(Long(0));
         }
         let count = ctx
-            .data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?
+            .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .indexed_files(query, 0, 0, FileSortBy::NameAsc, true)
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
@@ -67,7 +67,7 @@ impl FilesQuery {
 
     async fn mounts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Mount>> {
         let facts = ctx
-            .data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?
+            .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .mounts(prefs(ctx).clone())
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
@@ -79,7 +79,7 @@ impl FilesQuery {
     async fn recent_files(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<File>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let items = ctx
-            .data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?
+            .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .recent_files()
             .await?;
         Ok(items.iter().map(file).collect())
@@ -99,7 +99,7 @@ impl FilesQuery {
     ) -> async_graphql::Result<Vec<File>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let page = file_reads::execute(
-            ctx.data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?,
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
             Request {
                 root,
                 query,
@@ -123,7 +123,7 @@ impl FilesQuery {
     ) -> async_graphql::Result<i32> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let page = file_reads::execute(
-            ctx.data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?,
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
             Request {
                 root,
                 query,
@@ -146,7 +146,7 @@ impl FilesQuery {
     ) -> async_graphql::Result<FileInfo> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let record = file_reads::stat_record(
-            ctx.data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?,
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
             &path,
         )
         .await;
@@ -178,7 +178,7 @@ impl FilesQuery {
     /// a filter without guarding every call.
     async fn path_exists(&self, ctx: &Context<'_>, path: String) -> async_graphql::Result<bool> {
         Ok(file_reads::stat_record(
-            ctx.data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?,
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
             &path,
         )
         .await
@@ -193,7 +193,7 @@ impl FilesQuery {
         path: String,
     ) -> async_graphql::Result<Option<PathKind>> {
         Ok(file_reads::stat_record(
-            ctx.data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?,
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
             &path,
         )
         .await
@@ -226,11 +226,11 @@ async fn media_info(
         .map(|extension| extension.to_string_lossy().to_lowercase())
         .unwrap_or_default();
     let kind = if is_image(&extension) {
-        plain_rs::enums::DataType::Image
+        plain_rs::features::enums::DataType::Image
     } else if is_video(&extension) {
-        plain_rs::enums::DataType::Video
+        plain_rs::features::enums::DataType::Video
     } else if is_audio(&extension) {
-        plain_rs::enums::DataType::Audio
+        plain_rs::features::enums::DataType::Audio
     } else {
         return Ok(None);
     };
@@ -241,16 +241,18 @@ async fn media_info(
         .flat_map(|field| field.selection_set())
         .any(|field| !matches!(field.name(), "durationMs" | "__typename"));
     let facts = if !needs_details {
-        if kind != plain_rs::enums::DataType::Image && selected.field("durationMs").exists() {
+        if kind != plain_rs::features::enums::DataType::Image
+            && selected.field("durationMs").exists()
+        {
             match ctx
-                .data::<Arc<plain_rs::services::files::duration_updates::Runtime>>()?
+                .data::<Arc<plain_rs::features::services::files::duration_updates::Runtime>>()?
                 .probe_milliseconds(path)
                 .await
                 .map_err(async_graphql::Error::new)?
             {
                 Some(duration) => json!({"durationMs":duration}),
                 None => ctx
-                    .data::<Arc<plain_rs::services::files::info::Info>>()?
+                    .data::<Arc<plain_rs::features::services::files::info::Info>>()?
                     .read(path, kind)
                     .await
                     .map_err(async_graphql::Error::new)?,
@@ -259,7 +261,7 @@ async fn media_info(
             json!({})
         }
     } else {
-        ctx.data::<Arc<plain_rs::services::files::info::Info>>()?
+        ctx.data::<Arc<plain_rs::features::services::files::info::Info>>()?
             .read(path, kind)
             .await
             .map_err(async_graphql::Error::new)?
@@ -268,7 +270,7 @@ async fn media_info(
         return Ok(None);
     }
     Ok(Some(match kind {
-        plain_rs::enums::DataType::Image => MediaFileInfo::Image(ImageFileInfo {
+        plain_rs::features::enums::DataType::Image => MediaFileInfo::Image(ImageFileInfo {
             make: text(&facts, "make"),
             model: text(&facts, "model"),
             rotation: integer(&facts, "rotation") as i32,
@@ -280,7 +282,7 @@ async fn media_info(
             taken_at: facts["takenAt"]
                 .as_str()
                 .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
-                .map(|value| plain_rs::types::Instant(value.with_timezone(&chrono::Utc))),
+                .map(|value| plain_rs::libs::types::Instant(value.with_timezone(&chrono::Utc))),
             flash: integer(&facts, "flash") as i32,
             f_number: facts["fNumber"].as_f64().unwrap_or(0.0),
             exposure_program: integer(&facts, "exposureProgram") as i32,
@@ -295,7 +297,7 @@ async fn media_info(
             height: integer(&facts, "height") as i32,
             location: location(&facts),
         }),
-        plain_rs::enums::DataType::Video => MediaFileInfo::Video(VideoFileInfo {
+        plain_rs::features::enums::DataType::Video => MediaFileInfo::Video(VideoFileInfo {
             width: integer(&facts, "width") as i32,
             height: integer(&facts, "height") as i32,
             duration_ms: Long(integer(&facts, "durationMs")),
@@ -313,7 +315,7 @@ async fn media_info(
             taken_at: facts["takenAt"]
                 .as_str()
                 .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
-                .map(|value| plain_rs::types::Instant(value.with_timezone(&chrono::Utc))),
+                .map(|value| plain_rs::libs::types::Instant(value.with_timezone(&chrono::Utc))),
             location: location(&facts),
         }),
         _ => MediaFileInfo::Audio(AudioFileInfo {
@@ -333,7 +335,7 @@ fn location(value: &Value) -> Option<Location> {
         });
     }
     let raw = value["rawLocation"].as_str()?;
-    let (latitude, longitude) = plain_rs::utils::iso6709::coordinates(raw)?;
+    let (latitude, longitude) = plain_rs::libs::utils::iso6709::coordinates(raw)?;
     Some(Location {
         latitude,
         longitude,
@@ -428,8 +430,8 @@ fn epoch_datetime() -> DateTime<Utc> {
     DateTime::<Utc>::from_timestamp(0, 0).unwrap_or_default()
 }
 
-fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<plain_rs::prefs::Prefs> {
-    ctx.data_unchecked::<Arc<plain_rs::prefs::Prefs>>()
+fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<plain_rs::features::prefs::Prefs> {
+    ctx.data_unchecked::<Arc<plain_rs::features::prefs::Prefs>>()
 }
 
 #[cfg(test)]

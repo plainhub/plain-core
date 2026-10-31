@@ -5,8 +5,8 @@ use crate::graphql::types::facts::optional_instant;
 use crate::graphql::types::facts::rows;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Object, SimpleObject};
-use plain_rs::types::Instant;
-use plain_rs::types::Long;
+use plain_rs::libs::types::Instant;
+use plain_rs::libs::types::Long;
 use serde_json::{Value, json};
 
 use crate::graphql::resolvers::media::public::STORAGE;
@@ -44,7 +44,7 @@ impl Video {
     async fn tags(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<Vec<Tag>> {
         crate::graphql::resolvers::tags::loader::load(
             ctx,
-            plain_rs::enums::DataType::Video,
+            plain_rs::features::enums::DataType::Video,
             self.id.as_str(),
         )
         .await
@@ -69,7 +69,7 @@ impl VideosQuery {
         query: String,
         offset: i32,
         limit: i32,
-        sort_by: plain_rs::prefs::settings::FileSortBy,
+        sort_by: plain_rs::features::prefs::settings::FileSortBy,
     ) -> async_graphql::Result<Vec<Video>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let items = media_rows(

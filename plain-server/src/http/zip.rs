@@ -5,7 +5,7 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use plain_rs::services::files::archive_downloads::{self, Download, Error};
+use plain_rs::features::services::files::archive_downloads::{self, Download, Error};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

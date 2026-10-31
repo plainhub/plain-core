@@ -3,12 +3,12 @@ use serde_json::json;
 
 #[test]
 fn queue_projection_preserves_large_progress_and_normalizes_attachment_defaults() {
-    let peer = plain_rs::db::DPeer::new(
+    let peer = plain_rs::libs::db::DPeer::new(
         "peer",
         "Peer",
         "127.0.0.1",
         Some(8443),
-        plain_rs::chat::enums::DeviceType::Phone,
+        plain_rs::features::chat::enums::DeviceType::Phone,
     );
     let queue = snapshot(json!({"runtimeId":"fixture","revision":5000000000_i64,"tasks":[{
         "id":"file","messageId":"message","generation":"generation","status":"PAUSED","error":"",

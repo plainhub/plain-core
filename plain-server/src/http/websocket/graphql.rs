@@ -9,9 +9,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
-use plain_rs::host::request_scope::NativeRequestScope;
-use plain_rs::protocols::graphql::{self, Role};
-use plain_rs::protocols::graphql::{Ack, Init, PROTOCOL};
+use plain_rs::libs::host::request_scope::NativeRequestScope;
+use plain_rs::libs::protocols::graphql::{self, Role};
+use plain_rs::libs::protocols::graphql::{Ack, Init, PROTOCOL};
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -52,11 +52,11 @@ async fn establish(
     if !state.prefs.get_or("desktop_access", true) {
         return Err("Access disabled".into());
     }
-    let local = plain_rs::services::sessions::local_key(state, &client);
+    let local = plain_rs::features::services::sessions::local_key(state, &client);
     let key = local
         .clone()
         .or_else(|| {
-            plain_rs::services::sessions::key(&state.db, &client)
+            plain_rs::features::services::sessions::key(&state.db, &client)
                 .ok()
                 .flatten()
         })
@@ -88,7 +88,9 @@ async fn establish(
         )
         .map_err(|_| "Invalid handshake")?;
     let ack = Ack {
-        server_nonce: plain_rs::utils::hex::bytes_to_hex(&plain_rs::crypto::random_bytes(32)),
+        server_nonce: plain_rs::libs::utils::hex::bytes_to_hex(
+            &plain_rs::libs::crypto::random_bytes(32),
+        ),
     };
     let ack_frame = graphql::seal_ack(
         &key,

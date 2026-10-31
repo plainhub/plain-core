@@ -1,5 +1,5 @@
 use crate::server::ContentServer;
-use plain_rs::files::tasks::FileTaskStatus;
+use plain_rs::features::files::tasks::FileTaskStatus;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -33,15 +33,15 @@ fn find_task(response: &Value, id: &str) -> Value {
 #[tokio::test]
 async fn main_tasks_track_resolved_paths_and_gate_sdk_execution_on_platform_authorization() {
     let temp = tempfile::tempdir().unwrap();
-    let token = plain_rs::utils::base64::base64_encode(&[12; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[12; 32]);
     let db_path = temp.path().join("core/tasks.db");
     let server = ContentServer::start_with_config(
         db_path.parent().unwrap(),
         &token,
-        Arc::new(plain_rs::prefs::Prefs::load(&temp.path().join("prefs.json")).unwrap()),
-        plain_rs::host::startup::StartupConfig {
+        Arc::new(plain_rs::features::prefs::Prefs::load(&temp.path().join("prefs.json")).unwrap()),
+        plain_rs::libs::host::startup::StartupConfig {
             system_media_catalog: true,
-            ..plain_rs::platform::startup::config()
+            ..plain_rs::libs::platform::startup::config()
         },
     )
     .unwrap();
@@ -169,14 +169,14 @@ async fn media_move_case(missing_destination: bool) {
     let destination = base.join("target");
     std::fs::write(&destination, b"existing").unwrap();
     let db_path = base.join("core/db");
-    let token = plain_rs::utils::base64::base64_encode(&[16; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[16; 32]);
     let server = ContentServer::start_with_config(
         db_path.parent().unwrap(),
         &token,
-        Arc::new(plain_rs::prefs::Prefs::load(&base.join("prefs")).unwrap()),
-        plain_rs::host::startup::StartupConfig {
+        Arc::new(plain_rs::features::prefs::Prefs::load(&base.join("prefs")).unwrap()),
+        plain_rs::libs::host::startup::StartupConfig {
             system_media_catalog: true,
-            ..plain_rs::platform::startup::config()
+            ..plain_rs::libs::platform::startup::config()
         },
     )
     .unwrap();
@@ -193,9 +193,9 @@ async fn media_move_case(missing_destination: bool) {
         Ok(())
     }).unwrap();
     let duration_cache =
-        plain_rs::media::duration_cache::DurationCache::new(db_path.parent().unwrap());
+        plain_rs::features::media::duration_cache::DurationCache::new(db_path.parent().unwrap());
     duration_cache
-        .save(plain_rs::media::duration_cache::Duration {
+        .save(plain_rs::features::media::duration_cache::Duration {
             media_type: "audio".into(),
             file_id: "1".into(),
             path: audio_path.clone(),
@@ -207,10 +207,10 @@ async fn media_move_case(missing_destination: bool) {
         .unwrap();
     db.use_platform_audio_catalog().unwrap();
     db.cache_platform_audio(
-        &[plain_rs::db::audio_catalog::AudioMedia {
+        &[plain_rs::libs::db::audio_catalog::AudioMedia {
             file_id: Some("1".into()),
             aliases: Vec::new(),
-            track: plain_rs::media::audio::queue::AudioTrack::from_path_stem(&audio_path),
+            track: plain_rs::features::media::audio::queue::AudioTrack::from_path_stem(&audio_path),
         }],
         false,
     )
@@ -222,8 +222,8 @@ async fn media_move_case(missing_destination: bool) {
         )
     })
     .unwrap();
-    plain_rs::media::audio::queue::save_audio_current(&db, &audio_path).unwrap();
-    plain_rs::media::audio::playback::seek(&db, 100).unwrap();
+    plain_rs::features::media::audio::queue::save_audio_current(&db, &audio_path).unwrap();
+    plain_rs::features::media::audio::playback::seek(&db, 100).unwrap();
     server.runtime_state().core.file_platform.use_sdk_for_test();
     let mut socket = crate::host::events::TestHost::new(&server);
     let source_root = source.clone();
@@ -387,7 +387,7 @@ async fn media_move_case(missing_destination: bool) {
         .unwrap();
     }
     assert_eq!(
-        plain_rs::media::audio::playback::snapshot(&db)
+        plain_rs::features::media::audio::playback::snapshot(&db)
             .unwrap()
             .path,
         if missing_destination {

@@ -80,7 +80,7 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
     state
         .prefs
         .set(
-            plain_rs::prefs::pref_keys::API_PERMISSIONS,
+            plain_rs::features::prefs::pref_keys::API_PERMISSIONS,
             vec![super::super::public::STORAGE],
         )
         .unwrap();

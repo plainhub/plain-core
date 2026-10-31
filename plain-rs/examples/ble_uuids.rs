@@ -1,3 +1,6 @@
 fn main() {
-    print!("{}", plain_rs::protocols::ble::print::kotlin_uuids_source());
+    print!(
+        "{}",
+        plain_rs::libs::protocols::ble::print::kotlin_uuids_source()
+    );
 }

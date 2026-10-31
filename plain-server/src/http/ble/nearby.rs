@@ -1,9 +1,9 @@
 use crate::server::ServerState;
 use anyhow::Result;
-use plain_rs::discovery::nearby_wire::Message;
-use plain_rs::protocols::ble;
-use plain_rs::services::discovery::discovery_advertisement;
-use plain_rs::services::discovery::pairing_runtime;
+use plain_rs::features::discovery::nearby_wire::Message;
+use plain_rs::features::services::discovery::discovery_advertisement;
+use plain_rs::features::services::discovery::pairing_runtime;
+use plain_rs::libs::protocols::ble;
 
 pub(super) async fn dispatch(
     state: &ServerState,
@@ -24,8 +24,11 @@ pub(super) async fn dispatch(
         }
         Message::DiscoverReply(_) => return ble::message(&[], &[]),
         Message::PairVerification(verification) => {
-            plain_rs::services::discovery::pairing_confirmation::handle(state, verification)
-                .await?;
+            plain_rs::features::services::discovery::pairing_confirmation::handle(
+                state,
+                verification,
+            )
+            .await?;
             return ble::message(&[], &[]);
         }
         Message::PairRequest(request) => pairing_runtime::Request::ReceiveRequest {

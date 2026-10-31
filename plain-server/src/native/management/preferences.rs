@@ -1,8 +1,8 @@
 use super::NativeManagement;
-use plain_rs::services::settings::preferences::Preferences;
-use plain_rs::services::settings::security_preferences::SecurityPreferences;
+use plain_rs::features::services::settings::preferences::Preferences;
+use plain_rs::features::services::settings::security_preferences::SecurityPreferences;
 
-use plain_rs::prefs::pref_keys as keys;
+use plain_rs::features::prefs::pref_keys as keys;
 use serde_json::{Map, Value, json};
 
 impl NativeManagement {
@@ -15,12 +15,12 @@ impl NativeManagement {
 
     pub fn get_pref(&self, key: &str) -> Result<Value, String> {
         self.state.native_client_id()?;
-        if let Some(value) = plain_rs::prefs::settings::get_entry(&self.state.prefs, key)
+        if let Some(value) = plain_rs::features::prefs::settings::get_entry(&self.state.prefs, key)
             .map_err(|error| error.to_string())?
         {
             return Ok(value);
         }
-        if let Some(value) = plain_rs::prefs::security::get_entry(&self.state.prefs, key)
+        if let Some(value) = plain_rs::features::prefs::security::get_entry(&self.state.prefs, key)
             .map_err(|error| error.to_string())?
         {
             return Ok(value);
@@ -28,11 +28,11 @@ impl NativeManagement {
         let state = &self.state;
         match key {
             keys::UPDATE_INFO => Ok(json!(
-                plain_rs::services::settings::updates::info(state)
+                plain_rs::features::services::settings::updates::info(state)
                     .map_err(|error| error.to_string())?
             )),
             keys::APP_UPDATE_AVAILABLE => {
-                let info = plain_rs::services::settings::updates::info(state)
+                let info = plain_rs::features::services::settings::updates::info(state)
                     .map_err(|error| error.to_string())?;
                 let version = &state.host.startup().app_version;
                 let skip_version = state
@@ -40,7 +40,7 @@ impl NativeManagement {
                     .get::<String>(keys::SKIP_VERSION)
                     .map_err(|error| error.to_string())?
                     .unwrap_or_default();
-                Ok(json!(plain_rs::updates::available(
+                Ok(json!(plain_rs::features::updates::available(
                     &info,
                     version,
                     &skip_version
@@ -61,7 +61,7 @@ impl NativeManagement {
 
     pub fn preferences(&self) -> Result<Map<String, Value>, String> {
         self.state.native_client_id()?;
-        let mut values = plain_rs::prefs::settings::values(&self.state.prefs)
+        let mut values = plain_rs::features::prefs::settings::values(&self.state.prefs)
             .map_err(|error| error.to_string())?;
         for key in [
             keys::PASSWORD,
@@ -87,7 +87,7 @@ impl NativeManagement {
 
     pub async fn set_pref(&self, key: &str, value: serde_json::Value) -> Result<bool, String> {
         self.state.native_client_id()?;
-        plain_rs::services::settings::preferences::Preferences::from_server(&self.state)
+        plain_rs::features::services::settings::preferences::Preferences::from_server(&self.state)
             .set(key, value)
             .await
             .map_err(|e| e.to_string())
@@ -126,7 +126,7 @@ impl NativeManagement {
     pub async fn set_notification_filter_mode(&self, mode: String) -> Result<bool, String> {
         self.state.native_client_id()?;
         Preferences::from_server(&self.state)
-            .action(plain_rs::prefs::settings::Action::SetNotificationMode(mode))
+            .action(plain_rs::features::prefs::settings::Action::SetNotificationMode(mode))
             .await
             .map_err(|error| error.to_string())
     }
@@ -134,7 +134,7 @@ impl NativeManagement {
     pub async fn clear_notification_filter_apps(&self) -> Result<bool, String> {
         self.state.native_client_id()?;
         Preferences::from_server(&self.state)
-            .action(plain_rs::prefs::settings::Action::ClearNotificationApps)
+            .action(plain_rs::features::prefs::settings::Action::ClearNotificationApps)
             .await
             .map_err(|error| error.to_string())
     }

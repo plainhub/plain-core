@@ -44,7 +44,7 @@ async fn run_development(state: &ServerState, body: Bytes) -> Result<Response, S
 /// An unset token never matches, and the comparison is constant time so a
 /// wrong guess cannot learn the real one from response timing.
 pub(crate) fn dev_bearer_matches(state: &ServerState, authorization: &str) -> Result<bool, ()> {
-    let expected = plain_rs::prefs::security::dev_token(&state.prefs).map_err(|_| ())?;
+    let expected = plain_rs::features::prefs::security::dev_token(&state.prefs).map_err(|_| ())?;
     if expected.is_empty() {
         return Ok(false);
     }
@@ -117,7 +117,7 @@ async fn execute(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let (token_mode, key) = if authorization.is_none() {
-        let key = plain_rs::services::sessions::key(&state.db, client_id)
+        let key = plain_rs::features::services::sessions::key(&state.db, client_id)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
             .ok_or(StatusCode::UNAUTHORIZED)?;
         (true, key)
@@ -131,8 +131,8 @@ async fn execute(
     };
 
     let request = if token_mode {
-        let decrypted =
-            plain_rs::crypto::xchacha_decrypt_raw(&key, &body).ok_or(StatusCode::UNAUTHORIZED)?;
+        let decrypted = plain_rs::libs::crypto::xchacha_decrypt_raw(&key, &body)
+            .ok_or(StatusCode::UNAUTHORIZED)?;
         if decrypted.is_empty() {
             return Err(StatusCode::UNAUTHORIZED);
         }
@@ -147,7 +147,7 @@ async fn execute(
         String::from_utf8(body.to_vec()).map_err(|_| StatusCode::BAD_REQUEST)?
     };
 
-    plain_rs::services::sessions::touch(state, client_id)
+    plain_rs::features::services::sessions::touch(state, client_id)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let result = run_with_context(
         &state.public,
@@ -159,7 +159,7 @@ async fn execute(
     )
     .await?;
     let mut response = if token_mode {
-        let encrypted = plain_rs::transport::http_response::Context::new("/graphql", &body)
+        let encrypted = plain_rs::libs::transport::http_response::Context::new("/graphql", &body)
             .encrypt(&key, &result)
             .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
         encrypted.into_response()
@@ -252,24 +252,24 @@ async fn execute_guest(state: &ServerState, id: &str, body: &[u8]) -> (u16, Vec<
     if id.is_empty() {
         return (401, vec![]);
     }
-    let shares = plain_rs::files::shares::Service::new(state.db.clone(), state.prefs.clone());
+    let shares =
+        plain_rs::features::files::shares::Service::new(state.db.clone(), state.prefs.clone());
     if !matches!(shares.active(id, true), Ok(Some(_))) {
         return (403, vec![]);
     }
-    let key = match shares
-        .token(id)
-        .and_then(|key| plain_rs::utils::base64::base64_decode_checked(&key).map_err(Into::into))
-    {
+    let key = match shares.token(id).and_then(|key| {
+        plain_rs::libs::utils::base64::base64_decode_checked(&key).map_err(Into::into)
+    }) {
         Ok(key) => key,
         Err(_) => return (500, vec![]),
     };
-    let plain = match plain_rs::crypto::xchacha_decrypt_raw(&key, body)
+    let plain = match plain_rs::libs::crypto::xchacha_decrypt_raw(&key, body)
         .and_then(|p| String::from_utf8(p).ok())
     {
         Some(p) if !p.is_empty() => p,
         _ => return (401, vec![]),
     };
-    let context = plain_rs::transport::http_response::Context::new("/guest_graphql", body);
+    let context = plain_rs::libs::transport::http_response::Context::new("/guest_graphql", body);
     let now = chrono::Utc::now().timestamp_millis();
     let body = match state.guest_replay.admit(id, &plain, now) {
         Ok(p) => p,

@@ -1,6 +1,6 @@
 use crate::graphql::resolvers::files::app_file::AppFile;
 use async_graphql::{Context, Object};
-use plain_rs::files::app_files::FileStore;
+use plain_rs::features::files::app_files::FileStore;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -17,16 +17,16 @@ impl AppFilesMutation {
     ) -> async_graphql::Result<AppFile> {
         crate::http::auth::public_gate::require(
             ctx,
-            ctx.data::<Arc<plain_rs::prefs::Prefs>>()?,
+            ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?,
             &["WRITE_EXTERNAL_STORAGE"],
         )?;
         let store = ctx.data::<Arc<FileStore>>()?;
         let state = ctx.data::<crate::server::ServerState>()?;
-        let file = plain_rs::services::files::imports::import(
+        let file = plain_rs::features::services::files::imports::import(
             store,
             &state.resources,
             state.cache.root(),
-            plain_rs::services::files::imports::Import {
+            plain_rs::features::services::files::imports::Import {
                 source,
                 name: file_name.clone(),
                 mime: mime_type,
@@ -38,7 +38,10 @@ impl AppFilesMutation {
         .await
         .map_err(async_graphql::Error::new)?;
         let name = if file_name.is_empty() {
-            plain_rs::chat::attachments::app_file_store::display_name(&file, &Default::default())
+            plain_rs::features::chat::attachments::app_file_store::display_name(
+                &file,
+                &Default::default(),
+            )
         } else {
             file_name
         };

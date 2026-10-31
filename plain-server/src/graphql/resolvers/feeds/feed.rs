@@ -2,14 +2,14 @@ use crate::graphql::resolvers::common::content_common;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::ActionResult;
 use async_graphql::{ComplexObject, Context, ID, Object, SimpleObject};
-use plain_rs::types::Instant;
+use plain_rs::libs::types::Instant;
 use std::sync::Arc;
 
-use plain_rs::db::Db;
-use plain_rs::db::notes_feeds::FeedEntryRow;
-use plain_rs::db::notes_feeds::FeedRow;
-use plain_rs::enums::DataType;
-use plain_rs::services::feeds;
+use plain_rs::features::enums::DataType;
+use plain_rs::features::services::feeds;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::db::notes_feeds::FeedEntryRow;
+use plain_rs::libs::db::notes_feeds::FeedRow;
 
 type GqlResult<T> = async_graphql::Result<T>;
 
@@ -77,7 +77,7 @@ impl FeedEntry {
 
     async fn feed(&self, ctx: &Context<'_>) -> GqlResult<Option<Feed>> {
         let db = ctx.data::<Arc<Db>>()?;
-        plain_rs::feeds::get(db, self.feed_id.as_str())?
+        plain_rs::features::feeds::get(db, self.feed_id.as_str())?
             .map(|row| feed_model(ctx, row))
             .transpose()
     }
@@ -146,30 +146,35 @@ impl FeedQuery {
         Ok(sync_service(ctx)?.states())
     }
     async fn feed(&self, ctx: &Context<'_>, id: ID) -> GqlResult<Option<Feed>> {
-        plain_rs::feeds::get(ctx.data::<Arc<Db>>()?, id.as_str())?
+        plain_rs::features::feeds::get(ctx.data::<Arc<Db>>()?, id.as_str())?
             .map(|row| feed_model(ctx, row))
             .transpose()
     }
     async fn feeds(&self, ctx: &Context<'_>) -> GqlResult<Vec<Feed>> {
-        plain_rs::feeds::list(ctx.data::<Arc<Db>>()?)?
+        plain_rs::features::feeds::list(ctx.data::<Arc<Db>>()?)?
             .into_iter()
             .map(|row| feed_model(ctx, row))
             .collect()
     }
 
     async fn feed_entry_counts(&self, ctx: &Context<'_>) -> GqlResult<Vec<FeedEntryCount>> {
-        Ok(plain_rs::feeds::entry_counts(ctx.data::<Arc<Db>>()?)?
-            .into_iter()
-            .map(|(id, count)| FeedEntryCount { id: ID(id), count })
-            .collect())
+        Ok(
+            plain_rs::features::feeds::entry_counts(ctx.data::<Arc<Db>>()?)?
+                .into_iter()
+                .map(|(id, count)| FeedEntryCount { id: ID(id), count })
+                .collect(),
+        )
     }
 
     async fn feed_entry_count(&self, ctx: &Context<'_>, query: String) -> GqlResult<i32> {
-        Ok(plain_rs::feeds::count(ctx.data::<Arc<Db>>()?, &query)?)
+        Ok(plain_rs::features::feeds::count(
+            ctx.data::<Arc<Db>>()?,
+            &query,
+        )?)
     }
 
     async fn feed_entry(&self, ctx: &Context<'_>, id: ID) -> GqlResult<Option<FeedEntry>> {
-        plain_rs::feeds::entry_get(ctx.data::<Arc<Db>>()?, id.as_str())?
+        plain_rs::features::feeds::entry_get(ctx.data::<Arc<Db>>()?, id.as_str())?
             .map(entry_model)
             .transpose()
     }
@@ -181,7 +186,7 @@ impl FeedQuery {
         offset: i32,
         limit: i32,
     ) -> GqlResult<Vec<FeedEntry>> {
-        plain_rs::feeds::search(ctx.data::<Arc<Db>>()?, &query, limit, offset)?
+        plain_rs::features::feeds::search(ctx.data::<Arc<Db>>()?, &query, limit, offset)?
             .into_iter()
             .map(entry_model)
             .collect()
@@ -200,8 +205,11 @@ impl FeedMutation {
         read: bool,
     ) -> GqlResult<ActionResult> {
         Ok(ActionResult {
-            affected_count: plain_rs::feeds::mark_read(ctx.data::<Arc<Db>>()?, &query, read)?
-                as i32,
+            affected_count: plain_rs::features::feeds::mark_read(
+                ctx.data::<Arc<Db>>()?,
+                &query,
+                read,
+            )? as i32,
         })
     }
 
@@ -220,7 +228,7 @@ impl FeedMutation {
     ) -> GqlResult<Feed> {
         feed_model(
             ctx,
-            plain_rs::feeds::update_fields(
+            plain_rs::features::feeds::update_fields(
                 ctx.data::<Arc<Db>>()?,
                 id.as_str(),
                 name.as_deref(),
@@ -244,12 +252,14 @@ impl FeedMutation {
     }
 
     async fn import_feeds(&self, ctx: &Context<'_>, content: String) -> GqlResult<bool> {
-        plain_rs::feeds::import_opml(ctx.data::<Arc<Db>>()?, &content)?;
+        plain_rs::features::feeds::import_opml(ctx.data::<Arc<Db>>()?, &content)?;
         Ok(true)
     }
 
     async fn export_feeds(&self, ctx: &Context<'_>) -> GqlResult<String> {
-        Ok(plain_rs::feeds::export_opml(ctx.data::<Arc<Db>>()?)?)
+        Ok(plain_rs::features::feeds::export_opml(
+            ctx.data::<Arc<Db>>()?,
+        )?)
     }
 
     async fn delete_feed(&self, ctx: &Context<'_>, id: ID) -> GqlResult<bool> {
@@ -277,8 +287,8 @@ impl FeedMutation {
         if query.trim().is_empty() {
             return Err("query is required".into());
         }
-        let entries = plain_rs::feeds::search(db, &query, i32::MAX, 0)?;
-        let affected_count = plain_rs::feeds::delete_entries(db, &query)? as i32;
+        let entries = plain_rs::features::feeds::search(db, &query, i32::MAX, 0)?;
+        let affected_count = plain_rs::features::feeds::delete_entries(db, &query)? as i32;
         if let Some(assets) = feed_assets(ctx) {
             for entry in entries {
                 assets.release(&entry.image);

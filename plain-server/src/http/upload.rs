@@ -20,7 +20,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use plain_rs::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES;
+use plain_rs::features::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
@@ -63,7 +63,7 @@ async fn session_key(state: &ServerState, headers: &HeaderMap) -> anyhow::Result
         .unwrap_or_default();
     anyhow::ensure!(!client_id.is_empty(), "c-id header is missing");
     if state.authenticated(headers) {
-        if let Some(key) = plain_rs::services::sessions::local_key(state, client_id) {
+        if let Some(key) = plain_rs::features::services::sessions::local_key(state, client_id) {
             return Ok(key);
         }
     }
@@ -72,7 +72,7 @@ async fn session_key(state: &ServerState, headers: &HeaderMap) -> anyhow::Result
         .session_get(client_id)
         .map_err(|error| anyhow::Error::msg(error.to_string()))?
         .ok_or_else(|| anyhow::anyhow!("unknown client"))?;
-    let key = plain_rs::utils::base64::base64_decode(&row.token);
+    let key = plain_rs::libs::utils::base64::base64_decode(&row.token);
     anyhow::ensure!(key.len() == 32, "session token is not a 32-byte key");
     Ok(key)
 }
@@ -87,7 +87,7 @@ async fn read_info<T: for<'de> Deserialize<'de>>(
         .bytes()
         .await
         .map_err(|error| anyhow::Error::msg(error.to_string()))?;
-    let plaintext = plain_rs::crypto::xchacha_decrypt_raw(key, &bytes)
+    let plaintext = plain_rs::libs::crypto::xchacha_decrypt_raw(key, &bytes)
         .ok_or_else(|| anyhow::anyhow!("Unauthorized"))?;
     let plaintext = std::str::from_utf8(&plaintext)?;
     let payload = state
@@ -275,7 +275,7 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
                 let mut destination = if current.replace {
                     original.clone()
                 } else {
-                    match plain_rs::utils::unique_path::unique_sibling(&original) {
+                    match plain_rs::libs::utils::unique_path::unique_sibling(&original) {
                         Ok(path) => path,
                         Err(error) => return plain(StatusCode::BAD_REQUEST, error.to_string()),
                     }
@@ -303,7 +303,7 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
                         let source = temp.clone();
                         let target = destination.clone();
                         let result = tokio::task::spawn_blocking(move || {
-                            plain_rs::files::filesystem::rename::no_replace(&source, &target)
+                            plain_rs::libs::filesystem::rename::no_replace(&source, &target)
                         })
                         .await;
                         let result = match result {
@@ -315,7 +315,8 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
                             .is_err_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists)
                         {
                             destination =
-                                match plain_rs::utils::unique_path::unique_sibling(&original) {
+                                match plain_rs::libs::utils::unique_path::unique_sibling(&original)
+                                {
                                     Ok(path) => path,
                                     Err(error) => break Err(error),
                                 };
@@ -386,7 +387,7 @@ async fn store_app_file(
             "Size mismatch: expected {expected}, got {written}"
         ));
     }
-    let store = plain_rs::files::app_files::FileStore::new(state.db.clone(), directory);
+    let store = plain_rs::features::files::app_files::FileStore::new(state.db.clone(), directory);
     match store
         .import(temp.clone(), name.to_owned(), content_type.to_owned(), true)
         .await
@@ -476,7 +477,7 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
                     continue;
                 }
                 let base = match upload_tmp_dir(&state).await {
-                    Ok(base) => match plain_rs::files::uploads::chunk_path(
+                    Ok(base) => match plain_rs::features::files::uploads::chunk_path(
                         Path::new(&base),
                         &current.file_id,
                         current.index,

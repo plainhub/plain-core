@@ -99,9 +99,9 @@ fn ordinary_startup_never_requires_mount_privileges() {
 
 #[tokio::test]
 async fn startup_scan_indexes_configured_directories_through_the_headless_host() {
-    use plain_rs::services::files::media_scans::Status;
+    use plain_rs::features::services::files::media_scans::Status;
     use std::sync::Arc;
-    let home = plain_rs::platform::system::consts::home_directory().unwrap();
+    let home = plain_rs::libs::platform::system::consts::home_directory().unwrap();
     let directory = tempfile::Builder::new()
         .prefix("scan-check-")
         .tempdir_in(home)
@@ -133,7 +133,9 @@ async fn startup_scan_indexes_configured_directories_through_the_headless_host()
         }
     })
     .await;
-    let count = catalog.count(plain_rs::enums::DataType::Doc).unwrap();
+    let count = catalog
+        .count(plain_rs::features::enums::DataType::Doc)
+        .unwrap();
     core.stop_core().await;
     runner.await.unwrap().unwrap();
     let completed = result.unwrap();

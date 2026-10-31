@@ -119,7 +119,7 @@ async fn cache_clear_waits_for_owned_copy_after_the_graphql_waiter_is_cancelled(
     assert!(running.await.unwrap_err().is_cancelled());
     let clearing = {
         let state = state.clone();
-        tokio::spawn(async move { plain_rs::services::cache::clear_application(&state).await })
+        tokio::spawn(async move { plain_rs::libs::cache::clear_application(&state).await })
     };
     assert!(!target.exists());
     stream.write(b" copy".to_vec()).await.unwrap();

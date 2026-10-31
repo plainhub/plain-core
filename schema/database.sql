@@ -1,5 +1,5 @@
 -- plain-core SQLite DDL (SQLite, WAL mode)
--- Generated; do not edit manually. Source: plain-rs/src/db/schema/*.rs
+-- Generated; do not edit manually. Source: plain-rs/src/libs/db/schema/*.rs
 -- Generate: node scripts/gen-db-schema-sql.mjs --write
 -- Check: node scripts/gen-db-schema-sql.mjs
 

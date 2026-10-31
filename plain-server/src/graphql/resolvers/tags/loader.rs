@@ -3,7 +3,7 @@ use async_graphql::{
     Context,
     dataloader::{DataLoader, Loader},
 };
-use plain_rs::{db::Db, enums::DataType};
+use plain_rs::{features::enums::DataType, libs::db::Db};
 use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -43,11 +43,13 @@ impl Loader<TagKey> for TagsLoader {
         }
         let mut result: HashMap<_, _> = keys.iter().cloned().map(|key| (key, Vec::new())).collect();
         for (kind, ids) in groups {
-            let tags: HashMap<_, _> = plain_rs::tags::tags_by_type(&self.db, kind)?
+            let tags: HashMap<_, _> = plain_rs::features::tags::tags_by_type(&self.db, kind)?
                 .into_iter()
                 .map(|tag| (tag.id.clone(), tag))
                 .collect();
-            for relation in plain_rs::tags::relations_for_keys_of_kind(&self.db, &ids, kind)? {
+            for relation in
+                plain_rs::features::tags::relations_for_keys_of_kind(&self.db, &ids, kind)?
+            {
                 if let Some(tag) = tags.get(&relation.tag_id) {
                     result
                         .entry(TagKey {

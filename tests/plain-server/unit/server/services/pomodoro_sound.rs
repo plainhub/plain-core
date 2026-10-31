@@ -7,7 +7,7 @@ async fn native_import_replaces_sound_in_the_owned_layout_without_host_calls() {
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
     let source = directory.path().join("selected+audio.wav");
-    let destination = plain_rs::data_paths::DataPaths::new(directory.path()).pomodoro_sound();
+    let destination = plain_rs::libs::data_paths::DataPaths::new(directory.path()).pomodoro_sound();
     for bytes in [b"first sound".as_slice(), b"replacement sound".as_slice()] {
         std::fs::write(&source, bytes).unwrap();
         let reference = core

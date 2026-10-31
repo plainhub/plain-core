@@ -1,8 +1,8 @@
 //! Public preference roots share the local Rust store and notify UI projections.
 
 use async_graphql::{Context, Json, Object};
-use plain_rs::prefs::Prefs;
-use plain_rs::prefs::pref_keys::{APP_HOME_FEATURES, AUTO_CHECK_UPDATE, SKIP_VERSION};
+use plain_rs::features::prefs::Prefs;
+use plain_rs::features::prefs::pref_keys::{APP_HOME_FEATURES, AUTO_CHECK_UPDATE, SKIP_VERSION};
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -24,15 +24,18 @@ impl PrefsQuery {
         let prefs = prefs(ctx);
         let mut values = serde_json::Map::new();
         for (key, value) in prefs.entries() {
-            if plain_rs::prefs::pref_keys::readable(&key, is_local(ctx)) {
-                let value = plain_rs::prefs::settings::get_entry(prefs, &key)?.unwrap_or(value);
+            if plain_rs::features::prefs::pref_keys::readable(&key, is_local(ctx)) {
+                let value =
+                    plain_rs::features::prefs::settings::get_entry(prefs, &key)?.unwrap_or(value);
                 values.insert(key, value);
             }
         }
         values
             .entry(APP_HOME_FEATURES.to_owned())
             .or_insert_with(|| {
-                Value::String(plain_rs::prefs::settings::Settings::default().app_home_features)
+                Value::String(
+                    plain_rs::features::prefs::settings::Settings::default().app_home_features,
+                )
             });
         Ok(Json(Value::Object(values)))
     }
@@ -104,7 +107,7 @@ fn is_local(ctx: &Context<'_>) -> bool {
         == Some(&crate::graphql::executor::RequestOrigin::Local)
 }
 pub(crate) fn allowed(ctx: &Context<'_>, key: &str) -> bool {
-    plain_rs::prefs::pref_keys::writable(key, is_local(ctx))
+    plain_rs::features::prefs::pref_keys::writable(key, is_local(ctx))
 }
 pub(crate) fn authorize(ctx: &Context<'_>, key: &str) -> async_graphql::Result<()> {
     if !allowed(ctx, key) {

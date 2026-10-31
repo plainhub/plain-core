@@ -1,6 +1,6 @@
 use async_graphql::{Enum, ID, InputObject, SimpleObject};
-use plain_rs::types::Instant;
-use plain_rs::types::Long;
+use plain_rs::libs::types::Instant;
+use plain_rs::libs::types::Long;
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct Disk {

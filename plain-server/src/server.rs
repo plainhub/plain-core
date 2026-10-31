@@ -51,25 +51,26 @@ impl ContentServer {
         &self.state.core
     }
 
-    pub fn shared_preferences(&self) -> Result<Arc<plain_rs::prefs::Prefs>, String> {
+    pub fn shared_preferences(&self) -> Result<Arc<plain_rs::features::prefs::Prefs>, String> {
         self.state.native_client_id()?;
         Ok(self.state.prefs.clone())
     }
 
-    pub fn preferences(&self) -> Result<&plain_rs::prefs::Prefs, String> {
+    pub fn preferences(&self) -> Result<&plain_rs::features::prefs::Prefs, String> {
         self.state.native_client_id()?;
         Ok(&self.state.prefs)
     }
 
     pub fn dlna_engine(
         &self,
-    ) -> std::sync::Arc<plain_rs::services::casting::receiver::receiver_engine::DlnaEngine> {
+    ) -> std::sync::Arc<plain_rs::features::services::casting::receiver::receiver_engine::DlnaEngine>
+    {
         self.state.dlna.clone()
     }
 
     pub async fn close_native_scope(
         &self,
-        scope: &plain_rs::host::request_scope::NativeRequestScope,
+        scope: &plain_rs::libs::host::request_scope::NativeRequestScope,
     ) -> Result<(), String> {
         scope.close();
         self.state
@@ -106,14 +107,15 @@ impl ContentServer {
         crate::graphql::executor::GraphqlExecutor::new(self.state.clone())
     }
     pub async fn resolve_native_file(&self, reference: &str) -> Result<PathBuf, String> {
-        plain_rs::services::files::file_access::resolve_native(&self.state, reference).await
+        plain_rs::features::services::files::file_access::resolve_native(&self.state, reference)
+            .await
     }
 
     pub async fn read_resource(
         &self,
         path: &str,
-    ) -> Result<plain_rs::host::resources::NativeResourceReader, String> {
-        let path = plain_rs::services::files::references::resolve(
+    ) -> Result<plain_rs::libs::host::resources::NativeResourceReader, String> {
+        let path = plain_rs::features::services::files::references::resolve(
             self.state.db.clone(),
             self.state.directory.clone(),
             path,
@@ -132,7 +134,7 @@ impl ContentServer {
             if state.native_client_id().is_err() {
                 return None;
             }
-            match plain_rs::services::peers::peer_address::proxy_address(&state.db, id) {
+            match plain_rs::features::services::peers::peer_address::proxy_address(&state.db, id) {
                 Ok(address) => address.map(|address| {
                     let state = state.clone();
                     crate::http::proxy::local::ResolvedPeer::new(address, move || {
@@ -157,10 +159,10 @@ impl ContentServer {
 
     pub fn native_media_catalog(
         &self,
-    ) -> Result<plain_rs::services::files::catalog_scan::NativeMediaCatalog, String> {
+    ) -> Result<plain_rs::features::services::files::catalog_scan::NativeMediaCatalog, String> {
         self.state.native_client_id()?;
         Ok(
-            plain_rs::services::files::catalog_scan::NativeMediaCatalog::new(
+            plain_rs::features::services::files::catalog_scan::NativeMediaCatalog::new(
                 self.state.core.clone(),
             ),
         )
@@ -185,10 +187,12 @@ impl ContentServer {
     fn build_state_with_config(
         directory: &Path,
         token: &str,
-        prefs: Arc<plain_rs::prefs::Prefs>,
-        config: plain_rs::host::startup::StartupConfig,
+        prefs: Arc<plain_rs::features::prefs::Prefs>,
+        config: plain_rs::libs::host::startup::StartupConfig,
     ) -> Result<(ServerState, watch::Sender<bool>, watch::Receiver<bool>), String> {
-        let host = Arc::new(plain_rs::host::bridge::Host::with_startup_config(config)?);
+        let host = Arc::new(plain_rs::libs::host::bridge::Host::with_startup_config(
+            config,
+        )?);
         let subscription_sessions: Arc<crate::graphql::subscriptions::session::Sessions> =
             Arc::default();
         let main_ws = Arc::new(crate::http::websocket::runtime::Runtime::default());
@@ -227,13 +231,13 @@ impl ContentServer {
         Ok((state, stop, receiver))
     }
 
-    pub fn cache_paths(&self) -> &plain_rs::cache_paths::CachePaths {
+    pub fn cache_paths(&self) -> &plain_rs::libs::cache_paths::CachePaths {
         &self.state.cache
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn open(directory: &Path) -> Result<Self, String> {
-        let cache = plain_rs::cache_paths::system::resolve(directory)?;
+        let cache = plain_rs::libs::cache_paths::system::resolve(directory)?;
         Self::open_with_cache(directory, &cache)
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -244,25 +248,27 @@ impl ContentServer {
         }
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
         let _data_directory =
-            plain_rs::data_paths::directory::DataDirectory::open(directory, cache_directory)?;
+            plain_rs::libs::data_paths::directory::DataDirectory::open(directory, cache_directory)?;
         let prefs = Arc::new(
-            plain_rs::prefs::Prefs::load(&plain_rs::prefs::default_path(directory))
-                .map_err(|error| error.to_string())?,
+            plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(
+                directory,
+            ))
+            .map_err(|error| error.to_string())?,
         );
-        let url_token = plain_rs::prefs::identity::ensure_url_token(&prefs);
-        if plain_rs::utils::base64::base64_decode(&url_token).len() != 32 {
+        let url_token = plain_rs::features::prefs::identity::ensure_url_token(&prefs);
+        if plain_rs::libs::utils::base64::base64_decode(&url_token).len() != 32 {
             return Err("token must contain 32 random bytes".into());
         }
         if prefs
-            .get::<String>(plain_rs::prefs::pref_keys::URL_TOKEN)
+            .get::<String>(plain_rs::features::prefs::pref_keys::URL_TOKEN)
             .map_err(|error| error.to_string())?
             .as_deref()
             != Some(url_token.as_str())
         {
             return Err("URL token persistence failed".into());
         }
-        let token = plain_rs::crypto::gen_token();
-        let mut config = plain_rs::platform::startup::config();
+        let token = plain_rs::libs::crypto::gen_token();
+        let mut config = plain_rs::libs::platform::startup::config();
         config.cache_dir = Some(cache_directory.to_string_lossy().into_owned());
         Self::start_core_with_config(directory, &token, prefs, config)
     }
@@ -271,21 +277,21 @@ impl ContentServer {
     pub fn start_core(
         directory: &Path,
         token: &str,
-        prefs: Arc<plain_rs::prefs::Prefs>,
+        prefs: Arc<plain_rs::features::prefs::Prefs>,
     ) -> Result<Self, String> {
         Self::start_core_with_config(
             directory,
             token,
             prefs,
-            plain_rs::platform::startup::config(),
+            plain_rs::libs::platform::startup::config(),
         )
     }
 
     pub fn start_core_with_config(
         directory: &Path,
         token: &str,
-        prefs: Arc<plain_rs::prefs::Prefs>,
-        config: plain_rs::host::startup::StartupConfig,
+        prefs: Arc<plain_rs::features::prefs::Prefs>,
+        config: plain_rs::libs::host::startup::StartupConfig,
     ) -> Result<Self, String> {
         let (state, stop, _) = Self::build_state_with_config(directory, token, prefs, config)?;
         Ok(Self {
@@ -300,13 +306,13 @@ impl ContentServer {
     pub fn start(
         directory: &Path,
         token: &str,
-        prefs: Arc<plain_rs::prefs::Prefs>,
+        prefs: Arc<plain_rs::features::prefs::Prefs>,
     ) -> Result<Self, String> {
         Self::start_with_config(
             directory,
             token,
             prefs,
-            plain_rs::platform::startup::config(),
+            plain_rs::libs::platform::startup::config(),
         )
     }
 
@@ -314,8 +320,8 @@ impl ContentServer {
     pub(crate) fn start_with_config(
         directory: &Path,
         token: &str,
-        prefs: Arc<plain_rs::prefs::Prefs>,
-        config: plain_rs::host::startup::StartupConfig,
+        prefs: Arc<plain_rs::features::prefs::Prefs>,
+        config: plain_rs::libs::host::startup::StartupConfig,
     ) -> Result<Self, String> {
         let (state, stop, mut receiver) =
             Self::build_state_with_config(directory, token, prefs, config)?;
@@ -345,8 +351,8 @@ impl ContentServer {
     pub async fn start_http(
         directory: &Path,
         token: &str,
-        prefs: Arc<plain_rs::prefs::Prefs>,
-        config: plain_rs::host::startup::StartupConfig,
+        prefs: Arc<plain_rs::features::prefs::Prefs>,
+        config: plain_rs::libs::host::startup::StartupConfig,
         http: u16,
         https: u16,
         cert: Vec<u8>,
@@ -406,7 +412,7 @@ impl ContentServer {
         self.state.http_server.stopped();
         self.state.publish_http_status();
     }
-    pub fn http_status(&self) -> plain_rs::services::http_status::HttpStatus {
+    pub fn http_status(&self) -> plain_rs::features::services::http_status::HttpStatus {
         self.state.http_server.status()
     }
     #[cfg(feature = "http_transport")]

@@ -4,13 +4,13 @@ use crate::graphql::resolvers::app::capability_types::{
 };
 use crate::server::ServerState;
 use async_graphql::{Context, Object, Result};
-use plain_rs::host::bridge::Host;
-use plain_rs::host::commands::{
+use plain_rs::features::services::settings::types::AppUpdate;
+use plain_rs::libs::host::bridge::Host;
+use plain_rs::libs::host::commands::{
     SYSTEM_SAMBA_APPLY, SYSTEM_SAMBA_PASSWORD, SYSTEM_SAMBA_SERVICE_FACTS, SambaApplyRequest,
     SambaPasswordRequest, SambaServiceFacts,
 };
-use plain_rs::services::settings::types::AppUpdate;
-use plain_rs::types::Long;
+use plain_rs::libs::types::Long;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -27,7 +27,7 @@ impl PlatformQuery {
     ) -> Result<Vec<crate::graphql::resolvers::app::capability_types::AuditEvent>> {
         use crate::graphql::resolvers::app::capability_types::{AuditEvent, AuditEventType};
         let state = ctx.data::<ServerState>()?;
-        let needle = plain_rs::utils::search_dsl::parse(&query)
+        let needle = plain_rs::libs::utils::search_dsl::parse(&query)
             .into_iter()
             .find(|field| field.name == "text")
             .map(|field| field.value)
@@ -47,7 +47,9 @@ impl PlatformQuery {
                             r#type: kind,
                             message: row.message,
                             client_id: row.client_id,
-                            created_at: plain_rs::types::Instant(at.with_timezone(&chrono::Utc)),
+                            created_at: plain_rs::libs::types::Instant(
+                                at.with_timezone(&chrono::Utc),
+                            ),
                         })
                         .map_err(|error| async_graphql::Error::new(error.to_string())),
                 )
@@ -57,14 +59,14 @@ impl PlatformQuery {
 
     async fn samba_settings(&self, ctx: &Context<'_>) -> Result<SambaSettings> {
         let state = ctx.data::<ServerState>()?;
-        let settings = plain_rs::prefs::samba::get_samba_settings(&state.prefs)?;
+        let settings = plain_rs::features::prefs::samba::get_samba_settings(&state.prefs)?;
         let service = samba_service(ctx).await?;
         Ok(samba_facts(settings, service))
     }
 
     async fn disks(&self, ctx: &Context<'_>) -> Result<Vec<Disk>> {
         require_capability(ctx, "DISK_MANAGER").await?;
-        let disks = tokio::task::spawn_blocking(plain_rs::platform::disks::list)
+        let disks = tokio::task::spawn_blocking(plain_rs::libs::platform::disks::list)
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?
             .map_err(async_graphql::Error::new)?;
@@ -82,12 +84,15 @@ impl PlatformQuery {
     }
 
     async fn app_update(&self, ctx: &Context<'_>) -> Result<AppUpdate> {
-        Ok(plain_rs::services::settings::updates::snapshot(ctx.data::<ServerState>()?).await?)
+        Ok(
+            plain_rs::features::services::settings::updates::snapshot(ctx.data::<ServerState>()?)
+                .await?,
+        )
     }
 }
 
 async fn require_capability(ctx: &Context<'_>, name: &str) -> Result<()> {
-    plain_rs::services::capabilities::require(ctx.data::<Arc<Host>>()?, name)
+    plain_rs::features::services::capabilities::require(ctx.data::<Arc<Host>>()?, name)
         .await
         .map_err(|error| async_graphql::Error::new(error.to_string()))
 }
@@ -103,7 +108,7 @@ async fn samba_service(ctx: &Context<'_>) -> Result<SambaServiceFacts> {
 }
 
 fn samba_facts(
-    settings: plain_rs::prefs::samba::SambaSettings,
+    settings: plain_rs::features::prefs::samba::SambaSettings,
     service: SambaServiceFacts,
 ) -> SambaSettings {
     let (service_name, service_active, service_enabled) = if service.name.is_empty() {
@@ -127,8 +132,12 @@ fn samba_facts(
                 share_path: share.share_path,
                 read_only: share.read_only,
                 auth: match share.auth {
-                    plain_rs::prefs::samba::SambaShareAuth::Guest => SambaShareAuth::GUEST,
-                    plain_rs::prefs::samba::SambaShareAuth::Password => SambaShareAuth::PASSWORD,
+                    plain_rs::features::prefs::samba::SambaShareAuth::Guest => {
+                        SambaShareAuth::GUEST
+                    }
+                    plain_rs::features::prefs::samba::SambaShareAuth::Password => {
+                        SambaShareAuth::PASSWORD
+                    }
                 },
             })
             .collect(),
@@ -140,7 +149,7 @@ fn samba_facts(
 
 async fn samba_apply(
     ctx: &Context<'_>,
-    settings: plain_rs::prefs::samba::SambaSettings,
+    settings: plain_rs::features::prefs::samba::SambaSettings,
 ) -> Result<()> {
     let value = ctx
         .data::<Arc<Host>>()?
@@ -164,14 +173,14 @@ impl PlatformMutation {
     async fn format_disk(&self, ctx: &Context<'_>, path: String) -> Result<bool> {
         require_capability(ctx, "DISK_MANAGER").await?;
         let state = ctx.data::<ServerState>()?;
-        let request = plain_rs::host::commands::DiskFormatRequest {
+        let request = plain_rs::libs::host::commands::DiskFormatRequest {
             path,
             client_id: ctx.data_opt::<String>().cloned().unwrap_or_default(),
         };
         let value = state
             .host
             .call_wait(
-                plain_rs::host::commands::SYSTEM_DISK_FORMAT,
+                plain_rs::libs::host::commands::SYSTEM_DISK_FORMAT,
                 serde_json::to_value(request)?,
             )
             .await
@@ -183,7 +192,7 @@ impl PlatformMutation {
     }
 
     async fn set_hostname(&self, ctx: &Context<'_>, name: String) -> Result<bool> {
-        let name = plain_rs::platform_hostname(&name);
+        let name = plain_rs::libs::utils::hostname::platform_hostname(&name);
         if name.is_empty() {
             return Err("device_name_invalid".into());
         }
@@ -191,8 +200,8 @@ impl PlatformMutation {
         let value = state
             .host
             .call(
-                plain_rs::host::commands::SYSTEM_HOSTNAME_SET,
-                serde_json::to_value(plain_rs::host::commands::HostnameRequest {
+                plain_rs::libs::host::commands::SYSTEM_HOSTNAME_SET,
+                serde_json::to_value(plain_rs::libs::host::commands::HostnameRequest {
                     name: name.clone(),
                 })?,
             )
@@ -218,7 +227,7 @@ impl PlatformMutation {
         alias: String,
     ) -> Result<bool> {
         let state = ctx.data::<ServerState>()?;
-        plain_rs::prefs::storage::set_alias(&state.prefs, id.as_str(), &alias)?;
+        plain_rs::features::prefs::storage::set_alias(&state.prefs, id.as_str(), &alias)?;
         Ok(true)
     }
 
@@ -232,18 +241,23 @@ impl PlatformMutation {
         let shares = input
             .shares
             .into_iter()
-            .map(|share| plain_rs::prefs::samba::SambaShare {
+            .map(|share| plain_rs::features::prefs::samba::SambaShare {
                 name: share.name,
                 share_path: share.share_path,
                 read_only: share.read_only,
                 auth: match share.auth {
-                    SambaShareAuth::GUEST => plain_rs::prefs::samba::SambaShareAuth::Guest,
-                    SambaShareAuth::PASSWORD => plain_rs::prefs::samba::SambaShareAuth::Password,
+                    SambaShareAuth::GUEST => {
+                        plain_rs::features::prefs::samba::SambaShareAuth::Guest
+                    }
+                    SambaShareAuth::PASSWORD => {
+                        plain_rs::features::prefs::samba::SambaShareAuth::Password
+                    }
                 },
             })
             .collect();
-        let settings = plain_rs::prefs::samba::configure(&state.prefs, input.enabled, shares)
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        let settings =
+            plain_rs::features::prefs::samba::configure(&state.prefs, input.enabled, shares)
+                .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         samba_apply(ctx, settings).await?;
         Ok(true)
     }
@@ -254,7 +268,7 @@ impl PlatformMutation {
             return Err("password required".into());
         }
         let state = ctx.data::<ServerState>()?;
-        let mut settings = plain_rs::prefs::samba::get_samba_settings(&state.prefs)?;
+        let mut settings = plain_rs::features::prefs::samba::get_samba_settings(&state.prefs)?;
         let value = ctx
             .data::<Arc<Host>>()?
             .call(
@@ -267,7 +281,7 @@ impl PlatformMutation {
             return Err("Samba password update failed".into());
         }
         settings.has_password = true;
-        plain_rs::prefs::samba::set_samba_settings(&state.prefs, &settings)?;
+        plain_rs::features::prefs::samba::set_samba_settings(&state.prefs, &settings)?;
         if settings.enabled {
             samba_apply(ctx, settings).await?;
         }

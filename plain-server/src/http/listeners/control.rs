@@ -1,5 +1,5 @@
 use crate::server::ServerState;
-use plain_rs::services::http_status::HttpServerState;
+use plain_rs::features::services::http_status::HttpServerState;
 pub(crate) fn restart(
     state: &ServerState,
     http: Option<u16>,
@@ -16,9 +16,11 @@ pub(crate) fn restart(
             let result = async {
                 state.native_client_id()?;
                 let preferences =
-                    plain_rs::services::settings::preferences::Preferences::from_server(&state);
+                    plain_rs::features::services::settings::preferences::Preferences::from_server(
+                        &state,
+                    );
                 preferences
-                    .patch(plain_rs::prefs::settings::SettingsPatch {
+                    .patch(plain_rs::features::prefs::settings::SettingsPatch {
                         http_port: http.map(i32::from),
                         https_port: https.map(i32::from),
                         ..Default::default()

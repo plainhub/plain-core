@@ -7,11 +7,11 @@ use crate::graphql::types::facts::text;
 use crate::graphql::types::facts::{host_json, provider_params};
 use crate::http::auth::public_gate;
 use async_graphql::{Context, ID, Object};
-use plain_rs::host::bridge::Host;
-use plain_rs::prefs::Prefs;
-use plain_rs::services::capabilities;
-use plain_rs::services::contacts::write as contact_write;
-use plain_rs::services::contacts::write::Action;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::features::services::capabilities;
+use plain_rs::features::services::contacts::write as contact_write;
+use plain_rs::features::services::contacts::write::Action;
+use plain_rs::libs::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -42,7 +42,7 @@ impl ContactsQuery {
             ctx,
             provider_params(
                 ctx,
-                plain_rs::services::files::provider_query::Provider::Contact,
+                plain_rs::features::services::files::provider_query::Provider::Contact,
                 &query,
                 serde_json::json!({"offset": offset, "limit": limit}),
             )
@@ -74,7 +74,7 @@ impl ContactsQuery {
                 "systemContactCount",
                 provider_params(
                     ctx,
-                    plain_rs::services::files::provider_query::Provider::Contact,
+                    plain_rs::features::services::files::provider_query::Provider::Contact,
                     &query,
                     serde_json::json!({}),
                 )
@@ -93,7 +93,7 @@ impl ContactsQuery {
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-        Ok(plain_rs::services::contacts::projection::sources(
+        Ok(plain_rs::features::services::contacts::projection::sources(
             host_json(ctx, "systemContactSources", json!({})).await?,
         )
         .iter()
@@ -109,7 +109,7 @@ impl ContactsQuery {
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-        Ok(plain_rs::services::contacts::projection::groups(
+        Ok(plain_rs::features::services::contacts::projection::groups(
             host_json(ctx, "systemContactGroupFacts", json!({})).await?,
         )
         .iter()
@@ -178,9 +178,9 @@ impl ContactsMutation {
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-        plain_rs::phone::query::require_narrowing(
-            ctx.data_unchecked::<Arc<plain_rs::db::Db>>(),
-            plain_rs::services::files::provider_query::Provider::Contact,
+        plain_rs::libs::phone::query::require_narrowing(
+            ctx.data_unchecked::<Arc<plain_rs::libs::db::Db>>(),
+            plain_rs::features::services::files::provider_query::Provider::Contact,
             &query,
         )
         .map_err(|error| async_graphql::Error::new(error.to_string()))?;
@@ -189,7 +189,7 @@ impl ContactsMutation {
             "systemContactIds",
             provider_params(
                 ctx,
-                plain_rs::services::files::provider_query::Provider::Contact,
+                plain_rs::features::services::files::provider_query::Provider::Contact,
                 &query,
                 serde_json::json!({}),
             )
@@ -307,7 +307,7 @@ async fn contact_rows(ctx: &Context<'_>, params: Value) -> async_graphql::Result
         .call("systemContactFacts", params)
         .await
         .map_err(async_graphql::Error::new)?;
-    plain_rs::services::contacts::projection::contacts(value)
+    plain_rs::features::services::contacts::projection::contacts(value)
         .map_err(|error| async_graphql::Error::new(error.to_string()))
 }
 
@@ -316,7 +316,7 @@ async fn reload(ctx: &Context<'_>, id: &str, phase: &str) -> async_graphql::Resu
         ctx,
         provider_params(
             ctx,
-            plain_rs::services::files::provider_query::Provider::Contact,
+            plain_rs::features::services::files::provider_query::Provider::Contact,
             &format!("id:{id}"),
             json!({"offset": 0, "limit": 1}),
         )

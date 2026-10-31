@@ -2,10 +2,10 @@ use crate::server::ContentServer;
 
 #[tokio::test]
 async fn startup_loads_published_integer_enums_and_returns_names_to_the_app() {
-    use plain_rs::prefs::{Prefs, pref_keys as keys};
+    use plain_rs::features::prefs::{Prefs, pref_keys as keys};
 
     let directory = tempfile::tempdir().unwrap();
-    let path = plain_rs::prefs::default_path(directory.path());
+    let path = plain_rs::features::prefs::default_path(directory.path());
     let prefs = Prefs::load(&path).unwrap();
     let expected = [
         (keys::DARK_THEME, "OFF"),
@@ -36,12 +36,12 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let management = core.native_management().unwrap();
-    let before = plain_rs::prefs::security::snapshot(&state.prefs).unwrap();
+    let before = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
     let mut events = state.events.subscribe();
     assert!(management.reset_password().unwrap());
     assert!(management.reset_url_token().unwrap());
     assert!(management.reset_adb_token().unwrap());
-    let after = plain_rs::prefs::security::snapshot(&state.prefs).unwrap();
+    let after = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
     assert_ne!(before.password, after.password);
     assert_ne!(before.url_token, after.url_token);
     assert_ne!(before.adb_token, after.adb_token);
@@ -50,7 +50,7 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
     assert_eq!(after.password.len(), 6);
     assert_eq!(after.adb_token.len(), 32);
     assert_eq!(
-        plain_rs::utils::base64::base64_decode_checked(&after.url_token)
+        plain_rs::libs::utils::base64::base64_decode_checked(&after.url_token)
             .unwrap()
             .len(),
         32
@@ -123,7 +123,7 @@ async fn native_scan_history_preserves_order_and_scoped_deletion() {
 }
 
 fn preference_updates(
-    events: &mut tokio::sync::broadcast::Receiver<plain_rs::events::WsEvent>,
+    events: &mut tokio::sync::broadcast::Receiver<plain_rs::libs::events::WsEvent>,
 ) -> usize {
     std::iter::from_fn(|| events.try_recv().ok())
         .filter(|event| event.event_type == "PREFS_UPDATED")
@@ -222,7 +222,7 @@ async fn keyed_native_reads_observe_committed_writes_and_reject_private_or_unkno
 
 #[tokio::test]
 async fn derived_native_keys_are_readable_but_not_writable() {
-    use plain_rs::prefs::pref_keys as keys;
+    use plain_rs::features::prefs::pref_keys as keys;
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -246,7 +246,7 @@ async fn derived_native_keys_are_readable_but_not_writable() {
 
 #[tokio::test]
 async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
-    use plain_rs::prefs::pref_keys as keys;
+    use plain_rs::features::prefs::pref_keys as keys;
     use serde_json::json;
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
@@ -318,7 +318,7 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
 
 #[tokio::test]
 async fn derived_native_reads_use_only_their_current_dependencies() {
-    use plain_rs::prefs::pref_keys as keys;
+    use plain_rs::features::prefs::pref_keys as keys;
     use serde_json::json;
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();

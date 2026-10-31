@@ -1,6 +1,6 @@
 use crate::server::ContentServer;
 use axum::{Router, body::Bytes, http::HeaderMap, routing::post};
-use plain_rs::services::peers::management_http::*;
+use plain_rs::features::services::peers::management_http::*;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
@@ -63,7 +63,7 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
     });
     let local_dir = tempfile::tempdir().unwrap();
     let local = ContentServer::open(local_dir.path()).unwrap();
-    let key = plain_rs::utils::base64::base64_decode(&session.token);
+    let key = plain_rs::libs::utils::base64::base64_decode(&session.token);
     let url = reqwest::Url::parse(&format!("https://127.0.0.1:{proxy_port}")).unwrap();
     let request = json!({"query":"{ app { deviceName } }"});
     let first = query(
@@ -109,7 +109,7 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
         let envelopes: Vec<_> = requests
             .iter()
             .map(|body| {
-                String::from_utf8(plain_rs::crypto::xchacha_decrypt_raw(&key, body).unwrap())
+                String::from_utf8(plain_rs::libs::crypto::xchacha_decrypt_raw(&key, body).unwrap())
                     .unwrap()
             })
             .collect();

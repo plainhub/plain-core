@@ -1,6 +1,6 @@
 use super::NativeManagement;
-use plain_rs::services::discovery::mdns_runtime;
-use plain_rs::services::discovery::mdns_runtime::Request;
+use plain_rs::features::services::discovery::mdns_runtime;
+use plain_rs::features::services::discovery::mdns_runtime::Request;
 use serde_json::Value;
 
 impl NativeManagement {

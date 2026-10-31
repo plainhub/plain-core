@@ -3,25 +3,34 @@ async fn catalog_is_created_from_core_and_stopped_handles_reject_access() {
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let catalog = core.native_media_catalog().unwrap();
-    assert_eq!(catalog.count(plain_rs::enums::DataType::Image).unwrap(), 0);
+    assert_eq!(
+        catalog
+            .count(plain_rs::features::enums::DataType::Image)
+            .unwrap(),
+        0
+    );
     assert!(catalog.record_files(&[]).unwrap().is_empty());
     assert!(
         catalog
-            .list(plain_rs::enums::DataType::Image, 10, 0)
+            .list(plain_rs::features::enums::DataType::Image, 10, 0)
             .unwrap()
             .is_empty()
     );
     core.stop_core().await;
     assert!(core.native_media_catalog().is_err());
-    assert!(catalog.count(plain_rs::enums::DataType::Image).is_err());
     assert!(
         catalog
-            .by_path(plain_rs::enums::DataType::Image, "/photo.jpg")
+            .count(plain_rs::features::enums::DataType::Image)
             .is_err()
     );
     assert!(
         catalog
-            .list(plain_rs::enums::DataType::Image, 10, 0)
+            .by_path(plain_rs::features::enums::DataType::Image, "/photo.jpg")
+            .is_err()
+    );
+    assert!(
+        catalog
+            .list(plain_rs::features::enums::DataType::Image, 10, 0)
             .is_err()
     );
     assert!(catalog.record_files(&[]).is_err());
@@ -38,27 +47,30 @@ async fn native_file_metadata_reaches_catalog_without_any_host_request() {
     let (_generation, mut requests) = crate::test_support::HostRequests::connect(&host);
     let catalog = core.native_media_catalog().unwrap();
     let indexed = catalog
-        .scan_file(plain_rs::enums::DataType::Doc, path.to_str().unwrap())
+        .scan_file(
+            plain_rs::features::enums::DataType::Doc,
+            path.to_str().unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(indexed.size_bytes, 8);
     assert_eq!(
         catalog
-            .count_matching(plain_rs::enums::DataType::Doc, "ext:txt")
+            .count_matching(plain_rs::features::enums::DataType::Doc, "ext:txt")
             .unwrap(),
         1
     );
     let rows = catalog
         .search(
-            plain_rs::enums::DataType::Doc,
+            plain_rs::features::enums::DataType::Doc,
             "ext:txt",
-            plain_rs::prefs::settings::FileSortBy::NameAsc,
+            plain_rs::features::prefs::settings::FileSortBy::NameAsc,
             10,
             0,
         )
         .unwrap()
         .iter()
-        .map(plain_rs::services::files::media_catalog_facts::row_facts)
+        .map(plain_rs::features::services::files::media_catalog_facts::row_facts)
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
     assert_eq!(rows[0]["id"], indexed.id);
@@ -67,16 +79,27 @@ async fn native_file_metadata_reaches_catalog_without_any_host_request() {
     std::fs::remove_file(&path).unwrap();
     assert!(
         catalog
-            .scan_file(plain_rs::enums::DataType::Doc, path.to_str().unwrap())
+            .scan_file(
+                plain_rs::features::enums::DataType::Doc,
+                path.to_str().unwrap()
+            )
             .await
             .is_err()
     );
-    assert_eq!(catalog.count(plain_rs::enums::DataType::Doc).unwrap(), 1);
+    assert_eq!(
+        catalog
+            .count(plain_rs::features::enums::DataType::Doc)
+            .unwrap(),
+        1
+    );
     assert!(requests.try_recv().is_err());
     core.stop_core().await;
     assert!(
         catalog
-            .scan_file(plain_rs::enums::DataType::Doc, path.to_str().unwrap())
+            .scan_file(
+                plain_rs::features::enums::DataType::Doc,
+                path.to_str().unwrap()
+            )
             .await
             .is_err()
     );
@@ -90,9 +113,11 @@ async fn rescan_with_failed_probe_retains_current_known_metadata_without_host_ro
     std::fs::write(&path, b"unrecognized audio bytes").unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let catalog = core.native_media_catalog().unwrap();
-    let mut known =
-        plain_rs::media::file_facts::read_file_metadata(&path, plain_rs::enums::DataType::Audio)
-            .unwrap();
+    let mut known = plain_rs::features::media::file_facts::read_file_metadata(
+        &path,
+        plain_rs::features::enums::DataType::Audio,
+    )
+    .unwrap();
     known.title = "Known title".into();
     known.artist = "Known artist".into();
     known.duration_ms = 1500;
@@ -102,7 +127,10 @@ async fn rescan_with_failed_probe_retains_current_known_metadata_without_host_ro
     let (_generation, mut requests) =
         crate::test_support::HostRequests::connect(&core.runtime_state().host);
     let updated = catalog
-        .scan_file(plain_rs::enums::DataType::Audio, path.to_str().unwrap())
+        .scan_file(
+            plain_rs::features::enums::DataType::Audio,
+            path.to_str().unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(updated.id, original.id);
@@ -133,7 +161,7 @@ fn directory_scan_fixture() -> tempfile::TempDir {
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
-    use plain_rs::services::files::media_scans::Status;
+    use plain_rs::features::services::files::media_scans::Status;
     let directory = directory_scan_fixture();
     let root = directory.path().join("library");
     let data = root.join("core");
@@ -205,12 +233,22 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
     assert_eq!(result.status, Status::Completed);
     assert_eq!(result.total_files, Some(7));
     assert_eq!(result.processed_files, 7);
-    assert_eq!(catalog.count(plain_rs::enums::DataType::Doc).unwrap(), 3);
-    assert_eq!(catalog.count(plain_rs::enums::DataType::Image).unwrap(), 1);
+    assert_eq!(
+        catalog
+            .count(plain_rs::features::enums::DataType::Doc)
+            .unwrap(),
+        3
+    );
+    assert_eq!(
+        catalog
+            .count(plain_rs::features::enums::DataType::Image)
+            .unwrap(),
+        1
+    );
     assert!(
         catalog
             .by_path(
-                plain_rs::enums::DataType::Doc,
+                plain_rs::features::enums::DataType::Doc,
                 cache.join("cache.txt").to_str().unwrap()
             )
             .unwrap()
@@ -234,7 +272,12 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
             .scan_completed_files(serde_json::json!({"paths":[path]}))
             .unwrap()
     );
-    assert_eq!(catalog.count(plain_rs::enums::DataType::Doc).unwrap(), 1);
+    assert_eq!(
+        catalog
+            .count(plain_rs::features::enums::DataType::Doc)
+            .unwrap(),
+        1
+    );
     assert!(
         catalog
             .scan_completed_files(serde_json::json!([path]))
@@ -257,7 +300,12 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
             .scan_completed_files(serde_json::json!({"paths":[opaque]}))
             .unwrap()
     );
-    assert_eq!(catalog.count(plain_rs::enums::DataType::Doc).unwrap(), 1);
+    assert_eq!(
+        catalog
+            .count(plain_rs::features::enums::DataType::Doc)
+            .unwrap(),
+        1
+    );
     core.stop_core().await;
     assert!(
         catalog
@@ -281,7 +329,12 @@ async fn completion_scan_reports_read_failures_instead_of_partial_success() {
             .scan_completed_files(serde_json::json!({"paths":[path,missing]}))
             .is_err()
     );
-    assert_eq!(catalog.count(plain_rs::enums::DataType::Doc).unwrap(), 0);
+    assert_eq!(
+        catalog
+            .count(plain_rs::features::enums::DataType::Doc)
+            .unwrap(),
+        0
+    );
     assert!(
         catalog
             .scan_completed_files(serde_json::json!({"paths":["relative.txt"]}))
@@ -300,7 +353,7 @@ async fn source_directories_share_core_preferences_and_reject_stopped_handles() 
     catalog.set_source_directories(&sources).unwrap();
     assert_eq!(clone.source_directories().unwrap(), sources);
     assert_eq!(
-        plain_rs::prefs::media::source_directories(&core.runtime_state().prefs).unwrap(),
+        plain_rs::features::prefs::media::source_directories(&core.runtime_state().prefs).unwrap(),
         sources
     );
     core.stop_core().await;
@@ -366,7 +419,7 @@ async fn filesystem_watch_events_from_an_os_thread_update_the_shared_catalog() {
     let observed = tokio::time::timeout(std::time::Duration::from_secs(10), async {
         loop {
             if catalog
-                .by_path(plain_rs::enums::DataType::Image, &path)
+                .by_path(plain_rs::features::enums::DataType::Image, &path)
                 .unwrap()
                 .is_some()
             {
@@ -386,7 +439,7 @@ async fn filesystem_watch_events_from_an_os_thread_update_the_shared_catalog() {
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
-    use plain_rs::{db::FileKind, enums::DataType};
+    use plain_rs::{features::enums::DataType, libs::db::FileKind};
     let directory = directory_scan_fixture();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let catalog = core.native_media_catalog().unwrap();
@@ -416,15 +469,22 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
     let mut events = core.runtime_state().events.subscribe();
     scan();
     let event = events.try_recv().unwrap();
-    assert_eq!(event.event_type, plain_rs::events::MEDIA_LIBRARY_UPDATED);
-    assert!(plain_rs::services::files::catalog_events::includes(
-        &event.payload,
-        DataType::Audio
-    ));
-    assert!(plain_rs::services::files::catalog_events::includes(
-        &event.payload,
-        DataType::File
-    ));
+    assert_eq!(
+        event.event_type,
+        plain_rs::libs::events::MEDIA_LIBRARY_UPDATED
+    );
+    assert!(
+        plain_rs::features::services::files::catalog_events::includes(
+            &event.payload,
+            DataType::Audio
+        )
+    );
+    assert!(
+        plain_rs::features::services::files::catalog_events::includes(
+            &event.payload,
+            DataType::File
+        )
+    );
     assert_eq!(catalog.count(DataType::Audio).unwrap(), 0);
     let file = db.file(id).unwrap().unwrap();
     assert_eq!(file.kind, FileKind::File);

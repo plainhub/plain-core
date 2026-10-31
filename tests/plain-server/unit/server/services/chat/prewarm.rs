@@ -2,22 +2,24 @@ use serde_json::json;
 
 #[tokio::test]
 async fn conversation_reads_prepare_once_in_background_and_skip_searches_and_pages() {
-    use plain_rs::chat::enums::{DeviceType, PeerStatus};
+    use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
     use std::sync::Arc;
     let directory = tempfile::tempdir().unwrap();
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
     let core = crate::server::ContentServer::start(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[9; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[9; 32]),
         prefs,
     )
     .unwrap();
     let state = core.runtime_state();
-    let mut peer = plain_rs::db::DPeer::new("peer", "Fixture", "", Some(1), DeviceType::Phone);
+    let mut peer =
+        plain_rs::libs::db::DPeer::new("peer", "Fixture", "", Some(1), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = plain_rs::utils::base64::base64_encode(&[7; 32]);
-    peer.public_key = plain_rs::utils::base64::base64_encode(&[8; 32]);
+    peer.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
+    peer.public_key = plain_rs::libs::utils::base64::base64_encode(&[8; 32]);
     state.db.upsert_peer(&peer);
     let (generation, mut requests) = state.host.connect();
     let executor = core.graphql_executor();

@@ -8,7 +8,7 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 
 use async_graphql::{Enum, ID, InputObject, SimpleObject};
-use plain_rs::types::Instant;
+use plain_rs::libs::types::Instant;
 
 /// The GraphQL enum name, which is also what the platform's kotlinx enum
 /// deserializer expects. Derived from the variant with the same case-boundary
@@ -234,7 +234,7 @@ impl Contact {
     async fn tags(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<Vec<Tag>> {
         crate::graphql::resolvers::tags::loader::load(
             ctx,
-            plain_rs::enums::DataType::Contact,
+            plain_rs::features::enums::DataType::Contact,
             self.id.as_str(),
         )
         .await

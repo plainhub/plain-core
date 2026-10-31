@@ -1,7 +1,7 @@
 //! Compare the production thumbnail pipeline stages on one local image.
 
 use anyhow::Result;
-use plain_rs::media::thumbnails::{compute_target_size, decode, encode, scale, sniff};
+use plain_rs::libs::media::thumbnails::{compute_target_size, decode, encode, scale, sniff};
 use std::{io::Read, path::Path, time::Instant};
 
 fn measure(

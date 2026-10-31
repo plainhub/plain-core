@@ -1,21 +1,21 @@
 use crate::server::ServerState;
-use plain_rs::events::WsEvent;
+use plain_rs::libs::events::WsEvent;
 use tokio::sync::broadcast;
 
 pub struct NativeEventStream {
     state: ServerState,
     events: broadcast::Receiver<WsEvent>,
     client_id: String,
-    scope: plain_rs::host::request_scope::NativeRequestScope,
+    scope: plain_rs::libs::host::request_scope::NativeRequestScope,
 }
 
 impl NativeEventStream {
     pub(crate) fn scoped(
         state: ServerState,
         client_id: String,
-        scope: plain_rs::host::request_scope::NativeRequestScope,
+        scope: plain_rs::libs::host::request_scope::NativeRequestScope,
     ) -> Result<Self, String> {
-        let key = plain_rs::utils::base64::base64_decode(&state.native_url_token()?);
+        let key = plain_rs::libs::utils::base64::base64_decode(&state.native_url_token()?);
         let _: [u8; 32] = key
             .try_into()
             .map_err(|_| "local event token unavailable".to_owned())?;
@@ -56,9 +56,12 @@ impl NativeEventStream {
                 continue;
             }
             if let Some(payload) = event.binary_payload {
-                return plain_rs::protocols::websocket::encode_raw(event.event_type, &payload)
-                    .map(Some)
-                    .ok_or_else(|| "invalid native event frame".into());
+                return plain_rs::libs::protocols::websocket::encode_raw(
+                    event.event_type,
+                    &payload,
+                )
+                .map(Some)
+                .ok_or_else(|| "invalid native event frame".into());
             }
         }
     }

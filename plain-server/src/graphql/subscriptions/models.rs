@@ -1,5 +1,5 @@
 use async_graphql::{ID, SimpleObject};
-use plain_rs::types::Long;
+use plain_rs::libs::types::Long;
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize)]
@@ -123,6 +123,6 @@ pub struct PairingProgressNotice {
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PomodoroAction {
-    pub today: plain_rs::services::pomodoro::PomodoroToday,
-    pub completed_state: Option<plain_rs::services::pomodoro::PomodoroState>,
+    pub today: plain_rs::features::services::pomodoro::PomodoroToday,
+    pub completed_state: Option<plain_rs::features::services::pomodoro::PomodoroState>,
 }

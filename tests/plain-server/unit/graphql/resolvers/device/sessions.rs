@@ -2,7 +2,7 @@ use super::*;
 use crate::graphql::executor::RequestOrigin;
 use crate::server::ContentServer;
 use async_graphql::Request;
-use plain_rs::sessions::SessionStore;
+use plain_rs::features::sessions::SessionStore;
 
 fn fixture() -> (tempfile::TempDir, ContentServer) {
     let directory = tempfile::tempdir().unwrap();
@@ -97,7 +97,7 @@ async fn authenticated_revocation_and_logout_remove_the_keys_used_by_http_authen
     .await;
     assert!(revoked.errors.is_empty(), "{:?}", revoked.errors);
     assert!(
-        plain_rs::services::sessions::key(&state.db, "second")
+        plain_rs::features::services::sessions::key(&state.db, "second")
             .unwrap()
             .is_none()
     );
@@ -112,7 +112,7 @@ async fn authenticated_revocation_and_logout_remove_the_keys_used_by_http_authen
     assert!(logout.errors.is_empty(), "{:?}", logout.errors);
     assert_eq!(logout.data.into_json().unwrap()["logout"], true);
     assert!(
-        plain_rs::services::sessions::key(&state.db, "first")
+        plain_rs::features::services::sessions::key(&state.db, "first")
             .unwrap()
             .is_none()
     );
@@ -171,7 +171,10 @@ async fn only_the_local_owner_can_mint_custom_session_credentials() {
         .unwrap();
     let id = created.client_id.as_str();
     let token = created.token.as_str();
-    assert_eq!(plain_rs::utils::base64::base64_decode(token).len(), 32);
+    assert_eq!(
+        plain_rs::libs::utils::base64::base64_decode(token).len(),
+        32
+    );
     assert_eq!(state.db.session_get(id).unwrap().unwrap().token, token);
     assert_eq!(state.db.session_list().unwrap().len(), before + 1);
     core.stop_core().await;

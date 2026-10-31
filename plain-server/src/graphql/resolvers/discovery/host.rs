@@ -9,7 +9,7 @@ pub struct DiscoveryHostQuery;
 #[Object]
 impl DiscoveryHostQuery {
     async fn parse_pairing_code(&self, code: String) -> Option<NearbyDevice> {
-        plain_rs::discovery::pairing_code::parse(&code)
+        plain_rs::features::discovery::pairing_code::parse(&code)
             .map(|payload| NearbyDevice::from_snapshot_device(payload.into_device()))
     }
     async fn nearby_devices(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<NearbyDevice>> {
@@ -19,7 +19,7 @@ impl DiscoveryHostQuery {
 }
 
 fn nearby_snapshot(state: &ServerState) -> async_graphql::Result<Vec<NearbyDevice>> {
-    let paired: HashSet<String> = plain_rs::db::chat_store::peers::all(&state.db)?
+    let paired: HashSet<String> = plain_rs::libs::db::chat_store::peers::all(&state.db)?
         .into_iter()
         .filter(|peer| peer.is_paired())
         .map(|peer| peer.id)

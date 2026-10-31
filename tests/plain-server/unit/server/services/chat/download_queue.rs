@@ -6,32 +6,33 @@ use std::sync::Arc;
 
 fn fixture() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[1; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[1; 32]),
         prefs,
     )
     .unwrap();
     let state = server.runtime_state().core;
-    let peer = plain_rs::db::DPeer::new(
+    let peer = plain_rs::libs::db::DPeer::new(
         "peer",
         "fixture",
         "",
         Some(443),
-        plain_rs::chat::enums::DeviceType::Phone,
+        plain_rs::features::chat::enums::DeviceType::Phone,
     );
-    plain_rs::db::chat_store::peers::save(
+    plain_rs::libs::db::chat_store::peers::save(
         &state.db,
         &[peer],
-        plain_rs::db::chat_store::SaveMode::Insert,
+        plain_rs::libs::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     (dir, server, state)
 }
 fn seed_chat(state: &ServerState, id: &str, size: usize) {
-    let row=plain_rs::db::DChat::new("peer","me","",&json!({"type":"FILES","value":{"items":[{"id":id,"uri":format!("fsid:{id}"),"fileName":"fixture.bin","size":size}]}}).to_string());
+    let row=plain_rs::libs::db::DChat::new("peer","me","",&json!({"type":"FILES","value":{"items":[{"id":id,"uri":format!("fsid:{id}"),"fileName":"fixture.bin","size":size}]}}).to_string());
     let mut row = row;
     row.id = id.into();
     state.db.insert_chat(&row).unwrap();
@@ -49,7 +50,8 @@ async fn terminal(state: &ServerState, id: &str) -> Option<Value> {
                 return row;
             }
             if row.is_none() {
-                if let Some(chat) = plain_rs::db::chat_store::messages::get(&state.db, id).unwrap()
+                if let Some(chat) =
+                    plain_rs::libs::db::chat_store::messages::get(&state.db, id).unwrap()
                 {
                     let content: Value = serde_json::from_str(&chat.content).unwrap();
                     if content["value"]["items"][0]["uri"]
@@ -80,7 +82,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
             let result = match request["method"].as_str().unwrap() {
                 "peerTransportCapabilities" => json!(["BLE"]),
                 "peerTransportBleExchange" => {
-                    let plain_rs::protocols::ble::Request::FileChunk {
+                    let plain_rs::libs::protocols::ble::Request::FileChunk {
                         file_id,
                         offset,
                         length,
@@ -101,7 +103,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
                     };
                     ble.reply_for_test(
                         &request["params"],
-                        plain_rs::protocols::ble::response(200, bytes).unwrap(),
+                        plain_rs::libs::protocols::ble::response(200, bytes).unwrap(),
                     )
                 }
                 "peerTransportSocketCloseAll" => json!(true),
@@ -132,7 +134,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
         while !updated || !retired {
             let event = events.recv().await.unwrap();
             let payload: Value = serde_json::from_str(&event.payload).unwrap_or(Value::Null);
-            if event.event_type == plain_rs::chat::events::WS_MESSAGE_UPDATED
+            if event.event_type == plain_rs::features::chat::events::WS_MESSAGE_UPDATED
                 && payload[0]["id"] == "exact"
             {
                 let content: Value =
@@ -145,7 +147,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
                 );
                 updated = true;
             }
-            if event.event_type == plain_rs::chat::events::WS_DOWNLOAD_PROGRESS
+            if event.event_type == plain_rs::features::chat::events::WS_DOWNLOAD_PROGRESS
                 && payload.as_array().is_some_and(|items| items.is_empty())
             {
                 retired = true;
@@ -168,7 +170,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
             .is_empty()
     );
 
-    let chat = plain_rs::db::chat_store::messages::get(&state.db, "exact")
+    let chat = plain_rs::libs::db::chat_store::messages::get(&state.db, "exact")
         .unwrap()
         .unwrap();
     let content: Value = serde_json::from_str(&chat.content).unwrap();
@@ -191,7 +193,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
                 .join(row["generation"].as_str().unwrap())
                 .exists()
         );
-        let row = plain_rs::db::chat_store::messages::get(&state.db, id)
+        let row = plain_rs::libs::db::chat_store::messages::get(&state.db, id)
             .unwrap()
             .unwrap();
         assert!(row.content.contains("fsid:"));
@@ -203,7 +205,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
 
 #[tokio::test]
 async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_bytes() {
-    use plain_rs::transport::router::{Outcome, TransportType};
+    use plain_rs::libs::transport::router::{Outcome, TransportType};
     use std::sync::atomic::{AtomicUsize, Ordering};
     for (root, fresh) in [
         ("retryChatDownload(id:\"retry\")", false),
@@ -211,7 +213,7 @@ async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_byt
         ("retryDownload(messageId:\"retry\",peerId:\"peer\")", true),
     ] {
         let (dir, server, state) = fixture();
-        let peer = plain_rs::db::chat_store::peers::get(&state.db, "peer")
+        let peer = plain_rs::libs::db::chat_store::peers::get(&state.db, "peer")
             .unwrap()
             .unwrap();
         for _ in 0..2 {
@@ -241,8 +243,10 @@ async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_byt
                 let result = match request["method"].as_str().unwrap() {
                     "peerTransportCapabilities" => json!(["BLE"]),
                     "peerTransportBleExchange" => {
-                        let plain_rs::protocols::ble::Request::FileChunk {
-                            file_id, offset, ..
+                        let plain_rs::libs::protocols::ble::Request::FileChunk {
+                            file_id,
+                            offset,
+                            ..
                         } = ble.request_for_test(&request["params"])
                         else {
                             panic!("Expected file request")
@@ -252,7 +256,7 @@ async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_byt
                         count.fetch_add(1, Ordering::SeqCst);
                         ble.reply_for_test(
                             &request["params"],
-                            plain_rs::protocols::ble::response(200, b"abc").unwrap(),
+                            plain_rs::libs::protocols::ble::response(200, b"abc").unwrap(),
                         )
                     }
                     "peerTransportSocketCloseAll" => json!(true),
@@ -279,7 +283,7 @@ async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_byt
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert!(terminal(&state, "retry").await.is_none());
         assert_eq!(exchanges.load(Ordering::SeqCst), 1);
-        let chat = plain_rs::db::chat_store::messages::get(&state.db, "retry")
+        let chat = plain_rs::libs::db::chat_store::messages::get(&state.db, "retry")
             .unwrap()
             .unwrap();
         let content: Value = serde_json::from_str(&chat.content).unwrap();

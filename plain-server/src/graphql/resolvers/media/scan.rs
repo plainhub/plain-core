@@ -1,8 +1,8 @@
 use super::types::ScanProgress;
 use crate::server::ServerState;
 use async_graphql::{Context, Object, Result};
-use plain_rs::services::files::scanning;
-use plain_rs::services::files::scanning::Command;
+use plain_rs::features::services::files::scanning;
+use plain_rs::features::services::files::scanning::Command;
 
 async fn state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
     let state = ctx.data::<ServerState>()?;

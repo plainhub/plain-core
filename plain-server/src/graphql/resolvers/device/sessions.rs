@@ -1,8 +1,8 @@
 use crate::server::ServerState;
 use async_graphql::{Context, Object, Result, SimpleObject};
-use plain_rs::db::Db;
-use plain_rs::sessions::SessionInfo;
-use plain_rs::types::Instant;
+use plain_rs::features::sessions::SessionInfo;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::types::Instant;
 use std::sync::Arc;
 
 #[derive(SimpleObject)]
@@ -25,9 +25,9 @@ struct Session {
     updated_at: Instant,
 }
 
-impl TryFrom<plain_rs::db::SessionRow> for Session {
+impl TryFrom<plain_rs::libs::db::SessionRow> for Session {
     type Error = async_graphql::Error;
-    fn try_from(row: plain_rs::db::SessionRow) -> Result<Self> {
+    fn try_from(row: plain_rs::libs::db::SessionRow) -> Result<Self> {
         let value = SessionInfo::try_from(row.clone())?;
         Ok(Self {
             client_id: value.client_id,
@@ -91,7 +91,7 @@ impl SessionsMutation {
         name: String,
     ) -> Result<bool> {
         caller(ctx)?;
-        Ok(plain_rs::services::sessions::rename(
+        Ok(plain_rs::features::services::sessions::rename(
             ctx.data::<ServerState>()?,
             &client_id,
             &name,
@@ -117,7 +117,7 @@ fn revoke(ctx: &Context<'_>, client_id: &str, action: &str) -> Result<bool> {
         .session_get(client_id)?
         .map(|row| row.name)
         .unwrap_or_default();
-    plain_rs::services::sessions::delete(state, client_id)?;
+    plain_rs::features::services::sessions::delete(state, client_id)?;
     state.db.audit_event_add(action, &name, Some(client_id))?;
     Ok(true)
 }

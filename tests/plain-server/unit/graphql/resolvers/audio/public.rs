@@ -1,9 +1,9 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::db::Db;
-use plain_rs::host::bridge::Host;
-use plain_rs::media::play_history;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::media::play_history;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -445,7 +445,7 @@ async fn clearing_empties_the_queue_and_tells_the_player() {
     seed_queue(&schema, &[("/music/one.mp3", "One", "Artist")]);
     seed_queue(&schema, &[("/music/a.mp3", "Alpha", "One")]);
     let mut events = schema
-        .data::<tokio::sync::broadcast::Sender<plain_rs::events::WsEvent>>()
+        .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
         .unwrap()
         .subscribe();
     let cleared = query(&schema, r#"mutation { clearAudioQueue }"#).await;
@@ -684,11 +684,11 @@ async fn a_library_row_keeps_the_album_art_reference() {
         _other => panic!("unexpected host call {_other}"),
     });
     database(&schema)
-        .record_media_files(&[plain_rs::db::MediaFileMetadata {
+        .record_media_files(&[plain_rs::libs::db::MediaFileMetadata {
             album: String::new(),
             album_artist: String::new(),
 
-            data_type: plain_rs::enums::DataType::Audio,
+            data_type: plain_rs::features::enums::DataType::Audio,
             path: "/m/a.mp3".to_owned(),
             title: "Song".to_owned(),
             artist: "Band".to_owned(),
@@ -710,8 +710,8 @@ async fn a_library_row_keeps_the_album_art_reference() {
         .data::<Arc<Prefs>>()
         .unwrap()
         .set(
-            plain_rs::prefs::pref_keys::URL_TOKEN,
-            plain_rs::utils::base64::base64_encode(&key),
+            plain_rs::features::prefs::pref_keys::URL_TOKEN,
+            plain_rs::libs::utils::base64::base64_encode(&key),
         )
         .unwrap();
     let document = r#"query { audios(offset: 0, limit: 10, query: "", sortBy: NAME_ASC) {
@@ -731,12 +731,16 @@ async fn a_library_row_keeps_the_album_art_reference() {
     );
     let row = &listed["data"]["audios"][0];
     let (scope, payload) =
-        plain_rs::files::resource_link::parse(row["albumFileId"].as_str().unwrap()).unwrap();
-    assert_eq!(scope, plain_rs::files::resource_link::Scope::Global);
-    let resource = plain_rs::files::resource_link::open(&scope, &key, payload).unwrap();
+        plain_rs::features::files::resource_link::parse(row["albumFileId"].as_str().unwrap())
+            .unwrap();
+    assert_eq!(
+        scope,
+        plain_rs::features::files::resource_link::Scope::Global
+    );
+    let resource = plain_rs::features::files::resource_link::open(&scope, &key, payload).unwrap();
     assert_eq!(
         resource.r#type,
-        plain_rs::files::resource_link::ResourceType::Media
+        plain_rs::features::files::resource_link::ResourceType::Media
     );
     assert_eq!(resource.id, "album-file-1");
     assert_eq!(row["artist"], "Band");
@@ -794,7 +798,7 @@ async fn adding_tracks_reads_every_search_page_without_an_item_limit() {
         other => panic!("unexpected host call {other}"),
     });
     let rows: Vec<_> = (0..1205)
-        .map(|i| plain_rs::db::MediaFileMetadata {
+        .map(|i| plain_rs::libs::db::MediaFileMetadata {
             album: String::new(),
             album_artist: String::new(),
 
@@ -956,7 +960,9 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token(
     )
     .data(prefs.clone())
     .finish();
-    prefs.remove(plain_rs::prefs::pref_keys::URL_TOKEN).unwrap();
+    prefs
+        .remove(plain_rs::features::prefs::pref_keys::URL_TOKEN)
+        .unwrap();
     for document in [
         "{ audio { title } }",
         "{ audio { title albumFileId @skip(if: true) } }",
@@ -971,22 +977,25 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token(
         "query Art { audio { ...Cover } } fragment Cover on Audio { cover: albumFileId }";
     let mut previous: Option<[u8; 32]> = None;
     for key in [[3u8; 32], [5u8; 32]] {
-        let token = plain_rs::utils::base64::base64_encode(&key);
+        let token = plain_rs::libs::utils::base64::base64_encode(&key);
         prefs
-            .set(plain_rs::prefs::pref_keys::URL_TOKEN, &token)
+            .set(plain_rs::features::prefs::pref_keys::URL_TOKEN, &token)
             .unwrap();
         let response = schema.execute(document).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let data = response.data.into_json().unwrap();
         let id = data["audio"]["cover"].as_str().unwrap();
-        let (scope, payload) = plain_rs::files::resource_link::parse(id).unwrap();
-        let resource = plain_rs::files::resource_link::open(&scope, &key, payload).unwrap();
+        let (scope, payload) = plain_rs::features::files::resource_link::parse(id).unwrap();
+        let resource =
+            plain_rs::features::files::resource_link::open(&scope, &key, payload).unwrap();
         assert_eq!(
             resource,
-            plain_rs::files::resource_link::Resource::reference(uri)
+            plain_rs::features::files::resource_link::Resource::reference(uri)
         );
         if let Some(previous) = previous {
-            assert!(plain_rs::files::resource_link::open(&scope, &previous, payload).is_err());
+            assert!(
+                plain_rs::features::files::resource_link::open(&scope, &previous, payload).is_err()
+            );
         }
         previous = Some(key);
     }
@@ -1019,7 +1028,7 @@ async fn main_audio_metadata_reads_unindexed_tags_without_changing_playback_or_s
     assert_eq!(domain::get_audio_current(db).unwrap(), current);
     assert_eq!(domain::queue_total(db).unwrap(), count);
     assert!(
-        db.media_file_by_path(plain_rs::enums::DataType::Audio, path)
+        db.media_file_by_path(plain_rs::features::enums::DataType::Audio, path)
             .unwrap()
             .is_none()
     );
@@ -1095,7 +1104,7 @@ async fn playlist_covers_use_the_shared_catalog_without_platform_requests() {
     let db = database(&schema);
     db.use_platform_audio_catalog().unwrap();
     db.cache_platform_audio(
-        &[plain_rs::db::audio_catalog::AudioMedia {
+        &[plain_rs::libs::db::audio_catalog::AudioMedia {
             file_id: Some("track".into()),
             aliases: Vec::new(),
             track: AudioTrack {
@@ -1125,10 +1134,10 @@ async fn browser_selection_advances_in_rust_without_dispatching_the_server_playe
     let (_dir, schema) = fixture_with(GRANTED, |method, _| panic!("unexpected host call {method}"));
     let browser_db = database(&schema).remote_audio();
     schema
-        .data::<Arc<plain_rs::services::audio::host::Audio>>()
+        .data::<Arc<plain_rs::features::services::audio::host::Audio>>()
         .unwrap()
         .remote()
-        .run_playback(|db, _| plain_rs::media::audio::playback::snapshot(db))
+        .run_playback(|db, _| plain_rs::features::media::audio::playback::snapshot(db))
         .await
         .unwrap();
     seed_queue(
@@ -1136,8 +1145,9 @@ async fn browser_selection_advances_in_rust_without_dispatching_the_server_playe
         &[("/one.mp3", "One", "Artist"), ("/two.mp3", "Two", "Artist")],
     );
     domain::save_audio_current(&browser_db, "/one.mp3").unwrap();
-    let local_before = plain_rs::media::audio::playback::snapshot(database(&schema)).unwrap();
-    let before = plain_rs::media::audio::playback::snapshot(&browser_db).unwrap();
+    let local_before =
+        plain_rs::features::media::audio::playback::snapshot(database(&schema)).unwrap();
+    let before = plain_rs::features::media::audio::playback::snapshot(&browser_db).unwrap();
     let document = format!(
         r#"mutation {{ advanceAudioSelection(action:NEXT,expectedPath:"/one.mp3",expectedRevision:{}) {{ track {{ mediaId path }} revision positionMs }} }}"#,
         before.revision
@@ -1158,7 +1168,7 @@ async fn browser_selection_advances_in_rust_without_dispatching_the_server_playe
     assert!(duplicate["data"]["advanceAudioSelection"].is_null());
     assert_eq!(domain::get_audio_current(&browser_db).unwrap(), "/two.mp3");
     assert_eq!(
-        plain_rs::media::audio::playback::snapshot(database(&schema)).unwrap(),
+        plain_rs::features::media::audio::playback::snapshot(database(&schema)).unwrap(),
         local_before
     );
     let mode = query(
@@ -1180,14 +1190,14 @@ async fn playback_snapshot_reuses_identity_and_reads_sdk_playback_facts_once() {
         json!({"isPlaying":true,"positionMs":123})
     });
     schema
-        .data::<Arc<plain_rs::services::audio::host::Audio>>()
+        .data::<Arc<plain_rs::features::services::audio::host::Audio>>()
         .unwrap()
-        .run_playback(|db, _| plain_rs::media::audio::playback::snapshot(db))
+        .run_playback(|db, _| plain_rs::features::media::audio::playback::snapshot(db))
         .await
         .unwrap();
     seed_queue(&schema, &[("/one.mp3", "One", "Artist")]);
     domain::save_audio_current(database(&schema), "/one.mp3").unwrap();
-    let expected = plain_rs::media::audio::playback::snapshot(database(&schema)).unwrap();
+    let expected = plain_rs::features::media::audio::playback::snapshot(database(&schema)).unwrap();
     let result = local_query(
         &schema,
         "{ audioPlayback { mediaId path revision isPlaying positionMs } }",
@@ -1215,8 +1225,8 @@ async fn overview_projects_the_authoritative_catalog_without_sdk_metadata_calls(
     let db = database(&schema);
     let rows = db
         .record_media_files(&[
-            plain_rs::db::MediaFileMetadata {
-                data_type: plain_rs::enums::DataType::Audio,
+            plain_rs::libs::db::MediaFileMetadata {
+                data_type: plain_rs::features::enums::DataType::Audio,
                 path: "/one.mp3".into(),
                 title: "One".into(),
                 artist: "Artist".into(),
@@ -1233,8 +1243,8 @@ async fn overview_projects_the_authoritative_catalog_without_sdk_metadata_calls(
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
             },
-            plain_rs::db::MediaFileMetadata {
-                data_type: plain_rs::enums::DataType::Audio,
+            plain_rs::libs::db::MediaFileMetadata {
+                data_type: plain_rs::features::enums::DataType::Audio,
                 path: "/two.mp3".into(),
                 title: "Two".into(),
                 artist: "Artist".into(),
@@ -1253,7 +1263,7 @@ async fn overview_projects_the_authoritative_catalog_without_sdk_metadata_calls(
             },
         ])
         .unwrap();
-    db.media_play_history_record(plain_rs::enums::DataType::Audio, &rows[1].id, 0)
+    db.media_play_history_record(plain_rs::features::enums::DataType::Audio, &rows[1].id, 0)
         .unwrap();
     let result = query(&schema,"{ audioOverview { artists { name itemCount playCount samplePath } recentItems { id path } } }").await;
     assert!(result["errors"].is_null(), "{result}");
@@ -1308,7 +1318,10 @@ async fn native_album_tags_reach_playlist_covers_without_platform_catalog_calls(
     std::fs::write(&second, guest).unwrap();
     let metadata = [&first, &second]
         .into_iter()
-        .map(|path| plain_rs::media::file_facts::read_file_metadata(path, DataType::Audio).unwrap())
+        .map(|path| {
+            plain_rs::features::media::file_facts::read_file_metadata(path, DataType::Audio)
+                .unwrap()
+        })
         .collect::<Vec<_>>();
     let rows = database(&schema).record_media_files(&metadata).unwrap();
     assert_eq!(rows[0].artist, "Track Artist");
@@ -1335,10 +1348,11 @@ async fn native_album_tags_reach_playlist_covers_without_platform_catalog_calls(
 async fn browser_history_writes_do_not_change_the_current_player_or_control_the_platform_player() {
     let (_dir, schema) = fixture_with(GRANTED, |method, _| panic!("unexpected host call {method}"));
     seed_queue(&schema, &[("/one.mp3", "One", "Artist")]);
-    let local_before = plain_rs::media::audio::playback::snapshot(database(&schema)).unwrap();
+    let local_before =
+        plain_rs::features::media::audio::playback::snapshot(database(&schema)).unwrap();
     let db = database(&schema);
     let mut events = schema
-        .data::<tokio::sync::broadcast::Sender<plain_rs::events::WsEvent>>()
+        .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
         .unwrap()
         .subscribe();
     for (method, position) in [
@@ -1362,7 +1376,7 @@ async fn browser_history_writes_do_not_change_the_current_player_or_control_the_
     assert!(next["errors"].is_null(), "{next}");
     assert_eq!(play_history::matching(db, &[]).unwrap()[0].play_count, 2);
     assert_eq!(
-        plain_rs::media::audio::playback::snapshot(database(&schema)).unwrap(),
+        plain_rs::features::media::audio::playback::snapshot(database(&schema)).unwrap(),
         local_before
     );
 }
@@ -1403,7 +1417,7 @@ async fn queue_query_id_selection_keeps_order_and_rejects_missing_ids_before_ins
         ["/music/b.mp3", "/music/a.mp3"]
     );
     assert_eq!(domain::get_audio_current(db).unwrap(), "/music/b.mp3");
-    let selected = plain_rs::media::audio::playback::snapshot(db).unwrap();
+    let selected = plain_rs::features::media::audio::playback::snapshot(db).unwrap();
     let response = query(
         &schema,
         r#"mutation {addAudioToQueue(query:"ids:test:/music/a.mp3")}"#,
@@ -1411,7 +1425,7 @@ async fn queue_query_id_selection_keeps_order_and_rejects_missing_ids_before_ins
     .await;
     assert_eq!(response["data"]["addAudioToQueue"], true);
     assert_eq!(
-        plain_rs::media::audio::playback::snapshot(db).unwrap(),
+        plain_rs::features::media::audio::playback::snapshot(db).unwrap(),
         selected
     );
     for selection in [
@@ -1472,8 +1486,8 @@ async fn replace_queue_uses_the_requested_sort_instead_of_target_preferences() {
         .unwrap()
         .set("audio_sort_by", "NAME_ASC")
         .unwrap();
-    let files = ["Alpha", "Zulu"].map(|title| plain_rs::db::MediaFileMetadata {
-        data_type: plain_rs::enums::DataType::Audio,
+    let files = ["Alpha", "Zulu"].map(|title| plain_rs::libs::db::MediaFileMetadata {
+        data_type: plain_rs::features::enums::DataType::Audio,
         path: format!("/sorted/{title}.mp3"),
         title: title.into(),
         artist: "Sort Artist".into(),

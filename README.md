@@ -19,6 +19,11 @@ Each contains its own unit tests and any shared fixtures or support code.
 Unit tests remain compiled inside their owning package; HTTP integration tests
 are registered explicitly in that package's `Cargo.toml`.
 
+The `features/` and `libs/` directories classify source responsibilities, not
+Cargo feature switches. Rust module paths follow the source tree, such as
+`plain_rs::features::chat` and `plain_rs::libs::crypto`. Unit tests
+mirror both directory groups under `tests/plain-rs/unit/`.
+
 Each `plain-*` directory is a Rust package managed by the root `Cargo.toml`.
 Desktop shell and mobile JNI/C ABI code live in plain-desktop and plain-app, respectively.
 
@@ -30,20 +35,28 @@ method, handler, request limits and middleware.
 
 ```text
 plain-rs/src/
-├── runtime.rs              Core construction, shared service handles and worker lifecycle
-├── services/               Business operations by domain (files, peers, chat, SMS, etc.)
-│   └── files/
-│       ├── links.rs        Encrypted file links and share reference resolution
-│       ├── content.rs      File reads, previews and representation selection
-│       ├── previews.rs     Conversions and temporary preview ownership
-│       ├── references.rs   Local paths, app:// and fid: references
-│       └── archive_downloads.rs  ZIP selection, extraction and download creation
-├── media/thumbnails/       Shared image/video/cover thumbnail engine
-├── ai_image_search/        AI image search models, preprocessing and ONNX sessions
-├── platform/               Native system information, network and filesystem primitives
-├── host/                   Host commands, resource streams and connection primitives
-├── protocols/              Shared wire formats and cryptographic framing
-└── data_paths/directory.rs Validated data/cache roots, data lock and staged restore
+├── lib.rs                  Public module entry points and compilation gates
+├── runtime.rs              Core construction and worker lifecycle
+├── features/               Product behavior and domain operations
+│   ├── chat/               Chat delivery and message operations
+│   ├── files/              File operations and resource references
+│   ├── media/              Media library, playback and catalog state
+│   ├── prefs/              Application preferences and identity
+│   └── services/           Runtime operations by domain
+│       └── files/          Browsing, previews, indexing and transfers
+└── libs/                   Reusable libraries and host infrastructure
+    ├── ai_image_search/    Models, preprocessing and inference
+    ├── apk/                Android binary XML and resource parsing
+    ├── media/              Format parsing, decoding and thumbnails
+    ├── filesystem/         Filesystem reads, writes and traversal
+    ├── crypto/             Cryptography and key formats
+    ├── db/                 SQLite schema, models and repositories
+    ├── host/               Host commands, scopes and resource streams
+    ├── platform/           Native OS and filesystem primitives
+    ├── protocols/          Wire formats and framing
+    ├── transport/          Shared authenticated peer transport
+    ├── data_paths/         Validated data roots and ownership
+    └── utils/              Parsing, encoding and file utilities
 
 plain-cli/src/
 ├── bootstrap.rs            Process initialization and command dispatch
@@ -100,11 +113,11 @@ For example, `/fs` is registered in `http/router.rs`, handled by
 [`http/fs.rs`](plain-server/src/http/fs.rs), and uses
 [`http/file_response.rs`](plain-server/src/http/file_response.rs) for local file
 streaming and Range responses. The handler parses HTTP options, calls
-[`plain-rs/services/files/links.rs`](plain-rs/src/services/files/links.rs) and
-[`plain-rs/services/files/content.rs`](plain-rs/src/services/files/content.rs), then
+[`plain-rs/features/services/files/links.rs`](plain-rs/src/features/services/files/links.rs) and
+[`plain-rs/features/services/files/content.rs`](plain-rs/src/features/services/files/content.rs), then
 maps the result to an HTTP response. Conversions and temporary-file ownership live in
-[`plain-rs/services/files/previews.rs`](plain-rs/src/services/files/previews.rs).
-[`plain-rs/services/files/references.rs`](plain-rs/src/services/files/references.rs)
+[`plain-rs/features/services/files/previews.rs`](plain-rs/src/features/services/files/previews.rs).
+[`plain-rs/features/services/files/references.rs`](plain-rs/src/features/services/files/references.rs)
 resolves local paths, `app://` paths and `fid:` references. HTTP Range, thumbnail
 ETag/304 responses and download headers stay in `http/file_response.rs`.
 GraphQL HTTP extraction and response handling belong to `http/graphql.rs`;
@@ -119,7 +132,7 @@ separate assembly directory or duplicate service container.
 
 `plain-cli/src/service.rs` combines the server with CLI host adapters and local
 approval. Linux mounting, disk formatting and Samba implementations remain in
-`plain-rs/src/platform/linux/`. `plain-server` contains no CLI/headless runtime;
+`plain-rs/src/libs/platform/linux/`. `plain-server` contains no CLI/headless runtime;
 its native APIs and `ContentServer::runtime()` provide the in-process entry points
 used by CLI, desktop and mobile hosts.
 

@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::db::Db;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::db::Db;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -48,8 +48,8 @@ fn database(schema: &PublicSchema) -> &Arc<Db> {
     schema.data::<Arc<Db>>().unwrap()
 }
 
-fn doc(path: &str) -> plain_rs::db::MediaFileMetadata {
-    plain_rs::db::MediaFileMetadata {
+fn doc(path: &str) -> plain_rs::libs::db::MediaFileMetadata {
+    plain_rs::libs::db::MediaFileMetadata {
         album: String::new(),
         album_artist: String::new(),
 

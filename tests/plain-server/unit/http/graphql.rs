@@ -14,8 +14,8 @@ fn contract_schema() -> (
     tempfile::TempDir,
     crate::test_support::schema::SchemaFixture,
 ) {
-    use plain_rs::db::Db;
-    use plain_rs::prefs::Prefs;
+    use plain_rs::features::prefs::Prefs;
+    use plain_rs::libs::db::Db;
     use std::sync::Arc;
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
@@ -25,7 +25,7 @@ fn contract_schema() -> (
     (
         dir,
         crate::test_support::schema::build(
-            Arc::new(plain_rs::host::bridge::Host::default()),
+            Arc::new(plain_rs::libs::host::bridge::Host::default()),
             events,
             prefs,
             db,
@@ -125,7 +125,7 @@ async fn the_development_bearer_only_admits_the_exact_configured_token() {
 
     // Unset: no bearer of any kind opens the development path.
     assert!(
-        plain_rs::prefs::security::dev_token(&core.shared_preferences().unwrap())
+        plain_rs::features::prefs::security::dev_token(&core.shared_preferences().unwrap())
             .unwrap()
             .is_empty()
     );
@@ -133,7 +133,10 @@ async fn the_development_bearer_only_admits_the_exact_configured_token() {
 
     let prefs = core.shared_preferences().unwrap();
     prefs
-        .set(plain_rs::prefs::pref_keys::DEV_TOKEN, "plainapp-dev")
+        .set(
+            plain_rs::features::prefs::pref_keys::DEV_TOKEN,
+            "plainapp-dev",
+        )
         .unwrap();
     let state = core.runtime_state();
     assert!(dev_bearer_matches(&state, "Bearer plainapp-dev").unwrap());
@@ -144,7 +147,9 @@ async fn the_development_bearer_only_admits_the_exact_configured_token() {
     assert!(!dev_bearer_matches(&state, "plainapp-dev").unwrap());
 
     // Clearing it takes the entry point away again.
-    prefs.remove(plain_rs::prefs::pref_keys::DEV_TOKEN).unwrap();
+    prefs
+        .remove(plain_rs::features::prefs::pref_keys::DEV_TOKEN)
+        .unwrap();
     assert!(!dev_bearer_matches(&state, "Bearer plainapp-dev").unwrap());
     core.stop_core().await;
 }

@@ -9,11 +9,13 @@ fn password_command_writes_shared_system_credentials() {
         "example-password",
     )
     .unwrap();
-    let prefs =
-        plain_rs::prefs::Prefs::load(&plain_rs::prefs::default_path(directory.path())).unwrap();
+    let prefs = plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(
+        directory.path(),
+    ))
+    .unwrap();
     assert_eq!(
         prefs
-            .get::<String>(plain_rs::prefs::pref_keys::PASSWORD)
+            .get::<String>(plain_rs::features::prefs::pref_keys::PASSWORD)
             .unwrap()
             .as_deref(),
         Some("example-password")

@@ -8,16 +8,17 @@ use tokio::sync::mpsc;
 fn public_fixture() -> (
     tempfile::TempDir,
     ContentServer,
-    Arc<plain_rs::prefs::Prefs>,
+    Arc<plain_rs::features::prefs::Prefs>,
 ) {
     let directory = tempfile::tempdir().unwrap();
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
     prefs.set("desktop_access", true).unwrap();
     prefs.set("client_id", "screen-fixture").unwrap();
     let core = ContentServer::start(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[4; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[4; 32]),
         prefs.clone(),
     )
     .unwrap();
@@ -29,9 +30,9 @@ use tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClien
 #[tokio::test]
 async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
     let (_directory, core, prefs) = public_fixture();
-    let key = plain_rs::utils::base64::base64_decode(&plain_rs::prefs::identity::ensure_url_token(
-        &prefs,
-    ));
+    let key = plain_rs::libs::utils::base64::base64_decode(
+        &plain_rs::features::prefs::identity::ensure_url_token(&prefs),
+    );
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
     let url = format!("ws://127.0.0.1:{}/image_editor?cid={client}", core.port);
     let (mut denied, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
@@ -45,12 +46,12 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
     ));
 
     let (mut socket, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
-    let registration = plain_rs::crypto::xchacha_encrypt_raw(
+    let registration = plain_rs::libs::crypto::xchacha_encrypt_raw(
         &key,
         chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
     )
     .unwrap();
-    let mut stream = plain_rs::protocols::websocket::Stream::new(&registration);
+    let mut stream = plain_rs::libs::protocols::websocket::Stream::new(&registration);
     socket
         .send(ClientMessage::Binary(registration.into()))
         .await
@@ -87,9 +88,9 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
 #[tokio::test]
 async fn screen_transports_authenticated_media_and_controls_separately_from_subscriptions() {
     let (_directory, core, prefs) = public_fixture();
-    let key = plain_rs::utils::base64::base64_decode(&plain_rs::prefs::identity::ensure_url_token(
-        &prefs,
-    ));
+    let key = plain_rs::libs::utils::base64::base64_decode(
+        &plain_rs::features::prefs::identity::ensure_url_token(&prefs),
+    );
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
     let bridge = Arc::new(core.host_events().unwrap());
     let host = bridge.clone();
@@ -142,7 +143,7 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         "plain-graphql-ws-v1".parse().unwrap(),
     );
     let (mut subscriptions, _) = tokio_tungstenite::connect_async(request).await.unwrap();
-    let init = plain_rs::protocols::graphql::seal_init(
+    let init = plain_rs::libs::protocols::graphql::seal_init(
         &key,
         &client,
         serde_json::to_string(&json!({
@@ -159,12 +160,12 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     let ClientMessage::Binary(ack) = subscriptions.next().await.unwrap().unwrap() else {
         panic!("Expected encrypted acknowledgement")
     };
-    assert!(plain_rs::protocols::graphql::open_ack(&key, &client, &init, &ack).is_some());
-    let mut subscription_stream = plain_rs::protocols::graphql::Stream::new(
+    assert!(plain_rs::libs::protocols::graphql::open_ack(&key, &client, &init, &ack).is_some());
+    let mut subscription_stream = plain_rs::libs::protocols::graphql::Stream::new(
         &client,
         &init,
         &ack,
-        plain_rs::protocols::graphql::Role::Client,
+        plain_rs::libs::protocols::graphql::Role::Client,
     )
     .unwrap();
     for (id, query) in [
@@ -208,12 +209,12 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     ))
     .await
     .unwrap();
-    let registration = plain_rs::crypto::xchacha_encrypt_raw(
+    let registration = plain_rs::libs::crypto::xchacha_encrypt_raw(
         &key,
         chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
     )
     .unwrap();
-    let mut screen_stream = plain_rs::protocols::websocket::Stream::new(&registration);
+    let mut screen_stream = plain_rs::libs::protocols::websocket::Stream::new(&registration);
     screen
         .send(ClientMessage::Binary(registration.into()))
         .await
@@ -238,7 +239,7 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         plain.extend_from_slice(payload);
         screen
             .send(ClientMessage::Binary(
-                plain_rs::crypto::xchacha_encrypt_raw(&key, &plain)
+                plain_rs::libs::crypto::xchacha_encrypt_raw(&key, &plain)
                     .unwrap()
                     .into(),
             ))
@@ -295,7 +296,7 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     .unwrap();
     let mut control = chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
     control.extend_from_slice(br#"{"type":"screenMirrorControl","input":{"action":"HOME"}}"#);
-    let control = plain_rs::crypto::xchacha_encrypt_raw(&key, &control).unwrap();
+    let control = plain_rs::libs::crypto::xchacha_encrypt_raw(&key, &control).unwrap();
     screen
         .send(ClientMessage::Binary(control.clone().into()))
         .await
@@ -413,7 +414,7 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
         .unwrap()
         .create_session("Remote subscription fixture".into())
         .unwrap();
-    let key = plain_rs::base64_decode(&session.token);
+    let key = plain_rs::libs::utils::base64::base64_decode(&session.token);
     let client = session.client_id;
     let mut request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
         .into_client_request()
@@ -423,7 +424,7 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
         "plain-graphql-ws-v1".parse().unwrap(),
     );
     let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
-    let init = plain_rs::protocols::graphql::seal_init(
+    let init = plain_rs::libs::protocols::graphql::seal_init(
         &key,
         &client,
         json!({
@@ -440,12 +441,12 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
     let ClientMessage::Binary(ack) = socket.next().await.unwrap().unwrap() else {
         panic!("Expected encrypted acknowledgement")
     };
-    assert!(plain_rs::protocols::graphql::open_ack(&key, &client, &init, &ack).is_some());
-    let mut stream = plain_rs::protocols::graphql::Stream::new(
+    assert!(plain_rs::libs::protocols::graphql::open_ack(&key, &client, &init, &ack).is_some());
+    let mut stream = plain_rs::libs::protocols::graphql::Stream::new(
         &client,
         &init,
         &ack,
-        plain_rs::protocols::graphql::Role::Client,
+        plain_rs::libs::protocols::graphql::Role::Client,
     )
     .unwrap();
     let query = json!({"type":"subscribe","id":"private","payload":{"query":"subscription { pairingSucceeded { deviceId key } }"}}).to_string();

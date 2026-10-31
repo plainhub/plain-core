@@ -6,8 +6,9 @@ use std::sync::Arc;
 async fn projects_persist_project_summaries_and_validate_state() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("plain.db");
-    let token = plain_rs::utils::base64::base64_encode(&[12; 32]);
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let token = plain_rs::libs::utils::base64::base64_encode(&[12; 32]);
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let server = ContentServer::start(path.parent().unwrap(), &token, prefs.clone()).unwrap();
     let save = r#"mutation {saveImageEditorProject(id:"",input:{stateB64:"AQID",thumbnail:"data:image/jpeg;base64,AQID",canvasWidth:100,canvasHeight:200,layerCount:2}) {id stateB64 thumbnail createdAt updatedAt}}"#;
     let result = call(server.port, &token, save).await;
@@ -97,11 +98,11 @@ async fn projects_persist_project_summaries_and_validate_state() {
 #[tokio::test]
 async fn binary_delta_does_not_invalidate_content() {
     let dir = tempfile::tempdir().unwrap();
-    let token = plain_rs::utils::base64::base64_encode(&[13; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[13; 32]);
     let server = ContentServer::start(
         dir.path(),
         &token,
-        Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap()),
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap()),
     )
     .unwrap();
     let mut socket = server.runtime_state().events.subscribe();

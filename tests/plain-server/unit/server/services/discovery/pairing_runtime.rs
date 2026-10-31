@@ -1,25 +1,26 @@
-use plain_rs::discovery::nearby_http::Message;
-use plain_rs::peers::pairing::sessions::Target;
-use plain_rs::services::discovery::pairing::Device;
-use plain_rs::services::discovery::pairing_runtime::*;
+use plain_rs::features::discovery::nearby_http::Message;
+use plain_rs::features::peers::pairing::sessions::Target;
+use plain_rs::features::services::discovery::pairing::Device;
+use plain_rs::features::services::discovery::pairing_runtime::*;
 use serde_json::json;
 
 #[cfg(feature = "http_transport")]
 fn fixture(id: &str) -> (tempfile::TempDir, crate::server::ContentServer) {
     use std::sync::Arc;
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    let (key, _public) = plain_rs::crypto::ed25519_generate();
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
+    let (key, _public) = plain_rs::libs::crypto::ed25519_generate();
     prefs.set("client_id", id).unwrap();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::utils::base64::base64_encode(&key),
+            plain_rs::libs::utils::base64::base64_encode(&key),
         )
         .unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[3; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -128,7 +129,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     let Message::PairRequest(request) = received.recv().await.unwrap() else {
         panic!()
     };
-    assert!(plain_rs::peers::pairing::security::verify_request(&request));
+    assert!(plain_rs::features::peers::pairing::security::verify_request(&request));
     assert_eq!(request.from_id, "local");
     assert!(matches!(
         received.recv().await.unwrap(),

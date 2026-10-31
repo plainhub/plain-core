@@ -8,9 +8,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
-use plain_rs::events::WsEvent;
-use plain_rs::prefs::security::PasswordType;
-use plain_rs::services::confirmation_channel;
+use plain_rs::features::prefs::security::PasswordType;
+use plain_rs::features::services::confirmation_channel;
+use plain_rs::libs::events::WsEvent;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -132,9 +132,11 @@ impl Runtime {
         if let Some(outgoing) = outgoing {
             tokio::time::timeout(
                 Duration::from_secs(2),
-                outgoing.send(Message::Binary(plain_rs::utils::base64::base64_decode(
-                    result["frame"].as_str().unwrap_or_default(),
-                ))),
+                outgoing.send(Message::Binary(
+                    plain_rs::libs::utils::base64::base64_decode(
+                        result["frame"].as_str().unwrap_or_default(),
+                    ),
+                )),
             )
             .await??;
             completed(state, result).await;
@@ -298,7 +300,7 @@ async fn run(
                         let accepted = (|| -> anyhow::Result<_> {
                             match std::mem::replace(&mut handshake, LoginHandshake::Submitted) {
                                 LoginHandshake::AwaitingCommitment => {
-                                    let password_type = plain_rs::prefs::security::password_type(&state.prefs)?;
+                                    let password_type = plain_rs::features::prefs::security::password_type(&state.prefs)?;
                                     let mode = match (params.auth.as_deref(), password_type) {
                                         (Some("1"), PasswordType::Fixed) => confirmation_channel::ConfirmationMode::Password,
                                         (Some("2"), PasswordType::None) => confirmation_channel::ConfirmationMode::DeviceConfirmation,
@@ -307,10 +309,10 @@ async fn run(
                                     anyhow::ensure!(enabled(&state), "desktop_access_disabled");
                                     let request = serde_json::from_str::<confirmation_channel::ClientHello>(&text)?;
                                     let device_id = state.prefs.get_or(
-                                        plain_rs::prefs::pref_keys::CLIENT_ID,
+                                        plain_rs::features::prefs::pref_keys::CLIENT_ID,
                                         String::new(),
                                     );
-                                    let signing = plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs)?;
+                                    let signing = plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
                                     let now = chrono::Utc::now().timestamp_millis() as u64;
                                     let (pending, response) = confirmation_channel::ServerHandshake::start(
                                         &params.cid,
@@ -356,12 +358,12 @@ async fn run(
                     let request = crate::http::auth::ws_login::Request::Issue {
                         client_id: params.cid.clone(),
                         client_ip: ip.clone(),
-                        frame: plain_rs::utils::base64::base64_encode(&frame),
+                        frame: plain_rs::libs::utils::base64::base64_encode(&frame),
                         channel,
                     };
                     match crate::http::auth::ws_login::execute(&state, request).await {
                         Ok(result) => {
-                            if socket.send(Message::Binary(plain_rs::utils::base64::base64_decode(result["frame"].as_str().unwrap_or_default()))).await.is_err() { break; }
+                            if socket.send(Message::Binary(plain_rs::libs::utils::base64::base64_decode(result["frame"].as_str().unwrap_or_default()))).await.is_err() { break; }
                             if result["status"] == "PENDING" {
                                 let request_id = result["requestId"].as_str().unwrap().to_owned();
                                 pending = Some(request_id.clone());
@@ -381,10 +383,10 @@ async fn run(
                         }
                     }
                 }
-                let Some(key) = plain_rs::services::sessions::local_key(&state, &params.cid)
-                    .or_else(|| plain_rs::services::sessions::key(&state.db, &params.cid).ok().flatten())
+                let Some(key) = plain_rs::features::services::sessions::local_key(&state, &params.cid)
+                    .or_else(|| plain_rs::features::services::sessions::key(&state.db, &params.cid).ok().flatten())
                     else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
-                let plain = plain_rs::crypto::xchacha_decrypt_raw(&key,&frame);
+                let plain = plain_rs::libs::crypto::xchacha_decrypt_raw(&key,&frame);
                 let Some(plain) = plain else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
                 let plain = match super::frames::admit(&state.main_ws.replay, &params.cid, &frame, &plain, registered, chrono::Utc::now().timestamp_millis()) {
                     Ok(payload) => payload,
@@ -392,13 +394,13 @@ async fn run(
                 };
                 if !registered {
                     if channel == Channel::Screen {
-                        if let Err(error) = plain_rs::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
+                        if let Err(error) = plain_rs::features::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
                             log::warn!("Screen mirror connection: {error}");
                             let _ = socket.send(close(1008, "unsupported_capability")).await;
                             break;
                         }
                     }
-                    stream = Some(plain_rs::protocols::websocket::Stream::new(&frame));
+                    stream = Some(plain_rs::libs::protocols::websocket::Stream::new(&frame));
                     registered = true;
                     permit.take();
                     if let Some(c) = state.main_ws.connections.lock().unwrap().get_mut(&id) { c.registered = true; }
@@ -413,7 +415,7 @@ async fn run(
                     }
                     let controls = controls(&plain);
                     if !controls.is_empty() {
-                        if let Err(error) = plain_rs::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
+                        if let Err(error) = plain_rs::features::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
                             log::warn!("Screen mirror controls: {error}");
                             let _ = socket.send(close(1008, "unsupported_capability")).await;
                             break;
@@ -437,8 +439,8 @@ async fn run(
                 let Some(event) = event.into_public() else { continue; };
                 if !enabled(&state) { break; }
                 // Same key the inbound frames used: the shell holds no session.
-                let Some(key) = plain_rs::services::sessions::local_key(&state, &params.cid)
-                    .or_else(|| plain_rs::services::sessions::key(&state.db, &params.cid).ok().flatten())
+                let Some(key) = plain_rs::features::services::sessions::local_key(&state, &params.cid)
+                    .or_else(|| plain_rs::features::services::sessions::key(&state.db, &params.cid).ok().flatten())
                 else { break; };
                 let payload = if let Some(payload) = event.binary_payload {
                     payload
@@ -476,7 +478,7 @@ async fn run(
             .values()
             .any(|c| c.channel == Channel::Screen && c.registered)
     {
-        match plain_rs::services::capabilities::snapshot(&state.host).await {
+        match plain_rs::features::services::capabilities::snapshot(&state.host).await {
             Ok(capabilities) if capabilities.iter().any(|value| value == "SCREEN_MIRROR") => {
                 if let Err(error) = state
                     .host

@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::db::Db;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::db::Db;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -79,8 +79,8 @@ fn media(
     title: &str,
     size: i64,
     bucket: &str,
-) -> plain_rs::db::MediaFileMetadata {
-    plain_rs::db::MediaFileMetadata {
+) -> plain_rs::libs::db::MediaFileMetadata {
+    plain_rs::libs::db::MediaFileMetadata {
         album: String::new(),
         album_artist: String::new(),
 
@@ -175,8 +175,8 @@ async fn images_carry_their_row_and_their_tags() {
         },
         |method, _| panic!("unexpected host call {method}"),
     );
-    let kind = plain_rs::enums::DataType::Image.kind();
-    let tag = plain_rs::tags::create_tag(&db, kind, "holiday").unwrap();
+    let kind = plain_rs::features::enums::DataType::Image.kind();
+    let tag = plain_rs::features::tags::create_tag(&db, kind, "holiday").unwrap();
     let rows = db.media_file_list(DataType::Image, 10, 0).unwrap();
     db.with_conn(|conn| {
         conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [&rows[0].id])
@@ -194,7 +194,7 @@ async fn images_carry_their_row_and_their_tags() {
             )
         })
         .collect::<Vec<_>>();
-    plain_rs::tags::add_relations(&db, &relations).unwrap();
+    plain_rs::features::tags::add_relations(&db, &relations).unwrap();
     let response = schema
         .execute(
             r#"query { images(offset:0, limit:20, query:"", sortBy:DATE_DESC)
@@ -582,8 +582,8 @@ async fn media_tags_are_loaded_only_when_selected_and_batch_all_rows() {
         |method, _| panic!("unexpected host call {method}"),
     );
     let rows = db.media_file_list(DataType::Image, 10, 0).unwrap();
-    let tag = plain_rs::tags::create_tag(&db, DataType::Image.kind(), "work").unwrap();
-    plain_rs::tags::add_relations(
+    let tag = plain_rs::features::tags::create_tag(&db, DataType::Image.kind(), "work").unwrap();
+    plain_rs::features::tags::add_relations(
         &db,
         &rows
             .iter()
@@ -675,9 +675,9 @@ async fn image_search_uses_the_original_query_for_text_filters_paging_and_count(
 
 #[tokio::test]
 async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
-    use plain_rs::media::images::embeddings::{self, EmbeddingInput};
-    use plain_rs::services::images::index::ImageIndex;
-    use plain_rs::services::images::models::Runtime;
+    use plain_rs::features::media::images::embeddings::{self, EmbeddingInput};
+    use plain_rs::features::services::images::index::ImageIndex;
+    use plain_rs::features::services::images::models::Runtime;
     use std::time::Duration;
 
     let (dir, schema, db) = fixture_seeded(
@@ -689,13 +689,13 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     let models = schema.data::<Arc<Runtime>>().unwrap();
     let index = schema.data::<Arc<ImageIndex>>().unwrap();
     index.use_native_catalog_for_test();
-    plain_rs::ai_image_search::models::test_fixture::fixture(
+    plain_rs::libs::ai_image_search::models::test_fixture::fixture(
         &dir.path().join("ai_models/incoming"),
     );
     models.import().await.unwrap();
     tokio::time::timeout(Duration::from_secs(10), async {
         while models.snapshot().status.status
-            != plain_rs::services::images::status::ImageSearchStatusType::Ready
+            != plain_rs::features::services::images::status::ImageSearchStatusType::Ready
         {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
@@ -742,9 +742,11 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
         )
     })
     .unwrap();
-    let tag = plain_rs::tags::create_tag(&db, DataType::Image.kind(), "selected").unwrap();
-    let empty_tag = plain_rs::tags::create_tag(&db, DataType::Image.kind(), "empty").unwrap();
-    plain_rs::tags::add_relations(
+    let tag =
+        plain_rs::features::tags::create_tag(&db, DataType::Image.kind(), "selected").unwrap();
+    let empty_tag =
+        plain_rs::features::tags::create_tag(&db, DataType::Image.kind(), "empty").unwrap();
+    plain_rs::features::tags::add_relations(
         &db,
         &[0, 1, 2, 3, 5, 6].map(|i| (tag.id.clone(), stored[i].id.clone())),
     )
@@ -752,7 +754,7 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     let embedding = |id: String, path: String, score: f32| EmbeddingInput {
         id,
         path,
-        embedding_base64: plain_rs::utils::base64::base64_encode(
+        embedding_base64: plain_rs::libs::utils::base64::base64_encode(
             &[score, 0.0, 0.0, 0.0]
                 .into_iter()
                 .flat_map(f32::to_be_bytes)
@@ -851,8 +853,8 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
         captured.lock().unwrap().push((method.to_owned(), params));
         json!([{"id":"page-one"},{"id":"page-two"}])
     });
-    let catalog = plain_rs::services::files::catalog::MediaCatalog::Platform { db, host };
-    let page = plain_rs::services::images::search::rows(
+    let catalog = plain_rs::features::services::files::catalog::MediaCatalog::Platform { db, host };
+    let page = plain_rs::features::services::images::search::rows(
         &catalog, models, "cat", "text:cat", 100, 2, "NAME_ASC",
     )
     .await

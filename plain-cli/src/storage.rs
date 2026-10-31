@@ -6,22 +6,22 @@ pub(super) fn validate_automount(enabled: bool) -> Result<()> {
         return Ok(());
     }
     #[cfg(target_os = "linux")]
-    return plain_rs::platform::linux::install::service::require_root();
+    return plain_rs::libs::platform::linux::install::service::require_root();
     #[cfg(not(target_os = "linux"))]
     anyhow::bail!("Automatic disk mounting is available on Linux");
 }
 
 pub(super) fn source_directories(
-    prefs: &plain_rs::prefs::Prefs,
+    prefs: &plain_rs::features::prefs::Prefs,
     requested: &[PathBuf],
 ) -> Result<Vec<String>> {
-    let saved = plain_rs::prefs::media::source_directories(prefs)?;
-    let home = plain_rs::platform::system::consts::home_directory();
+    let saved = plain_rs::features::prefs::media::source_directories(prefs)?;
+    let home = plain_rs::libs::platform::system::consts::home_directory();
     let mounted = mounted_directories(prefs);
     choose_directories(&saved, requested, home.as_deref(), &mounted)
 }
 
-fn mounted_directories(_prefs: &plain_rs::prefs::Prefs) -> Vec<PathBuf> {
+fn mounted_directories(_prefs: &plain_rs::features::prefs::Prefs) -> Vec<PathBuf> {
     let disks = sysinfo::Disks::new_with_refreshed_list();
     let mounted = disks
         .iter()
@@ -32,11 +32,12 @@ fn mounted_directories(_prefs: &plain_rs::prefs::Prefs) -> Vec<PathBuf> {
     let mounted = mounted
         .into_iter()
         .chain(
-            plain_rs::platform::linux::mounts::list::list_mounts(_prefs)
+            plain_rs::libs::platform::linux::mounts::list::list_mounts(_prefs)
                 .into_iter()
                 .filter_map(|mount| mount.mount_point)
                 .filter(|path| {
-                    plain_rs::platform::linux::mounts::automount::parse_usb_slot(path).is_some()
+                    plain_rs::libs::platform::linux::mounts::automount::parse_usb_slot(path)
+                        .is_some()
                 })
                 .map(PathBuf::from),
         )
@@ -78,7 +79,7 @@ fn choose_directories(
         .filter(|path| path.is_dir())
         .map(|path| path.canonicalize())
         .collect::<std::io::Result<Vec<_>>>()?;
-    let unique = plain_rs::files::filesystem::roots::prune_nested(roots, |root| {
+    let unique = plain_rs::libs::filesystem::roots::prune_nested(roots, |root| {
         cfg!(target_os = "macos") && root.ends_with("Library/Mobile Documents/com~apple~CloudDocs")
     });
     Ok(unique
@@ -88,8 +89,8 @@ fn choose_directories(
 }
 
 pub(super) fn start_source_scan(
-    catalog: &plain_rs::services::files::catalog_scan::NativeMediaCatalog,
-) -> Result<plain_rs::services::files::media_scans::Snapshot, String> {
+    catalog: &plain_rs::features::services::files::catalog_scan::NativeMediaCatalog,
+) -> Result<plain_rs::features::services::files::media_scans::Snapshot, String> {
     catalog.start_source_scan("/")
 }
 
@@ -97,7 +98,7 @@ pub(super) fn start_source_scan(
 pub(crate) fn event_sink(
     core: &plain_server::server::ContentServer,
     include_mounted: bool,
-) -> Result<plain_rs::platform::linux::mounts::automount::EventSink, String> {
+) -> Result<plain_rs::libs::platform::linux::mounts::automount::EventSink, String> {
     let db = core.runtime().db.clone();
     let catalog = core.native_media_catalog()?;
     let prefs = core.shared_preferences()?;
@@ -110,7 +111,7 @@ pub(crate) fn event_sink(
                 .load(std::sync::atomic::Ordering::SeqCst)
             {
                 let result = (|| -> Result<(), String> {
-                    let mut roots = plain_rs::prefs::media::source_directories(&prefs)
+                    let mut roots = plain_rs::features::prefs::media::source_directories(&prefs)
                         .map_err(|error| error.to_string())?;
                     if include_mounted {
                         roots.extend(

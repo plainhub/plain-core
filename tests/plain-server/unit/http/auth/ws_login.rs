@@ -1,5 +1,5 @@
 use super::*;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
 
 #[test]
 fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
@@ -49,7 +49,7 @@ fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
 #[test]
 fn the_login_key_is_a_truncation_of_the_same_hex_the_client_sends() {
     let digest = Sha512::digest(b"secret");
-    let hex = plain_rs::utils::hex::bytes_to_hex(&digest);
+    let hex = plain_rs::libs::utils::hex::bytes_to_hex(&digest);
     let key = hash_to_token(&hex);
     assert_eq!(key.len(), 32);
     // The comparison is against the FULL digest hex (SHA-512 = 128 chars); the
@@ -62,7 +62,7 @@ fn the_login_key_is_a_truncation_of_the_same_hex_the_client_sends() {
 
 #[test]
 fn peer_blocks_are_only_accepted_when_usable() {
-    let good = json!({"port": 8080, "signaturePublicKey": plain_rs::utils::base64::base64_encode(&[7u8; 32])});
+    let good = json!({"port": 8080, "signaturePublicKey": plain_rs::libs::utils::base64::base64_encode(&[7u8; 32])});
     assert!(peer_chat_paired(&json!({"peer": good})));
     assert!(!peer_chat_paired(&json!({})));
     assert!(!peer_chat_paired(&json!({"peer": null})));
@@ -110,11 +110,11 @@ fn signing_uses_the_core_keypair() {
             .as_nanos()
     ));
     let prefs = Prefs::load(&dir.join("prefs.json")).unwrap();
-    let (keypair, public) = plain_rs::crypto::ed25519_generate();
+    let (keypair, public) = plain_rs::libs::crypto::ed25519_generate();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::utils::base64::base64_encode(&keypair),
+            plain_rs::libs::utils::base64::base64_encode(&keypair),
         )
         .unwrap();
 
@@ -123,8 +123,8 @@ fn signing_uses_the_core_keypair() {
         !signature.is_empty(),
         "an empty signature looks like a valid answer and fails only on the client"
     );
-    assert!(plain_rs::crypto::ed25519_verify(
-        &plain_rs::utils::base64::base64_encode(&public),
+    assert!(plain_rs::libs::crypto::ed25519_verify(
+        &plain_rs::libs::utils::base64::base64_encode(&public),
         b"device|COMPLETED|pk|42",
         &signature
     ));
@@ -188,8 +188,8 @@ async fn browser_login(
     password: Option<&str>,
 ) -> (
     LoginSocket,
-    plain_rs::services::confirmation_channel::Channel,
-    plain_rs::crypto::EcdhSession,
+    plain_rs::features::services::confirmation_channel::Channel,
+    plain_rs::libs::crypto::EcdhSession,
     Vec<u8>,
 ) {
     use futures_util::SinkExt;
@@ -201,12 +201,12 @@ async fn browser_login(
     .await
     .unwrap();
     let mode = if password.is_some() {
-        plain_rs::services::confirmation_channel::ConfirmationMode::Password
+        plain_rs::features::services::confirmation_channel::ConfirmationMode::Password
     } else {
-        plain_rs::services::confirmation_channel::ConfirmationMode::DeviceConfirmation
+        plain_rs::features::services::confirmation_channel::ConfirmationMode::DeviceConfirmation
     };
     let (client, hello) =
-        plain_rs::services::confirmation_channel::Client::start(client_id, mode).unwrap();
+        plain_rs::features::services::confirmation_channel::Client::start(client_id, mode).unwrap();
     socket
         .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
         .await
@@ -214,11 +214,12 @@ async fn browser_login(
     let Message::Text(hello) = login_frame(&mut socket).await else {
         panic!("signed hello required")
     };
-    let public = plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    let public =
+        plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     let (channel, reveal) = client
         .accept(
             &serde_json::from_str(&hello).unwrap(),
-            &plain_rs::utils::base64::base64_encode(&public[32..]),
+            &plain_rs::libs::utils::base64::base64_encode(&public[32..]),
             &state.native_client_id().unwrap(),
             now_ms(),
         )
@@ -229,15 +230,15 @@ async fn browser_login(
         ))
         .await
         .unwrap();
-    let session = plain_rs::crypto::EcdhSession::generate();
-    let mut request = json!({"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
-    let digest = password.map(plain_rs::crypto::sha512_hex);
+    let session = plain_rs::libs::crypto::EcdhSession::generate();
+    let mut request = json!({"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::libs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
+    let digest = password.map(plain_rs::libs::crypto::sha512_hex);
     if let Some(digest) = &digest {
         request["password"] = json!(digest);
     }
     let bytes = serde_json::to_vec(&request).unwrap();
     let bytes = if let Some(digest) = &digest {
-        plain_rs::crypto::xchacha_encrypt_raw(&digest.as_bytes()[..32], &bytes).unwrap()
+        plain_rs::libs::crypto::xchacha_encrypt_raw(&digest.as_bytes()[..32], &bytes).unwrap()
     } else {
         bytes
     };
@@ -251,7 +252,7 @@ async fn browser_login(
     };
     let pending = channel.decrypt_response(&pending, now_ms()).unwrap();
     let pending = if let Some(digest) = &digest {
-        plain_rs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &pending).unwrap()
+        plain_rs::libs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &pending).unwrap()
     } else {
         pending
     };
@@ -269,7 +270,7 @@ async fn browser_login(
 
 #[cfg(feature = "http_transport")]
 struct LoginCallbacks {
-    host: std::sync::Arc<plain_rs::host::bridge::Host>,
+    host: std::sync::Arc<plain_rs::libs::host::bridge::Host>,
     generation: u64,
     requests: tokio::sync::mpsc::Receiver<Value>,
 }
@@ -319,9 +320,9 @@ async fn passwordless_hello_consumes_the_same_ip_limiter_before_key_exchange() {
     use futures_util::SinkExt;
     use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
-    let (_, hello) = plain_rs::services::confirmation_channel::Client::start(
+    let (_, hello) = plain_rs::features::services::confirmation_channel::Client::start(
         "browser",
-        plain_rs::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
+        plain_rs::features::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
     )
     .unwrap();
     for index in 0..=LOGIN_ATTEMPT_LIMIT {
@@ -419,7 +420,7 @@ async fn saturated_host_recovers_the_pending_login_snapshot() {
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
     let mut callbacks = LoginCallbacks::new(&state);
-    for _ in 0..plain_rs::host::bridge::REQUEST_CAPACITY {
+    for _ in 0..plain_rs::libs::host::bridge::REQUEST_CAPACITY {
         state.host.notify("blocked", json!({})).unwrap();
     }
     let (_socket, _, _, _) = browser_login(&state, port, "queued-browser", None).await;
@@ -473,15 +474,16 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
         assert_eq!(response["loginContext"], channel.context);
         assert!(response.get("token").is_none());
         let shared = session
-            .compute_shared_key(&plain_rs::utils::base64::base64_decode(
+            .compute_shared_key(&plain_rs::libs::utils::base64::base64_decode(
                 response["ecdhPublicKey"].as_str().unwrap(),
             ))
             .unwrap();
         assert_eq!(
             state.db.session_get(client_id).unwrap().unwrap().token,
-            plain_rs::utils::base64::base64_encode(&shared)
+            plain_rs::libs::utils::base64::base64_encode(&shared)
         );
-        let signing = plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+        let signing =
+            plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
         let signed = format!(
             "{}|COMPLETED|{}|{}|{}",
             response["clientId"].as_str().unwrap(),
@@ -489,8 +491,8 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
             response["timestamp"].as_u64().unwrap(),
             channel.context
         );
-        assert!(plain_rs::crypto::ed25519_verify(
-            &plain_rs::utils::base64::base64_encode(&signing[32..]),
+        assert!(plain_rs::libs::crypto::ed25519_verify(
+            &plain_rs::libs::utils::base64::base64_encode(&signing[32..]),
             signed.as_bytes(),
             response["signature"].as_str().unwrap()
         ));
@@ -578,9 +580,9 @@ async fn successful_passwordless_logins_still_count_toward_the_rolling_ip_limit(
         tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid=blocked&auth=2"))
             .await
             .unwrap();
-    let (_, hello) = plain_rs::services::confirmation_channel::Client::start(
+    let (_, hello) = plain_rs::features::services::confirmation_channel::Client::start(
         "blocked",
-        plain_rs::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
+        plain_rs::features::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
     )
     .unwrap();
     socket
@@ -670,9 +672,9 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
                 .await
                 .unwrap();
         } else {
-            let (client, hello) = plain_rs::services::confirmation_channel::Client::start(
+            let (client, hello) = plain_rs::features::services::confirmation_channel::Client::start(
                 "browser",
-                plain_rs::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
+                plain_rs::features::services::confirmation_channel::ConfirmationMode::DeviceConfirmation,
             )
             .unwrap();
             socket
@@ -683,11 +685,12 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
                 panic!("signed challenge required")
             };
             let keypair =
-                plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+                plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs)
+                    .unwrap();
             let (channel, mut reveal) = client
                 .accept(
                     &serde_json::from_str(&response).unwrap(),
-                    &plain_rs::utils::base64::base64_encode(&keypair[32..]),
+                    &plain_rs::libs::utils::base64::base64_encode(&keypair[32..]),
                     "",
                     now_ms(),
                 )
@@ -700,7 +703,7 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
                     .await
                     .unwrap(),
                 "changed-reveal" => {
-                    reveal.nonce = plain_rs::utils::base64::base64_encode(&[9; 32]);
+                    reveal.nonce = plain_rs::libs::utils::base64::base64_encode(&[9; 32]);
                     socket
                         .send(Message::Text(
                             serde_json::to_string(&reveal).unwrap().into(),
@@ -730,8 +733,10 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
 }
 
 fn password_protection(digest: &str) -> LoginProtection {
-    use plain_rs::services::confirmation_channel::{Client, ConfirmationMode, ServerHandshake};
-    let (private, public) = plain_rs::crypto::ed25519_generate();
+    use plain_rs::features::services::confirmation_channel::{
+        Client, ConfirmationMode, ServerHandshake,
+    };
+    let (private, public) = plain_rs::libs::crypto::ed25519_generate();
     let (client, hello) = Client::start("browser", ConfirmationMode::Password).unwrap();
     let (server, response) = ServerHandshake::start(
         "browser",
@@ -745,7 +750,7 @@ fn password_protection(digest: &str) -> LoginProtection {
     let (_, reveal) = client
         .accept(
             &response,
-            &plain_rs::utils::base64::base64_encode(&public),
+            &plain_rs::libs::utils::base64::base64_encode(&public),
             "device",
             now_ms(),
         )
@@ -760,7 +765,7 @@ fn password_protection(digest: &str) -> LoginProtection {
 #[tokio::test]
 async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_encryption() {
     use futures_util::SinkExt;
-    use plain_rs::services::confirmation_channel::{Client, ConfirmationMode};
+    use plain_rs::features::services::confirmation_channel::{Client, ConfirmationMode};
     use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
@@ -788,11 +793,12 @@ async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_
                 panic!("signed hello required")
             };
             let signing =
-                plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+                plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs)
+                    .unwrap();
             let (keys, reveal) = client
                 .accept(
                     &serde_json::from_str(&hello).unwrap(),
-                    &plain_rs::utils::base64::base64_encode(&signing[32..]),
+                    &plain_rs::libs::utils::base64::base64_encode(&signing[32..]),
                     &state.native_client_id().unwrap(),
                     now_ms(),
                 )
@@ -805,13 +811,13 @@ async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_
                 .await
                 .unwrap();
         }
-        let session = plain_rs::crypto::EcdhSession::generate();
+        let session = plain_rs::libs::crypto::EcdhSession::generate();
         let request = json!({
             "password":digest, "loginContext":context,
             "browserName":"Fixture", "browserVersion":"1", "osName":"Fixture", "osVersion":"1",
-            "isMobile":false, "ecdhPublicKey":plain_rs::utils::base64::base64_encode(&session.public_key_bytes),
+            "isMobile":false, "ecdhPublicKey":plain_rs::libs::utils::base64::base64_encode(&session.public_key_bytes),
         });
-        let inner = plain_rs::crypto::xchacha_encrypt_raw(
+        let inner = plain_rs::libs::crypto::xchacha_encrypt_raw(
             &digest.as_bytes()[..32],
             &serde_json::to_vec(&request).unwrap(),
         )
@@ -942,7 +948,7 @@ async fn idle_connections_consume_the_login_budget_before_any_message() {
 #[tokio::test]
 async fn a_signed_hello_does_not_extend_the_initial_exchange_deadline() {
     use futures_util::{SinkExt, StreamExt};
-    use plain_rs::services::confirmation_channel::{Client, ConfirmationMode};
+    use plain_rs::features::services::confirmation_channel::{Client, ConfirmationMode};
     use tokio_tungstenite::tungstenite::Message;
     let (_directory, server, port) = passwordless_server().await;
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(

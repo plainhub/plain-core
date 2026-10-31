@@ -1,15 +1,16 @@
-use plain_rs::peers::pairing::sessions::Target;
-use plain_rs::services::discovery::pairing;
-use plain_rs::services::discovery::pairing_attempts::Mode;
-use plain_rs::utils::base64::base64_encode;
+use plain_rs::features::peers::pairing::sessions::Target;
+use plain_rs::features::services::discovery::pairing;
+use plain_rs::features::services::discovery::pairing_attempts::Mode;
+use plain_rs::libs::utils::base64::base64_encode;
 use sha2::Digest;
 use std::sync::Arc;
 
 fn fixture(id: &str) -> (tempfile::TempDir, crate::server::ContentServer) {
     let directory = tempfile::tempdir().unwrap();
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("system.json")).unwrap());
-    let (key, _) = plain_rs::crypto::ed25519_generate();
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("system.json")).unwrap(),
+    );
+    let (key, _) = plain_rs::libs::crypto::ed25519_generate();
     prefs.set("client_id", id).unwrap();
     prefs
         .set("signature_key_pair", base64_encode(&key))
@@ -30,8 +31,8 @@ fn device() -> pairing::Device {
 }
 #[tokio::test]
 async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authenticated_response() {
-    use plain_rs::services::discovery::pairing_runtime;
-    use plain_rs::services::discovery::pairing_runtime::Request;
+    use plain_rs::features::services::discovery::pairing_runtime;
+    use plain_rs::features::services::discovery::pairing_runtime::Request;
     let (_local_dir, local_server) = fixture("local");
     let (_remote_dir, remote_server) = fixture("remote");
     let mut ports = Vec::new();
@@ -77,7 +78,7 @@ async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authen
     let notice = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let event = incoming.recv().await.unwrap();
-            if event.event_type == plain_rs::chat::events::WS_PAIRING_REQUEST_RECEIVED {
+            if event.event_type == plain_rs::features::chat::events::WS_PAIRING_REQUEST_RECEIVED {
                 break serde_json::from_str::<serde_json::Value>(&event.payload).unwrap();
             }
         }
@@ -93,12 +94,12 @@ async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authen
         .unwrap();
     assert_eq!(notice["verificationCode"], code);
     assert!(
-        plain_rs::db::chat_store::peers::get(&local.db, "remote")
+        plain_rs::libs::db::chat_store::peers::get(&local.db, "remote")
             .unwrap()
             .is_none()
     );
     assert!(
-        plain_rs::db::chat_store::peers::get(&remote.db, "local")
+        plain_rs::libs::db::chat_store::peers::get(&remote.db, "local")
             .unwrap()
             .is_none()
     );
@@ -125,11 +126,11 @@ async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authen
         "SUCCEEDED"
     );
     assert_eq!(
-        plain_rs::db::chat_store::peers::get(&local.db, "remote")
+        plain_rs::libs::db::chat_store::peers::get(&local.db, "remote")
             .unwrap()
             .unwrap()
             .key,
-        plain_rs::db::chat_store::peers::get(&remote.db, "local")
+        plain_rs::libs::db::chat_store::peers::get(&remote.db, "local")
             .unwrap()
             .unwrap()
             .key

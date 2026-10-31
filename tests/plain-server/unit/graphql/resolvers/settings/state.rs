@@ -8,7 +8,7 @@ fn fixture() -> (
 ) {
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    plain_rs::prefs::security::bootstrap(&prefs).unwrap();
+    plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
     let (events, receiver) = broadcast::channel(32);
     let schema = Schema::build(
         crate::graphql::resolvers::settings::public::PrefsQuery,
@@ -76,7 +76,7 @@ async fn native_preferences_preserve_defaults_and_use_storage_keys() {
     let state = core.runtime_state();
     state.prefs.set("editor_font_size", 20).unwrap();
     state.prefs.set("feed_auto_refresh_interval", 2345).unwrap();
-    let expected = plain_rs::prefs::settings::values(&state.prefs).unwrap();
+    let expected = plain_rs::features::prefs::settings::values(&state.prefs).unwrap();
     let actual = core.native_management().unwrap().preferences().unwrap();
     for (key, value) in &expected {
         assert_eq!(&actual[key], value, "{key}");
@@ -111,7 +111,7 @@ async fn system_commands_validate_and_do_not_return_private_keys() {
         .await;
     assert!(updated.errors.is_empty(), "{:?}", updated.errors);
     let prefs = schema.data::<Arc<Prefs>>().unwrap();
-    let snapshot = plain_rs::prefs::security::snapshot(prefs).unwrap();
+    let snapshot = plain_rs::features::prefs::security::snapshot(prefs).unwrap();
     assert!(!snapshot.login_require_approval);
     assert!(!snapshot.client_id.is_empty());
     assert!(!snapshot.signature_public_key.is_empty());
@@ -147,7 +147,7 @@ async fn runtime_security_preferences_validate_before_publishing() {
 async fn result_only_user_patch_does_not_read_unselected_system_settings() {
     let directory = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
-    plain_rs::prefs::security::bootstrap(&prefs).unwrap();
+    plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
     prefs
         .set(
             "volume_alias",
@@ -167,7 +167,7 @@ async fn result_only_user_patch_does_not_read_unselected_system_settings() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["setPref"], true);
     assert_eq!(
-        plain_rs::prefs::settings::snapshot(&prefs)
+        plain_rs::features::prefs::settings::snapshot(&prefs)
             .unwrap()
             .editor_font_size,
         21

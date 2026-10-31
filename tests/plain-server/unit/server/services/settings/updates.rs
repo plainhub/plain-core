@@ -1,8 +1,8 @@
 use crate::server::ContentServer;
 use async_graphql::Request;
-use plain_rs::prefs::pref_keys::AUTO_CHECK_UPDATE;
-use plain_rs::prefs::pref_keys::SKIP_VERSION;
-use plain_rs::services::settings::updates::*;
+use plain_rs::features::prefs::pref_keys::AUTO_CHECK_UPDATE;
+use plain_rs::features::prefs::pref_keys::SKIP_VERSION;
+use plain_rs::features::services::settings::updates::*;
 use serde_json::json;
 
 #[tokio::test]
@@ -38,7 +38,7 @@ async fn native_update_check_uses_capabilities_and_skips_network_when_automatic_
         }
         assert!(worker.await.unwrap().try_recv().is_err());
         assert_eq!(
-            plain_rs::services::settings::updates::info(&state)
+            plain_rs::features::services::settings::updates::info(&state)
                 .unwrap()
                 .check_update_time,
             0

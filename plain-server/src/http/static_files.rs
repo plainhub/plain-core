@@ -140,7 +140,7 @@ fn now_ms() -> i64 {
 }
 
 pub(crate) async fn serve(
-    prefs: &plain_rs::prefs::Prefs,
+    prefs: &plain_rs::features::prefs::Prefs,
     root: Option<&Path>,
     embedded: Option<&SharedWebBundle>,
     method: &Method,

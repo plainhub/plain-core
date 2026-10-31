@@ -1,36 +1,37 @@
 #![cfg(feature = "http_transport")]
 
 use crate::server::ContentServer;
-use plain_rs::chat::enums::DeviceType;
-use plain_rs::chat::enums::PeerStatus;
-use plain_rs::db::DPeer;
-use plain_rs::db::chat_store::SaveMode;
-use plain_rs::db::chat_store::peers;
+use plain_rs::features::chat::enums::DeviceType;
+use plain_rs::features::chat::enums::PeerStatus;
+use plain_rs::libs::db::DPeer;
+use plain_rs::libs::db::chat_store::SaveMode;
+use plain_rs::libs::db::chat_store::peers;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 fn root(id: &str) -> (tempfile::TempDir, ContentServer, Vec<u8>, String) {
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", id).unwrap();
     prefs.set("background_service_enabled", true).unwrap();
-    let (kp, _pk) = plain_rs::crypto::ed25519_generate();
+    let (kp, _pk) = plain_rs::libs::crypto::ed25519_generate();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::utils::base64::base64_encode(&kp),
+            plain_rs::libs::utils::base64::base64_encode(&kp),
         )
         .unwrap();
-    let token = plain_rs::utils::base64::base64_encode(&[3; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[3; 32]);
     let server = ContentServer::start(dir.path(), &token, prefs).unwrap();
     (dir, server, kp.to_vec(), token)
 }
 fn peer(id: &str, port: u16, pk: &[u8], ip: &str) -> DPeer {
     let mut row = DPeer::new(id, id, ip, Some(port), DeviceType::Phone);
     row.status = PeerStatus::Paired;
-    row.key = plain_rs::utils::base64::base64_encode(&[7; 32]);
-    row.public_key = plain_rs::utils::base64::base64_encode(pk);
+    row.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
+    row.public_key = plain_rs::libs::utils::base64::base64_encode(pk);
     row
 }
 async fn public(server: &ContentServer) -> u16 {
@@ -123,7 +124,7 @@ async fn aware_host_only_moves_raw_socket_bytes_rust_performs_tls_crypto_and_gra
                         .await;
                         let value = match n {
                             Ok(Ok(n)) => {
-                                json!({"eof":n==0,"bytes":plain_rs::utils::base64::base64_encode(&bytes[..n])})
+                                json!({"eof":n==0,"bytes":plain_rs::libs::utils::base64::base64_encode(&bytes[..n])})
                             }
                             _ => json!({"eof":false,"bytes":null}),
                         };
@@ -132,7 +133,7 @@ async fn aware_host_only_moves_raw_socket_bytes_rust_performs_tls_crypto_and_gra
                     });
                 }
                 "peerTransportSocketWrite" => {
-                    let bytes = plain_rs::utils::base64::base64_decode(
+                    let bytes = plain_rs::libs::utils::base64::base64_decode(
                         request["params"]["bytes"].as_str().unwrap(),
                     );
                     sockets[&token]
@@ -160,12 +161,18 @@ async fn aware_host_only_moves_raw_socket_bytes_rust_performs_tls_crypto_and_gra
             }
         }
     });
-    let wire =
-        plain_rs::transport::contract::signed_request(&kp, "query { __typename }", json!({}), "")
-            .unwrap();
+    let wire = plain_rs::libs::transport::contract::signed_request(
+        &kp,
+        "query { __typename }",
+        json!({}),
+        "",
+    )
+    .unwrap();
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        plain_rs::services::peers::peer_sdk::aware_send(&state, &remote, "", &[7; 32], &wire),
+        plain_rs::features::services::peers::peer_sdk::aware_send(
+            &state, &remote, "", &[7; 32], &wire,
+        ),
     )
     .await
     .unwrap()
@@ -187,23 +194,23 @@ async fn aware_host_only_moves_raw_socket_bytes_rust_performs_tls_crypto_and_gra
 async fn ble_incoming_file_uses_root_encrypted_fid_and_eof_without_native_http_bridge() {
     let (dir, server, _, _token) = root("local");
     let state = server.runtime_state();
-    let imported = plain_rs::chat::attachments::app_file_store::import_bytes(
+    let imported = plain_rs::features::chat::attachments::app_file_store::import_bytes(
         &state.db,
         dir.path(),
         b"actual bytes",
         "text/plain",
     )
     .unwrap();
-    let encrypted = plain_rs::chat::messages::content::make_file_id(
+    let encrypted = plain_rs::features::chat::messages::content::make_file_id(
         &format!("fid:{}", imported.fid_suffix),
-        &plain_rs::prefs::ensure_url_token(&state.prefs),
+        &plain_rs::features::prefs::ensure_url_token(&state.prefs),
     );
     for (offset, length, expected) in [
         (0, 6, b"actual".as_slice()),
         (6, 8192, b" bytes".as_slice()),
         (12, 8192, b"".as_slice()),
     ] {
-        let request = plain_rs::protocols::ble::Request::FileChunk {
+        let request = plain_rs::libs::protocols::ble::Request::FileChunk {
             client_id: "peer".into(),
             file_id: encrypted.clone(),
             offset,
@@ -214,7 +221,7 @@ async fn ble_incoming_file_uses_root_encrypted_fid_and_eof_without_native_http_b
         let bytes = crate::http::ble::dispatch(state.clone(), &request)
             .await
             .unwrap();
-        let (status, body) = plain_rs::protocols::ble::decode_response(&bytes).unwrap();
+        let (status, body) = plain_rs::libs::protocols::ble::decode_response(&bytes).unwrap();
         assert_eq!(status, 200);
         assert_eq!(body, expected);
     }

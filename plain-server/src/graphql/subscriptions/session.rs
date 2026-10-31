@@ -4,10 +4,10 @@ use crate::graphql::executor::RequestContext;
 use crate::graphql::executor::RequestOrigin;
 use crate::server::ServerState;
 use futures_util::StreamExt;
-use plain_rs::host::request_scope::NativeRequestScope;
-use plain_rs::protocols::graphql::events::EventSpec;
-use plain_rs::protocols::graphql::messages::ClientMessage;
-use plain_rs::protocols::graphql::messages::ServerMessage;
+use plain_rs::libs::host::request_scope::NativeRequestScope;
+use plain_rs::libs::protocols::graphql::events::EventSpec;
+use plain_rs::libs::protocols::graphql::messages::ClientMessage;
+use plain_rs::libs::protocols::graphql::messages::ServerMessage;
 use std::{
     collections::HashMap,
     sync::{
@@ -60,7 +60,7 @@ fn next_id() -> Result<u64, String> {
 #[derive(Clone)]
 pub enum SubscriptionSession {
     Local(Arc<Session>),
-    Peer(Arc<plain_rs::services::peers::subscriptions::PeerSubscription>),
+    Peer(Arc<plain_rs::features::services::peers::subscriptions::PeerSubscription>),
 }
 impl SubscriptionSession {
     pub fn send(&self, message: &str) -> Result<(), String> {
@@ -142,11 +142,11 @@ impl Sessions {
     pub(crate) fn open_peer(
         self: &Arc<Self>,
         state: ServerState,
-        target: plain_rs::protocols::graphql::PeerSubscriptionTarget,
+        target: plain_rs::libs::protocols::graphql::PeerSubscriptionTarget,
         scope: NativeRequestScope,
     ) -> Result<u64, String> {
         let id = next_id()?;
-        let session = plain_rs::services::peers::subscriptions::PeerSubscription::open(
+        let session = plain_rs::features::services::peers::subscriptions::PeerSubscription::open(
             state.core, target, scope,
         )?;
         let mut entries = self.entries.lock().map_err(|error| error.to_string())?;
@@ -189,7 +189,7 @@ impl Sessions {
     }
     pub(crate) fn notify_snapshot(
         &self,
-        host: &plain_rs::host::bridge::Host,
+        host: &plain_rs::libs::host::bridge::Host,
     ) -> Result<(), String> {
         let _delivery = self.host_delivery.lock().unwrap();
         host.notify(
@@ -293,9 +293,9 @@ impl Session {
         if !self.state.prefs.get_or("desktop_access", true) {
             return false;
         }
-        let current =
-            plain_rs::services::sessions::local_key(&self.state, &self.client).or_else(|| {
-                plain_rs::services::sessions::key(&self.state.db, &self.client)
+        let current = plain_rs::features::services::sessions::local_key(&self.state, &self.client)
+            .or_else(|| {
+                plain_rs::features::services::sessions::key(&self.state.db, &self.client)
                     .ok()
                     .flatten()
             });

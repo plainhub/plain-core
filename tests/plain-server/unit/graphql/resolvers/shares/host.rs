@@ -6,10 +6,11 @@ use std::sync::Arc;
 #[tokio::test]
 async fn main_share_content_uses_saved_roots_identity_and_live_port() {
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let server = ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[7; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap();
@@ -37,7 +38,7 @@ async fn main_share_content_uses_saved_roots_identity_and_live_port() {
     assert_eq!(message["value"]["shareId"], id);
     assert_eq!(
         message["value"]["urlToken"],
-        plain_rs::files::shares::Service::new(
+        plain_rs::features::files::shares::Service::new(
             server.runtime_state().db.clone(),
             server.runtime_state().prefs.clone()
         )
@@ -65,8 +66,10 @@ async fn main_folder_share_and_batch_chat_use_shared_services_without_host_calls
     let directory = tempfile::tempdir().unwrap();
     let server = ContentServer::start(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[7; 32]),
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap()),
+        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
+        Arc::new(
+            plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+        ),
     )
     .unwrap();
     let shared = directory.path().join("shared");

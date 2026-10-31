@@ -1,12 +1,12 @@
 use crate::graphql::types::ActionResult;
 use async_graphql::{Context, Enum, Object, SimpleObject};
-use plain_rs::db::DChat;
-use plain_rs::db::Db;
-use plain_rs::types::Instant;
+use plain_rs::libs::db::DChat;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::types::Instant;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-pub use plain_rs::chat::enums::ChatStatus;
+pub use plain_rs::features::chat::enums::ChatStatus;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ChatChannelStatus {
@@ -51,7 +51,7 @@ pub struct ChatChannel {
     pub members: Vec<ChatChannelMember>,
     /// Monotonically increasing mutation counter; receivers ignore channel
     /// updates whose version is not greater than their local copy.
-    pub version: plain_rs::types::Long,
+    pub version: plain_rs::libs::types::Long,
     pub status: ChatChannelStatus,
     #[graphql(name = "createdAt")]
     pub created_at: Instant,
@@ -65,9 +65,10 @@ impl ChatChannel {
     async fn key(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         let db = db(ctx)?.clone();
         let id = self.id.clone();
-        let row =
-            tokio::task::spawn_blocking(move || plain_rs::db::chat_store::channels::get(&db, &id))
-                .await??;
+        let row = tokio::task::spawn_blocking(move || {
+            plain_rs::libs::db::chat_store::channels::get(&db, &id)
+        })
+        .await??;
         Ok(row
             .ok_or_else(|| async_graphql::Error::new("Chat channel no longer exists"))?
             .key)
@@ -125,7 +126,9 @@ impl ChatQuery {
         let text = text_of(&query);
         let rows = db(ctx)?.get_chats_page(&target, &text, offset, limit);
         if let Some(state) = ctx.data_opt::<crate::server::ServerState>() {
-            plain_rs::services::chat::prewarm::prepare_page(state, &target, &text, offset, limit);
+            plain_rs::features::services::chat::prewarm::prepare_page(
+                state, &target, &text, offset, limit,
+            );
         }
         Ok(rows.iter().map(item).collect())
     }
@@ -136,14 +139,14 @@ impl ChatQuery {
         id: async_graphql::ID,
     ) -> async_graphql::Result<Option<ChatItem>> {
         Ok(
-            plain_rs::db::chat_store::messages::get(db(ctx)?, id.as_str())?
+            plain_rs::libs::db::chat_store::messages::get(db(ctx)?, id.as_str())?
                 .as_ref()
                 .map(item),
         )
     }
 
     async fn chat_channels(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ChatChannel>> {
-        let facts = plain_rs::chat::events::public_channels(db(ctx)?, &actor(ctx)?)?;
+        let facts = plain_rs::features::chat::events::public_channels(db(ctx)?, &actor(ctx)?)?;
         Ok(rows(&facts, channel))
     }
 }
@@ -164,7 +167,7 @@ impl ChatMutation {
         target: String,
         content: String,
     ) -> async_graphql::Result<Vec<ChatItem>> {
-        let row = plain_rs::services::chat::chat_actions::send(
+        let row = plain_rs::features::services::chat::chat_actions::send(
             ctx.data::<crate::server::ServerState>()?,
             &target,
             &content,
@@ -180,7 +183,7 @@ impl ChatMutation {
         ctx: &Context<'_>,
         id: async_graphql::ID,
     ) -> async_graphql::Result<bool> {
-        plain_rs::services::chat::chat_actions::delete(
+        plain_rs::features::services::chat::chat_actions::delete(
             ctx.data::<crate::server::ServerState>()?,
             vec![id.to_string()],
         )?;
@@ -192,7 +195,7 @@ impl ChatMutation {
         ctx: &Context<'_>,
         query: String,
     ) -> async_graphql::Result<ActionResult> {
-        let count = plain_rs::services::chat::chat_actions::delete_query(
+        let count = plain_rs::features::services::chat::chat_actions::delete_query(
             ctx.data::<crate::server::ServerState>()?,
             &query,
         )?;
@@ -206,7 +209,7 @@ impl ChatMutation {
         ctx: &Context<'_>,
         id: async_graphql::ID,
     ) -> async_graphql::Result<ChatItem> {
-        let row = plain_rs::services::chat::chat_actions::retry(
+        let row = plain_rs::features::services::chat::chat_actions::retry(
             ctx.data::<crate::server::ServerState>()?,
             id.to_string(),
         )
@@ -314,13 +317,13 @@ async fn action(
         params.insert((*key).to_string(), value.clone());
     }
     let request = serde_json::from_value(Value::Object(params))?;
-    let result = plain_rs::services::chat::channel_runtime::execute(
+    let result = plain_rs::features::services::chat::channel_runtime::execute(
         ctx.data::<crate::server::ServerState>()?,
         request,
     )
     .await?;
-    let row: plain_rs::db::DChannel = serde_json::from_value(result["channel"].clone())?;
-    Ok(channel(&plain_rs::chat::events::channel_to_json(
+    let row: plain_rs::libs::db::DChannel = serde_json::from_value(result["channel"].clone())?;
+    Ok(channel(&plain_rs::features::chat::events::channel_to_json(
         &row,
         &actor(ctx)?,
     )))
@@ -340,7 +343,7 @@ async fn flag(
         params.insert((*key).to_string(), value.clone());
     }
     let request = serde_json::from_value(Value::Object(params))?;
-    plain_rs::services::chat::channel_runtime::execute(
+    plain_rs::features::services::chat::channel_runtime::execute(
         ctx.data::<crate::server::ServerState>()?,
         request,
     )
@@ -349,7 +352,7 @@ async fn flag(
 }
 
 pub(crate) fn item(row: &DChat) -> ChatItem {
-    from_json(&plain_rs::chat::service::chat_to_json(row))
+    from_json(&plain_rs::features::chat::service::chat_to_json(row))
 }
 
 fn from_json(value: &Value) -> ChatItem {
@@ -395,7 +398,9 @@ fn channel(value: &Value) -> ChatChannel {
                 _ => ChannelMemberStatus::Joined,
             },
         }),
-        version: plain_rs::types::Long(crate::graphql::types::facts::integer(value, "version")),
+        version: plain_rs::libs::types::Long(crate::graphql::types::facts::integer(
+            value, "version",
+        )),
         status: match crate::graphql::types::facts::text(value, "status").as_str() {
             "LEFT" => ChatChannelStatus::Left,
             "KICKED" => ChatChannelStatus::Kicked,
@@ -411,7 +416,7 @@ fn channel(value: &Value) -> ChatChannel {
 }
 
 fn text_of(query: &str) -> String {
-    plain_rs::utils::search_dsl::parse(query)
+    plain_rs::libs::utils::search_dsl::parse(query)
         .into_iter()
         .find(|field| field.name == "text")
         .map(|field| field.value)
@@ -431,8 +436,8 @@ fn db<'a>(ctx: &'a Context<'_>) -> async_graphql::Result<&'a Arc<Db>> {
 mod tests;
 
 fn actor(ctx: &Context<'_>) -> async_graphql::Result<String> {
-    ctx.data::<Arc<plain_rs::prefs::Prefs>>()?
-        .get::<String>(plain_rs::prefs::pref_keys::CLIENT_ID)?
+    ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?
+        .get::<String>(plain_rs::features::prefs::pref_keys::CLIENT_ID)?
         .filter(|actor| !actor.is_empty())
         .ok_or_else(|| async_graphql::Error::new("Missing client identity"))
 }

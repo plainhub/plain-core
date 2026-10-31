@@ -1,6 +1,6 @@
 use super::NativeUploads;
-use plain_rs::host::request_scope::NativeRequestScope;
-use plain_rs::services::files::upload_chunks::UploadChunk;
+use plain_rs::features::services::files::upload_chunks::UploadChunk;
+use plain_rs::libs::host::request_scope::NativeRequestScope;
 use std::{
     collections::HashMap,
     sync::{

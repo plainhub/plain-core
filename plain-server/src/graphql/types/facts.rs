@@ -7,8 +7,8 @@
 //! platform could not fill in.
 
 use async_graphql::{Context, ID};
-use plain_rs::host::bridge::Host;
-use plain_rs::types::Instant;
+use plain_rs::libs::host::bridge::Host;
+use plain_rs::libs::types::Instant;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -28,12 +28,12 @@ pub(crate) async fn host_json(
 
 pub(crate) async fn provider_params(
     ctx: &Context<'_>,
-    provider: plain_rs::services::files::provider_query::Provider,
+    provider: plain_rs::features::services::files::provider_query::Provider,
     query: &str,
     params: Value,
 ) -> async_graphql::Result<Value> {
-    plain_rs::services::files::provider_query::params(
-        ctx.data_unchecked::<Arc<plain_rs::db::Db>>(),
+    plain_rs::features::services::files::provider_query::params(
+        ctx.data_unchecked::<Arc<plain_rs::libs::db::Db>>(),
         provider,
         query,
         params,

@@ -59,7 +59,7 @@ async fn get_from(
     path: &str,
 ) -> Option<Response> {
     let dir = tempfile::tempdir().unwrap();
-    let prefs = plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap();
+    let prefs = plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap();
     serve(&prefs, root, bundle, &Method::GET, path).await
 }
 
@@ -168,7 +168,7 @@ async fn a_rejected_path_is_not_served_as_a_client_route() {
 async fn the_access_switch_and_the_method_gate_every_asset() {
     let bundle = bundle();
     let dir = tempfile::tempdir().unwrap();
-    let prefs = plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap();
+    let prefs = plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap();
     prefs
         .set("desktop_access", serde_json::json!(false))
         .unwrap();

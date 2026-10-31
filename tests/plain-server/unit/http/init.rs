@@ -33,14 +33,14 @@ async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_re
     let id = state.native_client_id().unwrap();
     assert!(state.db.session_get(&id).unwrap().is_none());
     state.prefs.set("password", "existing-password").unwrap();
-    let key = plain_rs::utils::base64::base64_decode(&core.native_url_token().unwrap());
+    let key = plain_rs::libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
     let mut headers = HeaderMap::new();
     headers.insert("c-id", id.parse().unwrap());
     let response = init(
         State(state.clone()),
         ConnectInfo("127.0.0.1:1234".parse().unwrap()),
         headers,
-        Bytes::from(plain_rs::crypto::xchacha_encrypt_raw(&key, b"init").unwrap()),
+        Bytes::from(plain_rs::libs::crypto::xchacha_encrypt_raw(&key, b"init").unwrap()),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -69,14 +69,14 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state.prefs.set("password", "preserved-password").unwrap();
-    plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     for mode in ["FIXED", "NONE"] {
         state.prefs.set("password_type", mode).unwrap();
         let before = std::fs::read(directory.path().join("prefs.json")).unwrap();
         let mut events = state.events.subscribe();
         for body in [
             vec![],
-            plain_rs::crypto::xchacha_encrypt_raw(&[9; 32], b"stale-token-probe").unwrap(),
+            plain_rs::libs::crypto::xchacha_encrypt_raw(&[9; 32], b"stale-token-probe").unwrap(),
         ] {
             let mut headers = HeaderMap::new();
             headers.insert("c-id", "browser".parse().unwrap());
@@ -101,7 +101,7 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
             assert!(
                 !payload
                     .to_string()
-                    .contains(&plain_rs::crypto::sha512_hex("preserved-password"))
+                    .contains(&plain_rs::libs::crypto::sha512_hex("preserved-password"))
             );
         }
         assert_eq!(

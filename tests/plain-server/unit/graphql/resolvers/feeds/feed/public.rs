@@ -1,9 +1,9 @@
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use async_graphql::Request;
-use plain_rs::db::Db;
-use plain_rs::db::notes_feeds::FeedEntryRow;
-use plain_rs::host::bridge::Host;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::db::notes_feeds::FeedEntryRow;
+use plain_rs::libs::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 

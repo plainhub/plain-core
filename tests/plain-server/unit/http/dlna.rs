@@ -6,19 +6,20 @@ const TOKEN: &str = "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=";
 #[cfg(feature = "http_transport")]
 fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let dir = tempfile::tempdir().unwrap();
-    let prefs =
-        std::sync::Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    let (key, _public) = plain_rs::crypto::ed25519_generate();
+    let prefs = std::sync::Arc::new(
+        plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap(),
+    );
+    let (key, _public) = plain_rs::libs::crypto::ed25519_generate();
     prefs.set("client_id", "actor").unwrap();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::utils::base64::base64_encode(&key),
+            plain_rs::libs::utils::base64::base64_encode(&key),
         )
         .unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[3; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -39,7 +40,7 @@ fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     });
     assert_eq!(
         TOKEN,
-        plain_rs::utils::base64::base64_encode(&[3; 32]),
+        plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         "token literal drifted"
     );
     (dir, server)
@@ -63,7 +64,9 @@ async fn public_fixture() -> (tempfile::TempDir, crate::server::ContentServer, u
 
 #[test]
 fn snapshot_omits_the_internal_pending_slot() {
-    let state = plain_rs::services::casting::receiver::renderer_state::DlnaRendererState::default();
+    let state =
+        plain_rs::features::services::casting::receiver::renderer_state::DlnaRendererState::default(
+        );
     let row = snapshot(&state);
     // The UI only ever needs the confirmed request; `raw_pending_cast_request`
     // is the rules input and must not leak into the host surface.
@@ -168,7 +171,12 @@ async fn a_forged_c_ip_header_cannot_impersonate_an_allowed_sender() {
     state.prefs.set("background_service_enabled", true).unwrap();
     state.prefs.set("dlna", true).unwrap();
     // 10.0.0.9 is "trusted"; the request below actually arrives from loopback.
-    plain_rs::prefs::dlna::add_sender(&state.prefs, "dlna_allowed_senders", "10.0.0.9", "TV");
+    plain_rs::features::prefs::dlna::add_sender(
+        &state.prefs,
+        "dlna_allowed_senders",
+        "10.0.0.9",
+        "TV",
+    );
 
     let soap = r#"<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:SetAVTransportURI xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID><CurrentURI>http://example/a.mp4</CurrentURI><CurrentURIMetaData/></u:SetAVTransportURI></s:Body></s:Envelope>"#;
     let status = client
@@ -240,12 +248,13 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     // Seed a pending request, then let the host accept it and remember the
     // sender — the same two-step the cast dialog performs.
     state.dlna.state.write().await.pending_cast_request = Some(
-        plain_rs::services::casting::receiver::types::PendingCastRequest {
+        plain_rs::features::services::casting::receiver::types::PendingCastRequest {
             sender_ip: "10.0.0.9".into(),
             sender_name: "TV".into(),
             media_uri: "http://example/a.mp4".into(),
             media_title: "a".into(),
-            media_type: plain_rs::services::casting::receiver::types::DlnaMediaType::VIDEO,
+            media_type:
+                plain_rs::features::services::casting::receiver::types::DlnaMediaType::VIDEO,
             album_art_uri: String::new(),
         },
     );
@@ -255,19 +264,20 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     let row: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(row["result"]["pendingCastRequest"], Value::Null);
     assert_eq!(row["result"]["mediaUri"], json!("http://example/a.mp4"));
-    assert!(plain_rs::prefs::dlna::senders_contain_ip(
-        &plain_rs::prefs::dlna::senders(&state.prefs, "dlna_allowed_senders"),
+    assert!(plain_rs::features::prefs::dlna::senders_contain_ip(
+        &plain_rs::features::prefs::dlna::senders(&state.prefs, "dlna_allowed_senders"),
         "10.0.0.9"
     ));
 
     // A rejected request lands the opposite way.
     state.dlna.state.write().await.pending_cast_request = Some(
-        plain_rs::services::casting::receiver::types::PendingCastRequest {
+        plain_rs::features::services::casting::receiver::types::PendingCastRequest {
             sender_ip: "10.0.0.8".into(),
             sender_name: "Other".into(),
             media_uri: "http://example/b.mp4".into(),
             media_title: "b".into(),
-            media_type: plain_rs::services::casting::receiver::types::DlnaMediaType::AUDIO,
+            media_type:
+                plain_rs::features::services::casting::receiver::types::DlnaMediaType::AUDIO,
             album_art_uri: String::new(),
         },
     );
@@ -276,8 +286,8 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     let row: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(row["result"]["pendingCastRequest"], Value::Null);
     assert_ne!(row["result"]["mediaUri"], json!("http://example/b.mp4"));
-    assert!(plain_rs::prefs::dlna::senders_contain_ip(
-        &plain_rs::prefs::dlna::senders(&state.prefs, "dlna_denied_senders"),
+    assert!(plain_rs::features::prefs::dlna::senders_contain_ip(
+        &plain_rs::features::prefs::dlna::senders(&state.prefs, "dlna_denied_senders"),
         "10.0.0.8"
     ));
 
@@ -449,7 +459,7 @@ async fn receiver_name_uses_the_native_default_and_current_core_setting_without_
     let (_generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     assert_eq!(
         device_name(&state).await.unwrap(),
-        plain_rs::prefs::identity::default_device_name()
+        plain_rs::features::prefs::identity::default_device_name()
     );
     state.prefs.set("device_name", "Shared Renderer").unwrap();
     assert_eq!(device_name(&state).await.unwrap(), "Shared Renderer");
@@ -481,10 +491,10 @@ impl MainDlnaClient {
             if let Some(error) = response.errors.first() {
                 return Err(error.message.clone());
             }
-            let mut value = plain_rs::services::casting::receiver::control::snapshot(
+            let mut value = plain_rs::features::services::casting::receiver::control::snapshot(
                 &self.1.dlna.snapshot().await,
             );
-            value["enabled"] = json!(plain_rs::prefs::dlna::enabled(&self.1.prefs));
+            value["enabled"] = json!(plain_rs::features::prefs::dlna::enabled(&self.1.prefs));
             return serde_json::to_string(&value).map_err(|error| error.to_string());
         }
         let report_kind = match action.as_str() {
@@ -502,7 +512,7 @@ impl MainDlnaClient {
                 input["positionMs"] = json!(renderer.seek_target_ms.unwrap());
             }
             drop(renderer);
-            plain_rs::services::casting::receiver::reports::accept(
+            plain_rs::features::services::casting::receiver::reports::accept(
                 &self.1,
                 self.1.host.generation().unwrap(),
                 kind,
@@ -510,13 +520,13 @@ impl MainDlnaClient {
             )
             .await?;
             return serde_json::to_string(
-                &plain_rs::services::casting::receiver::control::snapshot(
+                &plain_rs::features::services::casting::receiver::control::snapshot(
                     &self.1.dlna.snapshot().await,
                 ),
             )
             .map_err(|error| error.to_string());
         }
-        use plain_rs::services::casting::receiver::control::Request;
+        use plain_rs::features::services::casting::receiver::control::Request;
         let request: Request = serde_json::from_value(input).map_err(|error| error.to_string())?;
         let management = crate::native::management::NativeManagement::new(self.1.clone());
         let result = match request {

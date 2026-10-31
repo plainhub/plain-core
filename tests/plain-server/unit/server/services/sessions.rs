@@ -5,30 +5,31 @@ use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
 };
-use plain_rs::services::sessions::*;
+use plain_rs::features::services::sessions::*;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
 
 fn fixture() -> (tempfile::TempDir, ContentServer) {
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("background_service_enabled", true).unwrap();
     prefs.set("desktop_access", true).unwrap();
     prefs.set("login_require_approval", false).unwrap();
     prefs.set("password", "secret").unwrap();
     prefs.set("password_type", "FIXED").unwrap();
     prefs.set("client_id", "phone").unwrap();
-    let (private, _public) = plain_rs::crypto::ed25519_generate();
+    let (private, _public) = plain_rs::libs::crypto::ed25519_generate();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::utils::base64::base64_encode(&private),
+            plain_rs::libs::utils::base64::base64_encode(&private),
         )
         .unwrap();
     let server = ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[3; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -37,17 +38,20 @@ fn fixture() -> (tempfile::TempDir, ContentServer) {
 
 fn offer(
     state: &ServerState,
-    client: &plain_rs::crypto::EcdhSession,
+    client: &plain_rs::libs::crypto::EcdhSession,
     peer: Value,
 ) -> (
     ws_login::Request,
-    plain_rs::services::confirmation_channel::Channel,
+    plain_rs::features::services::confirmation_channel::Channel,
 ) {
     use sha2::Digest;
-    let digest = plain_rs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
-    use plain_rs::services::confirmation_channel::{Client, ConfirmationMode, ServerHandshake};
+    let digest = plain_rs::libs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
+    use plain_rs::features::services::confirmation_channel::{
+        Client, ConfirmationMode, ServerHandshake,
+    };
     let (login, hello) = Client::start("browser", ConfirmationMode::Password).unwrap();
-    let signing = plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    let signing =
+        plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     let now = chrono::Utc::now().timestamp_millis() as u64;
     let device_id = state.native_client_id().unwrap();
     let (server, response) = ServerHandshake::start(
@@ -62,14 +66,14 @@ fn offer(
     let (keys, reveal) = login
         .accept(
             &response,
-            &plain_rs::utils::base64::base64_encode(&signing[32..]),
+            &plain_rs::libs::utils::base64::base64_encode(&signing[32..]),
             &device_id,
             now,
         )
         .unwrap();
     let channel = server.finish(&reveal, now).unwrap();
-    let request = json!({"password":digest,"loginContext":keys.context,"browserName":"Test","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::utils::base64::base64_encode(&client.public_key_bytes),"peer":peer});
-    let frame = plain_rs::crypto::xchacha_encrypt_raw(
+    let request = json!({"password":digest,"loginContext":keys.context,"browserName":"Test","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::libs::utils::base64::base64_encode(&client.public_key_bytes),"peer":peer});
+    let frame = plain_rs::libs::crypto::xchacha_encrypt_raw(
         &digest.as_bytes()[..32],
         &serde_json::to_vec(&request).unwrap(),
     )
@@ -79,7 +83,7 @@ fn offer(
         ws_login::Request::Issue {
             client_id: "browser".into(),
             client_ip: "192.0.2.1".into(),
-            frame: plain_rs::utils::base64::base64_encode(&frame),
+            frame: plain_rs::libs::utils::base64::base64_encode(&frame),
             channel,
         },
         keys,
@@ -90,40 +94,42 @@ fn offer(
 async fn web_login_ecdh_encrypted_response_signature_and_token_auth_survive_restart() {
     let (dir, server) = fixture();
     let state = server.runtime_state();
-    let client = plain_rs::crypto::EcdhSession::generate();
+    let client = plain_rs::libs::crypto::EcdhSession::generate();
     let (request, keys) = offer(&state, &client, Value::Null);
     let issued = ws_login::execute(&state, request).await.unwrap();
     assert_eq!(issued["status"], "COMPLETED");
     let shared = client
-        .compute_shared_key(&plain_rs::utils::base64::base64_decode(
+        .compute_shared_key(&plain_rs::libs::utils::base64::base64_decode(
             issued["response"]["ecdhPublicKey"].as_str().unwrap(),
         ))
         .unwrap();
     assert_eq!(
-        plain_rs::utils::base64::base64_encode(&shared),
+        plain_rs::libs::utils::base64::base64_encode(&shared),
         issued["token"]
     );
     let row = state.db.session_get("browser").unwrap().unwrap();
     assert_eq!(row.r#type, "WEB");
     assert_eq!(
-        plain_rs::db::Db::open(&plain_rs::data_paths::DataPaths::new(dir.path()).database())
-            .unwrap()
-            .session_get("browser")
-            .unwrap()
-            .unwrap()
-            .token,
+        plain_rs::libs::db::Db::open(
+            &plain_rs::libs::data_paths::DataPaths::new(dir.path()).database()
+        )
+        .unwrap()
+        .session_get("browser")
+        .unwrap()
+        .unwrap()
+        .token,
         row.token
     );
     use sha2::Digest;
-    let digest = plain_rs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
+    let digest = plain_rs::libs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
     let encrypted = keys
         .decrypt_response(
-            &plain_rs::utils::base64::base64_decode(issued["frame"].as_str().unwrap()),
+            &plain_rs::libs::utils::base64::base64_decode(issued["frame"].as_str().unwrap()),
             chrono::Utc::now().timestamp_millis() as u64,
         )
         .unwrap();
     let decrypted =
-        plain_rs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &encrypted).unwrap();
+        plain_rs::libs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &encrypted).unwrap();
     assert_eq!(
         serde_json::from_slice::<Value>(&decrypted).unwrap(),
         issued["response"]
@@ -135,9 +141,9 @@ async fn web_login_ecdh_encrypted_response_signature_and_token_auth_survive_rest
         response["timestamp"].as_u64().unwrap(),
         keys.context,
     );
-    let pair = plain_rs::prefs::security::signing_keypair(&state.prefs).unwrap();
-    assert!(plain_rs::crypto::ed25519_verify(
-        &plain_rs::base64_encode(&pair[32..]),
+    let pair = plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
+    assert!(plain_rs::libs::crypto::ed25519_verify(
+        &plain_rs::libs::utils::base64::base64_encode(&pair[32..]),
         material.as_bytes(),
         response["signature"].as_str().unwrap()
     ));
@@ -148,8 +154,9 @@ async fn web_login_ecdh_encrypted_response_signature_and_token_auth_survive_rest
         chrono::Utc::now().timestamp_millis(),
         uuid::Uuid::new_v4()
     );
-    let encrypted = plain_rs::crypto::xchacha_encrypt_raw(&shared, plaintext.as_bytes()).unwrap();
-    let context = plain_rs::transport::http_response::Context::new("/graphql", &encrypted);
+    let encrypted =
+        plain_rs::libs::crypto::xchacha_encrypt_raw(&shared, plaintext.as_bytes()).unwrap();
+    let context = plain_rs::libs::transport::http_response::Context::new("/graphql", &encrypted);
     let response = graphql::call(
         State(state.clone()),
         headers.clone(),
@@ -179,7 +186,7 @@ async fn confirmation_is_once_only_and_cancel_or_revoke_prevents_issuance() {
     let (_dir, server) = fixture();
     let state = server.runtime_state();
     state.prefs.set("login_require_approval", true).unwrap();
-    let client = plain_rs::crypto::EcdhSession::generate();
+    let client = plain_rs::libs::crypto::EcdhSession::generate();
     let pending = ws_login::execute(&state, offer(&state, &client, Value::Null).0)
         .await
         .unwrap();
@@ -231,7 +238,10 @@ async fn native_management_public_auth_and_revoke_share_one_database_without_hos
     let created = serde_json::to_value(create(&state, "API".into()).unwrap()).unwrap();
     let id = created["client_id"].as_str().unwrap();
     let token = created["token"].as_str().unwrap();
-    assert_eq!(plain_rs::utils::base64::base64_decode(token).len(), 32);
+    assert_eq!(
+        plain_rs::libs::utils::base64::base64_decode(token).len(),
+        32
+    );
     let mut headers = HeaderMap::new();
     headers.insert("c-id", id.parse().unwrap());
     headers.insert("authorization", format!("Bearer {token}").parse().unwrap());
@@ -252,9 +262,10 @@ async fn native_management_public_auth_and_revoke_share_one_database_without_hos
             .is_some()
     );
     assert!(rename(&state, id, "Renamed").unwrap());
-    let reopened =
-        plain_rs::db::Db::open(&plain_rs::data_paths::DataPaths::new(dir.path()).database())
-            .unwrap();
+    let reopened = plain_rs::libs::db::Db::open(
+        &plain_rs::libs::data_paths::DataPaths::new(dir.path()).database(),
+    )
+    .unwrap();
     assert_eq!(reopened.session_get(id).unwrap().unwrap().name, "Renamed");
     let mut wrong = headers.clone();
     wrong.insert("authorization", "Bearer wrong".parse().unwrap());
@@ -282,9 +293,9 @@ async fn native_management_public_auth_and_revoke_share_one_database_without_hos
 async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords() {
     let (_dir, server) = fixture();
     let state = server.runtime_state();
-    let client = plain_rs::crypto::EcdhSession::generate();
-    let (_, public) = plain_rs::crypto::ed25519_generate();
-    let peer = json!({"port":8443,"signaturePublicKey":plain_rs::utils::base64::base64_encode(&public),"deviceName":"Desktop","deviceType":"COMPUTER","ips":["192.0.2.1"]});
+    let client = plain_rs::libs::crypto::EcdhSession::generate();
+    let (_, public) = plain_rs::libs::crypto::ed25519_generate();
+    let peer = json!({"port":8443,"signaturePublicKey":plain_rs::libs::utils::base64::base64_encode(&public),"deviceName":"Desktop","deviceType":"COMPUTER","ips":["192.0.2.1"]});
     let pending = ws_login::execute(&state, offer(&state, &client, peer).0)
         .await
         .unwrap();
@@ -306,13 +317,14 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
     let expected = sha2::Sha256::digest(
         [
             b"plain-chat-pairing-v1".as_slice(),
-            plain_rs::utils::base64::base64_decode(issued["token"].as_str().unwrap()).as_slice(),
+            plain_rs::libs::utils::base64::base64_decode(issued["token"].as_str().unwrap())
+                .as_slice(),
         ]
         .concat(),
     );
     assert_eq!(
         paired.key,
-        plain_rs::utils::base64::base64_encode(&expected)
+        plain_rs::libs::utils::base64::base64_encode(&expected)
     );
     assert_eq!(paired.name, "Desktop");
     let token = key(&state.db, "browser").unwrap().unwrap();
@@ -322,7 +334,9 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
         State(state.clone()),
         axum::extract::ConnectInfo("127.0.0.1:1".parse().unwrap()),
         headers.clone(),
-        axum::body::Bytes::from(plain_rs::crypto::xchacha_encrypt_raw(&token, b"init").unwrap()),
+        axum::body::Bytes::from(
+            plain_rs::libs::crypto::xchacha_encrypt_raw(&token, b"init").unwrap(),
+        ),
     )
     .await;
     let response: Value = serde_json::from_slice(
@@ -358,24 +372,24 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_available() {
-    use plain_rs::db::chat_store::{SaveMode, channels, peers};
+    use plain_rs::libs::db::chat_store::{SaveMode, channels, peers};
     let (_dir, server) = fixture();
     let state = server.runtime_state();
     let session = create(&state, "Remote".into()).unwrap();
     state.prefs.set("url_token", "resource-token").unwrap();
     state.prefs.set("adb_token", "adb-secret").unwrap();
     state.prefs.set("dev_token", "dev-secret").unwrap();
-    let mut peer = plain_rs::db::DPeer::new(
+    let mut peer = plain_rs::libs::db::DPeer::new(
         "peer",
         "Peer",
         "192.0.2.2",
         Some(8080),
-        plain_rs::chat::enums::DeviceType::Tablet,
+        plain_rs::features::chat::enums::DeviceType::Tablet,
     );
     peer.key = "peer-secret".into();
     peer.token = "peer-token".into();
     peers::save(&state.db, &[peer], SaveMode::Insert).unwrap();
-    let mut channel = plain_rs::db::DChannel::new("Channel", "peer");
+    let mut channel = plain_rs::libs::db::DChannel::new("Channel", "peer");
     channel.id = "channel".into();
     channel.key = "channel-secret".into();
     channels::save(&state.db, &[channel], SaveMode::Insert).unwrap();

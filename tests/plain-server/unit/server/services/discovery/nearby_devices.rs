@@ -1,17 +1,18 @@
-use plain_rs::db::chat_store;
-use plain_rs::discovery::nearby_devices::Device;
-use plain_rs::services::discovery::nearby_devices::*;
+use plain_rs::features::discovery::nearby_devices::Device;
+use plain_rs::features::services::discovery::nearby_devices::*;
+use plain_rs::libs::db::chat_store;
 use serde_json::json;
 
 #[tokio::test]
 async fn rust_sweep_honors_radio_pause_and_real_tls_verdicts() {
     use std::sync::Arc;
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("client_id", "local").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[3; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -73,14 +74,14 @@ async fn rust_sweep_honors_radio_pause_and_real_tls_verdicts() {
     assert_eq!(state.nearby_devices.snapshot().devices[0].id, "alive");
     assert_eq!(chat_store::nearby::all(&state.db).unwrap().len(), 1);
     assert!(state.nearby_devices.stale(&state.db).unwrap().is_empty());
-    let mut peer = plain_rs::db::DPeer::new(
+    let mut peer = plain_rs::libs::db::DPeer::new(
         "live",
         "old",
         "",
         Some(2443),
-        plain_rs::chat::enums::DeviceType::Phone,
+        plain_rs::features::chat::enums::DeviceType::Phone,
     );
-    peer.status = plain_rs::chat::enums::PeerStatus::Paired;
+    peer.status = plain_rs::features::chat::enums::PeerStatus::Paired;
     peer.key = "preserved-key".into();
     chat_store::peers::save(&state.db, &[peer], chat_store::SaveMode::Insert).unwrap();
     let mut events = state.events.subscribe();
@@ -103,7 +104,7 @@ async fn rust_sweep_honors_radio_pause_and_real_tls_verdicts() {
     let peer_update = events.recv().await.unwrap();
     assert_eq!(
         peer_update.event_type,
-        plain_rs::chat::events::WS_PEER_UPDATED
+        plain_rs::features::chat::events::WS_PEER_UPDATED
     );
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&peer_update.payload).unwrap(),
@@ -114,7 +115,7 @@ async fn rust_sweep_honors_radio_pause_and_real_tls_verdicts() {
     let first = events.recv().await.unwrap();
     assert_eq!(
         first.event_type,
-        plain_rs::chat::events::WS_NEARBY_DEVICE_FOUND
+        plain_rs::features::chat::events::WS_NEARBY_DEVICE_FOUND
     );
     let public: serde_json::Value = serde_json::from_str(&first.payload).unwrap();
     assert_eq!(public["id"], "live");

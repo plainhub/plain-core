@@ -6,22 +6,10 @@ rust-version = "1.99"
 description = "Shared Plain GraphQL, HTTP and native transport adapters"
 
 [features]
-"crypto" = ["plain-rs/crypto"]
-"ble" = ["plain-rs/ble"]
-"ble-native" = ["plain-rs/ble-native"]
-"chat" = ["plain-rs/chat"]
-"library" = ["plain-rs/library"]
-"prefs" = ["plain-rs/prefs"]
-"sqlite_browse" = ["plain-rs/sqlite_browse"]
 "default" = ["core", "http_transport", "media"]
-"media" = ["plain-rs/runtime-media", "library"]
-"media_gql" = ["media", "library", "dep:async-graphql", "plain-rs/graphql"]
-"ai-image-search" = ["plain-rs/runtime"]
+"media" = ["plain-rs/runtime-media"]
 "http_transport" = ["dep:serde_json", "dep:reqwest", "reqwest/rustls-tls", "dep:axum", "dep:axum-server", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
-"api" = ["core"]
-"core" = ["plain-rs/phone", "plain-rs/linux-system", "dep:serde_json", "dep:chrono", "dep:rusqlite", "ble", "crypto", "sqlite_browse", "dep:tower", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:anyhow", "chat", "library", "dep:async-graphql", "dep:axum", "dep:reqwest", "reqwest/rustls-tls", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime", "plain-rs/filesystem", "plain-rs/trash", "plain-rs/html", "plain-rs/feeds", "plain-rs/tls", "plain-rs/graphql", "ai-image-search"]
-"mobile" = ["core"]
-"system" = ["api"]
+"core" = ["dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:anyhow", "dep:async-graphql", "dep:axum", "dep:reqwest", "reqwest/rustls-tls", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
 
 
 [dependencies]

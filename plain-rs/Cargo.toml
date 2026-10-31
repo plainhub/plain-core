@@ -36,14 +36,14 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "storage-platform" = ["dep:anyhow", "dep:sysinfo"]
 "unix-platform" = ["dep:anyhow"]
 "linux-system" = ["dep:anyhow"]
-"linux-platform" = ["linux-system", "prefs", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util"]
+"linux-platform" = ["linux-system", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util"]
 
 "image-metadata" = ["library", "dep:image"]
-"runtime" = ["ble", "graphql","services", "phone", "filesystem", "trash", "html", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros"]
-"runtime-media" = ["runtime", "media", "image-metadata", "dep:notify", "tokio/process"]
+"runtime" = ["ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros"]
+"runtime-media" = ["runtime", "media", "dep:notify", "tokio/process"]
 
 "ai-image-search" = ["dep:tokenizers", "dep:image", "dep:serde_json", "dep:cc"]
-"media" = ["crypto", "library", "image-metadata", "dep:tempfile", "dep:fast_image_resize", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util"]
+"media" = ["image-metadata", "dep:tempfile", "dep:fast_image_resize", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util"]
 
 [dependencies]
 "flate2" = { version = "1", optional = true }

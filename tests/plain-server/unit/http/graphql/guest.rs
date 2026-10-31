@@ -1,7 +1,7 @@
 use super::*;
 use crate::server::ContentServer;
-use plain_rs::files::shares::Service;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::files::shares::Service;
+use plain_rs::features::prefs::Prefs;
 use serde_json::Value;
 use std::sync::Arc;
 #[tokio::test]
@@ -13,12 +13,12 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     prefs
         .set(
             "master_secret",
-            plain_rs::utils::base64::base64_encode(&[11; 32]),
+            plain_rs::libs::utils::base64::base64_encode(&[11; 32]),
         )
         .unwrap();
     let server = ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[10; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[10; 32]),
         prefs,
     )
     .unwrap();
@@ -33,9 +33,10 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
         )
         .unwrap();
     let key =
-        plain_rs::utils::base64::base64_decode_checked(&service.token(&share.id).unwrap()).unwrap();
+        plain_rs::libs::utils::base64::base64_decode_checked(&service.token(&share.id).unwrap())
+            .unwrap();
     let wrap = |nonce: &str, query: &str| {
-        plain_rs::crypto::xchacha_encrypt_raw(
+        plain_rs::libs::crypto::xchacha_encrypt_raw(
             &key,
             format!("{}|{nonce}|{query}", chrono::Utc::now().timestamp_millis()).as_bytes(),
         )
@@ -48,7 +49,7 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     let (status, encrypted) = execute_guest(&state, &share.id, &body).await;
     assert_eq!(status, 200);
     let result: Value = serde_json::from_slice(
-        &plain_rs::transport::http_response::Context::new("/guest_graphql", &body)
+        &plain_rs::libs::transport::http_response::Context::new("/guest_graphql", &body)
             .decrypt(&key, &encrypted)
             .unwrap(),
     )
@@ -68,7 +69,7 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     let (status, encrypted) = execute_guest(&state, &share.id, &forbidden).await;
     assert_eq!(status, 200);
     let result: Value = serde_json::from_slice(
-        &plain_rs::transport::http_response::Context::new("/guest_graphql", &forbidden)
+        &plain_rs::libs::transport::http_response::Context::new("/guest_graphql", &forbidden)
             .decrypt(&key, &encrypted)
             .unwrap(),
     )

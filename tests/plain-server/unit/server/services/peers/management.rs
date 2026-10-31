@@ -1,12 +1,12 @@
 use futures_util::SinkExt;
 use futures_util::StreamExt;
-use plain_rs::db::DPeer;
-use plain_rs::db::chat_store::peers;
-use plain_rs::events::WsEvent;
+use plain_rs::features::services::peers::clipboard::receive as synchronize_clipboard;
+use plain_rs::features::services::peers::management::*;
+use plain_rs::libs::db::DPeer;
+use plain_rs::libs::db::chat_store::peers;
+use plain_rs::libs::events::WsEvent;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_rs::services::peers::clipboard::receive as synchronize_clipboard;
-use plain_rs::services::peers::management::*;
-use plain_rs::{chat::enums::DeviceType, db::chat_store::SaveMode};
+use plain_rs::{features::chat::enums::DeviceType, libs::db::chat_store::SaveMode};
 use serde_json::json;
 use std::time::Duration;
 use tokio::sync::watch;
@@ -74,9 +74,14 @@ async fn actual_management_socket_authenticates_and_relays_only_decrypted_native
     let directory = tempfile::tempdir().unwrap();
     let data = directory.path().join("data");
     std::fs::create_dir_all(&data).unwrap();
-    let prefs = plain_rs::prefs::Prefs::load(&plain_rs::prefs::default_path(&data)).unwrap();
+    let prefs =
+        plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(&data))
+            .unwrap();
     prefs
-        .set(plain_rs::prefs::pref_keys::CLIENT_ID, &session.client_id)
+        .set(
+            plain_rs::features::prefs::pref_keys::CLIENT_ID,
+            &session.client_id,
+        )
         .unwrap();
     let manager =
         crate::server::ContentServer::open_with_cache(&data, &directory.path().join("cache"))
@@ -129,8 +134,8 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     };
-    fn seed(db: &plain_rs::db::Db, text: &str, sensitive: bool, sequence: u8) {
-        let (item, _) = plain_rs::clipboard::record(db, text, "", "", sensitive).unwrap();
+    fn seed(db: &plain_rs::libs::db::Db, text: &str, sensitive: bool, sequence: u8) {
+        let (item, _) = plain_rs::features::clipboard::record(db, text, "", "", sensitive).unwrap();
         let time = format!("2026-01-01T00:00:{sequence:02}.000Z");
         db.with_conn(|connection| {
             connection
@@ -238,7 +243,7 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
         .set("api_permissions", json!(["CLIPBOARD"]))
         .unwrap();
     let mut echoes = state.events.subscribe();
-    plain_rs::services::clipboard::report(
+    plain_rs::features::services::clipboard::report(
         &state,
         &json!({"text":"new clipboard","sensitive":false}).to_string(),
     )
@@ -304,17 +309,17 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
                 .unwrap();
         }
     });
-    let result = plain_rs::services::peers::management_http::query(
+    let result = plain_rs::features::services::peers::management_http::query(
         &state,
         &reqwest::Url::parse(&format!("https://127.0.0.1:{port}")).unwrap(),
         &session.client_id,
-        &plain_rs::utils::base64::base64_decode(&peer.token),
+        &plain_rs::libs::utils::base64::base64_decode(&peer.token),
         json!({"query":"mutation($text:String!){setClipboard(text:$text)}", "variables":{"text":"encrypted fixture write"}}),
         4 * 1024 * 1024,
     ).await.unwrap();
     assert_eq!(result["setClipboard"], true);
     let mut remote_echoes = remote_state.events.subscribe();
-    plain_rs::services::clipboard::report(
+    plain_rs::features::services::clipboard::report(
         &remote_state,
         &json!({"text":"encrypted fixture write","sensitive":false}).to_string(),
     )

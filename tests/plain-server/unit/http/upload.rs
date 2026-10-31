@@ -30,7 +30,7 @@ async fn multipart_upload(
         uuid::Uuid::new_v4(),
         info
     );
-    let encrypted = plain_rs::crypto::xchacha_encrypt_raw(key, metadata.as_bytes()).unwrap();
+    let encrypted = plain_rs::libs::crypto::xchacha_encrypt_raw(key, metadata.as_bytes()).unwrap();
     let mut metadata =
         format!("--{boundary}\r\nContent-Disposition: form-data; name=\"info\"\r\n\r\n")
             .into_bytes();
@@ -74,19 +74,20 @@ async fn multipart_regular_upload_streams_without_host_preserves_replacements_an
 {
     let directory = tempfile::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
-        plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs.set("desktop_access", true).unwrap();
     let core = crate::server::ContentServer::start(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[7; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
-    let session = plain_rs::services::sessions::create(&state, "upload fixture".into()).unwrap();
-    let key = plain_rs::utils::base64::base64_decode(&session.token);
+    let session =
+        plain_rs::features::services::sessions::create(&state, "upload fixture".into()).unwrap();
+    let key = plain_rs::libs::utils::base64::base64_decode(&session.token);
     let destination = directory.path().join("files");
     std::fs::create_dir(&destination).unwrap();
     let data = (0..(2 * 1024 * 1024 + 17))
@@ -164,16 +165,16 @@ async fn multipart_regular_upload_streams_without_host_preserves_replacements_an
 #[tokio::test]
 async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_directory() {
     let directory = tempfile::tempdir().unwrap();
-    let token = plain_rs::utils::base64::base64_encode(&[8; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[8; 32]);
     let prefs = std::sync::Arc::new(
-        plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs.set("desktop_access", true).unwrap();
-    plain_rs::prefs::identity::ensure_url_token(&prefs);
+    plain_rs::features::prefs::identity::ensure_url_token(&prefs);
     let core = crate::server::ContentServer::start(directory.path(), &token, prefs).unwrap();
     let state = core.runtime_state();
     let client_id = state.native_client_id().unwrap();
-    let key = plain_rs::utils::base64::base64_decode(&core.native_url_token().unwrap());
+    let key = plain_rs::libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
     let data = vec![42; MAX_UPLOAD_WRITE_BYTES * 3 + 19];
     let info = serde_json::json!({"fileId":"fixture","index":0,"size":data.len()});
     let response = multipart_upload(
@@ -188,8 +189,12 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
     )
     .await;
     assert_eq!(response.status(), 201);
-    let path = plain_rs::files::uploads::chunk_path(state.upload_chunks.directory(), "fixture", 0)
-        .unwrap();
+    let path = plain_rs::features::files::uploads::chunk_path(
+        state.upload_chunks.directory(),
+        "fixture",
+        0,
+    )
+    .unwrap();
     assert_eq!(std::fs::read(path).unwrap(), data);
     let info = serde_json::json!({"fileId":"fixture","index":0,"size":20});
     let response = multipart_upload(

@@ -8,8 +8,8 @@
 //! `Permission.enabledAndIsGrantedAsync` does and `checkEnabledAsync` does not.
 
 use async_graphql::Context;
-use plain_rs::host::bridge::Host;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::host::bridge::Host;
 use std::sync::Arc;
 
 /// plain-app's `checkEnabledAsync`: error out unless every named permission
@@ -45,7 +45,7 @@ pub(crate) fn require(
     if is_local(ctx) {
         return Ok(());
     }
-    if plain_rs::services::device::access::is_enabled(prefs, permissions) {
+    if plain_rs::features::services::device::access::is_enabled(prefs, permissions) {
         Ok(())
     } else {
         Err(async_graphql::Error::new("no_permission"))
@@ -60,14 +60,14 @@ pub(crate) async fn require_granted(
     permissions: &[&str],
 ) -> anyhow::Result<bool> {
     if !is_local(ctx)
-        && !plain_rs::services::device::access::is_enabled(
+        && !plain_rs::features::services::device::access::is_enabled(
             ctx.data_unchecked::<Arc<Prefs>>(),
             permissions,
         )
     {
         return Ok(false);
     }
-    plain_rs::services::device::access::granted(
+    plain_rs::features::services::device::access::granted(
         ctx.data_unchecked::<Arc<Host>>(),
         &permissions
             .iter()

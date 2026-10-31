@@ -1,7 +1,7 @@
 use crate::server::ContentServer;
 use crate::server::ServerState;
-use plain_rs::services::settings::update_download::*;
-use plain_rs::services::settings::updates;
+use plain_rs::features::services::settings::update_download::*;
+use plain_rs::features::services::settings::updates;
 use serde_json::json;
 use std::path::Path;
 use std::sync::Arc;
@@ -48,7 +48,7 @@ async fn complete_stream_is_published_with_identity_and_restored_without_client_
     let mut reports = allow_updates(&state);
     let (_cancel, _receiver) = watch::channel(false);
     let mut events = state.events.subscribe();
-    let path = plain_rs::services::settings::update_download::test_fixture::save(
+    let path = plain_rs::features::services::settings::update_download::test_fixture::save(
         &state,
         "complete",
         vec![b"a".to_vec(), b"b".to_vec(), b"cd".to_vec()],
@@ -60,7 +60,7 @@ async fn complete_stream_is_published_with_identity_and_restored_without_client_
         Path::new(&path).parent().unwrap().parent().unwrap(),
         state.cache.app_updates()
     );
-    let _info = plain_rs::services::settings::updates::info(&state).unwrap();
+    let _info = plain_rs::features::services::settings::updates::info(&state).unwrap();
     let mut progress = Vec::new();
     for _ in 0..3 {
         let report = tokio::time::timeout(Duration::from_secs(3), reports.recv())

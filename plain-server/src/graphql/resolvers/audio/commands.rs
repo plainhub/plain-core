@@ -1,9 +1,9 @@
 use crate::graphql::resolvers::audio::public::AudioItem;
 use async_graphql::{Context, ID, Object, Result, SimpleObject};
-use plain_rs::media::audio::{commands, playback, queue};
-use plain_rs::prefs::Prefs;
-use plain_rs::services::audio::host::Audio;
-use plain_rs::types::Long;
+use plain_rs::features::media::audio::{commands, playback, queue};
+use plain_rs::features::prefs::Prefs;
+use plain_rs::features::services::audio::host::Audio;
+use plain_rs::libs::types::Long;
 use std::sync::Arc;
 
 #[derive(SimpleObject)]
@@ -38,7 +38,7 @@ impl AudioCommandsMutation {
     async fn advance_audio_selection(
         &self,
         ctx: &Context<'_>,
-        action: plain_rs::media::audio::selection::AudioSelectionAction,
+        action: plain_rs::features::media::audio::selection::AudioSelectionAction,
         expected_path: String,
         expected_revision: Long,
         #[graphql(default)] shuffle: bool,
@@ -57,7 +57,7 @@ impl AudioCommandsMutation {
                     return Ok(None);
                 }
                 engine.refresh()?;
-                plain_rs::media::audio::selection::advance_with_shuffle(
+                plain_rs::features::media::audio::selection::advance_with_shuffle(
                     db,
                     &prefs,
                     action,
@@ -73,8 +73,8 @@ impl AudioCommandsMutation {
             .await?;
         if selection.is_some() {
             let _ = ctx
-                .data::<tokio::sync::broadcast::Sender<plain_rs::events::WsEvent>>()?
-                .send(plain_rs::events::WsEvent::broadcast(
+                .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()?
+                .send(plain_rs::libs::events::WsEvent::broadcast(
                     "CONTENT_CHANGED",
                     "{}".into(),
                 ));

@@ -194,7 +194,7 @@ impl Drop for ListenerTaskGuard {
 
 pub fn tls_config(certificate_pem: &[u8], private_key_pem: &[u8]) -> Result<RustlsConfig, String> {
     Ok(RustlsConfig::from_config(std::sync::Arc::new(
-        plain_rs::services::tls_identity::config(certificate_pem, private_key_pem)?,
+        plain_rs::libs::tls_identity::config(certificate_pem, private_key_pem)?,
     )))
 }
 

@@ -1,10 +1,10 @@
 use crate::server::ContentServer;
+use plain_rs::features::services::peers::management::Identity;
+use plain_rs::features::services::peers::metadata::*;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_rs::services::peers::management::Identity;
-use plain_rs::services::peers::metadata::*;
 use plain_rs::{
-    chat::enums::DeviceType,
-    db::{
+    features::chat::enums::DeviceType,
+    libs::db::{
         DPeer,
         chat_store::{SaveMode, peers},
     },
@@ -42,7 +42,7 @@ async fn fixture() -> (
         Some(18443),
         DeviceType::Computer,
     );
-    peer.token = plain_rs::utils::base64::base64_encode(&[7; 32]);
+    peer.token = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
     peer.key = "pairing-key".into();
     peer.public_key = "signature-key".into();
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
@@ -69,7 +69,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
     remote_state
         .prefs
         .set(
-            plain_rs::prefs::pref_keys::DEVICE_NAME,
+            plain_rs::features::prefs::pref_keys::DEVICE_NAME,
             "Authenticated name",
         )
         .unwrap();
@@ -175,7 +175,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
     );
     assert_eq!(
         events.try_recv().unwrap().event_type,
-        plain_rs::chat::events::WS_PEER_UPDATED
+        plain_rs::features::chat::events::WS_PEER_UPDATED
     );
     refresh(&state, &peer.id, &identity, &cancelled)
         .await

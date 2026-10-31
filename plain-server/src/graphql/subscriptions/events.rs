@@ -5,8 +5,8 @@ use futures_util::{
     StreamExt,
     stream::{self, BoxStream},
 };
-use plain_rs::protocols::graphql::events::EVENTS;
-use plain_rs::protocols::graphql::events::EventSpec;
+use plain_rs::libs::protocols::graphql::events::EVENTS;
+use plain_rs::libs::protocols::graphql::events::EventSpec;
 use serde::de::DeserializeOwned;
 
 pub(super) async fn authorize(
@@ -15,12 +15,12 @@ pub(super) async fn authorize(
     spec: &EventSpec,
 ) -> Result<()> {
     if origin == RequestOrigin::Remote
-        && !plain_rs::services::device::access::is_enabled(&state.prefs, spec.permissions)
+        && !plain_rs::features::services::device::access::is_enabled(&state.prefs, spec.permissions)
     {
         return Err("no_permission".into());
     }
     if let Some(capability) = spec.capability {
-        plain_rs::services::capabilities::require(&state.host, capability)
+        plain_rs::features::services::capabilities::require(&state.host, capability)
             .await
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
     }
@@ -30,7 +30,7 @@ pub(super) async fn authorize(
             .iter()
             .map(|name| name.to_string())
             .collect::<Vec<_>>();
-        if !plain_rs::services::device::access::granted(&state.host, &names)
+        if !plain_rs::features::services::device::access::granted(&state.host, &names)
             .await
             .map_err(|e| async_graphql::Error::new(e.to_string()))?
         {

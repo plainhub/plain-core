@@ -1,11 +1,11 @@
 use crate::server::ServerState;
-use plain_rs::host::bridge::Host;
+use plain_rs::libs::host::bridge::Host;
 
 struct PublicSchema {
     state: ServerState,
     _server: crate::server::ContentServer,
 }
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -37,23 +37,23 @@ fn fixture_with(
         .unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[3; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
     let state = server.runtime_state();
-    let mut peer = plain_rs::db::DPeer::new(
+    let mut peer = plain_rs::libs::db::DPeer::new(
         "peer-1",
         "Pixel",
         "192.168.1.20",
         Some(1234),
-        plain_rs::chat::enums::DeviceType::Phone,
+        plain_rs::features::chat::enums::DeviceType::Phone,
     );
-    peer.status = plain_rs::chat::enums::PeerStatus::Paired;
-    plain_rs::db::chat_store::peers::save(
+    peer.status = plain_rs::features::chat::enums::PeerStatus::Paired;
+    plain_rs::libs::db::chat_store::peers::save(
         &state.db,
         &[peer],
-        plain_rs::db::chat_store::SaveMode::Insert,
+        plain_rs::libs::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     state
@@ -257,8 +257,10 @@ async fn main_identity_rename_and_pairing_code_use_shared_preferences_and_refuse
     assert_eq!(value["app"]["clientId"], executor.client_id());
     let settings = core.native_management().unwrap().preferences().unwrap();
     assert_eq!(
-        plain_rs::utils::base64::base64_decode(settings["signature_public_key"].as_str().unwrap())
-            .len(),
+        plain_rs::libs::utils::base64::base64_decode(
+            settings["signature_public_key"].as_str().unwrap()
+        )
+        .len(),
         32
     );
     assert!(!settings["mdns_hostname"].as_str().unwrap().is_empty());

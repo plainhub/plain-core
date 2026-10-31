@@ -5,18 +5,26 @@ use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
 };
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn device() -> (tempfile::TempDir, ContentServer, HeaderMap) {
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    plain_rs::prefs::security::bootstrap(&prefs).unwrap();
-    let server =
-        ContentServer::start(dir.path(), &plain_rs::base64_encode(&[3; 32]), prefs).unwrap();
+    plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
+    let server = ContentServer::start(
+        dir.path(),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
+        prefs,
+    )
+    .unwrap();
     let session = serde_json::to_value(
-        plain_rs::services::sessions::create(&server.runtime_state(), "Controller".into()).unwrap(),
+        plain_rs::features::services::sessions::create(
+            &server.runtime_state(),
+            "Controller".into(),
+        )
+        .unwrap(),
     )
     .unwrap();
     let mut headers = HeaderMap::new();

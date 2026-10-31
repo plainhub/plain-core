@@ -1,6 +1,6 @@
 use axum::body::Bytes;
 use hyper::body::Frame;
-use plain_rs::services::peers::peer_lan::limited_chunks;
+use plain_rs::features::services::peers::peer_lan::limited_chunks;
 use std::{
     collections::VecDeque,
     io,

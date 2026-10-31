@@ -1,4 +1,4 @@
-use plain_rs::media::audio::{playback, queue};
+use plain_rs::features::media::audio::{playback, queue};
 
 #[tokio::test]
 async fn native_host_lifetime_restores_position_and_invalidates_reports_once_per_generation() {

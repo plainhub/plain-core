@@ -31,35 +31,36 @@ async fn peer_schema_preserves_required_arguments_and_empty_query() {
 #[tokio::test]
 async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     use crate::server::ContentServer;
-    use plain_rs::chat::enums::DeviceType;
-    use plain_rs::chat::enums::PeerStatus;
-    use plain_rs::db::DPeer;
-    use plain_rs::db::Db;
-    use plain_rs::db::chat_store::SaveMode;
-    use plain_rs::db::chat_store::messages;
-    use plain_rs::db::chat_store::peers;
+    use plain_rs::features::chat::enums::DeviceType;
+    use plain_rs::features::chat::enums::PeerStatus;
+    use plain_rs::libs::db::DPeer;
+    use plain_rs::libs::db::Db;
+    use plain_rs::libs::db::chat_store::SaveMode;
+    use plain_rs::libs::db::chat_store::messages;
+    use plain_rs::libs::db::chat_store::peers;
     use std::sync::Arc;
     use tokio_tungstenite::tungstenite::Message;
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("background_service_enabled", true).unwrap();
     prefs.set("device_name", "fixture tablet").unwrap();
     prefs.set("client_id", "local").unwrap();
-    let (local_keypair, local_public_key) = plain_rs::crypto::ed25519_generate();
+    let (local_keypair, local_public_key) = plain_rs::libs::crypto::ed25519_generate();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::utils::base64::base64_encode(&local_keypair),
+            plain_rs::libs::utils::base64::base64_encode(&local_keypair),
         )
         .unwrap();
-    let token = plain_rs::utils::base64::base64_encode(&[5; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[5; 32]);
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let key = [7; 32];
-    let (kp, public_key) = plain_rs::crypto::ed25519_generate();
+    let (kp, public_key) = plain_rs::libs::crypto::ed25519_generate();
     let mut peer = DPeer::new("peer", "phone", "", Some(443), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = plain_rs::utils::base64::base64_encode(&key);
-    peer.public_key = plain_rs::utils::base64::base64_encode(&public_key);
+    peer.key = plain_rs::libs::utils::base64::base64_encode(&key);
+    peer.public_key = plain_rs::libs::utils::base64::base64_encode(&public_key);
     peers::save(&db, &[peer], SaveMode::Insert).unwrap();
     let server = ContentServer::start(dir.path(), &token, prefs.clone()).unwrap();
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
@@ -91,7 +92,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                         request["params"],
                         json!({
                             "peer":{"id":"peer","port":port},
-                            "config":{"pmk":plain_rs::utils::base64::base64_encode(&[7;32]),"isClient":true,"localPort":https}
+                            "config":{"pmk":plain_rs::libs::utils::base64::base64_encode(&[7;32]),"isClient":true,"localPort":https}
                         })
                     );
 
@@ -102,15 +103,15 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                 "peerStopAware" => json!(true),
                 "peerTransportCapabilities" => json!(["BLE"]),
                 "peerTransportBleExchange" => {
-                    let wire = plain_rs::services::peers::ble_transport::test_peer_wire(
+                    let wire = plain_rs::features::services::peers::ble_transport::test_peer_wire(
                         &ble,
                         &request["params"],
                         &[7; 32],
                     );
                     let parts: Vec<_> = wire.splitn(3, '|').collect();
-                    assert!(plain_rs::crypto::ed25519_verify(
-                        &plain_rs::utils::base64::base64_encode(&local_public_key),
-                        plain_rs::transport::auth::signature_payload(
+                    assert!(plain_rs::libs::crypto::ed25519_verify(
+                        &plain_rs::libs::utils::base64::base64_encode(&local_public_key),
+                        plain_rs::libs::transport::auth::signature_payload(
                             parts[1].parse().unwrap(),
                             "",
                             parts[2]
@@ -134,7 +135,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                     if let Some(done) = broadcast_done.take() {
                         let _ = done.send(());
                     }
-                    plain_rs::services::peers::ble_transport::test_reply(
+                    plain_rs::features::services::peers::ble_transport::test_reply(
                         &ble,
                         &request["params"],
                         json!({"data":{"channelSystemMessage":true}}),
@@ -159,12 +160,12 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .unwrap();
     let wire = |document: Value| {
         let content = document.to_string();
-        let ts = plain_rs::peers::pairing::now_ms();
-        let signature = plain_rs::crypto::ed25519_sign(
+        let ts = plain_rs::features::peers::pairing::now_ms();
+        let signature = plain_rs::libs::crypto::ed25519_sign(
             &kp,
-            plain_rs::transport::auth::signature_payload(ts, "", &content).as_bytes(),
+            plain_rs::libs::transport::auth::signature_payload(ts, "", &content).as_bytes(),
         );
-        plain_rs::crypto::xchacha_encrypt_raw(
+        plain_rs::libs::crypto::xchacha_encrypt_raw(
             &key,
             format!("{signature}|{ts}|{content}").as_bytes(),
         )
@@ -183,7 +184,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .await
         .unwrap();
     assert_eq!(response.status(), 200);
-    let content = plain_rs::transport::http_response::Context::new("/peer_graphql", &body)
+    let content = plain_rs::libs::transport::http_response::Context::new("/peer_graphql", &body)
         .decrypt(&key, &response.bytes().await.unwrap())
         .unwrap();
     let content: Value = serde_json::from_slice(&content).unwrap();
@@ -193,12 +194,12 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     assert!(content["data"]["renamed"][0]["channelId"].is_null());
     let event = std::iter::from_fn(|| received_events.try_recv().ok())
         .take(32)
-        .find(|event| event.event_type == plain_rs::chat::events::WS_MESSAGE_CREATED)
+        .find(|event| event.event_type == plain_rs::features::chat::events::WS_MESSAGE_CREATED)
         .expect("received message event");
     let stored = messages::get(&db, id).unwrap().unwrap();
     assert_eq!(
         serde_json::from_str::<Value>(&event.payload).unwrap(),
-        json!([plain_rs::chat::service::chat_to_json(&stored)])
+        json!([plain_rs::features::chat::service::chat_to_json(&stored)])
     );
     for expected in [false, true] {
         if expected {
@@ -215,7 +216,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             .await
             .unwrap();
         let content: Value = serde_json::from_slice(
-            &plain_rs::transport::http_response::Context::new("/peer_graphql", &body)
+            &plain_rs::libs::transport::http_response::Context::new("/peer_graphql", &body)
                 .decrypt(&key, &response.bytes().await.unwrap())
                 .unwrap(),
         )
@@ -232,7 +233,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .await
         .unwrap();
     let content: Value = serde_json::from_slice(
-        &plain_rs::transport::http_response::Context::new("/peer_graphql", &body)
+        &plain_rs::libs::transport::http_response::Context::new("/peer_graphql", &body)
             .decrypt(&key, &response.bytes().await.unwrap())
             .unwrap(),
     )
@@ -249,19 +250,20 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             .status(),
         401
     );
-    let channel = plain_rs::chat::channels::state::create(&db, "local", "fixture").unwrap();
-    plain_rs::chat::channels::state::apply(
+    let channel =
+        plain_rs::features::chat::channels::state::create(&db, "local", "fixture").unwrap();
+    plain_rs::features::chat::channels::state::apply(
         &db,
         "local",
         &channel.id,
-        plain_rs::chat::channels::state::Action::Invite {
+        plain_rs::features::chat::channels::state::Action::Invite {
             peer: "peer".into(),
         },
     )
     .unwrap();
     let mut channel_events = server.runtime_state().events.subscribe();
     let body = wire(
-        json!({"query":"mutation Accept($payload:String!) { channelSystemMessage(type:INVITE_ACCEPT,payload:$payload) }","variables":{"payload":json!({"channelId":channel.id,"publicKey":plain_rs::utils::base64::base64_encode(&public_key),"name":"joined","deviceType":"PHONE"}).to_string()}}),
+        json!({"query":"mutation Accept($payload:String!) { channelSystemMessage(type:INVITE_ACCEPT,payload:$payload) }","variables":{"payload":json!({"channelId":channel.id,"publicKey":plain_rs::libs::utils::base64::base64_encode(&public_key),"name":"joined","deviceType":"PHONE"}).to_string()}}),
     );
     let response = client
         .post(&public_url)
@@ -271,7 +273,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .await
         .unwrap();
     let content: Value = serde_json::from_slice(
-        &plain_rs::transport::http_response::Context::new("/peer_graphql", &body)
+        &plain_rs::libs::transport::http_response::Context::new("/peer_graphql", &body)
             .decrypt(&key, &response.bytes().await.unwrap())
             .unwrap(),
     )
@@ -283,7 +285,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .unwrap();
     assert_eq!(
         event.event_type,
-        plain_rs::chat::events::WS_CHANNELS_UPDATED
+        plain_rs::features::chat::events::WS_CHANNELS_UPDATED
     );
     let event: Value = serde_json::from_str(&event.payload).unwrap();
     assert_eq!(event["channels"][0]["id"], channel.id);

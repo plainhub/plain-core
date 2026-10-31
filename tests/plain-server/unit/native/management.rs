@@ -164,7 +164,7 @@ async fn retired_management_roots_are_unavailable_to_local_and_authenticated_rem
     assert_eq!(state.db.session_list().unwrap().len(), before);
     assert_eq!(state.http_server.snapshot().revision.0, 0);
     assert!(
-        !plain_rs::data_paths::DataPaths::new(&directory.path().join("data"))
+        !plain_rs::libs::data_paths::DataPaths::new(&directory.path().join("data"))
             .pending_restore()
             .exists()
     );
@@ -273,13 +273,13 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
     assert_eq!(system["url_token"], "fixture-resource-token");
     for key in system.keys() {
         assert!(
-            plain_rs::prefs::pref_keys::access(key).is_some()
+            plain_rs::features::prefs::pref_keys::access(key).is_some()
                 || matches!(
                     key.as_str(),
-                    plain_rs::prefs::pref_keys::SIGNATURE_PUBLIC_KEY
-                        | plain_rs::prefs::pref_keys::UPDATE_INFO
-                        | plain_rs::prefs::pref_keys::APP_UPDATE_AVAILABLE
-                        | plain_rs::prefs::pref_keys::ONBOARDING_COMPLETED
+                    plain_rs::features::prefs::pref_keys::SIGNATURE_PUBLIC_KEY
+                        | plain_rs::features::prefs::pref_keys::UPDATE_INFO
+                        | plain_rs::features::prefs::pref_keys::APP_UPDATE_AVAILABLE
+                        | plain_rs::features::prefs::pref_keys::ONBOARDING_COMPLETED
                 ),
             "Unexpected native preference key: {key}"
         );

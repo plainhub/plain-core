@@ -17,7 +17,7 @@ impl ServerState {
         let (stop, receiver) = watch::channel(false);
         let router = crate::http::router::build_router(self.clone(), receiver.clone());
         let started = async {
-            let fingerprint = plain_rs::services::tls_identity::certificate_sha256(&cert)?;
+            let fingerprint = plain_rs::libs::tls_identity::certificate_sha256(&cert)?;
             let listeners =
                 crate::http::listeners::HttpListeners::start(router, http, https, cert, key)
                     .await?;
@@ -34,8 +34,8 @@ impl ServerState {
         };
         let ports = (listeners.http_port, listeners.https_port);
         if let Err(error) =
-            plain_rs::services::settings::preferences::Preferences::from_server(self)
-                .patch(plain_rs::prefs::settings::SettingsPatch {
+            plain_rs::features::services::settings::preferences::Preferences::from_server(self)
+                .patch(plain_rs::features::prefs::settings::SettingsPatch {
                     http_port: Some(i32::from(ports.0)),
                     https_port: Some(i32::from(ports.1)),
                     ..Default::default()
@@ -69,7 +69,8 @@ impl ServerState {
         });
         crate::http::listeners::lifecycle::monitor(self.clone(), failure, receiver);
         drop(guard);
-        if let Err(error) = plain_rs::services::casting::receiver::lifecycle::reconcile(self).await
+        if let Err(error) =
+            plain_rs::features::services::casting::receiver::lifecycle::reconcile(self).await
         {
             log::warn!("DLNA receiver startup: {error}");
         }
@@ -77,8 +78,8 @@ impl ServerState {
         Ok(ports)
     }
     pub(crate) async fn http_configuration(&self) -> Result<(u16, u16, Vec<u8>, Vec<u8>), String> {
-        let settings =
-            plain_rs::prefs::settings::snapshot(&self.prefs).map_err(|error| error.to_string())?;
+        let settings = plain_rs::features::prefs::settings::snapshot(&self.prefs)
+            .map_err(|error| error.to_string())?;
         let http = u16::try_from(settings.http_port).map_err(|error| error.to_string())?;
         let https = u16::try_from(settings.https_port).map_err(|error| error.to_string())?;
         let identity = self

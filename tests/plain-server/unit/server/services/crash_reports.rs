@@ -15,7 +15,7 @@ async fn native_report_uses_owned_cache_fixed_metadata_and_only_the_latest_200_l
     let external_cache = tempfile::tempdir().unwrap();
     let core = ContentServer::open_with_cache(directory.path(), external_cache.path()).unwrap();
     let state = core.runtime_state();
-    let paths = plain_rs::data_paths::DataPaths::new(directory.path());
+    let paths = plain_rs::libs::data_paths::DataPaths::new(directory.path());
     std::fs::write(paths.crash_report(), "pending fatal report").unwrap();
     std::fs::write(paths.crash_log(), "permanent crash history").unwrap();
     let log = directory.path().join("active.log");
@@ -83,7 +83,7 @@ async fn empty_logs_do_not_add_a_section_and_remote_requests_cannot_create_a_rep
         .logs
         .set_path(directory.path().join("missing.log"))
         .unwrap();
-    let _paths = plain_rs::data_paths::DataPaths::new(directory.path());
+    let _paths = plain_rs::libs::data_paths::DataPaths::new(directory.path());
     let remote = crate::graphql::executor::execute_graphql(
         &state.public,
         request("remote report"),
@@ -114,7 +114,7 @@ async fn publication_failure_is_reported_and_cleans_its_temporary_file() {
         .logs
         .set_path(directory.path().join("missing.log"))
         .unwrap();
-    let _paths = plain_rs::data_paths::DataPaths::new(directory.path());
+    let _paths = plain_rs::libs::data_paths::DataPaths::new(directory.path());
     std::fs::create_dir_all(core.cache_paths().crash_report_export()).unwrap();
     assert!(
         core.native_management()

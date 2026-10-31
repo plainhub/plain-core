@@ -125,7 +125,10 @@ async fn rename_postprocessing_failure_preserves_physical_receipt_and_does_not_r
     assert_eq!(std::fs::read(&destination).unwrap(), b"fixture");
     let owner = state.native_client_id().unwrap();
     let failed = state.files.list(owner.clone()).await.unwrap().remove(0);
-    assert_eq!(failed.status, plain_rs::files::tasks::FileTaskStatus::Error);
+    assert_eq!(
+        failed.status,
+        plain_rs::features::files::tasks::FileTaskStatus::Error
+    );
     assert_eq!(failed.completed_ops[0].dst, destination.to_str().unwrap());
     assert_eq!(
         relation(&first, "file"),
@@ -156,7 +159,7 @@ async fn rename_postprocessing_failure_preserves_physical_receipt_and_does_not_r
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn native_rename_and_delete_follow_actual_catalog_identities() {
-    use plain_rs::enums::DataType;
+    use plain_rs::features::enums::DataType;
     let home = std::env::var_os("HOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
@@ -172,9 +175,11 @@ async fn native_rename_and_delete_follow_actual_catalog_identities() {
     image::RgbImage::from_pixel(8, 8, image::Rgb([20, 40, 60]))
         .save(&source)
         .unwrap();
-    let read =
-        plain_rs::media::file_facts::read_file_metadata_with_availability(&source, DataType::Image)
-            .unwrap();
+    let read = plain_rs::features::media::file_facts::read_file_metadata_with_availability(
+        &source,
+        DataType::Image,
+    )
+    .unwrap();
     let rows = core
         .native_media_catalog()
         .unwrap()
@@ -271,7 +276,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
     }
     let owner = state
         .prefs
-        .get::<String>(plain_rs::prefs::pref_keys::CLIENT_ID)
+        .get::<String>(plain_rs::features::prefs::pref_keys::CLIENT_ID)
         .unwrap()
         .unwrap();
     let rows = state.files.list(owner.clone()).await.unwrap();

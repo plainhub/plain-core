@@ -1,7 +1,7 @@
 use crate::server::ContentServer;
 use chrono::Utc;
-use plain_rs::events::WS_POMODORO_ACTION;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::events::WS_POMODORO_ACTION;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -13,7 +13,7 @@ struct Fixture {
 fn fixture() -> Fixture {
     let directory = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
-    let mut settings = plain_rs::prefs::settings::Settings::default().pomodoro_settings;
+    let mut settings = plain_rs::features::prefs::settings::Settings::default().pomodoro_settings;
     for (key, value) in [
         ("workDurationMin", 1),
         ("shortBreakDurationMin", 2),
@@ -47,7 +47,7 @@ async fn call(server: &ContentServer, token: &str, query: &str) -> Value {
 #[tokio::test]
 async fn server_assembly_runs_the_timer_and_main_controls_share_its_statistics() {
     let fixture = fixture();
-    let token = plain_rs::utils::base64::base64_encode(&[12; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[12; 32]);
     let server =
         ContentServer::start(fixture._directory.path(), &token, fixture.prefs.clone()).unwrap();
     let state = server.runtime_state();
@@ -121,7 +121,7 @@ async fn server_assembly_runs_the_timer_and_main_controls_share_its_statistics()
 #[tokio::test]
 async fn main_schema_rejects_retired_client_scheduler_controls() {
     let fixture = fixture();
-    let token = plain_rs::utils::base64::base64_encode(&[12; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[12; 32]);
     let server =
         ContentServer::start(fixture._directory.path(), &token, fixture.prefs.clone()).unwrap();
     for query in [

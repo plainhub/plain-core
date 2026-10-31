@@ -1,6 +1,6 @@
 use super::NativeManagement;
-use plain_rs::services::casting::receiver::control;
-use plain_rs::services::casting::receiver::control::Request;
+use plain_rs::features::services::casting::receiver::control;
+use plain_rs::features::services::casting::receiver::control::Request;
 use serde_json::Value;
 
 impl NativeManagement {
@@ -16,7 +16,8 @@ impl NativeManagement {
 
     pub async fn dlna_receiver(&self) -> Result<Value, String> {
         let mut snapshot = self.receiver(Request::Snapshot {}).await?;
-        snapshot["enabled"] = Value::Bool(plain_rs::prefs::dlna::enabled(&self.state.prefs));
+        snapshot["enabled"] =
+            Value::Bool(plain_rs::features::prefs::dlna::enabled(&self.state.prefs));
         snapshot["rules"] = self.receiver(Request::Rules {}).await?;
         Ok(snapshot)
     }

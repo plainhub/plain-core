@@ -78,24 +78,25 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     use sha2::Digest;
     use tokio_tungstenite::tungstenite::Message as ClientMessage;
     let dir = tempfile::tempdir().unwrap();
-    let prefs =
-        std::sync::Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let prefs = std::sync::Arc::new(
+        plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap(),
+    );
     prefs.set("background_service_enabled", true).unwrap();
     prefs.set("desktop_access", true).unwrap();
     prefs.set("login_require_approval", true).unwrap();
     prefs.set("password", "secret").unwrap();
     prefs.set("password_type", "FIXED").unwrap();
     prefs.set("client_id", "phone").unwrap();
-    let (private, _) = plain_rs::crypto::ed25519_generate();
+    let (private, _) = plain_rs::libs::crypto::ed25519_generate();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::utils::base64::base64_encode(&private),
+            plain_rs::libs::utils::base64::base64_encode(&private),
         )
         .unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[3; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -121,8 +122,8 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         )
         .await
         .unwrap();
-    let digest = plain_rs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
-    let client = plain_rs::crypto::EcdhSession::generate();
+    let digest = plain_rs::libs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
+    let client = plain_rs::libs::crypto::EcdhSession::generate();
     for (cid, allowed) in [("rejected-browser", false), ("accepted-browser", true)] {
         let (mut socket, _) = tokio_tungstenite::connect_async(format!(
             "ws://127.0.0.1:{port}/auth?cid={cid}&auth=1"
@@ -133,10 +134,10 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         let request = json!({
             "password":digest, "loginContext":keys.context,
             "browserName":"Test", "browserVersion":"1", "osName":"Fixture", "osVersion":"1",
-            "isMobile":false, "ecdhPublicKey":plain_rs::utils::base64::base64_encode(&client.public_key_bytes),
+            "isMobile":false, "ecdhPublicKey":plain_rs::libs::utils::base64::base64_encode(&client.public_key_bytes),
             "peer":null,
         });
-        let inner = plain_rs::crypto::xchacha_encrypt_raw(
+        let inner = plain_rs::libs::crypto::xchacha_encrypt_raw(
             &digest.as_bytes()[..32],
             &serde_json::to_vec(&request).unwrap(),
         )
@@ -176,7 +177,8 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
                 .decrypt_response(&frame, chrono::Utc::now().timestamp_millis() as u64)
                 .unwrap();
             let decrypted =
-                plain_rs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &inner).unwrap();
+                plain_rs::libs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &inner)
+                    .unwrap();
             let result: Value = serde_json::from_slice(&decrypted).unwrap();
             assert_eq!(result["status"], "COMPLETED");
             let state = server.runtime_state();
@@ -216,12 +218,12 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
 fn public_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let directory = tempfile::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
-        plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs.set("desktop_access", true).unwrap();
     let core = crate::server::ContentServer::start(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[4; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[4; 32]),
         prefs,
     )
     .unwrap();
@@ -248,8 +250,8 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
     state.prefs.set("password", "secret").unwrap();
     state.prefs.set("password_type", "FIXED").unwrap();
     state.prefs.set("login_require_approval", false).unwrap();
-    let digest = plain_rs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
-    let client = plain_rs::crypto::EcdhSession::generate();
+    let digest = plain_rs::libs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
+    let client = plain_rs::libs::crypto::EcdhSession::generate();
     for attempt in 0..7 {
         let cid = format!("login-limit-{attempt}");
         let (mut socket, _) = tokio_tungstenite::connect_async(format!(
@@ -259,7 +261,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
         .await
         .unwrap();
         if attempt >= 5 {
-            use plain_rs::services::confirmation_channel::{Client, ConfirmationMode};
+            use plain_rs::features::services::confirmation_channel::{Client, ConfirmationMode};
             let (_, hello) = Client::start(&cid, ConfirmationMode::Password).unwrap();
             socket
                 .send(ClientMessage::Text(
@@ -272,11 +274,11 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
             let request = json!({
                 "password":digest, "loginContext":keys.context,
                 "browserName":"Test", "browserVersion":"1", "osName":"Fixture", "osVersion":"1",
-                "isMobile":false, "ecdhPublicKey":plain_rs::utils::base64::base64_encode(&client.public_key_bytes),
+                "isMobile":false, "ecdhPublicKey":plain_rs::libs::utils::base64::base64_encode(&client.public_key_bytes),
                 "peer":null,
             });
             let inner = if attempt == 0 {
-                plain_rs::crypto::xchacha_encrypt_raw(
+                plain_rs::libs::crypto::xchacha_encrypt_raw(
                     &digest.as_bytes()[..32],
                     &serde_json::to_vec(&request).unwrap(),
                 )
@@ -304,7 +306,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                     .decrypt_response(&frame, chrono::Utc::now().timestamp_millis() as u64)
                     .unwrap();
                 let plaintext =
-                    plain_rs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &inner)
+                    plain_rs::libs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &inner)
                         .unwrap();
                 let result: Value = serde_json::from_slice(&plaintext).unwrap();
                 assert_eq!(result["status"], "COMPLETED");
@@ -386,9 +388,9 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     use tokio_tungstenite::tungstenite::Message as ClientMessage;
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
-    let key = plain_rs::utils::base64::base64_decode(&plain_rs::prefs::identity::ensure_url_token(
-        &state.prefs,
-    ));
+    let key = plain_rs::libs::utils::base64::base64_decode(
+        &plain_rs::features::prefs::identity::ensure_url_token(&state.prefs),
+    );
     let client = state.native_client_id().unwrap();
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     let host = state.host.clone();
@@ -417,7 +419,7 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     .unwrap();
     socket
         .send(ClientMessage::Binary(
-            plain_rs::crypto::xchacha_encrypt_raw(
+            plain_rs::libs::crypto::xchacha_encrypt_raw(
                 &key,
                 chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
             )
@@ -432,7 +434,7 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     for payload in [json_control.as_slice(), touch.as_slice()] {
         let mut plain = chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
         plain.extend_from_slice(payload);
-        last = plain_rs::crypto::xchacha_encrypt_raw(&key, &plain).unwrap();
+        last = plain_rs::libs::crypto::xchacha_encrypt_raw(&key, &plain).unwrap();
         socket
             .send(ClientMessage::Binary(last.clone().into()))
             .await
@@ -483,7 +485,7 @@ async fn host_replacement_restores_only_authenticated_online_clients() {
             ),
             "remote".into(),
             Some(vec![1; 32]),
-            plain_rs::host::request_scope::NativeRequestScope::default(),
+            plain_rs::libs::host::request_scope::NativeRequestScope::default(),
         )
         .unwrap();
     session.mark_online().unwrap();
@@ -504,7 +506,7 @@ async fn saturated_host_recovers_online_clients_without_counting_native_sessions
     let state = core.runtime_state();
     let native = core.native_graphql().unwrap();
     let native_id = native
-        .open_subscriptions(plain_rs::host::request_scope::NativeRequestScope::default())
+        .open_subscriptions(plain_rs::libs::host::request_scope::NativeRequestScope::default())
         .unwrap();
     let host = core.host_events().unwrap();
     host_online(&host, json!([])).await;
@@ -549,7 +551,7 @@ async fn saturated_host_recovers_online_clients_without_counting_native_sessions
     assert_eq!(network["method"], "networkInterfacesChanged");
     host.reply(json!({"id":network["id"],"result":null}))
         .unwrap();
-    for _ in 0..plain_rs::host::bridge::REQUEST_CAPACITY {
+    for _ in 0..plain_rs::libs::host::bridge::REQUEST_CAPACITY {
         state.host.notify("blocked", json!({})).unwrap();
     }
     let session = state
@@ -562,7 +564,7 @@ async fn saturated_host_recovers_online_clients_without_counting_native_sessions
             ),
             "remote".into(),
             Some(vec![1; 32]),
-            plain_rs::host::request_scope::NativeRequestScope::default(),
+            plain_rs::libs::host::request_scope::NativeRequestScope::default(),
         )
         .unwrap();
     session.mark_online().unwrap();
@@ -596,12 +598,12 @@ async fn online_clients_follow_authenticated_graphql_connections() {
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
     let client = state.native_client_id().unwrap();
-    let key = plain_rs::utils::base64::base64_decode(&plain_rs::prefs::identity::ensure_url_token(
-        &state.prefs,
-    ));
+    let key = plain_rs::libs::utils::base64::base64_decode(
+        &plain_rs::features::prefs::identity::ensure_url_token(&state.prefs),
+    );
     let native = core.native_graphql().unwrap();
     let native_id = native
-        .open_subscriptions(plain_rs::host::request_scope::NativeRequestScope::default())
+        .open_subscriptions(plain_rs::libs::host::request_scope::NativeRequestScope::default())
         .unwrap();
     let host = core.host_events().unwrap();
     host_online(&host, json!([])).await;
@@ -639,7 +641,7 @@ async fn online_clients_follow_authenticated_graphql_connections() {
                 "plain-graphql-ws-v1".parse().unwrap(),
             );
             let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
-            let init = plain_rs::protocols::graphql::seal_init(&key, &client, json!({"timestampMillis": chrono::Utc::now().timestamp_millis(), "clientNonce": nonce.repeat(32)}).to_string().as_bytes()).unwrap();
+            let init = plain_rs::libs::protocols::graphql::seal_init(&key, &client, json!({"timestampMillis": chrono::Utc::now().timestamp_millis(), "clientNonce": nonce.repeat(32)}).to_string().as_bytes()).unwrap();
             socket
                 .send(Frame::Binary(init.clone().into()))
                 .await
@@ -647,7 +649,9 @@ async fn online_clients_follow_authenticated_graphql_connections() {
             let Frame::Binary(ack) = socket.next().await.unwrap().unwrap() else {
                 panic!("Expected encrypted acknowledgement")
             };
-            assert!(plain_rs::protocols::graphql::open_ack(&key, &client, &init, &ack).is_some());
+            assert!(
+                plain_rs::libs::protocols::graphql::open_ack(&key, &client, &init, &ack).is_some()
+            );
             socket.send(Frame::Ping(vec![1].into())).await.unwrap();
             assert!(matches!(
                 socket.next().await.unwrap().unwrap(),
@@ -715,8 +719,10 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
                 client.clone(),
             ),
             client,
-            Some(plain_rs::base64_decode(&credentials.token)),
-            plain_rs::host::request_scope::NativeRequestScope::default(),
+            Some(plain_rs::libs::utils::base64::base64_decode(
+                &credentials.token,
+            )),
+            plain_rs::libs::host::request_scope::NativeRequestScope::default(),
         )
         .unwrap();
     session.send(r#"{"type":"subscribe","id":"public","payload":{"query":"subscription { pairingCompleted { deviceId deviceName ip } }"}}"#).unwrap();
@@ -783,9 +789,9 @@ async fn password_keys(
     >,
     state: &ServerState,
     client_id: &str,
-) -> plain_rs::services::confirmation_channel::Channel {
+) -> plain_rs::features::services::confirmation_channel::Channel {
     use futures_util::{SinkExt, StreamExt};
-    use plain_rs::services::confirmation_channel::{Client, ConfirmationMode};
+    use plain_rs::features::services::confirmation_channel::{Client, ConfirmationMode};
     use tokio_tungstenite::tungstenite::Message;
     let (client, hello) = Client::start(client_id, ConfirmationMode::Password).unwrap();
     socket
@@ -800,11 +806,12 @@ async fn password_keys(
     let Message::Text(response) = response else {
         panic!("signed password challenge required")
     };
-    let signing = plain_rs::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    let signing =
+        plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     let (keys, reveal) = client
         .accept(
             &serde_json::from_str(&response).unwrap(),
-            &plain_rs::utils::base64::base64_encode(&signing[32..]),
+            &plain_rs::libs::utils::base64::base64_encode(&signing[32..]),
             &state.native_client_id().unwrap(),
             chrono::Utc::now().timestamp_millis() as u64,
         )
@@ -909,9 +916,9 @@ async fn authenticated_editor_connections_release_unauthenticated_slots() {
     let (_directory, server) = public_fixture();
     let state = server.runtime_state();
     let client_id = state.native_client_id().unwrap();
-    let key = plain_rs::utils::base64::base64_decode(&plain_rs::prefs::identity::ensure_url_token(
-        &state.prefs,
-    ));
+    let key = plain_rs::libs::utils::base64::base64_decode(
+        &plain_rs::features::prefs::identity::ensure_url_token(&state.prefs),
+    );
     let mut sockets = Vec::new();
     for _ in 0..=MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP {
         let (mut socket, _) = tokio_tungstenite::connect_async(format!(
@@ -920,7 +927,7 @@ async fn authenticated_editor_connections_release_unauthenticated_slots() {
         ))
         .await
         .unwrap();
-        let proof = plain_rs::crypto::xchacha_encrypt_raw(
+        let proof = plain_rs::libs::crypto::xchacha_encrypt_raw(
             &key,
             chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
         )
@@ -947,7 +954,7 @@ async fn non_mobile_native_subscriptions_reject_sms_fields() {
     let (_directory, core) = public_fixture();
     let native = core.native_graphql().unwrap();
     let id = native
-        .open_subscriptions(plain_rs::host::request_scope::NativeRequestScope::default())
+        .open_subscriptions(plain_rs::libs::host::request_scope::NativeRequestScope::default())
         .unwrap();
     let session = native.subscription_session(id).unwrap();
     session.send(r#"{"type":"subscribe","id":"sms","payload":{"query":"subscription { smsSendResult { requestId } }"}}"#).unwrap();

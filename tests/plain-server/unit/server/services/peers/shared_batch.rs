@@ -34,13 +34,14 @@ async fn tls() -> (u16, tokio::task::JoinHandle<()>, Arc<Notify>, Arc<Notify>) {
             let released = release.clone();
             async move {
                 let (scope, payload) =
-                    plain_rs::files::resource_link::parse(&params["id"]).unwrap();
+                    plain_rs::features::files::resource_link::parse(&params["id"]).unwrap();
                 assert_eq!(
                     scope,
-                    plain_rs::files::resource_link::Scope::Share("fixture".into())
+                    plain_rs::features::files::resource_link::Scope::Share("fixture".into())
                 );
                 let resource =
-                    plain_rs::files::resource_link::open(&scope, &[8; 32], payload).unwrap();
+                    plain_rs::features::files::resource_link::open(&scope, &[8; 32], payload)
+                        .unwrap();
                 let path = resource.id;
                 Body::from_stream(futures_util::stream::unfold(0, move |step| {
                     let path = path.clone();
@@ -77,12 +78,13 @@ async fn tls() -> (u16, tokio::task::JoinHandle<()>, Arc<Notify>, Arc<Notify>) {
 }
 fn fixture() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
     let directory = tempfile::tempdir().unwrap();
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
     prefs.set("client_id", "fixture").unwrap();
     let server = crate::server::ContentServer::start(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[3; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -96,8 +98,8 @@ async fn enqueue(
     target: &std::path::Path,
 ) -> String {
     let response = server.native_graphql().unwrap().execute(Request::new("mutation($input: SharedDownloadInput!) { enqueueSharedDownload(input: $input) }").variables(Variables::from_json(json!({"input":{
-        "messageId":format!("message-{path}"),"kind":"FILE","link":{"host":"127.0.0.1","port":port,"sharedId":"fixture","token":plain_rs::base64_encode(&[7;32]),"pageUrl":""},
-        "urlToken":plain_rs::base64_encode(&[8;32]),"entries":[{"name":format!("{path}.bin"),"relativePath":path,"isDir":false,"size":3,"mimeType":"application/octet-stream","hasThumb":false}],
+        "messageId":format!("message-{path}"),"kind":"FILE","link":{"host":"127.0.0.1","port":port,"sharedId":"fixture","token":plain_rs::libs::utils::base64::base64_encode(&[7;32]),"pageUrl":""},
+        "urlToken":plain_rs::libs::utils::base64::base64_encode(&[8;32]),"entries":[{"name":format!("{path}.bin"),"relativePath":path,"isDir":false,"size":3,"mimeType":"application/octet-stream","hasThumb":false}],
         "targetDir":target.to_str().unwrap(),"zipName":""
     }})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

@@ -1,7 +1,7 @@
 use crate::server::ServerState;
 use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject};
-use plain_rs::files::shares::Service;
-use plain_rs::types::Long;
+use plain_rs::features::files::shares::Service;
+use plain_rs::libs::types::Long;
 
 #[derive(SimpleObject)]
 struct SharedFile {
@@ -71,7 +71,7 @@ impl Query {
                     .map_err(|error| async_graphql::Error::new(error.to_string()))?;
                 (
                     size,
-                    plain_rs::utils::mime::mime_from_ext(&root.real_path).to_owned(),
+                    plain_rs::libs::utils::mime::mime_from_ext(&root.real_path).to_owned(),
                 )
             };
             entries.push(SharedFile {

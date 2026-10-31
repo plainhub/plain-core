@@ -60,7 +60,7 @@ impl NativeFileResources {
             .into_owned();
         let info = ResourceInfo {
             id: uuid::Uuid::new_v4().to_string(),
-            mime: plain_rs::utils::mime::mime_from_ext(&name).into(),
+            mime: plain_rs::libs::utils::mime::mime_from_ext(&name).into(),
             name,
             size: metadata.len(),
         };

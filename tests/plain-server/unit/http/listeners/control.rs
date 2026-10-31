@@ -1,5 +1,5 @@
 use super::*;
-use plain_rs::services::http_status::*;
+use plain_rs::features::services::http_status::*;
 use serde_json::json;
 
 #[test]

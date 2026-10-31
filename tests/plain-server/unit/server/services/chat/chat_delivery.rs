@@ -1,22 +1,23 @@
 #![cfg(feature = "http_transport")]
 
-use plain_rs::db::DPeer;
-use plain_rs::services::chat::chat_delivery::*;
+use plain_rs::features::services::chat::chat_delivery::*;
+use plain_rs::libs::db::DPeer;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]
 async fn explicit_message_retry_root_probes_open_transport_and_sends_original_row_once() {
-    use plain_rs::chat::enums::{ChatStatus, PeerStatus};
-    use plain_rs::transport::router::{Outcome, TransportType};
+    use plain_rs::features::chat::enums::{ChatStatus, PeerStatus};
+    use plain_rs::libs::transport::router::{Outcome, TransportType};
     use std::sync::atomic::{AtomicUsize, Ordering};
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "self").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[1; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[1; 32]),
         prefs,
     )
     .unwrap();
@@ -26,18 +27,18 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
         "fixture",
         "",
         Some(443),
-        plain_rs::chat::enums::DeviceType::Phone,
+        plain_rs::features::chat::enums::DeviceType::Phone,
     );
-    peer.key = plain_rs::utils::base64::base64_encode(&[7; 32]);
+    peer.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
     peer.status = PeerStatus::Paired;
-    plain_rs::db::chat_store::peers::save(
+    plain_rs::libs::db::chat_store::peers::save(
         &state.db,
         &[peer.clone()],
-        plain_rs::db::chat_store::SaveMode::Insert,
+        plain_rs::libs::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     let content = json!({"type":"TEXT","value":{"text":"explicit retry fixture"}}).to_string();
-    let mut original = plain_rs::db::DChat::new("me", "fixture", "", &content);
+    let mut original = plain_rs::libs::db::DChat::new("me", "fixture", "", &content);
     original.id = "retry-native".into();
     original.status = ChatStatus::Failed;
     state.db.insert_chat(&original).unwrap();
@@ -69,7 +70,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
             let result = match request["method"].as_str().unwrap() {
                 "peerTransportCapabilities" => json!(["BLE"]),
                 "peerTransportBleExchange" => {
-                    let wire = plain_rs::services::peers::ble_transport::test_peer_wire(
+                    let wire = plain_rs::features::services::peers::ble_transport::test_peer_wire(
                         &ble,
                         &request["params"],
                         &[7; 32],
@@ -78,11 +79,11 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
                         serde_json::from_str(wire.splitn(3, '|').nth(2).unwrap()).unwrap();
                     assert_eq!(
                         document["query"],
-                        plain_rs::transport::contract::CREATE_CHAT_ITEM
+                        plain_rs::libs::transport::contract::CREATE_CHAT_ITEM
                     );
                     assert_eq!(document["variables"]["content"], expected);
                     count.fetch_add(1, Ordering::SeqCst);
-                    plain_rs::services::peers::ble_transport::test_reply(
+                    plain_rs::features::services::peers::ble_transport::test_reply(
                         &ble,
                         &request["params"],
                         json!({"data":{"createChatItem":[]}}),
@@ -127,7 +128,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
     );
     let sent = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
-            let row = plain_rs::db::chat_store::messages::get(&state.db, &original.id)
+            let row = plain_rs::libs::db::chat_store::messages::get(&state.db, &original.id)
                 .unwrap()
                 .unwrap();
             if row.status == ChatStatus::Sent {

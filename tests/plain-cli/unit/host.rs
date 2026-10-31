@@ -7,7 +7,7 @@ struct Directory(std::path::PathBuf);
 
 impl Directory {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(plain_rs::utils::short_uuid::short_uuid());
+        let path = std::env::temp_dir().join(plain_rs::libs::utils::short_uuid::short_uuid());
         std::fs::create_dir(&path).unwrap();
         Self(path)
     }
@@ -89,7 +89,7 @@ async fn native_app_query_uses_startup_data_and_live_capabilities_without_public
     );
     assert_eq!(data["app"]["deviceType"], "COMPUTER");
     let mut capabilities = vec!["MEDIA_SCAN"];
-    capabilities.extend(plain_rs::services::files::browser::capabilities());
+    capabilities.extend(plain_rs::features::services::files::browser::capabilities());
     assert_eq!(data["app"]["capabilities"], serde_json::json!(capabilities));
     assert_eq!(data["app"]["httpPort"], 0);
     assert_eq!(data["app"]["httpsPort"], 0);
@@ -149,11 +149,11 @@ async fn media_buckets_are_served_by_the_core_catalog() {
     let path = directory.0.join("report.txt");
     core.native_media_catalog()
         .unwrap()
-        .record_files(&[plain_rs::db::MediaFileMetadata {
+        .record_files(&[plain_rs::libs::db::MediaFileMetadata {
             album: String::new(),
             album_artist: String::new(),
 
-            data_type: plain_rs::enums::DataType::Doc,
+            data_type: plain_rs::features::enums::DataType::Doc,
             path: path.to_str().unwrap().into(),
             title: "Document title".into(),
             artist: String::new(),
@@ -201,7 +201,7 @@ async fn completion_scan_runs_directly_without_another_host_request() {
     let home = std::env::var_os("HOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    let directory = Directory(home.join(plain_rs::utils::short_uuid::short_uuid()));
+    let directory = Directory(home.join(plain_rs::libs::utils::short_uuid::short_uuid()));
     std::fs::create_dir(&directory.0).unwrap();
     let core = Arc::new(ContentServer::open(&directory.0.as_path().join("core")).unwrap());
     core.native_media_catalog()
@@ -229,7 +229,7 @@ async fn completion_scan_runs_directly_without_another_host_request() {
     assert_eq!(
         core.native_media_catalog()
             .unwrap()
-            .count(plain_rs::enums::DataType::Doc)
+            .count(plain_rs::features::enums::DataType::Doc)
             .unwrap(),
         1
     );
@@ -289,7 +289,7 @@ async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
         .thumbnails
         .get(
             state,
-            plain_rs::services::images::thumbnails::Request {
+            plain_rs::features::services::images::thumbnails::Request {
                 path: image_path.to_string_lossy().into_owned(),
                 width: 4,
                 height: 4,
@@ -303,7 +303,7 @@ async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
         .unwrap();
     assert_eq!(image::load_from_memory(&bytes).unwrap().width(), 4);
     assert_eq!(image::load_from_memory(&bytes).unwrap().height(), 4);
-    assert!(!plain_rs::files::filesystem::image_format::is_animated_image_or_svg(&image_path));
+    assert!(!plain_rs::libs::filesystem::image_format::is_animated_image_or_svg(&image_path));
     core.stop_core().await;
     runner.await.unwrap().unwrap();
 }
@@ -339,11 +339,11 @@ async fn audio_queue_uses_the_registered_host_and_keeps_unindexed_playback_tempo
     let core = Arc::new(ContentServer::open(directory.path()).unwrap());
     let db = core.runtime().db.clone();
     let rows = db
-        .record_media_files(&[plain_rs::db::MediaFileMetadata {
+        .record_media_files(&[plain_rs::libs::db::MediaFileMetadata {
             album: String::new(),
             album_artist: String::new(),
 
-            data_type: plain_rs::enums::DataType::Audio,
+            data_type: plain_rs::features::enums::DataType::Audio,
             path: indexed.to_string_lossy().into_owned(),
             title: "Indexed".into(),
             artist: "Artist".into(),
@@ -406,17 +406,20 @@ async fn audio_queue_uses_the_registered_host_and_keeps_unindexed_playback_tempo
         raw.to_string_lossy().as_ref()
     );
     assert_eq!(
-        db.media_file_count(plain_rs::enums::DataType::Audio)
+        db.media_file_count(plain_rs::features::enums::DataType::Audio)
             .unwrap(),
         1
     );
-    assert_eq!(plain_rs::media::audio::queue::queue_total(&db).unwrap(), 0);
+    assert_eq!(
+        plain_rs::features::media::audio::queue::queue_total(&db).unwrap(),
+        0
+    );
     let response = executor
         .execute("mutation { clearAudioQueue }".into())
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
-        plain_rs::media::audio::queue::get_audio_current(&db).unwrap(),
+        plain_rs::features::media::audio::queue::get_audio_current(&db).unwrap(),
         ""
     );
     core.stop_core().await;

@@ -6,12 +6,13 @@ use std::sync::Arc;
 #[tokio::test]
 async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_host() {
     let directory = tempfile::tempdir().unwrap();
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
     prefs.set("client_id", "mdns-fixture").unwrap();
     let server = ContentServer::start(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[3; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -78,11 +79,12 @@ fn mdns_snapshot_projection_keeps_packet_timestamps_and_ipv6_without_loss() {
 #[tokio::test]
 async fn native_schema_does_not_expose_platform_scan_lifecycle() {
     let directory = tempfile::tempdir().unwrap();
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
     let server = ContentServer::start(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[3; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -121,7 +123,7 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
     assert_eq!(
         state
             .prefs
-            .get::<String>(plain_rs::prefs::pref_keys::MDNS_HOSTNAME)
+            .get::<String>(plain_rs::features::prefs::pref_keys::MDNS_HOSTNAME)
             .unwrap()
             .unwrap(),
         "renderer.local"
@@ -143,7 +145,7 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
         .await;
     assert!(!invalid.errors.is_empty());
     assert_eq!(
-        plain_rs::prefs::security::snapshot(&state.prefs)
+        plain_rs::features::prefs::security::snapshot(&state.prefs)
             .unwrap()
             .mdns_hostname,
         "renderer.local"

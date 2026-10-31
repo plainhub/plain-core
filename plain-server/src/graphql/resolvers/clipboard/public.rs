@@ -2,9 +2,9 @@ use crate::graphql::resolvers::clipboard::models::ClipboardItem;
 use crate::graphql::types::ActionResult;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Object};
-use plain_rs::db::Db;
-use plain_rs::host::bridge::Host;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::host::bridge::Host;
 use std::sync::Arc;
 
 const PERMISSION: &str = "CLIPBOARD";
@@ -60,7 +60,7 @@ impl ClipboardMutation {
             .data_opt::<crate::graphql::executor::RequestClient>()
             .map(crate::graphql::executor::RequestClient::client_id)
             .unwrap_or_default();
-        plain_rs::services::clipboard::record_history(
+        plain_rs::features::services::clipboard::record_history(
             ctx.data::<Arc<Db>>()?,
             ctx.data::<Arc<Host>>()?,
             &text,
@@ -110,7 +110,7 @@ impl ClipboardMutation {
 fn enabled(ctx: &Context<'_>) -> async_graphql::Result<()> {
     // plain-app's clipboard roots raise their own error here, not `no_permission`.
     if public_gate::is_local(ctx)
-        || plain_rs::services::device::access::is_enabled(
+        || plain_rs::features::services::device::access::is_enabled(
             ctx.data_unchecked::<Arc<Prefs>>(),
             &[PERMISSION],
         )

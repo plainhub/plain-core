@@ -1,11 +1,11 @@
 use crate::graphql::resolvers::peers::query::Query;
 use crate::server::ServerState;
 use async_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
-use plain_rs::chat::enums::ChannelSystemMessageType;
-use plain_rs::chat::enums::ChatStatus;
-use plain_rs::db::DChat;
-use plain_rs::transport::auth::AuthenticatedPeer;
-use plain_rs::types::Instant;
+use plain_rs::features::chat::enums::ChannelSystemMessageType;
+use plain_rs::features::chat::enums::ChatStatus;
+use plain_rs::libs::db::DChat;
+use plain_rs::libs::transport::auth::AuthenticatedPeer;
+use plain_rs::libs::types::Instant;
 use serde_json::{Value, json};
 
 #[derive(SimpleObject)]
@@ -50,7 +50,7 @@ impl Mutation {
         content: String,
     ) -> async_graphql::Result<Vec<ChatItem>> {
         let c = ctx.data_unchecked::<PeerContext>();
-        let Some(received) = plain_rs::chat::messages::message_lifecycle::receive(
+        let Some(received) = plain_rs::features::chat::messages::message_lifecycle::receive(
             &c.state.db,
             &c.authenticated.peer.id,
             &c.channel_id,
@@ -62,10 +62,16 @@ impl Mutation {
             return Ok(vec![]);
         };
         let item = ChatItem::try_from(received.chat.clone())?;
-        let _ = c.state.events.send(plain_rs::events::WsEvent::broadcast(
-            plain_rs::chat::events::WS_MESSAGE_CREATED,
-            json!([plain_rs::chat::service::chat_to_json(&received.chat)]).to_string(),
-        ));
+        let _ = c
+            .state
+            .events
+            .send(plain_rs::libs::events::WsEvent::broadcast(
+                plain_rs::features::chat::events::WS_MESSAGE_CREATED,
+                json!([plain_rs::features::chat::service::chat_to_json(
+                    &received.chat
+                )])
+                .to_string(),
+            ));
         if let Ok(content) = serde_json::from_str::<Value>(&received.chat.content) {
             if matches!(content["type"].as_str(), Some("FILES" | "IMAGES")) {
                 if let Some(files) = content["value"]["items"].as_array() {
@@ -93,7 +99,7 @@ impl Mutation {
         payload: String,
     ) -> async_graphql::Result<bool> {
         let c = ctx.data_unchecked::<PeerContext>();
-        match plain_rs::services::chat::channel_runtime::receive(
+        match plain_rs::features::services::chat::channel_runtime::receive(
             &c.state,
             &c.authenticated.peer.id,
             r#type,
@@ -120,8 +126,8 @@ pub(crate) type PeerSchema = Schema<Query, Mutation, EmptySubscription>;
 pub(crate) fn schema() -> PeerSchema {
     Schema::build(Query, Mutation, EmptySubscription)
         .extension(crate::graphql::enum_literals::EnumLiteralValidation)
-        .register_output_type::<plain_rs::types::Long>()
-        .register_output_type::<plain_rs::chat::enums::PeerStatus>()
+        .register_output_type::<plain_rs::libs::types::Long>()
+        .register_output_type::<plain_rs::features::chat::enums::PeerStatus>()
         .limit_depth(16)
         .limit_complexity(256)
         .finish()
@@ -133,7 +139,8 @@ pub(crate) async fn execute(
     body: &[u8],
 ) -> (u16, Vec<u8>) {
     let authenticated =
-        match plain_rs::transport::auth::authenticate(&state.db, client_id, channel_id, body) {
+        match plain_rs::libs::transport::auth::authenticate(&state.db, client_id, channel_id, body)
+        {
             Ok(authenticated) => authenticated,
             Err(error) => return (error.http_status(), vec![]),
         };
@@ -151,7 +158,7 @@ pub(crate) async fn execute(
             channel_id: channel_id.into(),
         }))
         .await;
-    let context = plain_rs::transport::http_response::Context::new("/peer_graphql", body);
+    let context = plain_rs::libs::transport::http_response::Context::new("/peer_graphql", body);
     match serde_json::to_vec(&response) {
         Ok(body) => context
             .encrypt(&key, &body)

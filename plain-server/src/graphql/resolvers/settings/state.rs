@@ -1,8 +1,8 @@
 use async_graphql::{Context, Result};
-use plain_rs::services::settings::preferences::Preferences;
-use plain_rs::services::settings::security_preferences::SecurityPreferences;
-use plain_rs::services::settings::security_preferences::security_key;
-use plain_rs::{events::WsEvent, prefs::Prefs};
+use plain_rs::features::services::settings::preferences::Preferences;
+use plain_rs::features::services::settings::security_preferences::SecurityPreferences;
+use plain_rs::features::services::settings::security_preferences::security_key;
+use plain_rs::{features::prefs::Prefs, libs::events::WsEvent};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -32,7 +32,7 @@ pub(crate) fn preferences<'a>(ctx: &'a Context<'_>) -> Result<Preferences<'a>> {
 
 pub(crate) async fn update(
     ctx: &Context<'_>,
-    patch: plain_rs::prefs::settings::SettingsPatch,
+    patch: plain_rs::features::prefs::settings::SettingsPatch,
 ) -> Result<bool> {
     let fields = serde_json::to_value(&patch)?;
     for (field, value) in fields.as_object().unwrap() {

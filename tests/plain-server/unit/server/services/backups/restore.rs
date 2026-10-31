@@ -1,4 +1,4 @@
-use plain_rs::services::backups::test_fixture::archive;
+use plain_rs::features::services::backups::test_fixture::archive;
 
 #[tokio::test]
 async fn native_restore_stages_without_overwriting_the_running_database() {
@@ -31,7 +31,7 @@ async fn native_restore_stages_without_overwriting_the_running_database() {
         "live"
     );
     assert!(
-        plain_rs::data_paths::directory::DataDirectory::open(
+        plain_rs::libs::data_paths::directory::DataDirectory::open(
             directory.path(),
             core.cache_paths().root()
         )

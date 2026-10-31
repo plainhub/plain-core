@@ -23,8 +23,9 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 
 fn fixture() -> (tempfile::TempDir, PublicSchema) {
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    let db = Arc::new(plain_rs::db::Db::open(&dir.path().join("data.db")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let db = Arc::new(plain_rs::libs::db::Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
     let directory = dir.path().to_path_buf();
     let (events, _) = tokio::sync::broadcast::channel(16);
@@ -102,7 +103,7 @@ async fn no_published_codec_is_null_rather_than_an_empty_object() {
 async fn quality_is_read_from_the_single_rust_store() {
     let (_dir, schema) = fixture();
     schema
-        .data::<Arc<plain_rs::prefs::Prefs>>()
+        .data::<Arc<plain_rs::features::prefs::Prefs>>()
         .unwrap()
         .set(
             "screen_mirror_quality",
@@ -128,7 +129,7 @@ async fn quality_is_read_from_the_single_rust_store() {
 async fn an_unknown_stored_quality_mode_reads_as_hd() {
     let (_dir, schema) = fixture();
     schema
-        .data::<Arc<plain_rs::prefs::Prefs>>()
+        .data::<Arc<plain_rs::features::prefs::Prefs>>()
         .unwrap()
         .set(
             "screen_mirror_quality",
@@ -201,7 +202,7 @@ async fn quality_updates_send_the_mode_name_the_store_understands() {
     );
     assert_eq!(
         schema
-            .data::<Arc<plain_rs::prefs::Prefs>>()
+            .data::<Arc<plain_rs::features::prefs::Prefs>>()
             .unwrap()
             .get::<Value>("screen_mirror_quality")
             .unwrap(),

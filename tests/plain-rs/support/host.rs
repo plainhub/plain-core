@@ -1,5 +1,5 @@
 pub(crate) fn acknowledge_host_callback(
-    host: &plain_rs::host::bridge::Host,
+    host: &crate::libs::host::bridge::Host,
     generation: u64,
     request: &serde_json::Value,
 ) -> bool {
@@ -40,13 +40,13 @@ pub(crate) fn acknowledge_host_callback(
 }
 
 pub(crate) struct HostRequests {
-    host: std::sync::Arc<plain_rs::host::bridge::Host>,
+    host: std::sync::Arc<crate::libs::host::bridge::Host>,
     generation: u64,
     incoming: tokio::sync::mpsc::Receiver<serde_json::Value>,
 }
 
 impl HostRequests {
-    pub(crate) fn connect(host: &std::sync::Arc<plain_rs::host::bridge::Host>) -> (u64, Self) {
+    pub(crate) fn connect(host: &std::sync::Arc<crate::libs::host::bridge::Host>) -> (u64, Self) {
         let (generation, incoming) = host.connect();
         (
             generation,

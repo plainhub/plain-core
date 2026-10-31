@@ -1,5 +1,5 @@
 //! GraphQL-facing enums. The chat-domain enums mirror the wire enums in
-//! `plain_rs::chat::enums` (which own the SQLite/wire representation);
+//! `plain_rs::features::chat::enums` (which own the SQLite/wire representation);
 //! the `From` impls below convert what the shared store returns into
 //! these GraphQL types. The remaining enums are desktop-only surfaces.
 
@@ -36,18 +36,18 @@ macro_rules! wire_enum {
             }
         }
 
-        impl From<plain_rs::chat::enums::$name> for $name {
-            fn from(v: plain_rs::chat::enums::$name) -> Self {
+        impl From<plain_rs::features::chat::enums::$name> for $name {
+            fn from(v: plain_rs::features::chat::enums::$name) -> Self {
                 match v {
-                    $(plain_rs::chat::enums::$name::$variant => Self::$variant,)+
+                    $(plain_rs::features::chat::enums::$name::$variant => Self::$variant,)+
                 }
             }
         }
 
-        impl From<$name> for plain_rs::chat::enums::$name {
+        impl From<$name> for plain_rs::features::chat::enums::$name {
             fn from(v: $name) -> Self {
                 match v {
-                    $($name::$variant => plain_rs::chat::enums::$name::$variant,)+
+                    $($name::$variant => plain_rs::features::chat::enums::$name::$variant,)+
                 }
             }
         }
@@ -126,21 +126,21 @@ impl FromStr for DeviceType {
     }
 }
 
-impl From<plain_rs::chat::enums::DeviceType> for DeviceType {
-    fn from(value: plain_rs::chat::enums::DeviceType) -> Self {
+impl From<plain_rs::features::chat::enums::DeviceType> for DeviceType {
+    fn from(value: plain_rs::features::chat::enums::DeviceType) -> Self {
         match value {
-            plain_rs::chat::enums::DeviceType::Phone => Self::Phone,
-            plain_rs::chat::enums::DeviceType::Tablet => Self::Tablet,
-            plain_rs::chat::enums::DeviceType::Computer => Self::Computer,
-            plain_rs::chat::enums::DeviceType::Tv => Self::Tv,
-            plain_rs::chat::enums::DeviceType::Nas => Self::Nas,
-            plain_rs::chat::enums::DeviceType::Other
-            | plain_rs::chat::enums::DeviceType::Unknown => Self::Other,
+            plain_rs::features::chat::enums::DeviceType::Phone => Self::Phone,
+            plain_rs::features::chat::enums::DeviceType::Tablet => Self::Tablet,
+            plain_rs::features::chat::enums::DeviceType::Computer => Self::Computer,
+            plain_rs::features::chat::enums::DeviceType::Tv => Self::Tv,
+            plain_rs::features::chat::enums::DeviceType::Nas => Self::Nas,
+            plain_rs::features::chat::enums::DeviceType::Other
+            | plain_rs::features::chat::enums::DeviceType::Unknown => Self::Other,
         }
     }
 }
 
-impl From<DeviceType> for plain_rs::chat::enums::DeviceType {
+impl From<DeviceType> for plain_rs::features::chat::enums::DeviceType {
     fn from(value: DeviceType) -> Self {
         match value {
             DeviceType::Phone => Self::Phone,
@@ -386,11 +386,11 @@ impl FromStr for PackageType {
 
 // ── DownloadStatus ─────────────────────────────────────────────────────────
 
-pub use plain_rs::chat::attachments::download_status::DownloadStatus;
+pub use plain_rs::features::chat::attachments::download_status::DownloadStatus;
 
 // ── MediaPlayMode ──────────────────────────────────────────────────────────
 
-pub use plain_rs::media::audio::play_mode::MediaPlayMode;
+pub use plain_rs::features::media::audio::play_mode::MediaPlayMode;
 
 // ── Permission ─────────────────────────────────────────────────────────────
 

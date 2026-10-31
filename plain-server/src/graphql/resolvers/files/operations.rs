@@ -7,10 +7,10 @@ use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Enum, Object, SimpleObject};
-use plain_rs::db::Db;
-use plain_rs::services::files::provider_query as provider_plan;
-use plain_rs::services::files::provider_query::Provider;
-use plain_rs::types::Long;
+use plain_rs::features::services::files::provider_query as provider_plan;
+use plain_rs::features::services::files::provider_query::Provider;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::types::Long;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -60,7 +60,7 @@ impl UploadQuery {
         ctx: &Context<'_>,
         file_id: String,
     ) -> async_graphql::Result<Vec<String>> {
-        ctx.data::<Arc<plain_rs::services::files::upload_chunks::UploadChunks>>()?
+        ctx.data::<Arc<plain_rs::features::services::files::upload_chunks::UploadChunks>>()?
             .list(&file_id)
             .await
             .map_err(async_graphql::Error::new)
@@ -74,7 +74,7 @@ impl UploadQuery {
         file_id: String,
     ) -> async_graphql::Result<MergeTask> {
         Ok(merge_task(
-            &ctx.data_unchecked::<std::sync::Arc<plain_rs::files::uploads::Runtime>>()
+            &ctx.data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
                 .status(&file_id),
         ))
     }
@@ -87,9 +87,9 @@ pub struct FileOpsMutation;
 impl FileOpsMutation {
     async fn create_file(&self, ctx: &Context<'_>, path: String) -> async_graphql::Result<File> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        let record = plain_rs::services::files::writes::execute(
-            ctx.data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?,
-            plain_rs::files::filesystem::writes::Operation::CreateFile { path },
+        let record = plain_rs::features::services::files::writes::execute(
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
+            plain_rs::libs::filesystem::writes::Operation::CreateFile { path },
         )
         .await
         .map_err(async_graphql::Error::new)?;
@@ -101,7 +101,8 @@ impl FileOpsMutation {
         paths: Vec<String>,
     ) -> async_graphql::Result<ActionResult> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        let tasks = ctx.data::<Arc<plain_rs::services::files::file_tasks::FileTasks>>()?;
+        let tasks =
+            ctx.data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?;
         Ok(ActionResult {
             affected_count: tasks.delete_many(paths).await?,
         })
@@ -115,7 +116,7 @@ impl FileOpsMutation {
     ) -> async_graphql::Result<String> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let state = ctx.data::<crate::server::ServerState>()?;
-        plain_rs::services::files::archive_operations::pack(
+        plain_rs::features::services::files::archive_operations::pack(
             &state.file_platform,
             paths,
             target,
@@ -133,7 +134,7 @@ impl FileOpsMutation {
     ) -> async_graphql::Result<String> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let state = ctx.data::<crate::server::ServerState>()?;
-        plain_rs::services::files::archive_operations::unpack(
+        plain_rs::features::services::files::archive_operations::unpack(
             &state.file_platform,
             path,
             target,
@@ -160,9 +161,9 @@ impl FileOpsMutation {
 
     async fn create_dir(&self, ctx: &Context<'_>, path: String) -> async_graphql::Result<File> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        let record = plain_rs::services::files::writes::execute(
-            ctx.data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?,
-            plain_rs::files::filesystem::writes::Operation::CreateDirectory { path },
+        let record = plain_rs::features::services::files::writes::execute(
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
+            plain_rs::libs::filesystem::writes::Operation::CreateDirectory { path },
         )
         .await
         .map_err(async_graphql::Error::new)?;
@@ -177,7 +178,7 @@ impl FileOpsMutation {
     ) -> async_graphql::Result<Option<String>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         Ok(ctx
-            .data::<Arc<plain_rs::services::files::file_tasks::FileTasks>>()?
+            .data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?
             .rename(&super::tasks::caller(ctx)?, path, name)
             .await?)
     }
@@ -190,9 +191,9 @@ impl FileOpsMutation {
         overwrite: bool,
     ) -> async_graphql::Result<File> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        let record = plain_rs::services::files::writes::execute(
-            ctx.data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?,
-            plain_rs::files::filesystem::writes::Operation::WriteText {
+        let record = plain_rs::features::services::files::writes::execute(
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
+            plain_rs::libs::filesystem::writes::Operation::WriteText {
                 path,
                 content,
                 overwrite,
@@ -216,7 +217,7 @@ impl FileOpsMutation {
         {
             return Err(async_graphql::Error::new("no_permission"));
         }
-        Ok(plain_rs::services::files::named_copy::copy(
+        Ok(plain_rs::features::services::files::named_copy::copy(
             ctx.data::<crate::server::ServerState>()?,
             super::tasks::caller(ctx)?,
             src,
@@ -254,7 +255,7 @@ impl FileOpsMutation {
         file_id: String,
     ) -> async_graphql::Result<bool> {
         let base = upload_base(ctx).await?;
-        ctx.data_unchecked::<std::sync::Arc<plain_rs::files::uploads::Runtime>>()
+        ctx.data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
             .delete(&base, &file_id)
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))
@@ -269,26 +270,33 @@ impl FileOpsMutation {
         total_chunks: i32,
         path: String,
         replace: bool,
-        total_size: plain_rs::types::Long,
+        total_size: plain_rs::libs::types::Long,
     ) -> async_graphql::Result<MergeTask> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        let platform = ctx.data::<Arc<plain_rs::services::files::platform::FilePlatform>>()?;
+        let platform =
+            ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?;
         let path = platform.resolve_reference(&path)?;
         let kind = if path.starts_with("content://") {
             if !replace {
                 return Err("Resource upload requires replacement".into());
             }
-            let host = ctx.data::<Arc<plain_rs::host::bridge::Host>>()?.clone();
+            let host = ctx
+                .data::<Arc<plain_rs::libs::host::bridge::Host>>()?
+                .clone();
             let destination = path.clone();
-            plain_rs::files::uploads::Kind::Resource {
+            plain_rs::features::files::uploads::Kind::Resource {
                 name: path.rsplit('/').next().unwrap_or_default().to_owned(),
                 write: Arc::new(move |source| {
                     let host = host.clone();
                     let destination = destination.clone();
                     Box::pin(async move {
-                        plain_rs::services::files::resources::write(&host, &source, &destination)
-                            .await
-                            .map_err(anyhow::Error::msg)
+                        plain_rs::features::services::files::resources::write(
+                            &host,
+                            &source,
+                            &destination,
+                        )
+                        .await
+                        .map_err(anyhow::Error::msg)
                     })
                 }),
             }
@@ -297,7 +305,7 @@ impl FileOpsMutation {
                 return Err("Unsupported upload destination".into());
             }
             platform.authorize(&path, true).await?;
-            plain_rs::files::uploads::Kind::File {
+            plain_rs::features::files::uploads::Kind::File {
                 path: path.into(),
                 replace,
             }
@@ -311,14 +319,14 @@ impl FileOpsMutation {
         file_id: String,
         total_chunks: i32,
         file_name: String,
-        total_size: plain_rs::types::Long,
+        total_size: plain_rs::libs::types::Long,
     ) -> async_graphql::Result<MergeTask> {
         start_merge(
             ctx,
             file_id,
             total_chunks,
             total_size.0,
-            plain_rs::files::uploads::Kind::AppFile { name: file_name },
+            plain_rs::features::files::uploads::Kind::AppFile { name: file_name },
         )
         .await
     }
@@ -429,16 +437,16 @@ async fn transfer(
     overwrite: bool,
 ) -> async_graphql::Result<bool> {
     let kind = match kind {
-        "COPY" => plain_rs::files::tasks::FileTaskType::Copy,
-        "MOVE" => plain_rs::files::tasks::FileTaskType::Move,
+        "COPY" => plain_rs::features::files::tasks::FileTaskType::Copy,
+        "MOVE" => plain_rs::features::files::tasks::FileTaskType::Move,
         _ => return Err("invalid file task type".into()),
     };
     Ok(ctx
-        .data::<Arc<plain_rs::services::files::file_tasks::FileTasks>>()?
+        .data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?
         .execute(
             &super::tasks::caller(ctx)?,
             kind,
-            vec![plain_rs::files::tasks::FileTaskOp {
+            vec![plain_rs::features::files::tasks::FileTaskOp {
                 src,
                 dst,
                 overwrite,
@@ -446,7 +454,7 @@ async fn transfer(
         )
         .await?
         .status
-        == plain_rs::files::tasks::FileTaskStatus::Done)
+        == plain_rs::features::files::tasks::FileTaskStatus::Done)
 }
 
 async fn media_action(
@@ -456,7 +464,7 @@ async fn media_action(
     query: &str,
     dest: Value,
 ) -> async_graphql::Result<i32> {
-    use plain_rs::media::actions::Action;
+    use plain_rs::features::media::actions::Action;
     let action = match action {
         "delete" => Action::Delete,
         "trash" => Action::Trash,
@@ -465,18 +473,18 @@ async fn media_action(
         _ => return Err("invalid media action".into()),
     };
     let data_type = match r#type {
-        MediaDataType::AUDIO => plain_rs::enums::DataType::Audio,
-        MediaDataType::VIDEO => plain_rs::enums::DataType::Video,
-        MediaDataType::IMAGE => plain_rs::enums::DataType::Image,
-        MediaDataType::DOC => plain_rs::enums::DataType::Doc,
+        MediaDataType::AUDIO => plain_rs::features::enums::DataType::Audio,
+        MediaDataType::VIDEO => plain_rs::features::enums::DataType::Video,
+        MediaDataType::IMAGE => plain_rs::features::enums::DataType::Image,
+        MediaDataType::DOC => plain_rs::features::enums::DataType::Doc,
     };
-    ctx.data::<Arc<plain_rs::services::files::media_actions::MediaActions>>()?
+    ctx.data::<Arc<plain_rs::features::services::files::media_actions::MediaActions>>()?
         .run_query(data_type, action, query, dest.as_str().unwrap_or_default())
         .await
         .map_err(Into::into)
 }
 
-fn written_file(record: plain_rs::files::filesystem::record::FileRecord) -> File {
+fn written_file(record: plain_rs::libs::filesystem::record::FileRecord) -> File {
     File {
         permission: record.permission,
         file_id: (!record.file_id.is_empty()).then(|| record.file_id.into()),
@@ -485,8 +493,8 @@ fn written_file(record: plain_rs::files::filesystem::record::FileRecord) -> File
         created_at: record
             .created_at
             .and_then(chrono::DateTime::from_timestamp_millis)
-            .map(plain_rs::types::Instant),
-        updated_at: plain_rs::types::Instant(
+            .map(plain_rs::libs::types::Instant),
+        updated_at: plain_rs::libs::types::Instant(
             chrono::DateTime::from_timestamp_millis(record.updated_at).unwrap_or_default(),
         ),
         size: Long(record.size),
@@ -504,8 +512,8 @@ fn merge_task(value: &Value) -> MergeTask {
     }
 }
 
-fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<plain_rs::prefs::Prefs> {
-    ctx.data_unchecked::<Arc<plain_rs::prefs::Prefs>>()
+fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<plain_rs::features::prefs::Prefs> {
+    ctx.data_unchecked::<Arc<plain_rs::features::prefs::Prefs>>()
 }
 
 #[cfg(test)]
@@ -514,7 +522,7 @@ mod tests;
 
 async fn upload_base(ctx: &Context<'_>) -> async_graphql::Result<std::path::PathBuf> {
     Ok(ctx
-        .data::<Arc<plain_rs::services::files::upload_chunks::UploadChunks>>()?
+        .data::<Arc<plain_rs::features::services::files::upload_chunks::UploadChunks>>()?
         .directory()
         .to_path_buf())
 }
@@ -523,17 +531,17 @@ async fn start_merge(
     id: String,
     count: i32,
     size: i64,
-    kind: plain_rs::files::uploads::Kind,
+    kind: plain_rs::features::files::uploads::Kind,
 ) -> async_graphql::Result<MergeTask> {
     let base = upload_base(ctx).await?;
     let store = ctx
-        .data_unchecked::<std::sync::Arc<plain_rs::files::app_files::FileStore>>()
+        .data_unchecked::<std::sync::Arc<plain_rs::features::files::app_files::FileStore>>()
         .clone();
     let runtime = ctx
-        .data_unchecked::<std::sync::Arc<plain_rs::files::uploads::Runtime>>()
+        .data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
         .clone();
     let events = ctx
-        .data_unchecked::<tokio::sync::broadcast::Sender<plain_rs::events::WsEvent>>()
+        .data_unchecked::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
         .clone();
     let value = runtime
         .start(store, base, id, count, size, kind, events)

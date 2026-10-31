@@ -2,8 +2,8 @@ use super::client_inputs::{SharedEntryInput, SharedLinkInput, SharedMessageCardI
 use super::client_models::{SharedBrowseResult, SharedLink};
 use crate::server::ServerState;
 use async_graphql::{Context, Object};
-use plain_rs::chat::messages::share_card;
-use plain_rs::services::peers::shared_client;
+use plain_rs::features::chat::messages::share_card;
+use plain_rs::features::services::peers::shared_client;
 
 fn error(value: anyhow::Error) -> async_graphql::Error {
     async_graphql::Error::new(value.to_string())

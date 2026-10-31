@@ -1,5 +1,5 @@
 use async_graphql::SimpleObject;
-use plain_rs::types::Instant;
+use plain_rs::libs::types::Instant;
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct ActionResult {

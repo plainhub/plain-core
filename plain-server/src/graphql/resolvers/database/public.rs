@@ -3,8 +3,8 @@
 //!
 
 use async_graphql::{Context, Enum, Object, SimpleObject};
-use plain_rs::db::devtools::SqliteFile;
-use plain_rs::types::Long;
+use plain_rs::libs::db::devtools::SqliteFile;
+use plain_rs::libs::types::Long;
 use std::sync::Arc;
 
 #[derive(SimpleObject, Clone, Debug, Default)]
@@ -195,7 +195,7 @@ impl DbMutation {
 
 async fn app_db(ctx: &Context<'_>) -> async_graphql::Result<SqliteFile> {
     let path = ctx
-        .data::<Arc<plain_rs::db::Db>>()?
+        .data::<Arc<plain_rs::libs::db::Db>>()?
         .with_conn(|connection| connection.path().map(std::path::PathBuf::from))
         .unwrap_or_default();
     Ok(SqliteFile::new(path))

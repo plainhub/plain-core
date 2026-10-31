@@ -5,10 +5,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
-use plain_rs::prefs::pref_keys::{DLNA_ALLOWED_SENDERS, DLNA_DENIED_SENDERS};
-use plain_rs::services::casting::receiver::control::emit;
+use plain_rs::features::prefs::pref_keys::{DLNA_ALLOWED_SENDERS, DLNA_DENIED_SENDERS};
+use plain_rs::features::services::casting::receiver::control::emit;
 #[cfg(test)]
-use plain_rs::services::casting::receiver::control::snapshot;
+use plain_rs::features::services::casting::receiver::control::snapshot;
 use std::{collections::HashMap, net::SocketAddr};
 
 /// Control points send a small description document; a larger cap than they
@@ -49,7 +49,7 @@ async fn read_body(body: axum::body::Body, limit: usize) -> Result<Vec<u8>, Body
 }
 
 fn access_allowed(state: &ServerState) -> bool {
-    plain_rs::prefs::dlna::enabled(&state.prefs)
+    plain_rs::features::prefs::dlna::enabled(&state.prefs)
 }
 
 fn headers_to_map(headers: &HeaderMap) -> HashMap<String, String> {
@@ -64,13 +64,13 @@ fn headers_to_map(headers: &HeaderMap) -> HashMap<String, String> {
         .collect()
 }
 
-use plain_rs::services::casting::address::device_name;
+use plain_rs::features::services::casting::address::device_name;
 
 /// The address the SSDP LOCATION points at and the device description
 /// advertises. Must agree with the one the advertiser used, or a control
 /// point fetches the description from an address the renderer never joined.
 fn local_ip() -> String {
-    let ips = plain_rs::protocols::mdns::host_responder::local_ipv4_strs();
+    let ips = plain_rs::libs::protocols::mdns::host_responder::local_ipv4_strs();
     ips.iter()
         .find(|ip| !ip.starts_with("127."))
         .or_else(|| ips.first())
@@ -99,8 +99,8 @@ pub(crate) async fn receiver(
     let body = String::from_utf8_lossy(&bytes).to_string();
     let headers = headers_to_map(&parts.headers);
 
-    let allowed = plain_rs::prefs::dlna::senders(&state.prefs, DLNA_ALLOWED_SENDERS);
-    let denied = plain_rs::prefs::dlna::senders(&state.prefs, DLNA_DENIED_SENDERS);
+    let allowed = plain_rs::features::prefs::dlna::senders(&state.prefs, DLNA_ALLOWED_SENDERS);
+    let denied = plain_rs::features::prefs::dlna::senders(&state.prefs, DLNA_DENIED_SENDERS);
     // The allow/deny rules and the "remember this sender" prefs both key on
     // the peer address, so it comes from the socket — a control point that
     // forged `c-ip` would otherwise be able to impersonate a trusted sender.
@@ -114,7 +114,7 @@ pub(crate) async fn receiver(
         }
     };
 
-    let response = plain_rs::services::casting::receiver::http_router::route(
+    let response = plain_rs::features::services::casting::receiver::http_router::route(
         &state.dlna.state,
         parts.method.as_str(),
         parts.uri.path(),
@@ -157,7 +157,7 @@ pub(crate) async fn media(
     request: HttpRequest,
 ) -> Response {
     let id = raw.split('.').next().unwrap_or_default();
-    let Some((path, mime)) = plain_rs::services::casting::media_alias::lookup(id) else {
+    let Some((path, mime)) = plain_rs::features::services::casting::media_alias::lookup(id) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     if path.starts_with("http://") || path.starts_with("https://") {
@@ -186,7 +186,7 @@ pub(crate) async fn media(
             return StatusCode::NOT_FOUND.into_response();
         }
     }
-    let path = match plain_rs::services::files::references::resolve(
+    let path = match plain_rs::features::services::files::references::resolve(
         state.db.clone(),
         state.directory.clone(),
         &path,
@@ -244,7 +244,7 @@ pub(crate) async fn callback(State(state): State<ServerState>, request: HttpRequ
         return StatusCode::BAD_REQUEST.into_response();
     };
     let xml = String::from_utf8_lossy(&body);
-    let fields = plain_rs::services::casting::cast_runtime::attributes(&xml);
+    let fields = plain_rs::features::services::casting::cast_runtime::attributes(&xml);
     let _guard = state.cast.operations.lock().await;
     if sid
         .as_ref()
@@ -261,7 +261,7 @@ pub(crate) async fn callback(State(state): State<ServerState>, request: HttpRequ
         }
         *previous = Some(sequence);
     }
-    let outcome = plain_rs::services::casting::cast_runtime::apply(&state, &fields).await;
+    let outcome = plain_rs::features::services::casting::cast_runtime::apply(&state, &fields).await;
     if let Err(error) = outcome {
         log::warn!("Cast callback failed: {error}");
     }

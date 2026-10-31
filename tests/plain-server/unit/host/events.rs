@@ -5,8 +5,8 @@ use std::{sync::Arc, time::Duration};
 fn server(dir: &tempfile::TempDir) -> ContentServer {
     ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[9; 32]),
-        Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap()),
+        &plain_rs::libs::utils::base64::base64_encode(&[9; 32]),
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap()),
     )
     .unwrap()
 }
@@ -28,7 +28,7 @@ async fn native_events_enforce_direction_and_reconcile_lag() {
         "IMAGE_INDEX_ERROR_REPORTED",
         "NETWORK_CHANGED",
         "AUDIO_LIBRARY_UPDATED",
-        plain_rs::events::MEDIA_LIBRARY_UPDATED,
+        plain_rs::libs::events::MEDIA_LIBRARY_UPDATED,
         "HTTP_SERVER_STATE_CHANGED",
         "MEDIA_ACTION_FINISHED",
         "MEDIA_CATALOG_CHANGED",
@@ -309,7 +309,7 @@ async fn scan_facts_are_validated_and_scoped_to_the_connected_host() {
     let state = server.runtime_state();
     assert!(matches!(
         state.ble_scans.seen(&id, "0001020304050607").unwrap(),
-        plain_rs::discovery::nearby_scan::Step::Read { .. }
+        plain_rs::features::discovery::nearby_scan::Step::Read { .. }
     ));
     for invalid in [
         serde_json::json!({"scanId":"invalid","active":true}),

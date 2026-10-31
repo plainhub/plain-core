@@ -1,6 +1,6 @@
 use crate::server::ContentServer;
 use crate::server::ServerState;
-use plain_rs::services::images::thumbnails::Request;
+use plain_rs::features::services::images::thumbnails::Request;
 use sha2::Digest;
 use std::sync::{Arc, atomic::Ordering};
 
@@ -63,12 +63,13 @@ fn write_image(path: &std::path::Path, width: u32, height: u32) {
 
 fn server_with_cache() -> (tempfile::TempDir, ContentServer, std::path::PathBuf) {
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "thumb-fixture").unwrap();
     let cache = dir.path().join("cache");
     let core = ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[4; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[4; 32]),
         prefs,
     )
     .unwrap();
@@ -218,7 +219,7 @@ async fn a_source_that_vanishes_produces_not_found() {
 }
 
 fn hex(bytes: &[u8]) -> String {
-    plain_rs::utils::hex::bytes_to_hex(&sha2::Sha256::digest(bytes))
+    plain_rs::libs::utils::hex::bytes_to_hex(&sha2::Sha256::digest(bytes))
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

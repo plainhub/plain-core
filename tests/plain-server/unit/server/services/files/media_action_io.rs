@@ -1,5 +1,5 @@
-use plain_rs::db::Db;
-use plain_rs::enums::DataType;
+use plain_rs::features::enums::DataType;
+use plain_rs::libs::db::Db;
 use std::path::Path;
 
 #[cfg(feature = "media")]
@@ -16,11 +16,11 @@ async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
         .iter()
         .map(|path| {
             std::fs::write(path, b"document").unwrap();
-            plain_rs::db::MediaFileMetadata {
+            plain_rs::libs::db::MediaFileMetadata {
                 album: String::new(),
                 album_artist: String::new(),
 
-                data_type: plain_rs::enums::DataType::Doc,
+                data_type: plain_rs::features::enums::DataType::Doc,
                 path: path.to_str().unwrap().into(),
                 title: "document".into(),
                 artist: String::new(),
@@ -59,13 +59,19 @@ async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
     assert!(paths[1].exists());
     assert!(
         catalog
-            .by_path(plain_rs::enums::DataType::Doc, paths[0].to_str().unwrap())
+            .by_path(
+                plain_rs::features::enums::DataType::Doc,
+                paths[0].to_str().unwrap()
+            )
             .unwrap()
             .is_none()
     );
     assert!(
         catalog
-            .by_path(plain_rs::enums::DataType::Doc, paths[1].to_str().unwrap())
+            .by_path(
+                plain_rs::features::enums::DataType::Doc,
+                paths[1].to_str().unwrap()
+            )
             .unwrap()
             .is_some()
     );
@@ -88,11 +94,11 @@ async fn image_delete_updates_index_before_any_parent_consumes_the_receipt() {
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let catalog = core.native_media_catalog().unwrap();
     let rows = catalog
-        .record_files(&[plain_rs::db::MediaFileMetadata {
+        .record_files(&[plain_rs::libs::db::MediaFileMetadata {
             album: String::new(),
             album_artist: String::new(),
 
-            data_type: plain_rs::enums::DataType::Image,
+            data_type: plain_rs::features::enums::DataType::Image,
             path: path.to_str().unwrap().into(),
             title: "photo".into(),
             artist: String::new(),
@@ -118,7 +124,12 @@ async fn image_delete_updates_index_before_any_parent_consumes_the_receipt() {
         1
     );
     assert!(!path.exists());
-    assert_eq!(catalog.count(plain_rs::enums::DataType::Image).unwrap(), 0);
+    assert_eq!(
+        catalog
+            .count(plain_rs::features::enums::DataType::Image)
+            .unwrap(),
+        0
+    );
     assert_eq!(
         index.status().version,
         version + 1,
@@ -133,7 +144,7 @@ fn seed(db: &Db, path: &Path) -> String {
 }
 
 fn seed_kind(db: &Db, path: &Path, kind: DataType) -> String {
-    db.record_media_files(&[plain_rs::db::MediaFileMetadata {
+    db.record_media_files(&[plain_rs::libs::db::MediaFileMetadata {
         album: String::new(),
         album_artist: String::new(),
 
@@ -186,7 +197,7 @@ async fn native_main_delete_has_no_host_exchange_and_publishes_each_event_once()
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn partial_main_media_actions_invalidate_only_completed_duration_entries() {
-    use plain_rs::media::duration_cache::Duration;
+    use plain_rs::features::media::duration_cache::Duration;
     for (kind, name, media_type) in [
         (DataType::Audio, "AUDIO", "audio"),
         (DataType::Video, "VIDEO", "video"),

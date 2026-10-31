@@ -4,7 +4,7 @@
 //! report it and forward the start/cancel/enable commands. Nothing here is
 //! gated — plain-app lets any web client drive the index.
 
-use plain_rs::services::images::status::ImageSearchStatus;
+use plain_rs::features::services::images::status::ImageSearchStatus;
 
 use async_graphql::{Context, Object};
 use std::sync::Arc;
@@ -19,7 +19,7 @@ impl ImageIndexQuery {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<ImageSearchStatus> {
         Ok(ctx
-            .data_unchecked::<Arc<plain_rs::services::images::models::Runtime>>()
+            .data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>()
             .snapshot()
             .status)
     }
@@ -31,7 +31,7 @@ pub struct ImageIndexMutation;
 #[Object]
 impl ImageIndexMutation {
     async fn enable_image_search(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        ctx.data_unchecked::<Arc<plain_rs::services::images::models::Runtime>>()
+        ctx.data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>()
             .enable(false)
             .await
             .map_err(async_graphql::Error::new)?;
@@ -39,7 +39,7 @@ impl ImageIndexMutation {
     }
 
     async fn import_image_search_model(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        ctx.data_unchecked::<Arc<plain_rs::services::images::models::Runtime>>()
+        ctx.data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>()
             .import()
             .await
             .map_err(async_graphql::Error::new)?;
@@ -47,7 +47,7 @@ impl ImageIndexMutation {
     }
 
     async fn disable_image_search(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        ctx.data_unchecked::<Arc<plain_rs::services::images::models::Runtime>>()
+        ctx.data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>()
             .cancel(true)
             .await
             .map_err(async_graphql::Error::new)?;
@@ -55,7 +55,7 @@ impl ImageIndexMutation {
     }
 
     async fn cancel_image_model_download(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        ctx.data_unchecked::<Arc<plain_rs::services::images::models::Runtime>>()
+        ctx.data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>()
             .cancel(false)
             .await
             .map_err(async_graphql::Error::new)?;
@@ -68,14 +68,14 @@ impl ImageIndexMutation {
         ctx: &Context<'_>,
         force: Option<bool>,
     ) -> async_graphql::Result<bool> {
-        ctx.data_unchecked::<Arc<plain_rs::services::images::index::ImageIndex>>()
+        ctx.data_unchecked::<Arc<plain_rs::features::services::images::index::ImageIndex>>()
             .start(force.unwrap_or(false))
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(true)
     }
 
     async fn cancel_image_index(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        ctx.data_unchecked::<Arc<plain_rs::services::images::index::ImageIndex>>()
+        ctx.data_unchecked::<Arc<plain_rs::features::services::images::index::ImageIndex>>()
             .cancel()
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(true)

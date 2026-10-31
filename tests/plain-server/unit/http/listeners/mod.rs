@@ -1,5 +1,8 @@
 use super::*;
-use axum::{extract::ConnectInfo, routing::get, routing::post};
+use axum::{
+    extract::ConnectInfo,
+    routing::{get, post},
+};
 
 fn certificate() -> (Vec<u8>, Vec<u8>) {
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
@@ -91,8 +94,8 @@ async fn listener_task_abort_is_reported_and_shutdown_releases_ports() {
 #[tokio::test]
 async fn nearby_client_handles_probe_accept_reject_timeout_and_offline() {
     use axum::http::{HeaderMap, StatusCode};
-    use plain_rs::discovery::nearby_http::{Message, post_url, probe, send, url};
-    use plain_rs::peers::pairing::protocol::PairingCancel;
+    use plain_rs::features::discovery::nearby_http::{Message, post_url, probe, send, url};
+    use plain_rs::features::peers::pairing::protocol::PairingCancel;
 
     let (cert, key) = certificate();
     let router = Router::new().route(

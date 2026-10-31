@@ -1,8 +1,8 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::db::Db;
-use plain_rs::host::bridge::Host;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -62,11 +62,11 @@ fn database(schema: &PublicSchema) -> &Arc<Db> {
 
 fn seed_media(
     schema: &PublicSchema,
-    data_type: plain_rs::enums::DataType,
+    data_type: plain_rs::features::enums::DataType,
     count: usize,
     trashed: bool,
     extension: &str,
-) -> Vec<plain_rs::db::MediaFileRow> {
+) -> Vec<plain_rs::libs::db::MediaFileRow> {
     let base = schema
         .data::<Arc<Prefs>>()
         .unwrap()
@@ -78,7 +78,7 @@ fn seed_media(
         .join("media");
     std::fs::create_dir_all(&base).unwrap();
     let rows: Vec<_> = (1..=count)
-        .map(|i| plain_rs::db::MediaFileMetadata {
+        .map(|i| plain_rs::libs::db::MediaFileMetadata {
             album: String::new(),
             album_artist: String::new(),
 
@@ -223,7 +223,7 @@ async fn copy_and_move_use_the_shared_file_tasks() {
         assert_eq!(std::fs::read_to_string(&destination).unwrap(), "new");
         assert_eq!(source.exists(), name == "copyFile");
         let tasks = schema
-            .data::<Arc<plain_rs::services::files::file_tasks::FileTasks>>()
+            .data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()
             .unwrap()
             .list("file-test".into())
             .await
@@ -272,7 +272,13 @@ async fn moving_media_is_gated() {
 #[tokio::test]
 async fn moving_media_uses_the_shared_native_commit_and_preserves_destination_collisions() {
     let (dir, schema) = fixture(GRANTED);
-    let rows = seed_media(&schema, plain_rs::enums::DataType::Doc, 2, false, "pdf");
+    let rows = seed_media(
+        &schema,
+        plain_rs::features::enums::DataType::Doc,
+        2,
+        false,
+        "pdf",
+    );
     let destination = dir.path().canonicalize().unwrap().join("target");
     std::fs::create_dir(&destination).unwrap();
     std::fs::write(destination.join("x1.pdf"), b"existing").unwrap();
@@ -528,24 +534,37 @@ async fn a_media_action_refuses_a_query_that_selects_nothing_and_all_true_still_
 #[tokio::test]
 async fn media_batches_commit_successes_and_notify_only_confirmed_ids() {
     let (_dir, schema) = fixture(GRANTED);
-    let rows = seed_media(&schema, plain_rs::enums::DataType::Video, 501, false, "mp4");
-    let selected = plain_rs::services::files::catalog::MediaCatalog::new(
+    let rows = seed_media(
+        &schema,
+        plain_rs::features::enums::DataType::Video,
+        501,
+        false,
+        "mp4",
+    );
+    let selected = plain_rs::features::services::files::catalog::MediaCatalog::new(
         database(&schema).clone(),
         schema.data::<Arc<Host>>().unwrap().clone(),
     )
-    .ids(plain_rs::enums::DataType::Video, "all:true", false)
+    .ids(
+        plain_rs::features::enums::DataType::Video,
+        "all:true",
+        false,
+    )
     .await
     .unwrap();
     let casualty = selected[6].clone();
     let failed = rows.iter().find(|row| row.id == casualty).unwrap();
     std::fs::remove_file(&failed.path).unwrap();
     let db = schema.data::<Arc<Db>>().unwrap();
-    let tag =
-        plain_rs::tags::create_tag(db, plain_rs::enums::DataType::Video.kind(), "keep failed")
-            .unwrap();
-    plain_rs::tags::add_relations(db, &[(tag.id.clone(), casualty.clone())]).unwrap();
+    let tag = plain_rs::features::tags::create_tag(
+        db,
+        plain_rs::features::enums::DataType::Video.kind(),
+        "keep failed",
+    )
+    .unwrap();
+    plain_rs::features::tags::add_relations(db, &[(tag.id.clone(), casualty.clone())]).unwrap();
     let mut events = schema
-        .data::<tokio::sync::broadcast::Sender<plain_rs::events::WsEvent>>()
+        .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
         .unwrap()
         .subscribe();
     let response = schema
@@ -559,7 +578,7 @@ async fn media_batches_commit_successes_and_notify_only_confirmed_ids() {
     );
 
     assert_eq!(
-        plain_rs::tags::keys_for_tag(db, &tag.id).unwrap(),
+        plain_rs::features::tags::keys_for_tag(db, &tag.id).unwrap(),
         vec![casualty.clone()]
     );
     let mut refreshes = 0;
@@ -643,7 +662,13 @@ async fn main_upload_resume_query_observes_only_completed_native_byte_streams() 
 #[tokio::test]
 async fn existing_media_delete_uses_shared_batches_and_refuses_blank_queries_before_effects() {
     let (_directory, schema) = fixture(GRANTED);
-    let rows = seed_media(&schema, plain_rs::enums::DataType::Video, 501, false, "mp4");
+    let rows = seed_media(
+        &schema,
+        plain_rs::features::enums::DataType::Video,
+        501,
+        false,
+        "mp4",
+    );
     let ids = rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>();
     let document =
         r#"mutation($query:String!){deleteMediaItems(type:VIDEO,query:$query){affectedCount}}"#;
@@ -697,7 +722,7 @@ async fn existing_media_delete_uses_shared_batches_and_refuses_blank_queries_bef
 
 #[test]
 fn file_id_selection_preserves_opaque_values_without_adding_filters() {
-    let fields = plain_rs::utils::search_dsl::parse(
+    let fields = plain_rs::libs::utils::search_dsl::parse(
         r#"ids:==opaque,17\ all:true,\"quoted\"\\path,媒体：42 trash:false"#,
     );
     assert_eq!(fields.len(), 2);

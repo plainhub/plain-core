@@ -1,5 +1,5 @@
 use super::*;
-use plain_rs::enums::DataType;
+use plain_rs::features::enums::DataType;
 use serde_json::{Value, json};
 use std::io::Read;
 
@@ -24,7 +24,7 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
         .map(|index| {
             let path = directory.path().join(format!("source-{index}.txt"));
             std::fs::write(&path, format!("bytes-{index}")).unwrap();
-            plain_rs::db::MediaFileMetadata {
+            plain_rs::libs::db::MediaFileMetadata {
                 data_type: DataType::Doc,
                 path: path.to_string_lossy().into_owned(),
                 title: format!("display title {index}"),
@@ -46,11 +46,11 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
         .collect::<Vec<_>>();
     let recorded = state.db.record_media_files(&rows).unwrap();
     let payload = json!({"type":"DOC","query":format!("ids:{},{}",recorded[0].id,recorded[2].id),"name":"selected.zip"}).to_string();
-    let token = plain_rs::prefs::ensure_url_token(&state.prefs);
-    let id = plain_rs::files::resource_link::encrypt(
-        &plain_rs::files::resource_link::Scope::Global,
+    let token = plain_rs::features::prefs::ensure_url_token(&state.prefs);
+    let id = plain_rs::features::files::resource_link::encrypt(
+        &plain_rs::features::files::resource_link::Scope::Global,
         "zip-files",
-        &plain_rs::utils::base64::base64_decode(&token),
+        &plain_rs::libs::utils::base64::base64_decode(&token),
         payload.as_bytes(),
     )
     .unwrap();
@@ -92,7 +92,8 @@ async fn shared_directory_download_preserves_empty_directories_and_excludes_outs
         std::fs::write(&outside, b"outside").unwrap();
         #[cfg(unix)]
         std::os::unix::fs::symlink(&outside, folder.join("escape.txt")).unwrap();
-        let shares = plain_rs::files::shares::Service::new(state.db.clone(), state.prefs.clone());
+        let shares =
+            plain_rs::features::files::shares::Service::new(state.db.clone(), state.prefs.clone());
         let share = shares
             .create(
                 "shared folder".into(),
@@ -101,12 +102,12 @@ async fn shared_directory_download_preserves_empty_directories_and_excludes_outs
                 None,
             )
             .unwrap();
-        let key = plain_rs::utils::base64::base64_decode(&share.url_token);
-        let id = plain_rs::files::resource_link::seal(
-            &plain_rs::files::resource_link::Scope::Share(share.id.clone()),
+        let key = plain_rs::libs::utils::base64::base64_decode(&share.url_token);
+        let id = plain_rs::features::files::resource_link::seal(
+            &plain_rs::features::files::resource_link::Scope::Share(share.id.clone()),
             &key,
-            &plain_rs::files::resource_link::Resource {
-                r#type: plain_rs::files::resource_link::ResourceType::SharedFile,
+            &plain_rs::features::files::resource_link::Resource {
+                r#type: plain_rs::features::files::resource_link::ResourceType::SharedFile,
                 id: "photos".into(),
             },
         )

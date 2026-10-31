@@ -303,7 +303,7 @@ async fn send_mms_allocates_one_rust_pending_id_and_launches_only_a_native_inten
         .to_owned();
     assert!(id.starts_with("pending_mms_"));
     let runtime = schema
-        .data::<Arc<plain_rs::services::sms::mms::Runtime>>()
+        .data::<Arc<plain_rs::features::services::sms::mms::Runtime>>()
         .unwrap();
     let duplicate = schema
         .execute(r#"mutation {sendMms(number:"+1555",body:"hi",attachmentPaths:[],threadId:"t1")}"#)

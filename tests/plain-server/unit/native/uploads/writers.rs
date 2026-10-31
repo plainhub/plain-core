@@ -1,5 +1,5 @@
 use super::*;
-use plain_rs::services::files::upload_chunks::UploadChunks;
+use plain_rs::features::services::files::upload_chunks::UploadChunks;
 use std::{future::Future, task::Poll};
 use tokio::sync::watch;
 

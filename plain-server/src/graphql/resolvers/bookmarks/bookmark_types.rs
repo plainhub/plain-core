@@ -1,8 +1,8 @@
 use crate::graphql::resolvers::common::content_common::instant as parse_instant;
 use async_graphql::{ComplexObject, ID, InputObject, SimpleObject};
-use plain_rs::db::bookmark::DBookmark;
-use plain_rs::db::bookmark::DBookmarkGroup;
-use plain_rs::types::Instant;
+use plain_rs::libs::db::bookmark::DBookmark;
+use plain_rs::libs::db::bookmark::DBookmarkGroup;
+use plain_rs::libs::types::Instant;
 
 #[derive(SimpleObject, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

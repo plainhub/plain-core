@@ -1,5 +1,5 @@
 use async_graphql::SimpleObject;
-use plain_rs::types::Instant;
+use plain_rs::libs::types::Instant;
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize, Clone, Debug)]
@@ -11,8 +11,8 @@ pub struct PeerAddress {
     api_url: String,
     status_ws_url: String,
 }
-impl From<plain_rs::services::peers::peer_address::Address> for PeerAddress {
-    fn from(value: plain_rs::services::peers::peer_address::Address) -> Self {
+impl From<plain_rs::features::services::peers::peer_address::Address> for PeerAddress {
+    fn from(value: plain_rs::features::services::peers::peer_address::Address) -> Self {
         Self {
             best_ip: value.best_ip,
             name: value.name,
@@ -50,8 +50,9 @@ impl PeerRecordQuery {
         let db = ctx.data::<crate::server::ServerState>()?.db.clone();
         let expected = serde_json::from_value(serde_json::to_value(expected)?)?;
         tokio::task::spawn_blocking(move || {
-            let peer = plain_rs::services::peers::peer_address::current(&db, &id, &expected)?;
-            plain_rs::services::peers::peer_address::file_url(&peer, &file_id)
+            let peer =
+                plain_rs::features::services::peers::peer_address::current(&db, &id, &expected)?;
+            plain_rs::features::services::peers::peer_address::file_url(&peer, &file_id)
         })
         .await?
         .map_err(|error| async_graphql::Error::new(error.to_string()))

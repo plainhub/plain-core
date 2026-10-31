@@ -1,7 +1,7 @@
-use plain_rs::types::{Instant, Long};
+use plain_rs::libs::types::{Instant, Long};
 
 use async_graphql::SimpleObject;
-use plain_rs::{chat::messages::share_card, files::shares::client};
+use plain_rs::features::{chat::messages::share_card, files::shares::client};
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize)]
@@ -130,10 +130,12 @@ impl TryFrom<client::Info> for SharedLinkInfo {
     }
 }
 
-impl TryFrom<plain_rs::services::peers::shared_client::BrowseResult> for SharedBrowseResult {
+impl TryFrom<plain_rs::features::services::peers::shared_client::BrowseResult>
+    for SharedBrowseResult
+{
     type Error = async_graphql::Error;
     fn try_from(
-        value: plain_rs::services::peers::shared_client::BrowseResult,
+        value: plain_rs::features::services::peers::shared_client::BrowseResult,
     ) -> Result<Self, Self::Error> {
         Ok(Self {
             info: value.info.try_into()?,

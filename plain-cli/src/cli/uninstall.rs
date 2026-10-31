@@ -1,9 +1,9 @@
 use anyhow::Result;
-use plain_rs::platform::system::consts::AppPaths;
+use plain_rs::libs::platform::system::consts::AppPaths;
 
 #[cfg(target_os = "linux")]
 pub fn run(paths: &AppPaths, keep_config: bool, keep_data: bool) -> Result<()> {
-    plain_rs::platform::linux::install::service::uninstall(
+    plain_rs::libs::platform::linux::install::service::uninstall(
         &paths.data_dir,
         &paths.tls_cert,
         &paths.tls_key,

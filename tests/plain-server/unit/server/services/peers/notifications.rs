@@ -1,27 +1,27 @@
 use anyhow::Result;
-use plain_rs::chat::enums::DeviceType;
-use plain_rs::db::DPeer;
-use plain_rs::services::notifications::types::Notification;
-use plain_rs::services::peers::management::Identity;
+use plain_rs::features::chat::enums::DeviceType;
+use plain_rs::features::services::notifications::types::Notification;
+use plain_rs::features::services::peers::management::Identity;
+use plain_rs::libs::db::DPeer;
 use serde_json::json;
 use std::sync::Mutex;
 use tokio::sync::watch;
 
-use plain_rs::events::WsEvent;
-use plain_rs::types::Instant;
+use plain_rs::libs::events::WsEvent;
+use plain_rs::libs::types::Instant;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Notify;
 
 struct CallbackReceiver {
-    host: Arc<plain_rs::host::bridge::Host>,
+    host: Arc<plain_rs::libs::host::bridge::Host>,
     generation: u64,
     requests: tokio::sync::mpsc::Receiver<serde_json::Value>,
     buffered: std::collections::VecDeque<serde_json::Value>,
 }
 
 impl CallbackReceiver {
-    fn new(host: Arc<plain_rs::host::bridge::Host>) -> Self {
+    fn new(host: Arc<plain_rs::libs::host::bridge::Host>) -> Self {
         let (generation, requests) = host.connect();
         Self {
             host,
@@ -80,10 +80,13 @@ impl CallbackReceiver {
 async fn refresh(
     state: &plain_rs::runtime::Runtime,
     id: &str,
-    identity: &plain_rs::services::peers::management::Identity,
+    identity: &plain_rs::features::services::peers::management::Identity,
     cancelled: &tokio::sync::watch::Receiver<bool>,
 ) -> anyhow::Result<()> {
-    plain_rs::services::peers::management::refresh_data(state, id, identity, cancelled, None).await
+    plain_rs::features::services::peers::management::refresh_data(
+        state, id, identity, cancelled, None,
+    )
+    .await
 }
 
 fn notification(id: &str) -> Notification {
@@ -110,7 +113,7 @@ fn event(receiver: &mut CallbackReceiver) -> serde_json::Value {
 #[tokio::test]
 async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_credentials() {
     use crate::server::ContentServer;
-    use plain_rs::db::chat_store::{SaveMode, peers};
+    use plain_rs::libs::db::chat_store::{SaveMode, peers};
     use std::sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -125,7 +128,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     remote_state
         .prefs
         .set(
-            plain_rs::prefs::pref_keys::DEVICE_NAME,
+            plain_rs::features::prefs::pref_keys::DEVICE_NAME,
             "Authenticated peer",
         )
         .unwrap();
@@ -380,19 +383,19 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     refresh(&state, &peer.id, &identity, &cancelled)
         .await
         .unwrap();
-    let error = plain_rs::services::peers::management_http::query(
+    let error = plain_rs::features::services::peers::management_http::query(
         &state,
         &reqwest::Url::parse(&format!("https://127.0.0.1:{port}")).unwrap(),
         &session.client_id,
-        &plain_rs::utils::base64::base64_decode(&peer.token),
+        &plain_rs::libs::utils::base64::base64_decode(&peer.token),
         json!({"query":"{ notifications(query:\"\",offset:0,limit:1) { id } }"}),
         256 * 1024,
     )
     .await
     .unwrap_err();
     assert!(matches!(
-        error.downcast_ref::<plain_rs::services::peers::management_http::AuthorizationError>(),
-        Some(plain_rs::services::peers::management_http::AuthorizationError::Permission)
+        error.downcast_ref::<plain_rs::features::services::peers::management_http::AuthorizationError>(),
+        Some(plain_rs::features::services::peers::management_http::AuthorizationError::Permission)
     ));
     let denied = event(&mut callbacks);
     assert!(denied["group"]["items"].as_array().unwrap().is_empty());

@@ -18,7 +18,7 @@ async fn native_import_preserves_image_bytes_and_resolves_duplicate_names_in_rus
         assert_eq!(reference, format!("app://note-images/{name}"));
         assert_eq!(
             std::fs::read(
-                plain_rs::data_paths::DataPaths::new(directory.path())
+                plain_rs::libs::data_paths::DataPaths::new(directory.path())
                     .note_images()
                     .join(name)
             )

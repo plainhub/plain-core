@@ -4,8 +4,8 @@ use crate::graphql::types::facts::optional_instant;
 use crate::graphql::types::facts::rows;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Object, SimpleObject};
-use plain_rs::types::Instant;
-use plain_rs::types::Long;
+use plain_rs::libs::types::Instant;
+use plain_rs::libs::types::Long;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -41,7 +41,7 @@ impl Image {
     async fn tags(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<Vec<Tag>> {
         crate::graphql::resolvers::tags::loader::load(
             ctx,
-            plain_rs::enums::DataType::Image,
+            plain_rs::features::enums::DataType::Image,
             self.id.as_str(),
         )
         .await
@@ -57,9 +57,9 @@ impl ImagesQuery {
         if !public_gate::require_granted(ctx, &[STORAGE]).await? {
             return Ok(0);
         }
-        plain_rs::services::images::search::count(
+        plain_rs::features::services::images::search::count(
             &crate::graphql::resolvers::media::public::catalog(ctx),
-            ctx.data_unchecked::<Arc<plain_rs::services::images::models::Runtime>>(),
+            ctx.data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>(),
             &text_field(&query),
             &query,
         )
@@ -73,13 +73,13 @@ impl ImagesQuery {
         query: String,
         offset: i32,
         limit: i32,
-        sort_by: plain_rs::prefs::settings::FileSortBy,
+        sort_by: plain_rs::features::prefs::settings::FileSortBy,
     ) -> async_graphql::Result<Vec<Image>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let items = Value::Array(
-            plain_rs::services::images::search::rows(
+            plain_rs::features::services::images::search::rows(
                 &crate::graphql::resolvers::media::public::catalog(ctx),
-                ctx.data_unchecked::<Arc<plain_rs::services::images::models::Runtime>>(),
+                ctx.data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>(),
                 &text_field(&query),
                 &query,
                 offset,

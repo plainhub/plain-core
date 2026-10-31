@@ -2,12 +2,12 @@ use async_graphql::{ComplexObject, Context, Object, SimpleObject};
 use std::sync::Arc;
 
 use crate::graphql::types::parse_instant;
-use plain_rs::chat::attachments::app_file_store::display_name;
-use plain_rs::chat::attachments::app_file_store::file_name_map;
-use plain_rs::db::DAppFile;
-use plain_rs::db::Db;
-use plain_rs::types::Instant;
-use plain_rs::types::Long;
+use plain_rs::features::chat::attachments::app_file_store::display_name;
+use plain_rs::features::chat::attachments::app_file_store::file_name_map;
+use plain_rs::libs::db::DAppFile;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::types::Instant;
+use plain_rs::libs::types::Long;
 
 #[derive(SimpleObject)]
 #[graphql(name = "AppFile")]
@@ -29,7 +29,7 @@ pub struct AppFile {
 impl AppFile {
     async fn real_path(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         Ok(ctx
-            .data::<Arc<plain_rs::files::app_files::FileStore>>()?
+            .data::<Arc<plain_rs::features::files::app_files::FileStore>>()?
             .stored_path(&self.real_path)
             .map_err(async_graphql::Error::new)?
             .to_string_lossy()

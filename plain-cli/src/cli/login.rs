@@ -1,6 +1,6 @@
 use crate::login_socket as login;
 use anyhow::Result;
-use plain_rs::platform::system::consts::AppPaths;
+use plain_rs::libs::platform::system::consts::AppPaths;
 use plain_server::native::management::NativeWebLoginRequests;
 use std::io::{self, Write};
 

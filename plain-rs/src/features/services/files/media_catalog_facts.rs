@@ -1,0 +1,53 @@
+//! Projects one shared media row into the `systemMediaRows` facts objects the
+//! GraphQL resolvers already decode, adding no field the protocol lacks.
+//! Trash membership stays out of the projection: the catalog query decides
+//! which rows exist, so a selected trashed row projects like any other.
+
+use crate::features::enums::DataType;
+use crate::libs::db::MediaFileRow;
+use serde_json::{Value, json};
+
+fn media_type(kind: i32) -> Result<DataType, String> {
+    [
+        DataType::Audio,
+        DataType::Video,
+        DataType::Image,
+        DataType::Doc,
+    ]
+    .into_iter()
+    .find(|data_type| data_type.kind() == kind)
+    .ok_or_else(|| format!("Unsupported media facts type {kind}"))
+}
+
+pub fn row_facts(row: &MediaFileRow) -> Result<Value, String> {
+    let mut facts = json!({
+        "id": row.id,
+        "title": row.title,
+        "path": row.path,
+        "size": row.size_bytes,
+        "bucketId": row.bucket_id,
+        "createdAt": row.created_at,
+        "updatedAt": row.updated_at,
+        "isFavorite": row.favorited,
+    });
+    match media_type(row.data_type)? {
+        DataType::Audio => {
+            facts["artist"] = json!(row.artist);
+            facts["albumId"] = json!(row.album_id);
+            facts["durationMs"] = json!(row.duration_ms);
+            facts["coverImageId"] = json!(row.cover_image_id.as_deref().unwrap_or_default());
+        }
+        _ => {
+            facts["durationMs"] = json!(row.duration_ms);
+            facts["takenAt"] = json!(row.taken_at);
+            facts["width"] = json!(row.width);
+            facts["height"] = json!(row.height);
+            facts["rotation"] = json!(row.rotation);
+        }
+    }
+    Ok(facts)
+}
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-rs/unit/features/services/files/media_catalog_facts.rs"]
+mod tests;

@@ -1,4 +1,4 @@
-use plain_rs::services::files::upload_chunks::{UploadChunk, UploadChunks};
+use plain_rs::features::services::files::upload_chunks::{UploadChunk, UploadChunks};
 use std::sync::Arc;
 use tokio::sync::watch;
 
@@ -23,7 +23,8 @@ impl NativeUploads {
             return Err("Invalid upload chunk length".into());
         }
         let mut chunk = self.open_chunk(id, index, bytes.len() as u64).await?;
-        for bytes in bytes.chunks(plain_rs::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES)
+        for bytes in
+            bytes.chunks(plain_rs::features::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES)
         {
             chunk.write(bytes).await?;
         }

@@ -1,5 +1,5 @@
-use plain_rs::services::casting::dlna_sender_runtime::*;
-use plain_rs::services::casting::sender::types::DiscoveredDevice;
+use plain_rs::features::services::casting::dlna_sender_runtime::*;
+use plain_rs::libs::dlna::types::DiscoveredDevice;
 use serde_json::json;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -49,7 +49,7 @@ async fn queue_mutations_preserve_duplicates_and_order_through_the_main_schema()
 #[tokio::test]
 async fn sender_controls_use_soap_and_release_the_original_subscription() {
     use axum::{Router, body::to_bytes, extract::Request, routing::any};
-    use plain_rs::services::casting::sender::types::UpnpService;
+    use plain_rs::libs::dlna::types::UpnpService;
     let calls = Arc::new(Mutex::new(Vec::<(String, String, String)>::new()));
     let captured = calls.clone();
     let router = Router::new().fallback(any(move |request: Request| {
@@ -89,10 +89,11 @@ async fn sender_controls_use_soap_and_release_the_original_subscription() {
         axum::serve(listener, router).await.unwrap();
     });
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[3; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();

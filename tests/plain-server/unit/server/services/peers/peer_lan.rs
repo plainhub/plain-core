@@ -1,33 +1,34 @@
 use crate::server::ContentServer;
-use plain_rs::chat::enums::DeviceType;
-use plain_rs::chat::enums::PeerStatus;
-use plain_rs::db::DPeer;
-use plain_rs::db::chat_store::SaveMode;
-use plain_rs::db::chat_store::peers;
-use plain_rs::services::peers::peer_lan::*;
+use plain_rs::features::chat::enums::DeviceType;
+use plain_rs::features::chat::enums::PeerStatus;
+use plain_rs::features::services::peers::peer_lan::*;
+use plain_rs::libs::db::DPeer;
+use plain_rs::libs::db::chat_store::SaveMode;
+use plain_rs::libs::db::chat_store::peers;
 use serde_json::json;
 use std::sync::Arc;
 fn root(id: &str) -> (tempfile::TempDir, ContentServer, Vec<u8>, String) {
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", id).unwrap();
     prefs.set("background_service_enabled", true).unwrap();
-    let (kp, _pk) = plain_rs::crypto::ed25519_generate();
+    let (kp, _pk) = plain_rs::libs::crypto::ed25519_generate();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::utils::base64::base64_encode(&kp),
+            plain_rs::libs::utils::base64::base64_encode(&kp),
         )
         .unwrap();
-    let token = plain_rs::utils::base64::base64_encode(&[3; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[3; 32]);
     let server = ContentServer::start(dir.path(), &token, prefs).unwrap();
     (dir, server, kp.to_vec(), token)
 }
 fn peer(id: &str, port: u16, pk: &[u8]) -> DPeer {
     let mut peer = DPeer::new(id, id, "invalid,127.0.0.1", Some(port), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = plain_rs::utils::base64::base64_encode(&[7; 32]);
-    peer.public_key = plain_rs::utils::base64::base64_encode(pk);
+    peer.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
+    peer.public_key = plain_rs::libs::utils::base64::base64_encode(pk);
     peer
 }
 #[tokio::test]
@@ -57,10 +58,14 @@ async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host
         SaveMode::Insert,
     )
     .unwrap();
-    let wire =
-        plain_rs::transport::contract::signed_request(&kp, "query { __typename }", json!({}), "")
-            .unwrap();
-    let result = plain_rs::services::peers::peer_transport::send(
+    let wire = plain_rs::libs::transport::contract::signed_request(
+        &kp,
+        "query { __typename }",
+        json!({}),
+        "",
+    )
+    .unwrap();
+    let result = plain_rs::features::services::peers::peer_transport::send(
         &a.runtime_state().core,
         &remote,
         "",
@@ -71,7 +76,7 @@ async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host
     .unwrap();
     assert_eq!(result["data"]["__typename"], "Query");
     let mut changed = remote.clone();
-    changed.key = plain_rs::utils::base64::base64_encode(&[9; 32]);
+    changed.key = plain_rs::libs::utils::base64::base64_encode(&[9; 32]);
     peers::save(&a.runtime_state().core.db, &[changed], SaveMode::Update).unwrap();
     assert!(matches!(
         send(
@@ -113,9 +118,13 @@ async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
         SaveMode::Insert,
     )
     .unwrap();
-    let wire =
-        plain_rs::transport::contract::signed_request(&kp, "query { __typename }", json!({}), "")
-            .unwrap();
+    let wire = plain_rs::libs::transport::contract::signed_request(
+        &kp,
+        "query { __typename }",
+        json!({}),
+        "",
+    )
+    .unwrap();
     let capacity = state
         .lan
         .capacity
@@ -123,8 +132,9 @@ async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
         .acquire_many_owned(4)
         .await
         .unwrap();
-    let call =
-        plain_rs::services::peers::peer_transport::send(&state, &remote, "", &[7; 32], &wire);
+    let call = plain_rs::features::services::peers::peer_transport::send(
+        &state, &remote, "", &[7; 32], &wire,
+    );
     tokio::pin!(call);
     assert!(futures_util::poll!(&mut call).is_pending());
     let mut refreshed = remote.clone();
@@ -136,7 +146,7 @@ async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
     assert_eq!(response["data"]["__typename"], "Query");
     let mut without_address = remote.clone();
     without_address.ip.clear();
-    let response = plain_rs::services::peers::peer_transport::send(
+    let response = plain_rs::features::services::peers::peer_transport::send(
         &state,
         &without_address,
         "",

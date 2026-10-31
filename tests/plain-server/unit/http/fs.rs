@@ -4,21 +4,21 @@ use axum::body::Body;
 use axum::extract::Request;
 use axum::http::{HeaderName, StatusCode, header};
 use axum::response::Response;
-use plain_rs::recent_files as recent;
+use plain_rs::features::recent_files as recent;
 
 fn test_state() -> (tempfile::TempDir, ContentServer, ServerState, Vec<u8>) {
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
-    let key = plain_rs::utils::base64::base64_decode(&core.native_url_token().unwrap());
+    let key = plain_rs::libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
     (directory, core, state, key)
 }
 
 fn file_id(key: &[u8], path: &str) -> String {
-    plain_rs::files::resource_link::seal(
-        &plain_rs::files::resource_link::Scope::Global,
+    plain_rs::features::files::resource_link::seal(
+        &plain_rs::features::files::resource_link::Scope::Global,
         key,
-        &plain_rs::files::resource_link::Resource::reference(path),
+        &plain_rs::features::files::resource_link::Resource::reference(path),
     )
     .unwrap()
 }
@@ -159,7 +159,7 @@ async fn fs_probe_reports_codec_json() {
 async fn fs_serves_fid_uris_from_app_file_store() {
     let (_root, _core, state, key) = test_state();
 
-    let imported = plain_rs::chat::attachments::app_file_store::import_bytes(
+    let imported = plain_rs::features::chat::attachments::app_file_store::import_bytes(
         &state.db,
         &state.directory,
         b"fid-payload-bytes",
@@ -182,7 +182,7 @@ async fn fs_typed_attachment_and_file_references_keep_downloads_and_ranges() {
     let files = tempfile::tempdir().unwrap();
     let path = files.path().join("preview.txt");
     std::fs::write(&path, b"fid-payload-bytes").unwrap();
-    let imported = plain_rs::chat::attachments::app_file_store::import_bytes(
+    let imported = plain_rs::features::chat::attachments::app_file_store::import_bytes(
         &state.db,
         &state.directory,
         b"fid-payload-bytes",
@@ -219,7 +219,7 @@ async fn fs_typed_image_reference_returns_decodable_thumbnail() {
         env!("CARGO_MANIFEST_DIR"),
         "/../plain-rs/testdata/v-prog420.jpg"
     ));
-    let imported = plain_rs::chat::attachments::app_file_store::import_bytes(
+    let imported = plain_rs::features::chat::attachments::app_file_store::import_bytes(
         &state.db,
         &state.directory,
         bytes,
@@ -285,7 +285,8 @@ async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion(
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("shared.txt");
     std::fs::write(&path, b"shared-payload").unwrap();
-    let shares = plain_rs::files::shares::Service::new(state.db.clone(), state.prefs.clone());
+    let shares =
+        plain_rs::features::files::shares::Service::new(state.db.clone(), state.prefs.clone());
     let share = shares
         .create(
             "fixture".into(),
@@ -294,12 +295,12 @@ async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion(
             None,
         )
         .unwrap();
-    let key = plain_rs::utils::base64::base64_decode(&share.url_token);
-    let id = plain_rs::files::resource_link::seal(
-        &plain_rs::files::resource_link::Scope::Share(share.id.clone()),
+    let key = plain_rs::libs::utils::base64::base64_decode(&share.url_token);
+    let id = plain_rs::features::files::resource_link::seal(
+        &plain_rs::features::files::resource_link::Scope::Share(share.id.clone()),
         &key,
-        &plain_rs::files::resource_link::Resource {
-            r#type: plain_rs::files::resource_link::ResourceType::SharedFile,
+        &plain_rs::features::files::resource_link::Resource {
+            r#type: plain_rs::features::files::resource_link::ResourceType::SharedFile,
             id: "shared.txt".into(),
         },
     )
@@ -357,31 +358,32 @@ async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
 
 #[tokio::test]
 async fn session_urls_revoke_new_requests_without_cancelling_started_transfers() {
-    use plain_rs::files::resource_link::{self, Resource, Scope};
+    use plain_rs::features::files::resource_link::{self, Resource, Scope};
     let directory = tempfile::tempdir().unwrap();
     let data = directory.path().join("data");
     std::fs::create_dir(&data).unwrap();
-    let prefs =
-        std::sync::Arc::new(plain_rs::prefs::Prefs::load(&data.join("prefs.json")).unwrap());
-    let server = ContentServer::start(&data, &plain_rs::crypto::gen_token(), prefs).unwrap();
+    let prefs = std::sync::Arc::new(
+        plain_rs::features::prefs::Prefs::load(&data.join("prefs.json")).unwrap(),
+    );
+    let server = ContentServer::start(&data, &plain_rs::libs::crypto::gen_token(), prefs).unwrap();
     let state = server.runtime_state();
-    let mut first = plain_rs::services::sessions::create(&state, "first".into()).unwrap();
+    let mut first = plain_rs::features::services::sessions::create(&state, "first".into()).unwrap();
     state.db.session_delete(&first.client_id).unwrap();
     first.client_id = "客户.with.dots/?+#".into();
     state.db.session_save(&first).unwrap();
-    let second = plain_rs::services::sessions::create(&state, "second".into()).unwrap();
+    let second = plain_rs::features::services::sessions::create(&state, "second".into()).unwrap();
     assert_ne!(first.url_token, second.url_token);
     assert_ne!(first.url_token, first.token);
     let bytes = vec![0x5a; 8 * 1024 * 1024];
     let file = directory.path().join("large.bin");
     std::fs::write(&file, &bytes).unwrap();
     let resource = Resource::reference(file.to_str().unwrap());
-    let key = plain_rs::utils::base64::base64_decode(&first.url_token);
+    let key = plain_rs::libs::utils::base64::base64_decode(&first.url_token);
     let id =
         resource_link::seal(&Scope::Session(first.client_id.clone()), &key, &resource).unwrap();
     let global = resource_link::seal(
         &Scope::Global,
-        &plain_rs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
+        &plain_rs::libs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
         &resource,
     )
     .unwrap();
@@ -410,7 +412,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     );
     let started = client.get(&url).query(&[("id", &id)]).send().await.unwrap();
     assert_eq!(started.status(), StatusCode::OK);
-    plain_rs::services::sessions::delete(&state, &first.client_id).unwrap();
+    plain_rs::features::services::sessions::delete(&state, &first.client_id).unwrap();
     assert_eq!(started.bytes().await.unwrap().as_ref(), bytes.as_slice());
     for range in [None, Some("bytes=4-7")] {
         let mut request = client.get(&url).query(&[("id", &id)]);
@@ -423,7 +425,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
         );
     }
     let mut replacement =
-        plain_rs::services::sessions::create(&state, "replacement".into()).unwrap();
+        plain_rs::features::services::sessions::create(&state, "replacement".into()).unwrap();
     state.db.session_delete(&replacement.client_id).unwrap();
     replacement.client_id = first.client_id.clone();
     state.db.session_save(&replacement).unwrap();
@@ -439,7 +441,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     );
     let fresh = resource_link::seal(
         &Scope::Session(replacement.client_id),
-        &plain_rs::utils::base64::base64_decode(&replacement.url_token),
+        &plain_rs::libs::utils::base64::base64_decode(&replacement.url_token),
         &resource,
     )
     .unwrap();
@@ -468,7 +470,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     for internal in [data.join("prefs.json"), data.join("plain.db")] {
         let id = resource_link::seal(
             &Scope::Global,
-            &plain_rs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
+            &plain_rs::libs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
             &Resource::reference(internal.to_str().unwrap()),
         )
         .unwrap();

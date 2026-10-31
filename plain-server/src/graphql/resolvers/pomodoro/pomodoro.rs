@@ -1,7 +1,7 @@
 use async_graphql::{Context, Object};
-pub use plain_rs::services::pomodoro::PomodoroSettings;
-pub use plain_rs::services::pomodoro::PomodoroToday;
-use plain_rs::services::pomodoro::Service;
+pub use plain_rs::features::services::pomodoro::PomodoroSettings;
+pub use plain_rs::features::services::pomodoro::PomodoroToday;
+use plain_rs::features::services::pomodoro::Service;
 use std::sync::Arc;
 #[derive(Default)]
 pub struct PomodoroQuery;

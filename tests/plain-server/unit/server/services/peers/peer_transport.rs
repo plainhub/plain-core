@@ -1,10 +1,10 @@
 #![cfg(feature = "http_transport")]
 
-use plain_rs::db::DPeer;
-use plain_rs::db::chat_store::peers;
+use plain_rs::features::services::peers::peer_transport::*;
+use plain_rs::libs::db::DPeer;
+use plain_rs::libs::db::chat_store::peers;
+use plain_rs::libs::transport::router::TransportType;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_rs::services::peers::peer_transport::*;
-use plain_rs::transport::router::TransportType;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
@@ -15,18 +15,19 @@ fn peer() -> DPeer {
         "fixture",
         "",
         Some(443),
-        plain_rs::chat::enums::DeviceType::Phone,
+        plain_rs::features::chat::enums::DeviceType::Phone,
     );
-    p.key = plain_rs::utils::base64::base64_encode(&[7; 32]);
+    p.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
     p
 }
 fn state() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[1; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[1; 32]),
         prefs,
     )
     .unwrap();
@@ -34,7 +35,7 @@ fn state() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
     peers::save(
         &state.db,
         &[peer()],
-        plain_rs::db::chat_store::SaveMode::Insert,
+        plain_rs::libs::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     (dir, server, state)
@@ -50,7 +51,7 @@ async fn aware_config_uses_current_pairing_identity_and_rejects_corrupt_keys() {
     assert_eq!(config.local_port, 2443);
     assert_eq!(
         config.pmk.unwrap(),
-        plain_rs::utils::base64::base64_encode(&[7; 32])
+        plain_rs::libs::utils::base64::base64_encode(&[7; 32])
     );
     let native = server.native_graphql().unwrap();
     assert_eq!(snapshot(&state)["active"], json!([]));
@@ -66,7 +67,7 @@ async fn aware_config_uses_current_pairing_identity_and_rejects_corrupt_keys() {
     peers::save(
         &state.db,
         &[corrupt],
-        plain_rs::db::chat_store::SaveMode::Update,
+        plain_rs::libs::db::chat_store::SaveMode::Update,
     )
     .unwrap();
     assert!(

@@ -5,8 +5,9 @@ use std::sync::Arc;
 #[tokio::test]
 async fn file_import_dedupe_release_and_restart_use_core_storage() {
     let dir = tempfile::tempdir().unwrap();
-    let token = plain_rs::utils::base64::base64_encode(&[14; 32]);
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let token = plain_rs::libs::utils::base64::base64_encode(&[14; 32]);
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs
         .set(
             "api_permissions",
@@ -47,12 +48,12 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
     .await;
     assert_eq!(page["data"]["appFileCount"], 1);
     assert_eq!(page["data"]["appFiles"][0]["id"], id);
-    let url_token = plain_rs::prefs::ensure_url_token(&prefs);
-    let encoded = plain_rs::files::resource_link::seal(
-        &plain_rs::files::resource_link::Scope::Global,
-        &plain_rs::utils::base64::base64_decode(&url_token),
-        &plain_rs::files::resource_link::Resource {
-            r#type: plain_rs::files::resource_link::ResourceType::AppFile,
+    let url_token = plain_rs::features::prefs::ensure_url_token(&prefs);
+    let encoded = plain_rs::features::files::resource_link::seal(
+        &plain_rs::features::files::resource_link::Scope::Global,
+        &plain_rs::libs::utils::base64::base64_decode(&url_token),
+        &plain_rs::features::files::resource_link::Resource {
+            r#type: plain_rs::features::files::resource_link::ResourceType::AppFile,
             id: id.to_owned(),
         },
     )

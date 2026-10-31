@@ -38,7 +38,7 @@ async fn main_import_keeps_its_staged_source_until_the_database_commit_before_ca
         .unwrap();
     stream.write(b"before".to_vec()).await.unwrap();
     assert!(state.cache_changes.try_write().is_err());
-    let mut clearing = Box::pin(plain_rs::services::cache::clear_application(&state));
+    let mut clearing = Box::pin(plain_rs::libs::cache::clear_application(&state));
     assert!(futures_util::poll!(&mut clearing).is_pending());
     stream.write(b" clear".to_vec()).await.unwrap();
     stream.finish().await.unwrap();

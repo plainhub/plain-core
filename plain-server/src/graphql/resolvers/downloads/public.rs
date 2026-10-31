@@ -1,6 +1,6 @@
 use crate::server::ServerState;
 use async_graphql::{Context, Object};
-use plain_rs::chat::attachments::download_queue::Queue;
+use plain_rs::features::chat::attachments::download_queue::Queue;
 use std::sync::Arc;
 
 async fn run(

@@ -2,7 +2,7 @@ use super::client_inputs::{SharedEntryInput, SharedLinkInput};
 use super::client_models::{SharedEntry, SharedLink};
 use crate::server::ServerState;
 use async_graphql::{Context, Enum, InputObject, Object, SimpleObject};
-use plain_rs::types::Long;
+use plain_rs::libs::types::Long;
 use serde::Deserialize;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Deserialize)]
@@ -13,7 +13,7 @@ enum SharedDownloadKind {
     Multi,
     Zip,
 }
-impl From<SharedDownloadKind> for plain_rs::files::shares::batch_plan::Kind {
+impl From<SharedDownloadKind> for plain_rs::features::files::shares::batch_plan::Kind {
     fn from(value: SharedDownloadKind) -> Self {
         match value {
             SharedDownloadKind::File => Self::File,
@@ -107,11 +107,12 @@ impl SharedDownloadMutation {
     ) -> async_graphql::Result<async_graphql::ID> {
         let state = ctx.data::<ServerState>()?;
         let runtime = state.shared_batches.clone();
-        let downloads_base = plain_rs::services::peers::shared_batch::downloads_directory(
-            &state.host,
-            &input.target_dir,
-        )?;
-        let intent = plain_rs::files::shares::batch_queue::Intent {
+        let downloads_base =
+            plain_rs::features::services::peers::shared_batch::downloads_directory(
+                &state.host,
+                &input.target_dir,
+            )?;
+        let intent = plain_rs::features::files::shares::batch_queue::Intent {
             message_id: input.message_id.to_string(),
             kind: input.kind.into(),
             link: input.link.try_into()?,
@@ -131,26 +132,38 @@ impl SharedDownloadMutation {
         ctx: &Context<'_>,
         id: async_graphql::ID,
     ) -> async_graphql::Result<bool> {
-        plain_rs::services::peers::shared_batch::control(ctx.data::<ServerState>()?, &id, "retry")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+        plain_rs::features::services::peers::shared_batch::control(
+            ctx.data::<ServerState>()?,
+            &id,
+            "retry",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))
     }
     async fn cancel_shared_download(
         &self,
         ctx: &Context<'_>,
         id: async_graphql::ID,
     ) -> async_graphql::Result<bool> {
-        plain_rs::services::peers::shared_batch::control(ctx.data::<ServerState>()?, &id, "cancel")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+        plain_rs::features::services::peers::shared_batch::control(
+            ctx.data::<ServerState>()?,
+            &id,
+            "cancel",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))
     }
     async fn remove_shared_download(
         &self,
         ctx: &Context<'_>,
         id: async_graphql::ID,
     ) -> async_graphql::Result<bool> {
-        plain_rs::services::peers::shared_batch::control(ctx.data::<ServerState>()?, &id, "remove")
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+        plain_rs::features::services::peers::shared_batch::control(
+            ctx.data::<ServerState>()?,
+            &id,
+            "remove",
+        )
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))
     }
 }

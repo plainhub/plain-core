@@ -2,18 +2,18 @@ use async_graphql::{Context, ID, Object};
 use serde_json::json;
 use std::sync::Arc;
 
-use plain_rs::db::Db;
-use plain_rs::db::bookmark as bookmark_db;
-use plain_rs::db::bookmark::DBookmark;
-use plain_rs::db::bookmark::DBookmarkGroup;
-use plain_rs::db::now_iso;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::db::bookmark as bookmark_db;
+use plain_rs::libs::db::bookmark::DBookmark;
+use plain_rs::libs::db::bookmark::DBookmarkGroup;
+use plain_rs::libs::db::now_iso;
 
 use crate::graphql::resolvers::bookmarks::bookmark_types::Bookmark;
 use crate::graphql::resolvers::bookmarks::bookmark_types::BookmarkGroup;
 use crate::graphql::resolvers::bookmarks::bookmark_types::BookmarkInput;
 use crate::graphql::types::ActionResult;
-use plain_rs::events::WS_BOOKMARK_UPDATED;
-use plain_rs::events::WsEvent;
+use plain_rs::libs::events::WS_BOOKMARK_UPDATED;
+use plain_rs::libs::events::WsEvent;
 use tokio::sync::broadcast;
 
 fn bookmark_to_json(b: &DBookmark) -> serde_json::Value {
@@ -123,7 +123,7 @@ impl BookmarkMutation {
         bookmark.group_id = (!input.group_id.is_empty()).then(|| input.group_id.to_string());
         bookmark.pinned = input.pinned;
         bookmark.sort_order = input.sort_order;
-        let assets = ctx.data_unchecked::<Arc<plain_rs::services::feeds::FeedAssets>>();
+        let assets = ctx.data_unchecked::<Arc<plain_rs::features::services::feeds::FeedAssets>>();
         let favicon_path = match input.favicon_url.as_deref() {
             None => None,
             Some("") => Some(String::new()),
@@ -157,7 +157,7 @@ impl BookmarkMutation {
         let ids = ids.into_iter().map(|id| id.to_string()).collect::<Vec<_>>();
         let removed = bookmark_db::delete_bookmarks_with_rows(db, &ids)?;
         let count = removed.len() as i32;
-        if let Ok(assets) = ctx.data::<Arc<plain_rs::services::feeds::FeedAssets>>() {
+        if let Ok(assets) = ctx.data::<Arc<plain_rs::features::services::feeds::FeedAssets>>() {
             for item in removed {
                 assets.release(&item.favicon_path);
             }

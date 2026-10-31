@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::db::Db;
+use plain_rs::libs::db::Db;
 use serde_json::{Value, json};
 
 fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema, Arc<Db>) {
@@ -8,7 +8,7 @@ fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema, Arc<Db>) {
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", permissions).unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
-    plain_rs::clipboard::record(&db, "hello", "web", "web", false).unwrap();
+    plain_rs::features::clipboard::record(&db, "hello", "web", "web", false).unwrap();
     let host = Arc::new(Host::default());
     let directory = dir.path().to_path_buf();
     let (events, _) = tokio::sync::broadcast::channel(16);
@@ -86,7 +86,7 @@ async fn clipboard_id_selection_deletes_only_selected_rows() {
         .as_str()
         .unwrap()
         .to_owned();
-    plain_rs::clipboard::record(&db, "unselected", "", "", false).unwrap();
+    plain_rs::features::clipboard::record(&db, "unselected", "", "", false).unwrap();
     for selection in [
         "ids:missing".to_owned(),
         "ids:".to_owned(),
@@ -116,7 +116,7 @@ fn write_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", json!(["CLIPBOARD"])).unwrap();
-    let token = plain_rs::utils::base64::base64_encode(&[9; 32]);
+    let token = plain_rs::libs::utils::base64::base64_encode(&[9; 32]);
     let server = crate::server::ContentServer::start(dir.path(), &token, prefs).unwrap();
     (dir, server)
 }
@@ -137,7 +137,7 @@ async fn write_request(state: &crate::server::ServerState, text: &str) -> async_
 fn write_host(
     state: &crate::server::ServerState,
     result: Value,
-) -> Arc<std::sync::Mutex<Vec<Option<plain_rs::db::ClipboardRow>>>> {
+) -> Arc<std::sync::Mutex<Vec<Option<plain_rs::libs::db::ClipboardRow>>>> {
     let observations = Arc::new(std::sync::Mutex::new(Vec::new()));
     let seen = observations.clone();
     let db = state.db.clone();
@@ -196,7 +196,7 @@ async fn set_clipboard_records_authenticated_source_before_platform_write_and_su
     );
     drop(observations);
     let mut events = state.events.subscribe();
-    plain_rs::services::clipboard::report(
+    plain_rs::features::services::clipboard::report(
         &state,
         &json!({"text":"received 🌍","sensitive":false}).to_string(),
     )

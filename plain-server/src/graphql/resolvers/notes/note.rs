@@ -2,13 +2,13 @@ use crate::graphql::resolvers::common::content_common;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::ActionResult;
 use async_graphql::{ComplexObject, Context, ID, InputObject, Object, SimpleObject};
-use plain_rs::types::Instant;
+use plain_rs::libs::types::Instant;
 use std::sync::Arc;
 
-use plain_rs::db::Db;
-use plain_rs::db::notes_feeds::NoteRow;
-use plain_rs::enums::DataType;
-use plain_rs::notes;
+use plain_rs::features::enums::DataType;
+use plain_rs::features::notes;
+use plain_rs::libs::db::Db;
+use plain_rs::libs::db::notes_feeds::NoteRow;
 
 type GqlResult<T> = async_graphql::Result<T>;
 

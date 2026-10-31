@@ -5,11 +5,12 @@ use std::sync::Arc;
 #[tokio::test]
 async fn closed_native_page_cancels_its_pending_main_schema_request_before_radio_acquisition() {
     let directory = tempfile::tempdir().unwrap();
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
     let server = ContentServer::start(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[7; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap();
@@ -57,11 +58,12 @@ async fn closing_an_old_native_scope_does_not_close_a_new_page_scope() {
 #[tokio::test]
 async fn native_subscription_delivers_without_an_http_listener() {
     let directory = tempfile::tempdir().unwrap();
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
     let server = ContentServer::start_core(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[7; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap();
@@ -81,7 +83,7 @@ async fn native_subscription_delivers_without_an_http_listener() {
     server
         .runtime_state()
         .events
-        .send(plain_rs::events::WsEvent::broadcast(
+        .send(plain_rs::libs::events::WsEvent::broadcast(
             "CONTENT_CHANGED",
             "{}".into(),
         ))
@@ -109,11 +111,12 @@ async fn native_subscription_delivers_without_an_http_listener() {
 #[tokio::test]
 async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_active() {
     let directory = tempfile::tempdir().unwrap();
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
     let server = ContentServer::start_core(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[7; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap();
@@ -138,7 +141,7 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
         .unwrap();
         assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
         for details in [None, Some(r#"{"results":[]}"#.to_string()), None] {
-            let row = plain_rs::db::DChat {
+            let row = plain_rs::libs::db::DChat {
                 id: "message".into(),
                 from_id: "me".into(),
                 to_id: "peer".into(),
@@ -146,15 +149,16 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
                 content: r#"{"type":"TEXT","value":{"text":"hello"}}"#.into(),
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
-                status: plain_rs::chat::enums::ChatStatus::Sent,
+                status: plain_rs::features::chat::enums::ChatStatus::Sent,
                 status_data: details.clone(),
             };
             server
                 .runtime_state()
                 .events
-                .send(plain_rs::events::WsEvent::broadcast(
+                .send(plain_rs::libs::events::WsEvent::broadcast(
                     event,
-                    serde_json::json!([plain_rs::chat::service::chat_to_json(&row)]).to_string(),
+                    serde_json::json!([plain_rs::features::chat::service::chat_to_json(&row)])
+                        .to_string(),
                 ))
                 .unwrap();
             let next: serde_json::Value = serde_json::from_str(

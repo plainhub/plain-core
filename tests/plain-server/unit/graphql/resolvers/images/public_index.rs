@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::host::bridge::Host;
-use plain_rs::services::images::status::ImageSearchStatusType;
+use plain_rs::features::services::images::status::ImageSearchStatusType;
+use plain_rs::libs::host::bridge::Host;
 use serde_json::{Value, json};
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -23,8 +23,9 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 
 fn fixture() -> (tempfile::TempDir, PublicSchema) {
     let dir = tempfile::tempdir().unwrap();
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    let db = Arc::new(plain_rs::db::Db::open(&dir.path().join("data.db")).unwrap());
+    let prefs =
+        Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let db = Arc::new(plain_rs::libs::db::Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
     let directory = dir.path().to_path_buf();
     let (events, _) = tokio::sync::broadcast::channel(16);
@@ -50,7 +51,7 @@ async fn image_search_status_is_owned_by_rust_without_platform_projection() {
     assert_eq!(row["status"], "UNAVAILABLE");
     assert_eq!(
         row["modelSize"],
-        plain_rs::ai_image_search::models::default_model::manifest().size() as i64
+        plain_rs::libs::ai_image_search::models::default_model::manifest().size() as i64
     );
     assert_eq!(
         row["modelDir"],
@@ -69,7 +70,7 @@ async fn restore_without_enabled_model_does_not_contact_platform() {
         panic!("Unexpected platform operation: {method}")
     });
     let models = schema
-        .data::<Arc<plain_rs::services::images::models::Runtime>>()
+        .data::<Arc<plain_rs::features::services::images::models::Runtime>>()
         .unwrap();
     models.enable(true).await.unwrap();
     assert_eq!(
@@ -81,14 +82,14 @@ async fn restore_without_enabled_model_does_not_contact_platform() {
 async fn cancel_index_mutates_the_same_index_queried_by_model_status() {
     let (_dir, schema) = fixture();
     let index = schema
-        .data::<Arc<plain_rs::services::images::index::ImageIndex>>()
+        .data::<Arc<plain_rs::features::services::images::index::ImageIndex>>()
         .unwrap();
     let before = index.status().version;
     let response = schema.execute("mutation { cancelImageIndex }").await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert!(index.status().version > before);
     let models = schema
-        .data::<Arc<plain_rs::services::images::models::Runtime>>()
+        .data::<Arc<plain_rs::features::services::images::models::Runtime>>()
         .unwrap();
     assert_eq!(
         models.snapshot().status.is_indexing,
@@ -107,7 +108,7 @@ async fn importing_without_a_complete_package_does_not_start_default_download() 
             .contains("complete model package")
     );
     let models = schema
-        .data::<Arc<plain_rs::services::images::models::Runtime>>()
+        .data::<Arc<plain_rs::features::services::images::models::Runtime>>()
         .unwrap();
     assert_eq!(
         models.snapshot().status.status,

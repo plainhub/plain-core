@@ -2,7 +2,7 @@ use crate::graphql::executor::GraphqlExecutor;
 use crate::native::events::NativeEventStream;
 use crate::server::ServerState;
 use async_graphql::{Request, Response};
-use plain_rs::{
+use plain_rs::libs::{
     host::request_scope::NativeRequestScope, protocols::graphql::PeerSubscriptionTarget,
 };
 

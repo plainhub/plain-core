@@ -1,17 +1,18 @@
 use crate::server::ContentServer;
-use plain_rs::services::casting::receiver::types::DlnaMediaType;
-use plain_rs::services::casting::receiver::types::DlnaPlaybackState;
-use plain_rs::services::casting::receiver::types::PendingCastRequest;
+use plain_rs::features::services::casting::receiver::types::DlnaMediaType;
+use plain_rs::features::services::casting::receiver::types::DlnaPlaybackState;
+use plain_rs::features::services::casting::receiver::types::PendingCastRequest;
 use serde_json::json;
 use std::sync::Arc;
 
 fn fixture() -> (tempfile::TempDir, ContentServer) {
     let directory = tempfile::tempdir().unwrap();
-    let prefs =
-        Arc::new(plain_rs::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
     let core = ContentServer::start(
         directory.path(),
-        &plain_rs::utils::base64::base64_encode(&[7; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap();

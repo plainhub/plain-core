@@ -1,7 +1,7 @@
 use async_graphql::Enum;
 use async_graphql::ID;
 use async_graphql::SimpleObject;
-use plain_rs::enums::DataType;
+use plain_rs::features::enums::DataType;
 
 /// Media-library item kinds accepted by media item actions and buckets
 /// (plain-app `MediaDataType`).
@@ -34,7 +34,7 @@ impl MediaDataType {
     }
 }
 
-pub use plain_rs::services::files::scanning::ScanState;
+pub use plain_rs::features::services::files::scanning::ScanState;
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
 pub struct ScanProgress {
@@ -47,7 +47,7 @@ pub struct ScanProgress {
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct MediaBucket {
-    pub size: plain_rs::types::Long,
+    pub size: plain_rs::libs::types::Long,
     pub id: ID,
     pub name: String,
     #[graphql(name = "itemCount")]

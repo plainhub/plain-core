@@ -1,12 +1,12 @@
 use async_graphql::{Context, ID, InputObject, Object, Result, SimpleObject};
-use plain_rs::files::tasks::CompletedOp;
-use plain_rs::files::tasks::FileTask;
-use plain_rs::files::tasks::FileTaskOp;
-use plain_rs::files::tasks::FileTaskStatus;
-use plain_rs::files::tasks::FileTaskType;
-use plain_rs::services::files::file_tasks::FileTasks;
-use plain_rs::types::Instant;
-use plain_rs::types::Long;
+use plain_rs::features::files::tasks::CompletedOp;
+use plain_rs::features::files::tasks::FileTask;
+use plain_rs::features::files::tasks::FileTaskOp;
+use plain_rs::features::files::tasks::FileTaskStatus;
+use plain_rs::features::files::tasks::FileTaskType;
+use plain_rs::features::services::files::file_tasks::FileTasks;
+use plain_rs::libs::types::Instant;
+use plain_rs::libs::types::Long;
 use std::sync::Arc;
 #[derive(InputObject)]
 struct FileTaskOpInput {
@@ -124,7 +124,7 @@ async fn create(
 ) -> Result<FileTaskResult> {
     crate::http::auth::public_gate::require(
         ctx,
-        ctx.data::<Arc<plain_rs::prefs::Prefs>>()?,
+        ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?,
         &["WRITE_EXTERNAL_STORAGE"],
     )?;
     let client_id = caller(ctx)?;

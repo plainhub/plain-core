@@ -54,13 +54,14 @@ impl PublicDiscovery {
         let task = tokio::spawn(async move {
             let core_stop = state.stop.clone();
             let start = async {
-                plain_rs::services::discovery::mdns_runtime::control(
+                plain_rs::features::services::discovery::mdns_runtime::control(
                     &state,
-                    plain_rs::services::discovery::mdns_runtime::Request::Publish {},
+                    plain_rs::features::services::discovery::mdns_runtime::Request::Publish {},
                 )
                 .await?;
                 if state.host.startup().wifi_aware_supported {
-                    plain_rs::services::peers::status_outgoing::ensure_aware(&state).await?;
+                    plain_rs::features::services::peers::status_outgoing::ensure_aware(&state)
+                        .await?;
                 }
                 Ok(())
             };
@@ -69,7 +70,7 @@ impl PublicDiscovery {
                     .mdns
                     .execute(
                         &state,
-                        plain_rs::services::discovery::mdns_runtime::Request::Unpublish {},
+                        plain_rs::features::services::discovery::mdns_runtime::Request::Unpublish {},
                     )
                     .await
                     .map(|_| ())
@@ -129,7 +130,7 @@ pub(crate) async fn stop_locked(state: &ServerState, guard: &mut Option<PublicSe
         .peer_status
         .public_active
         .store(false, std::sync::atomic::Ordering::SeqCst);
-    plain_rs::services::peers::peer_status_controller::stop(state).await;
+    plain_rs::features::services::peers::peer_status_controller::stop(state).await;
     if let Err(error) = state.aware.stop(state).await {
         log::warn!("Aware subscription shutdown: {error}");
     }
@@ -138,11 +139,11 @@ pub(crate) async fn stop_locked(state: &ServerState, guard: &mut Option<PublicSe
         .close_client(&state.subscription_sessions, None);
     state.mms.cancel_all().await;
     let _cast_guard = state.cast.operations.lock().await;
-    plain_rs::services::casting::dlna_sender_playback::end(state, true).await;
+    plain_rs::features::services::casting::dlna_sender_playback::end(state, true).await;
     let _receiver_guard = state.cast.receiver_operations.lock().await;
-    plain_rs::services::casting::receiver::lifecycle::stop_locked(state).await;
+    plain_rs::features::services::casting::receiver::lifecycle::stop_locked(state).await;
     state.cast.stop_tasks();
-    plain_rs::services::casting::dlna_sender_runtime::release_permission(
+    plain_rs::features::services::casting::dlna_sender_runtime::release_permission(
         state,
         &state.cast.scan_lease,
     )

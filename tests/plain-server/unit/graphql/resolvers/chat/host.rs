@@ -4,10 +4,10 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn server(dir: &std::path::Path) -> ContentServer {
-    let prefs = Arc::new(plain_rs::prefs::Prefs::load(&dir.join("prefs.json")).unwrap());
+    let prefs = Arc::new(plain_rs::features::prefs::Prefs::load(&dir.join("prefs.json")).unwrap());
     ContentServer::start(
         &dir,
-        &plain_rs::utils::base64::base64_encode(&[7; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap()
@@ -36,7 +36,7 @@ async fn local_messages_edit_forward_and_clear_through_native_executor() {
     assert_eq!(result["sendChatItem"][0]["status"], "SENT");
     assert_eq!(
         events.recv().await.unwrap().event_type,
-        plain_rs::chat::events::WS_MESSAGE_CREATED
+        plain_rs::features::chat::events::WS_MESSAGE_CREATED
     );
     let edited = execute(
         &server,
@@ -64,7 +64,7 @@ async fn local_messages_edit_forward_and_clear_through_native_executor() {
     assert_eq!(rows["chatCount"], 2);
     assert_eq!(rows["chatRecords"].as_array().unwrap().len(), 2);
     assert_eq!(rows["chatConversations"][0]["id"], "local");
-    let unrelated = plain_rs::chat::messages::message_lifecycle::create(
+    let unrelated = plain_rs::features::chat::messages::message_lifecycle::create(
         &state.db,
         "unrelated-peer",
         "",
@@ -101,7 +101,8 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
     let state = server.runtime_state();
     let source = dir.path().join("fixture.txt");
     std::fs::write(&source, b"abc").unwrap();
-    let store = plain_rs::files::app_files::FileStore::new(state.db.clone(), dir.path().into());
+    let store =
+        plain_rs::features::files::app_files::FileStore::new(state.db.clone(), dir.path().into());
     let file = store
         .import(source, "fixture.txt".into(), "text/plain".into(), false)
         .await
@@ -181,33 +182,33 @@ async fn long_text_files_and_invalid_targets_use_the_same_message_lifecycle() {
 async fn retry_returns_pending_before_platform_transport_completes() {
     let dir = tempfile::tempdir().unwrap();
     let server = server(dir.path());
-    let (kp, pk) = plain_rs::crypto::ed25519_generate();
+    let (kp, pk) = plain_rs::libs::crypto::ed25519_generate();
     let state = server.runtime_state();
     state.prefs.set("client_id", "local").unwrap();
     state
         .prefs
         .set(
             "signature_key_pair",
-            plain_rs::utils::base64::base64_encode(&kp),
+            plain_rs::libs::utils::base64::base64_encode(&kp),
         )
         .unwrap();
-    let mut remote = plain_rs::db::DPeer::new(
+    let mut remote = plain_rs::libs::db::DPeer::new(
         "remote",
         "remote",
         "",
         Some(443),
-        plain_rs::chat::enums::DeviceType::Phone,
+        plain_rs::features::chat::enums::DeviceType::Phone,
     );
-    remote.status = plain_rs::chat::enums::PeerStatus::Paired;
-    remote.key = plain_rs::utils::base64::base64_encode(&[7; 32]);
-    remote.public_key = plain_rs::utils::base64::base64_encode(&pk);
-    plain_rs::db::chat_store::peers::save(
+    remote.status = plain_rs::features::chat::enums::PeerStatus::Paired;
+    remote.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
+    remote.public_key = plain_rs::libs::utils::base64::base64_encode(&pk);
+    plain_rs::libs::db::chat_store::peers::save(
         &state.db,
         &[remote],
-        plain_rs::db::chat_store::SaveMode::Insert,
+        plain_rs::libs::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
-    let row = plain_rs::chat::messages::message_lifecycle::create(
+    let row = plain_rs::features::chat::messages::message_lifecycle::create(
         &state.db,
         "remote",
         "",
@@ -230,7 +231,7 @@ async fn retry_returns_pending_before_platform_transport_completes() {
         .reply(generation, json!({"id":caps["id"],"result":["BLE"]}))
         .unwrap();
     let exchange = requests.recv().await.unwrap();
-    let result = plain_rs::services::peers::ble_transport::test_reply(
+    let result = plain_rs::features::services::peers::ble_transport::test_reply(
         &state.ble_transport,
         &exchange["params"],
         json!({"data":{"createChatItem":[]}}),
@@ -242,11 +243,11 @@ async fn retry_returns_pending_before_platform_transport_completes() {
         .unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(2), async {
         loop {
-            if plain_rs::db::chat_store::messages::get(&state.db, &row.id)
+            if plain_rs::libs::db::chat_store::messages::get(&state.db, &row.id)
                 .unwrap()
                 .unwrap()
                 .status
-                == plain_rs::chat::enums::ChatStatus::Sent
+                == plain_rs::features::chat::enums::ChatStatus::Sent
             {
                 break;
             }
@@ -294,7 +295,8 @@ async fn batch_forward_uses_current_content_and_owns_each_creation_event() {
     let mut created = 0;
     while let Ok(event) = events.try_recv() {
         assert_ne!(event.event_type, "CONTENT_CHANGED");
-        created += usize::from(event.event_type == plain_rs::chat::events::WS_MESSAGE_CREATED);
+        created +=
+            usize::from(event.event_type == plain_rs::features::chat::events::WS_MESSAGE_CREATED);
     }
     assert_eq!(created, 2);
     assert!(host_requests.try_recv().is_err());

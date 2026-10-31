@@ -1,7 +1,7 @@
 use crate::test_support::schema::build;
 
-use plain_rs::db::Db;
-use plain_rs::prefs::Prefs;
+use plain_rs::features::prefs::Prefs;
+use plain_rs::libs::db::Db;
 use std::sync::Arc;
 
 fn sdl() -> String {
@@ -419,7 +419,7 @@ async fn public_schema_pomodoro_roots_execute() {
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema = build(
-        Arc::new(plain_rs::host::bridge::Host::default()),
+        Arc::new(plain_rs::libs::host::bridge::Host::default()),
         events,
         prefs,
         db,
@@ -575,7 +575,7 @@ async fn no_root_field_fails_for_unregistered_schema_data() {
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let probe_prefs = prefs.clone();
-    let host = Arc::new(plain_rs::host::bridge::Host::default());
+    let host = Arc::new(plain_rs::libs::host::bridge::Host::default());
     let (generation, mut requests) = host.connect();
     let responses = host.clone();
     let provider = tokio::spawn(async move {
@@ -609,11 +609,11 @@ async fn no_root_field_fails_for_unregistered_schema_data() {
     let mut unregistered = Vec::new();
     let mut unwalkable = Vec::new();
     // Request-scoped resolvers use a genuine server state.
-    let mut config = plain_rs::platform::startup::config();
+    let mut config = plain_rs::libs::platform::startup::config();
     config.cache_dir = Some(dir.path().join("cache").to_string_lossy().into_owned());
     let server = crate::server::ContentServer::start_core_with_config(
         dir.path(),
-        &plain_rs::utils::base64::base64_encode(&[7; 32]),
+        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
         probe_prefs,
         config,
     )
@@ -740,7 +740,7 @@ async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema = build(
-        Arc::new(plain_rs::host::bridge::Host::default()),
+        Arc::new(plain_rs::libs::host::bridge::Host::default()),
         events,
         prefs,
         db,

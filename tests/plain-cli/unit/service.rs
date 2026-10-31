@@ -6,7 +6,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
 {
     let directory = tempfile::Builder::new()
         .prefix("cli-service-")
-        .tempdir_in(plain_rs::platform::system::consts::home_directory().unwrap())
+        .tempdir_in(plain_rs::libs::platform::system::consts::home_directory().unwrap())
         .unwrap();
     let paths = AppPaths {
         data_dir: directory.path().join("data"),
@@ -17,8 +17,10 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
     std::fs::create_dir(&paths.data_dir).unwrap();
     let source = directory.path().join("sources");
     std::fs::create_dir(&source).unwrap();
-    let prefs =
-        plain_rs::prefs::Prefs::load(&plain_rs::prefs::default_path(&paths.data_dir)).unwrap();
+    let prefs = plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(
+        &paths.data_dir,
+    ))
+    .unwrap();
     prefs.set("http_port", 0).unwrap();
     prefs.set("https_port", 0).unwrap();
     let options = || Options {
