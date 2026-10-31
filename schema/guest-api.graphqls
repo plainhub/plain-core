@@ -1,12 +1,12 @@
 scalar Long
 
 type Query {
-	sharedInfo(virtualPath: String): SharedInfo!
+	sharedInfo(relativePath: String): SharedInfo!
 }
 
 type SharedFile {
 	name: String!
-	virtualPath: String!
+	relativePath: String!
 	isDir: Boolean!
 	size: Long!
 	mimeType: String!

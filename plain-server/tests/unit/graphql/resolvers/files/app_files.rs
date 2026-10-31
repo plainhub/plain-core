@@ -48,13 +48,15 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
     assert_eq!(page["data"]["appFileCount"], 1);
     assert_eq!(page["data"]["appFiles"][0]["id"], id);
     let url_token = plain_rs::prefs::ensure_url_token(&prefs);
-    let encoded = plain_rs::utils::base64::base64_encode(
-        &plain_rs::crypto::xchacha_encrypt(
-            &url_token,
-            dir.path().join(relative).to_str().unwrap().as_bytes(),
-        )
-        .unwrap(),
-    );
+    let encoded = plain_rs::files::resource_link::seal(
+        &plain_rs::files::resource_link::Scope::Global,
+        &plain_rs::utils::base64::base64_decode(&url_token),
+        &plain_rs::files::resource_link::Resource {
+            r#type: plain_rs::files::resource_link::ResourceType::AppFile,
+            id: id.to_owned(),
+        },
+    )
+    .unwrap();
     let client = reqwest::Client::new();
     let url = format!("http://127.0.0.1:{}/fs", server.port);
     let response = client

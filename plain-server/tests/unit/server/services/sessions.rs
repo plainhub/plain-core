@@ -414,7 +414,7 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     let metadata = remote(&state, &headers,
         r#"{ sessions { clientId clientName } peers { id name } chatChannels { id name } app { urlToken } }"#).await;
     assert!(metadata.get("errors").is_none(), "{metadata}");
-    assert_eq!(metadata["data"]["app"]["urlToken"], "resource-token");
+    assert_eq!(metadata["data"]["app"]["urlToken"], session.url_token);
     assert_eq!(
         metadata["data"]["sessions"][0]["clientId"],
         session.client_id

@@ -207,6 +207,7 @@ impl Store {
 
     fn apply(
         &self,
+        client_id: &str,
         id: &str,
         identity: &Identity,
         result: Result<(AppSnapshot, Vec<Notification>, reqwest::Url)>,
@@ -242,11 +243,16 @@ impl Store {
                         let icon = match peer.icons.get(notification.app_id.as_str()) {
                             Some(icon) => icon.clone(),
                             None => {
-                                let file_id = plain_rs::chat::messages::content::make_file_id(
-                                    &format!("pkgicon://{}", notification.app_id.as_str()),
-                                    &peer.url_token,
-                                );
-                                ensure!(!file_id.is_empty(), "Invalid notification icon key");
+                                let file_id = plain_rs::files::resource_link::seal(
+                                    &plain_rs::files::resource_link::Scope::Session(
+                                        client_id.into(),
+                                    ),
+                                    &plain_rs::utils::base64::base64_decode(&peer.url_token),
+                                    &plain_rs::files::resource_link::Resource::reference(&format!(
+                                        "pkgicon://{}",
+                                        notification.app_id.as_str()
+                                    )),
+                                )?;
                                 let mut url = base.join("/fs")?;
                                 url.query_pairs_mut().append_pair("id", &file_id);
                                 let icon = url.to_string();
@@ -354,13 +360,14 @@ pub async fn refresh_from_app(
     let cancelled = cancelled.clone();
     tokio::task::spawn_blocking(move || {
         state.db.with_conn(|connection| {
-            if plain_rs::services::peers::management::current(
-                connection, &state, &id, &identity, &cancelled,
-            )? {
-                state
-                    .management
-                    .notifications
-                    .apply(&id, &identity, result, &state.host)?;
+            if super::management::current(connection, &state, &id, &identity, &cancelled)? {
+                state.management.notifications.apply(
+                    &client_id,
+                    &id,
+                    &identity,
+                    result,
+                    &state.host,
+                )?;
             }
             Ok(())
         })

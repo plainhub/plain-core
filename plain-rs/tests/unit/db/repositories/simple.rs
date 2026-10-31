@@ -82,6 +82,7 @@ fn clipboard_delete_by_ids_and_clear() {
 fn session_save_get_and_touch() {
     let db = test_db("session");
     let row = SessionRow {
+        url_token: "resource-key".into(),
         client_id: "client-1".into(),
         name: "Browser".into(),
         r#type: "WEB".into(),
@@ -100,6 +101,7 @@ fn session_save_get_and_touch() {
     let got = db.session_get("client-1").unwrap().expect("session");
     assert_eq!(got.r#type, "WEB");
     assert_eq!(got.browser_name, "Chrome");
+    assert_eq!(got.url_token, row.url_token);
 
     db.session_touch(&[("client-1".into(), "2026-03-01T00:00:00.000Z".into())])
         .unwrap();
@@ -125,6 +127,7 @@ fn session_list_orders_by_last_active_desc() {
         ("mid", "2026-03-01T00:00:00.000Z"),
     ] {
         db.session_save(&SessionRow {
+            url_token: "resource-key".into(),
             client_id: id.into(),
             name: id.into(),
             r#type: "WEB".into(),
@@ -330,6 +333,7 @@ fn rows_round_trip_through_serde() {
 #[test]
 fn serialized_field_names_are_snake_case() {
     let row = SessionRow {
+        url_token: "resource-key".into(),
         client_id: "c".into(),
         name: "n".into(),
         r#type: "WEB".into(),

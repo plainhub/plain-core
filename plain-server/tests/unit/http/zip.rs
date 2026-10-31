@@ -3,7 +3,7 @@ use super::*;
 static NEXT_STAGING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[test]
-fn zip_virtual_paths_split_into_archive_and_prefix() {
+fn zip_relative_paths_split_into_archive_and_prefix() {
     let dir = std::env::temp_dir().join(format!("plain_zip_path_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let archive = dir.join("pack.zip");
@@ -90,10 +90,14 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
     let recorded = state.db.record_media_files(&rows).unwrap();
     let payload = json!({"type":"DOC","query":format!("ids:{},{}",recorded[0].id,recorded[2].id),"name":"selected.zip"}).to_string();
     let token = plain_rs::prefs::ensure_url_token(&state.prefs);
-    let id = plain_rs::utils::base64::base64_encode_url_safe(
-        &plain_rs::crypto::xchacha_encrypt(&token, payload.as_bytes()).unwrap(),
-    );
-    let response = files(State(state.clone()), Query(Params { id, sid: None })).await;
+    let id = plain_rs::files::resource_link::encrypt(
+        &plain_rs::files::resource_link::Scope::Global,
+        "zip-files",
+        &plain_rs::utils::base64::base64_decode(&token),
+        payload.as_bytes(),
+    )
+    .unwrap();
+    let response = files(State(state.clone()), Query(Params { id })).await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
@@ -263,19 +267,17 @@ async fn shared_directory_download_preserves_empty_directories_and_excludes_outs
                 None,
             )
             .unwrap();
-        let payload = serde_json::json!({"sharedId":share.id,"virtualPath":"photos"}).to_string();
         let key = plain_rs::utils::base64::base64_decode(&share.url_token);
-        let id = plain_rs::utils::base64::base64_encode_url_safe(
-            &plain_rs::crypto::xchacha_encrypt_raw(&key, payload.as_bytes()).unwrap(),
-        );
-        let response = dir(
-            State(state.clone()),
-            Query(Params {
-                id,
-                sid: Some(share.id),
-            }),
+        let id = plain_rs::files::resource_link::seal(
+            &plain_rs::files::resource_link::Scope::Share(share.id.clone()),
+            &key,
+            &plain_rs::files::resource_link::Resource {
+                r#type: plain_rs::files::resource_link::ResourceType::SharedFile,
+                id: "photos".into(),
+            },
         )
-        .await;
+        .unwrap();
+        let response = dir(State(state.clone()), Query(Params { id })).await;
         assert_eq!(response.status(), StatusCode::OK);
         let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
             .await

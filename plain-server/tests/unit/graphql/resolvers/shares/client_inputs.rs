@@ -149,7 +149,7 @@ fn owned_entries_keep_their_storage_and_full_width_size() {
     for size in [i64::MIN, -1, 0, i64::MAX] {
         let input = SharedEntryInput {
             name: "a +?#% file".into(),
-            virtual_path: "folder/a +?#% file".into(),
+            relative_path: "folder/a +?#% file".into(),
             is_dir: false,
             size: Long(size),
             mime_type: "text/plain".into(),
@@ -157,20 +157,20 @@ fn owned_entries_keep_their_storage_and_full_width_size() {
         };
         let allocations = [
             input.name.as_ptr(),
-            input.virtual_path.as_ptr(),
+            input.relative_path.as_ptr(),
             input.mime_type.as_ptr(),
         ];
         let output: client::File = input.into();
         assert_eq!(
             [
                 output.name.as_ptr(),
-                output.virtual_path.as_ptr(),
+                output.relative_path.as_ptr(),
                 output.mime_type.as_ptr()
             ],
             allocations
         );
         assert_eq!(output.name, "a +?#% file");
-        assert_eq!(output.virtual_path, "folder/a +?#% file");
+        assert_eq!(output.relative_path, "folder/a +?#% file");
         assert_eq!(output.mime_type, "text/plain");
         assert_eq!(output.size, size);
         assert!(!output.is_dir);

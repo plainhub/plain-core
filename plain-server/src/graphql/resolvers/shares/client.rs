@@ -69,14 +69,14 @@ impl SharedClientMutation {
         ctx: &Context<'_>,
         message_id: async_graphql::ID,
         expected: SharedMessageCardInput,
-        virtual_path: Option<String>,
+        relative_path: Option<String>,
     ) -> async_graphql::Result<Option<SharedBrowseResult>> {
         let expected: share_card::Card = expected.try_into()?;
         shared_client::browse(
             ctx.data::<ServerState>()?,
             &message_id,
             &expected,
-            virtual_path.as_deref(),
+            relative_path.as_deref(),
         )
         .await
         .map_err(error)?

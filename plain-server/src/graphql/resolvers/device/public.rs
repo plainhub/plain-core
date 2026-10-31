@@ -13,9 +13,6 @@ use std::sync::Arc;
 #[graphql(complex)]
 pub struct App {
     pub client_id: String,
-    /// Explicit read-only exception: authenticated clients need this existing
-    /// file-access key. Generic prefs never expose it or allow writing it.
-    pub url_token: String,
     pub http_port: i32,
     pub https_port: i32,
     pub device_name: String,
@@ -41,6 +38,10 @@ impl App {
 
 #[ComplexObject]
 impl App {
+    async fn url_token(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+        Ok(crate::graphql::executor::resource_credentials(ctx)?.1)
+    }
+
     async fn tls_certificate_sha256(
         &self,
         ctx: &Context<'_>,
@@ -206,7 +207,6 @@ impl DeviceQuery {
         };
         Ok(App {
             client_id: system.client_id,
-            url_token: system.url_token,
             http_port,
             https_port,
             device_name: user.device_name,

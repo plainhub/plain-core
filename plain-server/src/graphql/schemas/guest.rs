@@ -6,7 +6,7 @@ use plain_rs::types::Long;
 #[derive(SimpleObject)]
 struct SharedFile {
     name: String,
-    virtual_path: String,
+    relative_path: String,
     is_dir: bool,
     size: Long,
     mime_type: String,
@@ -31,12 +31,12 @@ impl Query {
     async fn shared_info(
         &self,
         ctx: &Context<'_>,
-        virtual_path: Option<String>,
+        relative_path: Option<String>,
     ) -> async_graphql::Result<SharedInfo> {
         let guest = ctx.data::<Guest>()?;
         let service = Service::new(guest.state.db.clone(), guest.state.prefs.clone());
         let id = guest.id.clone();
-        let path = virtual_path.unwrap_or_default();
+        let path = relative_path.unwrap_or_default();
         let (share, roots) = tokio::task::spawn_blocking(move || service.browse(&id, &path))
             .await
             .map_err(|e| async_graphql::Error::new(e.to_string()))?
@@ -44,7 +44,7 @@ impl Query {
         let mut entries = Vec::new();
         for root in roots {
             let name = root
-                .virtual_path
+                .relative_path
                 .trim_end_matches('/')
                 .rsplit('/')
                 .next()
@@ -76,7 +76,7 @@ impl Query {
             };
             entries.push(SharedFile {
                 name,
-                virtual_path: root.virtual_path,
+                relative_path: root.relative_path,
                 is_dir: root.is_dir,
                 size: Long(size),
                 mime_type,

@@ -232,11 +232,11 @@ pub async fn browse(
     state: &CoreRuntime,
     message_id: &str,
     expected: &Card,
-    virtual_path: Option<&str>,
+    relative_path: Option<&str>,
 ) -> Result<Option<BrowseResult>> {
     request(
         state,
-        browse_current(state, message_id, expected, virtual_path),
+        browse_current(state, message_id, expected, relative_path),
     )
     .await
 }
@@ -250,10 +250,10 @@ pub async fn cache_file(
     thumbnail: bool,
 ) -> Result<String> {
     ensure!(!entry.is_dir, "Shared preview requires a file");
-    let mut url = link.file_url(&url_token, &entry.virtual_path, false)?;
+    let mut url = link.file_url(&url_token, &entry.relative_path, false)?;
     let (name, key) = if thumbnail {
         url.push_str("&w=200&h=200&cc=false");
-        ("thumbnail".to_owned(), Some(json!({"host":link.host,"port":link.port,"shareId":link.shared_id,"token":link.token,"urlToken":url_token,"path":entry.virtual_path,"size":entry.size,"centerCrop":false}).to_string()))
+        ("thumbnail".to_owned(), Some(json!({"host":link.host,"port":link.port,"shareId":link.shared_id,"token":link.token,"urlToken":url_token,"path":entry.relative_path,"size":entry.size,"centerCrop":false}).to_string()))
     } else {
         (entry.name, None)
     };

@@ -126,7 +126,7 @@ impl Queue {
         let mut paths: Vec<_> = intent
             .entries
             .iter()
-            .map(|e| e.virtual_path.as_str())
+            .map(|e| e.relative_path.as_str())
             .collect();
         paths.sort_unstable();
         paths.dedup();
@@ -146,7 +146,7 @@ impl Queue {
                 .intent
                 .entries
                 .iter()
-                .map(|e| e.virtual_path.as_str())
+                .map(|e| e.relative_path.as_str())
                 .collect();
             old.sort_unstable();
             old.dedup();
@@ -334,12 +334,12 @@ impl Queue {
         t.run.snapshot.done_files = plan
             .targets
             .iter()
-            .filter(|v| t.run.completed.contains(&v.entry.virtual_path))
+            .filter(|v| t.run.completed.contains(&v.entry.relative_path))
             .count();
         t.run.snapshot.downloaded_size = plan
             .targets
             .iter()
-            .filter(|v| t.run.completed.contains(&v.entry.virtual_path))
+            .filter(|v| t.run.completed.contains(&v.entry.relative_path))
             .map(|v| v.entry.size)
             .sum();
         t.last_bytes = t.run.snapshot.downloaded_size;
@@ -448,12 +448,12 @@ impl Queue {
             t.run.snapshot.done_files = plan
                 .targets
                 .iter()
-                .filter(|v| t.run.completed.contains(&v.entry.virtual_path))
+                .filter(|v| t.run.completed.contains(&v.entry.relative_path))
                 .count();
             t.run.snapshot.downloaded_size = plan
                 .targets
                 .iter()
-                .filter(|v| t.run.completed.contains(&v.entry.virtual_path))
+                .filter(|v| t.run.completed.contains(&v.entry.relative_path))
                 .map(|v| v.entry.size)
                 .sum();
         }

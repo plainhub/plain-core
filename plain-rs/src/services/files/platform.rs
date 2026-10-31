@@ -1,5 +1,5 @@
 mod media_rows;
-mod paths;
+pub(super) mod paths;
 
 use anyhow::{Result, anyhow, bail};
 use plain_rs::db::Db;
@@ -53,6 +53,30 @@ impl FilePlatform {
             scans,
         }
     }
+    pub(crate) async fn resource_media_path(&self, id: &str) -> Result<String> {
+        if self.host.uses_system_media_catalog() {
+            let mut plan = plain_rs::services::files::provider_query::Plan::default();
+            plan.ids("_id", vec![id.to_owned()]);
+            let rows = self
+                .host
+                .call(
+                    "systemFileIndexRows",
+                    json!({"plan":plan,"offset":0,"limit":1,"sortBy":"NAME_ASC"}),
+                )
+                .await
+                .map_err(anyhow::Error::msg)?;
+            return rows
+                .as_array()
+                .and_then(|rows| rows.first())
+                .filter(|row| row["mediaId"].as_str() == Some(id))
+                .and_then(|row| row["path"].as_str())
+                .filter(|path| !path.is_empty())
+                .map(str::to_owned)
+                .ok_or_else(|| anyhow!("Media unavailable"));
+        }
+        self.db.with_conn(|conn| conn.query_row("SELECT path FROM file_catalog WHERE id=?1 AND kind IN ('IMAGE','VIDEO','AUDIO','DOC') AND missing=0 AND trashed=0 AND is_available=1", [id], |row| row.get(0))).map_err(Into::into)
+    }
+
     pub fn uses_sdk(&self) -> bool {
         #[cfg(any(test, feature = "test-seams"))]
         {

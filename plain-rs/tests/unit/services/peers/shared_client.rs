@@ -26,6 +26,12 @@ fn discovery_selects_complete_matching_records_and_safe_ipv6_urls() {
     assert!(download_url("http://localhost/fs?sid=s&id=x").is_err());
     assert!(download_url("https://user@localhost/fs?sid=s&id=x").is_err());
     assert!(download_url("https://localhost/proxyfs?sid=s&id=x").is_err());
+    let link = Link::new("localhost", 443, "fixture", &plain_rs::base64_encode(&[7;32])).unwrap();
+    let url = link.file_url(&plain_rs::base64_encode(&[8;32]), "folder/file", false).unwrap();
+    assert!(download_url(&url).is_ok());
+    assert!(download_url("https://localhost/fs?id=g.AA").is_err());
+    assert!(download_url("https://localhost/fs?id=c.client.AA").is_err());
+    assert!(download_url("https://localhost/fs?id=x").is_err());
 }
 
 #[tokio::test]
@@ -91,7 +97,7 @@ async fn stopped_core_rejects_every_typed_shared_operation_before_side_effects()
         plain_rs::services::files::remote_cache::RemoteCache::new(directory.path().join("cache"));
     let file = plain_rs::files::shares::client::File {
         name: "preview.txt".into(),
-        virtual_path: "folder/ +?#中文%".into(),
+        relative_path: "folder/ +?#中文%".into(),
         is_dir: false,
         size: 8,
         mime_type: "text/plain".into(),
@@ -231,7 +237,7 @@ async fn thumbnail_requests_keep_aspect_ratio_and_replace_cropped_cache_entries(
     let url_token = plain_rs::base64_encode(&[8; 32]);
     let entry = plain_rs::files::shares::client::File {
         name: "photo.jpg".into(),
-        virtual_path: "folder/ +?#中文%".into(),
+        relative_path: "folder/ +?#中文%".into(),
         is_dir: false,
         size: 8,
         mime_type: "image/jpeg".into(),
@@ -239,11 +245,11 @@ async fn thumbnail_requests_keep_aspect_ratio_and_replace_cropped_cache_entries(
     };
     let cache =
         plain_rs::services::files::remote_cache::RemoteCache::new(directory.path().join("cache"));
-    let old_key = json!({"host":link.host,"port":link.port,"shareId":link.shared_id,"token":link.token,"urlToken":url_token,"path":entry.virtual_path,"size":entry.size}).to_string();
+    let old_key = json!({"host":link.host,"port":link.port,"shareId":link.shared_id,"token":link.token,"urlToken":url_token,"path":entry.relative_path,"size":entry.size}).to_string();
     let old_path = cache
         .download(
             &link
-                .file_url(&url_token, &entry.virtual_path, false)
+                .file_url(&url_token, &entry.relative_path, false)
                 .unwrap(),
             "thumbnail",
             Some(&old_key),

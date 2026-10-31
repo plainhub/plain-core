@@ -16,15 +16,9 @@ use std::{
 #[cfg_attr(feature = "graphql", derive(async_graphql::SimpleObject))]
 #[serde(rename_all = "camelCase")]
 pub struct Root {
-    pub virtual_path: String,
+    pub relative_path: String,
     pub real_path: String,
     pub is_dir: bool,
-}
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FileParams {
-    shared_id: String,
-    virtual_path: String,
 }
 
 pub struct Service {
@@ -56,7 +50,7 @@ impl Service {
             let meta = path.metadata()?;
             anyhow::ensure!(meta.is_dir() || meta.is_file(), "unsupported share root");
             roots.push(Root {
-                virtual_path: format!("{name}{}", if meta.is_dir() { "/" } else { "" }),
+                relative_path: format!("{name}{}", if meta.is_dir() { "/" } else { "" }),
                 real_path: path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("invalid root path"))?
@@ -148,24 +142,24 @@ impl Service {
     pub fn resolve(
         &self,
         id: &str,
-        virtual_path: &str,
+        relative_path: &str,
         guest: bool,
     ) -> anyhow::Result<Option<String>> {
         let Some(row) = self.active(id, guest)? else {
             return Ok(None);
         };
-        Self::resolve_row(&row, virtual_path)
+        Self::resolve_row(&row, relative_path)
     }
-    fn resolve_row(row: &ShareRow, virtual_path: &str) -> anyhow::Result<Option<String>> {
+    fn resolve_row(row: &ShareRow, relative_path: &str) -> anyhow::Result<Option<String>> {
         let roots = Self::roots(row)?;
-        let normalized = virtual_path.trim().trim_start_matches('/');
+        let normalized = relative_path.trim().trim_start_matches('/');
         let (top, rest) = normalized.split_once('/').unwrap_or((normalized, ""));
         let root = if normalized.is_empty() {
             roots.first()
         } else {
             roots
                 .iter()
-                .find(|r| r.virtual_path.trim_end_matches('/') == top)
+                .find(|r| r.relative_path.trim_end_matches('/') == top)
         };
         let Some(root) = root else { return Ok(None) };
         let base = Path::new(&root.real_path);
@@ -201,22 +195,22 @@ impl Service {
         };
         Ok(candidate.to_str().map(str::to_owned))
     }
-    pub fn browse(&self, id: &str, virtual_path: &str) -> anyhow::Result<(ShareRow, Vec<Root>)> {
+    pub fn browse(&self, id: &str, relative_path: &str) -> anyhow::Result<(ShareRow, Vec<Root>)> {
         let row = self
             .active(id, true)?
             .ok_or_else(|| anyhow::anyhow!("share inactive"))?;
         let mut entries = Vec::new();
-        if virtual_path.trim().trim_matches('/').is_empty() {
+        if relative_path.trim().trim_matches('/').is_empty() {
             for root in Self::roots(&row)? {
-                if Self::resolve_row(&row, &root.virtual_path)?.is_some() {
+                if Self::resolve_row(&row, &root.relative_path)?.is_some() {
                     entries.push(root);
                 }
             }
         } else {
-            let path = Self::resolve_row(&row, virtual_path)?
+            let path = Self::resolve_row(&row, relative_path)?
                 .ok_or_else(|| anyhow::anyhow!("path not allowed"))?;
             if Path::new(&path).is_dir() {
-                let parent = virtual_path.trim().trim_matches('/');
+                let parent = relative_path.trim().trim_matches('/');
                 for entry in std::fs::read_dir(path)? {
                     let entry = entry?;
                     let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
@@ -225,8 +219,8 @@ impl Service {
                     if name.starts_with('.') {
                         continue;
                     }
-                    let virtual_path = format!("{parent}/{name}");
-                    let Some(real_path) = Self::resolve_row(&row, &virtual_path)? else {
+                    let relative_path = format!("{parent}/{name}");
+                    let Some(real_path) = Self::resolve_row(&row, &relative_path)? else {
                         continue;
                     };
                     let meta = Path::new(&real_path).metadata()?;
@@ -234,12 +228,12 @@ impl Service {
                         continue;
                     }
                     entries.push(Root {
-                        virtual_path,
+                        relative_path,
                         real_path,
                         is_dir: meta.is_dir(),
                     });
                 }
-                entries.sort_by(|a, b| a.virtual_path.cmp(&b.virtual_path));
+                entries.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
             }
         }
         Ok((row, entries))
@@ -267,7 +261,7 @@ impl Service {
                 if meta.is_dir() {
                     anyhow::ensure!(result.len() < 100_000, "too many archive entries");
                     result.push(Root {
-                        virtual_path: format!(
+                        relative_path: format!(
                             "{}/",
                             path.strip_prefix(&base)?
                                 .to_str()
@@ -283,7 +277,7 @@ impl Service {
                 } else if meta.is_file() {
                     anyhow::ensure!(result.len() < 100_000, "too many archive files");
                     result.push(Root {
-                        virtual_path: path
+                        relative_path: path
                             .strip_prefix(&base)?
                             .to_str()
                             .ok_or_else(|| anyhow::anyhow!("invalid entry name"))?
@@ -297,7 +291,7 @@ impl Service {
                 }
             }
         }
-        result.sort_by(|a, b| a.virtual_path.cmp(&b.virtual_path));
+        result.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
         Ok(result)
     }
 
@@ -305,19 +299,17 @@ impl Service {
         let Some(row) = self.active(id, true)? else {
             return Ok(None);
         };
-        let ciphertext = crate::base64_decode(encrypted);
+        let Ok((scope, payload)) = crate::files::resource_link::parse(encrypted) else {
+            return Ok(None);
+        };
+        if scope != crate::files::resource_link::Scope::Share(id.into()) {
+            return Ok(None);
+        }
         let key = crate::utils::base64::base64_decode_checked(&row.url_token)?;
-        let Some(plain) = crate::xchacha_decrypt_raw(&key, &ciphertext) else {
+        let Ok(resource) = crate::files::resource_link::open(&scope, &key, payload) else {
             return Ok(None);
         };
-        let params: FileParams = match serde_json::from_slice(&plain) {
-            Ok(p) => p,
-            Err(_) => return Ok(None),
-        };
-        if params.shared_id != id {
-            return Ok(None);
-        };
-        Self::resolve_row(&row, &params.virtual_path)
+        Self::resolve_row(&row, &resource.id)
     }
 }
 fn validate_expiry(value: Option<&str>) -> anyhow::Result<()> {

@@ -33,14 +33,15 @@ async fn tls() -> (u16, tokio::task::JoinHandle<()>, Arc<Notify>, Arc<Notify>) {
             let started = observed.clone();
             let released = release.clone();
             async move {
-                assert_eq!(params["sid"], "fixture");
-                let plain = plain_rs::crypto::xchacha_decrypt_raw(
-                    &[8; 32],
-                    &plain_rs::utils::base64::base64_decode(&params["id"]),
-                )
-                .unwrap();
-                let value: Value = serde_json::from_slice(&plain).unwrap();
-                let path = value["virtualPath"].as_str().unwrap().to_owned();
+                let (scope, payload) =
+                    plain_rs::files::resource_link::parse(&params["id"]).unwrap();
+                assert_eq!(
+                    scope,
+                    plain_rs::files::resource_link::Scope::Share("fixture".into())
+                );
+                let resource =
+                    plain_rs::files::resource_link::open(&scope, &[8; 32], payload).unwrap();
+                let path = resource.id;
                 Body::from_stream(futures_util::stream::unfold(0, move |step| {
                     let path = path.clone();
                     let started = started.clone();
@@ -96,7 +97,7 @@ async fn enqueue(
 ) -> String {
     let response = server.native_graphql().unwrap().execute(Request::new("mutation($input: SharedDownloadInput!) { enqueueSharedDownload(input: $input) }").variables(Variables::from_json(json!({"input":{
         "messageId":format!("message-{path}"),"kind":"FILE","link":{"host":"127.0.0.1","port":port,"sharedId":"fixture","token":plain_rs::base64_encode(&[7;32]),"pageUrl":""},
-        "urlToken":plain_rs::base64_encode(&[8;32]),"entries":[{"name":format!("{path}.bin"),"virtualPath":path,"isDir":false,"size":3,"mimeType":"application/octet-stream","hasThumb":false}],
+        "urlToken":plain_rs::base64_encode(&[8;32]),"entries":[{"name":format!("{path}.bin"),"relativePath":path,"isDir":false,"size":3,"mimeType":"application/octet-stream","hasThumb":false}],
         "targetDir":target.to_str().unwrap(),"zipName":""
     }})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

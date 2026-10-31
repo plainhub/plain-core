@@ -24,7 +24,7 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
     assert!(uuid::Uuid::parse_str(parts[1]).is_ok());
     let document: Value = serde_json::from_str(parts[2]).unwrap();
     assert_eq!(
-        document["variables"]["virtualPath"],
+        document["variables"]["relativePath"],
         "folder/quoted\" 中文%"
     );
     let url = link
@@ -36,14 +36,19 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
         .unwrap();
     let url = reqwest::Url::parse(&url).unwrap();
     let query: std::collections::HashMap<_, _> = url.query_pairs().collect();
-    assert_eq!(query["sid"], link.shared_id);
-    let file: Value = serde_json::from_slice(
-        &crate::xchacha_decrypt_raw(&[8; 32], &crate::base64_decode(&query["id"])).unwrap(),
-    )
-    .unwrap();
+    assert!(!query.contains_key("sid"));
+    let (scope, payload) = crate::files::resource_link::parse(&query["id"]).unwrap();
+    assert_eq!(
+        scope,
+        crate::files::resource_link::Scope::Share(link.shared_id.clone())
+    );
+    let file = crate::files::resource_link::open(&scope, &[8; 32], payload).unwrap();
     assert_eq!(
         file,
-        json!({"sharedId":link.shared_id,"virtualPath":"folder/+/?#中文%"})
+        crate::files::resource_link::Resource {
+            r#type: crate::files::resource_link::ResourceType::SharedFile,
+            id: "folder/+/?#中文%".into()
+        }
     );
     assert!(link.file_url("bad", "", false).is_err());
     for host in ["localhost/path", "evil@localhost", "a,b", "a?b", "a\\b"] {

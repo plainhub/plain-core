@@ -28,3 +28,6 @@ pub mod trash;
 pub mod walk;
 
 pub mod resource_id;
+
+#[cfg(all(feature = "crypto", any(feature = "chat", feature = "kv")))]
+pub mod resource_link;

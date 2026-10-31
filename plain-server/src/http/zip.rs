@@ -27,8 +27,6 @@ const MAX_ENTRIES: usize = 100_000;
 pub(crate) struct Params {
     #[serde(default)]
     id: String,
-    #[serde(default)]
-    sid: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -61,19 +59,7 @@ fn url_escape(value: &str) -> String {
 
 /// Decrypt a urlToken-protected `id` into its plaintext payload.
 fn decrypt_url_id(state: &ServerState, id: &str) -> Option<String> {
-    let token = state
-        .prefs
-        .get::<String>(plain_rs::prefs::pref_keys::URL_TOKEN)
-        .ok()
-        .flatten()
-        .unwrap_or_default();
-    let key = plain_rs::utils::base64::base64_decode(&token);
-    if key.len() != 32 {
-        return None;
-    }
-    let plaintext =
-        plain_rs::crypto::xchacha_decrypt_raw(&key, &plain_rs::utils::base64::base64_decode(id))?;
-    String::from_utf8(plaintext).ok()
+    String::from_utf8(plain_rs::services::files::links::decrypt(state, id, "zip-files").ok()?).ok()
 }
 
 /// `….zip!zip!/inner` → (archive, inner prefix).
@@ -180,6 +166,14 @@ async fn stream_archive(
     staging: Option<Staging>,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) -> Response {
+    for (path, _) in items.iter().filter(|_| staging.is_none()) {
+        if let Err(error) =
+            plain_rs::services::files::links::authorize_path(state, &path.to_string_lossy())
+        {
+            return plain(StatusCode::FORBIDDEN, error.to_string());
+        }
+    }
+
     let _staging = staging;
     let reader = match state
         .archives
@@ -216,19 +210,21 @@ async fn zip_dir(
         return plain(StatusCode::BAD_REQUEST, "");
     }
     // Share links stay reachable without desktop access, exactly like before.
-    if let Some(sid) = params.sid.as_deref() {
+    if let Ok((plain_rs::files::resource_link::Scope::Share(sid), _)) =
+        plain_rs::files::resource_link::parse(&params.id)
+    {
         let shares = plain_rs::files::shares::Service::new(state.db.clone(), state.prefs.clone());
-        let path = match shares.resolve_file(sid, &params.id) {
+        let path = match shares.resolve_file(&sid, &params.id) {
             Ok(Some(path)) => PathBuf::from(path),
             _ => return plain(StatusCode::FORBIDDEN, ""),
         };
-        let entries = match shares.archive(sid, &params.id) {
+        let entries = match shares.archive(&sid, &params.id) {
             Ok(entries) => entries,
             Err(error) => return plain(StatusCode::BAD_REQUEST, error.to_string()),
         };
         let items: Vec<(PathBuf, String)> = entries
             .into_iter()
-            .map(|entry| (PathBuf::from(entry.real_path), entry.virtual_path))
+            .map(|entry| (PathBuf::from(entry.real_path), entry.relative_path))
             .collect();
         let name = format!(
             "{}.zip",
@@ -241,26 +237,11 @@ async fn zip_dir(
     if !desktop_access_allowed(state) {
         return plain(StatusCode::FORBIDDEN, "");
     }
-    let Some(plaintext) = decrypt_url_id(state, &params.id) else {
-        return plain(StatusCode::FORBIDDEN, "File is expired or does not exist.");
+    let file = match plain_rs::services::files::links::resolve(state, &params.id).await {
+        Ok(file) => file,
+        Err(error) => return plain(StatusCode::FORBIDDEN, error.to_string()),
     };
-    let (path, json_name) = if plaintext.starts_with('{') {
-        let value: Value = serde_json::from_str(&plaintext).unwrap_or(Value::Null);
-        (
-            value
-                .get("path")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned(),
-            value
-                .get("name")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned(),
-        )
-    } else {
-        (plaintext.clone(), String::new())
-    };
+    let (path, json_name) = (file.path, file.name);
     if path.is_empty() {
         return plain(StatusCode::BAD_REQUEST, "");
     }

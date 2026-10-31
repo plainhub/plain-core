@@ -7,7 +7,7 @@ fn intent(kind: Kind) -> Intent {
         url_token: crate::base64_encode(&[8; 32]),
         entries: vec![File {
             name: "fixture.txt".into(),
-            virtual_path: "fixture.txt".into(),
+            relative_path: "fixture.txt".into(),
             is_dir: false,
             size: 3,
             mime_type: "text/plain".into(),
@@ -179,7 +179,7 @@ fn partial_failures_keep_only_confirmed_bytes_and_retries_resume_remaining_paths
     let mut i = intent(Kind::Multi);
     let mut second = i.entries[0].clone();
     second.name = "second.txt".into();
-    second.virtual_path = "second.txt".into();
+    second.relative_path = "second.txt".into();
     second.size = 4;
     i.entries.push(second);
     let id = q.enqueue(i).unwrap();

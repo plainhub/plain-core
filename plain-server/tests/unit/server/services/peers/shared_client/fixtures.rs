@@ -67,23 +67,23 @@ pub(super) async fn tls() -> (
             assert!(uuid::Uuid::parse_str(parts[1]).is_ok());
             let request: Value = serde_json::from_str(parts[2]).unwrap();
             count.fetch_add(1, Ordering::SeqCst);
-            if request["variables"]["virtualPath"] == "slow" {
+            if request["variables"]["relativePath"] == "slow" {
                 started.notify_one();
                 release.notified().await;
             }
-            let info = json!({"data":{"sharedInfo":{"name":"current","readOnly":true,"requiresPassword":false,"expiresAt":null,"urlToken":plain_rs::utils::base64::base64_encode(&[8;32]),"entries":[{"name":"a 中文.txt","virtualPath":"folder/ +?#中文%","isDir":false,"size":8,"mimeType":"text/plain","hasThumb":false}]}}});
+            let info = json!({"data":{"sharedInfo":{"name":"current","readOnly":true,"requiresPassword":false,"expiresAt":null,"urlToken":plain_rs::utils::base64::base64_encode(&[8;32]),"entries":[{"name":"a 中文.txt","relativePath":"folder/ +?#中文%","isDir":false,"size":8,"mimeType":"text/plain","hasThumb":false}]}}});
             plain_rs::transport::http_response::Context::new("/guest_graphql", &body).encrypt(&[7;32], info.to_string().as_bytes()).unwrap()
         }
     })).route("/fs", get(|Query(params): Query<std::collections::HashMap<String, String>>| async move {
-        assert_eq!(params["sid"], "fixture");
+        let (scope,payload)=plain_rs::files::resource_link::parse(&params["id"]).unwrap();
+        assert_eq!(scope,plain_rs::files::resource_link::Scope::Share("fixture".into()));
         if params.contains_key("w") {
             assert_eq!(params["w"], "200");
             assert_eq!(params["h"], "200");
             assert_eq!(params.get("cc").map(String::as_str), Some("false"));
         }
-        let plain = plain_rs::crypto::xchacha_decrypt_raw(&[8;32], &plain_rs::utils::base64::base64_decode(&params["id"])).unwrap();
-        let decoded: Value = serde_json::from_slice(&plain).unwrap();
-        assert_eq!(decoded["virtualPath"], "folder/ +?#中文%");
+        let resource=plain_rs::files::resource_link::open(&scope,&[8;32],payload).unwrap();
+        assert_eq!(resource.id,"folder/ +?#中文%");
         "download"
     }));
     let task = tokio::spawn(async move {

@@ -194,11 +194,10 @@ async fn ble_incoming_file_uses_root_encrypted_fid_and_eof_without_native_http_b
         "text/plain",
     )
     .unwrap();
-    let encrypted = plain_rs::crypto::xchacha_encrypt(
+    let encrypted = plain_rs::chat::messages::content::make_file_id(
+        &format!("fid:{}", imported.fid_suffix),
         &plain_rs::prefs::ensure_url_token(&state.prefs),
-        format!("fid:{}", imported.fid_suffix).as_bytes(),
-    )
-    .unwrap();
+    );
     for (offset, length, expected) in [
         (0, 6, b"actual".as_slice()),
         (6, 8192, b" bytes".as_slice()),
@@ -206,7 +205,7 @@ async fn ble_incoming_file_uses_root_encrypted_fid_and_eof_without_native_http_b
     ] {
         let request = plain_rs::protocols::ble::Request::FileChunk {
             client_id: "peer".into(),
-            file_id: plain_rs::utils::base64::base64_encode(&encrypted),
+            file_id: encrypted.clone(),
             offset,
             length,
         }

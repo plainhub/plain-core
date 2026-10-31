@@ -17,15 +17,11 @@ type AndroidExtras {
 
 type App {
 	clientId: String!
-	"""
-	Explicit read-only exception: authenticated clients need this existing
-	file-access key. Generic prefs never expose it or allow writing it.
-	"""
-	urlToken: String!
 	httpPort: Int!
 	httpsPort: Int!
 	deviceName: String!
 	developerMode: Boolean!
+	urlToken: String!
 	tlsCertificateSha256: String
 	appDir: String!
 	deviceType: DeviceType!
@@ -173,6 +169,7 @@ type Session {
 	clientName: String!
 	type: String!
 	token: String!
+	urlToken: String!
 	clientIp: String!
 	osName: String!
 	osVersion: String!

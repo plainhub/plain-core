@@ -34,7 +34,7 @@ pub(super) struct SharedMessageCardInput {
 #[derive(InputObject)]
 pub(super) struct SharedEntryInput {
     name: String,
-    virtual_path: String,
+    relative_path: String,
     is_dir: bool,
     size: Long,
     mime_type: String,
@@ -81,7 +81,7 @@ impl From<SharedEntryInput> for client::File {
     fn from(value: SharedEntryInput) -> Self {
         Self {
             name: value.name,
-            virtual_path: value.virtual_path,
+            relative_path: value.relative_path,
             is_dir: value.is_dir,
             size: value.size.0,
             mime_type: value.mime_type,

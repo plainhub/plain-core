@@ -52,7 +52,7 @@ fn audio_facts_carry_the_audio_only_fields() {
     let facts = row_facts(&row(DataType::Audio)).unwrap();
     assert_eq!(facts["artist"], json!("Artist"));
     assert_eq!(facts["durationMs"], json!(10));
-    assert_eq!(facts["albumFileId"], json!("album"));
+    assert_eq!(facts["coverImageId"], json!("album"));
     assert_eq!(facts["albumId"], json!("native-album"));
     for key in ["takenAt", "width", "height", "rotation"] {
         assert!(facts.get(key).is_none());
@@ -68,7 +68,7 @@ fn video_image_and_doc_share_the_dimension_fields() {
         assert_eq!(facts["width"], json!(4));
         assert_eq!(facts["height"], json!(3));
         assert_eq!(facts["rotation"], json!(90));
-        for key in ["artist", "albumFileId"] {
+        for key in ["artist", "coverImageId"] {
             assert!(facts.get(key).is_none());
         }
     }

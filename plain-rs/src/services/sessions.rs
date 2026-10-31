@@ -37,6 +37,7 @@ pub fn touch(state: &CoreRuntime, client_id: &str) -> anyhow::Result<()> {
 pub fn create(state: &CoreRuntime, name: String) -> anyhow::Result<SessionRow> {
     let now = plain_rs::utils::dbtime::now_iso();
     let row = SessionRow {
+        url_token: plain_rs::crypto::gen_token(),
         client_id: uuid::Uuid::new_v4().to_string(),
         name,
         r#type: "CUSTOM".into(),

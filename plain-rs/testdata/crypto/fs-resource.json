@@ -1,0 +1,9 @@
+{
+  "clientId": "客户.a/b",
+  "key": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+  "resource": {
+    "type": "FILE",
+    "id": "/photos/a.jpg"
+  },
+  "envelope": "c.客户.a/b.AAECAwQFBgcICQoLDA0ODxAREhMUFRYX0zXf_Ip5eZ8HgcgLo8CDjjayGi022EcZnGnY8rWtuv1zWa0R2rowTfBttQ9uc8GObm-lNQ"
+}

@@ -44,7 +44,7 @@ async fn authenticated_main_browse_caches_and_queues_real_tls_files_without_host
     let link: Link = serde_json::from_value(result["link"].clone()).unwrap();
     let cached = graphql_http_variables(server.port, &token,
         "mutation($link:SharedLinkInput!,$urlToken:String!,$entry:SharedEntryInput!){cacheSharedFile(link:$link,urlToken:$urlToken,entry:$entry,thumbnail:false)}",
-        json!({"link":link,"urlToken":result["info"]["urlToken"],"entry":{"name":"preview.txt","virtualPath":"folder/ +?#中文%","isDir":false,"size":8,"mimeType":"text/plain","hasThumb":false}})).await;
+        json!({"link":link,"urlToken":result["info"]["urlToken"],"entry":{"name":"preview.txt","relativePath":"folder/ +?#中文%","isDir":false,"size":8,"mimeType":"text/plain","hasThumb":false}})).await;
     assert!(cached.get("errors").is_none(), "{cached}");
     assert_eq!(
         tokio::fs::read(cached["data"]["cacheSharedFile"].as_str().unwrap())
@@ -70,7 +70,7 @@ async fn authenticated_main_browse_caches_and_queues_real_tls_files_without_host
         json!({"input":{
             "messageId":row.id,"kind":"SYNC","link":link,
             "urlToken":result["info"]["urlToken"],
-            "entries":[{"name":"Root","virtualPath":"root","isDir":true,"size":0,"mimeType":"","hasThumb":false}],
+            "entries":[{"name":"Root","relativePath":"root","isDir":true,"size":0,"mimeType":"","hasThumb":false}],
             "targetDir":target.to_str().unwrap(),"zipName":""
         }}),
     ).await;

@@ -10,7 +10,7 @@ use crate::db::models::simple::ShareRow;
 use crate::db::models::simple::TrashedMessageRow;
 
 const SESSION_COLUMNS: &str = "client_id, name, type, client_ip, os_name, os_version, \
-     browser_name, browser_version, token, last_seen_at, created_at, updated_at";
+     browser_name, browser_version, token, url_token, last_seen_at, created_at, updated_at";
 const SHARE_COLUMNS: &str = "id, name, password, url_token, expires_at, read_only, data, \
      created_at, updated_at";
 const POMODORO_COLUMNS: &str =
@@ -28,9 +28,10 @@ fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
         browser_name: row.get(6)?,
         browser_version: row.get(7)?,
         token: row.get(8)?,
-        last_seen_at: row.get(9)?,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
+        url_token: row.get(9)?,
+        last_seen_at: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
     })
 }
 
@@ -107,9 +108,9 @@ impl Db {
         self.with_conn(|c| {
             c.execute(
                 "INSERT OR REPLACE INTO sessions (client_id, name, type, client_ip, os_name,
-                     os_version, browser_name, browser_version, token, last_seen_at,
+                     os_version, browser_name, browser_version, token, url_token, last_seen_at,
                      created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 params![
                     row.client_id,
                     row.name,
@@ -120,6 +121,7 @@ impl Db {
                     row.browser_name,
                     row.browser_version,
                     row.token,
+                    row.url_token,
                     row.last_seen_at
                         .as_deref()
                         .map(crate::utils::dbtime::normalize)

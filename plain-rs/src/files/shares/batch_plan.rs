@@ -123,10 +123,10 @@ impl Walker {
             name(&item.entry.name)?;
             ensure!(item.entry.size >= 0, "Invalid shared file size");
             ensure!(
-                !item.ancestors.contains(&item.entry.virtual_path),
+                !item.ancestors.contains(&item.entry.relative_path),
                 "Shared directory cycle"
             );
-            if !self.paths.insert(item.entry.virtual_path.clone()) {
+            if !self.paths.insert(item.entry.relative_path.clone()) {
                 continue;
             }
             let relative = join(&item.parent, &item.entry.name);
@@ -136,7 +136,7 @@ impl Walker {
                     self.directories <= 10_000 && item.ancestors.len() < 64,
                     "Shared directory capacity exceeded"
                 );
-                let path = item.entry.virtual_path.clone();
+                let path = item.entry.relative_path.clone();
                 self.active = Some(item);
                 return Ok(Some(path));
             }
@@ -175,7 +175,7 @@ impl Walker {
         children.sort_by_key(|file| (!file.is_dir, file.name.to_lowercase()));
         let parent = join(&item.parent, &item.entry.name);
         let mut ancestors = item.ancestors;
-        ancestors.push(item.entry.virtual_path);
+        ancestors.push(item.entry.relative_path);
         for entry in children.into_iter().rev() {
             self.pending.push(Pending {
                 entry,

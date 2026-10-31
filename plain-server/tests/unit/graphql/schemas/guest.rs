@@ -27,7 +27,7 @@ async fn shared_file_rows_read_metadata_directly_without_host_dispatch() {
         .finish();
     let result = schema
         .execute(
-            "{ sharedInfo(virtualPath: \"Shared/\") { entries { name size mimeType hasThumb } } }",
+            "{ sharedInfo(relativePath: \"Shared/\") { entries { name size mimeType hasThumb } } }",
         )
         .await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);

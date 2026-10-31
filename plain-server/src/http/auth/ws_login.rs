@@ -457,6 +457,7 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> anyhow::Resul
         .map_err(|error| anyhow::Error::msg(error.to_string()))?;
     let now = plain_rs::utils::dbtime::now_iso();
     let row = SessionRow {
+        url_token: plain_rs::crypto::gen_token(),
         client_id: request.client_id.clone(),
         name: existing
             .as_ref()

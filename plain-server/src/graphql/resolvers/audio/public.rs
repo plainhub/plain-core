@@ -49,9 +49,9 @@ pub struct Audio {
     #[graphql(name = "bucketId")]
     pub bucket_id: async_graphql::ID,
     #[graphql(skip)]
-    pub album_file_id: String,
-    #[graphql(skip)]
     pub album_art_uri: String,
+    #[graphql(skip)]
+    pub cover_image_id: String,
     #[graphql(name = "createdAt")]
     pub created_at: Instant,
     #[graphql(name = "updatedAt")]
@@ -63,18 +63,23 @@ pub struct Audio {
 #[async_graphql::ComplexObject]
 impl Audio {
     async fn album_file_id(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
-        if self.album_art_uri.is_empty() {
-            return Ok(self.album_file_id.clone());
-        }
-        let token = prefs(ctx)
-            .get::<String>(plain_rs::prefs::pref_keys::URL_TOKEN)
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?
-            .ok_or_else(|| async_graphql::Error::new("Missing URL token"))?;
-        let id = plain_rs::chat::messages::content::make_file_id(&self.album_art_uri, &token);
-        if id.is_empty() {
-            return Err(async_graphql::Error::new("Invalid URL token"));
-        }
-        Ok(id)
+        let resource = if !self.album_art_uri.is_empty() {
+            plain_rs::files::resource_link::Resource::reference(&self.album_art_uri)
+        } else if !self.cover_image_id.is_empty() {
+            plain_rs::files::resource_link::Resource {
+                r#type: plain_rs::files::resource_link::ResourceType::Media,
+                id: self.cover_image_id.clone(),
+            }
+        } else {
+            return Ok(String::new());
+        };
+        let (scope, token) = crate::graphql::executor::resource_credentials(ctx)?;
+        plain_rs::files::resource_link::seal(
+            &scope,
+            &plain_rs::utils::base64::base64_decode(&token),
+            &resource,
+        )
+        .map_err(|error| async_graphql::Error::new(error.to_string()))
     }
 
     async fn tags(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<Vec<Tag>> {
@@ -767,8 +772,8 @@ pub(crate) fn audio_from_facts(item: &Value) -> Audio {
         size: Long(crate::graphql::types::facts::integer(item, "size")),
         bucket_id: crate::graphql::types::facts::id(item, "bucketId"),
         album_id: crate::graphql::types::facts::text(item, "albumId").into(),
-        album_file_id: crate::graphql::types::facts::text(item, "albumFileId"),
         album_art_uri: crate::graphql::types::facts::text(item, "albumArtUri"),
+        cover_image_id: crate::graphql::types::facts::text(item, "coverImageId"),
         created_at: crate::graphql::types::facts::instant(item, "createdAt"),
         updated_at: crate::graphql::types::facts::instant(item, "updatedAt"),
         is_favorite: crate::graphql::types::facts::flag(item, "isFavorite"),

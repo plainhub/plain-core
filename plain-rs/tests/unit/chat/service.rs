@@ -155,13 +155,14 @@ fn to_peer_content_converts_fid_to_fsid() {
         "uri should be fsid: prefix, got: {uri}"
     );
 
-    // The encrypted part (after fsid:) must round-trip through
-    // xchacha_decrypt to the original fid: URI.
-    let encrypted_b64 = uri.strip_prefix("fsid:").unwrap();
-    let encrypted = base64_decode(encrypted_b64);
-    let plaintext = xchacha_decrypt(&token, &encrypted).expect("must decrypt");
-    let plaintext_str = std::str::from_utf8(&plaintext).unwrap();
-    assert_eq!(plaintext_str, "fid:abcdef0123456789.jpg");
+    let (scope, payload) =
+        crate::files::resource_link::parse(uri.strip_prefix("fsid:").unwrap()).unwrap();
+    let resource =
+        crate::files::resource_link::open(&scope, &crate::base64_decode(&token), payload).unwrap();
+    assert_eq!(
+        resource,
+        crate::files::resource_link::Resource::reference("fid:abcdef0123456789.jpg")
+    );
 }
 
 #[test]

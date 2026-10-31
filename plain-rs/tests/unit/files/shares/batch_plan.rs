@@ -1,7 +1,7 @@
 use super::*;
 fn file(path: &str, name: &str, dir: bool, size: i64) -> File {
     File {
-        virtual_path: path.into(),
+        relative_path: path.into(),
         name: name.into(),
         is_dir: dir,
         size,

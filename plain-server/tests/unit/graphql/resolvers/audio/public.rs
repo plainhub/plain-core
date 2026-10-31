@@ -705,15 +705,35 @@ async fn a_library_row_keeps_the_album_art_reference() {
         }])
         .unwrap();
 
-    let listed = query(
-        &schema,
-        r#"query { audios(offset: 0, limit: 10, query: "", sortBy: NAME_ASC) {
-            id title artist path durationMs size bucketId albumFileId createdAt updatedAt isFavorite tags { name }
-        } }"#,
-    )
-    .await;
+    let key = [7; 32];
+    schema
+        .data::<Arc<Prefs>>()
+        .unwrap()
+        .set(
+            plain_rs::prefs::pref_keys::URL_TOKEN,
+            plain_rs::utils::base64::base64_encode(&key),
+        )
+        .unwrap();
+    let document = r#"query { audios(offset: 0, limit: 10, query: "", sortBy: NAME_ASC) {
+        id title artist path durationMs size bucketId albumFileId createdAt updatedAt isFavorite tags { name }
+    } }"#;
+    let unauthenticated = query(&schema, document).await;
+    assert!(
+        unauthenticated["errors"].as_array().is_some_and(|errors| !errors.is_empty()),
+        "A remote request without a session must not use the global key: {unauthenticated}"
+    );
+    let listed = local_query(&schema, document).await;
+    assert!(listed["errors"].as_array().is_none_or(Vec::is_empty), "{listed}");
     let row = &listed["data"]["audios"][0];
-    assert_eq!(row["albumFileId"], "album-file-1", "{listed}");
+    let (scope, payload) =
+        plain_rs::files::resource_link::parse(row["albumFileId"].as_str().unwrap()).unwrap();
+    assert_eq!(scope, plain_rs::files::resource_link::Scope::Global);
+    let resource = plain_rs::files::resource_link::open(&scope, &key, payload).unwrap();
+    assert_eq!(
+        resource.r#type,
+        plain_rs::files::resource_link::ResourceType::Media
+    );
+    assert_eq!(resource.id, "album-file-1");
     assert_eq!(row["artist"], "Band");
     assert_eq!(row["durationMs"], 1234);
     assert_eq!(row["size"], 42);
@@ -920,8 +940,8 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token(
             duration_ms: Long(1000),
             size: Long(42),
             bucket_id: "music".into(),
-            album_file_id: String::new(),
             album_art_uri: uri.into(),
+            cover_image_id: String::new(),
             created_at: Instant::default(),
             updated_at: Instant::default(),
             is_favorite: false,
@@ -954,13 +974,14 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token(
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let data = response.data.into_json().unwrap();
         let id = data["audio"]["cover"].as_str().unwrap();
-        let bytes = plain_rs::utils::base64::base64_decode(id);
+        let (scope, payload) = plain_rs::files::resource_link::parse(id).unwrap();
+        let resource = plain_rs::files::resource_link::open(&scope, &key, payload).unwrap();
         assert_eq!(
-            plain_rs::crypto::xchacha_decrypt_raw(&key, &bytes).unwrap(),
-            uri.as_bytes()
+            resource,
+            plain_rs::files::resource_link::Resource::reference(uri)
         );
         if let Some(previous) = previous {
-            assert!(plain_rs::crypto::xchacha_decrypt_raw(&previous, &bytes).is_none());
+            assert!(plain_rs::files::resource_link::open(&scope, &previous, payload).is_err());
         }
         previous = Some(key);
     }

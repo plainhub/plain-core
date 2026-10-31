@@ -43,7 +43,7 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     };
     let body = wrap(
         "a",
-        r#"{"query":"query($path:String){ alias:sharedInfo(virtualPath:$path){name readOnly expiresAt entries{name virtualPath isDir size mimeType hasThumb}} }","variables":{"path":""}}"#,
+        r#"{"query":"query($path:String){ alias:sharedInfo(relativePath:$path){name readOnly expiresAt entries{name relativePath isDir size mimeType hasThumb}} }","variables":{"path":""}}"#,
     );
     let (status, encrypted) = execute_guest(&state, &share.id, &body).await;
     assert_eq!(status, 200);
@@ -55,7 +55,7 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     .unwrap();
     assert_eq!(result["data"]["alias"]["name"], "Test");
     assert_eq!(
-        result["data"]["alias"]["entries"][0]["virtualPath"],
+        result["data"]["alias"]["entries"][0]["relativePath"],
         "Shared/"
     );
     assert_eq!(result["data"]["alias"]["entries"][0]["size"], 0);

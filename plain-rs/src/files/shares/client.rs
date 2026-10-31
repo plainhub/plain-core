@@ -60,9 +60,9 @@ impl Link {
         ensure!(key.len() == 32, "Invalid share token");
         Ok(key)
     }
-    pub fn request(&self, virtual_path: Option<&str>) -> Result<Vec<u8>> {
-        let query = "query($virtualPath: String) { sharedInfo(virtualPath: $virtualPath) { name readOnly requiresPassword expiresAt urlToken entries { name virtualPath isDir size mimeType hasThumb } } }";
-        let body = json!({"query":query,"variables":{"virtualPath":virtual_path}}).to_string();
+    pub fn request(&self, relative_path: Option<&str>) -> Result<Vec<u8>> {
+        let query = "query($relativePath: String) { sharedInfo(relativePath: $relativePath) { name readOnly requiresPassword expiresAt urlToken entries { name relativePath isDir size mimeType hasThumb } } }";
+        let body = json!({"query":query,"variables":{"relativePath":relative_path}}).to_string();
         let envelope = format!(
             "{}|{}|{body}",
             crate::peers::pairing::now_ms(),
@@ -93,18 +93,19 @@ impl Link {
         );
         Ok(info)
     }
-    pub fn file_url(&self, url_token: &str, virtual_path: &str, zip: bool) -> Result<String> {
+    pub fn file_url(&self, url_token: &str, relative_path: &str, zip: bool) -> Result<String> {
         let key = crate::utils::base64::base64_decode_checked(url_token)?;
         ensure!(key.len() == 32, "Invalid shared file token");
-        let bytes = crate::xchacha_encrypt_raw(
+        let id = crate::files::resource_link::seal(
+            &crate::files::resource_link::Scope::Share(self.shared_id.clone()),
             &key,
-            &serde_json::to_vec(&json!({"sharedId":self.shared_id,"virtualPath":virtual_path}))?,
-        )
-        .ok_or_else(|| anyhow::anyhow!("Cannot encrypt shared file ID"))?;
+            &crate::files::resource_link::Resource {
+                r#type: crate::files::resource_link::ResourceType::SharedFile,
+                id: relative_path.into(),
+            },
+        )?;
         let mut url = self.url(if zip { "/zip/dir" } else { "/fs" })?;
-        url.query_pairs_mut()
-            .append_pair("sid", &self.shared_id)
-            .append_pair("id", &crate::base64_encode(&bytes));
+        url.query_pairs_mut().append_pair("id", &id);
         Ok(url.to_string())
     }
 }
@@ -112,7 +113,7 @@ impl Link {
 #[serde(rename_all = "camelCase")]
 pub struct File {
     pub name: String,
-    pub virtual_path: String,
+    pub relative_path: String,
     pub is_dir: bool,
     pub size: i64,
     pub mime_type: String,

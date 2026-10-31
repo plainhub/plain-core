@@ -27,6 +27,27 @@ impl RequestClient {
     }
 }
 
+#[cfg(feature = "core")]
+pub(crate) fn resource_credentials(
+    ctx: &async_graphql::Context<'_>,
+) -> async_graphql::Result<(plain_rs::files::resource_link::Scope, String)> {
+    use plain_rs::files::resource_link::Scope;
+    if ctx.data_opt::<RequestOrigin>() == Some(&RequestOrigin::Remote) {
+        let id = ctx.data::<RequestClient>()?.client_id();
+        let row = ctx
+            .data::<std::sync::Arc<plain_rs::db::Db>>()?
+            .session_get(id)?
+            .ok_or_else(|| async_graphql::Error::new("Session unavailable"))?;
+        Ok((Scope::Session(id.into()), row.url_token))
+    } else {
+        let token = ctx
+            .data::<std::sync::Arc<plain_rs::prefs::Prefs>>()?
+            .get::<String>(plain_rs::prefs::pref_keys::URL_TOKEN)?
+            .ok_or_else(|| async_graphql::Error::new("URL token unavailable"))?;
+        Ok((Scope::Global, token))
+    }
+}
+
 #[derive(Clone)]
 pub struct RequestContext {
     #[cfg(feature = "core")]

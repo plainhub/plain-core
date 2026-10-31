@@ -15,8 +15,12 @@ fn test_state() -> (tempfile::TempDir, ContentServer, ServerState, Vec<u8>) {
 }
 
 fn file_id(key: &[u8], path: &str) -> String {
-    let blob = plain_rs::crypto::xchacha_encrypt_raw(key, path.as_bytes()).expect("encrypt");
-    plain_rs::utils::base64::base64_encode_url_safe(&blob)
+    plain_rs::files::resource_link::seal(
+        &plain_rs::files::resource_link::Scope::Global,
+        key,
+        &plain_rs::files::resource_link::Resource::reference(path),
+    )
+    .unwrap()
 }
 
 fn temp_bin(key: &[u8]) -> (tempfile::TempDir, String) {
@@ -173,8 +177,11 @@ async fn fs_serves_fid_uris_from_app_file_store() {
 }
 
 #[tokio::test]
-async fn fs_serves_json_wrapped_references_with_names_and_ranges() {
+async fn fs_typed_attachment_and_file_references_keep_downloads_and_ranges() {
     let (_root, _core, state, key) = test_state();
+    let files = tempfile::tempdir().unwrap();
+    let path = files.path().join("preview.txt");
+    std::fs::write(&path, b"fid-payload-bytes").unwrap();
     let imported = plain_rs::chat::attachments::app_file_store::import_bytes(
         &state.db,
         &state.directory,
@@ -182,13 +189,11 @@ async fn fs_serves_json_wrapped_references_with_names_and_ranges() {
         "text/plain",
     )
     .unwrap();
-    let uri = format!("fid:{}", imported.fid_suffix);
-    for path in [&uri, "relative.txt"] {
-        if path == "relative.txt" {
-            std::fs::write(state.directory.join(path), b"fid-payload-bytes").unwrap();
-        }
-        let envelope = serde_json::json!({"path":path,"name":"preview.txt"}).to_string();
-        let id = file_id(&key, &envelope);
+    for reference in [
+        format!("fid:{}", imported.fid_suffix),
+        path.to_string_lossy().into_owned(),
+    ] {
+        let id = file_id(&key, &reference);
         let response = call_fs(
             &state,
             &format!("id={id}&dl=1"),
@@ -200,7 +205,7 @@ async fn fs_serves_json_wrapped_references_with_names_and_ranges() {
             response.headers()[header::CONTENT_DISPOSITION]
                 .to_str()
                 .unwrap()
-                .contains("preview.txt")
+                .starts_with("attachment;")
         );
         assert_eq!(body_bytes(response).await, b"payload");
     }
@@ -208,7 +213,7 @@ async fn fs_serves_json_wrapped_references_with_names_and_ranges() {
 
 #[cfg(feature = "media")]
 #[tokio::test]
-async fn fs_json_wrapped_image_reference_returns_decodable_thumbnail() {
+async fn fs_typed_image_reference_returns_decodable_thumbnail() {
     let (_root, _core, state, key) = test_state();
     let bytes = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -221,10 +226,7 @@ async fn fs_json_wrapped_image_reference_returns_decodable_thumbnail() {
         "image/jpeg",
     )
     .unwrap();
-    let envelope =
-        serde_json::json!({"path":format!("fid:{}", imported.fid_suffix),"name":"preview.jpg"})
-            .to_string();
-    let id = file_id(&key, &envelope);
+    let id = file_id(&key, &format!("fid:{}", imported.fid_suffix));
     let response = call_fs(&state, &format!("id={id}&w=32&h=32"), &[]).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_bytes(response).await;
@@ -293,9 +295,16 @@ async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion(
         )
         .unwrap();
     let key = plain_rs::utils::base64::base64_decode(&share.url_token);
-    let params = serde_json::json!({"sharedId":share.id,"virtualPath":"shared.txt"}).to_string();
-    let id = file_id(&key, &params);
-    let query = format!("id={id}&sid={}&dl=1", share.id);
+    let id = plain_rs::files::resource_link::seal(
+        &plain_rs::files::resource_link::Scope::Share(share.id.clone()),
+        &key,
+        &plain_rs::files::resource_link::Resource {
+            r#type: plain_rs::files::resource_link::ResourceType::SharedFile,
+            id: "shared.txt".into(),
+        },
+    )
+    .unwrap();
+    let query = format!("id={id}&dl=1");
     let response = call_fs(&state, &query, &[range_header("bytes=0-5")]).await;
     assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
     assert!(
@@ -307,7 +316,7 @@ async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion(
     assert_eq!(body_bytes(response).await, b"shared");
     assert_eq!(
         call_fs(&state, &format!("id={id}"), &[]).await.status(),
-        StatusCode::FORBIDDEN
+        StatusCode::OK
     );
     state.db.share_delete(&share.id).unwrap();
     assert_eq!(
@@ -319,7 +328,8 @@ async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion(
 #[tokio::test]
 async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
     let (_root, _core, state, key) = test_state();
-    let path = state.directory.join("preview.png");
+    let images = tempfile::tempdir().unwrap();
+    let path = images.path().join("preview.png");
     image::RgbImage::new(64, 32).save(&path).unwrap();
     let original = std::fs::read(&path).unwrap();
     let id = file_id(&key, path.to_str().unwrap());
@@ -343,4 +353,135 @@ async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
             .starts_with("attachment;")
     );
     assert_eq!(body_bytes(response).await, original);
+}
+
+#[tokio::test]
+async fn session_urls_revoke_new_requests_without_cancelling_started_transfers() {
+    use plain_rs::files::resource_link::{self, Resource, Scope};
+    let directory = tempfile::tempdir().unwrap();
+    let data = directory.path().join("data");
+    std::fs::create_dir(&data).unwrap();
+    let prefs =
+        std::sync::Arc::new(plain_rs::prefs::Prefs::load(&data.join("prefs.json")).unwrap());
+    let server = ContentServer::start(&data, &plain_rs::crypto::gen_token(), prefs).unwrap();
+    let state = server.runtime_state();
+    let mut first = plain_rs::services::sessions::create(&state, "first".into()).unwrap();
+    state.db.session_delete(&first.client_id).unwrap();
+    first.client_id = "客户.with.dots/?+#".into();
+    state.db.session_save(&first).unwrap();
+    let second = plain_rs::services::sessions::create(&state, "second".into()).unwrap();
+    assert_ne!(first.url_token, second.url_token);
+    assert_ne!(first.url_token, first.token);
+    let bytes = vec![0x5a; 8 * 1024 * 1024];
+    let file = directory.path().join("large.bin");
+    std::fs::write(&file, &bytes).unwrap();
+    let resource = Resource::reference(file.to_str().unwrap());
+    let key = plain_rs::utils::base64::base64_decode(&first.url_token);
+    let id =
+        resource_link::seal(&Scope::Session(first.client_id.clone()), &key, &resource).unwrap();
+    let global = resource_link::seal(
+        &Scope::Global,
+        &plain_rs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
+        &resource,
+    )
+    .unwrap();
+    let url = format!("http://127.0.0.1:{}/fs", server.port);
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .query(&[("id", &id)])
+        .header("Range", "bytes=1-3")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(response.bytes().await.unwrap().as_ref(), &bytes[1..4]);
+    let (_, payload) = resource_link::parse(&id).unwrap();
+    let forged = format!("c.{}.{payload}", second.client_id);
+    assert_eq!(
+        client
+            .get(&url)
+            .query(&[("id", forged)])
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let started = client.get(&url).query(&[("id", &id)]).send().await.unwrap();
+    assert_eq!(started.status(), StatusCode::OK);
+    plain_rs::services::sessions::delete(&state, &first.client_id).unwrap();
+    assert_eq!(started.bytes().await.unwrap().as_ref(), bytes.as_slice());
+    for range in [None, Some("bytes=4-7")] {
+        let mut request = client.get(&url).query(&[("id", &id)]);
+        if let Some(range) = range {
+            request = request.header("Range", range);
+        }
+        assert_eq!(
+            request.send().await.unwrap().status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+    let mut replacement =
+        plain_rs::services::sessions::create(&state, "replacement".into()).unwrap();
+    state.db.session_delete(&replacement.client_id).unwrap();
+    replacement.client_id = first.client_id.clone();
+    state.db.session_save(&replacement).unwrap();
+    assert_eq!(
+        client
+            .get(&url)
+            .query(&[("id", &id)])
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let fresh = resource_link::seal(
+        &Scope::Session(replacement.client_id),
+        &plain_rs::utils::base64::base64_decode(&replacement.url_token),
+        &resource,
+    )
+    .unwrap();
+    assert_eq!(
+        client
+            .get(&url)
+            .query(&[("id", fresh)])
+            .header("Range", "bytes=0-0")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::PARTIAL_CONTENT
+    );
+    assert_eq!(
+        client
+            .get(&url)
+            .query(&[("id", global)])
+            .header("Range", "bytes=0-0")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::PARTIAL_CONTENT
+    );
+    for internal in [data.join("prefs.json"), data.join("plain.db")] {
+        let id = resource_link::seal(
+            &Scope::Global,
+            &plain_rs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
+            &Resource::reference(internal.to_str().unwrap()),
+        )
+        .unwrap();
+        assert_eq!(
+            client
+                .get(&url)
+                .query(&[("id", id)])
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+    server.shutdown().await;
 }

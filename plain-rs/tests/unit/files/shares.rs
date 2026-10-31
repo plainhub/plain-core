@@ -2,8 +2,7 @@ use super::*;
 fn fixture() -> (tempfile::TempDir, Arc<Service>) {
     let dir = tempfile::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("db")).unwrap());
-    let prefs =
-        Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
+    let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs
         .set(
             "master_secret",
@@ -169,15 +168,15 @@ fn encrypted_file_ids_are_share_bound_and_roots_are_fresh() {
     // key the web client uses in `getSharedFileId(urlToken, …)`.
     let key = crate::utils::base64::base64_decode_checked(&row.url_token).unwrap();
     let encrypt = |id: &str| {
-        crate::utils::base64::base64_encode(
-            &crate::xchacha_encrypt_raw(
-                &key,
-                serde_json::json!({"sharedId":id,"virtualPath":"a/x"})
-                    .to_string()
-                    .as_bytes(),
-            )
-            .unwrap(),
+        crate::files::resource_link::seal(
+            &crate::files::resource_link::Scope::Share(id.into()),
+            &key,
+            &crate::files::resource_link::Resource {
+                r#type: crate::files::resource_link::ResourceType::SharedFile,
+                id: "a/x".into(),
+            },
         )
+        .unwrap()
     };
     let encoded = encrypt(&row.id);
     assert!(s.resolve_file(&row.id, &encoded).unwrap().is_some());
@@ -237,23 +236,23 @@ fn browse_and_archive_exclude_escaping_symlinks() {
     assert_eq!(
         entries
             .iter()
-            .map(|e| e.virtual_path.as_str())
+            .map(|e| e.relative_path.as_str())
             .collect::<Vec<_>>(),
         vec!["root/a", "root/empty"]
     );
-    let encrypted = crate::utils::base64::base64_encode(
-        &crate::xchacha_encrypt_raw(
-            &crate::utils::base64::base64_decode_checked(&row.url_token).unwrap(),
-            serde_json::json!({"sharedId":row.id,"virtualPath":"root"})
-                .to_string()
-                .as_bytes(),
-        )
-        .unwrap(),
-    );
+    let encrypted = crate::files::resource_link::seal(
+        &crate::files::resource_link::Scope::Share(row.id.clone()),
+        &crate::utils::base64::base64_decode_checked(&row.url_token).unwrap(),
+        &crate::files::resource_link::Resource {
+            r#type: crate::files::resource_link::ResourceType::SharedFile,
+            id: "root".into(),
+        },
+    )
+    .unwrap();
     let zip = s.archive(&row.id, &encrypted).unwrap();
     assert_eq!(
         zip.iter()
-            .map(|e| e.virtual_path.as_str())
+            .map(|e| e.relative_path.as_str())
             .collect::<Vec<_>>(),
         vec!["a", "empty/"]
     );

@@ -353,6 +353,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     browser_name TEXT NOT NULL,
     browser_version TEXT NOT NULL,
     token TEXT NOT NULL,
+    url_token TEXT NOT NULL,
     last_seen_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL

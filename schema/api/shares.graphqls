@@ -1,5 +1,5 @@
 type Root {
-	virtualPath: String!
+	relativePath: String!
 	realPath: String!
 	isDir: Boolean!
 }
@@ -86,7 +86,7 @@ type SharedDownloadTask {
 
 type SharedEntry {
 	name: String!
-	virtualPath: String!
+	relativePath: String!
 	isDir: Boolean!
 	size: Long!
 	mimeType: String!
@@ -95,7 +95,7 @@ type SharedEntry {
 
 input SharedEntryInput {
 	name: String!
-	virtualPath: String!
+	relativePath: String!
 	isDir: Boolean!
 	size: Long!
 	mimeType: String!
@@ -160,7 +160,7 @@ input SharedPeerAddressInput {
 }
 
 extend type Mutation {
-	browseSharedLink(messageId: ID!, expected: SharedMessageCardInput!, virtualPath: String): SharedBrowseResult
+	browseSharedLink(messageId: ID!, expected: SharedMessageCardInput!, relativePath: String): SharedBrowseResult
 	cacheSharedFile(link: SharedLinkInput!, urlToken: String!, entry: SharedEntryInput!, thumbnail: Boolean!): String!
 	cancelSharedDownload(id: ID!): Boolean!
 	createShare(name: String!, realPaths: [String!]!, readOnly: Boolean!, expiresAt: Instant): ShareRecord!

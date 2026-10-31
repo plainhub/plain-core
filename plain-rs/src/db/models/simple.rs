@@ -14,6 +14,7 @@ pub struct ClipboardRow {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SessionRow {
+    pub url_token: String,
     pub client_id: String,
     pub name: String,
     pub r#type: String,

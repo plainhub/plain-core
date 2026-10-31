@@ -74,6 +74,11 @@ impl<'a> SessionStore<'a> {
         info.updated_at = now;
         info.last_active = now;
         self.db.session_save(&SessionRow {
+            url_token: existing
+                .as_ref()
+                .filter(|row| row.token == info.token)
+                .map(|row| row.url_token.clone())
+                .unwrap_or_else(crate::crypto::gen_token),
             client_id: info.client_id.clone(),
             token: info.token.clone(),
             name: info.client_name.clone(),

@@ -104,18 +104,17 @@ async fn incoming_preserves_file_bytes_without_host_bridge() {
         "image/jpeg",
     )
     .unwrap();
-    let id = plain_rs::crypto::xchacha_encrypt(
+    let id = plain_rs::chat::messages::content::make_file_id(
+        &format!("fid:{}", file.fid_suffix),
         &plain_rs::prefs::ensure_url_token(&state.prefs),
-        format!("fid:{}", file.fid_suffix).as_bytes(),
-    )
-    .unwrap();
+    );
     let bytes = incoming_exchange(
         &server,
         ble::HTTP_CHAR_UUID,
         "actual MAC",
         Request::FileChunk {
             client_id: "actor".into(),
-            file_id: plain_rs::utils::base64::base64_encode(&id),
+            file_id: id,
             offset: 0,
             length: 8192,
         }

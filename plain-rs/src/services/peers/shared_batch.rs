@@ -172,13 +172,13 @@ async fn execute(state: &CoreRuntime, run: &Run) -> Result<()> {
         .planned(&run.snapshot.id, &run.snapshot.generation, plan.clone())?;
     let mut items = vec![];
     for target in &plan.targets {
-        if run.intent.kind != Kind::Zip && run.completed.contains(&target.entry.virtual_path) {
+        if run.intent.kind != Kind::Zip && run.completed.contains(&target.entry.relative_path) {
             continue;
         }
         let url =
             run.intent
                 .link
-                .file_url(&run.intent.url_token, &target.entry.virtual_path, false)?;
+                .file_url(&run.intent.url_token, &target.entry.relative_path, false)?;
         let result = operation(
             state,
             run,
@@ -199,7 +199,7 @@ async fn execute(state: &CoreRuntime, run: &Run) -> Result<()> {
                 state.shared_batches.queue.file_finished(
                     &run.snapshot.id,
                     &run.snapshot.generation,
-                    &target.entry.virtual_path,
+                    &target.entry.relative_path,
                     None,
                 )?;
                 if run.intent.kind != Kind::Zip {
@@ -210,7 +210,7 @@ async fn execute(state: &CoreRuntime, run: &Run) -> Result<()> {
                 state.shared_batches.queue.file_finished(
                     &run.snapshot.id,
                     &run.snapshot.generation,
-                    &target.entry.virtual_path,
+                    &target.entry.relative_path,
                     Some(error.to_string()),
                 )?;
                 if run.intent.kind == Kind::Zip {

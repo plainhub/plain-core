@@ -46,16 +46,9 @@ fn target_url(plaintext: &str) -> anyhow::Result<&str> {
 }
 
 fn decode_target(state: &ServerState, id: &str) -> anyhow::Result<String> {
-    let token = state
-        .prefs
-        .get::<String>(plain_rs::prefs::pref_keys::URL_TOKEN)
-        .unwrap_or_default();
-    let key = plain_rs::utils::base64::base64_decode(token.as_deref().unwrap_or_default());
-    anyhow::ensure!(key.len() == 32, "url token is not available");
-    let blob = plain_rs::utils::base64::base64_decode(id);
-    let plaintext = plain_rs::crypto::xchacha_decrypt_raw(&key, &blob)
-        .ok_or_else(|| anyhow::anyhow!("File is expired or does not exist."))?;
-    let url = String::from_utf8(plaintext)?;
+    let url = String::from_utf8(plain_rs::services::files::links::decrypt(
+        state, id, "proxyfs",
+    )?)?;
     Ok(target_url(&url)?.to_owned())
 }
 

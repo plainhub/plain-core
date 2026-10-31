@@ -36,7 +36,7 @@ struct SharedMessageCard {
 #[serde(rename_all = "camelCase")]
 pub(super) struct SharedEntry {
     name: String,
-    virtual_path: String,
+    relative_path: String,
     is_dir: bool,
     size: Long,
     mime_type: String,
@@ -100,7 +100,7 @@ impl From<client::File> for SharedEntry {
     fn from(row: client::File) -> Self {
         Self {
             name: row.name,
-            virtual_path: row.virtual_path,
+            relative_path: row.relative_path,
             is_dir: row.is_dir,
             size: Long(row.size),
             mime_type: row.mime_type,

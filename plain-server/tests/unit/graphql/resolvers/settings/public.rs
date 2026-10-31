@@ -152,7 +152,7 @@ async fn pref_keys_outside_the_safe_set_are_refused() {
             .await;
         assert_eq!(response.errors.len(), 1, "{key}");
         assert_eq!(
-            response.errors[0].message, "Preference is not writable",
+            response.errors[0].message, "Preference is not accessible",
             "{key}"
         );
     }
@@ -163,7 +163,7 @@ async fn pref_keys_outside_the_safe_set_are_refused() {
         ))
         .await;
     assert_eq!(response.errors.len(), 1);
-    assert_eq!(response.errors[0].message, "Preference is not writable");
+    assert_eq!(response.errors[0].message, "Preference is not accessible");
 }
 
 /// The cap is on bytes, not characters - a multi-byte value would slip past

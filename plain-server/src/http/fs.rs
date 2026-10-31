@@ -43,7 +43,7 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
             ),
     };
     let result = async {
-        let file = links::resolve(&state, &id, query("sid").as_deref())?;
+        let file = links::resolve(&state, &id).await?;
         let content = content::read(&state, file, options).await?;
         let response = match content {
             Content::File {

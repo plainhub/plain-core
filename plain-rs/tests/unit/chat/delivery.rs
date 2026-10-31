@@ -211,12 +211,15 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
         let wire = crate::chat::messages::content::peer_content(&content, &token).unwrap();
         let wire: Value = serde_json::from_str(&wire).unwrap();
         let uri_wire = wire["value"]["items"][0]["uri"].as_str().unwrap();
-        let decrypted = crate::xchacha_decrypt(
-            &token,
-            &crate::base64_decode(uri_wire.strip_prefix("fsid:").unwrap()),
-        )
-        .unwrap();
-        assert_eq!(String::from_utf8(decrypted).unwrap(), uri);
+        let (scope, payload) =
+            crate::files::resource_link::parse(uri_wire.strip_prefix("fsid:").unwrap()).unwrap();
+        let resource =
+            crate::files::resource_link::open(&scope, &crate::base64_decode(&token), payload)
+                .unwrap();
+        assert_eq!(
+            resource,
+            crate::files::resource_link::Resource::reference(uri)
+        );
         assert!(crate::chat::messages::content::peer_content(&content, "").is_err());
     }
     assert!(

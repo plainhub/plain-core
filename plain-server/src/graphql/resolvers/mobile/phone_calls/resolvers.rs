@@ -146,7 +146,8 @@ impl CallsQuery {
             None
         };
         let runtime = ctx.data_unchecked::<Arc<plain_rs::phone::Service>>();
-        let prefs = ctx.data_unchecked::<Arc<Prefs>>();
+        let (scope, token) = crate::graphql::executor::resource_credentials(ctx)?;
+        let key = plain_rs::utils::base64::base64_decode(&token);
         let mut calls = Vec::with_capacity(facts.len());
         for fact in &facts {
             let mut row = call(fact);
@@ -157,10 +158,12 @@ impl CallsQuery {
             {
                 path
             } else {
-                plain_rs::chat::messages::content::make_file_id(
-                    &path,
-                    &prefs.get_or(plain_rs::prefs::pref_keys::URL_TOKEN, String::new()),
+                plain_rs::files::resource_link::seal(
+                    &scope,
+                    &key,
+                    &plain_rs::files::resource_link::Resource::reference(&path),
                 )
+                .map_err(|error| async_graphql::Error::new(error.to_string()))?
             };
             calls.push(row);
         }

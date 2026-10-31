@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use std::path::{Component, Path, PathBuf};
 
-fn canonical(path: &Path) -> Result<PathBuf> {
+pub(crate) fn canonical(path: &Path) -> Result<PathBuf> {
     if !path.is_absolute() {
         bail!("absolute file path required");
     }

@@ -12,6 +12,8 @@ struct Session {
     r#type: String,
     #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
     token: String,
+    #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
+    url_token: String,
     client_ip: String,
     os_name: String,
     os_version: String,
@@ -32,6 +34,7 @@ impl TryFrom<plain_rs::db::SessionRow> for Session {
             client_name: value.client_name,
             r#type: row.r#type,
             token: value.token,
+            url_token: row.url_token,
             client_ip: row.client_ip,
             os_name: value.os_name,
             os_version: value.os_version,

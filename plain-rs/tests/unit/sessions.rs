@@ -36,6 +36,10 @@ fn session_refresh_preserves_credential_metadata_and_never_restores_a_revoked_ro
     first.client_name = "Renamed".into();
     let updated = store.upsert(first.clone()).unwrap();
     assert_eq!(updated.token, first.token);
+    assert_eq!(
+        db.session_get("browser").unwrap().unwrap().url_token,
+        row.url_token
+    );
     assert_eq!(updated.created_at, first.created_at);
     assert_eq!(
         db.session_get("browser").unwrap().unwrap().client_ip,
