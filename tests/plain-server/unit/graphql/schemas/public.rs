@@ -5,12 +5,10 @@ use plain_rs::prefs::Prefs;
 use std::sync::Arc;
 
 fn sdl() -> String {
-    async_graphql::Schema::build(
-        super::Query::<crate::graphql::resolvers::mobile::MobileQuery>::default(),
-        super::Mutation::<crate::graphql::resolvers::mobile::MobileMutation>::default(),
-        crate::graphql::subscriptions::Subscription::<
-            crate::graphql::subscriptions::sms::SmsSubscriptions,
-        >::default(),
+    super::PublicSchema::build(
+        super::Query::default(),
+        super::Mutation::default(),
+        crate::graphql::subscriptions::Subscription::default(),
     )
     .extension(crate::graphql::enum_literals::EnumLiteralValidation)
     .register_output_type::<crate::graphql::resolvers::media::item::MediaItem>()
@@ -735,9 +733,8 @@ fn media_types_preserve_the_shared_interface() {
     }
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
-async fn deployed_non_mobile_schema_rejects_mobile_roots_even_with_mobile_feature() {
+async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host() {
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
@@ -753,7 +750,7 @@ async fn deployed_non_mobile_schema_rejects_mobile_roots_even_with_mobile_featur
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     let root = &data["__schema"];
-    for (kind, absent) in [
+    for (kind, required) in [
         (
             "queryType",
             &[
@@ -773,7 +770,7 @@ async fn deployed_non_mobile_schema_rejects_mobile_roots_even_with_mobile_featur
                 "sendMms",
                 "deleteContacts",
                 "deleteCalls",
-                "uninstallPackage",
+                "uninstallPackages",
             ][..],
         ),
         (
@@ -790,60 +787,34 @@ async fn deployed_non_mobile_schema_rejects_mobile_roots_even_with_mobile_featur
             .as_array()
             .unwrap()
             .iter()
-            .map(|v| v["name"].as_str().unwrap())
+            .map(|value| value["name"].as_str().unwrap())
             .collect();
-        for field in absent {
-            assert!(!fields.contains(field), "{kind}.{field} exposed");
+        for field in required {
+            assert!(fields.contains(field), "{kind}.{field} missing");
         }
     }
     let names: Vec<_> = root["types"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["name"].as_str().unwrap())
+        .map(|value| value["name"].as_str().unwrap())
         .collect();
     for name in ["Contact", "Call", "Sms", "SmsSendResult", "MmsSendResult"] {
-        assert!(!names.contains(&name), "mobile type {name} exposed");
+        assert!(names.contains(&name), "type {name} missing");
     }
-    for query in [
-        "{ contacts(query: \"\", offset: 0, limit: 1) { id } }",
-        "mutation { sendSms }",
-    ] {
-        let response = schema.execute(query).await;
-        assert!(
-            response
-                .errors
-                .iter()
-                .any(|error| error.message.contains("Unknown field")),
-            "{:?}",
-            response.errors
-        );
-    }
-    use futures_util::StreamExt;
-    let response = schema
-        .execute_stream("subscription { smsSendResult { requestId } }")
-        .next()
-        .await
-        .unwrap();
-    assert!(
-        response
-            .errors
-            .iter()
-            .any(|error| error.message.contains("Unknown field")),
-        "{:?}",
-        response.errors
-    );
     for field in [
         "smsProviderChanged",
         "smsSendResult",
         "mmsSendResult",
         "mmsSent",
     ] {
-        assert!(
+        assert_eq!(
             crate::graphql::subscriptions::operation::spec(&async_graphql::Request::new(format!(
                 "subscription {{ {field} }}"
             )))
-            .is_err()
+            .unwrap()
+            .field,
+            field
         );
     }
 }

@@ -1,6 +1,35 @@
 use super::*;
 use std::io::{Cursor, Write};
 
+#[tokio::test]
+async fn exported_logs_are_readable_without_authorizing_private_log_sources() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let path = state.logs.path().unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, b"exported fixture log\n").unwrap();
+    let exported = state
+        .logs
+        .export(&state.directory, &state.cache, state.stop.clone())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(plain_rs::services::files::links::authorize_path(&state, &exported).is_ok());
+    assert!(
+        plain_rs::services::files::links::authorize_path(&state, path.to_str().unwrap()).is_err()
+    );
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(&exported).unwrap()).unwrap();
+    let mut content = String::new();
+    archive
+        .by_name("logs/latest.log")
+        .unwrap()
+        .read_to_string(&mut content)
+        .unwrap();
+    assert_eq!(content, "exported fixture log\n");
+    core.stop_core().await;
+}
+
 #[test]
 fn filtering_precedes_paging_and_large_offsets_remain_bounded() {
     let bytes = b"MATCH-old\r\n\nnoise\nmatch-middle\nnoise\nMATCH-new";

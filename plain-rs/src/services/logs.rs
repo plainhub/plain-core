@@ -72,7 +72,7 @@ impl Logs {
         let rust_path = self.rust_path.clone();
         let paths = plain_rs::data_paths::DataPaths::new(directory);
         let reports = vec![paths.crash_report(), paths.crash_log()];
-        let target = cache.root().join("logs.zip");
+        let target = cache.shared_previews().join("logs.zip");
         let files = tokio::task::spawn_blocking(move || {
             let mut files = log_files(&path, &rust_path)?
                 .into_iter()

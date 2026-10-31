@@ -7,15 +7,15 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, watch};
 
 pub struct Archives {
     previews: Arc<plain_rs::utils::keyed_locks::KeyedLocks>,
-    directory: PathBuf,
+    cache: plain_rs::cache_paths::CachePaths,
     gate: Arc<Semaphore>,
 }
 
 impl Archives {
-    pub fn new(directory: PathBuf) -> Self {
+    pub fn new(cache: plain_rs::cache_paths::CachePaths) -> Self {
         Self {
             previews: Arc::new(plain_rs::utils::keyed_locks::KeyedLocks::new()),
-            directory,
+            cache,
             gate: Arc::new(Semaphore::new(1)),
         }
     }
@@ -36,7 +36,7 @@ impl Archives {
             .split_once("!zip!/")
             .ok_or("Archive entry reference required")?;
         let reference = format!("{archive}!zip!/{}", name.trim_matches('/'));
-        let cache = self.directory.join("entries");
+        let cache = self.cache.shared_previews().join("archives");
         let previews = self.previews.clone();
         tokio::spawn(async move {
             previews
@@ -74,7 +74,7 @@ impl Archives {
         input_guard: Inputs,
     ) -> Result<ArchiveReader, String> {
         ensure_running(&stop)?;
-        let directory = self.directory.clone();
+        let directory = self.cache.root().join("archives");
         let (file, staging, size, permit) = tokio::task::spawn_blocking(move || {
             let _input_guard = input_guard;
             let _permit = permit;

@@ -26,18 +26,10 @@ pub struct UploadMergeResult {
     pub merged_size: Option<Long>,
     pub error: Option<String>,
 }
-#[cfg(any(
-    test,
-    all(feature = "mobile", any(target_os = "android", target_os = "ios"))
-))]
 #[derive(SimpleObject, Deserialize)]
 pub struct SmsProviderChange {
     pub uris: Vec<String>,
 }
-#[cfg(any(
-    test,
-    all(feature = "mobile", any(target_os = "android", target_os = "ios"))
-))]
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SmsSendResult {
@@ -45,10 +37,6 @@ pub struct SmsSendResult {
     pub success: bool,
     pub result_code: Option<i32>,
 }
-#[cfg(any(
-    test,
-    all(feature = "mobile", any(target_os = "android", target_os = "ios"))
-))]
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MmsSendResult {

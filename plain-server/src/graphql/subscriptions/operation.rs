@@ -57,15 +57,6 @@ pub(crate) fn spec(request: &Request) -> Result<&'static EventSpec, String> {
     }
     EVENTS
         .iter()
-        .filter(|spec| {
-            !matches!(
-                spec.event,
-                "SMS_PROVIDER_CHANGED" | "SMS_SEND_RESULT" | "MMS_SEND_RESULT" | "MMS_SENT"
-            ) || cfg!(all(
-                feature = "mobile",
-                any(target_os = "android", target_os = "ios")
-            ))
-        })
         .find(|spec| names.iter().any(|(_, name)| *name == spec.field))
         .ok_or_else(|| "Unknown subscription field".into())
 }

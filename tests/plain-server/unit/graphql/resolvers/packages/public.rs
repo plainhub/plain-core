@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::schema::MobileFixture as PublicSchema;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use serde_json::json;
 
 /// Answers every host call from `handler`, so a resolver test exercises the
@@ -34,7 +34,7 @@ fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema, Arc<Prefs>) 
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::test_support::schema::build_mobile(host, events, prefs.clone(), db, directory),
+        crate::test_support::schema::build(host, events, prefs.clone(), db, directory),
         prefs,
     )
 }

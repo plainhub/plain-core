@@ -355,7 +355,7 @@ impl Runtime {
             pairing: Arc::new(plain_rs::peers::pairing::sessions::Sessions::default()),
             dlna,
             archives: Arc::new(plain_rs::services::files::archives::Archives::new(
-                directory.join("archives"),
+                cache.clone(),
             )),
             upload_chunks: Arc::new(plain_rs::services::files::upload_chunks::UploadChunks::new(
                 directory.join("uploads"),

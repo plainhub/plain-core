@@ -75,7 +75,7 @@ async fn main_log_export_and_clear_cover_app_and_rust_log_families() {
     core.set_log_file(&path).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
-    let existing = state.cache.root().join("logs.zip");
+    let existing = state.cache.shared_previews().join("logs.zip");
     std::fs::create_dir_all(existing.parent().unwrap()).unwrap();
     std::fs::write(&existing, b"preserved archive").unwrap();
     let native = core.native_graphql().unwrap();

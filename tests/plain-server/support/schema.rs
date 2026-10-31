@@ -49,39 +49,12 @@ pub(crate) fn build(
     }
 }
 
-pub(crate) type MobileSchema = async_graphql::Schema<
-    crate::graphql::schemas::public::Query<crate::graphql::resolvers::mobile::MobileQuery>,
-    crate::graphql::schemas::public::Mutation<crate::graphql::resolvers::mobile::MobileMutation>,
-    crate::graphql::subscriptions::Subscription<
-        crate::graphql::subscriptions::sms::SmsSubscriptions,
-    >,
->;
-pub(crate) type MobileFixture = SchemaFixture<MobileSchema>;
-pub(crate) fn mobile(runtime: plain_rs::runtime::Runtime) -> MobileSchema {
-    let builder =
-        async_graphql::Schema::build(Default::default(), Default::default(), Default::default());
-    crate::graphql::schemas::public::configure_schema(runtime, builder).finish()
-}
-pub(crate) fn build_mobile(
-    host: Arc<plain_rs::host::bridge::Host>,
-    events: tokio::sync::broadcast::Sender<plain_rs::events::WsEvent>,
-    prefs: Arc<Prefs>,
-    db: Arc<Db>,
-    directory: std::path::PathBuf,
-) -> MobileFixture {
-    let (runtime, stop) = runtime(host, events, prefs, db, directory);
-    SchemaFixture {
-        schema: mobile(runtime),
-        _stop: stop,
-    }
-}
-
-pub(crate) struct SchemaFixture<T = crate::graphql::schemas::public::PublicSchema> {
-    schema: T,
+pub(crate) struct SchemaFixture {
+    schema: crate::graphql::schemas::public::PublicSchema,
     _stop: tokio::sync::watch::Sender<bool>,
 }
-impl<T> std::ops::Deref for SchemaFixture<T> {
-    type Target = T;
+impl std::ops::Deref for SchemaFixture {
+    type Target = crate::graphql::schemas::public::PublicSchema;
     fn deref(&self) -> &Self::Target {
         &self.schema
     }

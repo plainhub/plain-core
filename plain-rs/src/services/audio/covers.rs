@@ -17,7 +17,9 @@ pub async fn cache(
         })
         .await?;
     let Some(cover) = cover else { return Ok(None) };
-    let directory = directory.join("audio-covers");
+    let directory = plain_rs::cache_paths::CachePaths::new(directory)
+        .shared_previews()
+        .join("audio-covers");
     tokio::task::spawn_blocking(move || publish(&directory, &cover.bytes))
         .await
         .map_err(|error| error.to_string())?

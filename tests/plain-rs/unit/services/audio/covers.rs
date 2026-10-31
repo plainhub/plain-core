@@ -66,3 +66,27 @@ async fn asf_metadata_library_artwork_uses_the_shared_reader_without_platform_qu
     );
     assert!(requests.try_recv().is_err());
 }
+
+#[tokio::test]
+async fn published_cover_is_readable_while_private_cache_neighbors_remain_denied() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let source = concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/audio-cover.mp3");
+    let cover = state.audio.cover(source).await.unwrap().unwrap();
+    assert!(
+        plain_rs::services::files::links::authorize_path(&state, cover.to_str().unwrap()).is_ok()
+    );
+    assert_eq!(
+        std::fs::read(&cover).unwrap(),
+        include_bytes!("../../../../../plain-rs/testdata/v-prog-gray.jpg")
+    );
+    let private = state.cache.root().join("audio-covers/private-neighbor");
+    std::fs::create_dir_all(private.parent().unwrap()).unwrap();
+    std::fs::write(&private, b"private bytes").unwrap();
+    assert!(
+        plain_rs::services::files::links::authorize_path(&state, private.to_str().unwrap())
+            .is_err()
+    );
+    core.stop_core().await;
+}

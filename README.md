@@ -108,9 +108,8 @@ maps the result to an HTTP response. Conversions and temporary-file ownership li
 resolves local paths, `app://` paths and `fid:` references. HTTP Range, thumbnail
 ETag/304 responses and download headers stay in `http/file_response.rs`.
 GraphQL HTTP extraction and response handling belong to `http/graphql.rs`;
-schema definitions and resolvers belong to `graphql/`. The deployed main schema
-includes mobile queries, mutations, subscriptions and their types only on Android
-or iOS builds with the `mobile` feature. Native and HTTP use that same schema.
+schema definitions and resolvers belong to `graphql/`. Native and HTTP use the same main schema on every host. Capabilities and
+permissions control operation support and authorization.
 
 `plain-rs/src/runtime.rs` owns each core service once. `plain-server/src/server.rs`
 adds schemas and transport connections to that runtime. HTTP listener startup and

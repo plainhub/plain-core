@@ -345,7 +345,7 @@ impl FilePlatform {
         let db = self.db.clone();
         let paths = serde_json::to_string(paths)?;
         Ok(tokio::task::spawn_blocking(move || db.with_conn(|connection| {
-            connection.prepare("SELECT data_type,id,path FROM file_catalog WHERE data_type IN (1,2,3,22,24) AND path IN (SELECT value FROM json_each(?1))")?
+            connection.prepare("SELECT data_type,id,path FROM file_catalog WHERE missing=0 AND data_type IN (1,2,3,22,24) AND path IN (SELECT value FROM json_each(?1))")?
                 .query_map([paths], |row| Ok(plain_rs::services::files::file_task_media::Identity { media_type: row.get(0)?, file_id: row.get(1)?, path: row.get(2)? }))?
                 .collect::<rusqlite::Result<Vec<_>>>()
         })).await??)

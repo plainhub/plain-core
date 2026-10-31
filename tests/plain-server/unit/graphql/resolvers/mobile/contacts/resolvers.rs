@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::schema::MobileFixture as PublicSchema;
+use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::db::Db;
 use serde_json::{Value, json};
 
@@ -32,7 +32,7 @@ fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema) {
     let (events, _) = tokio::sync::broadcast::channel(16);
     (
         dir,
-        crate::test_support::schema::build_mobile(host, events, prefs, db, directory),
+        crate::test_support::schema::build(host, events, prefs, db, directory),
     )
 }
 

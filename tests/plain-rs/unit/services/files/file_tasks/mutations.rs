@@ -1,5 +1,74 @@
 use crate::test_runtime::Core as ContentServer;
 
+#[tokio::test]
+async fn overwriting_move_ignores_retired_catalog_rows_when_deleting_the_current_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().canonicalize().unwrap();
+    let core = ContentServer::open(&root.join("core")).unwrap();
+    let state = core.runtime_state();
+    let source = root.join("source.bin");
+    let destination = root.join("destination.bin");
+    let neighbor = root.join("neighbor.bin");
+    for (path, data) in [
+        (&source, b"source".as_slice()),
+        (&destination, b"old"),
+        (&neighbor, b"neighbor"),
+    ] {
+        std::fs::write(path, data).unwrap();
+        state
+            .file_platform
+            .scan(&[path.to_str().unwrap().into()])
+            .await
+            .unwrap();
+    }
+    let paths = vec![
+        source.to_str().unwrap().into(),
+        destination.to_str().unwrap().into(),
+    ];
+    let before = state.file_platform.identities(&paths).await.unwrap();
+    assert_eq!(before.len(), 2);
+    let source_id = before
+        .iter()
+        .find(|item| item.path == paths[0])
+        .unwrap()
+        .file_id
+        .clone();
+    let task = state
+        .files
+        .execute(
+            "fixture",
+            plain_rs::files::tasks::FileTaskType::Move,
+            vec![plain_rs::files::tasks::FileTaskOp {
+                src: paths[0].clone(),
+                dst: paths[1].clone(),
+                overwrite: true,
+            }],
+        )
+        .await
+        .unwrap();
+    assert_eq!(task.status, plain_rs::files::tasks::FileTaskStatus::Done);
+    assert_eq!(std::fs::read(&destination).unwrap(), b"source");
+    assert!(!source.exists());
+    let current = state
+        .file_platform
+        .identities(&[paths[1].clone()])
+        .await
+        .unwrap();
+    assert_eq!(current.len(), 1);
+    assert_eq!(current[0].file_id, source_id);
+    assert_eq!(
+        state
+            .files
+            .delete_many(vec![paths[1].clone()])
+            .await
+            .unwrap(),
+        1
+    );
+    assert!(!destination.exists());
+    assert_eq!(std::fs::read(&neighbor).unwrap(), b"neighbor");
+    core.stop_core().await;
+}
+
 fn relation(core: &ContentServer, tag: &str) -> Option<String> {
     core.runtime_state()
         .db

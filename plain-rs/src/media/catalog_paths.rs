@@ -56,8 +56,22 @@ pub fn is_media_excluded_at(
     if is_media_excluded_name_or_root(&p, data_dir, cache_dir, extra_roots) {
         return true;
     }
+    #[cfg(unix)]
+    let device = {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(&p).ok().map(|metadata| metadata.dev())
+    };
     let mut ancestor = Some(Path::new(&p));
     while let Some(dir) = ancestor {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            if device.is_some_and(|device| {
+                std::fs::metadata(dir).is_ok_and(|metadata| metadata.dev() != device)
+            }) {
+                break;
+            }
+        }
         if dir.join(".nomedia").is_file()
             || (is_native_hidden(dir) && !is_cloud_drive_ancestor(&p, dir))
         {

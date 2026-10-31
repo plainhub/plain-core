@@ -273,7 +273,7 @@ async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
             .unwrap(),
         )
         .unwrap();
-    let schema = crate::test_support::schema::mobile(state.core.clone());
+    let schema = crate::graphql::schemas::public::build_with_runtime(state.core.clone());
     let request = RequestContext::local(state.clone())
         .prepare(Request::new(
             "subscription { smsSendResult { requestId success resultCode } }",
