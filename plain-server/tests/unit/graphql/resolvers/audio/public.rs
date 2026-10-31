@@ -719,11 +719,16 @@ async fn a_library_row_keeps_the_album_art_reference() {
     } }"#;
     let unauthenticated = query(&schema, document).await;
     assert!(
-        unauthenticated["errors"].as_array().is_some_and(|errors| !errors.is_empty()),
+        unauthenticated["errors"]
+            .as_array()
+            .is_some_and(|errors| !errors.is_empty()),
         "A remote request without a session must not use the global key: {unauthenticated}"
     );
     let listed = local_query(&schema, document).await;
-    assert!(listed["errors"].as_array().is_none_or(Vec::is_empty), "{listed}");
+    assert!(
+        listed["errors"].as_array().is_none_or(Vec::is_empty),
+        "{listed}"
+    );
     let row = &listed["data"]["audios"][0];
     let (scope, payload) =
         plain_rs::files::resource_link::parse(row["albumFileId"].as_str().unwrap()).unwrap();

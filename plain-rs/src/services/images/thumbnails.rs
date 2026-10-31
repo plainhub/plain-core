@@ -84,8 +84,13 @@ async fn decode(
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         #[cfg(feature = "media")]
         let bytes = plain_rs::media::thumbnails::render(
-            &request.path, request.width, request.height, request.center_crop, cache,
-        ).await?;
+            &request.path,
+            request.width,
+            request.height,
+            request.center_crop,
+            cache,
+        )
+        .await?;
         #[cfg(not(feature = "media"))]
         let bytes = plain_rs::services::images::thumbnail_decoder::native(request, cache).await?;
         if let Some(bytes) = bytes.as_ref() {

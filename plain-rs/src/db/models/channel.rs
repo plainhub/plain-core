@@ -7,7 +7,11 @@ use crate::utils::short_uuid::short_uuid;
 pub struct DChannel {
     pub id: String,
     pub name: String,
-    #[serde(default, serialize_with = "super::serialize_optional_text", deserialize_with = "super::deserialize_optional_text")]
+    #[serde(
+        default,
+        serialize_with = "super::serialize_optional_text",
+        deserialize_with = "super::deserialize_optional_text"
+    )]
     pub owner_id: Option<String>,
     pub members: String,
     pub key: String,
@@ -68,7 +72,11 @@ impl DChannel {
         }
         // Owner is preferred (plain-app resolves "me" sentinel → my_id;
         // in Rust the owner is stored as the real peer id).
-        if let Some(owner) = self.owner_id.as_ref().filter(|owner| online_ids.contains(*owner)) {
+        if let Some(owner) = self
+            .owner_id
+            .as_ref()
+            .filter(|owner| online_ids.contains(*owner))
+        {
             return Some(owner.clone());
         }
         // Fallback: smallest id among ALL online joined members.

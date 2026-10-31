@@ -85,7 +85,8 @@ pub fn ensure_identity(prefs: &Prefs) -> AppIdentity {
         .trim_end_matches(".local")
         .to_string();
     let ed25519_keypair = base64_encode(
-        &crate::prefs::security::ensure_signing_keypair(prefs).expect("Signing identity unavailable"),
+        &crate::prefs::security::ensure_signing_keypair(prefs)
+            .expect("Signing identity unavailable"),
     );
     AppIdentity {
         client_id,

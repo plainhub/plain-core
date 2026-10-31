@@ -122,7 +122,6 @@ fn structured_values_reject_unusable_shapes_without_writing() {
     }
 }
 
-
 #[test]
 fn listener_ports_use_the_single_preferences_store() {
     let (_directory, prefs) = fixture();
@@ -170,9 +169,15 @@ fn keyed_values_include_defaults_without_writing_and_round_trip_through_validate
     let before_invalid = prefs.entries();
     assert!(set_entry(&prefs, keys::HTTP_PORT, serde_json::json!(70000)).is_err());
     assert!(set_entry(&prefs, keys::HTTP_PORT, serde_json::json!("invalid")).is_err());
-    assert_eq!(set_entry(&prefs, keys::HTTP_PORT, Value::Null).unwrap(), Some(false));
+    assert_eq!(
+        set_entry(&prefs, keys::HTTP_PORT, Value::Null).unwrap(),
+        Some(false)
+    );
     assert_eq!(prefs.entries(), before_invalid);
-    assert_eq!(set_entry(&prefs, "httpPort", serde_json::json!(8181)).unwrap(), None);
+    assert_eq!(
+        set_entry(&prefs, "httpPort", serde_json::json!(8181)).unwrap(),
+        None
+    );
 }
 
 #[test]
@@ -184,7 +189,10 @@ fn keyed_reads_use_core_defaults_and_do_not_decode_unrelated_preferences() {
     }
     assert_eq!(prefs.entries(), before);
     prefs.set(keys::SHOW_HIDDEN_FILES, "invalid").unwrap();
-    assert_eq!(get_entry(&prefs, keys::HTTP_PORT).unwrap(), Some(serde_json::json!(8080)));
+    assert_eq!(
+        get_entry(&prefs, keys::HTTP_PORT).unwrap(),
+        Some(serde_json::json!(8080))
+    );
     assert!(get_entry(&prefs, keys::SHOW_HIDDEN_FILES).is_err());
     assert_eq!(get_entry(&prefs, "unknown").unwrap(), None);
 }

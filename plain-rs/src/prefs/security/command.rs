@@ -65,7 +65,9 @@ impl Command {
             match self {
                 Self::SetPassword { password } => put(map, PASSWORD, password)?,
                 Self::SetPasswordType { value } => put(map, PASSWORD_TYPE, value)?,
-                Self::SetLoginRequireApproval { enabled } => put(map, LOGIN_REQUIRE_APPROVAL, enabled)?,
+                Self::SetLoginRequireApproval { enabled } => {
+                    put(map, LOGIN_REQUIRE_APPROVAL, enabled)?
+                }
                 Self::SetRotateUrlToken { enabled } => {
                     put(map, ROTATE_URL_TOKEN_ON_RESTART, enabled)?
                 }
@@ -102,7 +104,6 @@ impl Command {
                     put(map, API_PERMISSIONS, current)?;
                 }
                 Self::SetMdnsHostname { hostname } => put(map, MDNS_HOSTNAME, hostname)?,
-
             }
             changed = before != *map;
             Ok(())

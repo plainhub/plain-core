@@ -94,12 +94,17 @@ fn explicit_updates_preserve_clicks_and_replace_only_requested_favicons() {
 
 #[test]
 fn bookmark_lookup_distinguishes_missing_rows_from_decode_failures() {
-    let db = Db::open(&crate::db::chat_tests::unique_tmp_dir("bookmark-read").join("plain.db")).unwrap();
+    let db =
+        Db::open(&crate::db::chat_tests::unique_tmp_dir("bookmark-read").join("plain.db")).unwrap();
     assert!(get_bookmark_by_id(&db, "missing").unwrap().is_none());
     let bookmark = DBookmark::new("https://example.com/page", "");
     insert_bookmark(&db, &bookmark).unwrap();
     db.with_conn(|conn| {
-        conn.execute("UPDATE bookmarks SET title=?1 WHERE id=?2", params![vec![0u8], bookmark.id])
-    }).unwrap();
+        conn.execute(
+            "UPDATE bookmarks SET title=?1 WHERE id=?2",
+            params![vec![0u8], bookmark.id],
+        )
+    })
+    .unwrap();
     assert!(get_bookmark_by_id(&db, &bookmark.id).is_err());
 }

@@ -1,7 +1,7 @@
 use crate::host::Host;
+use plain_rs::host::request_scope::NativeRequestScope;
 use plain_server::native::graphql::NativeGraphqlExecutor;
 use plain_server::server::ContentServer;
-use plain_rs::host::request_scope::NativeRequestScope;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;

@@ -1,12 +1,12 @@
 //! One instance, one flat preferences file: prefs.json.
-pub mod pref_keys;
 pub mod dlna;
 pub mod identity;
 pub mod media;
+pub mod pref_keys;
 pub mod samba;
-pub mod storage;
 pub mod security;
 pub mod settings;
+pub mod storage;
 
 pub use identity::{AppIdentity, ensure_identity, ensure_mdns_hostname, ensure_url_token};
 
@@ -116,22 +116,47 @@ impl Prefs {
     }
     pub fn notify_changed(&self) {
         let hook = self.change_hook.read().unwrap().clone();
-        if let Some(hook) = hook { hook(); }
+        if let Some(hook) = hook {
+            hook();
+        }
     }
     pub fn in_memory() -> Self {
-        Self { path: PathBuf::new(), inner: RwLock::new(Map::new()), change_hook: RwLock::new(None) }
+        Self {
+            path: PathBuf::new(),
+            inner: RwLock::new(Map::new()),
+            change_hook: RwLock::new(None),
+        }
     }
     pub fn load(path: &Path) -> Result<Self> {
         let inner = match std::fs::read_to_string(path) {
-            Ok(text) => serde_json::from_str(&text).map_err(|source| PrefsError::Parse { path: path.to_owned(), source })?,
+            Ok(text) => serde_json::from_str(&text).map_err(|source| PrefsError::Parse {
+                path: path.to_owned(),
+                source,
+            })?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Map::new(),
-            Err(source) => return Err(PrefsError::Read { path: path.to_owned(), source }),
+            Err(source) => {
+                return Err(PrefsError::Read {
+                    path: path.to_owned(),
+                    source,
+                });
+            }
         };
-        Ok(Self { path: path.to_owned(), inner: RwLock::new(inner), change_hook: RwLock::new(None) })
+        Ok(Self {
+            path: path.to_owned(),
+            inner: RwLock::new(inner),
+            change_hook: RwLock::new(None),
+        })
     }
-    pub fn path(&self) -> &Path { &self.path }
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
     pub fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>> {
-        self.inner.read().unwrap().get(key).map(|value| serde_json::from_value(value.clone()).map_err(PrefsError::Decode)).transpose()
+        self.inner
+            .read()
+            .unwrap()
+            .get(key)
+            .map(|value| serde_json::from_value(value.clone()).map_err(PrefsError::Decode))
+            .transpose()
     }
     pub fn get_or<T: DeserializeOwned>(&self, key: &str, default: T) -> T {
         self.get(key).unwrap_or(None).unwrap_or(default)
@@ -139,7 +164,9 @@ impl Prefs {
     pub fn set<T: Serialize>(&self, key: &str, value: T) -> Result<bool> {
         let value = serde_json::to_value(value).map_err(PrefsError::Encode)?;
         self.update(|entries| {
-            if entries.get(key) == Some(&value) { return Ok(false); }
+            if entries.get(key) == Some(&value) {
+                return Ok(false);
+            }
             entries.insert(key.to_owned(), value);
             Ok(true)
         })
@@ -148,9 +175,15 @@ impl Prefs {
         self.update(|entries| Ok(entries.remove(key).is_some()))
     }
     pub fn clear(&self) -> Result<()> {
-        self.update(|entries| { entries.clear(); Ok(()) })
+        self.update(|entries| {
+            entries.clear();
+            Ok(())
+        })
     }
-    pub(crate) fn update<T>(&self, update: impl FnOnce(&mut Map<String, Value>) -> Result<T>) -> Result<T> {
+    pub(crate) fn update<T>(
+        &self,
+        update: impl FnOnce(&mut Map<String, Value>) -> Result<T>,
+    ) -> Result<T> {
         let mut stored = self.inner.write().unwrap();
         let mut next = stored.clone();
         let result = update(&mut next)?;
@@ -166,11 +199,20 @@ impl Prefs {
         Ok(result)
     }
     pub fn entries(&self) -> Vec<(String, Value)> {
-        self.inner.read().unwrap().iter().map(|(key, value)| (key.clone(), value.clone())).collect()
+        self.inner
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect()
     }
     pub fn entries_sorted(&self) -> Vec<(String, String)> {
-        let mut entries: Vec<_> = self.entries().into_iter().map(|(key,value)| (key,value.to_string())).collect();
-        entries.sort_by(|a,b| a.0.cmp(&b.0));
+        let mut entries: Vec<_> = self
+            .entries()
+            .into_iter()
+            .map(|(key, value)| (key, value.to_string()))
+            .collect();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
         entries
     }
     fn save(&self, inner: &Map<String, Value>) -> Result<bool> {

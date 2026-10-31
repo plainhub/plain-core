@@ -51,7 +51,6 @@ fn roundtrip_string_and_json_shapes() {
     );
 }
 
-
 #[test]
 fn user_store_has_matching_default_and_clear_operations() {
     let (dir, prefs) = tmp_prefs("user-ops");
@@ -85,7 +84,10 @@ fn remove_persists_and_reports_presence() {
     let (_dir, prefs) = tmp_prefs("remove");
     prefs.set("volume_alias", "v").unwrap();
     assert!(prefs.remove("volume_alias").unwrap());
-    assert!(!prefs.remove("volume_alias").unwrap(), "second remove: absent");
+    assert!(
+        !prefs.remove("volume_alias").unwrap(),
+        "second remove: absent"
+    );
     assert_eq!(prefs.get::<String>("volume_alias").unwrap(), None);
 }
 
@@ -134,7 +136,9 @@ fn entries_sorted_with_json_rendered_values() {
 fn reload_sees_previous_writes_and_pretty_prints() {
     let (dir, prefs) = tmp_prefs("reload");
     prefs.set("device_name", "box").unwrap();
-    prefs.set("samba_settings", serde_json::json!({"a": 1})).unwrap();
+    prefs
+        .set("samba_settings", serde_json::json!({"a": 1}))
+        .unwrap();
     drop(prefs);
 
     // File is pretty-printed (hand-editable, like plain-desktop's).

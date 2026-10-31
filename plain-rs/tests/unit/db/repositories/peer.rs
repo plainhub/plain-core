@@ -171,14 +171,23 @@ fn update_peer_name_renames_only() {
 
 #[test]
 fn peer_url_helpers_use_best_ip_and_port() {
-    let mut peer = DPeer::new("p1", "p1", "203.0.113.7,203.0.113.8", Some(8443), DeviceType::Nas);
+    let mut peer = DPeer::new(
+        "p1",
+        "p1",
+        "203.0.113.7,203.0.113.8",
+        Some(8443),
+        DeviceType::Nas,
+    );
     assert_eq!(peer.best_ip(), "203.0.113.7");
     assert_eq!(peer.base_url().unwrap(), "https://203.0.113.7:8443");
     assert_eq!(
         peer.peer_graphql_url().unwrap(),
         "https://203.0.113.7:8443/peer_graphql"
     );
-    assert_eq!(peer.file_url("abc").unwrap(), "https://203.0.113.7:8443/fs?id=abc");
+    assert_eq!(
+        peer.file_url("abc").unwrap(),
+        "https://203.0.113.7:8443/fs?id=abc"
+    );
     // Default HTTPS port is omitted.
     peer.port = Some(443);
     peer.ip = "203.0.113.7".to_string();
@@ -188,15 +197,39 @@ fn peer_url_helpers_use_best_ip_and_port() {
 #[test]
 fn unknown_port_is_null_and_has_no_connection_urls() {
     let db = crate::db::Db::open(std::path::Path::new(":memory:")).unwrap();
-    let peer = DPeer::new("unknown", "Unknown", "198.51.100.1", None, DeviceType::Phone);
-    crate::db::chat_store::peers::save(&db, &[peer], crate::db::chat_store::SaveMode::Upsert).unwrap();
+    let peer = DPeer::new(
+        "unknown",
+        "Unknown",
+        "198.51.100.1",
+        None,
+        DeviceType::Phone,
+    );
+    crate::db::chat_store::peers::save(&db, &[peer], crate::db::chat_store::SaveMode::Upsert)
+        .unwrap();
     let stored = db.get_peer_by_id("unknown").unwrap();
     assert_eq!(stored.port, None);
     assert_eq!(stored.base_url(), None);
     assert_eq!(stored.peer_graphql_url(), None);
     assert_eq!(stored.file_url("file"), None);
     assert!(crate::transport::contract::peer_graphql_urls(&stored).is_empty());
-    assert!(db.with_conn(|connection| connection.query_row("SELECT port IS NULL FROM peers WHERE id='unknown'", [], |row| row.get::<_, bool>(0))).unwrap());
-    assert!(db.with_conn(|connection| connection.execute("UPDATE peers SET port=0 WHERE id='unknown'", [])).is_err());
-    assert!(db.with_conn(|connection| connection.execute("UPDATE peers SET port=65536 WHERE id='unknown'", [])).is_err());
+    assert!(
+        db.with_conn(|connection| connection.query_row(
+            "SELECT port IS NULL FROM peers WHERE id='unknown'",
+            [],
+            |row| row.get::<_, bool>(0)
+        ))
+        .unwrap()
+    );
+    assert!(
+        db.with_conn(
+            |connection| connection.execute("UPDATE peers SET port=0 WHERE id='unknown'", [])
+        )
+        .is_err()
+    );
+    assert!(
+        db.with_conn(
+            |connection| connection.execute("UPDATE peers SET port=65536 WHERE id='unknown'", [])
+        )
+        .is_err()
+    );
 }

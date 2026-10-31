@@ -3,7 +3,8 @@ use rusqlite::{OptionalExtension, params};
 use crate::db::DAppFile;
 use crate::db::Db;
 
-const APP_FILE_COLS: &str = "id,size_bytes,mime_type,real_path,ref_count,weak_hash,created_at,updated_at";
+const APP_FILE_COLS: &str =
+    "id,size_bytes,mime_type,real_path,ref_count,weak_hash,created_at,updated_at";
 
 fn row_to_app_file(row: &rusqlite::Row<'_>) -> rusqlite::Result<DAppFile> {
     Ok(DAppFile {
@@ -127,7 +128,8 @@ impl Db {
                 crate::utils::dbtime::normalize(&f.created_at)?,
                 crate::utils::dbtime::normalize(&f.updated_at)?
             ],
-        ).map(|_| ())
+        )
+        .map(|_| ())
     }
 
     pub fn increment_app_file_ref(&self, id: &str) {

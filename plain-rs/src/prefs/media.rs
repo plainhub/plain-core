@@ -1,5 +1,5 @@
-use crate::prefs::pref_keys::MEDIA_SOURCE_DIRS;
 use super::{Prefs, Result};
+use crate::prefs::pref_keys::MEDIA_SOURCE_DIRS;
 
 pub fn source_directories(prefs: &Prefs) -> Result<Vec<String>> {
     Ok(prefs.get(MEDIA_SOURCE_DIRS)?.unwrap_or_default())

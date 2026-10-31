@@ -1,5 +1,5 @@
-use crate::prefs::pref_keys::VOLUME_ALIAS;
 use super::Prefs;
+use crate::prefs::pref_keys::VOLUME_ALIAS;
 use anyhow::Result;
 use serde_json::{Map, Value};
 

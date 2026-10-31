@@ -1,4 +1,3 @@
-
 pub fn now_iso() -> String {
     now_iso_millis()
 }
@@ -24,7 +23,6 @@ pub fn iso_from_unix_millis(millis: i64) -> String {
 fn is_leap(y: u64) -> bool {
     y.is_multiple_of(4) && (!y.is_multiple_of(100) || y.is_multiple_of(400))
 }
-
 
 fn unix_millis_to_iso8601(millis: u64) -> String {
     let (date, hh, mm, ss) = split_unix_secs(millis / 1000);
@@ -72,6 +70,10 @@ fn split_unix_secs(secs: u64) -> (String, u64, u64, u64) {
 #[cfg(any(feature = "chat", feature = "library"))]
 pub fn normalize(value: &str) -> rusqlite::Result<String> {
     chrono::DateTime::parse_from_rfc3339(value)
-        .map(|instant| instant.with_timezone(&chrono::Utc).to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+        .map(|instant| {
+            instant
+                .with_timezone(&chrono::Utc)
+                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+        })
         .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
 }

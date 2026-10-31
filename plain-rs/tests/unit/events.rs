@@ -68,5 +68,4 @@ fn public_projection_keeps_regular_text_and_binary_buffers_and_excludes_internal
     let bytes = event.binary_payload.unwrap();
     assert_eq!(bytes, [0, 1, 255]);
     assert_eq!(bytes.as_ptr(), pointer);
-
 }

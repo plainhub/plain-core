@@ -46,7 +46,6 @@ fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
     assert!(last.next_after.is_none());
 }
 
-
 #[test]
 fn the_login_key_is_a_truncation_of_the_same_hex_the_client_sends() {
     let digest = Sha512::digest(b"secret");

@@ -25,18 +25,14 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
     assert_eq!(PREF_KEYS, expected);
     for (key, policy) in expected {
         assert_eq!(access(key), Some(policy), "{key}");
-        assert_eq!(readable(key, false), matches!(policy, PrefAccess::Default | PrefAccess::RemoteReadOnly), "{key}");
+        assert_eq!(
+            readable(key, false),
+            matches!(policy, PrefAccess::Default | PrefAccess::RemoteReadOnly),
+            "{key}"
+        );
         assert_eq!(readable(key, true), policy != PrefAccess::RustOnly, "{key}");
-        assert_eq!(
-            writable(key, false),
-            policy == PrefAccess::Default,
-            "{key}"
-        );
-        assert_eq!(
-            writable(key, true),
-            policy != PrefAccess::RustOnly,
-            "{key}"
-        );
+        assert_eq!(writable(key, false), policy == PrefAccess::Default, "{key}");
+        assert_eq!(writable(key, true), policy != PrefAccess::RustOnly, "{key}");
     }
 }
 
@@ -101,12 +97,20 @@ fn exported_constants_match_the_registered_keys() {
         AUTO_CHECK_UPDATE,
         SKIP_VERSION,
         APP_HOME_FEATURES,
-        CLIENT_ID,        URL_TOKEN,
+        CLIENT_ID,
+        URL_TOKEN,
         ADB_TOKEN,
         MASTER_SECRET,
         SIGNATURE_KEY_PAIR,
     ];
-    assert_eq!(constants, PREF_KEYS.iter().map(|(key, _)| *key).collect::<Vec<_>>().as_slice());
+    assert_eq!(
+        constants,
+        PREF_KEYS
+            .iter()
+            .map(|(key, _)| *key)
+            .collect::<Vec<_>>()
+            .as_slice()
+    );
 }
 
 #[test]
@@ -129,7 +133,12 @@ fn unknown_or_modified_keys_never_gain_access() {
 
 #[test]
 fn native_read_keys_do_not_allow_generic_preference_writes() {
-    for key in [UPDATE_INFO, APP_UPDATE_AVAILABLE, ONBOARDING_COMPLETED, SIGNATURE_PUBLIC_KEY] {
+    for key in [
+        UPDATE_INFO,
+        APP_UPDATE_AVAILABLE,
+        ONBOARDING_COMPLETED,
+        SIGNATURE_PUBLIC_KEY,
+    ] {
         assert_eq!(access(key), None, "{key}");
         assert!(!readable(key, false), "{key}");
         assert!(!readable(key, true), "{key}");

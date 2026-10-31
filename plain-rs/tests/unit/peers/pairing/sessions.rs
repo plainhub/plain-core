@@ -143,7 +143,13 @@ fn incoming_approval_rechecks_signed_timestamp_when_consuming_request() {
     let sessions = Sessions::default();
     let request = incoming_request();
     assert!(sessions.receive(&request));
-    sessions.1.lock().unwrap().get_mut("peer").unwrap().timestamp = i64::MIN;
+    sessions
+        .1
+        .lock()
+        .unwrap()
+        .get_mut("peer")
+        .unwrap()
+        .timestamp = i64::MIN;
     assert!(sessions.incoming_target("peer", "request").is_none());
     assert!(sessions.take_incoming("peer", "request").is_none());
 }

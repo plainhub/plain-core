@@ -1,5 +1,5 @@
-use crate::prefs::pref_keys::SAMBA_SETTINGS;
 use super::{Prefs, PrefsError};
+use crate::prefs::pref_keys::SAMBA_SETTINGS;
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_USERNAME: &str = "plainapp";

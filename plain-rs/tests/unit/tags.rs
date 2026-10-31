@@ -110,7 +110,9 @@ fn relations_for_keys_filters_kind_and_keeps_key_order() {
     add_relations(&db, &[(audio_tag.id.clone(), "k2".to_string())]).unwrap();
     let rels = relations_for_keys_of_kind(&db, &["k2".to_string(), "k1".to_string()], 1).unwrap();
     assert_eq!(
-        rels.iter().map(|r| r.target_key.as_str()).collect::<Vec<_>>(),
+        rels.iter()
+            .map(|r| r.target_key.as_str())
+            .collect::<Vec<_>>(),
         ["k2", "k1"]
     );
 }

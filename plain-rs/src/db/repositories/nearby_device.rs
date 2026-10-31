@@ -15,7 +15,13 @@ impl Db {
             Ok(DNearbyDeviceCache {
                 id: row.get(0)?,
                 name: row.get(1)?,
-                ips: serde_json::from_str(&ips).map_err(|error|rusqlite::Error::FromSqlConversionFailure(2,rusqlite::types::Type::Text,Box::new(error)))?,
+                ips: serde_json::from_str(&ips).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        2,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })?,
                 port: row.get::<_, i64>(3)? as u16,
                 device_type: row.get(4)?,
                 version: row.get(5)?,

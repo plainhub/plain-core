@@ -1,20 +1,17 @@
 use super::*;
-use std::io::Read;
-use serde_json::{Value, json};
 use plain_rs::enums::DataType;
-
-
-
-
+use serde_json::{Value, json};
+use std::io::Read;
 
 #[test]
 fn download_names_are_percent_encoded() {
     assert_eq!(crate::http::file_response::escape("plain.zip"), "plain.zip");
-    assert_eq!(crate::http::file_response::escape("报告 2024.zip"), "%E6%8A%A5%E5%91%8A%202024.zip");
+    assert_eq!(
+        crate::http::file_response::escape("报告 2024.zip"),
+        "%E6%8A%A5%E5%91%8A%202024.zip"
+    );
     assert_eq!(crate::http::file_response::escape("a\"b.zip"), "a%22b.zip");
 }
-
-
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]

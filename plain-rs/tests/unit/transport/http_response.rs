@@ -6,8 +6,10 @@ fn noble_vectors_match_the_shared_response_context_and_wire_bytes() {
         XChaCha20Poly1305, XNonce,
         aead::{Aead, KeyInit, Payload},
     };
-    let vectors: serde_json::Value =
-        serde_json::from_str(include_str!("../../../testdata/crypto/http-response-vectors.json")).unwrap();
+    let vectors: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../testdata/crypto/http-response-vectors.json"
+    ))
+    .unwrap();
     for vector in vectors.as_array().unwrap() {
         let bytes = |field: &str| crate::base64_decode(vector[field].as_str().unwrap());
         let key = bytes("key");

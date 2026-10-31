@@ -128,8 +128,12 @@ fn parse_log_level(value: &str) -> anyhow::Result<log::LevelFilter> {
 }
 
 pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> anyhow::Result<bool> {
-    if key == AUTO_CHECK_UPDATE { anyhow::ensure!(value.is_boolean(), "Invalid auto check update setting"); }
-    if key == SKIP_VERSION { anyhow::ensure!(value.is_string(), "Invalid skipped version"); }
+    if key == AUTO_CHECK_UPDATE {
+        anyhow::ensure!(value.is_boolean(), "Invalid auto check update setting");
+    }
+    if key == SKIP_VERSION {
+        anyhow::ensure!(value.is_string(), "Invalid skipped version");
+    }
     let command = match key {
         PASSWORD => Some(Command::SetPassword {
             password: serde_json::from_value(value.clone())?,

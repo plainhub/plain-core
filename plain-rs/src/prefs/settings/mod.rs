@@ -1,5 +1,5 @@
-mod sort;
 mod enum_value;
+mod sort;
 pub use sort::FileSortBy;
 mod play_mode;
 pub use play_mode::MediaPlayMode;
@@ -46,7 +46,8 @@ pub fn snapshot(prefs: &Prefs) -> Result<Settings> {
         settings.locale = serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
     }
     if let Some(value) = entries.get(keys::BACKGROUND_SERVICE_ENABLED) {
-        settings.background_service_enabled = serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
+        settings.background_service_enabled =
+            serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
     }
     if let Some(value) = entries.get(keys::DESKTOP_ACCESS) {
         settings.desktop_access =

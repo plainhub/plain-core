@@ -28,5 +28,4 @@ impl DeviceSubscriptions {
     ) -> Result<BoxStream<'static, Result<ClipboardChange>>> {
         events::stream(ctx, "CLIPBOARD_CHANGED").await
     }
-
 }

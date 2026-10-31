@@ -1,8 +1,8 @@
 #[cfg(any(test, not(any(target_os = "android", target_os = "ios"))))]
 use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
 #[cfg(any(test, not(any(target_os = "android", target_os = "ios"))))]
 use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 
 pub fn resolve(data_directory: &Path) -> Result<PathBuf, String> {
     if !data_directory.is_absolute() {

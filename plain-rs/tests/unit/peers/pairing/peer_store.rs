@@ -53,11 +53,29 @@ fn a_known_signing_identity_cannot_be_replaced_by_repairing() {
 fn unpair_removes_management_access_before_chat_only_repairing_and_preserves_history() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let original = save(&db, facts()).unwrap();
-    db.with_conn(|connection| connection.execute("UPDATE peers SET token='management-grant' WHERE id='peer'", [])).unwrap();
-    let chat = crate::db::DChat::new("me", "peer", "", r#"{"type":"TEXT","value":{"text":"saved message"}}"#);
-    crate::db::chat_store::messages::save(&db, std::slice::from_ref(&chat), crate::db::chat_store::SaveMode::Insert).unwrap();
+    db.with_conn(|connection| {
+        connection.execute(
+            "UPDATE peers SET token='management-grant' WHERE id='peer'",
+            [],
+        )
+    })
+    .unwrap();
+    let chat = crate::db::DChat::new(
+        "me",
+        "peer",
+        "",
+        r#"{"type":"TEXT","value":{"text":"saved message"}}"#,
+    );
+    crate::db::chat_store::messages::save(
+        &db,
+        std::slice::from_ref(&chat),
+        crate::db::chat_store::SaveMode::Insert,
+    )
+    .unwrap();
     assert!(crate::db::chat_store::peers::unpair(&db, "peer").unwrap());
-    let unpaired = crate::db::chat_store::peers::get(&db, "peer").unwrap().unwrap();
+    let unpaired = crate::db::chat_store::peers::get(&db, "peer")
+        .unwrap()
+        .unwrap();
     assert_eq!(unpaired.status, PeerStatus::Unpaired);
     assert!(unpaired.token.is_empty());
     assert_eq!(unpaired.public_key, original.public_key);
@@ -65,5 +83,11 @@ fn unpair_removes_management_access_before_chat_only_repairing_and_preserves_his
     assert_eq!(repaired.status, PeerStatus::Paired);
     assert!(repaired.token.is_empty());
     assert_eq!(repaired.created_at, original.created_at);
-    assert_eq!(crate::db::chat_store::messages::get(&db, &chat.id).unwrap().unwrap().content, chat.content);
+    assert_eq!(
+        crate::db::chat_store::messages::get(&db, &chat.id)
+            .unwrap()
+            .unwrap()
+            .content,
+        chat.content
+    );
 }

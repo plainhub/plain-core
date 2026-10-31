@@ -125,8 +125,9 @@ async fn delete_peer_demotes_channel_members() {
     let svc = service("del-peer");
     let mut ch = svc.create_channel("Team").unwrap();
     // peer-x as a joined channel member.
-    ch.members = r#"[{"peerId":"me-server","status":"JOINED"},{"peerId":"peer-x","status":"JOINED"}]"#
-        .to_string();
+    ch.members =
+        r#"[{"peerId":"me-server","status":"JOINED"},{"peerId":"peer-x","status":"JOINED"}]"#
+            .to_string();
     svc.db.update_channel(&ch);
     svc.db.upsert_peer(&DPeer::new(
         "peer-x",

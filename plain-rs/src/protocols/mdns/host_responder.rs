@@ -1062,11 +1062,7 @@ fn joined_iface_list() -> Vec<String> {
 /// plain-server's mdns runtime tests can assert their effect. Recording is a
 /// no-op unless capture is enabled.
 #[doc(hidden)]
-pub fn record_received(
-    socket: &std::net::UdpSocket,
-    src: std::net::SocketAddr,
-    bytes: &[u8],
-) {
+pub fn record_received(socket: &std::net::UdpSocket, src: std::net::SocketAddr, bytes: &[u8]) {
     if let Ok(dst) = socket.local_addr() {
         crate::protocols::mdns::packet_capture::record("IN", src, dst, bytes);
     }

@@ -1,6 +1,6 @@
 use super::*;
-use plain_rs::inference::embedding::{ImageEncoder, ImageSource};
 use plain_rs::host::resource_stream::NativeResourceFile;
+use plain_rs::inference::embedding::{ImageEncoder, ImageSource};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct Encoder {

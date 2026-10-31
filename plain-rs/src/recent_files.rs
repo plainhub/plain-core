@@ -11,6 +11,8 @@ pub fn add(store: &Db, path: &str) -> Result<()> {
 }
 pub fn list(store: &Db, limit: usize) -> Result<Vec<String>> {
     let mut paths: Vec<String> = store.get_json(KEY)?.unwrap_or_default();
-    if limit > 0 { paths.truncate(limit); }
+    if limit > 0 {
+        paths.truncate(limit);
+    }
     Ok(paths)
 }

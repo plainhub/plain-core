@@ -6,7 +6,11 @@ use crate::db::repositories::peer::PEER_COLS;
 use crate::db::repositories::peer::row_to_peer;
 use anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
-pub fn update_name(connection: &rusqlite::Connection, id: &str, name: &str) -> rusqlite::Result<usize> {
+pub fn update_name(
+    connection: &rusqlite::Connection,
+    id: &str,
+    name: &str,
+) -> rusqlite::Result<usize> {
     connection.execute(
         "UPDATE peers SET name=?1, updated_at=?2 WHERE id=?3",
         params![name, crate::db::now_iso(), id],

@@ -111,7 +111,10 @@ impl ImageIndex {
         self.system_catalog
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }
-    pub fn set_encoder(&self, encoder: Option<Arc<dyn plain_rs::inference::embedding::ImageEncoder>>) {
+    pub fn set_encoder(
+        &self,
+        encoder: Option<Arc<dyn plain_rs::inference::embedding::ImageEncoder>>,
+    ) {
         *self.encoder.lock().unwrap() = encoder;
     }
     pub fn status(&self) -> Status {

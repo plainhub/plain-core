@@ -7,7 +7,6 @@ pub mod replay;
 #[cfg(feature = "core")]
 pub mod ws_login;
 
-
 #[cfg(feature = "core")]
 pub(crate) mod local_client;
 

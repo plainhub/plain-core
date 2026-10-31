@@ -191,7 +191,9 @@ async fn catalog_changes_share_one_cancellable_timer_and_do_not_retain_the_runti
 #[tokio::test]
 async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_download() {
     let directory = tempfile::tempdir().unwrap();
-    plain_rs::inference::models::test_fixture::fixture(&directory.path().join("ai_models/imported"));
+    plain_rs::inference::models::test_fixture::fixture(
+        &directory.path().join("ai_models/imported"),
+    );
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
     let responder = host.clone();
@@ -264,7 +266,9 @@ async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_do
 #[tokio::test]
 async fn native_model_restore_and_shutdown_do_not_request_sdk_observers_or_catalogs() {
     let directory = tempfile::tempdir().unwrap();
-    plain_rs::inference::models::test_fixture::fixture(&directory.path().join("ai_models/imported"));
+    plain_rs::inference::models::test_fixture::fixture(
+        &directory.path().join("ai_models/imported"),
+    );
     let host = Arc::new(Host::default());
     let (_generation, mut requests) = host.connect();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());

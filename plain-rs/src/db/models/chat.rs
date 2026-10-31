@@ -7,11 +7,19 @@ pub struct DChat {
     pub id: String,
     pub from_id: String,
     pub to_id: String,
-    #[serde(default, serialize_with = "super::serialize_optional_text", deserialize_with = "super::deserialize_optional_text")]
+    #[serde(
+        default,
+        serialize_with = "super::serialize_optional_text",
+        deserialize_with = "super::deserialize_optional_text"
+    )]
     pub channel_id: Option<String>,
     pub content: String,
     pub status: ChatStatus,
-    #[serde(default, serialize_with = "super::serialize_optional_text", deserialize_with = "super::deserialize_optional_text")]
+    #[serde(
+        default,
+        serialize_with = "super::serialize_optional_text",
+        deserialize_with = "super::deserialize_optional_text"
+    )]
     pub status_data: Option<String>,
     pub created_at: String,
     pub updated_at: String,

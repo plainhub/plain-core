@@ -71,7 +71,9 @@ fn non_owner_rename_is_rejected_without_changing_any_channel_field() {
             &db,
             "guest",
             &before.id,
-            Action::Rename { name: "forbidden".into() },
+            Action::Rename {
+                name: "forbidden".into(),
+            },
         );
         let after = channels::get(&db, &before.id).unwrap().unwrap();
         assert_eq!(after, before);

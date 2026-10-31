@@ -109,17 +109,15 @@ async fn startup_scan_indexes_configured_directories_through_the_headless_host()
     let source = directory.path().join("documents");
     std::fs::create_dir(&source).unwrap();
     std::fs::write(source.join("document.txt"), b"document").unwrap();
-    let core =
-        Arc::new(plain_server::server::ContentServer::open(&directory.path().join("core")).unwrap());
+    let core = Arc::new(
+        plain_server::server::ContentServer::open(&directory.path().join("core")).unwrap(),
+    );
     let catalog = core.native_media_catalog().unwrap();
     catalog
         .set_source_directories(&[source.to_string_lossy().into_owned()])
         .unwrap();
     catalog.configure_scan_directories(None).unwrap();
-    let runtime = Arc::new(crate::host::Host::new(
-        core.clone(),
-        vec![],
-    ));
+    let runtime = Arc::new(crate::host::Host::new(core.clone(), vec![]));
     let runner = tokio::spawn(runtime.run());
     let started = start_source_scan(&catalog).unwrap();
     let result = tokio::time::timeout(std::time::Duration::from_secs(10), async {

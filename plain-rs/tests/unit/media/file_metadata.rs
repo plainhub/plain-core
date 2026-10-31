@@ -198,7 +198,11 @@ fn video_catalog_dimensions_use_shared_container_readers_without_an_image_decode
             panic!("video metadata must not use an image decoder")
         })
         .unwrap();
-        assert_eq!((read.metadata.width, read.metadata.height), (width, height), "{name}");
+        assert_eq!(
+            (read.metadata.width, read.metadata.height),
+            (width, height),
+            "{name}"
+        );
         assert!(read.available.dimensions, "{name}");
         assert!(read.available.rotation, "{name}");
     }
@@ -213,7 +217,14 @@ fn unreadable_video_metadata_remains_unknown_without_invented_dimensions() {
         panic!("invalid video must not be treated as an image")
     })
     .unwrap();
-    assert_eq!((read.metadata.width, read.metadata.height, read.metadata.rotation), (0, 0, 0));
+    assert_eq!(
+        (
+            read.metadata.width,
+            read.metadata.height,
+            read.metadata.rotation
+        ),
+        (0, 0, 0)
+    );
     assert!(!read.available.dimensions);
     assert!(!read.available.rotation);
     assert!(!read.available.duration);

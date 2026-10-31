@@ -11,9 +11,9 @@
 //! multi-connection table, the per-peer capacity limit, and idle expiry that
 //! the old Kotlin `BleServerProtocol` duplicated in a second language.
 
-use crate::protocols::ble::Assembler;
 #[cfg(test)]
 use crate::protocols::ble;
+use crate::protocols::ble::Assembler;
 use anyhow::{Result, ensure};
 use std::{
     collections::HashMap,
@@ -53,12 +53,7 @@ pub struct Sessions {
 impl Sessions {
     /// Feed one raw GATT write. Returns whether more frames are needed, or the
     /// assembled request once the final frame lands.
-    pub fn write(
-        &self,
-        address: &str,
-        characteristic: &str,
-        value: &[u8],
-    ) -> Result<Outcome> {
+    pub fn write(&self, address: &str, characteristic: &str, value: &[u8]) -> Result<Outcome> {
         let key = (address.to_string(), characteristic.to_ascii_lowercase());
         let mut table = self.table.lock().unwrap();
         Sessions::reap(&mut table);
@@ -68,12 +63,10 @@ impl Sessions {
             "BLE assembly capacity exceeded"
         );
         let now = Instant::now();
-        let session = table
-            .entry(key.clone())
-            .or_insert_with(|| Session {
-                assembler: Assembler::default(),
-                touched: now,
-            });
+        let session = table.entry(key.clone()).or_insert_with(|| Session {
+            assembler: Assembler::default(),
+            touched: now,
+        });
         let result = session.assembler.push(value);
         session.touched = now;
         match result {
@@ -95,7 +88,10 @@ impl Sessions {
     /// Records the request id of a completed Nearby request so the platform can
     /// correlate a later response notification back to the peer.
     pub fn record_nearby_request(&self, address: &str, request_id: u32) {
-        self.nearby.lock().unwrap().insert(address.to_string(), request_id);
+        self.nearby
+            .lock()
+            .unwrap()
+            .insert(address.to_string(), request_id);
     }
 
     /// The most recent Nearby request id seen for an address, if any.
@@ -105,7 +101,10 @@ impl Sessions {
 
     /// Forget every session belonging to a disconnected peer.
     pub fn clear_peer(&self, address: &str) {
-        self.table.lock().unwrap().retain(|(addr, _), _| addr != address);
+        self.table
+            .lock()
+            .unwrap()
+            .retain(|(addr, _), _| addr != address);
         self.nearby.lock().unwrap().remove(address);
     }
 
@@ -146,7 +145,11 @@ mod tests {
             if start >= message.len() {
                 break;
             }
-            out.push(ble::frame(message, id, false, sequence, LIMIT).unwrap().unwrap());
+            out.push(
+                ble::frame(message, id, false, sequence, LIMIT)
+                    .unwrap()
+                    .unwrap(),
+            );
             sequence += 1;
         }
         out

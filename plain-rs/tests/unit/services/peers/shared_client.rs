@@ -26,8 +26,16 @@ fn discovery_selects_complete_matching_records_and_safe_ipv6_urls() {
     assert!(download_url("http://localhost/fs?sid=s&id=x").is_err());
     assert!(download_url("https://user@localhost/fs?sid=s&id=x").is_err());
     assert!(download_url("https://localhost/proxyfs?sid=s&id=x").is_err());
-    let link = Link::new("localhost", 443, "fixture", &plain_rs::base64_encode(&[7;32])).unwrap();
-    let url = link.file_url(&plain_rs::base64_encode(&[8;32]), "folder/file", false).unwrap();
+    let link = Link::new(
+        "localhost",
+        443,
+        "fixture",
+        &plain_rs::base64_encode(&[7; 32]),
+    )
+    .unwrap();
+    let url = link
+        .file_url(&plain_rs::base64_encode(&[8; 32]), "folder/file", false)
+        .unwrap();
     assert!(download_url(&url).is_ok());
     assert!(download_url("https://localhost/fs?id=g.AA").is_err());
     assert!(download_url("https://localhost/fs?id=c.client.AA").is_err());

@@ -95,7 +95,10 @@ pub(crate) fn save(c: &Connection, channel: &DChannel, new: bool) -> Result<()> 
         params![
             channel.id,
             channel.name,
-            channel.owner_id.as_deref().filter(|value|!value.is_empty()),
+            channel
+                .owner_id
+                .as_deref()
+                .filter(|value| !value.is_empty()),
             channel.members,
             channel.key,
             channel.version,
