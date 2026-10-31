@@ -76,7 +76,7 @@ mod win_power {
         if unsafe { GetSystemPowerStatus(&mut s) } == 0 {
             return None;
         }
-        crate::features::services::device::win_battery_from(s.battery_flag, s.battery_life_percent)
+        super::win_battery_from(s.battery_flag, s.battery_life_percent)
     }
 }
 
