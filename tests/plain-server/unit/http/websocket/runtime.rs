@@ -948,10 +948,19 @@ async fn authenticated_editor_connections_release_unauthenticated_slots() {
     server.shutdown().await;
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
-async fn non_mobile_native_subscriptions_reject_sms_fields() {
+async fn native_subscriptions_reject_sms_when_capability_is_unavailable() {
     let (_directory, core) = public_fixture();
+    let state = core.runtime_state();
+    let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
+    let host = state.host.clone();
+    let responder = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            assert_eq!(request["method"], "systemCapabilities");
+            host.reply(generation, json!({"id":request["id"],"result":[]}))
+                .unwrap();
+        }
+    });
     let native = core.native_graphql().unwrap();
     let id = native
         .open_subscriptions(plain_rs::libs::host::request_scope::NativeRequestScope::default())
@@ -968,8 +977,10 @@ async fn non_mobile_native_subscriptions_reject_sms_fields() {
     assert_eq!(response["type"], "error");
     assert_eq!(
         response["payload"][0]["message"],
-        "Unknown subscription field"
+        "unsupported capability SMS"
     );
     native.close_subscriptions(id);
+    state.host.disconnect(generation);
+    responder.await.unwrap();
     core.stop_core().await;
 }
