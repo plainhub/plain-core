@@ -69,5 +69,5 @@ pub fn hash(bytes: &[u8]) -> u64 {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/xxh64.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/xxh64.rs"]
 mod tests;

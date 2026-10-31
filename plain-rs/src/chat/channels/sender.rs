@@ -414,5 +414,5 @@ pub fn parse_device_type(s: &str) -> DeviceType {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/channels/sender.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/channels/sender.rs"]
 mod tests;

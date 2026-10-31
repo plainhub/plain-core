@@ -57,5 +57,5 @@ pub async fn stat_record(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/browse.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/browse.rs"]
 mod tests;

@@ -87,5 +87,5 @@ impl NativeGraphqlExecutor {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/native/graphql.rs"]
+#[path = "../../../tests/plain-server/unit/native/graphql.rs"]
 mod tests;

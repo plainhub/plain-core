@@ -126,5 +126,5 @@ fn rules(state: &CoreRuntime) -> Value {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/casting/receiver/control.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/casting/receiver/control.rs"]
 mod tests;

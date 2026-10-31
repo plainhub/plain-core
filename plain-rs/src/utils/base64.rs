@@ -124,5 +124,5 @@ pub fn base64_decode(input: &str) -> Vec<u8> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/base64.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/base64.rs"]
 mod tests;

@@ -33,5 +33,5 @@ pub fn coordinates(raw: &str) -> Option<(f64, f64)> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/iso6709.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/iso6709.rs"]
 mod tests;

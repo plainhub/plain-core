@@ -77,5 +77,5 @@ fn letters(value: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/phone/locale.rs"]
+#[path = "../../../tests/plain-rs/unit/phone/locale.rs"]
 mod tests;

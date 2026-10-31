@@ -70,5 +70,5 @@ pub(crate) async fn files(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/http/zip.rs"]
+#[path = "../../../tests/plain-server/unit/http/zip.rs"]
 mod tests;

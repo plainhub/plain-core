@@ -208,5 +208,5 @@ pub(crate) async fn fallback(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/http/static_files.rs"]
+#[path = "../../../tests/plain-server/unit/http/static_files.rs"]
 mod tests;

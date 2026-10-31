@@ -67,5 +67,5 @@ async fn facts(state: &CoreRuntime) -> Result<Facts> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/discovery_advertisement.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/discovery_advertisement.rs"]
 mod tests;

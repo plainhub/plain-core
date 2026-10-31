@@ -142,5 +142,5 @@ fn creation_time(data: &[u8]) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/isobmff/video.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/isobmff/video.rs"]
 mod tests;

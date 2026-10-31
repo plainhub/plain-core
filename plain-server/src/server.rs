@@ -462,7 +462,7 @@ impl Drop for ContentServer {
     }
 }
 #[cfg(test)]
-#[path = "../tests/unit/server.rs"]
+#[path = "../../tests/plain-server/unit/server.rs"]
 mod tests;
 
 #[cfg(feature = "http_transport")]

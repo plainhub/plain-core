@@ -28,5 +28,5 @@ pub fn path_from_file_id(id: &str, prefs: &plain_rs::prefs::Prefs) -> Result<Str
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/files/resource_id.rs"]
+#[path = "../../../tests/plain-rs/unit/files/resource_id.rs"]
 mod tests;

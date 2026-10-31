@@ -298,5 +298,5 @@ pub(crate) fn subscription_stream(
 }
 
 #[cfg(all(test, feature = "core"))]
-#[path = "../../tests/unit/graphql/executor.rs"]
+#[path = "../../../tests/plain-server/unit/graphql/executor.rs"]
 mod tests;

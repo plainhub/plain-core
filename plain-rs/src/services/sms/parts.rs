@@ -88,5 +88,5 @@ pub fn snippet(candidates: &[Snippet]) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/sms/parts.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/sms/parts.rs"]
 mod tests;

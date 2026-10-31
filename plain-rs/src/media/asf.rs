@@ -140,7 +140,7 @@ pub(super) fn video(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/asf.rs"]
+#[path = "../../../tests/plain-rs/unit/media/asf.rs"]
 mod tests;
 
 pub(super) fn cover(reader: &mut (impl Read + Seek)) -> Option<super::cover::CoverData> {

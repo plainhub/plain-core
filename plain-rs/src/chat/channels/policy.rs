@@ -23,5 +23,5 @@ pub fn actions(owner: Option<&str>, status: ChannelStatus, actor: &str) -> Actio
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/channels/policy.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/channels/policy.rs"]
 mod tests;

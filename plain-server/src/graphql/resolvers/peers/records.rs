@@ -58,5 +58,5 @@ impl PeerRecordQuery {
     }
 }
 #[cfg(all(test, feature = "http_transport"))]
-#[path = "../../../../tests/unit/graphql/resolvers/peers/records.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/peers/records.rs"]
 mod tests;

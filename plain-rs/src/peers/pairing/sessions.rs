@@ -285,5 +285,5 @@ impl Pending {
     }
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/peers/pairing/sessions.rs"]
+#[path = "../../../../tests/plain-rs/unit/peers/pairing/sessions.rs"]
 mod tests;

@@ -291,5 +291,5 @@ fn value_to_string(value: rusqlite::types::Value) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/browse.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/browse.rs"]
 mod tests;

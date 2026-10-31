@@ -160,5 +160,5 @@ pub use crate::chat::manager::resolve_chat_ids;
 pub use crate::chat::messages::content::to_peer_content;
 
 #[cfg(test)]
-#[path = "../../tests/unit/chat/service.rs"]
+#[path = "../../../tests/plain-rs/unit/chat/service.rs"]
 mod tests;

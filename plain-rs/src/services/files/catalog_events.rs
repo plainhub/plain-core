@@ -28,5 +28,5 @@ pub fn publish(events: &broadcast::Sender<WsEvent>, types: impl IntoIterator<Ite
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/catalog_events.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/catalog_events.rs"]
 mod tests;

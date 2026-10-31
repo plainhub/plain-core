@@ -126,5 +126,5 @@ fn invalid(message: &str) -> DomainError {
     DomainError::Other(message.into())
 }
 #[cfg(test)]
-#[path = "../../tests/unit/files/moves.rs"]
+#[path = "../../../tests/plain-rs/unit/files/moves.rs"]
 mod tests;

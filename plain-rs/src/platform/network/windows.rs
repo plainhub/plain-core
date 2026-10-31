@@ -105,5 +105,5 @@ unsafe fn collect(head: *const Adapter) -> Vec<Interface> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/network/windows.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/network/windows.rs"]
 mod tests;

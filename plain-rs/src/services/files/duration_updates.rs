@@ -252,5 +252,5 @@ impl Runtime {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/duration_updates.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/duration_updates.rs"]
 mod tests;

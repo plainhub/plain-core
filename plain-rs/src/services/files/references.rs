@@ -56,5 +56,5 @@ pub fn resolve_many(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/references.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/references.rs"]
 mod tests;

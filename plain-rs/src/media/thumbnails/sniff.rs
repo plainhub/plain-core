@@ -238,5 +238,5 @@ fn sniff_webp(buf: &[u8]) -> Result<Sniffed, SniffError> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/thumbnails/sniff.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/thumbnails/sniff.rs"]
 mod tests;

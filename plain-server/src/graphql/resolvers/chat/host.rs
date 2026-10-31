@@ -198,5 +198,5 @@ fn filter(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/chat/host.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/chat/host.rs"]
 mod tests;

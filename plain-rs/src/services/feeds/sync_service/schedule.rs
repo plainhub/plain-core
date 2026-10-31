@@ -351,5 +351,5 @@ async fn tick(state: &CoreRuntime, previous_wake: &mut Option<Option<i64>>) -> R
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/feeds/sync_service/schedule.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/feeds/sync_service/schedule.rs"]
 mod tests;

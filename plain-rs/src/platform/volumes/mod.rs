@@ -118,5 +118,5 @@ fn windows_path(path: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/volumes/mod.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/volumes/mod.rs"]
 mod tests;

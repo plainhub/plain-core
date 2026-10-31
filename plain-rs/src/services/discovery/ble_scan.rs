@@ -185,5 +185,5 @@ async fn work(state: CoreRuntime) {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/ble_scan.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/ble_scan.rs"]
 mod tests;

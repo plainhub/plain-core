@@ -59,5 +59,5 @@ impl DiscoverySessions {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/discovery/sessions.rs"]
+#[path = "../../../tests/plain-rs/unit/discovery/sessions.rs"]
 mod tests;

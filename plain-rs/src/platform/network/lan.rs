@@ -90,5 +90,5 @@ pub fn classify_network(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/network/lan.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/network/lan.rs"]
 mod tests;

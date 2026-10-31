@@ -278,5 +278,5 @@ impl Assembler {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/protocols/ble/mod.rs"]
+#[path = "../../../../tests/plain-rs/unit/protocols/ble/mod.rs"]
 mod tests;

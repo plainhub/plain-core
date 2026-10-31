@@ -11,5 +11,5 @@ pub fn set_source_directories(prefs: &Prefs, directories: &[String]) -> Result<(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/prefs/media.rs"]
+#[path = "../../../tests/plain-rs/unit/prefs/media.rs"]
 mod tests;

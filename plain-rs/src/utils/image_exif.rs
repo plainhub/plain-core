@@ -175,5 +175,5 @@ fn project(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/image_exif.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/image_exif.rs"]
 mod tests;

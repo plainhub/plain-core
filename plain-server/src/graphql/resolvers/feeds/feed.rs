@@ -289,7 +289,7 @@ impl FeedMutation {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/feeds/feed.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/feeds/feed.rs"]
 mod tests;
 
 fn sync_service(ctx: &Context<'_>) -> GqlResult<Arc<feeds::SyncService>> {

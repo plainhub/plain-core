@@ -233,5 +233,5 @@ fn clamp_byte(v: i32) -> u8 {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/thumbnails/video.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/thumbnails/video.rs"]
 mod tests;

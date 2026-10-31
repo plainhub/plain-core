@@ -190,5 +190,5 @@ pub(crate) fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<plain_rs::prefs::Prefs>
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/media/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/media/public.rs"]
 mod tests;

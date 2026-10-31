@@ -199,5 +199,5 @@ pub fn tls_config(certificate_pem: &[u8], private_key_pem: &[u8]) -> Result<Rust
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/listeners/mod.rs"]
+#[path = "../../../../tests/plain-server/unit/http/listeners/mod.rs"]
 mod tests;

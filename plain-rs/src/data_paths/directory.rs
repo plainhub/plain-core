@@ -78,5 +78,5 @@ impl DataDirectory {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/data_paths/directory.rs"]
+#[path = "../../../tests/plain-rs/unit/data_paths/directory.rs"]
 mod tests;

@@ -233,5 +233,5 @@ pub(super) fn milliseconds(reader: &mut (impl Read + Seek)) -> Option<i64> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/flv.rs"]
+#[path = "../../../tests/plain-rs/unit/media/flv.rs"]
 mod tests;

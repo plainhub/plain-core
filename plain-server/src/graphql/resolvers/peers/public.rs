@@ -300,5 +300,5 @@ async fn host_call(ctx: &Context<'_>, method: &str, params: Value) -> async_grap
 }
 
 #[cfg(all(test, feature = "http_transport"))]
-#[path = "../../../../tests/unit/graphql/resolvers/peers/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/peers/public.rs"]
 mod tests;

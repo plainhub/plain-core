@@ -149,7 +149,7 @@ pub const WS_POMODORO_ACTION: &'static str = "POMODORO_ACTION";
 pub const WS_IMAGE_EDITOR_UPDATE: &'static str = "IMAGE_EDITOR_UPDATE";
 
 #[cfg(test)]
-#[path = "../tests/unit/events.rs"]
+#[path = "../../tests/plain-rs/unit/events.rs"]
 mod tests;
 
 pub const WS_DEVICE_NAME_UPDATED: &str = "DEVICE_NAME_UPDATED";

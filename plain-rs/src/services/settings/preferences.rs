@@ -127,5 +127,5 @@ impl<'a> Preferences<'a> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/settings/preferences.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/settings/preferences.rs"]
 mod tests;

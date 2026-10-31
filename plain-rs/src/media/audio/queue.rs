@@ -653,7 +653,7 @@ pub(crate) fn record_history_conn(c: &rusqlite::Connection, path: &str) -> Domai
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/audio/queue.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/audio/queue.rs"]
 mod tests;
 
 pub fn playlist_item_records_page(

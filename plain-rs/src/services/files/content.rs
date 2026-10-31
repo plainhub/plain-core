@@ -293,5 +293,5 @@ async fn read_slice(path: &str, offset: i64, length: usize) -> anyhow::Result<Co
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/content.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/content.rs"]
 mod tests;

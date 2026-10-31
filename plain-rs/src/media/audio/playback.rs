@@ -137,5 +137,5 @@ fn save_position(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/audio/playback.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/audio/playback.rs"]
 mod tests;

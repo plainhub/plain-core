@@ -71,5 +71,5 @@ fn to_disk(d: &LsblkDevice) -> Disk {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/platform/linux/disks/list.rs"]
+#[path = "../../../../../tests/plain-rs/unit/platform/linux/disks/list.rs"]
 mod tests;

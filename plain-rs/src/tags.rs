@@ -68,5 +68,5 @@ mod relations;
 pub use relations::update_relations;
 
 #[cfg(test)]
-#[path = "../tests/unit/tags.rs"]
+#[path = "../../tests/plain-rs/unit/tags.rs"]
 mod tests;

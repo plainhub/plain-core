@@ -17,5 +17,5 @@ object BleUuids {{
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/protocols/ble/print.rs"]
+#[path = "../../../../tests/plain-rs/unit/protocols/ble/print.rs"]
 mod tests;

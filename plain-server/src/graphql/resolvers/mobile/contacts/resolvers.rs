@@ -444,5 +444,5 @@ fn contact_input(input: &ContactInput) -> Value {
 }
 
 #[cfg(test)]
-#[path = "../../../../../tests/unit/graphql/resolvers/mobile/contacts/resolvers.rs"]
+#[path = "../../../../../../tests/plain-server/unit/graphql/resolvers/mobile/contacts/resolvers.rs"]
 mod tests;

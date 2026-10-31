@@ -203,5 +203,5 @@ impl<R: Seek> Seek for View<R> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/probe/id3.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/probe/id3.rs"]
 mod tests;

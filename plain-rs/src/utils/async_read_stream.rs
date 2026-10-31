@@ -71,5 +71,5 @@ impl<R: AsyncRead + Unpin> Stream for AsyncReadStream<R> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/async_read_stream.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/async_read_stream.rs"]
 mod tests;

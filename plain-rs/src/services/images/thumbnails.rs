@@ -244,5 +244,5 @@ impl Drop for Temporary {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/images/thumbnails.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/images/thumbnails.rs"]
 mod tests;

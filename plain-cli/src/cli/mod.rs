@@ -81,5 +81,5 @@ pub(crate) enum Cmd {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/cli.rs"]
+#[path = "../../../tests/plain-cli/unit/cli.rs"]
 mod tests;

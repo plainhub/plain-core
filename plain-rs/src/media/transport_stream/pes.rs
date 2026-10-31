@@ -172,5 +172,5 @@ fn header_length(bytes: &[u8]) -> Header {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/transport_stream/pes.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/transport_stream/pes.rs"]
 mod tests;

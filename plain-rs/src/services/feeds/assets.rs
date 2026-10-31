@@ -232,5 +232,5 @@ pub fn main_image(html: &str, base: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/feeds/assets.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/feeds/assets.rs"]
 mod tests;

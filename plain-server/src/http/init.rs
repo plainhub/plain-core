@@ -50,5 +50,5 @@ pub(crate) async fn init(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/http/init.rs"]
+#[path = "../../../tests/plain-server/unit/http/init.rs"]
 mod tests;

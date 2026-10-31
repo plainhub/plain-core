@@ -84,5 +84,5 @@ pub fn best(ips: &[String], local: &[Interface]) -> String {
         .unwrap_or_default()
 }
 #[cfg(test)]
-#[path = "../../tests/unit/transport/lan.rs"]
+#[path = "../../../tests/plain-rs/unit/transport/lan.rs"]
 mod tests;

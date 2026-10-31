@@ -183,5 +183,5 @@ pub fn append(db: &Db, id: &str, text: &str, preview: &Value) -> Result<Option<D
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/chat/link_preview.rs"]
+#[path = "../../../tests/plain-rs/unit/chat/link_preview.rs"]
 mod tests;

@@ -49,5 +49,5 @@ fn publish(directory: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/audio/covers.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/audio/covers.rs"]
 mod tests;

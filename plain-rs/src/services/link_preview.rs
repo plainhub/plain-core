@@ -429,5 +429,5 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/link_preview.rs"]
+#[path = "../../../tests/plain-rs/unit/services/link_preview.rs"]
 mod fetch_tests;

@@ -367,5 +367,5 @@ pub async fn stage(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/backups/restore.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/backups/restore.rs"]
 mod tests;

@@ -309,5 +309,5 @@ pub fn selected_roots(root: String, source_dirs: &[String]) -> Vec<std::path::Pa
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/catalog_paths.rs"]
+#[path = "../../../tests/plain-rs/unit/media/catalog_paths.rs"]
 mod tests;

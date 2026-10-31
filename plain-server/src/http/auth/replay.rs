@@ -23,5 +23,5 @@ impl Replay {
     }
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/http/auth/replay.rs"]
+#[path = "../../../../tests/plain-server/unit/http/auth/replay.rs"]
 mod tests;

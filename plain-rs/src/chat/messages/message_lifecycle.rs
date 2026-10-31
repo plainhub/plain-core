@@ -209,5 +209,5 @@ fn delivery_impl(
     })
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/messages/message_lifecycle.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/messages/message_lifecycle.rs"]
 mod tests;

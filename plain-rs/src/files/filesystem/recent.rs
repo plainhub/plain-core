@@ -53,5 +53,5 @@ pub fn list(root: &Path, limit: usize) -> Vec<FileEntry> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/files/filesystem/recent.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/filesystem/recent.rs"]
 mod tests;

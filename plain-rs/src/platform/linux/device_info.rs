@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/linux/device_info.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/linux/device_info.rs"]
 mod tests;
 
 #[derive(Debug, Serialize, Default)]

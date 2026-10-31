@@ -478,5 +478,5 @@ pub async fn wait_stop(receiver: &mut watch::Receiver<bool>) {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/media_scans.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/media_scans.rs"]
 mod tests;

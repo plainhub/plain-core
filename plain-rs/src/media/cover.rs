@@ -147,5 +147,5 @@ fn picture_to_cover_data(pic: &Picture) -> Option<CoverData> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/cover.rs"]
+#[path = "../../../tests/plain-rs/unit/media/cover.rs"]
 mod tests;

@@ -366,5 +366,5 @@ impl Service {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/pomodoro.rs"]
+#[path = "../../../tests/plain-rs/unit/services/pomodoro.rs"]
 mod tests;

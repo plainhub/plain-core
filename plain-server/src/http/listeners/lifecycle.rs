@@ -161,5 +161,5 @@ pub(crate) async fn stop_locked(state: &ServerState, guard: &mut Option<PublicSe
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/listeners/lifecycle.rs"]
+#[path = "../../../../tests/plain-server/unit/http/listeners/lifecycle.rs"]
 mod tests;

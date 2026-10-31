@@ -547,7 +547,7 @@ fn discard(state: &CoreRuntime, path: &str) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/settings/update_download.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/settings/update_download.rs"]
 mod tests;
 
 #[cfg(any(test, feature = "test-seams"))]

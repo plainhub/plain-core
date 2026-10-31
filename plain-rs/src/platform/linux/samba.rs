@@ -438,5 +438,5 @@ fn which(prog: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/linux/samba.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/linux/samba.rs"]
 mod tests;

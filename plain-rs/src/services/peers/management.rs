@@ -542,5 +542,5 @@ async fn connection_loop(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/management.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/management.rs"]
 mod tests;

@@ -122,5 +122,5 @@ fn extract_code(number: &str) -> Option<(u16, &str)> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/phone/number.rs"]
+#[path = "../../../tests/plain-rs/unit/phone/number.rs"]
 mod tests;

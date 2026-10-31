@@ -163,5 +163,5 @@ pub(super) fn display(name: &str, value: String) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/packages/attributes.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/packages/attributes.rs"]
 pub(crate) mod tests;

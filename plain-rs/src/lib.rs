@@ -3,8 +3,8 @@
 // would resolve to the *mounting* crate.
 extern crate self as plain_rs;
 
-#[cfg(feature = "inference")]
-pub mod inference;
+#[cfg(feature = "ai-image-search")]
+pub mod ai_image_search;
 
 pub mod cache_paths;
 pub mod data_paths;
@@ -142,13 +142,13 @@ pub mod host;
 pub mod runtime;
 
 #[cfg(all(test, feature = "runtime"))]
-#[path = "../tests/support/runtime.rs"]
+#[path = "../../tests/plain-rs/support/runtime.rs"]
 pub(crate) mod test_runtime;
 
 #[cfg(all(test, feature = "runtime"))]
-#[path = "../tests/support/host.rs"]
+#[path = "../../tests/plain-rs/support/host.rs"]
 pub(crate) mod test_support;
 
 #[cfg(all(feature = "runtime", any(test, feature = "test-seams")))]
-#[path = "../tests/support/apk.rs"]
+#[path = "../../tests/plain-rs/support/apk.rs"]
 pub mod test_apk;

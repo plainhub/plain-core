@@ -808,7 +808,7 @@ fn read_dirents(fd: i32, buf: &mut [u8]) -> std::io::Result<usize> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/files/filesystem/mod.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/filesystem/mod.rs"]
 mod tests;
 
 pub fn measure(path: &Path) -> std::io::Result<(i64, i64)> {

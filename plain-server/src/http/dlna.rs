@@ -148,7 +148,7 @@ pub(crate) async fn receiver(
 }
 
 #[cfg(all(test, feature = "http_transport"))]
-#[path = "../../tests/unit/http/dlna.rs"]
+#[path = "../../../tests/plain-server/unit/http/dlna.rs"]
 mod tests;
 
 pub(crate) async fn media(

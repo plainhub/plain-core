@@ -205,5 +205,5 @@ pub fn field_value(q: &str, name: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/search_dsl.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/search_dsl.rs"]
 mod tests;

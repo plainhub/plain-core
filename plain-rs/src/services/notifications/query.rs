@@ -41,5 +41,5 @@ pub fn notifications(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/notifications/query.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/notifications/query.rs"]
 mod tests;

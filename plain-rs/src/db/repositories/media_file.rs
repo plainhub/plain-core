@@ -174,5 +174,5 @@ impl Db {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/media_file.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/media_file.rs"]
 mod tests;

@@ -50,5 +50,5 @@ pub fn is_animated_image_or_svg(path: &Path) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/files/filesystem/image_format.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/filesystem/image_format.rs"]
 mod tests;

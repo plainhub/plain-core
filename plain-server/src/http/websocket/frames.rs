@@ -28,5 +28,5 @@ pub(super) fn admit<'a>(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/websocket/frames.rs"]
+#[path = "../../../../tests/plain-server/unit/http/websocket/frames.rs"]
 mod tests;

@@ -129,5 +129,5 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
 }
 
 #[cfg(all(test, not(any(target_os = "android", target_os = "ios"))))]
-#[path = "../../tests/unit/http/fs.rs"]
+#[path = "../../../tests/plain-server/unit/http/fs.rs"]
 mod tests;

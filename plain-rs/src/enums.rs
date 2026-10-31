@@ -65,5 +65,5 @@ impl DataType {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/enums.rs"]
+#[path = "../../tests/plain-rs/unit/enums.rs"]
 mod tests;

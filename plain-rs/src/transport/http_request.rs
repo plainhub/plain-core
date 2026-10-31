@@ -20,5 +20,5 @@ pub fn decrypt_response(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/transport/http_request.rs"]
+#[path = "../../../tests/plain-rs/unit/transport/http_request.rs"]
 mod tests;

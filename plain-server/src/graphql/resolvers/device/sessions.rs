@@ -123,5 +123,5 @@ fn revoke(ctx: &Context<'_>, client_id: &str, action: &str) -> Result<bool> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/device/sessions.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/device/sessions.rs"]
 mod tests;

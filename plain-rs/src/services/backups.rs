@@ -184,7 +184,7 @@ pub async fn export(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/backups.rs"]
+#[path = "../../../tests/plain-rs/unit/services/backups.rs"]
 mod tests;
 
 #[cfg(any(test, feature = "test-seams"))]

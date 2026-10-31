@@ -477,7 +477,7 @@ pub fn display_name(file: &DAppFile, name_map: &HashMap<String, String>) -> Stri
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/attachments/app_file_store.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/attachments/app_file_store.rs"]
 mod tests;
 
 pub fn import_attachment(

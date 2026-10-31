@@ -94,5 +94,5 @@ pub fn publish_library_updated(host: &std::sync::Arc<plain_rs::host::bridge::Hos
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/audio/reports.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/audio/reports.rs"]
 mod tests;

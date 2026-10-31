@@ -230,5 +230,5 @@ fn taken_at(raw: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/info.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/info.rs"]
 mod tests;

@@ -196,5 +196,5 @@ pub(crate) fn configure_schema<
         .data(runtime.temp_values)
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/graphql/schemas/public.rs"]
+#[path = "../../../../tests/plain-server/unit/graphql/schemas/public.rs"]
 mod tests;

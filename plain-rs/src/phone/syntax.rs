@@ -129,5 +129,5 @@ pub(super) fn digit(ch: char) -> Option<char> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/phone/syntax.rs"]
+#[path = "../../../tests/plain-rs/unit/phone/syntax.rs"]
 mod tests;

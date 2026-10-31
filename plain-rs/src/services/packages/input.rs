@@ -146,5 +146,5 @@ impl<'a> Bytes<'a> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/packages/input.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/packages/input.rs"]
 mod tests;

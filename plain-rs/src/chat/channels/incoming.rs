@@ -312,5 +312,5 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/channels/incoming.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/channels/incoming.rs"]
 mod tests;

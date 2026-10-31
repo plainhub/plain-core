@@ -18,5 +18,5 @@ pub async fn import(state: &CoreRuntime, source: &str) -> Result<String, String>
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/pomodoro_sound.rs"]
+#[path = "../../../tests/plain-rs/unit/services/pomodoro_sound.rs"]
 mod tests;

@@ -76,5 +76,5 @@ pub fn read_file(path: &str) -> DomainResult<AudioTrack> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/audio/metadata.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/audio/metadata.rs"]
 mod tests;

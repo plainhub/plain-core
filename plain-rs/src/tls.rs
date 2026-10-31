@@ -85,5 +85,5 @@ pub fn decode_pkcs12(bytes: &[u8], password: &str) -> Result<(Vec<u8>, Vec<u8>),
 mod pkcs12;
 
 #[cfg(test)]
-#[path = "../tests/unit/tls.rs"]
+#[path = "../../tests/plain-rs/unit/tls.rs"]
 mod tests;

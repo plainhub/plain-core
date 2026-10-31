@@ -40,5 +40,5 @@ impl Db {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/audit_event.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/audit_event.rs"]
 mod tests;

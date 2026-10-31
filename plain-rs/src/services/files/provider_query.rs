@@ -326,5 +326,5 @@ pub fn require_narrowing(db: &Db, provider: Provider, query: &str) -> anyhow::Re
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/provider_query.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/provider_query.rs"]
 mod tests;

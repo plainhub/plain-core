@@ -230,5 +230,5 @@ pub fn bucket_item_facts(db: &Db, data_type: DataType) -> Result<Vec<serde_json:
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/media_catalog.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/media_catalog.rs"]
 mod tests;

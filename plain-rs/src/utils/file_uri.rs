@@ -33,5 +33,5 @@ pub fn local_path(path: &str) -> Result<String, String> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/file_uri.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/file_uri.rs"]
 mod tests;

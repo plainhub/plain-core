@@ -483,5 +483,5 @@ pub(super) fn render_with(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/packages/xml.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/packages/xml.rs"]
 pub(crate) mod tests;

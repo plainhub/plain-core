@@ -169,5 +169,5 @@ pub(super) fn avcc(data: &[u8]) -> Option<StreamInfo> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/h264.rs"]
+#[path = "../../../tests/plain-rs/unit/media/h264.rs"]
 mod tests;

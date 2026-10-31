@@ -84,5 +84,5 @@ pub fn advance_with_shuffle(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/audio/selection.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/audio/selection.rs"]
 mod tests;

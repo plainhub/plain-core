@@ -112,5 +112,5 @@ pub fn clear(db: &Db) -> DomainResult<usize> {
     Ok(db.embedding_delete_all()?)
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/media/images/embeddings.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/images/embeddings.rs"]
 mod tests;

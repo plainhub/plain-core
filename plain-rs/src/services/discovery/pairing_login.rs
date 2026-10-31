@@ -426,5 +426,5 @@ async fn metadata(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/pairing_login.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/pairing_login.rs"]
 mod tests;

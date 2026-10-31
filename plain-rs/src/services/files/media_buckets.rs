@@ -97,5 +97,5 @@ fn aggregate_with_sort_key(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/media_buckets.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/media_buckets.rs"]
 mod tests;

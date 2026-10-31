@@ -141,5 +141,5 @@ pub async fn execute(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/sms/send.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/sms/send.rs"]
 mod tests;

@@ -69,5 +69,5 @@ pub(super) fn kernel_version() -> Result<String, String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/device/apple.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/device/apple.rs"]
 mod tests;

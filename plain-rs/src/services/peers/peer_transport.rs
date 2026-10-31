@@ -271,5 +271,5 @@ pub fn aware_config_for_peer(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/peer_transport.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/peer_transport.rs"]
 mod tests;

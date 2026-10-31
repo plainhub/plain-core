@@ -623,5 +623,5 @@ async fn file_key(path: &Path) -> Result<Option<String>> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/external_index.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/external_index.rs"]
 mod tests;

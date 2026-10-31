@@ -463,5 +463,5 @@ impl Drop for Queue {
     }
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/attachments/download_queue.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/attachments/download_queue.rs"]
 mod tests;

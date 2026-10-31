@@ -71,5 +71,5 @@ pub fn mms(candidates: &[MmsAddress]) -> &str {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/sms/addresses.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/sms/addresses.rs"]
 mod tests;

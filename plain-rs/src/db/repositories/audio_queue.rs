@@ -254,5 +254,5 @@ pub fn playlist_items_page(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/audio_queue.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/audio_queue.rs"]
 mod tests;

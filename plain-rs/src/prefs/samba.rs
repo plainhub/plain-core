@@ -85,5 +85,5 @@ pub fn configure(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/prefs/samba.rs"]
+#[path = "../../../tests/plain-rs/unit/prefs/samba.rs"]
 mod tests;

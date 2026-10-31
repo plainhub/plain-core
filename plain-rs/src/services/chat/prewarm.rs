@@ -131,5 +131,5 @@ async fn execute(state: &CoreRuntime, id: &str) -> Result<Option<Advertisement>>
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/chat/prewarm.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/chat/prewarm.rs"]
 mod tests;

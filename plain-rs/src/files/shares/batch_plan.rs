@@ -195,5 +195,5 @@ impl Walker {
     }
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/files/shares/batch_plan.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/shares/batch_plan.rs"]
 mod tests;

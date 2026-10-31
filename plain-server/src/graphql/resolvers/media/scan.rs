@@ -83,5 +83,5 @@ impl MediaScanMutation {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/media/scan.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/media/scan.rs"]
 mod tests;

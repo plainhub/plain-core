@@ -552,5 +552,5 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/http/upload.rs"]
+#[path = "../../../tests/plain-server/unit/http/upload.rs"]
 mod tests;

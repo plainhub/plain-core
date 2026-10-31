@@ -433,5 +433,5 @@ fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<plain_rs::prefs::Prefs> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/files/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/files/public.rs"]
 mod tests;

@@ -12,5 +12,5 @@ pub fn bytes_to_hex(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/hex.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/hex.rs"]
 mod tests;

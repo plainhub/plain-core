@@ -103,5 +103,5 @@ pub fn proxy_address(db: &plain_rs::db::Db, id: &str) -> anyhow::Result<Option<S
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/peer_address.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/peer_address.rs"]
 mod tests;

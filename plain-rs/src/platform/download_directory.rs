@@ -66,5 +66,5 @@ fn xdg(home: &std::path::Path, bytes: &[u8]) -> Option<PathBuf> {
 mod windows;
 
 #[cfg(all(test, unix))]
-#[path = "../../tests/unit/platform/download_directory.rs"]
+#[path = "../../../tests/plain-rs/unit/platform/download_directory.rs"]
 mod tests;

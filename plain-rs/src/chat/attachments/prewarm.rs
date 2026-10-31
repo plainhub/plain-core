@@ -165,5 +165,5 @@ pub async fn run<D: Driver>(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/attachments/prewarm.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/attachments/prewarm.rs"]
 mod tests;

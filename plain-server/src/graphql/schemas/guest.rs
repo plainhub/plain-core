@@ -110,5 +110,5 @@ pub(crate) fn schema(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/graphql/schemas/guest.rs"]
+#[path = "../../../../tests/plain-server/unit/graphql/schemas/guest.rs"]
 mod tests;

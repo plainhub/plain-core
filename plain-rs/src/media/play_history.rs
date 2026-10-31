@@ -128,5 +128,5 @@ fn invalid(message: &str) -> DomainError {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/play_history.rs"]
+#[path = "../../../tests/plain-rs/unit/media/play_history.rs"]
 mod tests;

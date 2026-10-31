@@ -151,5 +151,5 @@ impl NoteMutation {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/notes/note.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/notes/note.rs"]
 mod tests;

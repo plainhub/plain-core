@@ -104,5 +104,5 @@ pub fn wire(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/chat/channel_outgoing.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/chat/channel_outgoing.rs"]
 mod tests;

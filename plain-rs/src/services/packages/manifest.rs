@@ -344,5 +344,5 @@ pub(super) fn xml(reader: impl Read + Seek) -> Result<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/packages/manifest.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/packages/manifest.rs"]
 pub(crate) mod tests;

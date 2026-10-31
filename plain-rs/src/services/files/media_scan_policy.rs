@@ -65,5 +65,5 @@ impl Policy {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/media_scan_policy.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/media_scan_policy.rs"]
 mod tests;

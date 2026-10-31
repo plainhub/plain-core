@@ -345,5 +345,5 @@ pub async fn release_permission(state: &CoreRuntime, slot: &Mutex<Option<Multica
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/casting/dlna_sender_runtime.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/casting/dlna_sender_runtime.rs"]
 mod tests;

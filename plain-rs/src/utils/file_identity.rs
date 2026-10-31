@@ -100,5 +100,5 @@ fn sample(_path: &Path, _follow: bool) -> io::Result<Identity> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/file_identity.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/file_identity.rs"]
 mod tests;

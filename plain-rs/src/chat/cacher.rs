@@ -110,5 +110,5 @@ impl Default for ChatCacher {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/chat/cacher.rs"]
+#[path = "../../../tests/plain-rs/unit/chat/cacher.rs"]
 mod tests;

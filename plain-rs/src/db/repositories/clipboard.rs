@@ -220,5 +220,5 @@ fn in_clause(column: &str, values: &[String]) -> (String, Vec<Value>) {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/clipboard.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/clipboard.rs"]
 mod tests;

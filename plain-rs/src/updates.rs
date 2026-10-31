@@ -159,5 +159,5 @@ pub fn apply_release(
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/updates.rs"]
+#[path = "../../tests/plain-rs/unit/updates.rs"]
 mod tests;

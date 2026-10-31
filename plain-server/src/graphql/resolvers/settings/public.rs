@@ -96,7 +96,7 @@ fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<Prefs> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/settings/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/settings/public.rs"]
 mod tests;
 
 fn is_local(ctx: &Context<'_>) -> bool {

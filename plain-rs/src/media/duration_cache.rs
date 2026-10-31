@@ -190,5 +190,5 @@ fn key(media_type: &str, id: &str) -> Result<String> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/duration_cache.rs"]
+#[path = "../../../tests/plain-rs/unit/media/duration_cache.rs"]
 mod tests;

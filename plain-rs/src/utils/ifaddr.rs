@@ -74,5 +74,5 @@ fn interfaces() -> (Vec<Ifv4>, Vec<Ifv6>) {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/ifaddr.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/ifaddr.rs"]
 mod tests;

@@ -135,7 +135,7 @@ pub fn scan(
     Ok(progress)
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/media/images/indexing.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/images/indexing.rs"]
 mod tests;
 
 fn embed_batch(

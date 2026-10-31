@@ -164,5 +164,5 @@ pub fn start(state: CoreRuntime) {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/nearby_devices.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/nearby_devices.rs"]
 mod tests;

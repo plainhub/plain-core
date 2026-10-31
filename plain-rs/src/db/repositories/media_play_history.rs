@@ -137,5 +137,5 @@ impl Db {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/media_play_history.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/media_play_history.rs"]
 mod tests;

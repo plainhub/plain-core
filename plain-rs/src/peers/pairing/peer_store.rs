@@ -61,5 +61,5 @@ pub fn save(db: &Db, facts: Facts) -> Result<DPeer> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/peers/pairing/peer_store.rs"]
+#[path = "../../../../tests/plain-rs/unit/peers/pairing/peer_store.rs"]
 mod tests;

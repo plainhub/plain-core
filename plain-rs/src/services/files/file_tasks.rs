@@ -517,5 +517,5 @@ pub mod mutations;
 mod trash;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/file_tasks.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/file_tasks.rs"]
 mod tests;

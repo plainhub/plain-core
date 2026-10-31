@@ -165,5 +165,5 @@ impl Db {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/peer.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/peer.rs"]
 mod tests;

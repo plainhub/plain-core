@@ -174,5 +174,5 @@ pub(super) static PLANS: LazyLock<Plans> = LazyLock::new(|| {
 });
 
 #[cfg(test)]
-#[path = "../../tests/unit/phone/plan.rs"]
+#[path = "../../../tests/plain-rs/unit/phone/plan.rs"]
 mod tests;

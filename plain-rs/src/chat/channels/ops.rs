@@ -292,5 +292,5 @@ impl<T: PeerTransport + 'static> ChatService<T> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/channels/ops.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/channels/ops.rs"]
 mod tests;

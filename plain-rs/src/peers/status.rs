@@ -209,5 +209,5 @@ pub fn handshake(key: &[u8], keypair: &[u8], client_id: &str, challenge: &str) -
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/peers/status.rs"]
+#[path = "../../../tests/plain-rs/unit/peers/status.rs"]
 mod tests;

@@ -115,5 +115,5 @@ pub fn build(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/channels/outgoing.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/channels/outgoing.rs"]
 mod tests;

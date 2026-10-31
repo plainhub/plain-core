@@ -628,5 +628,5 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/auth/ws_login.rs"]
+#[path = "../../../../tests/plain-server/unit/http/auth/ws_login.rs"]
 mod tests;

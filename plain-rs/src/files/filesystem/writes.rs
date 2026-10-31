@@ -84,5 +84,5 @@ impl Operation {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/files/filesystem/writes.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/filesystem/writes.rs"]
 mod tests;

@@ -158,5 +158,5 @@ fn temp_root(directory: &Path) -> Result<PathBuf> {
     Ok(root)
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/attachments/attachment_imports.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/attachments/attachment_imports.rs"]
 mod tests;

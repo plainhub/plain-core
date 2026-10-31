@@ -104,5 +104,5 @@ fn directory_prefix(root: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/files/deletes.rs"]
+#[path = "../../../tests/plain-rs/unit/files/deletes.rs"]
 mod tests;

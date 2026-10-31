@@ -174,5 +174,5 @@ fn split(value: &OsStr) -> (&str, Option<&OsStr>) {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/cli/parser.rs"]
+#[path = "../../../tests/plain-cli/unit/cli/parser.rs"]
 mod tests;

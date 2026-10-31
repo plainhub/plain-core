@@ -59,5 +59,5 @@ impl Drop for MulticastSession<'_> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/host/multicast.rs"]
+#[path = "../../../tests/plain-rs/unit/host/multicast.rs"]
 mod tests;

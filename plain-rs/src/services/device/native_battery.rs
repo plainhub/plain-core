@@ -81,5 +81,5 @@ mod win_power {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/device/native_battery.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/device/native_battery.rs"]
 mod tests;

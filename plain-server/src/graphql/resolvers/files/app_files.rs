@@ -57,5 +57,5 @@ impl AppFilesMutation {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/files/app_files.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/files/app_files.rs"]
 mod tests;

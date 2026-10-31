@@ -18,5 +18,5 @@ pub fn unarchive(db: &Db, id: &str) -> anyhow::Result<usize> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/sms/state.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/sms/state.rs"]
 mod tests;

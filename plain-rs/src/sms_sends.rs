@@ -155,5 +155,5 @@ pub fn tick(store: &Db, now: u64) -> anyhow::Result<Vec<Outcome>> {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/prefs/sms_sends.rs"]
+#[path = "../../tests/plain-rs/unit/prefs/sms_sends.rs"]
 mod tests;

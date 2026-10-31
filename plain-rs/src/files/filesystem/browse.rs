@@ -238,5 +238,5 @@ fn millis(time: SystemTime) -> i64 {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/files/filesystem/browse.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/filesystem/browse.rs"]
 mod tests;

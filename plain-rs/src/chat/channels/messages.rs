@@ -205,5 +205,5 @@ pub fn find_member<'a>(members: &'a [ChannelMember], peer_id: &str) -> Option<&'
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/channels/messages.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/channels/messages.rs"]
 mod tests;

@@ -15,5 +15,5 @@ pub(super) fn interface_type(name: &str) -> InterfaceType {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/network/ios.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/network/ios.rs"]
 mod tests;

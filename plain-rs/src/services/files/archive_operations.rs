@@ -479,5 +479,5 @@ pub async fn unpack(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/archive_operations.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/archive_operations.rs"]
 mod tests;

@@ -36,5 +36,5 @@ pub fn notification_changed(events: &broadcast::Sender<WsEvent>, app_id: &str) {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/sms/provider_events.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/sms/provider_events.rs"]
 mod tests;

@@ -103,5 +103,5 @@ unsafe fn collect(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/network/unix.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/network/unix.rs"]
 mod tests;

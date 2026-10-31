@@ -178,5 +178,5 @@ fn build(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/feeds/date.rs"]
+#[path = "../../../tests/plain-rs/unit/feeds/date.rs"]
 mod tests;

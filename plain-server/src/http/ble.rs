@@ -91,5 +91,5 @@ pub(crate) async fn dispatch(state: ServerState, data: &[u8]) -> Result<Vec<u8>>
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/http/ble.rs"]
+#[path = "../../../tests/plain-server/unit/http/ble.rs"]
 mod tests;

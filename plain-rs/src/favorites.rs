@@ -227,5 +227,5 @@ pub fn find_by_full_path(db: &Db, full: &str) -> DomainResult<Option<FavoriteFol
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/favorites.rs"]
+#[path = "../../tests/plain-rs/unit/favorites.rs"]
 mod tests;

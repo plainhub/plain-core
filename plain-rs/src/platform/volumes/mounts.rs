@@ -43,5 +43,5 @@ pub(crate) fn parse(input: &str) -> Result<Vec<Mount>> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/volumes/mounts.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/volumes/mounts.rs"]
 mod tests;

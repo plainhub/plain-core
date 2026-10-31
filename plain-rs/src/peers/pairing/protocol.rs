@@ -102,5 +102,5 @@ impl PairingCancel {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/peers/pairing/protocol.rs"]
+#[path = "../../../../tests/plain-rs/unit/peers/pairing/protocol.rs"]
 mod tests;

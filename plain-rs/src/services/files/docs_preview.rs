@@ -200,5 +200,5 @@ pub async fn get_or_create_pdf_preview(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/docs_preview.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/docs_preview.rs"]
 mod tests;

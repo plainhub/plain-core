@@ -127,5 +127,5 @@ pub async fn clear_application(state: &plain_rs::runtime::Runtime) -> Result<(),
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/cache.rs"]
+#[path = "../../../tests/plain-rs/unit/services/cache.rs"]
 mod tests;

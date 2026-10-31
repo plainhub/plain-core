@@ -163,5 +163,5 @@ pub fn deleted_items(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/file_task_media.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/file_task_media.rs"]
 mod tests;

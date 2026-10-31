@@ -264,5 +264,5 @@ fn evaluate(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/media_provider.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/media_provider.rs"]
 mod tests;

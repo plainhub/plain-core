@@ -92,7 +92,7 @@ fn owns(interface: &Interface, address: IpAddr) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/platform/network.rs"]
+#[path = "../../../tests/plain-rs/unit/platform/network.rs"]
 mod tests;
 
 #[cfg(feature = "runtime")]

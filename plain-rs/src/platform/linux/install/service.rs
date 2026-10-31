@@ -99,5 +99,5 @@ fn restart_service(command: &mut std::process::Command) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/platform/linux/install/service.rs"]
+#[path = "../../../../../tests/plain-rs/unit/platform/linux/install/service.rs"]
 mod tests;

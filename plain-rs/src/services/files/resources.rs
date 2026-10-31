@@ -128,5 +128,5 @@ async fn native(operation: &str, path: &str, params: Value) -> Result<Value, Str
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/resources.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/resources.rs"]
 mod tests;

@@ -217,5 +217,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/database/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/database/public.rs"]
 mod tests;

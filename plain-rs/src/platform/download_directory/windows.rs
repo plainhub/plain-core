@@ -51,5 +51,5 @@ unsafe fn result_path(status: i32, path: *const u16) -> Option<PathBuf> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/download_directory/windows.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/download_directory/windows.rs"]
 mod tests;

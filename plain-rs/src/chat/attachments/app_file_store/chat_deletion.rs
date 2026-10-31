@@ -170,5 +170,5 @@ fn mutate(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/chat/attachments/app_file_store/chat_deletion.rs"]
+#[path = "../../../../../tests/plain-rs/unit/chat/attachments/app_file_store/chat_deletion.rs"]
 mod tests;

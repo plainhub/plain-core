@@ -14,11 +14,11 @@ fn events<'a>(ctx: &'a Context<'_>) -> Option<&'a broadcast::Sender<WsEvent>> {
     ctx.data_opt::<broadcast::Sender<WsEvent>>()
 }
 #[cfg(all(test, feature = "core"))]
-#[path = "../../../../tests/unit/graphql/resolvers/settings/state.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/settings/state.rs"]
 mod tests;
 
 #[cfg(all(test, feature = "core", feature = "http_transport"))]
-#[path = "../../../../tests/unit/graphql/resolvers/settings/http.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/settings/http.rs"]
 mod http_tests;
 
 pub(crate) fn preferences<'a>(ctx: &'a Context<'_>) -> Result<Preferences<'a>> {

@@ -35,5 +35,5 @@ pub async fn lookup_many(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/phone/batch.rs"]
+#[path = "../../../tests/plain-rs/unit/phone/batch.rs"]
 mod tests;

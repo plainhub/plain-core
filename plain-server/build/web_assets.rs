@@ -120,5 +120,5 @@ fn collect(root: &Path, directory: &Path, files: &mut Vec<(String, PathBuf)>) ->
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/build/web_assets.rs"]
+#[path = "../../tests/plain-server/unit/build/web_assets.rs"]
 mod tests;

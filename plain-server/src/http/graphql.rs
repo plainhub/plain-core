@@ -223,7 +223,7 @@ pub(crate) async fn call(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/http/graphql.rs"]
+#[path = "../../../tests/plain-server/unit/http/graphql.rs"]
 mod tests;
 
 pub(crate) async fn peer(
@@ -312,5 +312,5 @@ pub(crate) async fn guest(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/http/graphql/guest.rs"]
+#[path = "../../../tests/plain-server/unit/http/graphql/guest.rs"]
 mod guest_tests;

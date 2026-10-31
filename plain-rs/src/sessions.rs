@@ -128,5 +128,5 @@ pub fn token_key(token: &str) -> Result<[u8; 32]> {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/sessions.rs"]
+#[path = "../../tests/plain-rs/unit/sessions.rs"]
 mod tests;

@@ -208,5 +208,5 @@ impl ChatDownloadMutation {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/downloads/queue.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/downloads/queue.rs"]
 mod tests;

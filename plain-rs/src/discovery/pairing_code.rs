@@ -74,5 +74,5 @@ impl Payload {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/discovery/pairing_code.rs"]
+#[path = "../../../tests/plain-rs/unit/discovery/pairing_code.rs"]
 mod tests;

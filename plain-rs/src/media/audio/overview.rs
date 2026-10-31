@@ -179,5 +179,5 @@ impl<T: Clone> Accumulator<T> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/audio/overview.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/audio/overview.rs"]
 mod tests;

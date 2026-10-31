@@ -261,5 +261,5 @@ fn derive(shared: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/confirmation_channel.rs"]
+#[path = "../../../tests/plain-rs/unit/services/confirmation_channel.rs"]
 mod tests;

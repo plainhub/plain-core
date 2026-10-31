@@ -53,5 +53,5 @@ pub fn unique_sibling_excluding(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/unique_path.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/unique_path.rs"]
 mod tests;

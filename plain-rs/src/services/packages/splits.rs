@@ -193,5 +193,5 @@ pub(super) fn sidecar(name: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/packages/splits.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/packages/splits.rs"]
 mod tests;

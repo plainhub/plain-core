@@ -71,5 +71,5 @@ pub fn parse_device_desc(body: &[u8]) -> DiscoveredDevice {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/casting/sender/desc.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/casting/sender/desc.rs"]
 mod tests;

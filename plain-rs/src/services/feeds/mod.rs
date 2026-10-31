@@ -456,5 +456,5 @@ pub mod assets;
 pub use assets::FeedAssets;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/feeds/mod.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/feeds/mod.rs"]
 mod tests;

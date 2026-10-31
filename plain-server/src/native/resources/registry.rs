@@ -173,5 +173,5 @@ impl Drop for NativeResourceRegistry {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/native/resources/registry.rs"]
+#[path = "../../../../tests/plain-server/unit/native/resources/registry.rs"]
 mod tests;

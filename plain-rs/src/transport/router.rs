@@ -256,5 +256,5 @@ fn next(state: &mut State, route: &mut Route, id: &str, now: Instant) -> Result<
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/transport/router.rs"]
+#[path = "../../../tests/plain-rs/unit/transport/router.rs"]
 mod tests;

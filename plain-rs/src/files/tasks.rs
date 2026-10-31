@@ -368,5 +368,5 @@ async fn execute(
     }
 }
 #[cfg(test)]
-#[path = "../../tests/unit/files/tasks.rs"]
+#[path = "../../../tests/plain-rs/unit/files/tasks.rs"]
 mod tests;

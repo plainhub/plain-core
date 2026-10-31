@@ -94,5 +94,5 @@ fn gap_boundary<T: TimeZone>(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/epoch_millis.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/epoch_millis.rs"]
 mod tests;

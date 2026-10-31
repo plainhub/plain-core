@@ -34,5 +34,5 @@ pub fn start(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/pairing_timeout.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/pairing_timeout.rs"]
 mod tests;

@@ -65,5 +65,5 @@ pub async fn import(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/imports.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/imports.rs"]
 mod tests;

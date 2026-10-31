@@ -57,5 +57,5 @@ impl NativeManagement {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/native/management/peers.rs"]
+#[path = "../../../../tests/plain-server/unit/native/management/peers.rs"]
 mod tests;

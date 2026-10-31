@@ -314,5 +314,5 @@ fn platform_params(db: &Db, kind: DataType, query: &str, params: Value) -> Resul
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/catalog.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/catalog.rs"]
 mod tests;

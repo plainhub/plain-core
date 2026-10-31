@@ -169,5 +169,5 @@ impl<R: Read + Seek> Track<'_, R> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/midi.rs"]
+#[path = "../../../tests/plain-rs/unit/media/midi.rs"]
 mod tests;

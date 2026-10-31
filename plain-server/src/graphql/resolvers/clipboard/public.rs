@@ -122,5 +122,5 @@ fn enabled(ctx: &Context<'_>) -> async_graphql::Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/clipboard/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/clipboard/public.rs"]
 mod tests;

@@ -157,5 +157,5 @@ impl Scans {
     }
 }
 #[cfg(test)]
-#[path = "../../tests/unit/discovery/nearby_scan.rs"]
+#[path = "../../../tests/plain-rs/unit/discovery/nearby_scan.rs"]
 mod tests;

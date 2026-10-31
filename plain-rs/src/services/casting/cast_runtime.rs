@@ -112,5 +112,5 @@ pub async fn apply(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/casting/cast_runtime.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/casting/cast_runtime.rs"]
 mod tests;

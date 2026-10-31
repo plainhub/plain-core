@@ -63,5 +63,5 @@ impl Summary {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/files/shares/summary.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/shares/summary.rs"]
 mod tests;

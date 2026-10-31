@@ -221,5 +221,5 @@ fn package_statuses(ids: &[String], facts: &Value) -> Vec<PackageStatus> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/packages/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/packages/public.rs"]
 mod tests;

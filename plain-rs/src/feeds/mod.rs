@@ -160,5 +160,5 @@ pub fn export_opml(db: &Db) -> DomainResult<String> {
 pub mod date;
 
 #[cfg(test)]
-#[path = "../../tests/unit/feeds/mod.rs"]
+#[path = "../../../tests/plain-rs/unit/feeds/mod.rs"]
 mod tests;

@@ -206,5 +206,5 @@ async fn open_ticket(path: &str) -> std::io::Result<tokio::fs::File> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/peer_download.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/peer_download.rs"]
 mod tests;

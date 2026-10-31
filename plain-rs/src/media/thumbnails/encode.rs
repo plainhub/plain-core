@@ -30,5 +30,5 @@ pub fn encode_jpeg(bm: Bitmap, quality: u8) -> Result<Vec<u8>> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/thumbnails/encode.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/thumbnails/encode.rs"]
 mod tests;

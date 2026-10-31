@@ -18,7 +18,7 @@ pub struct EcdhSession {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/crypto/ecdh.rs"]
+#[path = "../../../tests/plain-rs/unit/crypto/ecdh.rs"]
 mod tests;
 
 impl EcdhSession {

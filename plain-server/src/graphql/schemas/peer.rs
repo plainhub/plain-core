@@ -161,5 +161,5 @@ pub(crate) async fn execute(
     }
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/graphql/schemas/peer_host.rs"]
+#[path = "../../../../tests/plain-server/unit/graphql/schemas/peer_host.rs"]
 mod tests;

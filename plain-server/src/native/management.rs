@@ -290,7 +290,7 @@ impl NativeManagement {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/native/management.rs"]
+#[path = "../../../tests/plain-server/unit/native/management.rs"]
 mod tests;
 
 mod casting;

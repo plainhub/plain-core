@@ -112,5 +112,5 @@ pub fn report(state: &CoreRuntime, payload: &str) -> Result<(), String> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/clipboard.rs"]
+#[path = "../../../tests/plain-rs/unit/services/clipboard.rs"]
 mod tests;

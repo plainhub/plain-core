@@ -478,5 +478,5 @@ pub(super) fn authorize_native(path: &Path, write: bool) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/platform.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/platform.rs"]
 mod tests;

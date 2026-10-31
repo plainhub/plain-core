@@ -47,5 +47,5 @@ pub async fn native(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/images/thumbnail_decoder.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/images/thumbnail_decoder.rs"]
 mod tests;

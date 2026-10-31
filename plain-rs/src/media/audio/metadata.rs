@@ -28,5 +28,5 @@ pub fn album_id(album: &str, album_artist: &str, artist: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/audio/metadata.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/audio/metadata.rs"]
 mod tests;

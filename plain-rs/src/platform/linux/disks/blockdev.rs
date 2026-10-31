@@ -277,5 +277,5 @@ pub fn resolve_underlying_single_base_disk(dev_name: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/platform/linux/disks/blockdev.rs"]
+#[path = "../../../../../tests/plain-rs/unit/platform/linux/disks/blockdev.rs"]
 mod tests;

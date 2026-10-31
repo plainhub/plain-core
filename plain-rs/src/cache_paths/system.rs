@@ -78,5 +78,5 @@ fn scoped(base: &Path, directory: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/cache_paths/system.rs"]
+#[path = "../../../tests/plain-rs/unit/cache_paths/system.rs"]
 mod tests;

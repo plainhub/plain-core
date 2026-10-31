@@ -200,5 +200,5 @@ pub fn ensure_samba_vfs_modules_debian_ubuntu() {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/platform/linux/install/packages.rs"]
+#[path = "../../../../../tests/plain-rs/unit/platform/linux/install/packages.rs"]
 mod tests;

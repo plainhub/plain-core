@@ -24,5 +24,5 @@ pub(crate) async fn authorize(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/auth/local_client.rs"]
+#[path = "../../../../tests/plain-server/unit/http/auth/local_client.rs"]
 mod tests;

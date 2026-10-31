@@ -441,5 +441,5 @@ fn apply_command(s: &mut DlnaRendererState, cmd: DlnaCommand) {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/casting/receiver/receiver_engine.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/casting/receiver/receiver_engine.rs"]
 mod tests;

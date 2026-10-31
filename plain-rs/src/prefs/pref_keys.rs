@@ -113,5 +113,5 @@ pub fn writable(key: &str, local: bool) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/prefs/pref_keys.rs"]
+#[path = "../../../tests/plain-rs/unit/prefs/pref_keys.rs"]
 mod tests;

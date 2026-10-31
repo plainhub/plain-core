@@ -91,5 +91,5 @@ async fn connected(
     let _ = tokio::time::timeout(Duration::from_secs(1), socket.close()).await;
 }
 #[cfg(all(test, feature = "http_transport"))]
-#[path = "../../../tests/unit/http/websocket/status.rs"]
+#[path = "../../../../tests/plain-server/unit/http/websocket/status.rs"]
 mod tests;

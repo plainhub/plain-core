@@ -286,5 +286,5 @@ pub mod types;
 pub mod access;
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/device.rs"]
+#[path = "../../../tests/plain-rs/unit/services/device.rs"]
 mod tests;

@@ -14,5 +14,5 @@ pub(super) fn style(id: u32) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/packages/framework.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/packages/framework.rs"]
 mod tests;

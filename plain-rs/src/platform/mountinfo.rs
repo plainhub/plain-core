@@ -109,5 +109,5 @@ fn path_clean(p: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/platform/mountinfo.rs"]
+#[path = "../../../tests/plain-rs/unit/platform/mountinfo.rs"]
 mod tests;

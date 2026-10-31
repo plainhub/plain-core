@@ -134,5 +134,5 @@ pub fn open(scope: &Scope, key: &[u8], payload: &str) -> Result<Resource> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/files/resource_link.rs"]
+#[path = "../../../tests/plain-rs/unit/files/resource_link.rs"]
 mod tests;

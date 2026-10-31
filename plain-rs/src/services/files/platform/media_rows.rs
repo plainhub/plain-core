@@ -39,5 +39,5 @@ pub(super) fn identities(facts: serde_json::Value) -> anyhow::Result<Vec<Identit
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/files/platform/media_rows.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/files/platform/media_rows.rs"]
 mod tests;

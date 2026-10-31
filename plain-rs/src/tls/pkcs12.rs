@@ -316,5 +316,5 @@ pub(super) fn decode(bytes: &[u8], password: &str) -> Result<(Vec<Vec<u8>>, Vec<
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/tls/pkcs12.rs"]
+#[path = "../../../tests/plain-rs/unit/tls/pkcs12.rs"]
 mod tests;

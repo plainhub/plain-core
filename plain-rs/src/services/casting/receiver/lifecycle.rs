@@ -97,5 +97,5 @@ pub async fn host_connected(state: CoreRuntime, generation: u64) {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/casting/receiver/lifecycle.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/casting/receiver/lifecycle.rs"]
 mod tests;

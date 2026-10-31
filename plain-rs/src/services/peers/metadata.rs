@@ -82,5 +82,5 @@ pub async fn refresh(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/metadata.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/metadata.rs"]
 mod tests;

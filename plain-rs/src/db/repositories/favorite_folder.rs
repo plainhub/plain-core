@@ -79,5 +79,5 @@ pub fn set_folder_alias(
     })
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/favorite_folder.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/favorite_folder.rs"]
 mod tests;

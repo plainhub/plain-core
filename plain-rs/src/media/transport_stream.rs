@@ -166,5 +166,5 @@ pub(super) fn video(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/transport_stream.rs"]
+#[path = "../../../tests/plain-rs/unit/media/transport_stream.rs"]
 mod tests;

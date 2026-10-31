@@ -509,7 +509,7 @@ fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<plain_rs::prefs::Prefs> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/files/operations.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/files/operations.rs"]
 mod tests;
 
 async fn upload_base(ctx: &Context<'_>) -> async_graphql::Result<std::path::PathBuf> {

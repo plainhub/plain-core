@@ -21,5 +21,5 @@ fn validate(id: &str, created: &str, updated: &str) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/chat_store.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/chat_store.rs"]
 mod tests;

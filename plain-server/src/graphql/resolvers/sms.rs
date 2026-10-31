@@ -423,5 +423,5 @@ fn conversation(item: &Value) -> SmsConversation {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/graphql/resolvers/sms.rs"]
+#[path = "../../../../tests/plain-server/unit/graphql/resolvers/sms.rs"]
 mod tests;

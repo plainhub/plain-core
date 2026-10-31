@@ -519,7 +519,7 @@ pub fn init_from_config(cfg: &plain_rs::utils::config::Config) {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/thumbnails/mod.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/thumbnails/mod.rs"]
 mod tests;
 
 pub async fn render(

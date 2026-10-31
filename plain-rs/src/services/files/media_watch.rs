@@ -175,5 +175,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/media_watch.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/media_watch.rs"]
 mod tests;

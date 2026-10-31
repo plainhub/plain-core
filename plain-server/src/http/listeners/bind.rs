@@ -58,5 +58,5 @@ pub fn bind_listener_fallback(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/listeners/bind.rs"]
+#[path = "../../../../tests/plain-server/unit/http/listeners/bind.rs"]
 mod tests;

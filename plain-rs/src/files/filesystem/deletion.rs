@@ -162,5 +162,5 @@ impl Plan {
     }
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/files/filesystem/deletion.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/filesystem/deletion.rs"]
 mod tests;

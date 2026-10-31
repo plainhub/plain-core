@@ -60,5 +60,5 @@ pub fn require_narrowing(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/phone/query.rs"]
+#[path = "../../../tests/plain-rs/unit/phone/query.rs"]
 mod tests;

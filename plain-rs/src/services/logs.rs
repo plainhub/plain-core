@@ -208,5 +208,5 @@ fn read(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/logs.rs"]
+#[path = "../../../tests/plain-rs/unit/services/logs.rs"]
 mod tests;

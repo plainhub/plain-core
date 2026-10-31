@@ -264,7 +264,7 @@ pub fn snapshot(prefs: &Prefs) -> anyhow::Result<SecurityState> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/prefs/system.rs"]
+#[path = "../../../../tests/plain-rs/unit/prefs/system.rs"]
 mod tests;
 
 pub const PERMISSIONS: &[&str] = &[

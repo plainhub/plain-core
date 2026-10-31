@@ -76,5 +76,5 @@ pub fn decode_ble(payload: &[u8]) -> Option<BleParts> {
     })
 }
 #[cfg(test)]
-#[path = "../../tests/unit/discovery/advertisement.rs"]
+#[path = "../../../tests/plain-rs/unit/discovery/advertisement.rs"]
 mod tests;

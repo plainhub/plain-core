@@ -240,7 +240,7 @@ impl Delivery {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/chat/delivery.rs"]
+#[path = "../../../tests/plain-rs/unit/chat/delivery.rs"]
 mod tests;
 
 mod receiver;

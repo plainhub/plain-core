@@ -93,5 +93,5 @@ pub fn is_remote_filesystem(fs_type: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/mounts.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/mounts.rs"]
 mod tests;

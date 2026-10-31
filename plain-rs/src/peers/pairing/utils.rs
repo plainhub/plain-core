@@ -54,5 +54,5 @@ pub fn local_ipv4_strs() -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/peers/pairing/utils.rs"]
+#[path = "../../../../tests/plain-rs/unit/peers/pairing/utils.rs"]
 mod tests;

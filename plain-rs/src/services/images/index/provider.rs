@@ -16,14 +16,14 @@ pub struct ImageProvider {
     host: Arc<Host>,
     runtime: tokio::runtime::Handle,
     ended: bool,
-    encoder: Option<Arc<dyn plain_rs::inference::embedding::ImageEncoder>>,
+    encoder: Option<Arc<dyn plain_rs::ai_image_search::embedding::ImageEncoder>>,
 }
 impl ImageProvider {
     pub fn new(
         host: Arc<Host>,
         resources: Arc<plain_rs::host::resources::NativeResources>,
         cache: std::path::PathBuf,
-        encoder: Option<Arc<dyn plain_rs::inference::embedding::ImageEncoder>>,
+        encoder: Option<Arc<dyn plain_rs::ai_image_search::embedding::ImageEncoder>>,
         db: Arc<plain_rs::db::Db>,
         system_catalog: bool,
     ) -> Self {
@@ -59,7 +59,7 @@ impl ImageProvider {
 
     fn encode(
         &self,
-        encoder: Arc<dyn plain_rs::inference::embedding::ImageEncoder>,
+        encoder: Arc<dyn plain_rs::ai_image_search::embedding::ImageEncoder>,
         item: &Image,
     ) -> DomainResult<Option<Vec<f32>>> {
         self.encode_with(encoder, item, |source, output| {
@@ -75,7 +75,7 @@ impl ImageProvider {
 
     fn encode_with(
         &self,
-        encoder: Arc<dyn plain_rs::inference::embedding::ImageEncoder>,
+        encoder: Arc<dyn plain_rs::ai_image_search::embedding::ImageEncoder>,
         item: &Image,
         decode: impl FnOnce(&std::path::Path, &std::path::Path) -> Result<Value, String>,
     ) -> DomainResult<Option<Vec<f32>>> {
@@ -213,5 +213,5 @@ impl Drop for ImageProvider {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/images/index/provider.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/images/index/provider.rs"]
 mod tests;

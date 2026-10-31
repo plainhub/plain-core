@@ -211,5 +211,5 @@ fn has_command(command: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/service.rs"]
+#[path = "../../tests/plain-cli/unit/service.rs"]
 mod tests;

@@ -207,5 +207,5 @@ pub fn start(state: CoreRuntime) {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/aware.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/aware.rs"]
 mod tests;

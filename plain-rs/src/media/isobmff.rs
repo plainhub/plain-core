@@ -336,7 +336,7 @@ pub fn tracks(path: &Path) -> Option<Tracks> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/isobmff.rs"]
+#[path = "../../../tests/plain-rs/unit/media/isobmff.rs"]
 mod tests;
 
 mod location;

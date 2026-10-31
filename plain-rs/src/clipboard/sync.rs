@@ -77,5 +77,5 @@ pub fn applied(store: &crate::kv::Db, peer_id: &str, item: &Item) -> Result<()> 
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/clipboard/sync.rs"]
+#[path = "../../../tests/plain-rs/unit/clipboard/sync.rs"]
 mod tests;

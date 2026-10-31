@@ -147,5 +147,5 @@ impl Db {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/channel.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/channel.rs"]
 mod tests;

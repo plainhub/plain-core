@@ -123,5 +123,5 @@ pub fn ensure_mdns_hostname(prefs: &Prefs) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/prefs/identity.rs"]
+#[path = "../../../tests/plain-rs/unit/prefs/identity.rs"]
 mod tests;

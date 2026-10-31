@@ -143,5 +143,5 @@ pub async fn subscription(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/casting/sender/soap.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/casting/sender/soap.rs"]
 mod tests;

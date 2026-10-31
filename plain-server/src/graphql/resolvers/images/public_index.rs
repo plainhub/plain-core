@@ -83,5 +83,5 @@ impl ImageIndexMutation {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/images/public_index.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/images/public_index.rs"]
 mod tests;

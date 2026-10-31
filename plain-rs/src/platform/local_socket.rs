@@ -210,5 +210,5 @@ pub fn peer_uid(fd: BorrowedFd<'_>) -> io::Result<u32> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/platform/local_socket.rs"]
+#[path = "../../../tests/plain-rs/unit/platform/local_socket.rs"]
 mod tests;

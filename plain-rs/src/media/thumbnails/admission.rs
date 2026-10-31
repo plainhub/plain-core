@@ -120,5 +120,5 @@ pub fn global() -> &'static Admission {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/thumbnails/admission.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/thumbnails/admission.rs"]
 mod tests;

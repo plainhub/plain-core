@@ -156,5 +156,5 @@ fn ensure_open(scope: &NativeRequestScope) -> Result<(), String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/native/uploads/writers.rs"]
+#[path = "../../../../tests/plain-server/unit/native/uploads/writers.rs"]
 mod tests;

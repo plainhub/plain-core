@@ -12,5 +12,5 @@ pub fn parse(encoded: &str) -> Result<(String, String)> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/messages/target.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/messages/target.rs"]
 mod tests;

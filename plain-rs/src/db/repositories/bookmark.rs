@@ -254,5 +254,5 @@ pub fn update_fields(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/bookmark.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/bookmark.rs"]
 mod tests;

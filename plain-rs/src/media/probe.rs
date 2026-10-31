@@ -194,5 +194,5 @@ fn tag_strings(tagged_file: &lofty::file::TaggedFile) -> TagStrings {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/probe.rs"]
+#[path = "../../../tests/plain-rs/unit/media/probe.rs"]
 mod tests;

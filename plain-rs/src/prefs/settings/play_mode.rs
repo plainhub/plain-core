@@ -38,5 +38,5 @@ impl MediaPlayMode {
 }
 
 #[cfg(all(test, feature = "library"))]
-#[path = "../../../tests/unit/prefs/settings/play_mode.rs"]
+#[path = "../../../../tests/plain-rs/unit/prefs/settings/play_mode.rs"]
 mod tests;

@@ -73,5 +73,5 @@ fn csv(messages: &[Value]) -> Result<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/sms/archives.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/sms/archives.rs"]
 mod tests;

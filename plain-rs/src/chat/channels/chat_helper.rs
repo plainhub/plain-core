@@ -333,5 +333,5 @@ pub fn build_no_leader_status_data() -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/channels/chat_helper.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/channels/chat_helper.rs"]
 mod tests;

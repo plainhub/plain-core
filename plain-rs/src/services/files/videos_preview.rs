@@ -140,5 +140,5 @@ pub async fn encode_3gp(input: &std::path::Path, output: &std::path::Path) -> Re
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/videos_preview.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/videos_preview.rs"]
 mod tests;

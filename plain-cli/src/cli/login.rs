@@ -70,5 +70,5 @@ fn display_requests(output: &mut impl Write, page: &NativeWebLoginRequests) -> i
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/cli/login.rs"]
+#[path = "../../../tests/plain-cli/unit/cli/login.rs"]
 mod tests;

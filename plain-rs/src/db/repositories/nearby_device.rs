@@ -75,5 +75,5 @@ impl Db {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/nearby_device.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/nearby_device.rs"]
 mod tests;

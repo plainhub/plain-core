@@ -33,7 +33,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/http/proxy/local/mod.rs"]
+#[path = "../../../../../tests/plain-server/unit/http/proxy/local/mod.rs"]
 mod tests;
 #[cfg(feature = "core")]
 pub mod utils;

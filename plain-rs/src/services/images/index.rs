@@ -45,7 +45,7 @@ pub struct ImageIndex {
     cache: std::path::PathBuf,
     events: tokio::sync::broadcast::Sender<plain_rs::events::WsEvent>,
     state: Arc<Mutex<State>>,
-    encoder: Mutex<Option<Arc<dyn plain_rs::inference::embedding::ImageEncoder>>>,
+    encoder: Mutex<Option<Arc<dyn plain_rs::ai_image_search::embedding::ImageEncoder>>>,
     idle: tokio::sync::Notify,
 }
 impl ImageIndex {
@@ -113,7 +113,7 @@ impl ImageIndex {
     }
     pub fn set_encoder(
         &self,
-        encoder: Option<Arc<dyn plain_rs::inference::embedding::ImageEncoder>>,
+        encoder: Option<Arc<dyn plain_rs::ai_image_search::embedding::ImageEncoder>>,
     ) {
         *self.encoder.lock().unwrap() = encoder;
     }
@@ -378,5 +378,5 @@ fn publish_status(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/images/index.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/images/index.rs"]
 mod tests;

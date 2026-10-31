@@ -243,5 +243,5 @@ impl Prefs {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/prefs/mod.rs"]
+#[path = "../../../tests/plain-rs/unit/prefs/mod.rs"]
 mod tests;

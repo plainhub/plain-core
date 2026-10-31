@@ -140,5 +140,5 @@ fn millis(value: &str, column: usize) -> rusqlite::Result<i64> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/indexed.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/indexed.rs"]
 mod tests;

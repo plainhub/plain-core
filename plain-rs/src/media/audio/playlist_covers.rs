@@ -51,5 +51,5 @@ pub fn playlist_covers(db: &Db, ids: &[String]) -> DomainResult<Vec<PlaylistCove
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/audio/playlist_covers.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/audio/playlist_covers.rs"]
 mod tests;

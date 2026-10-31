@@ -270,5 +270,5 @@ pub async fn cache_file(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/shared_client.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/shared_client.rs"]
 mod tests;

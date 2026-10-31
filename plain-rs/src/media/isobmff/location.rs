@@ -101,5 +101,5 @@ fn metadata(reader: &mut (impl Read + Seek), start: u64, end: u64) -> Option<Str
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/isobmff/location.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/isobmff/location.rs"]
 mod tests;

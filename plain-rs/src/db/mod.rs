@@ -220,14 +220,14 @@ impl Db {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/db/mod.rs"]
+#[path = "../../../tests/plain-rs/unit/db/mod.rs"]
 mod tests;
 
 #[cfg(all(test, feature = "chat"))]
-#[path = "../../tests/unit/db/mod.rs"]
+#[path = "../../../tests/plain-rs/unit/db/mod.rs"]
 mod chat_tests;
 #[cfg(all(test, feature = "library"))]
-#[path = "../../tests/unit/db/mod.rs"]
+#[path = "../../../tests/plain-rs/unit/db/mod.rs"]
 mod library_tests;
 
 #[cfg(feature = "library")]
@@ -239,11 +239,11 @@ pub use models::{
 pub use repositories::media_file;
 
 #[cfg(all(test, feature = "chat", feature = "library"))]
-#[path = "../../tests/unit/db/design.rs"]
+#[path = "../../../tests/plain-rs/unit/db/design.rs"]
 mod design_tests;
 
 #[cfg(test)]
-#[path = "../../tests/unit/db/backup.rs"]
+#[path = "../../../tests/plain-rs/unit/db/backup.rs"]
 mod backup_tests;
 
 pub(crate) fn read_count(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<usize> {

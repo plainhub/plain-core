@@ -72,5 +72,5 @@ pub fn metadata(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/casting/sender/didl.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/casting/sender/didl.rs"]
 mod tests;

@@ -5,13 +5,19 @@ Shared Rust code for PlainApp desktop, mobile and command-line hosts.
 ```text
 plain-core/
 ├── Cargo.toml                Builds and tests the three packages together
-├── plain-rs/                 Domain services, storage, protocols, media and inference
+├── plain-rs/                 Domain services, storage, protocols, media and AI image search
 ├── plain-server/             GraphQL, HTTP and native transport adapters
 ├── plain-cli/                The plainapp command-line executable
+├── tests/                    Tests grouped by package; unit paths mirror src/
 ├── assets/                   Shared Web bundle and canonical file icons
 ├── schema/                   GraphQL and SQLite definitions
 └── scripts/                  Development tools
 ```
+
+Tests live under `tests/plain-rs/`, `tests/plain-server/` and `tests/plain-cli/`.
+Each contains its own unit tests and any shared fixtures or support code.
+Unit tests remain compiled inside their owning package; HTTP integration tests
+are registered explicitly in that package's `Cargo.toml`.
 
 Each `plain-*` directory is a Rust package managed by the root `Cargo.toml`.
 Desktop shell and mobile JNI/C ABI code live in plain-desktop and plain-app, respectively.
@@ -33,7 +39,7 @@ plain-rs/src/
 │       ├── references.rs   Local paths, app:// and fid: references
 │       └── archive_downloads.rs  ZIP selection, extraction and download creation
 ├── media/thumbnails/       Shared image/video/cover thumbnail engine
-├── inference/              Model packages, preprocessing and ONNX sessions
+├── ai_image_search/        AI image search models, preprocessing and ONNX sessions
 ├── platform/               Native system information, network and filesystem primitives
 ├── host/                   Host commands, resource streams and connection primitives
 ├── protocols/              Shared wire formats and cryptographic framing
@@ -87,7 +93,7 @@ plain-server/
 │   │   └── executor.rs      Shared schema execution
 │   ├── host/events.rs        Host event dispatch into the core services
 │   └── native/              Native API entry points
-└── tests/unit/              Rust unit tests mirroring src/ paths
+
 ```
 
 For example, `/fs` is registered in `http/router.rs`, handled by

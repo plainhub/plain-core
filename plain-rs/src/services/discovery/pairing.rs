@@ -269,5 +269,5 @@ pub fn receive_cancel(prefs: &Prefs, sessions: &Sessions, cancel: PairingCancel)
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/pairing.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/pairing.rs"]
 mod tests;

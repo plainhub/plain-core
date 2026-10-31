@@ -60,5 +60,5 @@ pub async fn import(state: &CoreRuntime, source: &str, name: &str) -> Result<Str
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/note_images.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/note_images.rs"]
 mod tests;

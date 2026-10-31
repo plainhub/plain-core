@@ -106,5 +106,5 @@ pub async fn deliver_observed(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/chat/chat_delivery.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/chat/chat_delivery.rs"]
 mod tests;

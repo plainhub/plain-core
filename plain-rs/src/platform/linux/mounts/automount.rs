@@ -458,5 +458,5 @@ async fn watch_child(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/platform/linux/mounts/automount.rs"]
+#[path = "../../../../../tests/plain-rs/unit/platform/linux/mounts/automount.rs"]
 mod tests;

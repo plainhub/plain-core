@@ -102,5 +102,5 @@ pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut graphql::Stream) -> R
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/management_wire.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/management_wire.rs"]
 mod tests;

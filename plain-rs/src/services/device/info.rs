@@ -303,5 +303,5 @@ fn cpu_model(text: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/device/info.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/device/info.rs"]
 mod tests;

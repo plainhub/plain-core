@@ -440,5 +440,5 @@ impl Db {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/simple.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/simple.rs"]
 mod simple_tests;

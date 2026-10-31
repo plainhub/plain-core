@@ -473,5 +473,5 @@ pub fn patch(prefs: &Prefs, patch: SettingsPatch) -> anyhow::Result<bool> {
     Ok(changed)
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/prefs/user.rs"]
+#[path = "../../../../tests/plain-rs/unit/prefs/user.rs"]
 mod tests;

@@ -144,5 +144,5 @@ impl TryFrom<plain_rs::services::peers::shared_client::BrowseResult> for SharedB
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/shares/client_models.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/shares/client_models.rs"]
 mod tests;

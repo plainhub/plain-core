@@ -282,5 +282,5 @@ mod android {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/ffi/ble.rs"]
+#[path = "../../../tests/plain-rs/unit/ffi/ble.rs"]
 mod tests;

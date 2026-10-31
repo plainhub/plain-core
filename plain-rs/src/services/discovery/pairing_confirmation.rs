@@ -340,7 +340,7 @@ pub fn publish(state: &CoreRuntime, request: PairingRequest, code: String) -> Re
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/pairing_confirmation.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/pairing_confirmation.rs"]
 pub(crate) mod tests;
 
 #[cfg(any(test, feature = "test-seams"))]

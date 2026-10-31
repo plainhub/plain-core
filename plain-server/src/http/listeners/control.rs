@@ -41,5 +41,5 @@ pub(crate) fn restart(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/listeners/control.rs"]
+#[path = "../../../../tests/plain-server/unit/http/listeners/control.rs"]
 mod tests;

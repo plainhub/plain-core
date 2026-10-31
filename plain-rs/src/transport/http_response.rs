@@ -21,5 +21,5 @@ impl Context {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/transport/http_response.rs"]
+#[path = "../../../tests/plain-rs/unit/transport/http_response.rs"]
 mod tests;

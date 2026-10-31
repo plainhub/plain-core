@@ -54,5 +54,5 @@ pub async fn probe(ip: &str, port: u16) -> Result<bool> {
     .await
 }
 #[cfg(test)]
-#[path = "../../tests/unit/discovery/nearby_http.rs"]
+#[path = "../../../tests/plain-rs/unit/discovery/nearby_http.rs"]
 mod tests;

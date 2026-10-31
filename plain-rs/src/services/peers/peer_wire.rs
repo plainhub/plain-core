@@ -67,5 +67,5 @@ pub fn signing_keypair(prefs: &Prefs) -> Result<Vec<u8>> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/peer_wire.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/peer_wire.rs"]
 mod tests;

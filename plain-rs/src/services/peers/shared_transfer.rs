@@ -324,5 +324,5 @@ pub async fn operation(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/shared_transfer.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/shared_transfer.rs"]
 mod tests;

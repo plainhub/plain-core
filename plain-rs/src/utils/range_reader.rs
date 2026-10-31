@@ -51,5 +51,5 @@ impl<R: Seek> Seek for RangeReader<R> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/range_reader.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/range_reader.rs"]
 mod tests;

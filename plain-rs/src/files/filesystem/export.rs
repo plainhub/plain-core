@@ -48,5 +48,5 @@ pub fn copy_file(source: &Path, destination: &Path) -> io::Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/files/filesystem/export.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/filesystem/export.rs"]
 mod tests;

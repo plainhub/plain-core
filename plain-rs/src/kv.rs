@@ -309,5 +309,5 @@ impl Batch {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/kv.rs"]
+#[path = "../../tests/plain-rs/unit/kv.rs"]
 mod tests;

@@ -65,5 +65,5 @@ impl NativeEventStream {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/native/events.rs"]
+#[path = "../../../tests/plain-server/unit/native/events.rs"]
 mod tests;

@@ -19,5 +19,5 @@ pub fn prune_nested(mut roots: Vec<PathBuf>, keep_nested: impl Fn(&Path) -> bool
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/files/filesystem/roots.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/filesystem/roots.rs"]
 mod tests;

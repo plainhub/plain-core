@@ -108,5 +108,5 @@ fn cancelled_error(root: &Path) -> anyhow::Error {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/files/walk.rs"]
+#[path = "../../../tests/plain-rs/unit/files/walk.rs"]
 mod tests;

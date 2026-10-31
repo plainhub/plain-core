@@ -54,7 +54,7 @@ pub struct Runtime {
     state: Mutex<ModelState>,
     #[cfg(any(test, feature = "test-seams"))]
     snapshot_reads: std::sync::atomic::AtomicUsize,
-    engine: Mutex<Option<Arc<plain_rs::inference::embedding::Engine>>>,
+    engine: Mutex<Option<Arc<plain_rs::ai_image_search::embedding::Engine>>>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     operations: tokio::sync::Mutex<()>,
     cancelled: AtomicBool,
@@ -113,7 +113,7 @@ impl Runtime {
                 },
                 model_size: plain_rs::types::Long(
                     self.engine.lock().unwrap().as_ref().map_or_else(
-                        || plain_rs::inference::models::default_model::manifest().size(),
+                        || plain_rs::ai_image_search::models::default_model::manifest().size(),
                         |e| e.manifest.size(),
                     ) as i64,
                 ),
@@ -252,15 +252,16 @@ impl Runtime {
             Selection::Active => self.selected_model()?,
         };
         let active = self.directory.join(model);
-        let default_is_current =
-            plain_rs::inference::models::manifest::Manifest::read(&active.join("manifest.json"))
-                .ok()
-                .is_some_and(|manifest| {
-                    manifest.fingerprint().ok()
-                        == plain_rs::inference::models::default_model::manifest()
-                            .fingerprint()
-                            .ok()
-                });
+        let default_is_current = plain_rs::ai_image_search::models::manifest::Manifest::read(
+            &active.join("manifest.json"),
+        )
+        .ok()
+        .is_some_and(|manifest| {
+            manifest.fingerprint().ok()
+                == plain_rs::ai_image_search::models::default_model::manifest()
+                    .fingerprint()
+                    .ok()
+        });
         let source = match selection {
             Selection::Incoming => self.directory.join("incoming"),
             Selection::Default if !default_is_current => {
@@ -272,8 +273,9 @@ impl Runtime {
             _ => active.clone(),
         };
         self.set_status(ImageSearchStatusType::Loading, String::new());
-        let manifest =
-            plain_rs::inference::models::manifest::Manifest::read(&source.join("manifest.json"))?;
+        let manifest = plain_rs::ai_image_search::models::manifest::Manifest::read(
+            &source.join("manifest.json"),
+        )?;
         let fingerprint = manifest.fingerprint()?;
         self.pause_index().await?;
         if let Some(engine) = self.engine.lock().unwrap().as_ref() {
@@ -281,7 +283,7 @@ impl Runtime {
         }
         let directory = source.clone();
         let engine = tokio::task::spawn_blocking(move || {
-            plain_rs::inference::embedding::Engine::open(directory, manifest)
+            plain_rs::ai_image_search::embedding::Engine::open(directory, manifest)
         })
         .await
         .map_err(|e| e.to_string())??;
@@ -350,10 +352,10 @@ impl Runtime {
             .read_timeout(Duration::from_secs(30))
             .build()
             .map_err(|e| e.to_string())?;
-        let manifest = plain_rs::inference::models::default_model::manifest();
+        let manifest = plain_rs::ai_image_search::models::default_model::manifest();
         let total = manifest.size();
         let mut downloaded = 0u64;
-        for (asset, url) in plain_rs::inference::models::default_model::downloads(&manifest) {
+        for (asset, url) in plain_rs::ai_image_search::models::default_model::downloads(&manifest) {
             if self.cancelled.load(Ordering::Acquire) {
                 return Err("Model download cancelled".into());
             }
@@ -403,7 +405,7 @@ impl Runtime {
         }
         tokio::fs::write(
             directory.join("LICENSE"),
-            include_str!("../../inference/APACHE-2.0.txt"),
+            include_str!("../../ai_image_search/APACHE-2.0.txt"),
         )
         .await
         .map_err(|e| e.to_string())?;
@@ -571,5 +573,5 @@ impl Runtime {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/images/models.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/images/models.rs"]
 mod tests;

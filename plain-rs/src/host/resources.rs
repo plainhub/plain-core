@@ -211,5 +211,5 @@ impl NativeResourceReader {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/host/resources.rs"]
+#[path = "../../../tests/plain-rs/unit/host/resources.rs"]
 mod tests;

@@ -414,5 +414,5 @@ impl Host {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/host/bridge.rs"]
+#[path = "../../../tests/plain-rs/unit/host/bridge.rs"]
 mod tests;

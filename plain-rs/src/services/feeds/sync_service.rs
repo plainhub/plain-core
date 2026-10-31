@@ -508,5 +508,5 @@ where
 pub mod schedule;
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/feeds/sync_service.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/feeds/sync_service.rs"]
 mod tests;

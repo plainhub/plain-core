@@ -560,5 +560,5 @@ fn controls(bytes: &[u8]) -> Vec<Value> {
     }
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/http/websocket/runtime.rs"]
+#[path = "../../../../tests/plain-server/unit/http/websocket/runtime.rs"]
 mod tests;

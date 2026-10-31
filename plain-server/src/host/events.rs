@@ -560,7 +560,7 @@ impl Drop for HostEvents {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/host/events.rs"]
+#[path = "../../../tests/plain-server/unit/host/events.rs"]
 mod tests;
 
 #[cfg(test)]
@@ -599,5 +599,5 @@ impl TestHost {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/host/events_runtime.rs"]
+#[path = "../../../tests/plain-server/unit/host/events_runtime.rs"]
 mod runtime_tests;

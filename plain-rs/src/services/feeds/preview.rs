@@ -13,5 +13,5 @@ pub async fn title(db: &Db, url: &str) -> DomainResult<String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/feeds/preview.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/feeds/preview.rs"]
 mod tests;

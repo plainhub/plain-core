@@ -115,5 +115,5 @@ async fn blocking<T: Send + 'static>(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/shares/host.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/shares/host.rs"]
 mod tests;

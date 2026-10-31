@@ -241,5 +241,5 @@ fn require_absent(path: &str) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/files/file_tasks/mutations.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/files/file_tasks/mutations.rs"]
 mod tests;

@@ -307,5 +307,5 @@ impl Devices {
     }
 }
 #[cfg(test)]
-#[path = "../../tests/unit/discovery/nearby_devices.rs"]
+#[path = "../../../tests/plain-rs/unit/discovery/nearby_devices.rs"]
 mod tests;

@@ -23,5 +23,5 @@ impl TempValues {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/temp_values.rs"]
+#[path = "../../../tests/plain-rs/unit/services/temp_values.rs"]
 mod tests;

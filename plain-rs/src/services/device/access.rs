@@ -40,5 +40,5 @@ pub fn is_enabled(prefs: &Prefs, permissions: &[&str]) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/device/access.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/device/access.rs"]
 mod tests;

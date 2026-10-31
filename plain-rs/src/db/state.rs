@@ -29,5 +29,5 @@ impl State {
 }
 
 #[cfg(all(test, feature = "chat"))]
-#[path = "../../tests/unit/db/state.rs"]
+#[path = "../../../tests/plain-rs/unit/db/state.rs"]
 mod tests;

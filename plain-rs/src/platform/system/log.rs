@@ -279,5 +279,5 @@ fn from_facade_level(level: log::Level) -> Level {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/system/log.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/system/log.rs"]
 mod tests;

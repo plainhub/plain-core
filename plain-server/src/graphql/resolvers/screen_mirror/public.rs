@@ -267,5 +267,5 @@ fn quality(value: &Value) -> ScreenMirrorQuality {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/screen_mirror/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/screen_mirror/public.rs"]
 mod tests;

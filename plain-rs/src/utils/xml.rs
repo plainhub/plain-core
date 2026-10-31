@@ -289,5 +289,5 @@ fn numeric(name: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/xml.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/xml.rs"]
 mod tests;

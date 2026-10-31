@@ -86,5 +86,5 @@ async fn platform_read(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/audio/overview.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/audio/overview.rs"]
 mod tests;

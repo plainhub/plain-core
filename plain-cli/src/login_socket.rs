@@ -289,5 +289,5 @@ pub(crate) async fn wait(service: &mut Option<Service>) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/login_socket.rs"]
+#[path = "../../tests/plain-cli/unit/login_socket.rs"]
 mod tests;

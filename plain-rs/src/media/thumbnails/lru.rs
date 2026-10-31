@@ -115,5 +115,5 @@ pub fn debug_clear() {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/thumbnails/lru.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/thumbnails/lru.rs"]
 mod tests;

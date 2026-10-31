@@ -160,5 +160,5 @@ fn input(registry: &Registry, expected: &str, value: &Value, position: Pos) -> S
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/graphql/enum_literals.rs"]
+#[path = "../../../tests/plain-server/unit/graphql/enum_literals.rs"]
 mod tests;

@@ -280,5 +280,5 @@ pub async fn execute(prefs: &Prefs, host: &Host, request: Request) -> anyhow::Re
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/contacts/write.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/contacts/write.rs"]
 mod tests;

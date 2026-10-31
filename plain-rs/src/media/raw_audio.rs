@@ -132,5 +132,5 @@ fn adts_milliseconds(reader: &mut (impl Read + Seek), mut offset: u64, end: u64)
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/raw_audio.rs"]
+#[path = "../../../tests/plain-rs/unit/media/raw_audio.rs"]
 mod tests;

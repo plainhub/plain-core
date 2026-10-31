@@ -156,5 +156,5 @@ impl MediaPlayHistoryMutation {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/media/play_history.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/media/play_history.rs"]
 mod tests;

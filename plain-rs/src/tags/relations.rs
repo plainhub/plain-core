@@ -30,5 +30,5 @@ pub fn update_relations(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/tags/relations.rs"]
+#[path = "../../../tests/plain-rs/unit/tags/relations.rs"]
 mod tests;

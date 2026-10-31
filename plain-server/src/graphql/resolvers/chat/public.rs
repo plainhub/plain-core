@@ -427,7 +427,7 @@ fn db<'a>(ctx: &'a Context<'_>) -> async_graphql::Result<&'a Arc<Db>> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/chat/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/chat/public.rs"]
 mod tests;
 
 fn actor(ctx: &Context<'_>) -> async_graphql::Result<String> {

@@ -56,5 +56,5 @@ impl Updates {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/images/editor.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/images/editor.rs"]
 mod tests;

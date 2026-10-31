@@ -228,5 +228,5 @@ async fn execute(state: &CoreRuntime, run: &Run) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/shared_batch.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/shared_batch.rs"]
 mod tests;

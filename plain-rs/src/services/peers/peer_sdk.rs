@@ -268,5 +268,5 @@ impl hyper::body::Body for RequestBody {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/peer_sdk.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/peer_sdk.rs"]
 mod tests;

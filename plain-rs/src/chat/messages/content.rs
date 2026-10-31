@@ -12,7 +12,7 @@ pub fn make_file_id(path: &str, token: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/messages/content.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/messages/content.rs"]
 mod tests;
 
 use serde_json::Value;

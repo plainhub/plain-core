@@ -267,5 +267,5 @@ fn destination(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/remote_cache.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/remote_cache.rs"]
 mod tests;

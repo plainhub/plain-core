@@ -80,5 +80,5 @@ impl DiscoveredDevice {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/casting/sender/types.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/casting/sender/types.rs"]
 mod tests;

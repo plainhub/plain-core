@@ -123,5 +123,5 @@ impl FileStore {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/files/app_files.rs"]
+#[path = "../../../tests/plain-rs/unit/files/app_files.rs"]
 mod tests;

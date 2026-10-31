@@ -177,7 +177,7 @@ pub(crate) fn notification(value: &Value) -> Notification {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/notifications/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/notifications/public.rs"]
 mod tests;
 
 #[derive(serde::Deserialize)]

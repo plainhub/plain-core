@@ -39,10 +39,10 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "linux-platform" = ["linux-system", "prefs", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util"]
 
 "image-metadata" = ["library", "dep:image"]
-"runtime" = ["ble", "graphql","services", "phone", "filesystem", "trash", "html", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "inference", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros"]
+"runtime" = ["ble", "graphql","services", "phone", "filesystem", "trash", "html", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros"]
 "runtime-media" = ["runtime", "media", "image-metadata", "dep:notify", "tokio/process"]
 
-"inference" = ["dep:tokenizers", "dep:image", "dep:serde_json", "dep:cc"]
+"ai-image-search" = ["dep:tokenizers", "dep:image", "dep:serde_json", "dep:cc"]
 "media" = ["crypto", "library", "image-metadata", "dep:tempfile", "dep:fast_image_resize", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util"]
 
 [dependencies]
@@ -129,7 +129,7 @@ sysinfo = { version = "0.32", default-features = false, features = ["system"], o
 
 [[example]]
 name = "image_search"
-required-features = ["inference"]
+required-features = ["ai-image-search"]
 
 [[example]]
 name = "thumb_bench"

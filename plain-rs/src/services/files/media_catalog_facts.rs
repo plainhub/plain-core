@@ -49,5 +49,5 @@ pub fn row_facts(row: &MediaFileRow) -> Result<Value, String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/media_catalog_facts.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/media_catalog_facts.rs"]
 mod tests;

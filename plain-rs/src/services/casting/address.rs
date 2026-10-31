@@ -39,5 +39,5 @@ pub async fn http_address(state: &CoreRuntime) -> Result<(String, String), Strin
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/casting/address.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/casting/address.rs"]
 mod tests;

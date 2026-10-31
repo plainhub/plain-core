@@ -184,5 +184,5 @@ fn authenticate_for(
     })
 }
 #[cfg(test)]
-#[path = "../../tests/unit/transport/auth.rs"]
+#[path = "../../../tests/plain-rs/unit/transport/auth.rs"]
 mod tests;

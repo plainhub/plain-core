@@ -110,5 +110,5 @@ pub fn apply(db: &Db, actor: &str, id: &str, action: Action) -> Result<DChannel>
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/channels/state.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/channels/state.rs"]
 mod tests;

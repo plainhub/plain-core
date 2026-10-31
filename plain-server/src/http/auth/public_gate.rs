@@ -78,5 +78,5 @@ pub(crate) async fn require_granted(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/http/auth/public_gate.rs"]
+#[path = "../../../../tests/plain-server/unit/http/auth/public_gate.rs"]
 mod tests;

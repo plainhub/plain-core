@@ -91,5 +91,5 @@ impl From<SharedEntryInput> for client::File {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/shares/client_inputs.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/shares/client_inputs.rs"]
 mod tests;

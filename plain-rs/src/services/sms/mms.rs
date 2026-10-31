@@ -427,5 +427,5 @@ fn matching(pending: &Pending, candidates: Vec<Candidate>) -> Vec<i64> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/sms/mms.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/sms/mms.rs"]
 mod tests;

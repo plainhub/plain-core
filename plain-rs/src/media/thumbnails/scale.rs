@@ -332,5 +332,5 @@ fn fir_resize(bm: Bitmap, tw: u32, th: u32) -> Bitmap {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/thumbnails/scale.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/thumbnails/scale.rs"]
 mod tests;

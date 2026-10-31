@@ -302,5 +302,5 @@ fn call(fact: &Value) -> Call {
 }
 
 #[cfg(test)]
-#[path = "../../../../../tests/unit/graphql/resolvers/mobile/phone_calls/resolvers.rs"]
+#[path = "../../../../../../tests/plain-server/unit/graphql/resolvers/mobile/phone_calls/resolvers.rs"]
 mod tests;

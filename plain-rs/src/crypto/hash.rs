@@ -15,5 +15,5 @@ pub fn sha512_hex(input: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/crypto/hash.rs"]
+#[path = "../../../tests/plain-rs/unit/crypto/hash.rs"]
 mod tests;

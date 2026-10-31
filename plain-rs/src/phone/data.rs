@@ -220,5 +220,5 @@ impl<'a> Reader<'a> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/phone/data.rs"]
+#[path = "../../../tests/plain-rs/unit/phone/data.rs"]
 mod tests;

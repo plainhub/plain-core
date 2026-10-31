@@ -380,5 +380,5 @@ async fn host_call(ctx: &Context<'_>, method: &str, params: Value) -> async_grap
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/device/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/device/public.rs"]
 mod tests;

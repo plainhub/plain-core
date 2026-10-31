@@ -476,5 +476,5 @@ fn count_entries(p: &Path) -> i64 {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/files/trash.rs"]
+#[path = "../../../tests/plain-rs/unit/files/trash.rs"]
 mod tests;

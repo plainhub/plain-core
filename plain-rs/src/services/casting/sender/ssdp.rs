@@ -68,5 +68,5 @@ pub fn parse_udn_from_usn(usn: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/casting/sender/ssdp.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/casting/sender/ssdp.rs"]
 mod tests;

@@ -70,5 +70,5 @@ impl CachePaths {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/cache_paths.rs"]
+#[path = "../../tests/plain-rs/unit/cache_paths.rs"]
 mod tests;

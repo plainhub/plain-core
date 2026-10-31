@@ -121,5 +121,5 @@ impl Schedule {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/link_preview/schedule.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/link_preview/schedule.rs"]
 mod tests;

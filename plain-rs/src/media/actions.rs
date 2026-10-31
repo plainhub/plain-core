@@ -193,5 +193,5 @@ fn invalid(message: &str) -> DomainError {
     DomainError::Other(message.into())
 }
 #[cfg(test)]
-#[path = "../../tests/unit/media/actions.rs"]
+#[path = "../../../tests/plain-rs/unit/media/actions.rs"]
 mod tests;

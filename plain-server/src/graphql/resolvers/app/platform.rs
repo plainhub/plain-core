@@ -276,5 +276,5 @@ impl PlatformMutation {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/app/platform.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/app/platform.rs"]
 mod tests;

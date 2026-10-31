@@ -33,5 +33,5 @@ fn read_type(root: &Path, name: &str) -> InterfaceType {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/platform/network/linux.rs"]
+#[path = "../../../../tests/plain-rs/unit/platform/network/linux.rs"]
 mod tests;

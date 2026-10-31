@@ -159,5 +159,5 @@ impl ImageEditorProjectMutation {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/images/image_editor_project.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/images/image_editor_project.rs"]
 mod tests;

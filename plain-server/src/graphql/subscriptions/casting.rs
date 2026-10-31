@@ -17,5 +17,5 @@ impl CastingSubscriptions {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/graphql/subscriptions/casting.rs"]
+#[path = "../../../../tests/plain-server/unit/graphql/subscriptions/casting.rs"]
 mod tests;

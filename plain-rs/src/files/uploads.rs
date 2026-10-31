@@ -320,5 +320,5 @@ fn commit_file(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/files/uploads.rs"]
+#[path = "../../../tests/plain-rs/unit/files/uploads.rs"]
 mod tests;

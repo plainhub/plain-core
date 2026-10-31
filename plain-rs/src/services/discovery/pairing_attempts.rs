@@ -533,5 +533,5 @@ fn resolve(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/pairing_attempts.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/pairing_attempts.rs"]
 mod tests;

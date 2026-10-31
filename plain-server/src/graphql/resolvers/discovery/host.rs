@@ -40,5 +40,5 @@ fn nearby_snapshot(state: &ServerState) -> async_graphql::Result<Vec<NearbyDevic
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/discovery/host.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/discovery/host.rs"]
 mod tests;

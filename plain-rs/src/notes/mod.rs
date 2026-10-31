@@ -101,7 +101,7 @@ pub fn export(db: &Db, query: &str) -> DomainResult<String> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/notes/mod.rs"]
+#[path = "../../../tests/plain-rs/unit/notes/mod.rs"]
 mod tests;
 
 pub fn markdown_title(content: &str) -> String {

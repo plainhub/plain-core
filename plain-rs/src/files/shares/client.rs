@@ -130,5 +130,5 @@ pub struct Info {
     pub entries: Vec<File>,
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/files/shares/client.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/shares/client.rs"]
 mod tests;

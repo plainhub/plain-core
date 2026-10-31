@@ -231,5 +231,5 @@ impl BookmarkMutation {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/bookmarks/bookmark.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/bookmarks/bookmark.rs"]
 mod tests;

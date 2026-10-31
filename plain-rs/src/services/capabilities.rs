@@ -22,5 +22,5 @@ pub async fn require(host: &Host, capability: &str) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/capabilities.rs"]
+#[path = "../../../tests/plain-rs/unit/services/capabilities.rs"]
 mod tests;

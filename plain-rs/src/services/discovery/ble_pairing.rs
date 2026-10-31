@@ -252,5 +252,5 @@ async fn run(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/ble_pairing.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/ble_pairing.rs"]
 mod tests;

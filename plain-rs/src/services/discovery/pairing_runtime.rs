@@ -687,5 +687,5 @@ pub async fn send_incoming(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/pairing_runtime.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/pairing_runtime.rs"]
 mod tests;

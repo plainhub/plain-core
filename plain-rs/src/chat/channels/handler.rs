@@ -69,5 +69,5 @@ pub fn handle<T: PeerTransport + 'static>(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/channels/handler.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/channels/handler.rs"]
 mod tests;

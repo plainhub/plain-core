@@ -14,5 +14,5 @@ pub mod server;
 pub mod host;
 
 #[cfg(all(test, feature = "core"))]
-#[path = "../tests/support/mod.rs"]
+#[path = "../../tests/plain-server/support/mod.rs"]
 pub(crate) mod test_support;

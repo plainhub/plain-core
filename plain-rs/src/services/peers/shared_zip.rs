@@ -85,5 +85,5 @@ pub fn pack(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/shared_zip.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/shared_zip.rs"]
 mod tests;

@@ -47,5 +47,5 @@ fn ensure_running(stop: &watch::Receiver<bool>) -> Result<(), String> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/native/uploads.rs"]
+#[path = "../../../tests/plain-server/unit/native/uploads.rs"]
 mod tests;

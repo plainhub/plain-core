@@ -29,5 +29,5 @@ fn syllable(character: char) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/sort_name.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/sort_name.rs"]
 mod tests;

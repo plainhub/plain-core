@@ -179,5 +179,5 @@ pub(crate) fn move_file_path(
     Ok(())
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/tag.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/tag.rs"]
 mod tests;

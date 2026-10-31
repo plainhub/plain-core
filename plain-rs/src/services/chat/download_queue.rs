@@ -107,5 +107,5 @@ pub fn start(state: CoreRuntime) {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/chat/download_queue.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/chat/download_queue.rs"]
 mod tests;

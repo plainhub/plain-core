@@ -25,5 +25,5 @@ pub fn file_icon(extension: &str) -> &'static str {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/native/assets.rs"]
+#[path = "../../../tests/plain-server/unit/native/assets.rs"]
 mod tests;

@@ -21,5 +21,5 @@ pub fn facts(granted: &[String], params: Value) -> Result<Value, String> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/host/permission_facts.rs"]
+#[path = "../../../tests/plain-rs/unit/host/permission_facts.rs"]
 mod tests;

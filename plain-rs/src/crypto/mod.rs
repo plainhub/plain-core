@@ -5,7 +5,7 @@ mod symmetric;
 pub use hash::sha512_hex;
 
 #[cfg(test)]
-#[path = "../../tests/unit/crypto/vectors.rs"]
+#[path = "../../../tests/plain-rs/unit/crypto/vectors.rs"]
 mod cross_platform_vectors;
 
 pub use crate::utils::base64::base64_decode;
@@ -36,5 +36,5 @@ pub fn gen_token() -> String {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/crypto/mod.rs"]
+#[path = "../../../tests/plain-rs/unit/crypto/mod.rs"]
 mod tests;

@@ -46,5 +46,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/prefs/settings/enum_value.rs"]
+#[path = "../../../../tests/plain-rs/unit/prefs/settings/enum_value.rs"]
 mod tests;

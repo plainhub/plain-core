@@ -422,5 +422,5 @@ pub async fn files(state: &CoreRuntime, id: &str) -> Result<Download, Error> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/archive_downloads.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/archive_downloads.rs"]
 mod tests;

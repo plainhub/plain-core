@@ -280,5 +280,5 @@ pub async fn server_action(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/tls_identity.rs"]
+#[path = "../../../tests/plain-rs/unit/services/tls_identity.rs"]
 mod tests;

@@ -143,5 +143,5 @@ pub(crate) fn event_sink(
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/storage.rs"]
+#[path = "../../tests/plain-cli/unit/storage.rs"]
 mod tests;

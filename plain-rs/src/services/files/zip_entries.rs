@@ -72,5 +72,5 @@ pub fn extract(cache: &Path, reference: &str) -> Result<PathBuf, String> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/zip_entries.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/zip_entries.rs"]
 mod tests;

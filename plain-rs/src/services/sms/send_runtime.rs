@@ -123,5 +123,5 @@ impl Runtime {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/sms/send_runtime.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/sms/send_runtime.rs"]
 mod tests;

@@ -202,5 +202,5 @@ impl PeerSubscription {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/subscriptions.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/subscriptions.rs"]
 mod tests;

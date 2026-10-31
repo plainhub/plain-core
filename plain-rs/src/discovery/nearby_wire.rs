@@ -74,5 +74,5 @@ pub fn discover_reply(payload: &str, advertised_id: &str) -> Result<DiscoverRepl
     Ok(reply)
 }
 #[cfg(test)]
-#[path = "../../tests/unit/discovery/nearby_wire.rs"]
+#[path = "../../../tests/plain-rs/unit/discovery/nearby_wire.rs"]
 mod tests;

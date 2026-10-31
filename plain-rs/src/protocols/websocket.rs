@@ -106,5 +106,5 @@ pub fn decode_with_token(frame: &[u8], token_b64: &str) -> Option<(String, Vec<u
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/protocols/websocket.rs"]
+#[path = "../../../tests/plain-rs/unit/protocols/websocket.rs"]
 mod tests;

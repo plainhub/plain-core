@@ -106,5 +106,5 @@ pub fn contacts(value: Value) -> anyhow::Result<Vec<Value>> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/contacts/projection.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/contacts/projection.rs"]
 mod tests;

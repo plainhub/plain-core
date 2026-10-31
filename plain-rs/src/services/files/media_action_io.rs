@@ -257,5 +257,5 @@ fn files(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/media_action_io.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/media_action_io.rs"]
 mod tests;

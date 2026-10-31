@@ -1,8 +1,8 @@
-#[cfg(feature = "inference")]
+#[cfg(feature = "ai-image-search")]
 use std::{env, path::PathBuf, process::Command};
-#[cfg(feature = "inference")]
+#[cfg(feature = "ai-image-search")]
 fn main() {
-    println!("cargo:rerun-if-changed=native/inference");
+    println!("cargo:rerun-if-changed=native/ai_image_search");
     for name in [
         "PLAIN_ONNX_RUNTIME_DIR",
         "ANDROID_NDK_HOME",
@@ -46,7 +46,7 @@ fn main() {
     let mut prepare = Command::new(python);
     prepare
         .args([
-            "native/inference/prepare_onnxruntime.py",
+            "native/ai_image_search/prepare_onnxruntime.py",
             "--target",
             &target,
             "--output",
@@ -77,8 +77,8 @@ fn main() {
     }
     let mut native = cc::Build::new();
     native
-        .file("native/inference/onnx_session.c")
-        .include("native/inference/onnxruntime");
+        .file("native/ai_image_search/onnx_session.c")
+        .include("native/ai_image_search/onnxruntime");
     if target.contains("apple-ios") {
         native.define("PLAIN_ONNX_STATIC", None);
         println!("cargo:rustc-link-search=native={}", runtime.display());
@@ -107,7 +107,7 @@ fn main() {
     native.compile("plain_onnx_session");
 }
 
-#[cfg(not(feature = "inference"))]
+#[cfg(not(feature = "ai-image-search"))]
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 }

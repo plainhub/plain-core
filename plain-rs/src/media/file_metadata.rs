@@ -180,5 +180,5 @@ fn image_reader<R: Read + Seek>(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/file_metadata.rs"]
+#[path = "../../../tests/plain-rs/unit/media/file_metadata.rs"]
 mod tests;

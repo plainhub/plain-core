@@ -211,5 +211,5 @@ fn build_archive(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/archives.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/archives.rs"]
 mod tests;

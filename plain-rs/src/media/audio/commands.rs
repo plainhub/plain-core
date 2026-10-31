@@ -227,5 +227,5 @@ fn dispatch(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/audio/commands.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/audio/commands.rs"]
 mod tests;

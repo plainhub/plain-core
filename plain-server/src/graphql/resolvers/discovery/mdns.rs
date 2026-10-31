@@ -147,7 +147,7 @@ impl MdnsMutation {
 }
 
 #[cfg(all(test, feature = "http_transport"))]
-#[path = "../../../../tests/unit/graphql/resolvers/discovery/mdns.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/discovery/mdns.rs"]
 mod tests;
 
 fn discovery_owner(ctx: &Context<'_>) -> async_graphql::Result<String> {

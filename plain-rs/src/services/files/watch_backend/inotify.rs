@@ -213,5 +213,5 @@ fn decode(bytes: &[u8]) -> io::Result<Vec<Event>> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/files/watch_backend/inotify.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/files/watch_backend/inotify.rs"]
 mod tests;

@@ -376,5 +376,5 @@ pub async fn refresh_from_app(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/peers/notifications.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/peers/notifications.rs"]
 mod tests;

@@ -222,5 +222,5 @@ fn save_trash(db: &Db, ids: &[String]) -> Result<usize> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/sms/mutations.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/sms/mutations.rs"]
 mod tests;

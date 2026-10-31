@@ -95,5 +95,5 @@ fn sort_packages(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/packages/query.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/packages/query.rs"]
 mod tests;

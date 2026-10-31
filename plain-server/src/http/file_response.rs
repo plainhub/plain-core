@@ -201,7 +201,7 @@ pub(crate) fn thumbnail(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/http/file_response.rs"]
+#[path = "../../../tests/plain-server/unit/http/file_response.rs"]
 mod tests;
 
 pub(crate) async fn resource(

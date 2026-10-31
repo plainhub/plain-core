@@ -52,5 +52,5 @@ pub(crate) fn test_app1_orientation(v: u8) -> Vec<u8> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/thumbnails/exif.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/thumbnails/exif.rs"]
 mod tests;

@@ -35,5 +35,5 @@ pub(super) fn dimensions(codec: u8, data: &[u8]) -> Option<(u32, u32)> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/flv/video.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/flv/video.rs"]
 mod tests;

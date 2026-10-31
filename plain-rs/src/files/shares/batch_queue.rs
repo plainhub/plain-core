@@ -512,5 +512,5 @@ impl Queue {
     }
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/files/shares/batch_queue.rs"]
+#[path = "../../../../tests/plain-rs/unit/files/shares/batch_queue.rs"]
 mod tests;

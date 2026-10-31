@@ -44,5 +44,5 @@ fn set_password(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/cli/passwd.rs"]
+#[path = "../../../tests/plain-cli/unit/cli/passwd.rs"]
 mod tests;

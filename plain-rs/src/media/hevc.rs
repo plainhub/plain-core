@@ -117,5 +117,5 @@ pub(super) fn hvcc(data: &[u8]) -> Option<StreamInfo> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/media/hevc.rs"]
+#[path = "../../../tests/plain-rs/unit/media/hevc.rs"]
 mod tests;

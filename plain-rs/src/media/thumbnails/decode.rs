@@ -133,5 +133,5 @@ pub fn image_from_bytes(data: &[u8]) -> Result<Bitmap> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/thumbnails/decode.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/thumbnails/decode.rs"]
 mod tests;

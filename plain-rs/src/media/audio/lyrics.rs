@@ -399,5 +399,5 @@ fn remove_unsync(data: &[u8]) -> Vec<u8> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/audio/lyrics.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/audio/lyrics.rs"]
 mod tests;

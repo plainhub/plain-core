@@ -174,5 +174,5 @@ impl Runtime {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/ble_advertising.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/ble_advertising.rs"]
 mod tests;

@@ -133,5 +133,5 @@ impl SqliteFile {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/devtools.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/devtools.rs"]
 mod tests;

@@ -79,5 +79,5 @@ pub async fn folder(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/chat/share_send.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/chat/share_send.rs"]
 mod tests;

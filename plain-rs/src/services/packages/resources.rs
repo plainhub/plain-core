@@ -345,5 +345,5 @@ impl<'a> Resources<'a> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/packages/resources.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/packages/resources.rs"]
 pub(crate) mod tests;

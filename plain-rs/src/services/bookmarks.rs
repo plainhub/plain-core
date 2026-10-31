@@ -45,5 +45,5 @@ fn parse_page_metadata(html: &str, base: &str) -> PageMetadata {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/services/bookmarks.rs"]
+#[path = "../../../tests/plain-rs/unit/services/bookmarks.rs"]
 mod tests;

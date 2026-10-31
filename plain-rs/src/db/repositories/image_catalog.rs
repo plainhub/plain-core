@@ -132,5 +132,5 @@ pub fn verify(db: &Db, expected: &str) -> DomainResult<()> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/db/repositories/image_catalog.rs"]
+#[path = "../../../../tests/plain-rs/unit/db/repositories/image_catalog.rs"]
 mod tests;

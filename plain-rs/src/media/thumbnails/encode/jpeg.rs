@@ -307,5 +307,5 @@ pub(super) fn encode(rgb: &[u8], width: u16, height: u16, quality: u8) -> Result
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/media/thumbnails/encode/jpeg.rs"]
+#[path = "../../../../../tests/plain-rs/unit/media/thumbnails/encode/jpeg.rs"]
 mod tests;

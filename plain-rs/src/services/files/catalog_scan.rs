@@ -647,5 +647,5 @@ impl NativeMediaCatalog {
 }
 
 #[cfg(all(test, feature = "runtime-media"))]
-#[path = "../../../tests/unit/services/files/catalog_scan.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/catalog_scan.rs"]
 mod tests;

@@ -666,7 +666,7 @@ pub fn remote_discovery_owner(client_id: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/discovery/mdns_runtime.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/discovery/mdns_runtime.rs"]
 mod tests;
 
 #[cfg(any(test, feature = "test-seams"))]

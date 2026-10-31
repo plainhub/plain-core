@@ -288,5 +288,5 @@ fn highlight(class: &str) -> Option<&str> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/utils/html_to_markdown/mod.rs"]
+#[path = "../../../../tests/plain-rs/unit/utils/html_to_markdown/mod.rs"]
 mod tests;

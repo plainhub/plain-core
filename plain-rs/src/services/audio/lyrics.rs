@@ -107,5 +107,5 @@ pub async fn read(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/audio/lyrics.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/audio/lyrics.rs"]
 mod tests;

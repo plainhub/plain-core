@@ -101,5 +101,5 @@ impl Host {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/host.rs"]
+#[path = "../../tests/plain-cli/unit/host.rs"]
 mod tests;

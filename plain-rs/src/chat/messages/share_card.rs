@@ -101,5 +101,5 @@ pub fn refresh(
     })
 }
 #[cfg(test)]
-#[path = "../../../tests/unit/chat/messages/share_card.rs"]
+#[path = "../../../../tests/plain-rs/unit/chat/messages/share_card.rs"]
 mod tests;

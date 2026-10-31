@@ -241,5 +241,5 @@ pub fn format_disk_single_partition<F: FnMut(&str)>(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/platform/linux/disks/format.rs"]
+#[path = "../../../../../tests/plain-rs/unit/platform/linux/disks/format.rs"]
 mod tests;

@@ -269,5 +269,5 @@ fn db<'a>(ctx: &'a Context<'_>) -> &'a Arc<Db> {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/graphql/resolvers/tags/public.rs"]
+#[path = "../../../../../tests/plain-server/unit/graphql/resolvers/tags/public.rs"]
 mod tests;

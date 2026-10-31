@@ -276,5 +276,5 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/chat/channel_runtime.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/chat/channel_runtime.rs"]
 mod tests;

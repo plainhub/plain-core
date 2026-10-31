@@ -61,5 +61,5 @@ pub fn remove_sender(prefs: &Prefs, key: &str, ip: &str) {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/prefs/dlna.rs"]
+#[path = "../../../tests/plain-rs/unit/prefs/dlna.rs"]
 mod tests;

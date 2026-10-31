@@ -221,5 +221,5 @@ pub async fn read_source<T: Send + 'static>(
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/files/input.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/files/input.rs"]
 mod tests;

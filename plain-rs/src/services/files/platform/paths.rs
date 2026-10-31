@@ -86,5 +86,5 @@ pub(super) fn external(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/services/files/platform/paths.rs"]
+#[path = "../../../../../tests/plain-rs/unit/services/files/platform/paths.rs"]
 mod tests;

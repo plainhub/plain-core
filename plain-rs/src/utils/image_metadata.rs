@@ -256,5 +256,5 @@ pub fn read(bytes: &[u8]) -> ImageMetadata {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/utils/image_metadata.rs"]
+#[path = "../../../tests/plain-rs/unit/utils/image_metadata.rs"]
 mod tests;

@@ -424,5 +424,5 @@ pub fn df_usage(path: &str) -> (i64, i64) {
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/platform/linux/mounts/list.rs"]
+#[path = "../../../../../tests/plain-rs/unit/platform/linux/mounts/list.rs"]
 mod tests;

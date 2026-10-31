@@ -202,5 +202,5 @@ pub fn release_owner(owner: &str) {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/services/casting/media_alias.rs"]
+#[path = "../../../../tests/plain-rs/unit/services/casting/media_alias.rs"]
 mod tests;

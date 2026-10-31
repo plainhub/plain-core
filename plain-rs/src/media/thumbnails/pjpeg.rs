@@ -947,5 +947,5 @@ fn ycbcr_to_rgb(y: u8, cb: u8, cr: u8) -> (u8, u8, u8) {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/thumbnails/pjpeg.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/thumbnails/pjpeg.rs"]
 mod tests;

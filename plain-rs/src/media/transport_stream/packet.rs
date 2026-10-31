@@ -169,5 +169,5 @@ pub(super) fn crc(bytes: &[u8]) -> u32 {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/unit/media/transport_stream/packet.rs"]
+#[path = "../../../../tests/plain-rs/unit/media/transport_stream/packet.rs"]
 mod tests;
