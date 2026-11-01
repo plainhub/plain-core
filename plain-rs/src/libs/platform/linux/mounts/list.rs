@@ -43,20 +43,37 @@ struct VolumeDevMeta {
     pkname: String,
     label: String,
     uuid: String,
+    drive_type: String,
 }
 
 fn build_volume_dev_meta_map() -> std::collections::HashMap<String, VolumeDevMeta> {
-    let mut m = std::collections::HashMap::new();
-    let Ok(devs) = run_lsblk(&["NAME", "PATH", "TYPE", "PKNAME", "LABEL", "UUID"]) else {
-        return m;
+    let Ok(devs) = run_lsblk(&["NAME", "PATH", "TYPE", "PKNAME", "LABEL", "UUID", "TRAN"]) else {
+        return std::collections::HashMap::new();
     };
-    fn walk(d: &LsblkDevice, m: &mut std::collections::HashMap<String, VolumeDevMeta>) {
+    volume_device_metadata(&devs)
+}
+
+fn volume_device_metadata(
+    devs: &[LsblkDevice],
+) -> std::collections::HashMap<String, VolumeDevMeta> {
+    let mut m = std::collections::HashMap::new();
+    fn walk(
+        d: &LsblkDevice,
+        parent_transport: &str,
+        m: &mut std::collections::HashMap<String, VolumeDevMeta>,
+    ) {
+        let transport = if d.tran.is_empty() {
+            parent_transport
+        } else {
+            &d.tran
+        };
         let path = d.path.trim();
         if !path.is_empty() {
             let meta = VolumeDevMeta {
                 pkname: d.pkname.trim().to_string(),
                 label: d.label.trim().to_string(),
                 uuid: d.uuid.trim().to_string(),
+                drive_type: drive_type_from_transport(transport).to_string(),
             };
             m.insert(path.to_string(), meta.clone());
             if let Ok(resolved) = std::fs::canonicalize(path) {
@@ -67,13 +84,21 @@ fn build_volume_dev_meta_map() -> std::collections::HashMap<String, VolumeDevMet
             }
         }
         for c in &d.children {
-            walk(c, m);
+            walk(c, transport, m);
         }
     }
-    for d in &devs {
-        walk(d, &mut m);
+    for d in devs {
+        walk(d, "", &mut m);
     }
     m
+}
+
+fn drive_type_from_transport(transport: &str) -> &'static str {
+    match transport {
+        "usb" => "USB_STORAGE",
+        "mmc" => "SDCARD",
+        _ => "INTERNAL_STORAGE",
+    }
 }
 
 const SKIP_FS_TYPES: &[&str] = &[
@@ -266,6 +291,10 @@ fn apply_volume_block_meta(
     }
     let dev_name = resolved.trim_start_matches("/dev/").to_string();
 
+    if let Some(metadata) = meta.get(&resolved) {
+        v.drive_type = Some(metadata.drive_type.clone());
+    }
+
     if v.label.is_none()
         && let Some(m) = meta.get(&resolved)
     {
@@ -308,6 +337,7 @@ fn list_disk_partitions() -> Vec<Mount> {
         "MOUNTPOINT",
         "PKNAME",
         "PARTN",
+        "TRAN",
     ]) else {
         return vec![];
     };
@@ -363,6 +393,7 @@ fn partition_mounts(devs: &[LsblkDevice]) -> Vec<Mount> {
                 total_bytes: size,
                 remote: false,
                 disk_id: non_empty(&disk_id),
+                drive_type: Some(drive_type_from_transport(&d.tran).to_string()),
                 ..Default::default()
             });
         }

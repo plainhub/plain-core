@@ -168,3 +168,31 @@ fn system_partitions_and_virtual_disks_are_not_presented_as_usb_data() {
     loop_disk.name = "loop0".into();
     assert!(partition_mounts(&[disk, loop_disk]).is_empty());
 }
+
+#[test]
+fn mounted_usb_disks_and_their_partitions_use_the_transport_not_the_removable_flag() {
+    let devices: Vec<LsblkDevice> = serde_json::from_value(serde_json::json!([
+        {"name":"sdfixture", "path":"/dev/sdfixture", "type":"disk", "tran":"usb", "rm":false,
+         "children":[{"name":"sdfixture1", "path":"/dev/sdfixture1", "pkname":"sdfixture", "type":"part", "tran":null}]},
+        {"name":"sdexample", "path":"/dev/sdexample", "type":"disk", "tran":"sata"}
+    ])).unwrap();
+    let metadata = volume_device_metadata(&devices);
+    for path in ["/dev/sdfixture", "/dev/sdfixture1"] {
+        let mut mount = Mount::default();
+        apply_volume_block_meta(&mut mount, path, &metadata);
+        assert_eq!(mount.drive_type.as_deref(), Some("USB_STORAGE"), "{path}");
+    }
+    let mut internal = Mount::default();
+    apply_volume_block_meta(&mut internal, "/dev/sdexample", &metadata);
+    assert_eq!(internal.drive_type.as_deref(), Some("INTERNAL_STORAGE"));
+}
+
+#[test]
+fn unmounted_usb_partitions_inherit_the_parent_transport() {
+    let mut device = usb_disk(None);
+    let input = serde_json::json!({"name":"sdfixture", "path":"/dev/sdfixture", "type":"disk", "tran":"usb"});
+    let mut parent: LsblkDevice = serde_json::from_value(input).unwrap();
+    parent.children.append(&mut device.children);
+    let mounts = partition_mounts(&[parent]);
+    assert_eq!(mounts[0].drive_type.as_deref(), Some("USB_STORAGE"));
+}

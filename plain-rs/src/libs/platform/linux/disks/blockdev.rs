@@ -28,6 +28,8 @@ pub struct LsblkDevice {
     pub mountpoint: Option<String>,
     #[serde(default, deserialize_with = "empty_string_if_null")]
     pub pkname: String,
+    #[serde(default, deserialize_with = "empty_string_if_null")]
+    pub tran: String,
     #[serde(default)]
     pub partn: Option<i64>,
     #[serde(default)]
