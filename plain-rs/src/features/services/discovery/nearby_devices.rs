@@ -117,7 +117,7 @@ pub fn snapshot(
     Ok(snapshot)
 }
 pub async fn sweep(state: &CoreRuntime) -> anyhow::Result<()> {
-    let stale = state.nearby_devices.stale(&state.db)?;
+    let mut stale = state.nearby_devices.stale(&state.db)?;
     if stale.is_empty() {
         return Ok(());
     }
@@ -127,7 +127,13 @@ pub async fn sweep(state: &CoreRuntime) -> anyhow::Result<()> {
         .await
         .map_err(anyhow::Error::msg)?;
     if facts.get("paused").and_then(serde_json::Value::as_bool) != Some(false) {
-        return Ok(());
+        stale.retain(|probe| {
+            probe
+                .device
+                .discovery_methods
+                .iter()
+                .any(|method| method == "LAN")
+        });
     }
     let interfaces = crate::infrastructure::transport::lan::local_interfaces();
     let mut changed = false;

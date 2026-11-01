@@ -168,7 +168,7 @@ impl Devices {
         self.observe_at(device, Instant::now(), visible)
     }
     #[cfg(test)]
-    fn seen_at(&self, device: Device, now: Instant) -> Result<bool> {
+    pub(crate) fn seen_at(&self, device: Device, now: Instant) -> Result<bool> {
         self.observe_at(device, now, true)
     }
     fn observe_at(&self, mut device: Device, now: Instant, visible: bool) -> Result<bool> {

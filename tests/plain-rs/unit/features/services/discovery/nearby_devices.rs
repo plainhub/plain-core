@@ -124,3 +124,60 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
     );
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn bluetooth_pause_does_not_preserve_stale_lan_devices() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = crate::test_runtime::Core::open(directory.path()).unwrap();
+    let state = server.runtime_state();
+    let (generation, mut requests) = state.host.connect();
+    let host = state.host.clone();
+    let facts = tokio::spawn(async move {
+        for paused in [true, false] {
+            let request = requests.recv().await.unwrap();
+            assert_eq!(request["method"], "nearbyScanFacts");
+            host.reply(
+                generation,
+                json!({"id":request["id"],"result":{"paused":paused}}),
+            )
+            .unwrap();
+        }
+    });
+    for (id, methods) in [
+        ("expired-lan", vec!["LAN".into()]),
+        ("paused-ble", vec!["BLE".into()]),
+    ] {
+        let device = Device {
+            id: id.into(),
+            name: id.into(),
+            ips: vec![],
+            port: 2443,
+            device_type: "PHONE".into(),
+            version: "1".into(),
+            platform: "test".into(),
+            last_seen_at: "1970-01-01T00:00:00.000Z".into(),
+            discovery_methods: methods,
+        };
+        chat_store::nearby::save(&state.db, &device.cache()).unwrap();
+        state
+            .nearby_devices
+            .seen_at(
+                device,
+                std::time::Instant::now() - std::time::Duration::from_secs(61),
+            )
+            .unwrap();
+    }
+    state.nearby_devices.scanning(true, true, vec![]).unwrap();
+    sweep(&state).await.unwrap();
+    let devices = state.nearby_devices.snapshot().devices;
+    assert_eq!(devices.len(), 1);
+    assert_eq!(devices[0].id, "paused-ble");
+    let cached = chat_store::nearby::all(&state.db).unwrap();
+    assert_eq!(cached.len(), 1);
+    assert_eq!(cached[0].id, "paused-ble");
+    sweep(&state).await.unwrap();
+    facts.await.unwrap();
+    assert!(state.nearby_devices.snapshot().devices.is_empty());
+    assert!(chat_store::nearby::all(&state.db).unwrap().is_empty());
+    server.shutdown().await;
+}

@@ -4,7 +4,7 @@ use plain_rs::infrastructure::db::chat_store;
 use serde_json::json;
 
 #[tokio::test]
-async fn rust_sweep_honors_radio_pause_and_real_tls_verdicts() {
+async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
     use std::sync::Arc;
     let dir = tempfile::tempdir().unwrap();
     let prefs =
@@ -56,18 +56,14 @@ async fn rust_sweep_honors_radio_pause_and_real_tls_verdicts() {
     let (generation, mut requests) = state.host.connect();
     let host = state.host.clone();
     let facts = tokio::spawn(async move {
-        for paused in [true, false] {
-            let request = requests.recv().await.unwrap();
-            assert_eq!(request["method"], "nearbyScanFacts");
-            host.reply(
-                generation,
-                json!({"id":request["id"],"result":{"paused":paused,"interfaces":[]}}),
-            )
-            .unwrap();
-        }
+        let request = requests.recv().await.unwrap();
+        assert_eq!(request["method"], "nearbyScanFacts");
+        host.reply(
+            generation,
+            json!({"id":request["id"],"result":{"paused":true,"interfaces":[]}}),
+        )
+        .unwrap();
     });
-    sweep(&state).await.unwrap();
-    assert_eq!(state.nearby_devices.snapshot().devices.len(), 2);
     sweep(&state).await.unwrap();
     facts.await.unwrap();
     assert_eq!(state.nearby_devices.snapshot().devices.len(), 1);
