@@ -201,7 +201,7 @@ fn progressive_search_keeps_exact_counts_and_sorted_pages_and_cancels_before_mor
             "needle-014.rs"
         ]
     );
-    assert_eq!(snapshots.len(), 2);
+    assert!(!snapshots.is_empty());
     assert!(
         snapshots
             .iter()
@@ -228,4 +228,124 @@ fn progressive_search_keeps_exact_counts_and_sorted_pages_and_cancels_before_mor
             .kind(),
         io::ErrorKind::Interrupted
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn recursive_search_skips_denied_children_but_rejects_a_denied_root() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let denied = root.path().join("denied");
+    fs::create_dir(&denied).unwrap();
+    fs::write(denied.join("needle-private"), b"private").unwrap();
+    fs::write(root.path().join("needle-readable"), b"readable").unwrap();
+    fs::set_permissions(&denied, fs::Permissions::from_mode(0)).unwrap();
+    let search = request(root.path(), "needle").plan().unwrap().execute();
+    let direct = request(&denied, "needle").plan().unwrap().execute();
+    fs::set_permissions(&denied, fs::Permissions::from_mode(0o700)).unwrap();
+    assert_eq!(
+        direct.err().unwrap().kind(),
+        io::ErrorKind::PermissionDenied
+    );
+    let page = search.unwrap();
+    assert_eq!(page.count, 1);
+    assert_eq!(page.items[0].name, "needle-readable");
+}
+
+#[test]
+fn progressive_search_limits_snapshots_and_avoids_duplicate_empty_pages() {
+    let root = tempfile::tempdir().unwrap();
+    for index in 0..1024 {
+        fs::write(root.path().join(format!("needle-{index:04}")), b"fixture").unwrap();
+    }
+    let plan = request(root.path(), "needle").plan().unwrap();
+    let mut snapshots = Vec::new();
+    let now = Instant::now();
+    let page = plan
+        .walk_inner(
+            Some(&mut |page| {
+                snapshots.push(page);
+                true
+            }),
+            || false,
+            || now,
+        )
+        .unwrap();
+    assert_eq!(page.count, 1024);
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].count, 128);
+    let mut ticks = 0;
+    let mut snapshots = Vec::new();
+    let page = plan
+        .walk_inner(
+            Some(&mut |page| {
+                snapshots.push(page);
+                true
+            }),
+            || false,
+            || {
+                ticks += 1;
+                now + Duration::from_millis(ticks * 100)
+            },
+        )
+        .unwrap();
+    assert_eq!(page.count, 1024);
+    assert_eq!(snapshots.len(), 7);
+}
+
+#[test]
+fn no_match_search_emits_no_repeated_empty_snapshots() {
+    let root = tempfile::tempdir().unwrap();
+    for index in 0..512 {
+        fs::write(root.path().join(format!("file-{index:04}")), b"fixture").unwrap();
+    }
+    let page = request(root.path(), "missing")
+        .plan()
+        .unwrap()
+        .walk(|_| panic!("no new matches to send"), || false)
+        .unwrap();
+    assert_eq!(page.count, 0);
+}
+
+#[test]
+#[ignore]
+fn large_directory_search_measurements() {
+    let root = tempfile::tempdir().unwrap();
+    for branch in 0..100 {
+        let directory = root.path().join(format!("branch-{branch:03}"));
+        fs::create_dir(&directory).unwrap();
+        for index in 0..200 {
+            fs::write(
+                directory.join(format!("needle-{branch:03}-{index:03}.txt")),
+                b"fixture",
+            )
+            .unwrap();
+        }
+    }
+    for query in ["needle", "missing", "file_size:>=1"] {
+        let mut request = request(root.path(), query);
+        request.limit = Some(10000);
+        let start = Instant::now();
+        let mut snapshots = 0;
+        let mut bytes = 0;
+        let page = request
+            .plan()
+            .unwrap()
+            .walk(
+                |page| {
+                    snapshots += 1;
+                    bytes += serde_json::to_vec(&page).unwrap().len();
+                    true
+                },
+                || false,
+            )
+            .unwrap();
+        bytes += serde_json::to_vec(&page).unwrap().len();
+        eprintln!(
+            "query={query} count={} snapshots={snapshots} bytes={bytes} elapsed_ms={}",
+            page.count,
+            start.elapsed().as_millis()
+        );
+        assert_eq!(page.count, if query == "missing" { 0 } else { 20000 });
+    }
 }

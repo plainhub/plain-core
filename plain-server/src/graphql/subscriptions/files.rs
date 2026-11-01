@@ -25,6 +25,7 @@ pub(super) const SPEC: EventSpec = EventSpec {
 #[derive(SimpleObject)]
 pub struct FileSearchResults {
     items: Vec<File>,
+    offset: Long,
     count: Long,
     complete: bool,
 }
@@ -58,49 +59,79 @@ impl FileSubscriptions {
             ready.0.send_replace(true);
         }
         Ok(stream::unfold(
-            (receiver, state, false),
-            move |(mut receiver, state, ended)| async move {
+            (receiver, state, false, std::collections::VecDeque::new()),
+            move |(mut receiver, state, ended, mut pending)| async move {
                 if ended {
                     return None;
                 }
-                let received = receiver.recv().await?;
+                if pending.is_empty() {
+                    let received = receiver.recv().await?;
+                    match received {
+                        Ok((page, complete)) => pending = batches(page, complete),
+                        Err(error) => pending.push_back(Err(async_graphql::Error::new(error))),
+                    }
+                }
                 let result = match events::authorize(&state, origin, &SPEC).await {
                     Err(error) => Err(error),
-                    Ok(()) => received
-                        .map(|(page, complete)| FileSearchResults {
-                            items: page
-                                .items
-                                .into_iter()
-                                .map(|item| File {
-                                    permission: item.permission,
-                                    file_id: (!item.file_id.is_empty())
-                                        .then(|| item.file_id.into()),
-                                    name: item.name,
-                                    path: item.path,
-                                    created_at: item
-                                        .created_at
-                                        .and_then(chrono::DateTime::from_timestamp_millis)
-                                        .map(Instant),
-                                    updated_at: Instant(
-                                        chrono::DateTime::from_timestamp_millis(item.updated_at)
-                                            .unwrap_or_default(),
-                                    ),
-                                    size: Long(item.size),
-                                    is_dir: item.is_dir,
-                                    child_count: item.child_count,
-                                })
-                                .collect(),
-                            count: Long(page.count as i64),
-                            complete,
-                        })
-                        .map_err(async_graphql::Error::new),
+                    Ok(()) => pending.pop_front()?,
                 };
                 let ended = result.as_ref().map_or(true, |page| page.complete);
-                Some((result, (receiver, state, ended)))
+                Some((result, (receiver, state, ended, pending)))
             },
         )
         .boxed())
     }
+}
+
+fn batches(
+    page: plain_rs::libs::filesystem::browse::Page,
+    complete: bool,
+) -> std::collections::VecDeque<Result<FileSearchResults>> {
+    let mut batches = std::collections::VecDeque::new();
+    let mut batch = FileSearchResults {
+        items: Vec::new(),
+        offset: Long(0),
+        count: Long(page.count as i64),
+        complete: false,
+    };
+    let mut bytes = 0;
+    for item in page.items {
+        let size = serde_json::to_vec(&item)
+            .expect("file records serialize")
+            .len()
+            + 128;
+        if !batch.items.is_empty() && (batch.items.len() == 128 || bytes + size > 256 * 1024) {
+            let offset = batch.offset.0 + batch.items.len() as i64;
+            batches.push_back(Ok(batch));
+            batch = FileSearchResults {
+                items: Vec::new(),
+                offset: Long(offset),
+                count: Long(page.count as i64),
+                complete: false,
+            };
+            bytes = 0;
+        }
+        bytes += size;
+        batch.items.push(File {
+            permission: item.permission,
+            file_id: (!item.file_id.is_empty()).then(|| item.file_id.into()),
+            name: item.name,
+            path: item.path,
+            created_at: item
+                .created_at
+                .and_then(chrono::DateTime::from_timestamp_millis)
+                .map(Instant),
+            updated_at: Instant(
+                chrono::DateTime::from_timestamp_millis(item.updated_at).unwrap_or_default(),
+            ),
+            size: Long(item.size),
+            is_dir: item.is_dir,
+            child_count: item.child_count,
+        });
+    }
+    batch.complete = complete;
+    batches.push_back(Ok(batch));
+    batches
 }
 
 #[cfg(test)]

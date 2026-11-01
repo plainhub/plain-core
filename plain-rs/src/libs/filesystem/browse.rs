@@ -3,7 +3,13 @@ use crate::libs::filesystem::record::FileRecord;
 use crate::libs::utils::search_dsl::FilterField;
 use crate::libs::utils::search_dsl::parse;
 use serde::{Deserialize, Serialize};
-use std::{fs, io, path::Path, time::SystemTime};
+use std::{
+    cmp::Reverse,
+    collections::BTreeMap,
+    fs, io,
+    path::Path,
+    time::{Duration, Instant, SystemTime},
+};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -30,6 +36,13 @@ pub struct Plan {
 pub struct Page {
     pub count: usize,
     pub items: Vec<FileRecord>,
+}
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum SortValue {
+    Text(String),
+    TextDescending(Reverse<String>),
+    Number(i64),
+    NumberDescending(Reverse<i64>),
 }
 impl Request {
     pub fn plan(self) -> io::Result<Plan> {
@@ -132,35 +145,35 @@ impl Plan {
                 .collect(),
         }
     }
+    fn sort_key(&self, item: &FileRecord) -> (bool, SortValue, String) {
+        let value = match self.sort {
+            SortBy::NameAsc => SortValue::Text(item.name.to_lowercase()),
+            SortBy::NameDesc => SortValue::TextDescending(Reverse(item.name.to_lowercase())),
+            SortBy::DateAsc => SortValue::Number(item.updated_at),
+            SortBy::DateDesc => SortValue::NumberDescending(Reverse(item.updated_at)),
+            SortBy::SizeAsc => SortValue::Number(item.size),
+            SortBy::SizeDesc => SortValue::NumberDescending(Reverse(item.size)),
+        };
+        (!item.is_dir, value, item.path.clone())
+    }
     fn sort_items(&self, items: &mut [FileRecord]) {
-        items.sort_by(|a, b| {
-            b.is_dir.cmp(&a.is_dir).then_with(|| {
-                match self.sort {
-                    SortBy::NameAsc => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-                    SortBy::NameDesc => b.name.to_lowercase().cmp(&a.name.to_lowercase()),
-                    SortBy::DateAsc => a.updated_at.cmp(&b.updated_at),
-                    SortBy::DateDesc => b.updated_at.cmp(&a.updated_at),
-                    SortBy::SizeAsc => a.size.cmp(&b.size),
-                    SortBy::SizeDesc => b.size.cmp(&a.size),
-                }
-                .then_with(|| a.path.cmp(&b.path))
-            })
-        });
+        items.sort_by_cached_key(|item| self.sort_key(item));
     }
     pub fn execute(&self) -> io::Result<Page> {
-        self.walk_inner(None, || false)
+        self.walk_inner(None, || false, Instant::now)
     }
     pub fn walk(
         &self,
         mut progress: impl FnMut(Page) -> bool,
         cancelled: impl Fn() -> bool,
     ) -> io::Result<Page> {
-        self.walk_inner(Some(&mut progress), cancelled)
+        self.walk_inner(Some(&mut progress), cancelled, Instant::now)
     }
     fn walk_inner(
         &self,
         mut progress: Option<&mut dyn FnMut(Page) -> bool>,
         cancelled: impl Fn() -> bool,
+        mut now: impl FnMut() -> Instant,
     ) -> io::Result<Page> {
         let root = Path::new(&self.root);
         match fs::metadata(root) {
@@ -170,9 +183,11 @@ impl Plan {
             Err(e) => return Err(e),
         }
         let mut directories = vec![fs::read_dir(root)?];
-        let mut items = Vec::new();
+        let mut items = BTreeMap::new();
         let mut count = 0usize;
         let mut visited = 0usize;
+        let mut last_progress = None;
+        let mut last_count = 0;
         while let Some(directory) = directories.last_mut() {
             if cancelled() {
                 return Err(io::Error::new(
@@ -185,23 +200,45 @@ impl Plan {
                 continue;
             };
             if visited > 0 && visited % 128 == 0 {
-                if let Some(limit) = self.limit {
-                    self.sort_items(&mut items);
-                    items.truncate(self.offset.saturating_add(limit));
-                }
-                if let Some(progress) = &mut progress {
-                    let mut snapshot = self.page(items.clone());
-                    snapshot.count = count;
+                let current = now();
+                if let Some(progress) = progress.as_mut().filter(|_| {
+                    count != last_count
+                        && last_progress.is_none_or(|last| {
+                            current.duration_since(last) >= Duration::from_millis(100)
+                        })
+                }) {
+                    let snapshot = Page {
+                        count,
+                        items: items
+                            .values()
+                            .skip(self.offset)
+                            .take(self.limit.unwrap_or(usize::MAX))
+                            .cloned()
+                            .collect(),
+                    };
                     if !progress(snapshot) {
                         return Err(io::Error::new(
                             io::ErrorKind::Interrupted,
                             "File search cancelled",
                         ));
                     }
+                    last_progress = Some(now());
+                    last_count = count;
                 }
             }
             visited += 1;
-            let entry = entry?;
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        io::ErrorKind::PermissionDenied | io::ErrorKind::NotFound
+                    ) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
             let name = entry.file_name().to_string_lossy().into_owned();
             if !self.show_hidden && name.starts_with('.') {
                 continue;
@@ -209,13 +246,28 @@ impl Plan {
             let path = entry.path();
             let meta = match fs::symlink_metadata(&path) {
                 Ok(meta) => meta,
-                Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        io::ErrorKind::PermissionDenied | io::ErrorKind::NotFound
+                    ) =>
+                {
+                    continue;
+                }
                 Err(e) => return Err(e),
             };
+            #[cfg(any(target_os = "macos", windows))]
+            if !self.show_hidden && super::hidden(&meta) {
+                continue;
+            }
             if self.recursive && meta.is_dir() {
                 match fs::read_dir(&path) {
                     Ok(directory) => directories.push(directory),
-                    Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                    Err(e)
+                        if matches!(
+                            e.kind(),
+                            io::ErrorKind::PermissionDenied | io::ErrorKind::NotFound
+                        ) => {}
                     Err(e) => return Err(e),
                 }
             }
@@ -237,7 +289,13 @@ impl Plan {
             if self.matches(&record, false) {
                 count += 1;
                 if !self.count_only {
-                    items.push(record);
+                    items.insert(self.sort_key(&record), record);
+                    if self
+                        .limit
+                        .is_some_and(|limit| items.len() > self.offset.saturating_add(limit))
+                    {
+                        items.pop_last();
+                    }
                 }
             }
         }
@@ -247,9 +305,21 @@ impl Plan {
                 items: Vec::new(),
             });
         }
-        let mut page = self.page(items);
-        page.count = count;
+        let mut page = Page {
+            count,
+            items: items
+                .into_values()
+                .skip(self.offset)
+                .take(self.limit.unwrap_or(usize::MAX))
+                .collect(),
+        };
         for item in &mut page.items {
+            if cancelled() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "File search cancelled",
+                ));
+            }
             if item.is_dir {
                 item.child_count = match crate::libs::filesystem::count_dir_entries(
                     Path::new(&item.path),

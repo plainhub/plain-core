@@ -199,3 +199,39 @@ fn directory_counts_work_on_host_platform() {
     assert_eq!(count_dir_entries(dir.path(), true).unwrap(), 2);
     assert_eq!(count_dir_entries_fast(dir.path(), 10).unwrap(), 2);
 }
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn macos_hidden_entries_follow_system_flags_in_lists_counts_and_search() {
+    use std::os::unix::ffi::OsStrExt;
+    unsafe extern "C" {
+        fn lchflags(path: *const libc::c_char, flags: u32) -> libc::c_int;
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    for name in ["visible-dir", "hidden-dir"] {
+        std::fs::create_dir(root.join(name)).unwrap();
+        std::fs::write(root.join(name).join("needle.txt"), b"fixture").unwrap();
+    }
+    for name in ["visible.txt", "hidden.txt", ".dot"] {
+        std::fs::write(root.join(name), b"fixture").unwrap();
+    }
+    std::os::unix::fs::symlink("hidden.txt", root.join("visible-link")).unwrap();
+    std::os::unix::fs::symlink("visible.txt", root.join("hidden-link")).unwrap();
+    for name in ["hidden-dir", "hidden.txt", "hidden-link"] {
+        let path = std::ffi::CString::new(root.join(name).as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { lchflags(path.as_ptr(), libc::UF_HIDDEN) }, 0);
+    }
+    assert_eq!(list_dir(root, false).await.unwrap().len(), 3);
+    assert_eq!(list_dir_paged(root, false, 0, 100, SortBy::NameAsc).await.unwrap().len(), 3);
+    assert_eq!(count_dir_entries(root, false).unwrap(), 3);
+    assert_eq!(list_dir(root, true).await.unwrap().len(), 7);
+    assert_eq!(count_dir_entries(root, true).unwrap(), 7);
+    let search = |path: &Path, query: &str| browse::Request {
+        root: path.to_string_lossy().into_owned(), query: query.into(),
+        sort_by: SortBy::NameAsc, offset: 0, limit: None, count_only: false,
+    }.plan().unwrap().execute().unwrap();
+    assert_eq!(search(root, "needle").count, 1);
+    assert_eq!(search(root, "needle show_hidden:true").count, 2);
+    assert_eq!(search(&root.join("hidden-dir"), "").count, 1);
+}

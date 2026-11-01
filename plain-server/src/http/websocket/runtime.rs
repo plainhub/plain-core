@@ -103,7 +103,7 @@ impl Runtime {
         sessions: &crate::graphql::subscriptions::session::Sessions,
         client_id: Option<&str>,
     ) {
-        sessions.close_client(client_id);
+        sessions.close_remote_clients(client_id);
         let connections = self.connections.lock().unwrap();
         for c in connections
             .values()

@@ -29,6 +29,18 @@ pub struct FileEntry {
 
 const DIR_CHILDREN_THRESHOLD: i32 = 20_000;
 
+#[cfg(target_os = "macos")]
+fn hidden(metadata: &std::fs::Metadata) -> bool {
+    use std::os::macos::fs::MetadataExt;
+    metadata.st_flags() & libc::UF_HIDDEN != 0
+}
+
+#[cfg(windows)]
+fn hidden(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    metadata.file_attributes() & 0x2 != 0
+}
+
 /// Mirrors Go `createDirModel` / `os.MkdirAll(p, 0o755)`. Creates the
 /// directory and any missing parents. Idempotent.
 pub async fn ensure_dir(p: &Path) -> std::io::Result<()> {
@@ -87,6 +99,10 @@ pub async fn list_dir_paged(
         }
         // Use the metadata already cached by the OS for read_dir entries.
         let meta = e.metadata().await?;
+        #[cfg(any(target_os = "macos", windows))]
+        if !show_hidden && hidden(&meta) {
+            continue;
+        }
         list.push(Entry {
             name,
             is_dir: meta.is_dir(),
@@ -185,6 +201,10 @@ pub async fn list_dir(dir: &Path, show_hidden: bool) -> std::io::Result<Vec<File
             continue;
         }
         let meta = e.metadata().await?;
+        #[cfg(any(target_os = "macos", windows))]
+        if !show_hidden && hidden(&meta) {
+            continue;
+        }
         let full = dir.join(&name);
         out.push(file_info_to_model(&full, &meta, meta.is_dir())?);
     }
@@ -196,9 +216,15 @@ pub fn count_dir_entries(dir: &Path, show_hidden: bool) -> std::io::Result<usize
     #[cfg(not(target_os = "linux"))]
     {
         return std::fs::read_dir(dir)?.try_fold(0usize, |count, entry| {
-            let name = entry?.file_name();
-            let visible = show_hidden || !name.to_string_lossy().starts_with('.');
-            Ok(count + usize::from(visible))
+            let entry = entry?;
+            if !show_hidden && entry.file_name().to_string_lossy().starts_with('.') {
+                return Ok(count);
+            }
+            #[cfg(any(target_os = "macos", windows))]
+            if !show_hidden && hidden(&entry.metadata()?) {
+                return Ok(count);
+            }
+            Ok(count + 1)
         });
     }
     #[cfg(target_os = "linux")]

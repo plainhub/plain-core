@@ -233,6 +233,7 @@ impl FilePlatform {
         sort: crate::features::prefs::settings::FileSortBy,
         count_only: bool,
     ) -> Result<serde_json::Value> {
+        let limit = limit.clamp(0, super::browse::SEARCH_RESULT_LIMIT as i32);
         if self.host.uses_system_media_catalog() {
             return crate::features::services::files::indexed::platform(
                 &self.db,

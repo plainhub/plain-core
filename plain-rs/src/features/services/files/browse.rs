@@ -1,6 +1,8 @@
 use crate::libs::filesystem::{browse::Request, record::FileRecord};
 use serde_json::Value;
 
+pub const SEARCH_RESULT_LIMIT: usize = 1000;
+
 pub async fn execute(
     platform: &crate::features::services::files::platform::FilePlatform,
     request: Request,
@@ -28,11 +30,17 @@ pub async fn execute(
 
 pub async fn search(
     platform: &crate::features::services::files::platform::FilePlatform,
-    request: Request,
+    mut request: Request,
 ) -> Result<
     tokio::sync::mpsc::Receiver<Result<(crate::libs::filesystem::browse::Page, bool), String>>,
     String,
 > {
+    request.limit = Some(
+        request
+            .limit
+            .unwrap_or(SEARCH_RESULT_LIMIT)
+            .min(SEARCH_RESULT_LIMIT),
+    );
     let plan = request.plan().map_err(|error| error.to_string())?;
     if plan.archive_path().is_some() {
         return Err("Directory search requires a filesystem directory".into());

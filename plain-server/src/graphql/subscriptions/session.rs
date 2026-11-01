@@ -234,12 +234,21 @@ impl Sessions {
             session.close();
         }
     }
+    pub(crate) fn close_remote_clients(&self, client: Option<&str>) {
+        self.close_matching(|session| {
+            matches!(session, SubscriptionSession::Local(local) if local.origin == RequestOrigin::Remote)
+                && client.is_none_or(|id| id == session.client_id())
+        });
+    }
     pub(crate) fn close_client(&self, client: Option<&str>) {
+        self.close_matching(|session| client.is_none_or(|id| id == session.client_id()));
+    }
+    fn close_matching(&self, matches: impl Fn(&SubscriptionSession) -> bool) {
         let sessions = {
             let mut entries = self.entries.lock().unwrap();
             let ids: Vec<_> = entries
                 .iter()
-                .filter(|(_, session)| client.is_none_or(|id| id == session.client_id()))
+                .filter(|(_, session)| matches(session))
                 .map(|(id, _)| *id)
                 .collect();
             ids.into_iter()
@@ -306,12 +315,12 @@ impl Session {
             _ => false,
         }
     }
-    fn queue(
+    fn encode(
         &self,
         message: ServerMessage,
         spec: Option<&'static EventSpec>,
         scope: Option<NativeRequestScope>,
-    ) -> Result<(), String> {
+    ) -> Result<Queued, String> {
         let (id, mut terminal) = match &message {
             ServerMessage::Next { id, .. } => (Some(id.clone()), false),
             ServerMessage::Error { id, .. } | ServerMessage::Complete { id } => {
@@ -335,18 +344,43 @@ impl Session {
             })
             .map_err(|error| error.to_string())?;
         }
+        Ok(Queued {
+            message: encoded,
+            id,
+            terminal,
+            spec,
+            scope,
+        })
+    }
+    fn queue(
+        &self,
+        message: ServerMessage,
+        spec: Option<&'static EventSpec>,
+        scope: Option<NativeRequestScope>,
+    ) -> Result<(), String> {
         self.outgoing
-            .try_send(Queued {
-                message: encoded,
-                id,
-                terminal,
-                spec,
-                scope,
-            })
+            .try_send(self.encode(message, spec, scope)?)
             .map_err(|_| {
                 self.closed.send_replace(true);
                 "Subscription backpressure".to_owned()
             })
+    }
+    async fn queue_operation(
+        &self,
+        message: ServerMessage,
+        spec: &'static EventSpec,
+        scope: NativeRequestScope,
+    ) -> Result<(), String> {
+        if spec.field != "fileSearchResults" {
+            return self.queue(message, Some(spec), Some(scope));
+        }
+        let queued = self.encode(message, Some(spec), Some(scope.clone()))?;
+        let mut closed = self.closed.subscribe();
+        tokio::select! {
+            _ = closed.wait_for(|value| *value) => Err("Subscription session closed".into()),
+            _ = scope.wait_closed() => Err("Subscription operation closed".into()),
+            result = self.outgoing.send(queued) => result.map_err(|_| "Subscription session closed".into()),
+        }
     }
 
     pub fn send(self: &Arc<Self>, encoded: &str) -> Result<(), String> {
@@ -425,7 +459,7 @@ impl Session {
                                 else if *readiness.borrow() {
                                     ready_sent = true;
                                     let response = async_graphql::Response::default().extension("subscriptionReady", async_graphql::Value::Boolean(true));
-                                    if session.queue(ServerMessage::Next { id: task_id.clone(), payload: response }, Some(spec), Some(task_scope.clone())).is_err() { break; }
+                                    if session.queue_operation(ServerMessage::Next { id: task_id.clone(), payload: response }, spec, task_scope.clone()).await.is_err() { break; }
                                 }
                                 continue;
                             },
@@ -448,7 +482,8 @@ impl Session {
                             }
                         };
                         if session
-                            .queue(message, Some(spec), Some(task_scope.clone()))
+                            .queue_operation(message, spec, task_scope.clone())
+                            .await
                             .is_err()
                         {
                             break;
@@ -457,13 +492,15 @@ impl Session {
                             return;
                         }
                     }
-                    let _ = session.queue(
-                        ServerMessage::Complete {
-                            id: task_id.clone(),
-                        },
-                        Some(spec),
-                        Some(task_scope),
-                    );
+                    let _ = session
+                        .queue_operation(
+                            ServerMessage::Complete {
+                                id: task_id.clone(),
+                            },
+                            spec,
+                            task_scope,
+                        )
+                        .await;
                 });
                 operations.insert(
                     id,
@@ -537,3 +574,7 @@ impl Session {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-server/unit/graphql/subscriptions/session.rs"]
+mod tests;
