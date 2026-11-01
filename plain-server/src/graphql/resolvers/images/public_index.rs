@@ -14,10 +14,7 @@ pub struct ImageIndexQuery;
 
 #[Object]
 impl ImageIndexQuery {
-    async fn image_search_status(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<ImageSearchStatus> {
+    fn image_search_status(&self, ctx: &Context<'_>) -> async_graphql::Result<ImageSearchStatus> {
         Ok(ctx
             .data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>()
             .snapshot()
@@ -63,7 +60,7 @@ impl ImageIndexMutation {
     }
 
     /// `force` re-scans images that already have an embedding.
-    async fn start_image_index(
+    fn start_image_index(
         &self,
         ctx: &Context<'_>,
         force: Option<bool>,
@@ -74,7 +71,7 @@ impl ImageIndexMutation {
         Ok(true)
     }
 
-    async fn cancel_image_index(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+    fn cancel_image_index(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
         ctx.data_unchecked::<Arc<plain_rs::features::services::images::index::ImageIndex>>()
             .cancel()
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;

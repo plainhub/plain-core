@@ -68,11 +68,7 @@ impl UploadQuery {
 
     /// `NONE` when no merge was ever started for this id, which is what a
     /// client sees before it calls `mergeChunks`.
-    async fn merge_status(
-        &self,
-        ctx: &Context<'_>,
-        file_id: String,
-    ) -> async_graphql::Result<MergeTask> {
+    fn merge_status(&self, ctx: &Context<'_>, file_id: String) -> async_graphql::Result<MergeTask> {
         Ok(merge_task(
             &ctx.data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
                 .status(&file_id),

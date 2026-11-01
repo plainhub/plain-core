@@ -62,7 +62,7 @@ pub struct Audio {
 
 #[async_graphql::ComplexObject]
 impl Audio {
-    async fn album_file_id(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+    fn album_file_id(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         let resource = if !self.album_art_uri.is_empty() {
             plain_rs::features::files::resource_link::Resource::reference(&self.album_art_uri)
         } else if !self.cover_image_id.is_empty() {

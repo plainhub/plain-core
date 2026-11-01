@@ -37,7 +37,7 @@ fn record(row: ShareRow) -> async_graphql::Result<ShareRecord> {
 pub struct ShareHostQuery;
 #[Object]
 impl ShareHostQuery {
-    async fn share_record(
+    fn share_record(
         &self,
         ctx: &Context<'_>,
         id: ID,
@@ -47,7 +47,7 @@ impl ShareHostQuery {
             .map(record)
             .transpose()
     }
-    async fn share_records(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ShareRecord>> {
+    fn share_records(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ShareRecord>> {
         ctx.data::<Arc<Db>>()?
             .share_list()?
             .into_iter()
@@ -101,7 +101,7 @@ impl ShareHostMutation {
             .await?,
         )
     }
-    async fn delete_share(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
+    fn delete_share(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
         Ok(ctx.data::<Arc<Db>>()?.share_delete(&id)? > 0)
     }
 }

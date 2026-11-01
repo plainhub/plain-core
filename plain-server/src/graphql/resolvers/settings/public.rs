@@ -20,7 +20,7 @@ pub struct PrefsQuery;
 
 #[Object]
 impl PrefsQuery {
-    async fn prefs(&self, ctx: &Context<'_>) -> async_graphql::Result<Json<Value>> {
+    fn prefs(&self, ctx: &Context<'_>) -> async_graphql::Result<Json<Value>> {
         let prefs = prefs(ctx);
         let index_allowed =
             crate::http::auth::public_gate::require(ctx, prefs, &["WRITE_EXTERNAL_STORAGE"])
@@ -78,11 +78,7 @@ impl PrefsQuery {
         }
         Ok(Json(Value::Object(values)))
     }
-    async fn saved_value(
-        &self,
-        ctx: &Context<'_>,
-        key: String,
-    ) -> async_graphql::Result<Json<Value>> {
+    fn saved_value(&self, ctx: &Context<'_>, key: String) -> async_graphql::Result<Json<Value>> {
         saved_key(&key)?;
         let state = ctx.data::<crate::server::ServerState>()?;
         Ok(Json(
@@ -120,7 +116,7 @@ impl PrefsMutation {
         }
         Ok(true)
     }
-    async fn set_saved_value(
+    fn set_saved_value(
         &self,
         ctx: &Context<'_>,
         key: String,

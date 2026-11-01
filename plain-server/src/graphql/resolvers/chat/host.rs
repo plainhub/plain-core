@@ -12,7 +12,7 @@ pub struct ChatConversation {
 pub struct ChatHostQuery;
 #[Object]
 impl ChatHostQuery {
-    async fn chat_conversations(
+    fn chat_conversations(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<ChatConversation>> {
@@ -26,7 +26,7 @@ impl ChatHostQuery {
         })
         .collect())
     }
-    async fn chat_records(
+    fn chat_records(
         &self,
         ctx: &Context<'_>,
         query: String,
@@ -40,7 +40,7 @@ impl ChatHostQuery {
         plain_rs::features::services::chat::prewarm::prepare_conversation(state, &filter);
         Ok(rows.iter().map(item).collect())
     }
-    async fn chat_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
+    fn chat_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
         let state = ctx.data::<ServerState>()?;
         let value = plain_rs::infrastructure::db::chat_store::messages::list(
             &state.db,
@@ -146,7 +146,7 @@ impl ChatHostMutation {
             async_graphql::Error::new("Message unavailable")
         })?))
     }
-    async fn edit_chat_text(
+    fn edit_chat_text(
         &self,
         ctx: &Context<'_>,
         id: ID,

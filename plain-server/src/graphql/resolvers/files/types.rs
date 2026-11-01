@@ -72,7 +72,7 @@ pub struct File {
 
 #[async_graphql::ComplexObject]
 impl File {
-    async fn is_system(&self) -> async_graphql::Result<bool> {
+    fn is_system(&self) -> async_graphql::Result<bool> {
         plain_libs::filesystem::system_items::contains(&self.path)
             .map_err(async_graphql::Error::new)
     }

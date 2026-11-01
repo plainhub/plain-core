@@ -74,7 +74,7 @@ pub struct ImageEditorProjectQuery;
 
 #[Object]
 impl ImageEditorProjectQuery {
-    async fn image_editor_projects(
+    fn image_editor_projects(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<ImageEditorProjectSummary>> {
@@ -84,7 +84,7 @@ impl ImageEditorProjectQuery {
             .collect()
     }
 
-    async fn image_editor_project(
+    fn image_editor_project(
         &self,
         ctx: &Context<'_>,
         id: ID,
@@ -100,7 +100,7 @@ pub struct ImageEditorProjectMutation;
 
 #[Object]
 impl ImageEditorProjectMutation {
-    async fn save_image_editor_project(
+    fn save_image_editor_project(
         &self,
         ctx: &Context<'_>,
         id: ID,
@@ -136,7 +136,7 @@ impl ImageEditorProjectMutation {
         to_project(row)
     }
 
-    async fn delete_image_editor_project(
+    fn delete_image_editor_project(
         &self,
         ctx: &Context<'_>,
         id: ID,
@@ -145,7 +145,7 @@ impl ImageEditorProjectMutation {
         Ok(true)
     }
 
-    async fn broadcast_image_editor_update(
+    fn broadcast_image_editor_update(
         &self,
         ctx: &Context<'_>,
         id: ID,

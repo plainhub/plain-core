@@ -55,7 +55,7 @@ struct MdnsActivity {
 #[async_graphql::ComplexObject]
 impl MdnsState {
     #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
-    async fn activity(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<MdnsActivity>> {
+    fn activity(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<MdnsActivity>> {
         let runtime = &ctx.data::<ServerState>()?.mdns;
         let activity = runtime
             .browser_activity()
@@ -76,7 +76,7 @@ impl MdnsState {
 pub struct MdnsQuery;
 #[Object]
 impl MdnsQuery {
-    async fn mdns_state(&self, ctx: &Context<'_>) -> async_graphql::Result<MdnsState> {
+    fn mdns_state(&self, ctx: &Context<'_>) -> async_graphql::Result<MdnsState> {
         let state = ctx.data::<ServerState>()?;
         if *state.stop.borrow() {
             return Err("Server stopped".into());

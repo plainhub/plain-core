@@ -238,11 +238,7 @@ impl SmsMutation {
         Ok(true)
     }
 
-    async fn unarchive_sms_conversation(
-        &self,
-        ctx: &Context<'_>,
-        id: ID,
-    ) -> async_graphql::Result<bool> {
+    fn unarchive_sms_conversation(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
         sms_state::unarchive(ctx.data_unchecked::<Arc<Db>>(), id.as_str())
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         Ok(true)

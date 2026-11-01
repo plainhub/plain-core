@@ -20,7 +20,7 @@ pub struct PlatformQuery;
 
 #[Object]
 impl PlatformQuery {
-    async fn audit_events(
+    fn audit_events(
         &self,
         ctx: &Context<'_>,
         query: String,
@@ -222,7 +222,7 @@ impl PlatformMutation {
         Ok(true)
     }
 
-    async fn set_mount_alias(
+    fn set_mount_alias(
         &self,
         ctx: &Context<'_>,
         id: async_graphql::ID,

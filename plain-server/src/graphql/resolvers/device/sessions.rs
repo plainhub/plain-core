@@ -69,7 +69,7 @@ pub struct SessionsQuery;
 
 #[Object]
 impl SessionsQuery {
-    async fn sessions(&self, ctx: &Context<'_>) -> Result<Vec<Session>> {
+    fn sessions(&self, ctx: &Context<'_>) -> Result<Vec<Session>> {
         caller(ctx)?;
         let db = ctx.data::<Arc<Db>>()?;
         db.session_list()?
@@ -84,12 +84,7 @@ pub struct SessionsMutation;
 
 #[Object]
 impl SessionsMutation {
-    async fn rename_session(
-        &self,
-        ctx: &Context<'_>,
-        client_id: String,
-        name: String,
-    ) -> Result<bool> {
+    fn rename_session(&self, ctx: &Context<'_>, client_id: String, name: String) -> Result<bool> {
         caller(ctx)?;
         Ok(plain_rs::features::services::sessions::rename(
             ctx.data::<ServerState>()?,
@@ -97,11 +92,11 @@ impl SessionsMutation {
             &name,
         )?)
     }
-    async fn logout(&self, ctx: &Context<'_>) -> Result<bool> {
+    fn logout(&self, ctx: &Context<'_>) -> Result<bool> {
         revoke(ctx, caller(ctx)?, "logout")
     }
 
-    async fn revoke_session(&self, ctx: &Context<'_>, client_id: String) -> Result<bool> {
+    fn revoke_session(&self, ctx: &Context<'_>, client_id: String) -> Result<bool> {
         if client_id.trim().is_empty() {
             return Ok(false);
         }

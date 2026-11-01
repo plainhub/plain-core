@@ -75,7 +75,7 @@ impl FeedEntry {
         content_common::tags(ctx, self.id.as_str(), DataType::FeedEntry.kind())
     }
 
-    async fn feed(&self, ctx: &Context<'_>) -> GqlResult<Option<Feed>> {
+    fn feed(&self, ctx: &Context<'_>) -> GqlResult<Option<Feed>> {
         let db = ctx.data::<Arc<Db>>()?;
         plain_rs::features::feeds::get(db, self.feed_id.as_str())?
             .map(|row| feed_model(ctx, row))
@@ -142,22 +142,22 @@ impl FeedQuery {
             title: feeds::preview_title(ctx.data::<Arc<Db>>()?, &url).await?,
         })
     }
-    async fn feed_sync_states(&self, ctx: &Context<'_>) -> GqlResult<Vec<feeds::FeedSyncState>> {
+    fn feed_sync_states(&self, ctx: &Context<'_>) -> GqlResult<Vec<feeds::FeedSyncState>> {
         Ok(sync_service(ctx)?.states())
     }
-    async fn feed(&self, ctx: &Context<'_>, id: ID) -> GqlResult<Option<Feed>> {
+    fn feed(&self, ctx: &Context<'_>, id: ID) -> GqlResult<Option<Feed>> {
         plain_rs::features::feeds::get(ctx.data::<Arc<Db>>()?, id.as_str())?
             .map(|row| feed_model(ctx, row))
             .transpose()
     }
-    async fn feeds(&self, ctx: &Context<'_>) -> GqlResult<Vec<Feed>> {
+    fn feeds(&self, ctx: &Context<'_>) -> GqlResult<Vec<Feed>> {
         plain_rs::features::feeds::list(ctx.data::<Arc<Db>>()?)?
             .into_iter()
             .map(|row| feed_model(ctx, row))
             .collect()
     }
 
-    async fn feed_entry_counts(&self, ctx: &Context<'_>) -> GqlResult<Vec<FeedEntryCount>> {
+    fn feed_entry_counts(&self, ctx: &Context<'_>) -> GqlResult<Vec<FeedEntryCount>> {
         Ok(
             plain_rs::features::feeds::entry_counts(ctx.data::<Arc<Db>>()?)?
                 .into_iter()
@@ -166,20 +166,20 @@ impl FeedQuery {
         )
     }
 
-    async fn feed_entry_count(&self, ctx: &Context<'_>, query: String) -> GqlResult<i32> {
+    fn feed_entry_count(&self, ctx: &Context<'_>, query: String) -> GqlResult<i32> {
         Ok(plain_rs::features::feeds::count(
             ctx.data::<Arc<Db>>()?,
             &query,
         )?)
     }
 
-    async fn feed_entry(&self, ctx: &Context<'_>, id: ID) -> GqlResult<Option<FeedEntry>> {
+    fn feed_entry(&self, ctx: &Context<'_>, id: ID) -> GqlResult<Option<FeedEntry>> {
         plain_rs::features::feeds::entry_get(ctx.data::<Arc<Db>>()?, id.as_str())?
             .map(entry_model)
             .transpose()
     }
 
-    async fn feed_entries(
+    fn feed_entries(
         &self,
         ctx: &Context<'_>,
         query: String,
@@ -198,7 +198,7 @@ pub struct FeedMutation;
 
 #[Object]
 impl FeedMutation {
-    async fn mark_feed_entries_read(
+    fn mark_feed_entries_read(
         &self,
         ctx: &Context<'_>,
         query: String,
@@ -213,12 +213,12 @@ impl FeedMutation {
         })
     }
 
-    async fn sync_feeds(&self, ctx: &Context<'_>, id: Option<ID>) -> GqlResult<bool> {
+    fn sync_feeds(&self, ctx: &Context<'_>, id: Option<ID>) -> GqlResult<bool> {
         sync_service(ctx)?.queue(id.map(|id| id.to_string()))?;
         Ok(true)
     }
 
-    async fn update_feed(
+    fn update_feed(
         &self,
         ctx: &Context<'_>,
         id: ID,
@@ -251,12 +251,12 @@ impl FeedMutation {
         feed_model(ctx, feed)
     }
 
-    async fn import_feeds(&self, ctx: &Context<'_>, content: String) -> GqlResult<bool> {
+    fn import_feeds(&self, ctx: &Context<'_>, content: String) -> GqlResult<bool> {
         plain_rs::features::feeds::import_opml(ctx.data::<Arc<Db>>()?, &content)?;
         Ok(true)
     }
 
-    async fn export_feeds(&self, ctx: &Context<'_>) -> GqlResult<String> {
+    fn export_feeds(&self, ctx: &Context<'_>) -> GqlResult<String> {
         Ok(plain_rs::features::feeds::export_opml(
             ctx.data::<Arc<Db>>()?,
         )?)
@@ -278,11 +278,7 @@ impl FeedMutation {
         )
     }
 
-    async fn delete_feed_entries(
-        &self,
-        ctx: &Context<'_>,
-        query: String,
-    ) -> GqlResult<ActionResult> {
+    fn delete_feed_entries(&self, ctx: &Context<'_>, query: String) -> GqlResult<ActionResult> {
         let db = ctx.data::<Arc<Db>>()?;
         if query.trim().is_empty() {
             return Err("query is required".into());

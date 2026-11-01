@@ -2,6 +2,7 @@ use super::domain_types::Tag;
 use async_graphql::{
     Context,
     dataloader::{DataLoader, Loader},
+    runtime::{TokioSpawner, TokioTimer},
 };
 use plain_rs::features::enums::DataType;
 use plain_rs::infrastructure::db::Db;
@@ -26,7 +27,8 @@ pub(crate) fn new(db: Arc<Db>) -> DataLoader<TagsLoader> {
             #[cfg(test)]
             loads: Default::default(),
         },
-        tokio::spawn,
+        TokioSpawner::current(),
+        TokioTimer::default(),
     )
 }
 

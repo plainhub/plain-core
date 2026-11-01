@@ -38,7 +38,7 @@ impl App {
 
 #[ComplexObject]
 impl App {
-    async fn url_token(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+    fn url_token(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         Ok(crate::graphql::executor::resource_credentials(ctx)?.1)
     }
 
@@ -62,7 +62,7 @@ impl App {
             Ok(None)
         }
     }
-    async fn app_dir(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+    fn app_dir(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         Ok(ctx
             .data::<plain_rs::runtime::Runtime>()?
             .device
@@ -70,7 +70,7 @@ impl App {
             .to_string_lossy()
             .into_owned())
     }
-    async fn device_type(&self, ctx: &Context<'_>) -> async_graphql::Result<DeviceType> {
+    fn device_type(&self, ctx: &Context<'_>) -> async_graphql::Result<DeviceType> {
         Ok(device_type(
             ctx.data::<Arc<Host>>()?.startup().device_type.as_str(),
         ))
@@ -101,7 +101,7 @@ impl App {
             .filter_map(|name| Capability::parse(&name))
             .collect())
     }
-    async fn build_channel(&self, ctx: &Context<'_>) -> async_graphql::Result<AppChannelType> {
+    fn build_channel(&self, ctx: &Context<'_>) -> async_graphql::Result<AppChannelType> {
         Ok(app_channel(
             &ctx.data::<Arc<Host>>()?.startup().build_channel,
         ))
@@ -122,10 +122,10 @@ impl App {
             .filter_map(|name| Permission::parse(name))
             .collect())
     }
-    async fn downloads_dir(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+    fn downloads_dir(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         Ok(ctx.data::<Arc<Host>>()?.startup().downloads_dir.clone())
     }
-    async fn debug(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+    fn debug(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
         Ok(ctx.data::<Arc<Host>>()?.startup().debug)
     }
 }
@@ -249,7 +249,7 @@ impl DeviceQuery {
         Ok(Long(i64::try_from(size)?))
     }
 
-    async fn app_log_path(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+    fn app_log_path(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         Ok(ctx
             .data::<plain_rs::runtime::Runtime>()?
             .logs
@@ -262,7 +262,7 @@ impl DeviceQuery {
     /// Whether the mDNS advertiser is currently scanning. Starting and
     /// stopping are commands, not state, so they report success rather
     /// than a snapshot the caller would have to re-read.
-    async fn is_discovering(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+    fn is_discovering(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
         let facts = ctx.data::<crate::server::ServerState>()?.mdns.snapshot();
         Ok(flag(&facts, "scanning"))
     }
@@ -291,7 +291,7 @@ impl DeviceMutation {
             .map_err(async_graphql::Error::new)
     }
 
-    async fn set_temp_value(
+    fn set_temp_value(
         &self,
         ctx: &Context<'_>,
         key: String,

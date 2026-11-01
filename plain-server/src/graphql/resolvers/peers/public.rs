@@ -151,7 +151,7 @@ impl PeersQuery {
         .await?;
         Ok(serde_json::from_value(value)?)
     }
-    async fn peers(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Peer>> {
+    fn peers(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Peer>> {
         let state = ctx.data::<crate::server::ServerState>()?;
         let rows = plain_rs::infrastructure::db::chat_store::peers::all(&state.db)?;
         let local = plain_rs::infrastructure::transport::lan::local_interfaces();

@@ -18,23 +18,10 @@ impl OutputType for Query {
         Cow::Borrowed("Query")
     }
     fn create_type_info(registry: &mut registry::Registry) -> String {
-        registry.create_output_type::<Self, _>(MetaTypeId::Object, |_| registry::MetaType::Object {
-            name: "Query".into(),
-            description: None,
-            fields: Default::default(),
-            cache_control: Default::default(),
-            extends: false,
-            shareable: false,
-            resolvable: true,
-            keys: None,
-            visible: None,
-            inaccessible: false,
-            interface_object: false,
-            tags: Default::default(),
-            is_subscription: false,
-            rust_typename: Some(std::any::type_name::<Self>()),
-            directive_invocations: Default::default(),
-            requires_scopes: Default::default(),
+        registry.create_output_type::<Self, _>(MetaTypeId::Object, |_| {
+            registry::ObjectBuilder::new("Query", Default::default())
+                .rust_typename(std::any::type_name::<Self>())
+                .build()
         })
     }
     async fn resolve(

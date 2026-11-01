@@ -86,15 +86,15 @@ pub struct BookmarkInput {
 
 #[ComplexObject]
 impl Bookmark {
-    async fn created_at(&self) -> async_graphql::Result<Instant> {
+    fn created_at(&self) -> async_graphql::Result<Instant> {
         parse_instant(&self.created_at)
     }
 
-    async fn updated_at(&self) -> async_graphql::Result<Instant> {
+    fn updated_at(&self) -> async_graphql::Result<Instant> {
         parse_instant(&self.updated_at)
     }
 
-    async fn last_clicked_at(&self) -> async_graphql::Result<Option<Instant>> {
+    fn last_clicked_at(&self) -> async_graphql::Result<Option<Instant>> {
         self.last_clicked_at
             .as_deref()
             .map(parse_instant)
@@ -104,10 +104,10 @@ impl Bookmark {
 
 #[ComplexObject]
 impl BookmarkGroup {
-    async fn created_at(&self) -> async_graphql::Result<Instant> {
+    fn created_at(&self) -> async_graphql::Result<Instant> {
         parse_instant(&self.created_at)
     }
-    async fn updated_at(&self) -> async_graphql::Result<Instant> {
+    fn updated_at(&self) -> async_graphql::Result<Instant> {
         parse_instant(&self.updated_at)
     }
 }

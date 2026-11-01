@@ -30,7 +30,7 @@ pub struct FavoriteFolderQuery;
 #[Object]
 impl FavoriteFolderQuery {
     /// List all favorite folders.
-    async fn favorite_folders(&self, ctx: &Context<'_>) -> Result<Vec<FavoriteFolder>> {
+    fn favorite_folders(&self, ctx: &Context<'_>) -> Result<Vec<FavoriteFolder>> {
         let db = ctx.data::<Arc<Db>>()?;
         list_gql(db)
     }
@@ -42,7 +42,7 @@ pub struct FavoriteFolderMutation;
 #[Object]
 impl FavoriteFolderMutation {
     /// Register a favorite folder and return the whole list.
-    async fn add_favorite_folder(
+    fn add_favorite_folder(
         &self,
         ctx: &Context<'_>,
         root_path: String,
@@ -55,7 +55,7 @@ impl FavoriteFolderMutation {
 
     /// Remove the favorite folder identified by `fullPath` and return the
     /// whole list.
-    async fn remove_favorite_folder(
+    fn remove_favorite_folder(
         &self,
         ctx: &Context<'_>,
         full_path: String,
@@ -68,7 +68,7 @@ impl FavoriteFolderMutation {
     }
 
     /// Set the favorite folder's display alias and return the whole list.
-    async fn set_favorite_folder_alias(
+    fn set_favorite_folder_alias(
         &self,
         ctx: &Context<'_>,
         full_path: String,

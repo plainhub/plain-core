@@ -16,7 +16,7 @@ pub struct ClipboardQuery;
 #[Object]
 impl ClipboardQuery {
     /// Paged clipboard history, newest first.
-    async fn clipboard_items(
+    fn clipboard_items(
         &self,
         ctx: &Context<'_>,
         query: String,
@@ -36,11 +36,7 @@ impl ClipboardQuery {
             .collect()
     }
 
-    async fn clipboard_item_count(
-        &self,
-        ctx: &Context<'_>,
-        query: String,
-    ) -> async_graphql::Result<i32> {
+    fn clipboard_item_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
         enabled(ctx)?;
         Ok(ctx.data::<Arc<Db>>()?.clipboard_count(&query)?.try_into()?)
     }
@@ -82,7 +78,7 @@ impl ClipboardMutation {
     /// Delete clipboard history entries matching the query DSL (`ids:` /
     /// `text:`; a bare word is a text LIKE). A blank query is rejected —
     /// send `all:true` to target everything.
-    async fn delete_clipboard_items(
+    fn delete_clipboard_items(
         &self,
         ctx: &Context<'_>,
         query: String,

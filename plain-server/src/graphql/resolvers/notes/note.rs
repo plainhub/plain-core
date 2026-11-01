@@ -70,17 +70,17 @@ pub struct NoteQuery;
 
 #[Object]
 impl NoteQuery {
-    async fn note_count(&self, ctx: &Context<'_>, query: String) -> GqlResult<i32> {
+    fn note_count(&self, ctx: &Context<'_>, query: String) -> GqlResult<i32> {
         Ok(notes::count(ctx.data::<Arc<Db>>()?, &query)?)
     }
 
-    async fn note(&self, ctx: &Context<'_>, id: ID) -> GqlResult<Option<Note>> {
+    fn note(&self, ctx: &Context<'_>, id: ID) -> GqlResult<Option<Note>> {
         notes::get(ctx.data::<Arc<Db>>()?, id.as_str())?
             .map(to_model)
             .transpose()
     }
 
-    async fn notes(
+    fn notes(
         &self,
         ctx: &Context<'_>,
         query: String,
@@ -99,7 +99,7 @@ pub struct NoteMutation;
 
 #[Object]
 impl NoteMutation {
-    async fn create_note(&self, ctx: &Context<'_>, input: NoteInput) -> GqlResult<Note> {
+    fn create_note(&self, ctx: &Context<'_>, input: NoteInput) -> GqlResult<Note> {
         to_model(notes::create(
             ctx.data::<Arc<Db>>()?,
             &input.title,
@@ -107,7 +107,7 @@ impl NoteMutation {
         )?)
     }
 
-    async fn update_note(&self, ctx: &Context<'_>, id: ID, input: NoteInput) -> GqlResult<Note> {
+    fn update_note(&self, ctx: &Context<'_>, id: ID, input: NoteInput) -> GqlResult<Note> {
         to_model(notes::update(
             ctx.data::<Arc<Db>>()?,
             id.as_str(),
@@ -116,36 +116,32 @@ impl NoteMutation {
         )?)
     }
 
-    async fn save_feed_entries_to_notes(
-        &self,
-        ctx: &Context<'_>,
-        query: String,
-    ) -> GqlResult<Vec<ID>> {
+    fn save_feed_entries_to_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<Vec<ID>> {
         Ok(notes::save_feed_entries(ctx.data::<Arc<Db>>()?, &query)?
             .into_iter()
             .map(ID)
             .collect())
     }
 
-    async fn trash_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<ActionResult> {
+    fn trash_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<ActionResult> {
         Ok(ActionResult {
             affected_count: notes::trash(ctx.data::<Arc<Db>>()?, &query)? as i32,
         })
     }
 
-    async fn restore_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<ActionResult> {
+    fn restore_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<ActionResult> {
         Ok(ActionResult {
             affected_count: notes::restore(ctx.data::<Arc<Db>>()?, &query)? as i32,
         })
     }
 
-    async fn delete_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<ActionResult> {
+    fn delete_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<ActionResult> {
         Ok(ActionResult {
             affected_count: notes::delete(ctx.data::<Arc<Db>>()?, &query)? as i32,
         })
     }
 
-    async fn export_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<String> {
+    fn export_notes(&self, ctx: &Context<'_>, query: String) -> GqlResult<String> {
         Ok(notes::export(ctx.data::<Arc<Db>>()?, &query)?)
     }
 }

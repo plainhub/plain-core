@@ -44,7 +44,7 @@ struct PeerContext {
 pub(crate) struct Mutation;
 #[Object]
 impl Mutation {
-    async fn create_chat_item(
+    fn create_chat_item(
         &self,
         ctx: &Context<'_>,
         content: String,

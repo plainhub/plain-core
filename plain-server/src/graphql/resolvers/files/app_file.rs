@@ -27,7 +27,7 @@ pub struct AppFile {
 
 #[ComplexObject]
 impl AppFile {
-    async fn real_path(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+    fn real_path(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         Ok(ctx
             .data::<Arc<plain_rs::features::files::app_files::FileStore>>()?
             .stored_path(&self.real_path)
@@ -36,11 +36,11 @@ impl AppFile {
             .into_owned())
     }
 
-    async fn created_at(&self) -> async_graphql::Result<Instant> {
+    fn created_at(&self) -> async_graphql::Result<Instant> {
         parse_instant(&self.created_at)
     }
 
-    async fn updated_at(&self) -> async_graphql::Result<Instant> {
+    fn updated_at(&self) -> async_graphql::Result<Instant> {
         parse_instant(&self.updated_at)
     }
 }
@@ -64,7 +64,7 @@ pub struct AppFileQuery;
 
 #[Object]
 impl AppFileQuery {
-    async fn app_files(
+    fn app_files(
         &self,
         ctx: &Context<'_>,
         query: String,
@@ -86,7 +86,7 @@ impl AppFileQuery {
             .collect())
     }
 
-    async fn app_file_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
+    fn app_file_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
         Ok(ctx.data::<Arc<Db>>()?.app_file_count(&query)?)
     }
 }

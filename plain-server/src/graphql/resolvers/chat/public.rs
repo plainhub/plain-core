@@ -115,7 +115,7 @@ impl ChatQuery {
     /// clients can render directly. `target` is the chat target id: a bare
     /// peer id (an optional `peer:` prefix is accepted), or a
     /// `channel:<id>` prefixed channel id.
-    async fn chat_items(
+    fn chat_items(
         &self,
         ctx: &Context<'_>,
         target: String,
@@ -133,7 +133,7 @@ impl ChatQuery {
         Ok(rows.iter().map(item).collect())
     }
 
-    async fn chat_item(
+    fn chat_item(
         &self,
         ctx: &Context<'_>,
         id: async_graphql::ID,
@@ -145,7 +145,7 @@ impl ChatQuery {
         )
     }
 
-    async fn chat_channels(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ChatChannel>> {
+    fn chat_channels(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ChatChannel>> {
         let facts = plain_rs::features::chat::events::public_channels(db(ctx)?, &actor(ctx)?)?;
         Ok(rows(&facts, channel))
     }
@@ -178,7 +178,7 @@ impl ChatMutation {
 
     /// Always true: an id that is already gone is the state the caller asked
     /// for, and the contract has no way to say "nothing was there".
-    async fn delete_chat_item(
+    fn delete_chat_item(
         &self,
         ctx: &Context<'_>,
         id: async_graphql::ID,
@@ -190,7 +190,7 @@ impl ChatMutation {
         Ok(true)
     }
 
-    async fn delete_chat_items(
+    fn delete_chat_items(
         &self,
         ctx: &Context<'_>,
         query: String,

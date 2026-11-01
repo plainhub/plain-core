@@ -50,12 +50,12 @@ pub struct BookmarkQuery;
 
 #[Object]
 impl BookmarkQuery {
-    async fn bookmark(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<Option<Bookmark>> {
+    fn bookmark(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<Option<Bookmark>> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         Ok(bookmark_db::get_bookmark_by_id(db, id.as_str())?.map(Bookmark::from))
     }
 
-    async fn bookmarks(&self, ctx: &Context<'_>) -> Vec<Bookmark> {
+    fn bookmarks(&self, ctx: &Context<'_>) -> Vec<Bookmark> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         bookmark_db::get_bookmarks(db)
             .into_iter()
@@ -63,7 +63,7 @@ impl BookmarkQuery {
             .collect()
     }
 
-    async fn bookmark_groups(&self, ctx: &Context<'_>) -> Vec<BookmarkGroup> {
+    fn bookmark_groups(&self, ctx: &Context<'_>) -> Vec<BookmarkGroup> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         let counts = bookmark_db::get_bookmarks(db).into_iter().fold(
             std::collections::HashMap::new(),
@@ -89,7 +89,7 @@ pub struct BookmarkMutation;
 
 #[Object]
 impl BookmarkMutation {
-    async fn add_bookmarks(
+    fn add_bookmarks(
         &self,
         ctx: &Context<'_>,
         urls: Vec<String>,
@@ -148,7 +148,7 @@ impl BookmarkMutation {
         Ok(Bookmark::from(bookmark))
     }
 
-    async fn delete_bookmarks(
+    fn delete_bookmarks(
         &self,
         ctx: &Context<'_>,
         ids: Vec<ID>,
@@ -167,16 +167,12 @@ impl BookmarkMutation {
         })
     }
 
-    async fn record_bookmark_click(
-        &self,
-        ctx: &Context<'_>,
-        id: ID,
-    ) -> async_graphql::Result<bool> {
+    fn record_bookmark_click(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
         bookmark_db::record_click(ctx.data_unchecked::<Arc<Db>>(), id.as_str())?;
         Ok(true)
     }
 
-    async fn create_bookmark_group(
+    fn create_bookmark_group(
         &self,
         ctx: &Context<'_>,
         name: String,
@@ -187,7 +183,7 @@ impl BookmarkMutation {
         Ok(BookmarkGroup::from_group(group, 0))
     }
 
-    async fn update_bookmark_group(
+    fn update_bookmark_group(
         &self,
         ctx: &Context<'_>,
         id: ID,
@@ -207,11 +203,7 @@ impl BookmarkMutation {
         Ok(BookmarkGroup::from_group(group, item_count))
     }
 
-    async fn delete_bookmark_group(
-        &self,
-        ctx: &Context<'_>,
-        id: ID,
-    ) -> async_graphql::Result<bool> {
+    fn delete_bookmark_group(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         let affected = bookmark_db::get_bookmarks_by_group_id(db, id.as_str());
         bookmark_db::delete_bookmark_group(db, id.as_str())?;

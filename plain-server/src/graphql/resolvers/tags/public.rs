@@ -15,7 +15,7 @@ pub struct TagsQuery;
 
 #[Object]
 impl TagsQuery {
-    async fn tags(&self, ctx: &Context<'_>, r#type: DataType) -> async_graphql::Result<Vec<Tag>> {
+    fn tags(&self, ctx: &Context<'_>, r#type: DataType) -> async_graphql::Result<Vec<Tag>> {
         let db = db(ctx);
         Ok(tags::tags_by_type(db, r#type.kind())
             .map_err(failed)?
@@ -24,7 +24,7 @@ impl TagsQuery {
             .collect())
     }
 
-    async fn tag_relations(
+    fn tag_relations(
         &self,
         ctx: &Context<'_>,
         r#type: DataType,
@@ -41,7 +41,7 @@ impl TagsQuery {
             .collect())
     }
 
-    async fn tag_keys(
+    fn tag_keys(
         &self,
         ctx: &Context<'_>,
         id: async_graphql::ID,
@@ -56,7 +56,7 @@ pub struct TagsMutation;
 
 #[Object]
 impl TagsMutation {
-    async fn create_tag(
+    fn create_tag(
         &self,
         ctx: &Context<'_>,
         r#type: DataType,
@@ -66,7 +66,7 @@ impl TagsMutation {
         Ok(tag(&row))
     }
 
-    async fn update_tag(
+    fn update_tag(
         &self,
         ctx: &Context<'_>,
         id: async_graphql::ID,
@@ -78,11 +78,7 @@ impl TagsMutation {
             .ok_or_else(|| async_graphql::Error::new(format!("Tag {} not found", id.as_str())))
     }
 
-    async fn delete_tag(
-        &self,
-        ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+    fn delete_tag(&self, ctx: &Context<'_>, id: async_graphql::ID) -> async_graphql::Result<bool> {
         tags::delete_tag(db(ctx), id.as_str()).map_err(failed)?;
         Ok(true)
     }
@@ -119,7 +115,7 @@ impl TagsMutation {
         Ok(true)
     }
 
-    async fn update_tag_relations(
+    fn update_tag_relations(
         &self,
         ctx: &Context<'_>,
         r#type: DataType,

@@ -6,7 +6,7 @@ use std::sync::Arc;
 pub struct PomodoroControlMutation;
 #[Object]
 impl PomodoroControlMutation {
-    async fn adjust_pomodoro(
+    fn adjust_pomodoro(
         &self,
         ctx: &Context<'_>,
         duration_sec: i32,
