@@ -761,6 +761,53 @@ fn password_protection(digest: &str) -> LoginProtection {
     }
 }
 
+#[tokio::test]
+async fn password_login_requires_setup_and_the_configured_password() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = crate::server::ContentServer::open(directory.path()).unwrap();
+    let state = server.runtime_state();
+    let security = &state.prefs;
+    plain_rs::features::prefs::security::configure_password_login(security).unwrap();
+    let pending = password_protection(&password_digest(security));
+    let request = json!({
+        "loginContext": pending.channel().context,
+        "password": password_digest(security),
+    });
+    assert_eq!(
+        pending.validate(&state, &request).unwrap_err().to_string(),
+        "password_setup_required"
+    );
+    plain_rs::features::prefs::security::setup_password(security, "owned-password").unwrap();
+    let protection = password_protection(&password_digest(security));
+    let request = json!({
+        "loginContext": protection.channel().context,
+        "password": password_digest(security),
+    });
+    protection.validate(&state, &request).unwrap();
+    let mut wrong = request;
+    wrong["password"] = json!("wrong-password");
+    assert_eq!(
+        protection.validate(&state, &wrong).unwrap_err().to_string(),
+        "invalid_password"
+    );
+    assert!(pending.validate(&state, &wrong).is_err());
+    server.stop_core().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn first_password_login_completes_without_owner_approval() {
+    let (_directory, server, port) = passwordless_server().await;
+    let state = server.runtime_state();
+    plain_rs::features::prefs::security::configure_password_login(&state.prefs).unwrap();
+    plain_rs::features::prefs::security::setup_password(&state.prefs, "owned-password").unwrap();
+    let (_socket, _, _, _) =
+        browser_login(&state, port, "first-browser", Some("owned-password")).await;
+    assert!(state.db.session_get("first-browser").unwrap().is_some());
+    assert!(state.login_attempts.lock().unwrap().pending.is_empty());
+    server.shutdown().await;
+}
+
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_encryption() {

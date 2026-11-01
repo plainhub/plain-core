@@ -51,6 +51,10 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
             axum::routing::any(crate::http::dlna::callback),
         )
         .route("/init", post(crate::http::init::init))
+        .route(
+            "/auth/setup",
+            post(crate::http::auth::setup::setup).layer(DefaultBodyLimit::max(8 * 1024)),
+        )
         .layer(DefaultBodyLimit::max(32 * 1024 * 1024))
         .with_state(state.clone());
     Router::new()

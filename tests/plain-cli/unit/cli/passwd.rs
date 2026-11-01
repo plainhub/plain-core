@@ -20,4 +20,9 @@ fn password_command_writes_shared_system_credentials() {
             .as_deref(),
         Some("example-password")
     );
+    assert_eq!(
+        plain_rs::features::prefs::security::password_type(&prefs).unwrap(),
+        plain_rs::features::prefs::security::PasswordType::Fixed
+    );
+    assert!(!prefs.get_or("login_require_approval", true));
 }

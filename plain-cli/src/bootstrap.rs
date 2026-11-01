@@ -29,7 +29,6 @@ pub fn run() -> Result<()> {
         crate::cli::Cmd::Run {
             media_directories,
             web_root,
-            automount,
         } => {
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
@@ -41,7 +40,6 @@ pub fn run() -> Result<()> {
                     file_index_defaults: None,
                     media_directories,
                     web_root,
-                    automount,
                 },
             ))
         }

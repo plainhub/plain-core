@@ -40,10 +40,7 @@ fn set_password(
     let prefs = plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(
         directory,
     ))?;
-    plain_rs::features::prefs::security::Command::SetPassword {
-        password: password.to_owned(),
-    }
-    .apply(&prefs)?;
+    plain_rs::features::prefs::security::set_password_login(&prefs, password)?;
     Ok(())
 }
 

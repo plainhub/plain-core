@@ -112,7 +112,6 @@ impl Cli {
             Scope::Run => Cmd::Run {
                 media_directories: values.media_directories,
                 web_root: values.web_root,
-                automount: values.automount,
             },
             Scope::Passwd => Cmd::Passwd {
                 stdin: values.stdin,
@@ -143,11 +142,17 @@ impl Cli {
                 });
             }
         };
+        if values.data_dir.is_some()
+            && !matches!(scope, Scope::Run | Scope::Uninstall | Scope::Passwd | Scope::Requests | Scope::Allow | Scope::Deny)
+        {
+            return Err(ParseError::invalid("--data-dir is not used by this command"));
+        }
+        if values.cache_dir.is_some() && !matches!(scope, Scope::Run | Scope::Passwd) {
+            return Err(ParseError::invalid("--cache-dir is not used by this command"));
+        }
         Ok(Self {
             data_dir: values.data_dir,
             cache_dir: values.cache_dir,
-            tls_cert: values.tls_cert,
-            tls_key: values.tls_key,
             command,
         })
     }

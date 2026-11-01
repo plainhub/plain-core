@@ -10,7 +10,6 @@ use std::{path::PathBuf, sync::Arc};
 pub struct Options {
     pub media_directories: Vec<PathBuf>,
     pub web_root: Option<PathBuf>,
-    pub automount: bool,
     #[cfg(test)]
     pub file_index_defaults: Option<plain_rs::features::prefs::file_index::Defaults>,
 }
@@ -25,7 +24,6 @@ pub struct Service {
 
 impl Service {
     pub async fn start(paths: &AppPaths, options: Options) -> Result<Self> {
-        storage::validate_automount(options.automount)?;
         crate::bootstrap::initialize_tls();
         let core = Arc::new(
             ContentServer::open_with_cache(&paths.data_dir, &paths.cache_dir)
@@ -38,6 +36,13 @@ impl Service {
                 .set_defaults_for_test(defaults)
                 .map_err(anyhow::Error::msg)?;
         }
+        let prefs = core.shared_preferences().map_err(anyhow::Error::msg)?;
+        plain_rs::features::prefs::security::configure_password_login(&prefs)?;
+        let permissions = plain_rs::features::prefs::pref_keys::API_PERMISSIONS;
+        if prefs.get::<Vec<String>>(permissions)?.is_none() {
+            prefs.set(permissions, [plain_rs::features::services::device::permission::Permission::WriteExternalStorage])?;
+        }
+        storage::source_directories(&prefs, &options.media_directories)?;
         let log_file = plain_rs::libs::platform::system::log::default_log_file(&paths.data_dir);
         plain_rs::libs::platform::system::log::set_file(&log_file)?;
         core.set_log_file(&log_file).map_err(anyhow::Error::msg)?;
@@ -65,7 +70,7 @@ impl Service {
             );
         }
         #[cfg(target_os = "linux")]
-        if options.automount {
+        if plain_rs::libs::platform::unix::is_root() {
             let store = self.core.runtime().store.get()?;
             let events = storage::event_sink(&self.core).map_err(anyhow::Error::msg)?;
             let mount_store = store.clone();
@@ -81,15 +86,6 @@ impl Service {
                 plain_rs::libs::platform::linux::mounts::automount::Watcher::start(store, events),
             );
         }
-        let prefs = self.core.shared_preferences().map_err(anyhow::Error::msg)?;
-        let roots = storage::source_directories(&prefs, &options.media_directories)?;
-        let catalog = self
-            .core
-            .native_media_catalog()
-            .map_err(anyhow::Error::msg)?;
-        catalog
-            .configure_scan_directories(None)
-            .map_err(anyhow::Error::msg)?;
         *self
             .core
             .runtime()
@@ -115,12 +111,6 @@ impl Service {
             .map_err(anyhow::Error::msg)?;
         log::info!("HTTP server listening on :{}", ports.0);
         log::info!("HTTPS server listening on :{}", ports.1);
-        if !roots.is_empty() {
-            storage::start_source_scan(&catalog).map_err(anyhow::Error::msg)?;
-        }
-        catalog
-            .watch_source_directories()
-            .map_err(anyhow::Error::msg)?;
         Ok(())
     }
 

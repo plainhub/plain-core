@@ -102,3 +102,44 @@ async fn cross_origin_access_follows_current_shared_preferences_or_debug_configu
     }
     core.stop_core().await;
 }
+
+#[tokio::test]
+async fn http2_same_origin_uses_uri_authority_without_host_header() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    core.set_build_debug(false);
+    let router = Router::new()
+        .route(
+            "/assets/main.js",
+            axum::routing::get(|| async { StatusCode::NO_CONTENT }),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            core.runtime_state(),
+            apply,
+        ));
+    for (origin, expected) in [
+        ("https://device.local:8443", StatusCode::NO_CONTENT),
+        ("https://device.local", StatusCode::FORBIDDEN),
+        ("http://device.local:8443", StatusCode::FORBIDDEN),
+        ("https://other.example:8443", StatusCode::FORBIDDEN),
+    ] {
+        let mut request = axum::http::Request::builder()
+            .version(axum::http::Version::HTTP_2)
+            .uri("https://device.local:8443/assets/main.js")
+            .header(header::ORIGIN, origin)
+            .body(Body::empty())
+            .unwrap();
+        request
+            .extensions_mut()
+            .insert(crate::http::ConnectionScheme("https"));
+        let response = router.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), expected, "{origin}");
+        assert_eq!(
+            response
+                .headers()
+                .contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN),
+            expected == StatusCode::NO_CONTENT
+        );
+    }
+    core.stop_core().await;
+}

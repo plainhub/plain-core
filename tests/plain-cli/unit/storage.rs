@@ -33,13 +33,6 @@ fn relative_scan_roots_are_rejected_before_saving_preferences() {
     );
 }
 
-#[test]
-fn ordinary_startup_never_requires_mount_privileges() {
-    validate_automount(false).unwrap();
-    #[cfg(not(target_os = "linux"))]
-    assert!(validate_automount(true).is_err());
-}
-
 #[tokio::test]
 async fn startup_scan_indexes_configured_directories_through_the_headless_host() {
     use plain_rs::features::services::files::media_scans::Status;
@@ -70,7 +63,7 @@ async fn startup_scan_indexes_configured_directories_through_the_headless_host()
     catalog.configure_scan_directories(None).unwrap();
     let runtime = Arc::new(crate::host::Host::new(core.clone(), vec![]));
     let runner = tokio::spawn(runtime.run());
-    let started = start_source_scan(&catalog).unwrap();
+    let started = catalog.start_source_scan("/").unwrap();
     let result = tokio::time::timeout(std::time::Duration::from_secs(10), async {
         loop {
             let snapshot = catalog.file_scan_status().unwrap().unwrap();

@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn previous_parser_command_option_and_help_results_are_preserved() {
+fn supported_command_option_and_help_results_are_preserved() {
     let cases: &[(&[&str], i32, Option<&str>, Option<&str>)] = include!("reference_cases.rs");
     assert_eq!(cases.len(), 564);
     for (arguments, code, parsed, help) in cases {
@@ -103,4 +103,30 @@ fn native_paths_preserve_unpaired_utf16_surrogates() {
     assert!(matches!(Cli::try_parse_from([
         OsString::from("plainapp"), "run".into(), attached,
     ]).unwrap().command, Cmd::Run { media_directories, .. } if media_directories[0].as_os_str() == path));
+}
+
+#[test]
+fn unused_options_are_rejected_instead_of_silently_ignored() {
+    for arguments in [
+        vec!["run", "--automount"],
+        vec!["run", "--tls-cert", "certificate.pem"],
+        vec!["run", "--tls-key", "private.key"],
+        vec!["install", "--data-dir", "data"],
+        vec!["--data-dir", "data", "install"],
+        vec!["install", "--cache-dir", "cache"],
+        vec!["update", "--data-dir", "data"],
+        vec!["--cache-dir", "cache", "bench"],
+        vec!["--cache-dir", "cache", "install"],
+        vec!["--data-dir", "data", "update"],
+        vec!["--tls-cert", "certificate.pem", "run"],
+        vec!["login", "requests", "--cache-dir", "cache"],
+        vec!["uninstall", "--cache-dir", "cache"],
+    ] {
+        assert_eq!(
+            Cli::try_parse_from(std::iter::once("plainapp").chain(arguments.clone()))
+                .unwrap_err().code,
+            2,
+            "{arguments:?}"
+        );
+    }
 }

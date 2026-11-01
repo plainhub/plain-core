@@ -199,14 +199,13 @@ Set `PLAIN_WEB_DIST` to an absolute frontend build directory to override the emb
 
 ### Configuration
 
-`run --web-root <directory>` serves a frontend bundle from disk instead of the compiled one, which is how a local frontend build is tried without rebuilding:
+For local frontend tests, `run --web-root <directory>` serves a bundle from disk instead of the compiled one without rebuilding the server.
 
-```ini
-[Service]
-ExecStart=/usr/local/bin/plainapp run --web-root /opt/plainapp/web
-```
+Ports come from user settings and default to `8080` and `8443`. Data defaults to `$HOME/.plainapp/data`; cache uses an application directory under the OS cache location. The installed service runs as root.
 
-Ports come from user settings and default to `8080` and `8443`. Data and cache live in `$HOME/.plainapp/data` and `$HOME/.plainapp/cache`; the unit sets no `User=`, so it runs as root and uses `/root/.plainapp`. Override with `--data-dir`, `--cache-dir`, `--tls-cert`, `--tls-key` or the `PLAINAPP_DATA_DIR`, `PLAINAPP_CACHE_DIR`, `PLAINAPP_TLS_CERT` and `PLAINAPP_TLS_KEY` environment variables.
+Linux root services automatically mount eligible unmounted filesystems at stable `/mnt/usbX` paths and monitor block-device changes.
+
+Configure paths with the `PLAINAPP_DATA_DIR`, `PLAINAPP_CACHE_DIR`, `PLAINAPP_TLS_CERT` and `PLAINAPP_TLS_KEY` environment variables. For isolated test instances, `run` accepts `--data-dir`, `--cache-dir`, repeated `--media-dir` and `--web-root`. `passwd` accepts data/cache directories; `uninstall` and `login` accept a data directory. Installation, update and benchmark commands accept no path overrides.
 
 ### Upgrade and removal
 

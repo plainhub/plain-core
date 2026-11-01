@@ -55,34 +55,23 @@ fn general_run_accepts_multiple_media_directories_and_global_paths() {
         Cmd::Run {
             media_directories,
             web_root,
-            automount,
         } => {
             assert_eq!(
                 media_directories,
                 [PathBuf::from("photos"), PathBuf::from("documents")]
             );
             assert_eq!(web_root, Some(PathBuf::from("web")));
-            assert!(!automount);
         }
         _ => panic!("run command required"),
     }
 }
 
 #[test]
-fn password_input_and_linux_automount_are_explicit_options() {
+fn password_input_can_use_standard_input() {
     assert!(matches!(
         Cli::try_parse_from(["plainapp", "passwd", "--stdin"])
             .unwrap()
             .command,
         Cmd::Passwd { stdin: true }
-    ));
-    assert!(matches!(
-        Cli::try_parse_from(["plainapp", "run", "--automount"])
-            .unwrap()
-            .command,
-        Cmd::Run {
-            automount: true,
-            ..
-        }
     ));
 }

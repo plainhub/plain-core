@@ -1,7 +1,12 @@
 mod command;
 use super::pref_keys as keys;
+mod password_login;
 mod update;
 pub use command::Command;
+pub use password_login::{
+    PasswordSetupError, configure_password_login, password_setup_required, set_password_login,
+    setup_password,
+};
 pub use update::{ReleaseInfo, UpdateInfo, UpdatePatch};
 
 use super::{Prefs, PrefsError, Result};
@@ -65,13 +70,16 @@ pub fn random_password(length: usize) -> String {
 }
 
 pub fn bootstrap(prefs: &Prefs) -> Result<()> {
+    let password_type = password_type(prefs)?;
     prefs.update(|map| {
         ensure(map, CLIENT_ID, crate::libs::utils::short_uuid::short_uuid)?;
         ensure(map, SIGNATURE_KEY_PAIR, || {
             crate::libs::utils::base64::base64_encode(&crate::libs::crypto::ed25519_generate().0)
         })?;
         ensure(map, MASTER_SECRET, crate::libs::crypto::gen_token)?;
-        ensure(map, PASSWORD, || random_password(6))?;
+        if password_type != PasswordType::Fixed {
+            ensure(map, PASSWORD, || random_password(6))?;
+        }
         ensure(map, ADB_TOKEN, || random_password(32))?;
         ensure(map, MDNS_HOSTNAME, generate_mdns_hostname)?;
         let rotate = read::<bool>(map, ROTATE_URL_TOKEN_ON_RESTART)?;

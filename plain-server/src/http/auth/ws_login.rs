@@ -157,6 +157,10 @@ impl LoginProtection {
     }
 
     fn validate(&self, state: &ServerState, request: &Value) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !plain_rs::features::prefs::security::password_setup_required(&state.prefs)?,
+            "password_setup_required"
+        );
         let channel = self.channel();
         channel.fresh(now_ms())?;
         anyhow::ensure!(

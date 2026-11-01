@@ -1,16 +1,6 @@
 use anyhow::Result;
 use std::path::PathBuf;
 
-pub(super) fn validate_automount(enabled: bool) -> Result<()> {
-    if !enabled {
-        return Ok(());
-    }
-    #[cfg(target_os = "linux")]
-    return plain_rs::libs::platform::linux::install::service::require_root();
-    #[cfg(not(target_os = "linux"))]
-    anyhow::bail!("Automatic disk mounting is available on Linux");
-}
-
 pub(super) fn source_directories(
     prefs: &plain_rs::features::prefs::Prefs,
     requested: &[PathBuf],
@@ -32,12 +22,6 @@ pub(super) fn source_directories(
     .map_err(anyhow::Error::msg)
 }
 
-pub(super) fn start_source_scan(
-    catalog: &plain_rs::features::services::files::catalog_scan::NativeMediaCatalog,
-) -> Result<plain_rs::features::services::files::media_scans::Snapshot, String> {
-    catalog.start_source_scan("/")
-}
-
 #[cfg(target_os = "linux")]
 pub(crate) fn event_sink(
     core: &plain_server::server::ContentServer,
@@ -55,7 +39,7 @@ pub(crate) fn event_sink(
                 let result = (|| -> Result<(), String> {
                     catalog.watch_source_directories()?;
                     if !catalog.source_directories()?.is_empty() {
-                        start_source_scan(&catalog)?;
+                        catalog.start_source_scan("/")?;
                     }
                     Ok(())
                 })();

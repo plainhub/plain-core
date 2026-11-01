@@ -45,8 +45,20 @@ pub(crate) async fn init(
         Ok(pair) => pair,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    Json(json!({"signaturePublicKey":plain_rs::libs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required}))
-        .into_response()
+    let needs_setup =
+        match plain_rs::features::prefs::security::password_setup_required(&state.prefs) {
+            Ok(value) => value,
+            Err(error) => {
+                log::error!("Password setup state unavailable: {error}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+    let mut result = json!({"signaturePublicKey":plain_rs::libs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required});
+    if needs_setup {
+        result["needsSetup"] = json!(true);
+        result["setupHttpsPort"] = json!(state.prefs.get_or("https_port", 8443u16));
+    }
+    Json(result).into_response()
 }
 
 #[cfg(test)]

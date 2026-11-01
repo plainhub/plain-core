@@ -36,9 +36,15 @@ pub(crate) async fn apply(
         .get::<crate::http::ConnectionScheme>()
         .map_or("http", |scheme| scheme.0);
     let host = request
-        .headers()
-        .get(header::HOST)
-        .and_then(|v| v.to_str().ok())
+        .uri()
+        .authority()
+        .map(|authority| authority.as_str())
+        .or_else(|| {
+            request
+                .headers()
+                .get(header::HOST)
+                .and_then(|value| value.to_str().ok())
+        })
         .unwrap_or_default();
     let trustworthy = is_potentially_trustworthy(scheme, host);
     let origin = request.headers().get(header::ORIGIN).cloned();

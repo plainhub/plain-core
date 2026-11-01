@@ -1,6 +1,32 @@
 use super::*;
 
 #[tokio::test]
+async fn fixed_password_without_a_secret_requires_initial_setup() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    state.prefs.set("password_type", "FIXED").unwrap();
+    state.prefs.set("password", "").unwrap();
+    let mut headers = HeaderMap::new();
+    headers.insert("c-id", "first-browser".parse().unwrap());
+    let response = init(
+        State(state),
+        ConnectInfo("127.0.0.1:1234".parse().unwrap()),
+        headers,
+        Bytes::new(),
+    )
+    .await;
+    let payload: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 2048)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(payload["needsSetup"], true);
+    core.stop_core().await;
+}
+
+#[tokio::test]
 async fn init_requires_a_client_id_and_returns_forbidden_when_access_is_disabled() {
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
