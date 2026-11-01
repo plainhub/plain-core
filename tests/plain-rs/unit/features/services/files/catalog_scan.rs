@@ -594,3 +594,60 @@ async fn watcher_reconciliation_waits_for_the_active_scan() {
     reconcile.await.unwrap();
     core.stop_core().await;
 }
+
+#[cfg(all(unix, feature = "runtime-media"))]
+#[tokio::test]
+async fn scanning_skips_unreadable_directories_and_preserves_their_existing_rows() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("source");
+    let denied = source.join("denied");
+    std::fs::create_dir_all(&denied).unwrap();
+    let private = denied.join("old.rs");
+    std::fs::write(&private, b"private").unwrap();
+    let public = source.join("readable.rs");
+    std::fs::write(&public, b"public").unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let id = state
+        .db
+        .record_file_paths(&[private.to_str().unwrap().into()], None)
+        .unwrap()[0]
+        .id;
+    let catalog = NativeMediaCatalog::new(state.clone());
+    std::fs::set_permissions(&denied, std::fs::Permissions::from_mode(0)).unwrap();
+    let denied_by_os = std::fs::read_dir(&denied).is_err();
+    let result = catalog.scan_directory(source.to_str().unwrap()).await;
+    let denied_result = catalog.scan_directory(denied.to_str().unwrap()).await;
+    std::fs::set_permissions(&denied, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let denied_result = denied_result.unwrap();
+    assert_eq!(
+        denied_result.status,
+        crate::features::services::files::media_scans::Status::Completed
+    );
+    if denied_by_os {
+        assert!(matches!(
+            denied_result.sources[0].state,
+            crate::features::services::files::media_scans::CoverageState::Excluded
+        ));
+    }
+    let result = result.unwrap();
+    assert_eq!(
+        result.status,
+        crate::features::services::files::media_scans::Status::Completed
+    );
+    assert!(result.error.is_none());
+    assert!(!state.db.file(id).unwrap().unwrap().missing);
+    assert_eq!(
+        state
+            .db
+            .with_conn(|connection| connection.query_row(
+                "SELECT COUNT(*) FROM files WHERE file_name='readable.rs' AND missing=0",
+                [],
+                |row| row.get::<_, i64>(0)
+            ))
+            .unwrap(),
+        1
+    );
+    core.stop_core().await;
+}

@@ -1,5 +1,5 @@
 use std::path::Path;
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 use std::sync::OnceLock;
 
 #[cfg(target_os = "macos")]
@@ -21,7 +21,7 @@ const EXCLUDED_SYSTEM_ROOTS: &[&str] = &[
 #[cfg(target_os = "linux")]
 const EXCLUDED_SYSTEM_ROOTS: &[&str] = &[
     "/proc", "/sys", "/dev", "/run", "/tmp", "/snap", "/usr", "/etc", "/var", "/boot", "/opt",
-    "/srv", "/lib", "/lib32", "/lib64", "/bin", "/sbin",
+    "/lib", "/lib32", "/lib64", "/bin", "/sbin",
 ];
 
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
@@ -85,21 +85,10 @@ pub fn is_media_excluded_at(
 
 #[cfg(target_os = "macos")]
 fn is_cloud_drive_ancestor(path: &str, ancestor: &Path) -> bool {
-    let Some(cloud) = cloud_drive_path() else {
+    let Some(cloud) = crate::features::prefs::file_index::macos_cloud_documents_root(path) else {
         return false;
     };
-    Path::new(path).starts_with(cloud) && cloud.starts_with(ancestor)
-}
-
-#[cfg(target_os = "macos")]
-fn cloud_drive_path() -> Option<&'static std::path::PathBuf> {
-    static CLOUD: OnceLock<Option<std::path::PathBuf>> = OnceLock::new();
-    CLOUD
-        .get_or_init(|| {
-            std::env::var_os("HOME")
-                .map(|home| Path::new(&home).join("Library/Mobile Documents/com~apple~CloudDocs"))
-        })
-        .as_ref()
+    cloud.starts_with(ancestor)
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -153,19 +142,7 @@ pub fn is_media_excluded_name_or_root(
 
 #[cfg(target_os = "macos")]
 fn is_platform_private_root(path: &str) -> bool {
-    static LIBRARY: OnceLock<Option<String>> = OnceLock::new();
-    let library = LIBRARY.get_or_init(|| {
-        std::env::var_os("HOME").map(|home| {
-            Path::new(&home)
-                .join("Library")
-                .to_string_lossy()
-                .to_string()
-        })
-    });
-    library.as_ref().is_some_and(|library| {
-        under_root(path, library)
-            && !cloud_drive_path().is_some_and(|cloud| Path::new(path).starts_with(cloud))
-    })
+    crate::features::prefs::file_index::macos_application_directory(path)
 }
 
 #[cfg(target_os = "windows")]

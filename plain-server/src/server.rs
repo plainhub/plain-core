@@ -109,6 +109,7 @@ impl ContentServer {
     pub async fn resolve_native_file(&self, reference: &str) -> Result<PathBuf, String> {
         plain_rs::features::services::files::file_access::resolve_native(&self.state, reference)
             .await
+            .map_err(|error| error.to_string())
     }
 
     pub async fn read_resource(

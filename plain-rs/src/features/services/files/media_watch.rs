@@ -244,7 +244,14 @@ where
 fn root_key(root: &Path) -> Result<Option<String>, String> {
     match crate::libs::utils::file_identity::key(root) {
         Ok(key) => Ok(key),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied
+            ) =>
+        {
+            Ok(None)
+        }
         Err(error) => Err(format!("{}: {error}", root.display())),
     }
 }
@@ -260,10 +267,14 @@ fn watch_tree(
     }
     if cfg!(any(target_os = "macos", target_os = "windows")) {
         if !watched.iter().any(|path| root.starts_with(path)) {
-            watcher
-                .watch(root, RecursiveMode::Recursive)
-                .map_err(|error| error.to_string())?;
-            watched.insert(root.to_owned());
+            match watcher.watch(root, RecursiveMode::Recursive) {
+                Ok(()) => {
+                    watched.insert(root.to_owned());
+                }
+                Err(error) if matches!(&error.kind, notify::ErrorKind::Io(error) if error.kind() == std::io::ErrorKind::PermissionDenied) =>
+                    {}
+                Err(error) => return Err(error.to_string()),
+            }
         }
         return Ok(());
     }
@@ -279,8 +290,7 @@ fn watch_tree(
                     watched.insert(path.clone());
                 }
                 Err(error)
-                    if path != root
-                        && matches!(&error.kind,
+                    if matches!(&error.kind,
                     notify::ErrorKind::Io(error) if matches!(error.kind(), std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound)) =>
                 {
                     continue;
@@ -296,6 +306,11 @@ fn watch_tree(
                     match entry.and_then(|entry| Ok((entry.file_type()?, entry.path()))) {
                         Ok((kind, path)) if kind.is_dir() => pending.push(path),
                         Ok(_) => {}
+                        Err(error)
+                            if matches!(
+                                error.kind(),
+                                std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
+                            ) => {}
                         Err(error) => {
                             failure = Some(error.to_string());
                         }
@@ -303,11 +318,10 @@ fn watch_tree(
                 }
             }
             Err(error)
-                if path != root
-                    && matches!(
-                        error.kind(),
-                        std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
-                    ) => {}
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
+                ) => {}
             Err(error) => {
                 failure = Some(error.to_string());
             }

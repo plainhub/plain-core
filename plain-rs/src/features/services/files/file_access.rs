@@ -1,23 +1,25 @@
 pub async fn resolve_native(
     state: &crate::runtime::Runtime,
     reference: &str,
-) -> Result<std::path::PathBuf, String> {
-    state.native_client_id()?;
+) -> anyhow::Result<std::path::PathBuf> {
+    state.native_client_id().map_err(anyhow::Error::msg)?;
     let path = crate::features::services::files::references::resolve(
         state.db.clone(),
         state.directory.clone(),
         reference,
-    )
-    .map_err(|error| error.to_string())?;
+    )?;
     let path = std::path::PathBuf::from(path);
     if !path.is_absolute() {
-        return Err("absolute native file path required".into());
+        anyhow::bail!("absolute native file path required");
     }
     state
         .file_platform
-        .authorize(path.to_str().ok_or("invalid file path encoding")?, false)
-        .await
-        .map_err(|error| error.to_string())?;
-    state.native_client_id()?;
+        .authorize(
+            path.to_str()
+                .ok_or_else(|| anyhow::anyhow!("invalid file path encoding"))?,
+            false,
+        )
+        .await?;
+    state.native_client_id().map_err(anyhow::Error::msg)?;
     Ok(path)
 }

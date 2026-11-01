@@ -280,3 +280,52 @@ fn an_excluded_special_root_is_still_invalid() {
     );
     assert_eq!(visits, 0);
 }
+
+#[cfg(unix)]
+#[test]
+fn unreadable_directories_are_skipped_without_losing_readable_siblings() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = tempfile::tempdir().unwrap();
+    let denied = directory.path().join("denied");
+    write_file(&denied.join("nested/private.txt"), "private");
+    write_file(&directory.path().join("readable/public.txt"), "public");
+    fs::set_permissions(&denied, fs::Permissions::from_mode(0)).unwrap();
+    let denied_by_os = match fs::read_dir(&denied) {
+        Ok(_) => false,
+        Err(error) => {
+            assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+            true
+        }
+    };
+    let mut seen = Vec::new();
+    let result = walk_entries(
+        directory.path(),
+        |_| false,
+        || false,
+        |path| {
+            seen.push(path.to_owned());
+            Ok(())
+        },
+    );
+    let mut root_visits = 0;
+    let denied_result = walk_entries(
+        &denied,
+        |_| false,
+        || false,
+        |_| {
+            root_visits += 1;
+            Ok(())
+        },
+    );
+    fs::set_permissions(&denied, fs::Permissions::from_mode(0o700)).unwrap();
+    result.unwrap();
+    denied_result.unwrap();
+    assert!(seen.contains(&directory.path().join("readable/public.txt")));
+    if denied_by_os {
+        assert_eq!(root_visits, 0);
+        assert!(!seen.iter().any(|path| path.starts_with(&denied)));
+    } else {
+        assert_eq!(root_visits, 3);
+        assert!(seen.contains(&denied.join("nested/private.txt")));
+    }
+}

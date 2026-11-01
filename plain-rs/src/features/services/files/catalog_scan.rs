@@ -102,7 +102,8 @@ impl NativeMediaCatalog {
         }
         let path =
             crate::features::services::files::file_access::resolve_native(&self.state, reference)
-                .await?;
+                .await
+                .map_err(|error| error.to_string())?;
         let metadata = tokio::task::spawn_blocking(move || {
             crate::features::media::file_facts::read_file_metadata_with_availability(
                 &path, data_type,
@@ -478,7 +479,16 @@ impl NativeMediaCatalog {
                 .await
                 {
                     Ok(path) => path,
+                    Err(error)
+                        if error.downcast_ref::<std::io::Error>().is_some_and(|error| {
+                            error.kind() == std::io::ErrorKind::PermissionDenied
+                        }) =>
+                    {
+                        session.source_state(&reference, CoverageState::Excluded, None)?;
+                        continue;
+                    }
                     Err(error) => {
+                        let error = error.to_string();
                         session.source_state(
                             &reference,
                             CoverageState::Failed,
@@ -500,6 +510,10 @@ impl NativeMediaCatalog {
                         )?;
                         discovery_failed = true;
                         errors.push(error);
+                        continue;
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+                        session.source_state(&reference, CoverageState::Excluded, None)?;
                         continue;
                     }
                     Err(error) => {
@@ -606,9 +620,13 @@ impl NativeMediaCatalog {
                 });
                 while let Some((data_type, path)) = receive.recv().await {
                     session.wait_running().await?;
-                    let actual = tokio::fs::canonicalize(&path)
-                        .await
-                        .map_err(|error| error.to_string())?;
+                    let actual = match tokio::fs::canonicalize(&path).await {
+                        Ok(path) => path,
+                        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+                            continue;
+                        }
+                        Err(error) => return Err(error.to_string()),
+                    };
                     if !actual.starts_with(&canonical_root) {
                         return Err("Media file escaped scan directory".into());
                     }
@@ -696,6 +714,7 @@ impl NativeMediaCatalog {
                         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                             missing.push(item.path);
                         }
+                        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {}
                         Err(error) => return Err(error.to_string()),
                         Ok(_) => {}
                     }

@@ -39,34 +39,35 @@ fn read_events_and_incomplete_writes_do_not_enter_the_reconciliation_queue() {
     ));
 }
 
+#[derive(Default)]
+struct DeniedWatcher {
+    denied: std::path::PathBuf,
+    calls: Vec<std::path::PathBuf>,
+}
+impl Watcher for DeniedWatcher {
+    fn new<F: notify::EventHandler>(_: F, _: notify::Config) -> notify::Result<Self> {
+        Ok(Self::default())
+    }
+    fn watch(&mut self, path: &Path, _: RecursiveMode) -> notify::Result<()> {
+        self.calls.push(path.to_owned());
+        if path == self.denied {
+            return Err(notify::Error::io(
+                std::io::ErrorKind::PermissionDenied.into(),
+            ));
+        }
+        Ok(())
+    }
+    fn unwatch(&mut self, _: &Path) -> notify::Result<()> {
+        Ok(())
+    }
+    fn kind() -> notify::WatcherKind {
+        notify::WatcherKind::NullWatcher
+    }
+}
+
 #[test]
 #[cfg(target_os = "linux")]
-fn an_inaccessible_watch_descendant_is_skipped_but_an_inaccessible_root_is_reported() {
-    #[derive(Default)]
-    struct DeniedWatcher {
-        denied: std::path::PathBuf,
-        calls: Vec<std::path::PathBuf>,
-    }
-    impl Watcher for DeniedWatcher {
-        fn new<F: notify::EventHandler>(_: F, _: notify::Config) -> notify::Result<Self> {
-            Ok(Self::default())
-        }
-        fn watch(&mut self, path: &Path, _: RecursiveMode) -> notify::Result<()> {
-            self.calls.push(path.to_owned());
-            if path == self.denied {
-                return Err(notify::Error::io(
-                    std::io::ErrorKind::PermissionDenied.into(),
-                ));
-            }
-            Ok(())
-        }
-        fn unwatch(&mut self, _: &Path) -> notify::Result<()> {
-            Ok(())
-        }
-        fn kind() -> notify::WatcherKind {
-            notify::WatcherKind::NullWatcher
-        }
-    }
+fn an_inaccessible_watch_descendant_is_skipped_before_descending() {
     let directory = tempfile::tempdir().unwrap();
     let denied = directory.path().join("denied");
     let nested = denied.join("nested");
@@ -86,12 +87,6 @@ fn an_inaccessible_watch_descendant_is_skipped_but_an_inaccessible_root_is_repor
     assert_eq!(
         watcher.calls.iter().filter(|path| *path == &denied).count(),
         1
-    );
-    assert!(
-        watch_tree(&mut watcher, &mut watched, &denied, None)
-            .unwrap_err()
-            .to_lowercase()
-            .contains("permission denied")
     );
 }
 
@@ -357,4 +352,17 @@ fn watcher_excluded_event_bursts_do_not_fill_the_watch_queue() {
     assert_eq!(receive.try_recv().unwrap(), event);
     enqueue_event(&send, Some(&scope), Event::new(EventKind::Other)).unwrap();
     assert_eq!(receive.try_recv().unwrap().kind, EventKind::Other);
+}
+
+#[test]
+fn an_inaccessible_watch_root_is_skipped_without_marking_it_watched() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut watcher = DeniedWatcher {
+        denied: directory.path().to_owned(),
+        ..Default::default()
+    };
+    let mut watched = std::collections::BTreeSet::new();
+    watch_tree(&mut watcher, &mut watched, directory.path(), None).unwrap();
+    assert!(watched.is_empty());
+    assert_eq!(watcher.calls, vec![directory.path().to_owned()]);
 }

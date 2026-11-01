@@ -164,7 +164,8 @@ fn defaults_resolve_home_when_service_has_no_home_environment() {
         assert!(
             resolve_defaults()
                 .scan_directories
-                .contains(&normalized(&expected))
+                .iter()
+                .any(|root| under(&normalized(&expected), root))
         );
         return;
     }
@@ -184,4 +185,64 @@ fn defaults_resolve_home_when_service_has_no_home_environment() {
         "{}",
         String::from_utf8_lossy(&output.stdout)
     );
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn defaults_cover_all_users_and_mounted_data_disks() {
+    let scope = Scope {
+        directories: resolve_defaults().scan_directories,
+        exclusions: vec!["/mnt/usb2/private".into()],
+        defaults: resolve_defaults(),
+    };
+    for path in [
+        "/home/first/Pictures/photo.jpg",
+        "/home/second/Music/song.mp3",
+        "/root/Documents/report.pdf",
+        "/Users/first/Pictures/photo.jpg",
+        "/Users/second/Music/song.mp3",
+        "/mnt/usb1/photo.jpg",
+        "/mnt/usb2/song.mp3",
+        "/media/data/report.pdf",
+        "/Volumes/Archive/photo.jpg",
+    ] {
+        assert!(scope.contains_entry(Path::new(path), false), "{path}");
+    }
+    for path in [
+        "/mnt/usb2/private/photo.jpg",
+        "/home/second/project/.git/config",
+        "/mnt/usb1/project/node_modules/package/index.js",
+        "/Users/first/project/target/debug/app",
+    ] {
+        assert!(!scope.contains_entry(Path::new(path), false), "{path}");
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn all_user_libraries_exclude_application_data_and_keep_cloud_documents() {
+    let scope = Scope {
+        directories: resolve_defaults().scan_directories,
+        exclusions: Vec::new(),
+        defaults: resolve_defaults(),
+    };
+    for user in ["first", "second"] {
+        assert!(!scope.contains_entry(
+            Path::new(&format!("/Users/{user}/Library/Caches/photo.jpg")),
+            false
+        ));
+        for suffix in [
+            "Library",
+            "Library/Mobile Documents",
+            "Library/Mobile Documents/com~apple~CloudDocs",
+        ] {
+            assert!(scope.contains_entry(Path::new(&format!("/Users/{user}/{suffix}")), true));
+        }
+        assert!(scope.contains_entry(
+            Path::new(&format!(
+                "/Users/{user}/Library/Mobile Documents/com~apple~CloudDocs/report.pdf"
+            )),
+            false
+        ));
+    }
 }

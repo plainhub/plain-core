@@ -203,3 +203,32 @@ fn the_default_scan_root_expands_to_all_configured_sources() {
         Vec::<std::path::PathBuf>::new()
     );
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn every_user_has_the_same_application_and_cloud_document_policy() {
+    for user in ["first", "second"] {
+        let cloud = format!("/Users/{user}/Library/Mobile Documents/com~apple~CloudDocs/photo.jpg");
+        let application = format!("/Users/{user}/Library/Application Support/App/photo.jpg");
+        assert!(!is_media_excluded_name_or_root(
+            &cloud,
+            Path::new("/app-data"),
+            Path::new("/app-cache"),
+            &[]
+        ));
+        assert!(is_cloud_drive_ancestor(
+            &cloud,
+            Path::new(&format!("/Users/{user}/Library"))
+        ));
+        assert!(is_media_excluded_name_or_root(
+            &application,
+            Path::new("/app-data"),
+            Path::new("/app-cache"),
+            &[]
+        ));
+        assert!(!is_cloud_drive_ancestor(
+            &format!("{cloud}-backup"),
+            Path::new("/Users/other/Library")
+        ));
+    }
+}

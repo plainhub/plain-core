@@ -23,11 +23,9 @@ impl Default for Defaults {
 
 fn resolve_defaults() -> Defaults {
     let home = crate::libs::platform::system::consts::home_directory();
-    let mut scan_directories: Vec<_> = if cfg!(any(
-        target_os = "linux",
-        target_os = "windows",
-        target_os = "macos"
-    )) {
+    let mut scan_directories: Vec<String> = if cfg!(any(target_os = "linux", target_os = "macos")) {
+        vec!["/".into()]
+    } else if cfg!(target_os = "windows") {
         home.iter().map(|path| normalized(path)).collect()
     } else {
         Vec::new()
@@ -38,7 +36,7 @@ fn resolve_defaults() -> Defaults {
         excluded_directories.extend(
             [
                 "/proc", "/sys", "/dev", "/run", "/tmp", "/usr", "/etc", "/var", "/boot", "/opt",
-                "/srv", "/lib", "/lib32", "/lib64", "/bin", "/sbin", "/snap",
+                "/lib", "/lib32", "/lib64", "/bin", "/sbin", "/snap",
             ]
             .map(str::to_owned),
         );
@@ -76,13 +74,6 @@ fn resolve_defaults() -> Defaults {
             ]
             .map(str::to_owned),
         );
-        if let Some(home) = &home {
-            let cloud = home.join("Library/Mobile Documents/com~apple~CloudDocs");
-            if cloud.is_dir() {
-                scan_directories.push(normalized(&cloud));
-            }
-            excluded_directories.push(normalized(&home.join("Library")));
-        }
     }
     #[cfg(target_os = "windows")]
     {
@@ -113,6 +104,9 @@ fn resolve_defaults() -> Defaults {
         scan_directories,
         excluded_directories,
         excluded_names: [
+            ".cache",
+            ".config",
+            ".local",
             ".git",
             "node_modules",
             "target",
@@ -130,13 +124,13 @@ fn resolve_defaults() -> Defaults {
 
 impl Defaults {
     fn excluded(&self, path: &str, is_dir: bool) -> bool {
-        let cloud = self
-            .scan_directories
-            .iter()
-            .any(|root| root.contains("/Library/Mobile Documents/") && under(path, root));
+        #[cfg(target_os = "macos")]
+        if macos_application_directory(path) {
+            return true;
+        }
         self.excluded_directories
             .iter()
-            .any(|root| !(cloud && root.ends_with("/Library")) && under(path, root))
+            .any(|root| under(path, root))
             || (if is_dir {
                 path
             } else {
@@ -149,6 +143,27 @@ impl Defaults {
                     .any(|name| component_eq(part, name))
             })
     }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn macos_application_directory(path: &str) -> bool {
+    path.strip_prefix("/Users/")
+        .and_then(|path| path.split_once('/'))
+        .is_some_and(|(_, path)| {
+            under(path, "Library")
+                && !under(path, "Library/Mobile Documents/com~apple~CloudDocs")
+                && !under("Library/Mobile Documents/com~apple~CloudDocs", path)
+        })
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn macos_cloud_documents_root(path: &str) -> Option<&Path> {
+    let profile = path.strip_prefix("/Users/")?.split_once('/')?.0;
+    let length =
+        "/Users/".len() + profile.len() + "/Library/Mobile Documents/com~apple~CloudDocs".len();
+    let root = path.get(..length)?;
+    (root.ends_with("/Library/Mobile Documents/com~apple~CloudDocs") && under(path, root))
+        .then(|| Path::new(root))
 }
 
 #[derive(Clone)]

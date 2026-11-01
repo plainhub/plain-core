@@ -37,8 +37,14 @@ fn walk(
     if cancelled() {
         return Err(cancelled_error(root));
     }
-    let root_meta = fs::symlink_metadata(root)
-        .with_context(|| format!("cannot read file walk root {}", root.display()))?;
+    let root_meta = match fs::symlink_metadata(root) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => return Ok(()),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("cannot read file walk root {}", root.display()));
+        }
+    };
     if root_meta.file_type().is_symlink() {
         return Err(anyhow::anyhow!(
             "file walk root is a symlink and is not followed: {}",
@@ -67,15 +73,28 @@ fn walk(
         if cancelled() {
             return Err(cancelled_error(root));
         }
+        let entries = match fs::read_dir(&directory) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => continue,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("cannot read directory {}", directory.display()));
+            }
+        };
         if include_directories {
             visit(&directory).with_context(|| format!("cannot visit {}", directory.display()))?;
         }
-        let entries = fs::read_dir(&directory)
-            .with_context(|| format!("cannot read directory {}", directory.display()))?;
         let mut subdirectories = Vec::new();
         for entry in entries {
-            let entry = entry
-                .with_context(|| format!("cannot read an entry of {}", directory.display()))?;
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => continue,
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("cannot read an entry of {}", directory.display())
+                    });
+                }
+            };
             if cancelled() {
                 return Err(cancelled_error(root));
             }
@@ -83,9 +102,15 @@ fn walk(
             if excluded(&path) {
                 continue;
             }
-            let file_type = entry
-                .file_type()
-                .with_context(|| format!("cannot read the file type of {}", path.display()))?;
+            let file_type = match entry.file_type() {
+                Ok(kind) => kind,
+                Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => continue,
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("cannot read the file type of {}", path.display())
+                    });
+                }
+            };
             if file_type.is_dir() {
                 subdirectories.push(path);
             } else if file_type.is_file() {
