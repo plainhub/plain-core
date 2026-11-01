@@ -98,3 +98,73 @@ fn non_empty_helper() {
     assert_eq!(non_empty(""), None);
     assert_eq!(non_empty("photos"), Some("photos".to_string()));
 }
+
+fn usb_disk(mountpoint: Option<&str>) -> LsblkDevice {
+    serde_json::from_value(serde_json::json!({
+        "name":"sdfixture", "path":"/dev/sdfixture", "type":"disk",
+        "children":[{"name":"sdfixture1", "path":"/dev/sdfixture1", "type":"part",
+            "fstype":"exfat", "uuid":"usb-volume", "label":"USB Data", "partn":1,
+            "size":64000000000_i64, "mountpoint":mountpoint}]
+    }))
+    .unwrap()
+}
+
+#[test]
+fn detected_usb_partition_is_listed_before_mounting() {
+    let mounts = partition_mounts(&[usb_disk(None)]);
+    assert_eq!(mounts.len(), 1);
+    let mount = &mounts[0];
+    assert_eq!(mount.id, "part:usb-volume");
+    assert_eq!(mount.path.as_deref(), Some("/dev/sdfixture1"));
+    assert_eq!(mount.label.as_deref(), Some("USB Data"));
+    assert_eq!(mount.fs_type.as_deref(), Some("exfat"));
+    assert_eq!(mount.partition_num, Some(1));
+    assert_eq!(mount.total_bytes, 64000000000);
+    assert!(mount.mount_point.is_none());
+    assert!(mount.used_bytes.is_none());
+    assert!(mount.free_bytes.is_none());
+}
+
+#[test]
+fn usb_mount_changes_preserve_partition_identity_and_absent_devices_disappear() {
+    let unmounted = partition_mounts(&[usb_disk(None)]);
+    let mounted = partition_mounts(&[usb_disk(Some("/mnt/usb1"))]);
+    assert_eq!(mounted[0].id, unmounted[0].id);
+    assert_eq!(mounted[0].mount_point.as_deref(), Some("/mnt/usb1"));
+    assert!(partition_mounts(&[]).is_empty());
+    let reconnected = partition_mounts(&[usb_disk(None)]);
+    assert_eq!(reconnected[0].id, mounted[0].id);
+    assert!(reconnected[0].mount_point.is_none());
+}
+
+#[test]
+fn usb_partition_without_uuid_retains_device_path_and_nullable_metadata() {
+    let mut disk = usb_disk(None);
+    let partition = &mut disk.children[0];
+    partition.uuid.clear();
+    partition.label.clear();
+    partition.path.clear();
+    partition.partn = None;
+    let mounts = partition_mounts(&[disk]);
+    assert_eq!(mounts[0].id, "part:/dev/sdfixture1");
+    assert_eq!(mounts[0].path.as_deref(), Some("/dev/sdfixture1"));
+    assert!(mounts[0].uuid.is_none());
+    assert!(mounts[0].label.is_none());
+    assert!(mounts[0].partition_num.is_none());
+}
+
+#[test]
+fn system_partitions_and_virtual_disks_are_not_presented_as_usb_data() {
+    let mut disk = usb_disk(None);
+    let mut boot = disk.children[0].clone();
+    boot.mountpoint = Some("/boot".into());
+    let mut lvm = disk.children[0].clone();
+    lvm.fstype = "LVM2_member".into();
+    let mut reserved = disk.children[0].clone();
+    reserved.fstype.clear();
+    reserved.size = Some(1024 * 1024);
+    disk.children = vec![boot, lvm, reserved];
+    let mut loop_disk = usb_disk(None);
+    loop_disk.name = "loop0".into();
+    assert!(partition_mounts(&[disk, loop_disk]).is_empty());
+}

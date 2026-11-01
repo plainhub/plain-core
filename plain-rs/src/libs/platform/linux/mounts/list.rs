@@ -312,8 +312,12 @@ fn list_disk_partitions() -> Vec<Mount> {
         return vec![];
     };
 
+    partition_mounts(&devs)
+}
+
+fn partition_mounts(devs: &[LsblkDevice]) -> Vec<Mount> {
     let mut parts = Vec::new();
-    for d in &devs {
+    for d in devs {
         if d.kind.trim() != "disk" || !is_user_visible_disk_name(&d.name) {
             continue;
         }

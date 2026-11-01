@@ -56,10 +56,16 @@ pub fn scan_filesystems() -> Result<Vec<BlockFs>> {
         "SIZE",
         "MOUNTPOINT",
     ])?;
+    Ok(filesystems_from_devices(&devs))
+}
+
+fn filesystems_from_devices(
+    devs: &[crate::libs::platform::linux::disks::blockdev::LsblkDevice],
+) -> Vec<BlockFs> {
     let skip_fs_types = ["swap", "crypto_LUKS", "LVM2_member"];
     let mut items: Vec<BlockFs> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
-    for d in flatten_devices(&devs) {
+    for d in flatten_devices(devs) {
         let uuid = d.uuid.trim();
         let fstype = d.fstype.trim();
         let path = d.path.trim();
@@ -81,7 +87,7 @@ pub fn scan_filesystems() -> Result<Vec<BlockFs>> {
         });
     }
     items.sort_by(|a, b| a.fsuuid.cmp(&b.fsuuid));
-    Ok(items)
+    items
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]

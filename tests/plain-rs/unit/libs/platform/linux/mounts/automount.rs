@@ -284,3 +284,50 @@ async fn monitor_exit_is_reported_as_a_failure() {
     .unwrap();
     assert!(result.unwrap_err().to_string().contains("monitor stopped"));
 }
+
+#[test]
+fn discovered_filesystems_keep_whole_disk_and_partition_layouts() {
+    let devices: Vec<crate::libs::platform::linux::disks::blockdev::LsblkDevice> = serde_json::from_value(serde_json::json!([
+        {"path":"/dev/sdfixture", "type":"disk", "fstype":"exfat", "uuid":"whole-disk", "size":64000000000_i64},
+        {"path":"/dev/sdexample", "type":"disk", "children":[
+            {"path":"/dev/sdexample1", "type":"part", "fstype":"ext4", "uuid":"partition", "mountpoint":"/mnt/usb2"},
+            {"path":"/dev/duplicate", "type":"part", "fstype":"ext4", "uuid":"partition"}
+        ]}
+    ])).unwrap();
+    let filesystems = filesystems_from_devices(&devices);
+    assert_eq!(filesystems.len(), 2);
+    assert_eq!(filesystems[0].fsuuid, "partition");
+    assert_eq!(filesystems[0].path, "/dev/sdexample1");
+    assert_eq!(filesystems[0].mountpoint, "/mnt/usb2");
+    assert_eq!(filesystems[1].fsuuid, "whole-disk");
+    assert_eq!(filesystems[1].size_bytes, 64000000000);
+    let (planned, _) = plan_mounts(&filesystems, &SlotMap::default());
+    assert_eq!(
+        planned,
+        vec![PlannedMount {
+            fsuuid: "whole-disk".into(),
+            slot: 1
+        }]
+    );
+}
+
+#[test]
+fn absent_incomplete_and_container_devices_are_never_mount_candidates() {
+    assert!(filesystems_from_devices(&[]).is_empty());
+    let devices: Vec<crate::libs::platform::linux::disks::blockdev::LsblkDevice> =
+        serde_json::from_value(serde_json::json!([
+            {"path":"/dev/swap", "fstype":"swap", "uuid":"swap"},
+            {"path":"/dev/encrypted", "fstype":"crypto_LUKS", "uuid":"encrypted"},
+            {"path":"/dev/lvm", "fstype":"LVM2_member", "uuid":"lvm"},
+            {"path":"/dev/no-uuid", "fstype":"ext4", "uuid":null},
+            {"path":"/dev/no-filesystem", "fstype":null, "uuid":"missing-fs"},
+            {"path":"", "fstype":"ext4", "uuid":"missing-path"}
+        ]))
+        .unwrap();
+    let filesystems = filesystems_from_devices(&devices);
+    assert!(filesystems.is_empty());
+    let persisted = slots(&[("previous-usb", 3)]);
+    let (planned, merged) = plan_mounts(&filesystems, &persisted);
+    assert!(planned.is_empty());
+    assert_eq!(merged, persisted);
+}
