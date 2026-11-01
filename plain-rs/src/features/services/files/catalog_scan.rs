@@ -2,6 +2,38 @@ use crate::features::enums::DataType;
 use crate::libs::db::{MediaFileMetadata, MediaFileRow};
 use crate::runtime::Runtime as CoreRuntime;
 
+pub async fn host_connected(state: CoreRuntime, generation: u64) -> Result<(), String> {
+    if state.host.uses_system_media_catalog() {
+        return Ok(());
+    }
+    let capabilities = crate::features::services::capabilities::snapshot(&state.host).await;
+    if !state.host.is_current(generation) {
+        return Ok(());
+    }
+    if !capabilities
+        .map_err(|error| error.to_string())?
+        .iter()
+        .any(|capability| capability == "MEDIA_SCAN")
+    {
+        return Ok(());
+    }
+    #[cfg(feature = "runtime-media")]
+    {
+        if state.media_scans.policy()?.scope.is_some() {
+            return Ok(());
+        }
+        let catalog = NativeMediaCatalog::new(state);
+        catalog.configure_scan_directories(None)?;
+        if !catalog.source_directories()?.is_empty() {
+            catalog.start_source_scan("/")?;
+        }
+        catalog.watch_source_directories()?;
+        Ok(())
+    }
+    #[cfg(not(feature = "runtime-media"))]
+    Err("MEDIA_SCAN advertised without a scanner implementation".into())
+}
+
 #[cfg(feature = "runtime-media")]
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]

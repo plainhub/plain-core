@@ -64,15 +64,22 @@ impl HostEvents {
         );
         let connected = state.core.clone();
         tokio::spawn(async move {
-            tokio::join!(
+            let (_, _, indexing) = tokio::join!(
                 plain_rs::features::services::discovery::mdns_runtime::Runtime::host_connected(
                     connected.clone(),
                     generation
                 ),
                 plain_rs::features::services::casting::receiver::lifecycle::host_connected(
+                    connected.clone(),
+                    generation
+                ),
+                plain_rs::features::services::files::catalog_scan::host_connected(
                     connected, generation
                 ),
             );
+            if let Err(error) = indexing {
+                log::error!("File index startup failed: {error}");
+            }
         });
         Ok(Self {
             preferences: Mutex::new(preferences),
