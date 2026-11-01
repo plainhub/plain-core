@@ -7,6 +7,7 @@ pub mod recent;
 pub mod record;
 pub mod rename;
 pub mod roots;
+pub mod system_items;
 pub mod walk;
 pub mod writes;
 pub type TransferProgress = dyn Fn(i64, i64) -> std::io::Result<()> + Send + Sync;

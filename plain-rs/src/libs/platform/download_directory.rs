@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 pub fn resolve() -> Option<PathBuf> {
     #[cfg(windows)]
-    return windows::resolve();
+    return super::known_folders::resolve(super::known_folders::Folder::Downloads);
     #[cfg(target_os = "macos")]
     return std::env::home_dir().map(|home| home.join("Downloads"));
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -61,9 +61,6 @@ fn xdg(home: &std::path::Path, bytes: &[u8]) -> Option<PathBuf> {
     }
     None
 }
-
-#[cfg(windows)]
-mod windows;
 
 #[cfg(all(test, unix))]
 #[path = "../../../../tests/plain-rs/unit/libs/platform/download_directory.rs"]

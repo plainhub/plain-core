@@ -8,6 +8,24 @@ use std::{fs, sync::Arc};
 
 const GRANTED: &str = r#"["WRITE_EXTERNAL_STORAGE"]"#;
 
+#[tokio::test]
+async fn file_classification_is_available_in_the_main_file_contract_without_hiding_entries() {
+    struct Files;
+    #[async_graphql::Object]
+    impl Files {
+        async fn entries(&self) -> Vec<File> {
+            ["/etc", "/home/person/etc"].into_iter().map(|path| file(&json!({"path":path}))).collect()
+        }
+    }
+    let schema = async_graphql::Schema::new(Files, async_graphql::EmptyMutation, async_graphql::EmptySubscription);
+    let response = schema.execute("{entries{path isSystem}}").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let value = response.data.into_json().unwrap();
+    assert_eq!(value["entries"][0]["isSystem"], cfg!(any(target_os = "linux", target_os = "android")));
+    assert_eq!(value["entries"][1]["isSystem"], false);
+    assert_eq!(value["entries"].as_array().unwrap().len(), 2);
+}
+
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
     let (generation, mut requests) = host.connect();
     let host = host.clone();

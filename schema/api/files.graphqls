@@ -36,6 +36,7 @@ type File {
 	size: Long!
 	isDir: Boolean!
 	childCount: Int!
+	isSystem: Boolean!
 }
 
 """

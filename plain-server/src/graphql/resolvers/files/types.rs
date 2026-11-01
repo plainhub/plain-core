@@ -49,6 +49,7 @@ pub struct Mount {
 
 /// One entry of a directory listing or a search page.
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(complex)]
 pub struct File {
     pub permission: String,
     /// Empty for non-media files — exposed as `null` rather than an empty id.
@@ -65,6 +66,13 @@ pub struct File {
     pub is_dir: bool,
     #[graphql(name = "childCount")]
     pub child_count: i32,
+}
+
+#[async_graphql::ComplexObject]
+impl File {
+    async fn is_system(&self) -> async_graphql::Result<bool> {
+        plain_rs::libs::filesystem::system_items::contains(&self.path).map_err(async_graphql::Error::new)
+    }
 }
 
 #[derive(SimpleObject, Clone, Debug)]

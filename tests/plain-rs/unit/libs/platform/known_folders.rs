@@ -30,5 +30,5 @@ fn unsuccessful_or_null_known_folder_results_are_never_dereferenced() {
 
 #[test]
 fn shell_download_directory_is_absolute_when_available() {
-    assert!(resolve().is_none_or(|path| path.is_absolute()));
+    assert!(resolve(Folder::Downloads).is_none_or(|path| path.is_absolute()));
 }

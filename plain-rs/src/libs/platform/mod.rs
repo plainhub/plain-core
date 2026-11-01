@@ -1,3 +1,5 @@
+#[cfg(windows)]
+pub mod known_folders;
 #[cfg(any(feature = "linux-platform", feature = "linux-system"))]
 pub mod linux;
 #[cfg(feature = "storage-platform")]
