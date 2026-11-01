@@ -44,7 +44,7 @@ pub(super) async fn dispatch(
             let core = core.clone();
             tokio::task::spawn_blocking(move || {
                 let store = core.runtime().store.get().map_err(|e| e.to_string())?;
-                let events = crate::storage::event_sink(&core, false)?;
+                let events = crate::storage::event_sink(&core)?;
                 let db = core.runtime().db.clone();
                 let client_id =
                     (!request.client_id.is_empty()).then_some(request.client_id.as_str());
