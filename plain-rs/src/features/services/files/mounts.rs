@@ -72,7 +72,7 @@ fn linux_facts(mount: crate::libs::platform::linux::mounts::list::Mount) -> serd
         "id":mount.id,"name":mount.name,"path":mount.path,"mountPoint":mount.mount_point,
         "fsType":mount.fs_type,"totalBytes":mount.total_bytes,"usedBytes":mount.used_bytes,
         "freeBytes":mount.free_bytes,"remote":mount.remote,"alias":mount.alias,"driveType":mount.drive_type,
-        "diskId":mount.disk_id,"partitionNum":mount.partition_num,"label":mount.label,"uuid":mount.uuid,
+        "diskId":mount.disk_id,"diskModel":mount.disk_model,"partitionNum":mount.partition_num,"label":mount.label,"uuid":mount.uuid,
     })
 }
 

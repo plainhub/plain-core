@@ -1022,3 +1022,27 @@ async fn audio_duration_selection_preserves_permission_and_probe_errors() {
     assert_eq!(response.errors.len(), 1);
     assert_eq!(response.errors[0].message, "Media duration runtime stopped");
 }
+
+#[tokio::test]
+async fn mount_labels_and_disk_models_are_available_in_the_main_schema() {
+    struct Volumes;
+    #[async_graphql::Object]
+    impl Volumes {
+        async fn mounts(&self) -> Vec<Mount> {
+            vec![mount(
+                &json!({"name":"usb1","label":"Photos","diskModel":"Example Drive"}),
+            )]
+        }
+    }
+    let schema = async_graphql::Schema::new(
+        Volumes,
+        async_graphql::EmptyMutation,
+        async_graphql::EmptySubscription,
+    );
+    let response = schema.execute("{mounts{name label diskModel}}").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap(),
+        json!({"mounts":[{"name":"usb1","label":"Photos","diskModel":"Example Drive"}]})
+    );
+}

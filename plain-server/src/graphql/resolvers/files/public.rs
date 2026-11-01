@@ -415,6 +415,8 @@ fn mount(item: &Value) -> Mount {
         alias: text(item, "alias"),
         drive_type: DriveType::parse(&text(item, "driveType")),
         disk_id: text(item, "diskId"),
+        label: text(item, "label"),
+        disk_model: text(item, "diskModel"),
     }
 }
 

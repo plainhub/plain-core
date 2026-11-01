@@ -45,6 +45,8 @@ pub struct Mount {
     pub drive_type: DriveType,
     #[graphql(name = "diskId")]
     pub disk_id: String,
+    pub label: String,
+    pub disk_model: String,
 }
 
 /// One entry of a directory listing or a search page.

@@ -149,6 +149,8 @@ type Mount {
 	alias: String!
 	driveType: DriveType!
 	diskId: String!
+	label: String!
+	diskModel: String!
 }
 
 enum PathKind {

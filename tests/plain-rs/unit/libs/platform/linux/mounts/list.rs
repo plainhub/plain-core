@@ -172,7 +172,7 @@ fn system_partitions_and_virtual_disks_are_not_presented_as_usb_data() {
 #[test]
 fn mounted_usb_disks_and_their_partitions_use_the_transport_not_the_removable_flag() {
     let devices: Vec<LsblkDevice> = serde_json::from_value(serde_json::json!([
-        {"name":"sdfixture", "path":"/dev/sdfixture", "type":"disk", "tran":"usb", "rm":false,
+        {"name":"sdfixture", "path":"/dev/sdfixture", "type":"disk", "tran":"usb", "rm":false, "model":"Example Drive",
          "children":[{"name":"sdfixture1", "path":"/dev/sdfixture1", "pkname":"sdfixture", "type":"part", "tran":null}]},
         {"name":"sdexample", "path":"/dev/sdexample", "type":"disk", "tran":"sata"}
     ])).unwrap();
@@ -181,6 +181,7 @@ fn mounted_usb_disks_and_their_partitions_use_the_transport_not_the_removable_fl
         let mut mount = Mount::default();
         apply_volume_block_meta(&mut mount, path, &metadata);
         assert_eq!(mount.drive_type.as_deref(), Some("USB_STORAGE"), "{path}");
+        assert_eq!(mount.disk_model.as_deref(), Some("Example Drive"), "{path}");
     }
     let mut internal = Mount::default();
     apply_volume_block_meta(&mut internal, "/dev/sdexample", &metadata);

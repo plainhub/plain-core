@@ -30,6 +30,7 @@ pub struct Mount {
     pub remote: bool,
     pub drive_type: Option<String>,
     pub disk_id: Option<String>,
+    pub disk_model: Option<String>,
 }
 
 pub fn list_mounts(prefs: &Prefs) -> Vec<Mount> {
@@ -44,10 +45,13 @@ struct VolumeDevMeta {
     label: String,
     uuid: String,
     drive_type: String,
+    disk_model: String,
 }
 
 fn build_volume_dev_meta_map() -> std::collections::HashMap<String, VolumeDevMeta> {
-    let Ok(devs) = run_lsblk(&["NAME", "PATH", "TYPE", "PKNAME", "LABEL", "UUID", "TRAN"]) else {
+    let Ok(devs) = run_lsblk(&[
+        "NAME", "PATH", "TYPE", "PKNAME", "LABEL", "UUID", "TRAN", "MODEL",
+    ]) else {
         return std::collections::HashMap::new();
     };
     volume_device_metadata(&devs)
@@ -60,6 +64,7 @@ fn volume_device_metadata(
     fn walk(
         d: &LsblkDevice,
         parent_transport: &str,
+        parent_model: &str,
         m: &mut std::collections::HashMap<String, VolumeDevMeta>,
     ) {
         let transport = if d.tran.is_empty() {
@@ -67,6 +72,12 @@ fn volume_device_metadata(
         } else {
             &d.tran
         };
+        let model = d
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(parent_model);
         let path = d.path.trim();
         if !path.is_empty() {
             let meta = VolumeDevMeta {
@@ -74,6 +85,7 @@ fn volume_device_metadata(
                 label: d.label.trim().to_string(),
                 uuid: d.uuid.trim().to_string(),
                 drive_type: drive_type_from_transport(transport).to_string(),
+                disk_model: model.to_string(),
             };
             m.insert(path.to_string(), meta.clone());
             if let Ok(resolved) = std::fs::canonicalize(path) {
@@ -84,11 +96,11 @@ fn volume_device_metadata(
             }
         }
         for c in &d.children {
-            walk(c, transport, m);
+            walk(c, transport, model, m);
         }
     }
     for d in devs {
-        walk(d, "", &mut m);
+        walk(d, "", "", &mut m);
     }
     m
 }
@@ -293,6 +305,7 @@ fn apply_volume_block_meta(
 
     if let Some(metadata) = meta.get(&resolved) {
         v.drive_type = Some(metadata.drive_type.clone());
+        v.disk_model = non_empty(&metadata.disk_model);
     }
 
     if v.label.is_none()
@@ -338,6 +351,7 @@ fn list_disk_partitions() -> Vec<Mount> {
         "PKNAME",
         "PARTN",
         "TRAN",
+        "MODEL",
     ]) else {
         return vec![];
     };
@@ -394,6 +408,7 @@ fn partition_mounts(devs: &[LsblkDevice]) -> Vec<Mount> {
                 remote: false,
                 disk_id: non_empty(&disk_id),
                 drive_type: Some(drive_type_from_transport(&d.tran).to_string()),
+                disk_model: d.model.as_deref().and_then(non_empty),
                 ..Default::default()
             });
         }
