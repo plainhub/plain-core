@@ -35,6 +35,7 @@ async fn sdk_file_access_without_a_system_media_catalog_records_portable_file_me
     let platform = FilePlatform::new(
         host.clone(),
         state.db.clone(),
+        state.prefs.clone(),
         state.directory.clone(),
         state.cache.root().to_owned(),
         state.events.clone(),
@@ -84,6 +85,7 @@ async fn sdk_recents(
     let platform = FilePlatform::new(
         host.clone(),
         state.db.clone(),
+        state.prefs.clone(),
         directory.path().to_path_buf(),
         state.cache.root().to_owned(),
         state.events.clone(),

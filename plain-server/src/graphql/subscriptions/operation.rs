@@ -57,6 +57,7 @@ pub(crate) fn spec(request: &Request) -> Result<&'static EventSpec, String> {
     }
     EVENTS
         .iter()
+        .chain(std::iter::once(&super::files::SPEC))
         .find(|spec| names.iter().any(|(_, name)| *name == spec.field))
         .ok_or_else(|| "Unknown subscription field".into())
 }

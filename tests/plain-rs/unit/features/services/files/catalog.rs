@@ -27,7 +27,11 @@ async fn native_catalog_reads_rows_counts_ids_and_buckets_without_a_host() {
     let dir = tempfile::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let stored = db.record_media_files(&[metadata()]).unwrap();
-    let catalog = MediaCatalog::new(db, Arc::new(Host::default()));
+    let catalog = MediaCatalog::new(
+        db,
+        Arc::new(Host::default()),
+        Arc::new(crate::features::prefs::Prefs::in_memory()),
+    );
     assert!(matches!(catalog, MediaCatalog::Native(_)));
     let rows = catalog
         .rows(DataType::Image, "", FileSortBy::NameAsc, 10, 0)
@@ -106,7 +110,11 @@ async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
     });
     let dir = tempfile::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
-    let catalog = MediaCatalog::new(db, host);
+    let catalog = MediaCatalog::new(
+        db,
+        host,
+        Arc::new(crate::features::prefs::Prefs::in_memory()),
+    );
     let rows = catalog
         .rows(DataType::Image, "text:picture", FileSortBy::NameAsc, 8, 4)
         .await
@@ -181,7 +189,11 @@ async fn semantic_image_candidates_intersect_platform_ids_and_keep_non_text_filt
                 .unwrap();
         }
     });
-    let catalog = MediaCatalog::Platform { db, host };
+    let catalog = MediaCatalog::Platform {
+        db,
+        host,
+        prefs: Arc::new(crate::features::prefs::Prefs::in_memory()),
+    };
     let candidates = ["2", "3", "2"].map(str::to_owned);
     for selection in ["ids:1,2".to_owned(), format!("tag_id:{}", tag.id)] {
         let query = format!(
@@ -251,7 +263,11 @@ async fn document_extensions_read_only_bounded_path_pages() {
                 .unwrap();
         }
     });
-    let catalog = MediaCatalog::Platform { db, host };
+    let catalog = MediaCatalog::Platform {
+        db,
+        host,
+        prefs: Arc::new(crate::features::prefs::Prefs::in_memory()),
+    };
     assert_eq!(
         catalog
             .document_extensions("bucket_id:/documents")

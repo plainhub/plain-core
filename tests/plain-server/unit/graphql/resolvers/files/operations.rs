@@ -544,6 +544,10 @@ async fn media_batches_commit_successes_and_notify_only_confirmed_ids() {
     let selected = plain_rs::features::services::files::catalog::MediaCatalog::new(
         database(&schema).clone(),
         schema.data::<Arc<Host>>().unwrap().clone(),
+        schema
+            .data::<Arc<plain_rs::features::prefs::Prefs>>()
+            .unwrap()
+            .clone(),
     )
     .ids(
         plain_rs::features::enums::DataType::Video,

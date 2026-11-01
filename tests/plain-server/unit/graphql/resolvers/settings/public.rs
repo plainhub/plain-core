@@ -290,3 +290,72 @@ async fn remote_tools_receive_effective_app_home_features_without_local_settings
         "NOTES|FILES"
     );
 }
+
+#[tokio::test]
+async fn file_index_scope_paths_and_writes_require_remote_storage_permission() {
+    let directory = tempfile::tempdir().unwrap();
+    let prefs = Arc::new(Prefs::in_memory());
+    prefs.set("api_permissions", Vec::<String>::new()).unwrap();
+    prefs
+        .set(
+            "media_source_dirs",
+            vec![directory.path().to_str().unwrap()],
+        )
+        .unwrap();
+    prefs
+        .set(
+            "file_index_excluded_dirs",
+            vec![directory.path().join("private").to_str().unwrap()],
+        )
+        .unwrap();
+    let host = Arc::new(Host::default());
+    let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());
+    let (events, _) = tokio::sync::broadcast::channel(16);
+    let schema = crate::test_support::schema::build(
+        host,
+        events,
+        prefs.clone(),
+        db,
+        directory.path().into(),
+    );
+    let response = schema.execute("{prefs}").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let values = response.data.into_json().unwrap();
+    for key in [
+        "media_source_dirs",
+        "file_index_excluded_dirs",
+        "file_index_defaults",
+        "file_index_sources",
+        "file_index_progress",
+    ] {
+        assert!(values["prefs"].get(key).is_none(), "{key}");
+    }
+    for key in ["media_source_dirs", "file_index_excluded_dirs"] {
+        let before = prefs.get::<Vec<String>>(key).unwrap();
+        let response = schema
+            .execute(format!("mutation {{setPref(key:{key:?},value:[])}}"))
+            .await;
+        assert!(
+            response
+                .errors
+                .iter()
+                .any(|error| error.message == "no_permission"),
+            "{:?}",
+            response.errors
+        );
+        assert_eq!(prefs.get::<Vec<String>>(key).unwrap(), before);
+    }
+    let response = schema
+        .execute(
+            async_graphql::Request::new("{prefs}")
+                .data(crate::graphql::executor::RequestOrigin::Local),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let values = response.data.into_json().unwrap();
+    assert!(values["prefs"]["file_index_defaults"].is_object());
+    assert_eq!(
+        values["prefs"]["media_source_dirs"][0],
+        directory.path().to_str().unwrap()
+    );
+}

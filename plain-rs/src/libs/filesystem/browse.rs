@@ -26,7 +26,7 @@ pub struct Plan {
     limit: Option<usize>,
     count_only: bool,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Page {
     pub count: usize,
     pub items: Vec<FileRecord>,
@@ -122,6 +122,17 @@ impl Plan {
                 items: Vec::new(),
             };
         }
+        self.sort_items(&mut items);
+        Page {
+            count,
+            items: items
+                .into_iter()
+                .skip(self.offset)
+                .take(self.limit.unwrap_or(usize::MAX))
+                .collect(),
+        }
+    }
+    fn sort_items(&self, items: &mut [FileRecord]) {
         items.sort_by(|a, b| {
             b.is_dir.cmp(&a.is_dir).then_with(|| {
                 match self.sort {
@@ -135,16 +146,22 @@ impl Plan {
                 .then_with(|| a.path.cmp(&b.path))
             })
         });
-        Page {
-            count,
-            items: items
-                .into_iter()
-                .skip(self.offset)
-                .take(self.limit.unwrap_or(usize::MAX))
-                .collect(),
-        }
     }
     pub fn execute(&self) -> io::Result<Page> {
+        self.walk_inner(None, || false)
+    }
+    pub fn walk(
+        &self,
+        mut progress: impl FnMut(Page) -> bool,
+        cancelled: impl Fn() -> bool,
+    ) -> io::Result<Page> {
+        self.walk_inner(Some(&mut progress), cancelled)
+    }
+    fn walk_inner(
+        &self,
+        mut progress: Option<&mut dyn FnMut(Page) -> bool>,
+        cancelled: impl Fn() -> bool,
+    ) -> io::Result<Page> {
         let root = Path::new(&self.root);
         match fs::metadata(root) {
             Ok(meta) if !meta.is_dir() => return Ok(self.page(Vec::new())),
@@ -155,11 +172,35 @@ impl Plan {
         let mut directories = vec![fs::read_dir(root)?];
         let mut items = Vec::new();
         let mut count = 0usize;
+        let mut visited = 0usize;
         while let Some(directory) = directories.last_mut() {
+            if cancelled() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "File search cancelled",
+                ));
+            }
             let Some(entry) = directory.next() else {
                 directories.pop();
                 continue;
             };
+            if visited > 0 && visited % 128 == 0 {
+                if let Some(limit) = self.limit {
+                    self.sort_items(&mut items);
+                    items.truncate(self.offset.saturating_add(limit));
+                }
+                if let Some(progress) = &mut progress {
+                    let mut snapshot = self.page(items.clone());
+                    snapshot.count = count;
+                    if !progress(snapshot) {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Interrupted,
+                            "File search cancelled",
+                        ));
+                    }
+                }
+            }
+            visited += 1;
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().into_owned();
             if !self.show_hidden && name.starts_with('.') {
@@ -174,11 +215,7 @@ impl Plan {
             if self.recursive && meta.is_dir() {
                 match fs::read_dir(&path) {
                     Ok(directory) => directories.push(directory),
-                    Err(e)
-                        if matches!(
-                            e.kind(),
-                            io::ErrorKind::PermissionDenied | io::ErrorKind::NotFound
-                        ) => {}
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => {}
                     Err(e) => return Err(e),
                 }
             }
@@ -211,6 +248,7 @@ impl Plan {
             });
         }
         let mut page = self.page(items);
+        page.count = count;
         for item in &mut page.items {
             if item.is_dir {
                 item.child_count = match crate::libs::filesystem::count_dir_entries(

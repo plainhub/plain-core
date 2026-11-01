@@ -180,3 +180,60 @@ fn linux_file_writes_only_reach_indexing_after_the_writer_closes() {
         vec![std::path::PathBuf::from("/media/closed.png")]
     );
 }
+
+#[test]
+fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() {
+    #[derive(Default)]
+    struct RecordingWatcher(Vec<(std::path::PathBuf, RecursiveMode)>);
+    impl Watcher for RecordingWatcher {
+        fn new<F: notify::EventHandler>(_: F, _: notify::Config) -> notify::Result<Self> {
+            Ok(Self::default())
+        }
+        fn watch(&mut self, path: &Path, mode: RecursiveMode) -> notify::Result<()> {
+            self.0.push((path.to_owned(), mode));
+            Ok(())
+        }
+        fn unwatch(&mut self, _: &Path) -> notify::Result<()> {
+            Ok(())
+        }
+        fn kind() -> notify::WatcherKind {
+            notify::WatcherKind::NullWatcher
+        }
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    std::fs::create_dir_all(root.join("project/src")).unwrap();
+    std::fs::create_dir_all(root.join("project/.git/objects")).unwrap();
+    let scope = crate::features::prefs::file_index::Scope {
+        directories: vec![crate::features::prefs::file_index::normalized(root)],
+        exclusions: Vec::new(),
+        defaults: crate::features::prefs::file_index::Defaults {
+            scan_directories: Vec::new(),
+            excluded_directories: Vec::new(),
+            excluded_names: vec![".git".into()],
+        },
+    };
+    let mut watcher = RecordingWatcher::default();
+    let mut watched = std::collections::BTreeSet::new();
+    watch_tree(&mut watcher, &mut watched, root, Some(&scope)).unwrap();
+    if cfg!(any(target_os = "macos", target_os = "windows")) {
+        assert_eq!(watcher.0, vec![(root.to_owned(), RecursiveMode::Recursive)]);
+        watch_tree(
+            &mut watcher,
+            &mut watched,
+            &root.join("project"),
+            Some(&scope),
+        )
+        .unwrap();
+        assert_eq!(watcher.0.len(), 1);
+    } else {
+        assert_eq!(watcher.0.len(), 3);
+        assert!(
+            watcher
+                .0
+                .iter()
+                .all(|(path, mode)| !path.to_string_lossy().contains(".git")
+                    && *mode == RecursiveMode::NonRecursive)
+        );
+    }
+}

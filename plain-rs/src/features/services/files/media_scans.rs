@@ -16,12 +16,31 @@ pub enum Status {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SourceCoverage {
+    pub path: String,
+    pub state: CoverageState,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverageState {
+    Pending,
+    Scanning,
+    Completed,
+    Excluded,
+    Failed,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub id: String,
     pub status: Status,
     pub total_files: Option<usize>,
     pub processed_files: usize,
     pub error: Option<String>,
+    pub sources: Vec<SourceCoverage>,
 }
 
 struct Job {
@@ -32,6 +51,7 @@ struct Job {
 
 #[derive(Default)]
 struct State {
+    defaults: crate::features::prefs::file_index::Defaults,
     job: Option<Job>,
     closed: bool,
     policy: Option<Arc<crate::features::services::files::media_scan_policy::Policy>>,
@@ -55,6 +75,7 @@ impl MediaScans {
                     crate::features::services::files::media_scan_policy::Policy {
                         cache_directory,
                         excluded_roots: Vec::new(),
+                        scope: None,
                     },
                 )),
                 ..State::default()
@@ -122,6 +143,7 @@ impl MediaScans {
                 total_files,
                 processed_files: 0,
                 error: None,
+                sources: Vec::new(),
             },
             cancel,
             activity,
@@ -172,6 +194,51 @@ impl MediaScans {
             .take();
         if let Some(task) = task {
             task.await.map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+
+    pub fn defaults(&self) -> Result<crate::features::prefs::file_index::Defaults, String> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?
+            .defaults
+            .clone())
+    }
+
+    pub fn set_defaults_for_test(
+        &self,
+        defaults: crate::features::prefs::file_index::Defaults,
+    ) -> Result<(), String> {
+        self.state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?
+            .defaults = defaults;
+        Ok(())
+    }
+
+    pub async fn wait_idle(&self) -> Result<(), String> {
+        let Some(mut activity) = self
+            .state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?
+            .job
+            .as_ref()
+            .map(|job| job.activity.subscribe())
+        else {
+            return Ok(());
+        };
+        while self.snapshot()?.is_some_and(|job| {
+            matches!(
+                job.status,
+                Status::Running | Status::Paused | Status::Cancelling
+            )
+        }) {
+            activity
+                .changed()
+                .await
+                .map_err(|_| "Media scan session closed")?;
         }
         Ok(())
     }
@@ -230,6 +297,25 @@ impl MediaScans {
         let result = record();
         drop(guard);
         result
+    }
+
+    pub fn record_with_scope<T>(
+        &self,
+        record: impl FnOnce(Option<&crate::features::prefs::file_index::Scope>) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let guard = self
+            .state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?;
+        if guard.closed {
+            return Err("Rust core stopped".into());
+        }
+        record(
+            guard
+                .policy
+                .as_ref()
+                .and_then(|policy| policy.scope.as_ref()),
+        )
     }
 
     pub fn snapshot(&self) -> Result<Option<Snapshot>, String> {
@@ -404,6 +490,57 @@ impl Session {
         job.snapshot.processed_files += 1;
         self.scans.publish(&job.snapshot);
         Ok(value)
+    }
+
+    pub fn sources(&self, paths: &[String]) -> Result<(), String> {
+        let mut guard = self
+            .scans
+            .state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?;
+        let job = guard
+            .job
+            .as_mut()
+            .filter(|job| job.snapshot.id == self.id)
+            .ok_or("Media scan replaced")?;
+        job.snapshot.sources = paths
+            .iter()
+            .map(|path| SourceCoverage {
+                path: path.clone(),
+                state: CoverageState::Pending,
+                error: None,
+            })
+            .collect();
+        Ok(())
+    }
+
+    pub fn source_state(
+        &self,
+        path: &str,
+        state: CoverageState,
+        error: Option<String>,
+    ) -> Result<(), String> {
+        let mut guard = self
+            .scans
+            .state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?;
+        let job = guard
+            .job
+            .as_mut()
+            .filter(|job| job.snapshot.id == self.id)
+            .ok_or("Media scan replaced")?;
+        if let Some(source) = job
+            .snapshot
+            .sources
+            .iter_mut()
+            .find(|source| source.path == path)
+        {
+            source.state = state;
+            source.error = error;
+        }
+        self.scans.publish(&job.snapshot);
+        Ok(())
     }
 
     pub fn discovered(&self, total_files: usize) -> Result<(), String> {

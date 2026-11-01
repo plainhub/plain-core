@@ -60,9 +60,9 @@ pub async fn progress(state: &CoreRuntime) -> Result<Progress> {
 }
 pub async fn directories(state: &CoreRuntime) -> Result<Vec<String>> {
     available(state).await?;
-    Ok(crate::features::prefs::media::source_directories(
-        &state.prefs,
-    )?)
+    crate::features::services::files::catalog_scan::NativeMediaCatalog::new(state.clone())
+        .source_directories()
+        .map_err(anyhow::Error::msg)
 }
 pub async fn execute(state: &CoreRuntime, command: Command) -> Result<()> {
     available(state).await?;
@@ -85,9 +85,14 @@ pub async fn execute(state: &CoreRuntime, command: Command) -> Result<()> {
             Command::Stop => {
                 catalog.cancel_file_scan().map_err(anyhow::Error::msg)?;
             }
-            Command::SetDirectories(dirs) => catalog
-                .set_source_directories(&dirs)
-                .map_err(anyhow::Error::msg)?,
+            Command::SetDirectories(dirs) => {
+                crate::features::services::settings::preferences::Preferences::from_server(state)
+                    .set(
+                        crate::features::prefs::pref_keys::MEDIA_SOURCE_DIRS,
+                        serde_json::to_value(dirs)?,
+                    )
+                    .await?;
+            }
         }
         Ok(())
     }

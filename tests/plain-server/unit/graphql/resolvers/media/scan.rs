@@ -6,6 +6,14 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
+    state
+        .media_scans
+        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+            scan_directories: Vec::new(),
+            excluded_directories: Vec::new(),
+            excluded_names: Vec::new(),
+        })
+        .unwrap();
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();
     let provider = tokio::spawn(async move {
@@ -25,12 +33,19 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         }
     });
     let native = core.native_graphql().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    let source_path = source.path().canonicalize().unwrap();
     let set = native
-        .execute(Request::new(
-            r#"mutation { setMediaSourceDirs(dirs:["/media/a"]) }"#,
-        ))
+        .execute(
+            Request::new("mutation($dirs:[String!]!){setMediaSourceDirs(dirs:$dirs)}").variables(
+                async_graphql::Variables::from_json(
+                    serde_json::json!({"dirs":[source_path.to_str().unwrap()]}),
+                ),
+            ),
+        )
         .await;
     assert!(set.errors.is_empty(), "{:?}", set.errors);
+    state.media_scans.wait_background().await.unwrap();
     let query = native
         .execute(Request::new(
             "{ mediaSourceDirs scanProgress { indexed pending total state error } }",
@@ -38,14 +53,17 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         .await;
     assert!(query.errors.is_empty(), "{:?}", query.errors);
     let data = query.data.into_json().unwrap();
-    assert_eq!(data["mediaSourceDirs"], serde_json::json!(["/media/a"]));
+    assert_eq!(
+        data["mediaSourceDirs"],
+        serde_json::json!([source_path.to_str().unwrap()])
+    );
     assert_eq!(data["scanProgress"]["state"], "IDLE");
     assert_eq!(
         core.native_media_catalog()
             .unwrap()
             .source_directories()
             .unwrap(),
-        vec!["/media/a"]
+        vec![source_path.to_str().unwrap()]
     );
     let state = core.runtime_state();
     let remote = crate::graphql::executor::execute_graphql(
@@ -69,6 +87,14 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
+    state
+        .media_scans
+        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+            scan_directories: Vec::new(),
+            excluded_directories: Vec::new(),
+            excluded_names: Vec::new(),
+        })
+        .unwrap();
     let request = || Request::new("{ mediaSourceDirs scanProgress { indexed total state } }");
     let denied = crate::graphql::executor::execute_graphql(
         &state.public,

@@ -35,9 +35,16 @@ async fn sdk_summary_batches_the_full_catalog_without_metadata_or_per_row_host_c
         assert!(requests.try_recv().is_err());
         offsets
     });
-    let summary = read(db.clone(), MediaCatalog::Platform { db, host })
-        .await
-        .unwrap();
+    let summary = read(
+        db.clone(),
+        MediaCatalog::Platform {
+            db,
+            host,
+            prefs: Arc::new(crate::features::prefs::Prefs::in_memory()),
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(summary.artists[0].item_count, 1025);
     assert_eq!(summary.recent_items.len(), 8);
     assert_eq!(worker.await.unwrap(), [0, 512, 1024]);
@@ -61,9 +68,16 @@ async fn malformed_or_repeated_catalog_pages_fail_instead_of_returning_partial_t
                 .unwrap();
         });
         assert!(
-            read(db.clone(), MediaCatalog::Platform { db, host })
-                .await
-                .is_err()
+            read(
+                db.clone(),
+                MediaCatalog::Platform {
+                    db,
+                    host,
+                    prefs: Arc::new(crate::features::prefs::Prefs::in_memory())
+                }
+            )
+            .await
+            .is_err()
         );
         worker.await.unwrap();
     }
@@ -135,9 +149,16 @@ async fn sdk_changed_page_is_discarded_and_summary_restarts_from_zero() {
         }
         assert!(requests.try_recv().is_err());
     });
-    let summary = read(db.clone(), MediaCatalog::Platform { db, host })
-        .await
-        .unwrap();
+    let summary = read(
+        db.clone(),
+        MediaCatalog::Platform {
+            db,
+            host,
+            prefs: Arc::new(crate::features::prefs::Prefs::in_memory()),
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(summary.artists.len(), 1);
     assert_eq!(summary.artists[0].name, "Current");
     assert_eq!(summary.artists[0].item_count, 1);
@@ -168,11 +189,18 @@ async fn sdk_changes_inside_queries_or_version_resets_have_bounded_retries() {
             requests
         });
         assert!(
-            read(db.clone(), MediaCatalog::Platform { db, host })
-                .await
-                .err()
-                .unwrap()
-                .contains("kept changing")
+            read(
+                db.clone(),
+                MediaCatalog::Platform {
+                    db,
+                    host,
+                    prefs: Arc::new(crate::features::prefs::Prefs::in_memory())
+                }
+            )
+            .await
+            .err()
+            .unwrap()
+            .contains("kept changing")
         );
         let mut requests = worker.await.unwrap();
         assert!(requests.try_recv().is_err());

@@ -58,6 +58,7 @@ fn selection_from_plan(
     let mut clauses = vec![
         "trashed=?".to_string(),
         "missing=0".into(),
+        "indexed=1".into(),
         "is_available=1".into(),
     ];
     clauses.extend(plan.clauses);

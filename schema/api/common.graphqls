@@ -70,6 +70,12 @@ type FeedSyncChange {
 	cancelled: Boolean
 }
 
+type FileSearchResults {
+	items: [File!]!
+	count: Long!
+	complete: Boolean!
+}
+
 enum FileSortBy {
 	DATE_ASC
 	DATE_DESC
@@ -249,6 +255,7 @@ type Subscription {
 	bookmarksUpdated: [Bookmark!]!
 	feedsFetched: FeedSyncChange!
 	uploadMergeResult: UploadMergeResult!
+	fileSearchResults(root: String!, query: String!, offset: Int!, limit: Int!, sortBy: FileSortBy!): FileSearchResults!
 	smsProviderChanged: SmsProviderChange
 	smsSendResult: SmsSendResult!
 	mmsSendResult: MmsSendResult!

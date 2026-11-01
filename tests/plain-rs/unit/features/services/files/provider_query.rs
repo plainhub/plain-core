@@ -496,3 +496,49 @@ fn destructive_doc_queries_must_narrow_beyond_the_provider_defaults() {
         assert!(require_narrowing(&db, provider, "ids:1,2").is_ok());
     }
 }
+
+#[test]
+fn persisted_exclusions_use_literal_subtree_boundaries_for_provider_rows() {
+    let prefs = crate::features::prefs::Prefs::in_memory();
+    prefs
+        .set(
+            crate::features::prefs::pref_keys::FILE_INDEX_EXCLUDED_DIRS,
+            vec!["/storage/user/private_%"],
+        )
+        .unwrap();
+    let mut plan = Plan::default();
+    exclude_directories(&mut plan, &prefs).unwrap();
+    let connection = rusqlite::Connection::open_in_memory().unwrap();
+    connection
+        .execute("CREATE TABLE entries(_data TEXT)", [])
+        .unwrap();
+    for path in [
+        "/storage/user/private_%",
+        "/storage/user/private_%/file.txt",
+        "/storage/user/private_%2/file.txt",
+        "/storage/user/private_AB/file.txt",
+    ] {
+        connection
+            .execute("INSERT INTO entries VALUES(?1)", [path])
+            .unwrap();
+    }
+    let paths = connection
+        .prepare(&format!(
+            "SELECT _data FROM entries WHERE {} ORDER BY _data",
+            plan.clauses.join(" AND ")
+        ))
+        .unwrap()
+        .query_map(rusqlite::params_from_iter(&plan.args), |row| {
+            row.get::<_, String>(0)
+        })
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    assert_eq!(
+        paths,
+        [
+            "/storage/user/private_%2/file.txt",
+            "/storage/user/private_AB/file.txt"
+        ]
+    );
+}

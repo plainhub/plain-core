@@ -62,7 +62,7 @@ pub fn snapshot(db: &Db) -> DomainResult<Snapshot> {
     db.with_conn(|connection| {
         let before = revision(connection)?;
         let total: usize = connection.query_row(
-            "SELECT count(*) FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND v.is_available=1",
+            "SELECT count(*) FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND f.indexed=1 AND v.is_available=1",
             [],
             |row| crate::libs::db::read_count(row, 0),
         )?;
@@ -83,7 +83,7 @@ pub fn page(db: &Db, expected: &str, cursor: &str, limit: usize) -> DomainResult
         return Err(DomainError::Other("Invalid image catalog page size".into()));
     }
     read(db, expected, |connection| {
-        let mut statement = connection.prepare("SELECT CAST(f.id AS TEXT),rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND v.is_available=1 AND f.id>CAST(?1 AS INTEGER) ORDER BY f.id LIMIT ?2")?;
+        let mut statement = connection.prepare("SELECT CAST(f.id AS TEXT),rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND f.indexed=1 AND v.is_available=1 AND f.id>CAST(?1 AS INTEGER) ORDER BY f.id LIMIT ?2")?;
         let items = statement
             .query_map(params![cursor, limit as i64], |row| {
                 Ok(Image {
@@ -112,7 +112,7 @@ pub fn resolve(db: &Db, expected: &str, ids: &[String]) -> DomainResult<Vec<Imag
             return Ok(Vec::new());
         }
         let sql = format!(
-            "SELECT CAST(f.id AS TEXT),rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND v.is_available=1 AND f.id IN ({}) ORDER BY f.id",
+            "SELECT CAST(f.id AS TEXT),rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND f.indexed=1 AND v.is_available=1 AND f.id IN ({}) ORDER BY f.id",
             vec!["?"; ids.len()].join(",")
         );
         let mut statement = connection.prepare(&sql)?;

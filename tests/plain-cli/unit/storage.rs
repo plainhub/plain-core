@@ -1,92 +1,35 @@
 use super::*;
 
 #[test]
-fn explicit_sources_accept_ordinary_directories_and_exclude_unrequested_volumes() {
+fn explicit_directories_are_added_to_platform_defaults_and_persisted() {
+    let prefs = plain_rs::features::prefs::Prefs::in_memory();
     let directory = tempfile::tempdir().unwrap();
-    let documents = directory.path().join("documents");
-    let volume = directory.path().join("volume");
-    std::fs::create_dir(&documents).unwrap();
-    std::fs::create_dir(&volume).unwrap();
-    let roots =
-        choose_directories(&[], &[documents.clone()], Some(directory.path()), &[volume]).unwrap();
-    assert_eq!(roots, [documents.canonicalize().unwrap().to_string_lossy()]);
-}
-
-#[test]
-fn saved_sources_are_preserved_instead_of_replaced_by_usb_mounts() {
-    let directory = tempfile::tempdir().unwrap();
-    let saved = directory.path().join("saved");
-    std::fs::create_dir(&saved).unwrap();
-    let roots = choose_directories(
-        &[saved.to_string_lossy().into_owned()],
-        &[],
-        Some(directory.path()),
-        &[],
-    )
-    .unwrap();
-    assert_eq!(roots, [saved.canonicalize().unwrap().to_string_lossy()]);
-}
-
-#[test]
-fn default_sources_include_home_and_removable_volumes_without_nas_path_rules() {
-    let directory = tempfile::tempdir().unwrap();
-    let home = directory.path().join("home");
-    let external = directory.path().join("external");
-    std::fs::create_dir(&home).unwrap();
-    std::fs::create_dir(&external).unwrap();
-    let roots = choose_directories(&[], &[], Some(&home), &[external.clone()]).unwrap();
-    assert_eq!(roots.len(), 2);
-    for path in [home, external] {
-        assert!(roots.contains(&path.canonicalize().unwrap().to_string_lossy().into_owned()));
-    }
-}
-
-#[test]
-fn nested_sources_are_scanned_once_and_missing_explicit_sources_fail() {
-    let directory = tempfile::tempdir().unwrap();
-    let nested = directory.path().join("photos");
-    std::fs::create_dir(&nested).unwrap();
-    let roots = choose_directories(
-        &[],
-        &[
-            nested,
-            directory.path().to_path_buf(),
-            directory.path().to_path_buf(),
-        ],
-        None,
-        &[],
-    )
-    .unwrap();
-    assert_eq!(
-        roots,
-        [directory.path().canonicalize().unwrap().to_string_lossy()]
+    let roots = source_directories(&prefs, &[directory.path().to_owned()]).unwrap();
+    assert!(
+        roots.contains(
+            &directory
+                .path()
+                .canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        )
     );
-    assert!(choose_directories(&[], &[directory.path().join("missing")], None, &[]).is_err());
+    for root in plain_rs::features::prefs::file_index::defaults().scan_directories {
+        assert!(roots.contains(&root));
+    }
+    assert_eq!(source_directories(&prefs, &[]).unwrap(), roots);
 }
 
-#[cfg(target_os = "macos")]
 #[test]
-fn cloud_sources_stay_independent_without_duplicate_entries() {
-    let directory = tempfile::tempdir().unwrap();
-    let cloud = directory
-        .path()
-        .join("Library/Mobile Documents/com~apple~CloudDocs");
-    std::fs::create_dir_all(&cloud).unwrap();
-    let root = directory.path().canonicalize().unwrap();
-    let cloud = cloud.canonicalize().unwrap();
-    let selected = choose_directories(
-        &[],
-        &[cloud.clone(), root.clone(), cloud.clone()],
-        None,
-        &[],
-    )
-    .unwrap();
-    assert_eq!(
-        selected,
-        vec![
-            root.to_string_lossy().into_owned(),
-            cloud.to_string_lossy().into_owned()
-        ]
+fn relative_scan_roots_are_rejected_before_saving_preferences() {
+    let prefs = plain_rs::features::prefs::Prefs::in_memory();
+    assert!(source_directories(&prefs, &[PathBuf::from("relative")]).is_err());
+    assert!(
+        prefs
+            .get::<Vec<String>>(plain_rs::features::prefs::pref_keys::MEDIA_SOURCE_DIRS)
+            .unwrap()
+            .is_none()
     );
 }
 
@@ -112,6 +55,14 @@ async fn startup_scan_indexes_configured_directories_through_the_headless_host()
     let core = Arc::new(
         plain_server::server::ContentServer::open(&directory.path().join("core")).unwrap(),
     );
+    core.runtime()
+        .media_scans
+        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+            scan_directories: Vec::new(),
+            excluded_directories: Vec::new(),
+            excluded_names: Vec::new(),
+        })
+        .unwrap();
     let catalog = core.native_media_catalog().unwrap();
     catalog
         .set_source_directories(&[source.to_string_lossy().into_owned()])

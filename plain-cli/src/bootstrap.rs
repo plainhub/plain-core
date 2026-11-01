@@ -37,6 +37,8 @@ pub fn run() -> Result<()> {
             runtime.block_on(crate::cli::run::run(
                 &paths,
                 crate::service::Options {
+                    #[cfg(test)]
+                    file_index_defaults: None,
                     media_directories,
                     web_root,
                     automount,

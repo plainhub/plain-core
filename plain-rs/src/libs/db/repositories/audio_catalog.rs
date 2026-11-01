@@ -25,7 +25,7 @@ pub(crate) fn init(conn: &Connection) -> rusqlite::Result<()> {
             SELECT file_id,path,title,artist,duration_ms,album_id FROM platform_audio_media
             UNION ALL
             SELECT id,path,title,artist,duration_ms,album_id FROM file_catalog
-            WHERE data_type=1 AND trashed=0 AND missing=0 AND is_available=1 AND NOT EXISTS(SELECT 1 FROM platform_audio_catalog);",
+            WHERE data_type=1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1 AND NOT EXISTS(SELECT 1 FROM platform_audio_catalog);",
     )
 }
 

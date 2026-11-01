@@ -51,6 +51,24 @@ impl Plan {
         }
     }
 }
+pub fn exclude_directories(
+    plan: &mut Plan,
+    prefs: &crate::features::prefs::Prefs,
+) -> anyhow::Result<()> {
+    for root in prefs
+        .get::<Vec<String>>(crate::features::prefs::pref_keys::FILE_INDEX_EXCLUDED_DIRS)?
+        .unwrap_or_default()
+    {
+        let root = crate::features::prefs::file_index::normalized(std::path::Path::new(&root));
+        let prefix = format!("{}/", root.trim_end_matches('/'));
+        plan.add(
+            "(_data != ? AND substr(_data,1,length(?)) != ?)".into(),
+            vec![root, prefix.clone(), prefix],
+        );
+    }
+    Ok(())
+}
+
 pub fn fields(db: &Db, query: &str) -> anyhow::Result<Vec<FilterField>> {
     let mut fields = search_dsl::parse(query);
     let tag_ids = fields

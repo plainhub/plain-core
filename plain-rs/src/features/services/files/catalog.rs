@@ -8,7 +8,11 @@ use std::sync::Arc;
 
 pub enum MediaCatalog {
     Native(Arc<Db>),
-    Platform { db: Arc<Db>, host: Arc<Host> },
+    Platform {
+        db: Arc<Db>,
+        host: Arc<Host>,
+        prefs: Arc<crate::features::prefs::Prefs>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -51,9 +55,9 @@ impl MediaPage {
 }
 
 impl MediaCatalog {
-    pub fn new(db: Arc<Db>, host: Arc<Host>) -> Self {
+    pub fn new(db: Arc<Db>, host: Arc<Host>, prefs: Arc<crate::features::prefs::Prefs>) -> Self {
         if host.uses_system_media_catalog() {
-            Self::Platform { db, host }
+            Self::Platform { db, host, prefs }
         } else {
             Self::Native(db)
         }
@@ -68,10 +72,10 @@ impl MediaCatalog {
         offset: u32,
     ) -> Result<Vec<Value>, String> {
         match self {
-            Self::Platform { db, host } => {
+            Self::Platform { db, host, prefs } => {
                 let facts = host.call(
                     "systemMediaRows",
-                    platform_params(db, kind, query, json!({"dataType":kind,"sortBy":sort.as_str(),"limit":limit,"offset":offset}))?,
+                    platform_params(db, prefs, kind, query, json!({"dataType":kind,"sortBy":sort.as_str(),"limit":limit,"offset":offset}))?,
                 ).await?;
                 serde_json::from_value(facts).map_err(|error| error.to_string())
             }
@@ -100,9 +104,9 @@ impl MediaCatalog {
         offset: u32,
     ) -> Result<MediaPage, String> {
         match self {
-            Self::Platform { db, host } => {
+            Self::Platform { db, host, prefs } => {
                 let facts = host.call("systemMediaRows", platform_params(
-                    db, kind, query,
+                    db, prefs, kind, query,
                     json!({"dataType":kind,"sortBy":sort.as_str(),"limit":limit,"offset":offset,"includeRevision":true}),
                 )?).await?;
                 serde_json::from_value::<MediaPage>(facts)
@@ -133,7 +137,12 @@ impl MediaCatalog {
         }
         let limit = plan.ids.len() as u32;
         match self {
-            Self::Platform { host, .. } => {
+            Self::Platform { host, prefs, .. } => {
+                let mut plan = plan;
+                crate::features::services::files::provider_query::exclude_directories(
+                    &mut plan, prefs,
+                )
+                .map_err(|error| error.to_string())?;
                 let facts = host.call(
                     "systemMediaRows",
                     json!({"dataType":DataType::Image,"sortBy":"NAME_ASC","limit":limit,"offset":0,"plan":plan}),
@@ -164,10 +173,10 @@ impl MediaCatalog {
 
     pub async fn count(&self, kind: DataType, query: &str) -> Result<i64, String> {
         match self {
-            Self::Platform { db, host } => host
+            Self::Platform { db, host, prefs } => host
                 .call(
                     "systemMediaCount",
-                    platform_params(db, kind, query, json!({"dataType":kind}))?,
+                    platform_params(db, prefs, kind, query, json!({"dataType":kind}))?,
                 )
                 .await?
                 .as_i64()
@@ -191,9 +200,10 @@ impl MediaCatalog {
         from_trash: bool,
     ) -> Result<Vec<String>, String> {
         match self {
-            Self::Platform { db, host } => serde_json::from_value(
+            Self::Platform { db, host, prefs } => serde_json::from_value(
                 host.call("systemMediaIdsFacts", {
-                    let mut params = platform_params(db, kind, query, json!({"dataType":kind}))?;
+                    let mut params =
+                        platform_params(db, prefs, kind, query, json!({"dataType":kind}))?;
                     if from_trash {
                         params["plan"]["trash"] = json!(true);
                     }
@@ -227,12 +237,12 @@ impl MediaCatalog {
                 .await
                 .map_err(|error| error.to_string())?
             }
-            Self::Platform { db, host } => {
+            Self::Platform { db, host, prefs } => {
                 let mut counts = std::collections::BTreeMap::new();
                 let mut offset = 0;
                 let page_size = 512;
                 loop {
-                    let facts = host.call("systemMediaRows", platform_params(db, DataType::Doc, query,
+                    let facts = host.call("systemMediaRows", platform_params(db, prefs, DataType::Doc, query,
                         json!({"dataType":DataType::Doc,"sortBy":"NAME_ASC","pathsOnly":true,"limit":page_size,"offset":offset}))?).await?;
                     let paths: Vec<String> =
                         serde_json::from_value(facts).map_err(|error| error.to_string())?;
@@ -251,9 +261,18 @@ impl MediaCatalog {
 
     pub async fn buckets(&self, kind: DataType) -> Result<Value, String> {
         match self {
-            Self::Platform { host, .. } => {
-                host.call("systemMediaBucketItemFacts", json!({"dataType":kind,"plan":crate::features::services::files::media_buckets::platform_plan(kind).map_err(|error| error.to_string())?}))
-                    .await
+            Self::Platform { host, prefs, .. } => {
+                let mut plan = crate::features::services::files::media_buckets::platform_plan(kind)
+                    .map_err(|error| error.to_string())?;
+                crate::features::services::files::provider_query::exclude_directories(
+                    &mut plan, prefs,
+                )
+                .map_err(|error| error.to_string())?;
+                host.call(
+                    "systemMediaBucketItemFacts",
+                    json!({"dataType":kind,"plan":plan}),
+                )
+                .await
             }
             Self::Native(db) => {
                 let db = db.clone();
@@ -302,15 +321,26 @@ fn image_search_plan(
     Ok(plan)
 }
 
-fn platform_params(db: &Db, kind: DataType, query: &str, params: Value) -> Result<Value, String> {
-    crate::features::services::files::provider_query::params(
-        db,
-        crate::features::services::files::provider_query::media_provider(kind)
-            .map_err(|error| error.to_string())?,
-        query,
-        params,
+fn platform_params(
+    db: &Db,
+    prefs: &crate::features::prefs::Prefs,
+    kind: DataType,
+    text: &str,
+    mut params: Value,
+) -> Result<Value, String> {
+    use crate::features::services::files::provider_query as query;
+    let fields = query::fields(db, text).map_err(|error| error.to_string())?;
+    let mut plan = query::plan(
+        query::media_provider(kind).map_err(|error| error.to_string())?,
+        &fields,
+        &query::dates(&fields),
+        None,
+        text.is_empty(),
     )
-    .map_err(|error| error.to_string())
+    .map_err(|error| error.to_string())?;
+    query::exclude_directories(&mut plan, prefs).map_err(|error| error.to_string())?;
+    params["plan"] = serde_json::to_value(plan).map_err(|error| error.to_string())?;
+    Ok(params)
 }
 
 #[cfg(test)]

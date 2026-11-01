@@ -11,6 +11,8 @@ pub struct Options {
     pub media_directories: Vec<PathBuf>,
     pub web_root: Option<PathBuf>,
     pub automount: bool,
+    #[cfg(test)]
+    pub file_index_defaults: Option<plain_rs::features::prefs::file_index::Defaults>,
 }
 
 pub struct Service {
@@ -29,6 +31,13 @@ impl Service {
             ContentServer::open_with_cache(&paths.data_dir, &paths.cache_dir)
                 .map_err(anyhow::Error::msg)?,
         );
+        #[cfg(test)]
+        if let Some(defaults) = options.file_index_defaults.clone() {
+            core.runtime()
+                .media_scans
+                .set_defaults_for_test(defaults)
+                .map_err(anyhow::Error::msg)?;
+        }
         let log_file = plain_rs::libs::platform::system::log::default_log_file(&paths.data_dir);
         plain_rs::libs::platform::system::log::set_file(&log_file)?;
         core.set_log_file(&log_file).map_err(anyhow::Error::msg)?;
@@ -58,8 +67,7 @@ impl Service {
         #[cfg(target_os = "linux")]
         if options.automount {
             let store = self.core.runtime().store.get()?;
-            let events = storage::event_sink(&self.core, options.media_directories.is_empty())
-                .map_err(anyhow::Error::msg)?;
+            let events = storage::event_sink(&self.core).map_err(anyhow::Error::msg)?;
             let mount_store = store.clone();
             let mount_events = events.clone();
             tokio::task::spawn_blocking(move || {
@@ -80,13 +88,7 @@ impl Service {
             .native_media_catalog()
             .map_err(anyhow::Error::msg)?;
         catalog
-            .set_source_directories(&roots)
-            .map_err(anyhow::Error::msg)?;
-        catalog
             .configure_scan_directories(None)
-            .map_err(anyhow::Error::msg)?;
-        catalog
-            .watch_source_directories()
             .map_err(anyhow::Error::msg)?;
         *self
             .core
@@ -116,6 +118,9 @@ impl Service {
         if !roots.is_empty() {
             storage::start_source_scan(&catalog).map_err(anyhow::Error::msg)?;
         }
+        catalog
+            .watch_source_directories()
+            .map_err(anyhow::Error::msg)?;
         Ok(())
     }
 

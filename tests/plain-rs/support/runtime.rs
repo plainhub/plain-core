@@ -44,6 +44,14 @@ impl Core {
         )?);
         let (state, stop) =
             crate::runtime::Runtime::open(directory, token, prefs, host, Arc::new(Clients))?;
+        #[cfg(feature = "runtime-media")]
+        state
+            .media_scans
+            .set_defaults_for_test(crate::features::prefs::file_index::Defaults {
+                scan_directories: Vec::new(),
+                excluded_directories: Vec::new(),
+                excluded_names: Vec::new(),
+            })?;
         Ok(Self { state, stop })
     }
     pub fn open(directory: &Path) -> Result<Self, String> {

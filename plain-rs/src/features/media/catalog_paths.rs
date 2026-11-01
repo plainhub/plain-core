@@ -37,13 +37,14 @@ pub fn is_file_excluded_at(
     cache_dir: &Path,
     extra_roots: &[String],
 ) -> bool {
-    let path = Path::new(path);
-    path.starts_with(data_dir)
-        || path.starts_with(cache_dir)
-        || path
-            .components()
-            .any(|part| part.as_os_str() == ".plain-trash")
-        || extra_roots.iter().any(|root| path.starts_with(root))
+    let mut exclusions = extra_roots.to_vec();
+    exclusions.extend([data_dir, cache_dir].map(crate::features::prefs::file_index::normalized));
+    crate::features::prefs::file_index::Scope {
+        directories: Vec::new(),
+        exclusions,
+        defaults: crate::features::prefs::file_index::defaults(),
+    }
+    .excluded(path)
 }
 
 pub fn is_media_excluded_at(
@@ -293,19 +294,20 @@ pub fn infer_type(name: &str) -> &'static str {
         "video"
     } else if mime.starts_with("audio/") {
         "audio"
-    } else if mime.starts_with("text/") || DOC_EXTRA_MIMES.contains(&mime) {
+    } else if DOC_EXTENSIONS.iter().any(|extension| {
+        name.rsplit('.')
+            .next()
+            .is_some_and(|value| value.eq_ignore_ascii_case(extension))
+    }) {
         "doc"
     } else {
         "other"
     }
 }
 
-const DOC_EXTRA_MIMES: [&str; 5] = [
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/javascript",
+const DOC_EXTENSIONS: &[&str] = &[
+    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "txt", "md",
+    "csv", "epub",
 ];
 
 pub fn selected_roots(root: String, source_dirs: &[String]) -> Vec<std::path::PathBuf> {
@@ -315,9 +317,7 @@ pub fn selected_roots(root: String, source_dirs: &[String]) -> Vec<std::path::Pa
             .filter(|dir| !dir.is_empty())
             .map(std::path::PathBuf::from)
             .collect::<Vec<_>>();
-        if !sources.is_empty() {
-            return sources;
-        }
+        return sources;
     }
     vec![std::path::PathBuf::from(root)]
 }

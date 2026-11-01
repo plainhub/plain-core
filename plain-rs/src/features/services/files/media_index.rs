@@ -11,6 +11,7 @@ pub fn read_files(
     cache: &Path,
     excluded_roots: &[String],
     paths: Vec<String>,
+    scope: Option<&crate::features::prefs::file_index::Scope>,
 ) -> Result<FileReads, String> {
     for path in &paths {
         crate::features::services::files::platform::authorize_native(Path::new(path), false)
@@ -33,11 +34,16 @@ pub fn read_files(
         let name = path
             .to_str()
             .ok_or("Invalid completed file path encoding")?;
-        if crate::features::media::catalog_paths::is_file_excluded_at(
-            name,
-            &directory,
-            cache,
-            excluded_roots,
+        if scope.map_or_else(
+            || {
+                crate::features::media::catalog_paths::is_file_excluded_at(
+                    name,
+                    &directory,
+                    cache,
+                    excluded_roots,
+                )
+            },
+            |scope| !scope.contains(&path),
         ) {
             continue;
         }

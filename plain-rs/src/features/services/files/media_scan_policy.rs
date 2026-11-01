@@ -1,8 +1,10 @@
 use std::path::{Path, PathBuf};
 
+#[derive(Clone)]
 pub struct Policy {
     pub cache_directory: PathBuf,
     pub excluded_roots: Vec<String>,
+    pub scope: Option<crate::features::prefs::file_index::Scope>,
 }
 
 impl Policy {
@@ -60,6 +62,7 @@ impl Policy {
         Ok(Self {
             cache_directory,
             excluded_roots,
+            scope: None,
         })
     }
 }

@@ -104,15 +104,33 @@ async fn platform_query_passes_prepared_conditions_and_only_resolves_parent_when
         }
     });
     assert_eq!(
-        platform(&db, &host, "text:100%", 0, 10, FileSortBy::NameAsc, false)
-            .await
-            .unwrap(),
+        platform(
+            &db,
+            &host,
+            &crate::features::prefs::Prefs::in_memory(),
+            "text:100%",
+            0,
+            10,
+            FileSortBy::NameAsc,
+            false
+        )
+        .await
+        .unwrap(),
         json!([])
     );
     assert_eq!(
-        platform(&db, &host, "parent:/docs", 0, 0, FileSortBy::NameAsc, true)
-            .await
-            .unwrap(),
+        platform(
+            &db,
+            &host,
+            &crate::features::prefs::Prefs::in_memory(),
+            "parent:/docs",
+            0,
+            0,
+            FileSortBy::NameAsc,
+            true
+        )
+        .await
+        .unwrap(),
         json!(3)
     );
     assert_eq!(
@@ -124,4 +142,92 @@ async fn platform_query_passes_prepared_conditions_and_only_resolves_parent_when
         ]
     );
     worker.abort();
+}
+
+#[test]
+fn scope_changes_hide_existing_records_and_preserve_file_identity_and_user_state() {
+    use crate::features::prefs::file_index::{Defaults, Scope};
+    let dir = tempfile::tempdir().unwrap();
+    let db = Db::open(&dir.path().join("plain.db")).unwrap();
+    seed(&db, "/docs/private/report.pdf", 10);
+    seed(&db, "/docs/private-notes/report.pdf", 20);
+    seed(&db, "/outside/report.pdf", 30);
+    let before = db
+        .with_conn(|conn| {
+            conn.execute("UPDATE files SET favorited=1", [])?;
+            conn.query_row(
+                "SELECT file_id FROM file_catalog WHERE path='/docs/private/report.pdf'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+        })
+        .unwrap();
+    let mut scope = Scope {
+        directories: vec!["/docs".into()],
+        exclusions: vec!["/docs/private".into()],
+        defaults: Defaults {
+            scan_directories: vec![],
+            excluded_directories: vec![],
+            excluded_names: vec![],
+        },
+    };
+    db.update_index_visibility(&scope, None).unwrap();
+    assert_eq!(
+        native(&db, "text:report", 0, 10, FileSortBy::NameAsc, false)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        native(&db, "text:report", 0, 0, FileSortBy::NameAsc, true).unwrap(),
+        json!(1)
+    );
+    assert_eq!(db.media_file_count(DataType::Doc).unwrap(), 1);
+    let stored = db
+        .with_conn(|conn| {
+            conn.query_row(
+                "SELECT favorited,missing FROM files WHERE id=?1",
+                [before],
+                |row| Ok((row.get::<_, bool>(0)?, row.get::<_, bool>(1)?)),
+            )
+        })
+        .unwrap();
+    assert_eq!(stored, (true, false));
+    scope.exclusions.clear();
+    db.update_index_visibility(&scope, None).unwrap();
+    assert_eq!(
+        native(&db, "text:report", 0, 0, FileSortBy::NameAsc, true).unwrap(),
+        json!(2)
+    );
+    assert_eq!(db.media_file_count(DataType::Doc).unwrap(), 2);
+    assert_eq!(
+        db.with_conn(|conn| conn.query_row(
+            "SELECT file_id FROM file_catalog WHERE path='/docs/private/report.pdf'",
+            [],
+            |row| row.get::<_, i64>(0)
+        ))
+        .unwrap(),
+        before
+    );
+}
+
+#[test]
+fn indexed_search_combines_subtree_kind_and_modification_time() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Db::open(&dir.path().join("plain.db")).unwrap();
+    seed(&db, "/docs/child/report.pdf", 10);
+    seed(&db, "/docs-other/report.pdf", 20);
+    let query = "path:/docs kind:DOC updated_at:>=2026-10-01T00:00:00Z";
+    assert_eq!(
+        native(&db, query, 0, 0, FileSortBy::NameAsc, true).unwrap(),
+        json!(1)
+    );
+    assert_eq!(
+        native(&db, query, 0, 10, FileSortBy::NameAsc, false).unwrap()[0]["path"],
+        "/docs/child/report.pdf"
+    );
+    assert!(native(&db, "path:relative", 0, 10, FileSortBy::NameAsc, false).is_err());
+    assert!(native(&db, "updated_at:invalid", 0, 10, FileSortBy::NameAsc, false).is_err());
 }

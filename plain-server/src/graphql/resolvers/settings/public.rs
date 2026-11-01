@@ -22,8 +22,19 @@ pub struct PrefsQuery;
 impl PrefsQuery {
     async fn prefs(&self, ctx: &Context<'_>) -> async_graphql::Result<Json<Value>> {
         let prefs = prefs(ctx);
+        let index_allowed =
+            crate::http::auth::public_gate::require(ctx, prefs, &["WRITE_EXTERNAL_STORAGE"])
+                .is_ok();
         let mut values = serde_json::Map::new();
         for (key, value) in prefs.entries() {
+            if !index_allowed
+                && matches!(
+                    key.as_str(),
+                    "media_source_dirs" | "file_index_excluded_dirs"
+                )
+            {
+                continue;
+            }
             if plain_rs::features::prefs::pref_keys::readable(&key, is_local(ctx)) {
                 let value =
                     plain_rs::features::prefs::settings::get_entry(prefs, &key)?.unwrap_or(value);
@@ -37,6 +48,34 @@ impl PrefsQuery {
                     plain_rs::features::prefs::settings::Settings::default().app_home_features,
                 )
             });
+        if index_allowed {
+            #[cfg(all(feature = "core", feature = "media"))]
+            if let Some(state) = ctx.data_opt::<plain_rs::runtime::Runtime>() {
+                values.insert(
+                    "file_index_progress".into(),
+                    serde_json::to_value(
+                        state
+                            .media_scans
+                            .snapshot()
+                            .map_err(async_graphql::Error::new)?,
+                    )?,
+                );
+            }
+            values.insert(
+                "file_index_defaults".into(),
+                serde_json::to_value(plain_rs::features::prefs::file_index::defaults())?,
+            );
+            values.insert(
+                "file_index_sources".into(),
+                serde_json::to_value(
+                    plain_rs::features::prefs::file_index::source_directories(
+                        prefs,
+                        &plain_rs::features::prefs::file_index::defaults(),
+                    )
+                    .map_err(async_graphql::Error::new)?,
+                )?,
+            );
+        }
         Ok(Json(Value::Object(values)))
     }
     async fn saved_value(
@@ -110,6 +149,9 @@ pub(crate) fn allowed(ctx: &Context<'_>, key: &str) -> bool {
     plain_rs::features::prefs::pref_keys::writable(key, is_local(ctx))
 }
 pub(crate) fn authorize(ctx: &Context<'_>, key: &str) -> async_graphql::Result<()> {
+    if matches!(key, "media_source_dirs" | "file_index_excluded_dirs") {
+        crate::http::auth::public_gate::require(ctx, prefs(ctx), &["WRITE_EXTERNAL_STORAGE"])?;
+    }
     if !allowed(ctx, key) {
         return Err(async_graphql::Error::new("Preference is not accessible"));
     }

@@ -40,7 +40,7 @@ pub fn native(db: &Db) -> DomainResult<Overview<crate::libs::db::MediaFileRow>> 
         });
         {
             let mut statement = transaction.prepare(&format!(
-                "SELECT {} FROM file_catalog WHERE data_type=1 AND trashed=0 AND missing=0 AND is_available=1 ORDER BY title COLLATE NOCASE ASC,id",
+                "SELECT {} FROM file_catalog WHERE data_type=1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1 ORDER BY title COLLATE NOCASE ASC,id",
                 crate::libs::db::media_file::COLUMNS,
             ))?;
             let mut rows = statement.query([])?;

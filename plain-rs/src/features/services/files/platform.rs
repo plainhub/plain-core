@@ -14,6 +14,7 @@ use std::{
 pub struct FilePlatform {
     pub(super) host: Arc<Host>,
     pub(super) db: Arc<Db>,
+    prefs: Arc<crate::features::prefs::Prefs>,
     directory: PathBuf,
     cache: PathBuf,
     private_roots: std::result::Result<[PathBuf; 2], String>,
@@ -27,6 +28,7 @@ impl FilePlatform {
     pub fn new(
         host: Arc<Host>,
         db: Arc<Db>,
+        prefs: Arc<crate::features::prefs::Prefs>,
         directory: PathBuf,
         cache: PathBuf,
         events: tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>,
@@ -41,6 +43,7 @@ impl FilePlatform {
             private_roots,
             host,
             db,
+            prefs,
             directory,
             cache,
             events,
@@ -232,7 +235,14 @@ impl FilePlatform {
     ) -> Result<serde_json::Value> {
         if self.host.uses_system_media_catalog() {
             return crate::features::services::files::indexed::platform(
-                &self.db, &self.host, &query, offset, limit, sort, count_only,
+                &self.db,
+                &self.host,
+                &self.prefs,
+                &query,
+                offset,
+                limit,
+                sort,
+                count_only,
             )
             .await;
         }
@@ -414,6 +424,7 @@ impl FilePlatform {
                     &cache,
                     &[],
                     existing,
+                    None,
                 )?;
                 let generic_types = crate::features::services::files::media_index::record_generic(
                     &db,

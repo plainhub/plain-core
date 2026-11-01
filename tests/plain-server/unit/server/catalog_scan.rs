@@ -1,7 +1,21 @@
+fn catalog_test_core(directory: &std::path::Path) -> crate::server::ContentServer {
+    let core = crate::server::ContentServer::open(directory).unwrap();
+    #[cfg(feature = "media")]
+    core.runtime_state()
+        .media_scans
+        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+            scan_directories: Vec::new(),
+            excluded_directories: Vec::new(),
+            excluded_names: Vec::new(),
+        })
+        .unwrap();
+    core
+}
+
 #[tokio::test]
 async fn catalog_is_created_from_core_and_stopped_handles_reject_access() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let core = catalog_test_core(directory.path());
     let catalog = core.native_media_catalog().unwrap();
     assert_eq!(
         catalog
@@ -42,7 +56,7 @@ async fn native_file_metadata_reaches_catalog_without_any_host_request() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("report.txt");
     std::fs::write(&path, "document").unwrap();
-    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let core = catalog_test_core(directory.path());
     let host = core.runtime_state().host.clone();
     let (_generation, mut requests) = crate::test_support::HostRequests::connect(&host);
     let catalog = core.native_media_catalog().unwrap();
@@ -111,7 +125,7 @@ async fn rescan_with_failed_probe_retains_current_known_metadata_without_host_ro
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("damaged.mp3");
     std::fs::write(&path, b"unrecognized audio bytes").unwrap();
-    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let core = catalog_test_core(directory.path());
     let catalog = core.native_media_catalog().unwrap();
     let mut known = plain_rs::features::media::file_facts::read_file_metadata(
         &path,
@@ -207,6 +221,14 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
             .cache_directory,
         cache.canonicalize().unwrap()
     );
+    core.runtime_state()
+        .media_scans
+        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+            scan_directories: vec![directory.path().to_string_lossy().into_owned()],
+            excluded_directories: Vec::new(),
+            excluded_names: Vec::new(),
+        })
+        .unwrap();
     catalog.configure_scan_directories(Some(&config)).unwrap();
     let host = core.runtime_state().host.clone();
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&host);
@@ -261,8 +283,11 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
 #[tokio::test]
 async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reentry() {
     let directory = directory_scan_fixture();
-    let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
+    let core = catalog_test_core(&directory.path().join("core"));
     let catalog = core.native_media_catalog().unwrap();
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let path = directory.path().join("completed.txt");
     std::fs::write(&path, b"completed file").unwrap();
@@ -318,8 +343,11 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
 #[tokio::test]
 async fn completion_scan_reports_read_failures_instead_of_partial_success() {
     let directory = directory_scan_fixture();
-    let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
+    let core = catalog_test_core(&directory.path().join("core"));
     let catalog = core.native_media_catalog().unwrap();
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let path = directory.path().join("completed.txt");
     std::fs::write(&path, b"completed file").unwrap();
@@ -346,12 +374,15 @@ async fn completion_scan_reports_read_failures_instead_of_partial_success() {
 #[tokio::test]
 async fn source_directories_share_core_preferences_and_reject_stopped_handles() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let core = catalog_test_core(directory.path());
     let catalog = core.native_media_catalog().unwrap();
     let clone = catalog.clone();
     let sources = vec!["/media/a".to_string(), "/media/a".to_string()];
     catalog.set_source_directories(&sources).unwrap();
-    assert_eq!(clone.source_directories().unwrap(), sources);
+    assert_eq!(
+        clone.source_directories().unwrap(),
+        vec![sources[0].clone()]
+    );
     assert_eq!(
         plain_rs::features::prefs::media::source_directories(&core.runtime_state().prefs).unwrap(),
         sources
@@ -367,7 +398,7 @@ async fn source_directories_share_core_preferences_and_reject_stopped_handles() 
 #[tokio::test]
 async fn the_watcher_stops_with_the_core_and_rejects_after_it() {
     let directory = tempfile::tempdir().unwrap();
-    let core = crate::server::ContentServer::open(&directory.path()).unwrap();
+    let core = catalog_test_core(directory.path());
     let source = directory.path().join("media");
     std::fs::create_dir_all(&source).unwrap();
     let catalog = core.native_media_catalog().unwrap();
@@ -375,6 +406,9 @@ async fn the_watcher_stops_with_the_core_and_rejects_after_it() {
         .set_source_directories(&[source.to_string_lossy().into_owned()])
         .unwrap();
     assert!(catalog.watch_source_directories().unwrap());
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     assert!(catalog.watch_source_directories().unwrap());
     assert!(
@@ -406,12 +440,16 @@ async fn filesystem_watch_events_from_an_os_thread_update_the_shared_catalog() {
         .prefix("watch-source-")
         .tempdir_in(std::env::current_dir().unwrap())
         .unwrap();
-    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let core = catalog_test_core(directory.path());
     let catalog = core.native_media_catalog().unwrap();
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     catalog
         .set_source_directories(&[source.path().to_string_lossy().into_owned()])
         .unwrap();
+    catalog.configure_scan_directories(None).unwrap();
     catalog.watch_source_directories().unwrap();
     let path = source.path().join("photo.png");
     image::RgbImage::new(1, 1).save(&path).unwrap();
@@ -441,8 +479,11 @@ async fn filesystem_watch_events_from_an_os_thread_update_the_shared_catalog() {
 async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
     use plain_rs::{features::enums::DataType, libs::db::FileKind};
     let directory = directory_scan_fixture();
-    let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
+    let core = catalog_test_core(&directory.path().join("core"));
     let catalog = core.native_media_catalog().unwrap();
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let path = directory.path().join("song.wav");
     std::fs::write(&path, b"unrecognized audio bytes").unwrap();

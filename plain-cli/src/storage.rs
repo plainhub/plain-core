@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub(super) fn validate_automount(enabled: bool) -> Result<()> {
     if !enabled {
@@ -15,77 +15,21 @@ pub(super) fn source_directories(
     prefs: &plain_rs::features::prefs::Prefs,
     requested: &[PathBuf],
 ) -> Result<Vec<String>> {
-    let saved = plain_rs::features::prefs::media::source_directories(prefs)?;
-    let home = plain_rs::libs::platform::system::consts::home_directory();
-    let mounted = mounted_directories(prefs);
-    choose_directories(&saved, requested, home.as_deref(), &mounted)
-}
-
-fn mounted_directories(_prefs: &plain_rs::features::prefs::Prefs) -> Vec<PathBuf> {
-    let disks = sysinfo::Disks::new_with_refreshed_list();
-    let mounted = disks
-        .iter()
-        .filter(|disk| disk.is_removable())
-        .map(|disk| disk.mount_point().to_path_buf())
-        .collect::<Vec<_>>();
-    #[cfg(target_os = "linux")]
-    let mounted = mounted
-        .into_iter()
-        .chain(
-            plain_rs::libs::platform::linux::mounts::list::list_mounts(_prefs)
-                .into_iter()
-                .filter_map(|mount| mount.mount_point)
-                .filter(|path| {
-                    plain_rs::libs::platform::linux::mounts::automount::parse_usb_slot(path)
-                        .is_some()
-                })
-                .map(PathBuf::from),
+    if !requested.is_empty() {
+        let directories = plain_rs::features::prefs::file_index::validate_directories(
+            requested
+                .iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
         )
-        .collect();
-    mounted
-}
-
-fn choose_directories(
-    saved: &[String],
-    requested: &[PathBuf],
-    home: Option<&Path>,
-    mounted: &[PathBuf],
-) -> Result<Vec<String>> {
-    let mut roots = if !requested.is_empty() {
-        for path in requested {
-            anyhow::ensure!(
-                path.is_dir(),
-                "Media directory does not exist: {}",
-                path.display()
-            );
-        }
-        requested.to_vec()
-    } else if !saved.is_empty() {
-        saved.iter().map(PathBuf::from).collect()
-    } else {
-        home.into_iter()
-            .map(Path::to_path_buf)
-            .chain(mounted.iter().cloned())
-            .collect()
-    };
-    #[cfg(target_os = "macos")]
-    if requested.is_empty() && saved.is_empty() {
-        if let Some(home) = home {
-            roots.push(home.join("Library/Mobile Documents/com~apple~CloudDocs"));
-        }
+        .map_err(anyhow::Error::msg)?;
+        plain_rs::features::prefs::media::set_source_directories(prefs, &directories)?;
     }
-    roots = roots
-        .into_iter()
-        .filter(|path| path.is_dir())
-        .map(|path| path.canonicalize())
-        .collect::<std::io::Result<Vec<_>>>()?;
-    let unique = plain_rs::libs::filesystem::roots::prune_nested(roots, |root| {
-        cfg!(target_os = "macos") && root.ends_with("Library/Mobile Documents/com~apple~CloudDocs")
-    });
-    Ok(unique
-        .into_iter()
-        .map(|path| path.to_string_lossy().into_owned())
-        .collect())
+    plain_rs::features::prefs::file_index::source_directories(
+        prefs,
+        &plain_rs::features::prefs::file_index::defaults(),
+    )
+    .map_err(anyhow::Error::msg)
 }
 
 pub(super) fn start_source_scan(
@@ -97,11 +41,9 @@ pub(super) fn start_source_scan(
 #[cfg(target_os = "linux")]
 pub(crate) fn event_sink(
     core: &plain_server::server::ContentServer,
-    include_mounted: bool,
 ) -> Result<plain_rs::libs::platform::linux::mounts::automount::EventSink, String> {
     let db = core.runtime().db.clone();
     let catalog = core.native_media_catalog()?;
-    let prefs = core.shared_preferences()?;
     let state = core.runtime().clone();
     Ok(std::sync::Arc::new(move |kind, message| {
         if kind == "mounts_changed" {
@@ -111,23 +53,9 @@ pub(crate) fn event_sink(
                 .load(std::sync::atomic::Ordering::SeqCst)
             {
                 let result = (|| -> Result<(), String> {
-                    let mut roots = plain_rs::features::prefs::media::source_directories(&prefs)
-                        .map_err(|error| error.to_string())?;
-                    if include_mounted {
-                        roots.extend(
-                            mounted_directories(&prefs)
-                                .into_iter()
-                                .map(|path| path.to_string_lossy().into_owned()),
-                        );
-                    }
-                    let roots = choose_directories(&roots, &[], None, &[])
-                        .map_err(|error| error.to_string())?;
-                    if catalog.source_directories()? != roots {
-                        catalog.set_source_directories(&roots)?;
-                        catalog.watch_source_directories()?;
-                        if !roots.is_empty() {
-                            start_source_scan(&catalog)?;
-                        }
+                    catalog.watch_source_directories()?;
+                    if !catalog.source_directories()?.is_empty() {
+                        start_source_scan(&catalog)?;
                     }
                     Ok(())
                 })();

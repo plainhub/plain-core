@@ -26,12 +26,24 @@ impl<'a> Preferences<'a> {
             .await
     }
 
-    pub async fn set(&self, key: &str, value: Value) -> anyhow::Result<bool> {
+    pub async fn set(&self, key: &str, mut value: Value) -> anyhow::Result<bool> {
         anyhow::ensure!(
             crate::features::prefs::pref_keys::writable(key, true),
             "Preference is not accessible"
         );
         anyhow::ensure!(value.to_string().len() <= 65536, "invalid_pref_value");
+        if matches!(
+            key,
+            crate::features::prefs::pref_keys::MEDIA_SOURCE_DIRS
+                | crate::features::prefs::pref_keys::FILE_INDEX_EXCLUDED_DIRS
+        ) {
+            value = serde_json::to_value(
+                crate::features::prefs::file_index::validate_directories(serde_json::from_value(
+                    value,
+                )?)
+                .map_err(anyhow::Error::msg)?,
+            )?;
+        }
         if key == AI_IMAGE_SEARCH_MODEL {
             anyhow::ensure!(
                 matches!(value.as_str(), Some("default" | "imported")),
@@ -75,7 +87,35 @@ impl<'a> Preferences<'a> {
         let before_model = self
             .prefs
             .get_or(AI_IMAGE_SEARCH_MODEL, String::from("default"));
+        #[cfg(feature = "runtime-media")]
+        let before_sources = self
+            .prefs
+            .get::<Vec<String>>(crate::features::prefs::pref_keys::MEDIA_SOURCE_DIRS)?;
+        #[cfg(feature = "runtime-media")]
+        let before_exclusions = self
+            .prefs
+            .get::<Vec<String>>(crate::features::prefs::pref_keys::FILE_INDEX_EXCLUDED_DIRS)?;
         let changed = write(self.prefs)?;
+        #[cfg(feature = "runtime-media")]
+        if let Some(state) = self.server {
+            if !state.host.uses_system_media_catalog()
+                && (before_sources
+                    != self
+                        .prefs
+                        .get::<Vec<String>>(crate::features::prefs::pref_keys::MEDIA_SOURCE_DIRS)?
+                    || before_exclusions
+                        != self.prefs.get::<Vec<String>>(
+                            crate::features::prefs::pref_keys::FILE_INDEX_EXCLUDED_DIRS,
+                        )?)
+            {
+                crate::features::services::files::catalog_scan::NativeMediaCatalog::new(
+                    state.clone(),
+                )
+                .refresh_scope()
+                .await
+                .map_err(anyhow::Error::msg)?;
+            }
+        }
         let after = crate::features::prefs::settings::snapshot(self.prefs)?;
         if changed {
             if let Some(events) = self.events {

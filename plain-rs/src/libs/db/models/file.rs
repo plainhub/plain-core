@@ -110,4 +110,5 @@ pub struct FileRow {
     pub album_artist: Option<String>,
     pub album_id: Option<String>,
     pub cover_image_id: Option<String>,
+    pub indexed: bool,
 }

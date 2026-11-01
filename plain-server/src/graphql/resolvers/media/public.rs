@@ -150,6 +150,8 @@ pub(crate) fn catalog(
     plain_rs::features::services::files::catalog::MediaCatalog::new(
         ctx.data_unchecked::<Arc<plain_rs::libs::db::Db>>().clone(),
         ctx.data_unchecked::<Arc<Host>>().clone(),
+        ctx.data_unchecked::<Arc<plain_rs::features::prefs::Prefs>>()
+            .clone(),
     )
 }
 

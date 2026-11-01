@@ -3,7 +3,7 @@ use crate::libs::platform::volumes::{self, Location, Volume};
 use rusqlite::{Connection, OptionalExtension, params};
 use std::path::{Component, Path};
 
-pub const COLUMNS: &str = "id,volume_id,path,file_name,kind,file_identity,mime_type,size_bytes,created_at,updated_at,missing,favorited,trashed_at,original_path,duration_ms,width,height,rotation,taken_at,title,artist,album,album_artist,album_id,cover_image_id";
+pub const COLUMNS: &str = "id,volume_id,path,file_name,kind,file_identity,mime_type,size_bytes,created_at,updated_at,missing,favorited,trashed_at,original_path,duration_ms,width,height,rotation,taken_at,title,artist,album,album_artist,album_id,cover_image_id,indexed";
 
 pub fn name_filter(text: &str) -> (String, Vec<String>) {
     if text.contains('\0') {
@@ -53,6 +53,7 @@ pub fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FileRow> {
         album_artist: row.get(22)?,
         album_id: row.get(23)?,
         cover_image_id: row.get(24)?,
+        indexed: row.get(25)?,
     })
 }
 
@@ -227,7 +228,7 @@ pub(crate) fn upsert(
                 params![destination, id.to_string()],
             )?;
         }
-        conn.execute("UPDATE files SET path=?1,file_name=?2,kind=COALESCE(?3,kind),file_identity=COALESCE(?4,file_identity),size_bytes=COALESCE(?5,size_bytes),created_at=COALESCE(created_at,?6),updated_at=?7,missing=0,mime_type=?8 WHERE id=?9",
+        conn.execute("UPDATE files SET path=?1,file_name=?2,kind=COALESCE(?3,kind),file_identity=COALESCE(?4,file_identity),size_bytes=COALESCE(?5,size_bytes),created_at=COALESCE(created_at,?6),updated_at=?7,missing=0,indexed=1,mime_type=?8 WHERE id=?9",
             params![path,name,kind,identity,size,created,updated,mime,id])?;
         Ok(id)
     } else {
@@ -363,6 +364,25 @@ impl Db {
             }
             tx.execute("UPDATE files SET missing=1 WHERE id IN (SELECT file_id FROM file_catalog WHERE path IN (SELECT value FROM json_each(?1)))",[paths])?;
             Ok(())
+        })
+    }
+
+    pub fn update_index_visibility(
+        &self,
+        scope: &crate::features::prefs::file_index::Scope,
+        paths: Option<&[String]>,
+    ) -> rusqlite::Result<()> {
+        self.with_conn(|connection| {
+            let selected = paths.map(serde_json::to_string).transpose().map_err(|error| sql_error(error))?;
+            let changes = connection.prepare("SELECT file_id,COALESCE(original_path,path),indexed,kind FROM file_catalog WHERE ?1 IS NULL OR EXISTS(SELECT 1 FROM json_each(?1) WHERE file_catalog.path=value OR substr(file_catalog.path,1,length(value)+1)=value||'/')")?
+                .query_map([selected], |row| Ok((row.get::<_,i64>(0)?, row.get::<_,String>(1)?, row.get::<_,bool>(2)?, row.get::<_,FileKind>(3)?)))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            let tx = connection.unchecked_transaction()?;
+            for (id, path, indexed, kind) in changes {
+                let visible = scope.contains_entry(Path::new(&path), kind == FileKind::Directory);
+                if visible != indexed { tx.execute("UPDATE files SET indexed=?1 WHERE id=?2", params![visible,id])?; }
+            }
+            tx.commit()
         })
     }
 

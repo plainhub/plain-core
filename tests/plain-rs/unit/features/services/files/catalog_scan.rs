@@ -123,11 +123,14 @@ async fn aborted_scan_future_releases_the_shared_job_and_failed_scans_report_par
 
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
-async fn directory_scan_cancels_during_the_first_read_without_catalog_writes() {
+async fn directory_scan_cancellation_preserves_basic_facts_before_metadata() {
     use crate::features::services::files::media_scans::Status;
     let directory = directory_scan_fixture();
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let mut catalog = NativeMediaCatalog::new(core.runtime_state());
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let root = directory.path().join("files");
     std::fs::create_dir(&root).unwrap();
@@ -152,12 +155,12 @@ async fn directory_scan_cancels_during_the_first_read_without_catalog_writes() {
     catalog.cancel_file_scan().unwrap();
     let result = worker.await.unwrap().unwrap();
     assert_eq!(result.status, Status::Cancelled);
-    assert_eq!(result.processed_files, 0);
+    assert_eq!(result.processed_files, 1);
     assert_eq!(
         catalog
             .count(crate::features::enums::DataType::Doc)
             .unwrap(),
-        0
+        1
     );
     assert!(requests.try_recv().is_err());
     core.stop_core().await;
@@ -165,8 +168,7 @@ async fn directory_scan_cancels_during_the_first_read_without_catalog_writes() {
 
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
-async fn directory_scan_cancellation_releases_a_bounded_producer_without_committing_pending_files()
-{
+async fn directory_scan_cancellation_after_discovery_preserves_all_basic_facts() {
     use crate::features::services::files::media_scans::Status;
     let directory = directory_scan_fixture();
     let root = directory.path().join("files");
@@ -176,6 +178,9 @@ async fn directory_scan_cancellation_releases_a_bounded_producer_without_committ
     }
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let mut catalog = NativeMediaCatalog::new(core.runtime_state());
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
@@ -192,14 +197,14 @@ async fn directory_scan_cancellation_releases_a_bounded_producer_without_committ
     catalog.cancel_file_scan().unwrap();
     let result = worker.await.unwrap().unwrap();
     assert_eq!(result.status, Status::Cancelled);
-    assert_eq!(result.processed_files, 0);
+    assert_eq!(result.processed_files, 96);
     assert_eq!(result.total_files, None);
     assert!(requests.try_recv().is_err());
     assert_eq!(
         catalog
             .count(crate::features::enums::DataType::Doc)
             .unwrap(),
-        0
+        96
     );
     core.stop_core().await;
 }
@@ -219,12 +224,16 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
     }
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let mut catalog = NativeMediaCatalog::new(core.runtime_state());
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let sources = roots
         .iter()
         .map(|root| root.to_str().unwrap().to_owned())
         .collect::<Vec<_>>();
     catalog.set_source_directories(&sources).unwrap();
+    catalog.configure_scan_directories(None).unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
     let (_generation, mut requests) =
@@ -260,6 +269,10 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
     );
 
     catalog.read_gate = None;
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
+    catalog.configure_scan_directories(None).unwrap();
     let result = catalog
         .scan_directories(vec![
             sources[0].clone(),
@@ -293,10 +306,14 @@ async fn background_source_scan_is_busy_before_the_first_read_and_core_stop_join
     std::fs::write(root.join("document.txt"), b"document").unwrap();
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let mut catalog = NativeMediaCatalog::new(core.runtime_state());
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     catalog
         .set_source_directories(&[root.to_str().unwrap().to_owned()])
         .unwrap();
+    catalog.configure_scan_directories(None).unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
     let (_generation, mut requests) =
@@ -325,7 +342,7 @@ async fn background_source_scan_is_busy_before_the_first_read_and_core_stop_join
             ""
         )
         .unwrap(),
-        0
+        1
     );
 }
 
@@ -368,4 +385,195 @@ fn directory_scan_fixture() -> tempfile::TempDir {
         .prefix("media-scan-")
         .tempdir_in(home)
         .unwrap()
+}
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn basic_catalog_is_searchable_before_a_blocked_media_probe() {
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("source");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("document.txt"), b"document").unwrap();
+    std::fs::write(source.join("source.rs"), b"fn main() {}").unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let mut catalog = NativeMediaCatalog::new(core.runtime_state());
+    let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
+    catalog.read_gate = Some(gate.clone());
+    let worker = tokio::spawn({
+        let catalog = catalog.clone();
+        let source = source.clone();
+        async move { catalog.scan_directory(source.to_str().unwrap()).await }
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(5), gate.0.notified())
+        .await
+        .unwrap();
+    let rows = crate::features::services::files::indexed::native(
+        &core.runtime_state().db,
+        "text:source.rs",
+        0,
+        10,
+        crate::features::prefs::settings::FileSortBy::NameAsc,
+        false,
+    )
+    .unwrap();
+    assert_eq!(rows.as_array().unwrap().len(), 1);
+    assert_eq!(catalog.count(DataType::Doc).unwrap(), 1);
+    gate.1.add_permits(1);
+    assert_eq!(
+        worker.await.unwrap().unwrap().status,
+        crate::features::services::files::media_scans::Status::Completed
+    );
+}
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn exclusion_changes_remove_results_and_reinclude_without_touching_originals() {
+    use crate::features::prefs::pref_keys::{FILE_INDEX_EXCLUDED_DIRS, MEDIA_SOURCE_DIRS};
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("source");
+    let private = source.join("private");
+    std::fs::create_dir_all(&private).unwrap();
+    let original = private.join("report.txt");
+    std::fs::write(&original, b"original contents").unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    state
+        .prefs
+        .set(MEDIA_SOURCE_DIRS, vec![source.to_str().unwrap()])
+        .unwrap();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    catalog
+        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
+        .unwrap();
+    catalog.configure_scan_directories(None).unwrap();
+    catalog
+        .scan_directory(source.to_str().unwrap())
+        .await
+        .unwrap();
+    let id = state
+        .db
+        .with_conn(|conn| {
+            conn.query_row(
+                "SELECT file_id FROM file_catalog WHERE file_name='report.txt'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+        })
+        .unwrap();
+    state
+        .db
+        .with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [id]))
+        .unwrap();
+    let preferences =
+        crate::features::services::settings::preferences::Preferences::from_server(&state);
+    preferences
+        .set(
+            FILE_INDEX_EXCLUDED_DIRS,
+            serde_json::json!([private.to_str().unwrap()]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        crate::features::services::files::indexed::native(
+            &state.db,
+            "text:report.txt",
+            0,
+            0,
+            crate::features::prefs::settings::FileSortBy::NameAsc,
+            true
+        )
+        .unwrap(),
+        serde_json::json!(0)
+    );
+    catalog
+        .scan_file(
+            crate::features::enums::DataType::Doc,
+            original.to_str().unwrap(),
+        )
+        .await
+        .unwrap();
+    catalog
+        .scan_completed_files(serde_json::json!({"paths":[original.to_str().unwrap()]}))
+        .unwrap();
+    assert_eq!(
+        crate::features::services::files::indexed::native(
+            &state.db,
+            "text:report.txt",
+            0,
+            0,
+            crate::features::prefs::settings::FileSortBy::NameAsc,
+            true
+        )
+        .unwrap(),
+        serde_json::json!(0)
+    );
+    assert_eq!(std::fs::read(&original).unwrap(), b"original contents");
+    preferences
+        .set(FILE_INDEX_EXCLUDED_DIRS, serde_json::json!([]))
+        .await
+        .unwrap();
+    state.media_scans.wait_background().await.unwrap();
+    assert_eq!(
+        crate::features::services::files::indexed::native(
+            &state.db,
+            "text:report.txt",
+            0,
+            0,
+            crate::features::prefs::settings::FileSortBy::NameAsc,
+            true
+        )
+        .unwrap(),
+        serde_json::json!(1)
+    );
+    assert_eq!(
+        state
+            .db
+            .with_conn(|conn| conn.query_row(
+                "SELECT id,favorited,missing FROM files WHERE id=?1",
+                [id],
+                |row| Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, bool>(1)?,
+                    row.get::<_, bool>(2)?
+                ))
+            ))
+            .unwrap(),
+        (id, true, false)
+    );
+    assert_eq!(std::fs::read(&original).unwrap(), b"original contents");
+    core.stop_core().await;
+}
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn an_unmounted_source_is_a_coverage_gap_and_does_not_retire_catalog_rows() {
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("disk");
+    std::fs::create_dir(&source).unwrap();
+    let source = source.canonicalize().unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let id = state.db.with_conn(|connection| -> rusqlite::Result<i64> {
+        connection.execute("INSERT INTO volumes(identity,path,is_available) VALUES('offline-fixture',?1,1)", [source.to_str().unwrap()])?;
+        let volume_id = connection.last_insert_rowid();
+        connection.execute("INSERT INTO files(volume_id,path,file_name,kind,updated_at,favorited) VALUES(?1,'missing.rs','missing.rs','FILE','2026-01-01T00:00:00.000Z',1)", [volume_id])?;
+        Ok(connection.last_insert_rowid())
+    }).unwrap();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    catalog
+        .set_source_directories(&[source.to_string_lossy().into_owned()])
+        .unwrap();
+    catalog.configure_scan_directories(None).unwrap();
+    let result = catalog.scan_source_directories("/").await.unwrap();
+    assert_eq!(
+        result.status,
+        crate::features::services::files::media_scans::Status::Failed
+    );
+    assert_eq!(result.total_files, None);
+    assert!(result.error.unwrap().contains("volume is offline"));
+    let row = state.db.file(id).unwrap().unwrap();
+    assert!(!row.missing);
+    assert!(row.favorited);
+    assert!(!state.db.volumes().unwrap()[0].is_available);
+    core.stop_core().await;
 }

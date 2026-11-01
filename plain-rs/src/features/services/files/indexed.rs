@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 pub async fn platform(
     db: &Db,
     host: &Host,
+    prefs: &crate::features::prefs::Prefs,
     query: &str,
     offset: i32,
     limit: i32,
@@ -34,13 +35,14 @@ pub async fn platform(
     } else {
         None
     };
-    let plan = query::plan(
+    let mut plan = query::plan(
         Provider::File,
         &fields,
         &Value::Null,
         parent_id.as_deref(),
         query.is_empty(),
     )?;
+    query::exclude_directories(&mut plan, prefs)?;
     host.call(
         if count_only {
             "systemFileIndexCount"
@@ -69,7 +71,12 @@ pub fn native(
         .collect::<Vec<_>>();
     let filters = fields
         .iter()
-        .filter(|field| field.name != "text")
+        .filter(|field| {
+            !matches!(
+                field.name.as_str(),
+                "text" | "path" | "root_path" | "updated_at" | "kind"
+            )
+        })
         .cloned()
         .collect::<Vec<_>>();
     let parent = fields
@@ -94,12 +101,51 @@ pub fn native(
         clauses.push(predicate);
         args.extend(values.into_iter().map(SqlValue::Text));
     }
+    for field in &fields {
+        match field.name.as_str() {
+            "path" | "root_path" => {
+                let root = crate::features::prefs::file_index::normalized(std::path::Path::new(
+                    &field.value,
+                ));
+                anyhow::ensure!(
+                    std::path::Path::new(&root).is_absolute(),
+                    "Absolute search directory required"
+                );
+                let prefix = format!("{}/", root.trim_end_matches('/'));
+                clauses.push("(path=? OR substr(path,1,length(?))=?)".into());
+                args.extend([root, prefix.clone(), prefix].map(SqlValue::Text));
+            }
+            "kind" => {
+                let kind = field.value.to_ascii_uppercase();
+                anyhow::ensure!(
+                    ["FILE", "DIRECTORY", "IMAGE", "VIDEO", "AUDIO", "DOC"]
+                        .contains(&kind.as_str()),
+                    "Unknown file kind"
+                );
+                clauses.push("kind=?".into());
+                args.push(SqlValue::Text(kind));
+            }
+            "updated_at" => {
+                let (op, value) = query::comparison(field);
+                anyhow::ensure!(
+                    ["=", "!=", ">", ">=", "<", "<="].contains(&op),
+                    "Invalid modification time comparison"
+                );
+                let value = chrono::DateTime::parse_from_rfc3339(value)?
+                    .with_timezone(&chrono::Utc)
+                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+                clauses.push(format!("updated_at {op} ?"));
+                args.push(SqlValue::Text(value));
+            }
+            _ => {}
+        }
+    }
     if plan.ids_column.is_some() {
         clauses.push(format!("_id IN ({})", vec!["?"; plan.ids.len()].join(",")));
         args.extend(plan.ids.into_iter().map(SqlValue::Text));
     }
     let selection = format!(
-        "WITH indexed AS (SELECT *,id AS _id,file_name AS _display_name,size_bytes AS _size,CASE WHEN length(path)=length(file_name)+1 THEN '/' ELSE substr(path,1,length(path)-length(file_name)-1) END AS parent FROM file_catalog WHERE trashed=0 AND missing=0 AND is_available=1) SELECT {{columns}} FROM indexed{}",
+        "WITH indexed AS (SELECT *,id AS _id,file_name AS _display_name,size_bytes AS _size,CASE WHEN length(path)=length(file_name)+1 THEN '/' ELSE substr(path,1,length(path)-length(file_name)-1) END AS parent FROM file_catalog WHERE trashed=0 AND missing=0 AND indexed=1 AND is_available=1) SELECT {{columns}} FROM indexed{}",
         if clauses.is_empty() {
             String::new()
         } else {

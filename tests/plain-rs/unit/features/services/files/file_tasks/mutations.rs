@@ -6,6 +6,12 @@ async fn overwriting_move_ignores_retired_catalog_rows_when_deleting_the_current
     let root = directory.path().canonicalize().unwrap();
     let core = ContentServer::open(&root.join("core")).unwrap();
     let state = core.runtime_state();
+    let catalog =
+        crate::features::services::files::catalog_scan::NativeMediaCatalog::new(state.clone());
+    catalog
+        .set_source_directories(&[root.to_string_lossy().into_owned()])
+        .unwrap();
+    catalog.configure_scan_directories(None).unwrap();
     let source = root.join("source.bin");
     let destination = root.join("destination.bin");
     let neighbor = root.join("neighbor.bin");

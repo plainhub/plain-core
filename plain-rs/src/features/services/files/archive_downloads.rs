@@ -308,6 +308,7 @@ async fn media_entries(
     let rows = crate::features::services::files::catalog::MediaCatalog::new(
         state.db.clone(),
         state.host.clone(),
+        state.prefs.clone(),
     )
     .rows(
         kind,

@@ -155,44 +155,33 @@ fn infer_type_known_extensions() {
 }
 
 #[test]
-fn infer_type_classifies_documents_off_shared_mime_table() {
-    // text/* entries of the shared plain-rs table.
+fn infer_type_separates_documents_from_source_code() {
     for name in [
-        "a.txt",
-        "readme.log",
-        "notes.md",
+        "notes.txt",
+        "README.md",
         "data.csv",
-        "sheet.tsv",
-        "page.html",
-        "index.htm",
-        "style.css",
+        "report.pdf",
+        "letter.doc",
+        "sheet.xlsx",
+        "slides.pptx",
+        "book.epub",
+        "book.xls",
+    ] {
+        assert_eq!(infer_type(name), "doc", "{name}");
+    }
+    for name in [
+        "main.rs",
         "script.js",
         "module.mjs",
+        "style.css",
+        "page.html",
+        "app.json",
+        "conf.xml",
+        "Makefile",
+        "archive.zip",
     ] {
-        assert_eq!(infer_type(name), "doc", "{name} must be a doc");
+        assert_eq!(infer_type(name), "other", "{name}");
     }
-    // plain-app extraDocumentMimeTypes beyond text/*.
-    for name in ["report.pdf", "old.doc", "thesis.DOCX", "sheet.XLSX"] {
-        assert_eq!(infer_type(name), "doc", "{name} must be a doc");
-    }
-    // Case-insensitive, same as the audio/video/image arms.
-    assert_eq!(infer_type("RESUME.PDF"), "doc");
-
-    // plain-app has no legacy .xls in extraDocumentMimeTypes — parity keeps
-    // it out until the shared table decision changes on the phone side too.
-    assert_eq!(infer_type("book.xls"), "other");
-    assert_eq!(infer_type("app.json"), "other");
-    assert_eq!(infer_type("conf.xml"), "other");
-
-    // Non-docs stay as they were.
-    assert_eq!(infer_type("song.mp3"), "audio");
-    assert_eq!(infer_type("clip.mp4"), "video");
-    assert_eq!(infer_type("photo.jpg"), "image");
-    assert_eq!(infer_type("archive.zip"), "other");
-    assert_eq!(infer_type("blob.bin"), "other");
-    // Extensionless files have no extension-derived MIME and are not docs
-    // (plain-app MediaStore assigns them application/octet-stream too).
-    assert_eq!(infer_type("Makefile"), "other");
 }
 
 #[test]
@@ -211,6 +200,6 @@ fn the_default_scan_root_expands_to_all_configured_sources() {
     );
     assert_eq!(
         selected_roots("/".into(), &[]),
-        vec![std::path::PathBuf::from("/")]
+        Vec::<std::path::PathBuf>::new()
     );
 }

@@ -3,6 +3,7 @@ mod casting;
 mod chat;
 mod device;
 pub(crate) mod events;
+mod files;
 mod library;
 mod mirror;
 pub(crate) mod models;
@@ -21,5 +22,6 @@ pub struct Subscription(
     notifications::NotificationsSubscriptions,
     chat::ChatSubscriptions,
     library::LibrarySubscriptions,
+    files::FileSubscriptions,
     sms::SmsSubscriptions,
 );

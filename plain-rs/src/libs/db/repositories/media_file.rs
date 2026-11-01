@@ -38,7 +38,7 @@ pub(crate) fn init(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
     conn.execute_batch("CREATE TEMP VIEW file_catalog AS SELECT CAST(f.id AS TEXT) AS id,f.id AS file_id,
 CASE f.kind WHEN 'AUDIO' THEN 1 WHEN 'VIDEO' THEN 2 WHEN 'IMAGE' THEN 3 WHEN 'DOC' THEN 24 ELSE 22 END AS data_type,
 CASE WHEN substr(v.path,-1)='/' THEN v.path||f.path ELSE v.path||CASE WHEN f.path='' THEN '' ELSE '/'||f.path END END AS path,
-f.file_name,f.kind,f.volume_id,f.file_identity,f.missing,v.is_available,
+f.file_name,f.kind,f.volume_id,f.file_identity,f.missing,f.indexed,v.is_available,
 COALESCE(f.title,'') AS title,COALESCE(f.artist,'') AS artist,COALESCE(f.album,'') AS album,COALESCE(f.album_artist,'') AS album_artist,COALESCE(f.album_id,'') AS album_id,
 CASE WHEN instr(f.path,'/')=0 THEN CASE WHEN v.path='/' THEN '/' ELSE rtrim(v.path,'/') END ELSE rtrim(v.path,'/')||'/'||substr(f.path,1,length(f.path)-length(f.file_name)-1) END AS bucket_id,
 COALESCE(f.mime_type,'') AS mime_type,CAST(COALESCE(f.size_bytes,0) AS INTEGER) AS size_bytes,CAST(COALESCE(f.duration_ms,0) AS INTEGER) AS duration_ms,f.cover_image_id,
@@ -164,12 +164,12 @@ impl Db {
         offset: u32,
     ) -> rusqlite::Result<Vec<MediaFileRow>> {
         kind(data_type)?;
-        self.with_conn(|conn| conn.prepare(&format!("SELECT {COLUMNS} FROM {SOURCE} WHERE data_type=?1 AND trashed=0 AND missing=0 AND is_available=1 ORDER BY updated_at DESC,file_id LIMIT ?2 OFFSET ?3"))?
+        self.with_conn(|conn| conn.prepare(&format!("SELECT {COLUMNS} FROM {SOURCE} WHERE data_type=?1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1 ORDER BY updated_at DESC,file_id LIMIT ?2 OFFSET ?3"))?
             .query_map(params![data_type.kind(),limit,offset],from_row)?.collect())
     }
     pub fn media_file_count(&self, data_type: DataType) -> rusqlite::Result<i64> {
         kind(data_type)?;
-        self.with_conn(|conn|conn.query_row(&format!("SELECT count(*) FROM {SOURCE} WHERE data_type=?1 AND trashed=0 AND missing=0 AND is_available=1"),[data_type.kind()],|row|row.get(0)))
+        self.with_conn(|conn|conn.query_row(&format!("SELECT count(*) FROM {SOURCE} WHERE data_type=?1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1"),[data_type.kind()],|row|row.get(0)))
     }
 }
 

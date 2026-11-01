@@ -159,3 +159,73 @@ fn browse_does_not_follow_recursive_symlink_cycles_or_escape_the_root() {
         );
     }
 }
+
+#[test]
+fn progressive_search_keeps_exact_counts_and_sorted_pages_and_cancels_before_more_reads() {
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir(root.path().join("node_modules")).unwrap();
+    for index in 0..300 {
+        fs::write(
+            root.path()
+                .join("node_modules")
+                .join(format!("needle-{index:03}.rs")),
+            b"source",
+        )
+        .unwrap();
+    }
+    let mut request = request(root.path(), "needle");
+    request.offset = 10;
+    request.limit = Some(5);
+    let plan = request.plan().unwrap();
+    let mut snapshots = Vec::new();
+    let page = plan
+        .walk(
+            |page| {
+                snapshots.push(page);
+                true
+            },
+            || false,
+        )
+        .unwrap();
+    assert_eq!(page.count, 300);
+    assert_eq!(
+        page.items
+            .iter()
+            .map(|item| item.name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "needle-010.rs",
+            "needle-011.rs",
+            "needle-012.rs",
+            "needle-013.rs",
+            "needle-014.rs"
+        ]
+    );
+    assert_eq!(snapshots.len(), 2);
+    assert!(
+        snapshots
+            .iter()
+            .all(|page| page.count < 300 && page.items.len() == 5)
+    );
+    let mut reads = 0;
+    let error = plan
+        .walk(
+            |page| {
+                reads += 1;
+                assert!(page.count < 300);
+                false
+            },
+            || false,
+        )
+        .err()
+        .unwrap();
+    assert_eq!(error.kind(), io::ErrorKind::Interrupted);
+    assert_eq!(reads, 1);
+    assert_eq!(
+        plan.walk(|_| panic!("cancelled before traversal"), || true)
+            .err()
+            .unwrap()
+            .kind(),
+        io::ErrorKind::Interrupted
+    );
+}
