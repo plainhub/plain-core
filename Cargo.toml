@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["plain-libs", "plain-rs", "plain-server", "plain-cli"]
+exclude = ["vendor/async-graphql"]
 
 [profile.dev]
 debug = "line-tables-only"
@@ -24,6 +25,9 @@ debug = "line-tables-only"
 
 [profile.dev.package.plainapp]
 debug = "line-tables-only"
+
+[profile.dev.package.async-graphql]
+incremental = false
 
 [profile.release]
 opt-level = 3

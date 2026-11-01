@@ -1,0 +1,921 @@
+use std::{collections::HashMap, fmt::Write};
+
+use crate::registry::{Deprecation, MetaField, MetaInputValue, MetaType, Registry};
+
+const SYSTEM_SCALARS: &[&str] = &["Int", "Float", "String", "Boolean", "ID"];
+const FEDERATION_SCALARS: &[&str] = &["Any"];
+
+/// Options for SDL export
+#[derive(Debug, Copy, Clone)]
+pub struct SDLExportOptions {
+    sorted_fields: bool,
+    sorted_arguments: bool,
+    sorted_enum_values: bool,
+    federation: bool,
+    prefer_single_line_descriptions: bool,
+    include_specified_by: bool,
+    compose_directive: bool,
+    use_space_ident: bool,
+    indent_width: u8,
+}
+
+impl Default for SDLExportOptions {
+    fn default() -> Self {
+        Self {
+            sorted_fields: false,
+            sorted_arguments: false,
+            sorted_enum_values: false,
+            federation: false,
+            prefer_single_line_descriptions: false,
+            include_specified_by: false,
+            compose_directive: false,
+            use_space_ident: false,
+            indent_width: 2,
+        }
+    }
+}
+
+impl SDLExportOptions {
+    /// Create a `SDLExportOptions`
+    #[inline]
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Export sorted fields
+    #[inline]
+    #[must_use]
+    pub fn sorted_fields(self) -> Self {
+        Self {
+            sorted_fields: true,
+            ..self
+        }
+    }
+
+    /// Export sorted field arguments
+    #[inline]
+    #[must_use]
+    pub fn sorted_arguments(self) -> Self {
+        Self {
+            sorted_arguments: true,
+            ..self
+        }
+    }
+
+    /// Export sorted enum items
+    #[inline]
+    #[must_use]
+    pub fn sorted_enum_items(self) -> Self {
+        Self {
+            sorted_enum_values: true,
+            ..self
+        }
+    }
+
+    /// Export as Federation SDL(Schema Definition Language)
+    #[inline]
+    #[must_use]
+    pub fn federation(self) -> Self {
+        Self {
+            federation: true,
+            ..self
+        }
+    }
+
+    /// When possible, write one-line instead of three-line descriptions
+    #[inline]
+    #[must_use]
+    pub fn prefer_single_line_descriptions(self) -> Self {
+        Self {
+            prefer_single_line_descriptions: true,
+            ..self
+        }
+    }
+
+    /// Includes `specifiedBy` directive in SDL
+    pub fn include_specified_by(self) -> Self {
+        Self {
+            include_specified_by: true,
+            ..self
+        }
+    }
+
+    /// Enable `composeDirective` if federation is enabled
+    pub fn compose_directive(self) -> Self {
+        Self {
+            compose_directive: true,
+            ..self
+        }
+    }
+
+    /// Use spaces for indentation instead of tabs
+    pub fn use_space_ident(self) -> Self {
+        Self {
+            use_space_ident: true,
+            ..self
+        }
+    }
+
+    /// Set the number of spaces to use for each indentation level (default: 2).
+    /// Only applies when `use_space_indent` is true
+    pub fn indent_width(self, width: u8) -> Self {
+        Self {
+            indent_width: width,
+            ..self
+        }
+    }
+}
+
+impl Registry {
+    pub(crate) fn export_sdl(&self, options: SDLExportOptions) -> String {
+        let mut sdl = String::new();
+
+        for ty in self.types.values() {
+            if ty.name().starts_with("__") {
+                continue;
+            }
+
+            if options.federation {
+                const FEDERATION_TYPES: &[&str] = &["_Any", "_Entity", "_Service"];
+                if FEDERATION_TYPES.contains(&ty.name()) {
+                    continue;
+                }
+            }
+
+            self.export_type(ty, &mut sdl, &options);
+        }
+
+        self.directives.values().for_each(|directive| {
+            // Filter out deprecated directive from SDL if it is not used
+            if directive.name == "deprecated"
+                && !self.types.values().any(|ty| match ty {
+                    MetaType::Object { fields, .. } => fields
+                        .values()
+                        .any(|field| field.deprecation.is_deprecated()),
+                    MetaType::Enum { enum_values, .. } => enum_values
+                        .values()
+                        .any(|value| value.deprecation.is_deprecated()),
+                    _ => false,
+                })
+            {
+                return;
+            }
+
+            // Filter out specifiedBy directive from SDL if it is not used
+            if directive.name == "specifiedBy"
+                && !self.types.values().any(|ty| {
+                    matches!(
+                        ty,
+                        MetaType::Scalar {
+                            specified_by_url: Some(_),
+                            ..
+                        }
+                    )
+                })
+            {
+                return;
+            }
+
+            // Filter out oneOf directive from SDL if it is not used
+            if directive.name == "oneOf"
+                && !self
+                    .types
+                    .values()
+                    .any(|ty| matches!(ty, MetaType::InputObject { oneof: true, .. }))
+            {
+                return;
+            }
+
+            writeln!(sdl, "{}", directive.sdl(&options)).ok();
+        });
+
+        if options.federation {
+            writeln!(sdl, "extend schema @link(").ok();
+            writeln!(
+                sdl,
+                "{}url: \"https://specs.apollo.dev/federation/v2.5\",",
+                tab(&options)
+            )
+            .ok();
+            writeln!(sdl, "{}import: [\"@key\", \"@tag\", \"@shareable\", \"@inaccessible\", \"@override\", \"@external\", \"@provides\", \"@requires\", \"@composeDirective\", \"@interfaceObject\", \"@requiresScopes\"]", tab(&options)).ok();
+            writeln!(sdl, ")").ok();
+
+            if options.compose_directive {
+                writeln!(sdl).ok();
+                let mut compose_directives = HashMap::<&str, Vec<String>>::new();
+                self.directives
+                    .values()
+                    .filter_map(|d| {
+                        d.composable
+                            .as_ref()
+                            .map(|ext_url| (ext_url, format!("\"@{}\"", d.name)))
+                    })
+                    .for_each(|(ext_url, name)| {
+                        compose_directives.entry(ext_url).or_default().push(name)
+                    });
+                for (url, directives) in compose_directives {
+                    writeln!(sdl, "extend schema @link(").ok();
+                    writeln!(sdl, "{}url: \"{}\"", tab(&options), url).ok();
+                    writeln!(sdl, "{}import: [{}]", tab(&options), directives.join(",")).ok();
+                    writeln!(sdl, ")").ok();
+                    for name in directives {
+                        writeln!(sdl, "{}@composeDirective(name: {})", tab(&options), name).ok();
+                    }
+                    writeln!(sdl).ok();
+                }
+            }
+        } else {
+            writeln!(sdl, "schema {{").ok();
+            writeln!(sdl, "{}query: {}", tab(&options), self.query_type).ok();
+            if let Some(mutation_type) = self.mutation_type.as_deref() {
+                writeln!(sdl, "{}mutation: {}", tab(&options), mutation_type).ok();
+            }
+            if let Some(subscription_type) = self.subscription_type.as_deref() {
+                writeln!(sdl, "{}subscription: {}", tab(&options), subscription_type).ok();
+            }
+            writeln!(sdl, "}}").ok();
+        }
+
+        sdl
+    }
+
+    fn export_fields<'a, I: Iterator<Item = &'a MetaField>>(
+        sdl: &mut String,
+        it: I,
+        options: &SDLExportOptions,
+    ) {
+        let mut fields = it.collect::<Vec<_>>();
+
+        if options.sorted_fields {
+            fields.sort_by_key(|field| &field.name);
+        }
+
+        for field in fields {
+            if field.name.starts_with("__")
+                || (options.federation && matches!(&*field.name, "_service" | "_entities"))
+            {
+                continue;
+            }
+
+            if let Some(description) = &field.description {
+                write_description(sdl, options, 1, description);
+            }
+
+            if !field.args.is_empty() {
+                write!(sdl, "{}{}(", tab(&options), field.name).ok();
+
+                let mut args = field.args.values().collect::<Vec<_>>();
+                if options.sorted_arguments {
+                    args.sort_by_key(|value| &value.name);
+                }
+
+                let need_multiline = args.iter().any(|x| x.description.is_some());
+
+                for (i, arg) in args.into_iter().enumerate() {
+                    if i != 0 {
+                        sdl.push(',');
+                    }
+
+                    if let Some(description) = &arg.description {
+                        writeln!(sdl).ok();
+                        write_description(sdl, options, 2, description);
+                    }
+
+                    if need_multiline {
+                        write!(sdl, "{0}{0}", tab(options)).ok();
+                    } else if i != 0 {
+                        sdl.push(' ');
+                    }
+
+                    write_input_value(sdl, arg);
+
+                    if options.federation {
+                        if arg.inaccessible {
+                            write!(sdl, " @inaccessible").ok();
+                        }
+
+                        for tag in &arg.tags {
+                            write!(sdl, " @tag(name: \"{}\")", tag.replace('"', "\\\"")).ok();
+                        }
+                    }
+
+                    for directive in &arg.directive_invocations {
+                        write!(sdl, " {}", directive.sdl()).ok();
+                    }
+                }
+
+                if need_multiline {
+                    write!(sdl, "\n{}", tab(&options)).ok();
+                }
+                write!(sdl, "): {}", field.ty).ok();
+            } else {
+                write!(sdl, "{}{}: {}", tab(&options), field.name, field.ty).ok();
+            }
+
+            write_deprecated(sdl, &field.deprecation);
+
+            for directive in &field.directive_invocations {
+                write!(sdl, " {}", directive.sdl()).ok();
+            }
+
+            if options.federation {
+                if field.external {
+                    write!(sdl, " @external").ok();
+                }
+                if let Some(requires) = &field.requires {
+                    write!(sdl, " @requires(fields: \"{}\")", requires).ok();
+                }
+                if let Some(provides) = &field.provides {
+                    write!(sdl, " @provides(fields: \"{}\")", provides).ok();
+                }
+                if field.shareable {
+                    write!(sdl, " @shareable").ok();
+                }
+                if field.inaccessible {
+                    write!(sdl, " @inaccessible").ok();
+                }
+                for tag in &field.tags {
+                    write!(sdl, " @tag(name: \"{}\")", tag.replace('"', "\\\"")).ok();
+                }
+                if let Some(from) = &field.override_from {
+                    write!(sdl, " @override(from: \"{}\")", from).ok();
+                }
+
+                if !&field.requires_scopes.is_empty() {
+                    write_requires_scopes(sdl, &field.requires_scopes);
+                }
+            }
+
+            writeln!(sdl).ok();
+        }
+    }
+
+    fn export_type(&self, ty: &MetaType, sdl: &mut String, options: &SDLExportOptions) {
+        match ty {
+            MetaType::Scalar {
+                name,
+                description,
+                inaccessible,
+                tags,
+                specified_by_url,
+                directive_invocations,
+                requires_scopes,
+                ..
+            } => {
+                let mut export_scalar = !SYSTEM_SCALARS.contains(&name.as_str());
+                if options.federation && FEDERATION_SCALARS.contains(&name.as_str()) {
+                    export_scalar = false;
+                }
+                if export_scalar {
+                    if let Some(description) = description {
+                        write_description(sdl, options, 0, description);
+                    }
+                    write!(sdl, "scalar {}", name).ok();
+
+                    if options.include_specified_by
+                        && let Some(specified_by_url) = specified_by_url
+                    {
+                        write!(
+                            sdl,
+                            " @specifiedBy(url: \"{}\")",
+                            specified_by_url.replace('"', "\\\"")
+                        )
+                        .ok();
+                    }
+
+                    if options.federation {
+                        if *inaccessible {
+                            write!(sdl, " @inaccessible").ok();
+                        }
+                        for tag in tags {
+                            write!(sdl, " @tag(name: \"{}\")", tag.replace('"', "\\\"")).ok();
+                        }
+                        if !requires_scopes.is_empty() {
+                            write_requires_scopes(sdl, requires_scopes);
+                        }
+                    }
+
+                    for directive in directive_invocations {
+                        write!(sdl, " {}", directive.sdl()).ok();
+                    }
+
+                    writeln!(sdl, "\n").ok();
+                }
+            }
+            MetaType::Object {
+                name,
+                fields,
+                extends,
+                keys,
+                description,
+                shareable,
+                resolvable,
+                inaccessible,
+                interface_object,
+                tags,
+                directive_invocations: raw_directives,
+                requires_scopes,
+                ..
+            } => {
+                if Some(name.as_str()) == self.subscription_type.as_deref()
+                    && options.federation
+                    && !self.federation_subscription
+                {
+                    return;
+                }
+
+                if name.as_str() == self.query_type && options.federation {
+                    let mut field_count = 0;
+                    for field in fields.values() {
+                        if field.name.starts_with("__")
+                            || (options.federation
+                                && matches!(&*field.name, "_service" | "_entities"))
+                        {
+                            continue;
+                        }
+                        field_count += 1;
+                    }
+                    if field_count == 0 {
+                        // is empty query root type
+                        return;
+                    }
+                }
+
+                if let Some(description) = description {
+                    write_description(sdl, options, 0, description);
+                }
+
+                if options.federation && *extends {
+                    write!(sdl, "extend ").ok();
+                }
+
+                write!(sdl, "type {}", name).ok();
+                self.write_implements(sdl, name);
+
+                for directive_invocation in raw_directives {
+                    write!(sdl, " {}", directive_invocation.sdl()).ok();
+                }
+
+                if options.federation {
+                    if let Some(keys) = keys {
+                        for key in keys {
+                            write!(sdl, " @key(fields: \"{}\"", key).ok();
+                            if !resolvable {
+                                write!(sdl, ", resolvable: false").ok();
+                            }
+                            write!(sdl, ")").ok();
+                        }
+                    }
+                    if *shareable {
+                        write!(sdl, " @shareable").ok();
+                    }
+
+                    if *inaccessible {
+                        write!(sdl, " @inaccessible").ok();
+                    }
+
+                    if *interface_object {
+                        write!(sdl, " @interfaceObject").ok();
+                    }
+
+                    for tag in tags {
+                        write!(sdl, " @tag(name: \"{}\")", tag.replace('"', "\\\"")).ok();
+                    }
+
+                    if !requires_scopes.is_empty() {
+                        write_requires_scopes(sdl, requires_scopes);
+                    }
+                }
+
+                writeln!(sdl, " {{").ok();
+                Self::export_fields(sdl, fields.values(), options);
+                writeln!(sdl, "}}\n").ok();
+            }
+            MetaType::Interface {
+                name,
+                fields,
+                extends,
+                keys,
+                description,
+                inaccessible,
+                tags,
+                directive_invocations,
+                requires_scopes,
+                ..
+            } => {
+                if let Some(description) = description {
+                    write_description(sdl, options, 0, description);
+                }
+
+                if options.federation && *extends {
+                    write!(sdl, "extend ").ok();
+                }
+                write!(sdl, "interface {}", name).ok();
+
+                if options.federation {
+                    if let Some(keys) = keys {
+                        for key in keys {
+                            write!(sdl, " @key(fields: \"{}\")", key).ok();
+                        }
+                    }
+                    if *inaccessible {
+                        write!(sdl, " @inaccessible").ok();
+                    }
+
+                    for tag in tags {
+                        write!(sdl, " @tag(name: \"{}\")", tag.replace('"', "\\\"")).ok();
+                    }
+
+                    if !requires_scopes.is_empty() {
+                        write_requires_scopes(sdl, requires_scopes);
+                    }
+                }
+
+                for directive in directive_invocations {
+                    write!(sdl, " {}", directive.sdl()).ok();
+                }
+
+                self.write_implements(sdl, name);
+
+                writeln!(sdl, " {{").ok();
+                Self::export_fields(sdl, fields.values(), options);
+                writeln!(sdl, "}}\n").ok();
+            }
+            MetaType::Enum {
+                name,
+                enum_values,
+                description,
+                inaccessible,
+                tags,
+                directive_invocations,
+                requires_scopes,
+                ..
+            } => {
+                if let Some(description) = description {
+                    write_description(sdl, options, 0, description);
+                }
+
+                write!(sdl, "enum {}", name).ok();
+                if options.federation {
+                    if *inaccessible {
+                        write!(sdl, " @inaccessible").ok();
+                    }
+                    for tag in tags {
+                        write!(sdl, " @tag(name: \"{}\")", tag.replace('"', "\\\"")).ok();
+                    }
+
+                    if !requires_scopes.is_empty() {
+                        write_requires_scopes(sdl, requires_scopes);
+                    }
+                }
+
+                for directive in directive_invocations {
+                    write!(sdl, " {}", directive.sdl()).ok();
+                }
+
+                writeln!(sdl, " {{").ok();
+
+                let mut values = enum_values.values().collect::<Vec<_>>();
+                if options.sorted_enum_values {
+                    values.sort_by_key(|value| &value.name);
+                }
+
+                for value in values {
+                    if let Some(description) = &value.description {
+                        write_description(sdl, options, 1, description);
+                    }
+                    write!(sdl, "{}{}", tab(&options), value.name).ok();
+                    write_deprecated(sdl, &value.deprecation);
+
+                    if options.federation {
+                        if value.inaccessible {
+                            write!(sdl, " @inaccessible").ok();
+                        }
+
+                        for tag in &value.tags {
+                            write!(sdl, " @tag(name: \"{}\")", tag.replace('"', "\\\"")).ok();
+                        }
+                    }
+
+                    for directive in &value.directive_invocations {
+                        write!(sdl, " {}", directive.sdl()).ok();
+                    }
+
+                    writeln!(sdl).ok();
+                }
+
+                writeln!(sdl, "}}\n").ok();
+            }
+            MetaType::InputObject {
+                name,
+                input_fields,
+                description,
+                inaccessible,
+                tags,
+                oneof,
+                directive_invocations: raw_directives,
+                ..
+            } => {
+                if let Some(description) = description {
+                    write_description(sdl, options, 0, description);
+                }
+
+                write!(sdl, "input {}", name).ok();
+
+                if *oneof {
+                    write!(sdl, " @oneOf").ok();
+                }
+                if options.federation {
+                    if *inaccessible {
+                        write!(sdl, " @inaccessible").ok();
+                    }
+                    for tag in tags {
+                        write!(sdl, " @tag(name: \"{}\")", tag.replace('"', "\\\"")).ok();
+                    }
+                }
+
+                for directive in raw_directives {
+                    write!(sdl, " {}", directive.sdl()).ok();
+                }
+
+                writeln!(sdl, " {{").ok();
+
+                let mut fields = input_fields.values().collect::<Vec<_>>();
+                if options.sorted_fields {
+                    fields.sort_by_key(|value| &value.name);
+                }
+
+                for field in fields {
+                    if let Some(description) = &field.description {
+                        write_description(sdl, options, 1, description);
+                    }
+                    write!(sdl, "{}", tab(options)).ok();
+                    write_input_value(sdl, field);
+                    if options.federation {
+                        if field.inaccessible {
+                            write!(sdl, " @inaccessible").ok();
+                        }
+                        for tag in &field.tags {
+                            write!(sdl, " @tag(name: \"{}\")", tag.replace('"', "\\\"")).ok();
+                        }
+                    }
+                    for directive in &field.directive_invocations {
+                        write!(sdl, " {}", directive.sdl()).ok();
+                    }
+                    writeln!(sdl).ok();
+                }
+
+                writeln!(sdl, "}}\n").ok();
+            }
+            MetaType::Union {
+                name,
+                possible_types,
+                description,
+                inaccessible,
+                tags,
+                directive_invocations,
+                ..
+            } => {
+                if let Some(description) = description {
+                    write_description(sdl, options, 0, description);
+                }
+
+                write!(sdl, "union {}", name).ok();
+                if options.federation {
+                    if *inaccessible {
+                        write!(sdl, " @inaccessible").ok();
+                    }
+                    for tag in tags {
+                        write!(sdl, " @tag(name: \"{}\")", tag.replace('"', "\\\"")).ok();
+                    }
+                }
+
+                for directive in directive_invocations {
+                    write!(sdl, " {}", directive.sdl()).ok();
+                }
+
+                write!(sdl, " =").ok();
+
+                for (idx, ty) in possible_types.iter().enumerate() {
+                    if idx == 0 {
+                        write!(sdl, " {}", ty).ok();
+                    } else {
+                        write!(sdl, " | {}", ty).ok();
+                    }
+                }
+                writeln!(sdl, "\n").ok();
+            }
+        }
+    }
+
+    fn write_implements(&self, sdl: &mut String, name: &str) {
+        if let Some(implements) = self.implements.get(name)
+            && !implements.is_empty()
+        {
+            write!(
+                sdl,
+                " implements {}",
+                implements
+                    .iter()
+                    .map(AsRef::as_ref)
+                    .collect::<Vec<&str>>()
+                    .join(" & ")
+            )
+            .ok();
+        }
+    }
+}
+
+pub(super) fn write_description(
+    sdl: &mut String,
+    options: &SDLExportOptions,
+    level: usize,
+    description: &str,
+) {
+    let tabs = tab(options).repeat(level);
+
+    if options.prefer_single_line_descriptions && !description.contains('\n') {
+        let description = description.replace('"', r#"\""#);
+        writeln!(sdl, "{tabs}\"{description}\"").ok();
+    } else {
+        let description = description.replace('\n', &format!("\n{tabs}"));
+        writeln!(sdl, "{tabs}\"\"\"\n{tabs}{description}\n{tabs}\"\"\"").ok();
+    }
+}
+
+fn write_input_value(sdl: &mut String, input_value: &MetaInputValue) {
+    if let Some(default_value) = &input_value.default_value {
+        _ = write!(
+            sdl,
+            "{}: {} = {}",
+            input_value.name, input_value.ty, default_value
+        );
+    } else {
+        _ = write!(sdl, "{}: {}", input_value.name, input_value.ty);
+    }
+
+    write_deprecated(sdl, &input_value.deprecation);
+}
+
+fn write_deprecated(sdl: &mut String, deprecation: &Deprecation) {
+    if let Deprecation::Deprecated { reason } = deprecation {
+        let _ = match reason {
+            Some(reason) => write!(sdl, " @deprecated(reason: \"{}\")", escape_string(reason)).ok(),
+            None => write!(sdl, " @deprecated").ok(),
+        };
+    }
+}
+
+fn write_requires_scopes(sdl: &mut String, requires_scopes: &[String]) {
+    write!(
+        sdl,
+        " @requiresScopes(scopes: [{}])",
+        requires_scopes
+            .iter()
+            .map(|x| {
+                "[".to_string()
+                    + &x.split_whitespace()
+                        .map(|y| "\"".to_string() + y + "\"")
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                    + "]"
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+    .ok();
+}
+
+fn escape_string(s: &str) -> String {
+    let mut res = String::new();
+
+    for c in s.chars() {
+        let ec = match c {
+            '\\' => Some("\\\\"),
+            '\x08' => Some("\\b"),
+            '\x0c' => Some("\\f"),
+            '\n' => Some("\\n"),
+            '\r' => Some("\\r"),
+            '\t' => Some("\\t"),
+            _ => None,
+        };
+        match ec {
+            Some(ec) => {
+                res.write_str(ec).ok();
+            }
+            None => {
+                res.write_char(c).ok();
+            }
+        }
+    }
+
+    res
+}
+
+fn tab(options: &SDLExportOptions) -> String {
+    if options.use_space_ident {
+        " ".repeat(options.indent_width.into())
+    } else {
+        "\t".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{model::__DirectiveLocation, registry::MetaDirective};
+
+    #[test]
+    fn test_escape_string() {
+        assert_eq!(
+            escape_string("1\\\x08d\x0c3\n4\r5\t6"),
+            "1\\\\\\bd\\f3\\n4\\r5\\t6"
+        );
+    }
+
+    #[test]
+    fn test_compose_directive_dsl() {
+        let expected = r#"directive @custom_type_directive on FIELD_DEFINITION
+extend schema @link(
+	url: "https://specs.apollo.dev/federation/v2.5",
+	import: ["@key", "@tag", "@shareable", "@inaccessible", "@override", "@external", "@provides", "@requires", "@composeDirective", "@interfaceObject", "@requiresScopes"]
+)
+
+extend schema @link(
+	url: "https://custom.spec.dev/extension/v1.0"
+	import: ["@custom_type_directive"]
+)
+	@composeDirective(name: "@custom_type_directive")
+
+"#;
+        let mut registry = Registry::default();
+        registry.add_directive(MetaDirective {
+            name: "custom_type_directive".to_string(),
+            description: None,
+            locations: vec![__DirectiveLocation::FIELD_DEFINITION],
+            args: Default::default(),
+            is_repeatable: false,
+            visible: None,
+            composable: Some("https://custom.spec.dev/extension/v1.0".to_string()),
+        });
+        let dsl = registry.export_sdl(SDLExportOptions::new().federation().compose_directive());
+        assert_eq!(dsl, expected)
+    }
+
+    #[test]
+    fn test_type_directive_sdl_without_federation() {
+        let expected = r#"directive @custom_type_directive(optionalWithoutDefault: String, optionalWithDefault: String = "DEFAULT") on FIELD_DEFINITION | OBJECT
+schema {
+	query: Query
+}
+"#;
+        let mut registry = Registry::default();
+        registry.add_directive(MetaDirective {
+            name: "custom_type_directive".to_string(),
+            description: None,
+            locations: vec![
+                __DirectiveLocation::FIELD_DEFINITION,
+                __DirectiveLocation::OBJECT,
+            ],
+            args: [
+                (
+                    "optionalWithoutDefault".to_string(),
+                    MetaInputValue {
+                        name: "optionalWithoutDefault".to_string(),
+                        description: None,
+                        ty: "String".to_string(),
+                        deprecation: Deprecation::NoDeprecated,
+                        default_value: None,
+                        visible: None,
+                        inaccessible: false,
+                        tags: vec![],
+                        is_secret: false,
+                        directive_invocations: vec![],
+                    },
+                ),
+                (
+                    "optionalWithDefault".to_string(),
+                    MetaInputValue {
+                        name: "optionalWithDefault".to_string(),
+                        description: None,
+                        ty: "String".to_string(),
+                        deprecation: Deprecation::NoDeprecated,
+                        default_value: Some("\"DEFAULT\"".to_string()),
+                        visible: None,
+                        inaccessible: false,
+                        tags: vec![],
+                        is_secret: false,
+                        directive_invocations: vec![],
+                    },
+                ),
+            ]
+            .into(),
+            is_repeatable: false,
+            visible: None,
+            composable: None,
+        });
+        registry.query_type = "Query".to_string();
+        let sdl = registry.export_sdl(SDLExportOptions::new());
+        assert_eq!(sdl, expected)
+    }
+}
