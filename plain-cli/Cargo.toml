@@ -20,7 +20,6 @@ serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
 log = "0.4"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
-sysinfo = { version = "0.32", default-features = false, features = ["disk"] }
 
 [dev-dependencies]
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
