@@ -60,5 +60,5 @@ fn configured_path(name: &str) -> Option<PathBuf> {
 }
 
 pub fn home_directory() -> Option<PathBuf> {
-    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+    std::env::home_dir()
 }

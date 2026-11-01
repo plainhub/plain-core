@@ -154,3 +154,34 @@ fn drive_roots_remain_absolute_and_match_the_whole_drive() {
     assert!(!under("D:/Users/example/file.txt", "C:/"));
     assert!(!under("C:relative.txt", "C:/"));
 }
+
+#[cfg(unix)]
+#[test]
+fn defaults_resolve_home_when_service_has_no_home_environment() {
+    const CHILD: &str = "PLAIN_TEST_HOME_WITHOUT_ENV";
+    if std::env::var_os(CHILD).is_some() {
+        let expected = std::env::home_dir().unwrap();
+        assert!(
+            resolve_defaults()
+                .scan_directories
+                .contains(&normalized(&expected))
+        );
+        return;
+    }
+    let test = format!(
+        "{}::defaults_resolve_home_when_service_has_no_home_environment",
+        module_path!().split_once("::").unwrap().1
+    );
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", &test, "--nocapture"])
+        .env_remove("HOME")
+        .env_remove("USERPROFILE")
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}

@@ -1,6 +1,6 @@
 use super::{Prefs, pref_keys};
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,8 +22,7 @@ impl Default for Defaults {
 }
 
 fn resolve_defaults() -> Defaults {
-    let home =
-        std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+    let home = crate::libs::platform::system::consts::home_directory();
     let mut scan_directories: Vec<_> = if cfg!(any(
         target_os = "linux",
         target_os = "windows",
@@ -51,7 +50,7 @@ fn resolve_defaults() -> Defaults {
                 ("XDG_STATE_HOME", ".local/state"),
             ] {
                 let path = std::env::var_os(key)
-                    .map(PathBuf::from)
+                    .map(std::path::PathBuf::from)
                     .filter(|path| path.is_absolute())
                     .unwrap_or_else(|| home.join(fallback));
                 excluded_directories.push(normalized(&path));
