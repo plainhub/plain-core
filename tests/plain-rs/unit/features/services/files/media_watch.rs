@@ -6,6 +6,96 @@ use super::*;
 use notify::event::{RemoveKind, RenameMode};
 
 #[test]
+#[cfg(target_os = "linux")]
+fn read_events_and_incomplete_writes_do_not_enter_the_reconciliation_queue() {
+    use notify::event::{AccessKind, AccessMode, CreateKind, DataChange};
+    let (send, mut receive) = tokio::sync::mpsc::channel(1);
+    for kind in [
+        EventKind::Access(AccessKind::Open(AccessMode::Read)),
+        EventKind::Access(AccessKind::Close(AccessMode::Read)),
+        EventKind::Create(CreateKind::File),
+        EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+    ] {
+        enqueue_event(&send, None, Event::new(kind).add_path("/owned/file".into())).unwrap();
+        assert!(matches!(
+            receive.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        ));
+    }
+    enqueue_event(
+        &send,
+        None,
+        Event::new(EventKind::Access(AccessKind::Close(AccessMode::Write)))
+            .add_path("/owned/file".into()),
+    )
+    .unwrap();
+    assert_eq!(
+        receive.try_recv().unwrap().kind,
+        EventKind::Modify(ModifyKind::Any)
+    );
+    assert!(matches!(
+        receive.try_recv(),
+        Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+    ));
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn an_inaccessible_watch_descendant_is_skipped_but_an_inaccessible_root_is_reported() {
+    #[derive(Default)]
+    struct DeniedWatcher {
+        denied: std::path::PathBuf,
+        calls: Vec<std::path::PathBuf>,
+    }
+    impl Watcher for DeniedWatcher {
+        fn new<F: notify::EventHandler>(_: F, _: notify::Config) -> notify::Result<Self> {
+            Ok(Self::default())
+        }
+        fn watch(&mut self, path: &Path, _: RecursiveMode) -> notify::Result<()> {
+            self.calls.push(path.to_owned());
+            if path == self.denied {
+                return Err(notify::Error::io(
+                    std::io::ErrorKind::PermissionDenied.into(),
+                ));
+            }
+            Ok(())
+        }
+        fn unwatch(&mut self, _: &Path) -> notify::Result<()> {
+            Ok(())
+        }
+        fn kind() -> notify::WatcherKind {
+            notify::WatcherKind::NullWatcher
+        }
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let denied = directory.path().join("denied");
+    let nested = denied.join("nested");
+    let readable = directory.path().join("readable");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::create_dir(&readable).unwrap();
+    let mut watcher = DeniedWatcher {
+        denied: denied.clone(),
+        ..Default::default()
+    };
+    let mut watched = std::collections::BTreeSet::new();
+    watch_tree(&mut watcher, &mut watched, directory.path(), None).unwrap();
+    assert!(watched.contains(directory.path()));
+    assert!(watched.contains(&readable));
+    assert!(!watched.contains(&denied));
+    assert!(!watcher.calls.contains(&nested));
+    assert_eq!(
+        watcher.calls.iter().filter(|path| *path == &denied).count(),
+        1
+    );
+    assert!(
+        watch_tree(&mut watcher, &mut watched, &denied, None)
+            .unwrap_err()
+            .to_lowercase()
+            .contains("permission denied")
+    );
+}
+
+#[test]
 fn a_new_media_file_is_indexed() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("clip.mp4");
@@ -236,4 +326,35 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
                     && *mode == RecursiveMode::NonRecursive)
         );
     }
+}
+
+#[test]
+fn watcher_excluded_event_bursts_do_not_fill_the_watch_queue() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let scope = crate::features::prefs::file_index::Scope {
+        directories: vec![crate::features::prefs::file_index::normalized(root)],
+        exclusions: vec![crate::features::prefs::file_index::normalized(
+            &root.join("build"),
+        )],
+        defaults: crate::features::prefs::file_index::Defaults {
+            scan_directories: Vec::new(),
+            excluded_directories: Vec::new(),
+            excluded_names: Vec::new(),
+        },
+    };
+    let (send, mut receive) = tokio::sync::mpsc::channel(256);
+    for index in 0..4096 {
+        let event = Event::new(EventKind::Modify(ModifyKind::Any))
+            .add_path(root.join(format!("build/{index}")));
+        enqueue_event(&send, Some(&scope), event).unwrap();
+    }
+    assert!(receive.try_recv().is_err());
+    let event = Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Both)))
+        .add_path(root.join("build/old"))
+        .add_path(root.join("new"));
+    enqueue_event(&send, Some(&scope), event.clone()).unwrap();
+    assert_eq!(receive.try_recv().unwrap(), event);
+    enqueue_event(&send, Some(&scope), Event::new(EventKind::Other)).unwrap();
+    assert_eq!(receive.try_recv().unwrap().kind, EventKind::Other);
 }

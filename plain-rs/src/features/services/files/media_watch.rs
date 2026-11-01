@@ -77,6 +77,25 @@ fn completed_event(event: Event) -> Option<Event> {
     Some(event)
 }
 
+fn enqueue_event(
+    send: &tokio::sync::mpsc::Sender<Event>,
+    scope: Option<&crate::features::prefs::file_index::Scope>,
+    mut event: Event,
+) -> Result<(), tokio::sync::mpsc::error::TrySendError<Event>> {
+    if !event.need_rescan() {
+        let Some(completed) = completed_event(event) else {
+            return Ok(());
+        };
+        event = completed;
+        if !event.paths.is_empty()
+            && scope.is_some_and(|scope| event.paths.iter().all(|path| !scope.contains(path)))
+        {
+            return Ok(());
+        }
+    }
+    send.try_send(event)
+}
+
 pub struct WatcherHandle {
     task: tokio::task::JoinHandle<()>,
 }
@@ -108,9 +127,14 @@ where
     let changed = Arc::new(tokio::sync::Notify::new());
     let overflow = dirty.clone();
     let wake = changed.clone();
+    let event_scope = scope.clone();
     let mut watcher =
         notify::recommended_watcher(move |result: notify::Result<Event>| match result {
-            Ok(event) => match send.try_send(event) {
+            Ok(event) if event.need_rescan() => {
+                overflow.store(true, Ordering::Release);
+                wake.notify_one();
+            }
+            Ok(event) => match enqueue_event(&send, event_scope.as_ref(), event) {
                 Ok(()) => {}
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                     overflow.store(true, Ordering::Release);
@@ -185,7 +209,7 @@ where
                     dirty.store(true, Ordering::Release);
                 }
             }
-            let Some(event) = event.and_then(completed_event) else { continue };
+            let Some(event) = event else { continue };
             if let Some(scope) = &scope {
                 if event.paths.iter().all(|path| !scope.contains(path)) { continue; }
             }
@@ -254,6 +278,13 @@ fn watch_tree(
                 Ok(()) => {
                     watched.insert(path.clone());
                 }
+                Err(error)
+                    if path != root
+                        && matches!(&error.kind,
+                    notify::ErrorKind::Io(error) if matches!(error.kind(), std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound)) =>
+                {
+                    continue;
+                }
                 Err(error) => {
                     failure = Some(error.to_string());
                 }
@@ -271,6 +302,12 @@ fn watch_tree(
                     }
                 }
             }
+            Err(error)
+                if path != root
+                    && matches!(
+                        error.kind(),
+                        std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
+                    ) => {}
             Err(error) => {
                 failure = Some(error.to_string());
             }

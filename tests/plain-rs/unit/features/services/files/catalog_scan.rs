@@ -577,3 +577,20 @@ async fn an_unmounted_source_is_a_coverage_gap_and_does_not_retire_catalog_rows(
     assert!(!state.db.volumes().unwrap()[0].is_available);
     core.stop_core().await;
 }
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn watcher_reconciliation_waits_for_the_active_scan() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    catalog.set_source_directories(&[]).unwrap();
+    let active = state.media_scans.begin(0).unwrap();
+    let reconcile = catalog.apply_watch_event(notify::Event::new(notify::EventKind::Other));
+    tokio::pin!(reconcile);
+    assert!(futures_util::poll!(reconcile.as_mut()).is_pending());
+    active.finish(Ok(())).unwrap();
+    reconcile.await.unwrap();
+    core.stop_core().await;
+}

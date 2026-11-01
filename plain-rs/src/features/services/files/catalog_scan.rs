@@ -234,6 +234,7 @@ impl NativeMediaCatalog {
         use crate::features::services::files::media_watch::effect_for;
         use notify::event::{EventKind, ModifyKind, RenameMode};
         if matches!(event.kind, EventKind::Other) {
+            self.state.media_scans.wait_idle().await?;
             self.scan_directories(self.source_directories()?).await?;
             return Ok(());
         }
@@ -289,7 +290,11 @@ impl NativeMediaCatalog {
                 &policy.cache_directory,
                 &policy.excluded_roots,
             );
-            match effect_for(&path, &event.kind, excluded) {
+            let effect = effect_for(&path, &event.kind, excluded);
+            if matches!(effect, Effect::Forget | Effect::RescanSubtree) {
+                self.state.media_scans.wait_idle().await?;
+            }
+            match effect {
                 Effect::Index => {
                     self.state
                         .file_platform
