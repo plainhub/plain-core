@@ -1,4 +1,5 @@
-use crate::libs::filesystem::{browse::Request, record::FileRecord};
+use plain_libs::filesystem::browse::Request;
+use plain_libs::filesystem::record::FileRecord;
 use serde_json::Value;
 
 pub const SEARCH_RESULT_LIMIT: usize = 1000;
@@ -32,7 +33,7 @@ pub async fn search(
     platform: &crate::features::services::files::platform::FilePlatform,
     mut request: Request,
 ) -> Result<
-    tokio::sync::mpsc::Receiver<Result<(crate::libs::filesystem::browse::Page, bool), String>>,
+    tokio::sync::mpsc::Receiver<Result<(plain_libs::filesystem::browse::Page, bool), String>>,
     String,
 > {
     request.limit = Some(

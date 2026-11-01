@@ -1,5 +1,6 @@
 use crate::server::ServerState;
-use plain_rs::libs::host::audio::{AudioPlaybackFacts, PLAYBACK_STATE};
+use plain_rs::infrastructure::host::audio::AudioPlaybackFacts;
+use plain_rs::infrastructure::host::audio::PLAYBACK_STATE;
 use serde_json::{Value, json};
 
 #[derive(Clone)]

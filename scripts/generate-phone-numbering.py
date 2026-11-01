@@ -93,7 +93,7 @@ def main():
     output = io.BytesIO()
     with gzip.GzipFile(fileobj=output, mode="wb", filename="", mtime=0) as writer:
         writer.write(raw)
-    path = Path(__file__).resolve().parents[1] / "plain-rs/src/libs/phone/data/numbering.json.gz"
+    path = Path(__file__).resolve().parents[1] / "plain-libs/src/phone/data/numbering.json.gz"
     if args.check:
         if path.read_bytes() != output.getvalue():
             raise SystemExit("Bundled numbering data is stale")

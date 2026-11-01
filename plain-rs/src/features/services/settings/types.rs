@@ -1,4 +1,4 @@
-use crate::libs::types::Instant;
+use crate::infrastructure::types::Instant;
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "graphql", derive(async_graphql::SimpleObject))]
 pub struct AppUpdate {

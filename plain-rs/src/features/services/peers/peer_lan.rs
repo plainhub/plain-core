@@ -1,4 +1,4 @@
-use crate::libs::db::DPeer;
+use crate::infrastructure::db::DPeer;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use futures_util::StreamExt;
@@ -51,9 +51,10 @@ pub async fn send(
         .map_err(|e| Failure::Fatal(e.to_string()))?
         .filter(|id| !id.is_empty())
         .ok_or_else(|| Failure::Fatal("Missing peer actor".into()))?;
-    let cipher = crate::libs::crypto::xchacha_encrypt_raw(key, body.as_bytes())
+    let cipher = plain_libs::crypto::xchacha_encrypt_raw(key, body.as_bytes())
         .ok_or_else(|| Failure::Fatal("Invalid peer encryption key".into()))?;
-    let context = crate::libs::transport::http_response::Context::new("/peer_graphql", &cipher);
+    let context =
+        crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &cipher);
     let response = state
         .lan
         .client

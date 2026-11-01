@@ -171,10 +171,7 @@ async fn only_the_local_owner_can_mint_custom_session_credentials() {
         .unwrap();
     let id = created.client_id.as_str();
     let token = created.token.as_str();
-    assert_eq!(
-        plain_rs::libs::utils::base64::base64_decode(token).len(),
-        32
-    );
+    assert_eq!(plain_libs::utils::base64::base64_decode(token).len(), 32);
     assert_eq!(state.db.session_get(id).unwrap().unwrap().token, token);
     assert_eq!(state.db.session_list().unwrap().len(), before + 1);
     core.stop_core().await;

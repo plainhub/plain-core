@@ -1,5 +1,5 @@
 use crate::host::Host;
-use plain_rs::libs::host::request_scope::NativeRequestScope;
+use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 use plain_server::native::graphql::NativeGraphqlExecutor;
 use plain_server::server::ContentServer;
 use serde_json::{Value, json};
@@ -179,7 +179,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
         second_peers["peers"][0]["key"]
     );
     assert_eq!(
-        plain_rs::libs::utils::base64::base64_decode(
+        plain_libs::utils::base64::base64_decode(
             first_peers["peers"][0]["token"].as_str().unwrap()
         )
         .len(),
@@ -190,7 +190,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     let remote_handle = first
         .native
         .open_peer_subscriptions(
-            plain_rs::libs::protocols::graphql::PeerSubscriptionTarget {
+            plain_rs::infrastructure::protocols::graphql::PeerSubscriptionTarget {
                 peer_id: second_id.into(),
                 public_key: first_peers["peers"][0]["publicKey"]
                     .as_str()

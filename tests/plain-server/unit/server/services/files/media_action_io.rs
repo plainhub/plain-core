@@ -1,5 +1,5 @@
 use plain_rs::features::enums::DataType;
-use plain_rs::libs::db::Db;
+use plain_rs::infrastructure::db::Db;
 use std::path::Path;
 
 #[cfg(feature = "media")]
@@ -16,7 +16,7 @@ async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
         .iter()
         .map(|path| {
             std::fs::write(path, b"document").unwrap();
-            plain_rs::libs::db::MediaFileMetadata {
+            plain_rs::infrastructure::db::MediaFileMetadata {
                 album: String::new(),
                 album_artist: String::new(),
 
@@ -94,7 +94,7 @@ async fn image_delete_updates_index_before_any_parent_consumes_the_receipt() {
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let catalog = core.native_media_catalog().unwrap();
     let rows = catalog
-        .record_files(&[plain_rs::libs::db::MediaFileMetadata {
+        .record_files(&[plain_rs::infrastructure::db::MediaFileMetadata {
             album: String::new(),
             album_artist: String::new(),
 
@@ -144,7 +144,7 @@ fn seed(db: &Db, path: &Path) -> String {
 }
 
 fn seed_kind(db: &Db, path: &Path, kind: DataType) -> String {
-    db.record_media_files(&[plain_rs::libs::db::MediaFileMetadata {
+    db.record_media_files(&[plain_rs::infrastructure::db::MediaFileMetadata {
         album: String::new(),
         album_artist: String::new(),
 

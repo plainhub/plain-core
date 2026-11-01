@@ -7,8 +7,8 @@ fn db() -> Db {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let mut peer = DPeer::new("peer", "Fixture", "", Some(1), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = crate::libs::utils::base64::base64_encode(&[7; 32]);
-    peer.public_key = crate::libs::utils::base64::base64_encode(&[8; 32]);
+    peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[8; 32]);
     db.upsert_peer(&peer);
     db
 }

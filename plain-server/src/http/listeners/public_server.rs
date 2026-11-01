@@ -17,7 +17,7 @@ impl ServerState {
         let (stop, receiver) = watch::channel(false);
         let router = crate::http::router::build_router(self.clone(), receiver.clone());
         let started = async {
-            let fingerprint = plain_rs::libs::tls_identity::certificate_sha256(&cert)?;
+            let fingerprint = plain_rs::infrastructure::tls_identity::certificate_sha256(&cert)?;
             let listeners =
                 crate::http::listeners::HttpListeners::start(router, http, https, cert, key)
                     .await?;

@@ -1,5 +1,7 @@
-use crate::libs::db::{Db, tag};
-use crate::libs::error::{DomainError, DomainResult};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::tag;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 
 pub fn update_relations(
     db: &Db,

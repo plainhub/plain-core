@@ -20,14 +20,14 @@ use futures_util::StreamExt;
 use regex::Regex;
 use serde_json::{Value, json};
 
-use crate::libs::utils::image_dimensions;
+use plain_libs::utils::image_dimensions;
 
 use crate::features::chat::link_preview as commit;
 pub use crate::features::chat::link_preview::extract_urls;
 use crate::features::chat::link_preview::is_valid_url;
 mod schedule;
 use crate::features::chat::attachments::app_file_store::import_preview_image;
-use crate::libs::db::Db;
+use crate::infrastructure::db::Db;
 pub use commit::{Edit, edit};
 pub use schedule::Schedule;
 
@@ -310,7 +310,7 @@ pub async fn refresh(
     db: &Db,
     directory: &Path,
     id: &str,
-) -> anyhow::Result<Option<crate::libs::db::DChat>> {
+) -> anyhow::Result<Option<crate::infrastructure::db::DChat>> {
     let Some(client) = http_client() else {
         return Ok(None);
     };
@@ -321,8 +321,8 @@ async fn refresh_with(
     directory: &Path,
     id: &str,
     client: &reqwest::Client,
-) -> anyhow::Result<Option<crate::libs::db::DChat>> {
-    let Some(row) = crate::libs::db::chat_store::messages::get(db, id)? else {
+) -> anyhow::Result<Option<crate::infrastructure::db::DChat>> {
+    let Some(row) = crate::infrastructure::db::chat_store::messages::get(db, id)? else {
         return Ok(None);
     };
     let content: Value = serde_json::from_str(&row.content)?;

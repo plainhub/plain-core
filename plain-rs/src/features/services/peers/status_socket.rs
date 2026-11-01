@@ -82,7 +82,7 @@ pub async fn connect_management(
         tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
             .max_message_size(Some(1024 * 1024))
             .max_frame_size(Some(1024 * 1024)),
-        Some(crate::libs::protocols::graphql::PROTOCOL),
+        Some(crate::infrastructure::protocols::graphql::PROTOCOL),
     )
     .await
 }

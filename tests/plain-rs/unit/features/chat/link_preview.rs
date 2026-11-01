@@ -133,7 +133,7 @@ fn failed_edit_restores_quarantined_image_and_sql_state() {
     assert!(first.real_path.exists());
     assert_eq!(db.app_file_get(&first.id).unwrap().unwrap().ref_count, 1);
     let content: Value = serde_json::from_str(
-        &crate::libs::db::chat_store::messages::get(&db, "message")
+        &crate::infrastructure::db::chat_store::messages::get(&db, "message")
             .unwrap()
             .unwrap()
             .content,
@@ -169,7 +169,7 @@ fn failed_import_rolls_back_preview_and_physically_installed_image() {
             .unwrap(),
         0
     );
-    let row = crate::libs::db::chat_store::messages::get(&db, "message")
+    let row = crate::infrastructure::db::chat_store::messages::get(&db, "message")
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -177,7 +177,7 @@ fn failed_import_rolls_back_preview_and_physically_installed_image() {
         json!([])
     );
     use sha2::{Digest, Sha256};
-    let hash = crate::libs::utils::hex::bytes_to_hex(&Sha256::digest(b"new-image"));
+    let hash = plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(b"new-image"));
     assert!(
         !crate::features::chat::attachments::app_file_store::dest_path(dir.path(), &hash, "png")
             .exists()

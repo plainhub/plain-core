@@ -1,11 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
-use crate::libs::db::DChat;
-use crate::libs::db::Db;
-use crate::libs::db::chat_store::channels;
-use crate::libs::db::chat_store::messages;
-use crate::libs::db::chat_store::peers;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::chat_store::channels;
+use crate::infrastructure::db::chat_store::messages;
+use crate::infrastructure::db::chat_store::peers;
 use anyhow::Result;
 
 pub struct ChatCacher {

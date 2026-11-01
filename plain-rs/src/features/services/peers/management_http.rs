@@ -32,9 +32,11 @@ pub async fn query(
         matches!(base.scheme(), "https" | "http") && base.host_str().is_some(),
         "Invalid management address"
     );
-    let encrypted = crate::libs::transport::http_request::encrypt(key, &request.to_string())
-        .map_err(|_| anyhow::anyhow!("invalid_session"))?;
-    let context = crate::libs::transport::http_response::Context::new("/graphql", &encrypted);
+    let encrypted =
+        crate::infrastructure::transport::http_request::encrypt(key, &request.to_string())
+            .map_err(|_| anyhow::anyhow!("invalid_session"))?;
+    let context =
+        crate::infrastructure::transport::http_response::Context::new("/graphql", &encrypted);
     let response = state
         .lan
         .client

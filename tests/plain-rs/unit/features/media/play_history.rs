@@ -1,5 +1,5 @@
 use super::*;
-use crate::libs::utils::search_dsl::parse;
+use plain_libs::utils::search_dsl::parse;
 
 fn database() -> Db {
     Db::open(std::path::Path::new(":memory:")).unwrap()
@@ -153,7 +153,7 @@ fn video_progress_preserves_exact_milliseconds_after_restart_and_uses_inclusive_
     assert_eq!(matching(&db, &[]).unwrap()[0].position_ms, 3_000_000_123);
     let boundary = chrono::DateTime::parse_from_rfc3339(&played_at).unwrap();
     let fields = |time: String| {
-        vec![crate::libs::utils::search_dsl::FilterField {
+        vec![plain_libs::utils::search_dsl::FilterField {
             name: "played_at".into(),
             op: ">=".into(),
             value: time,

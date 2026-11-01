@@ -9,9 +9,12 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
-use plain_rs::libs::host::request_scope::NativeRequestScope;
-use plain_rs::libs::protocols::graphql::{self, Role};
-use plain_rs::libs::protocols::graphql::{Ack, Init, PROTOCOL};
+use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
+use plain_rs::infrastructure::protocols::graphql;
+use plain_rs::infrastructure::protocols::graphql::Ack;
+use plain_rs::infrastructure::protocols::graphql::Init;
+use plain_rs::infrastructure::protocols::graphql::PROTOCOL;
+use plain_rs::infrastructure::protocols::graphql::Role;
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -88,9 +91,7 @@ async fn establish(
         )
         .map_err(|_| "Invalid handshake")?;
     let ack = Ack {
-        server_nonce: plain_rs::libs::utils::hex::bytes_to_hex(
-            &plain_rs::libs::crypto::random_bytes(32),
-        ),
+        server_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(32)),
     };
     let ack_frame = graphql::seal_ack(
         &key,

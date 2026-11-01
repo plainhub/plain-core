@@ -1,7 +1,7 @@
 use crate::features::chat::enums::PeerStatus;
 use crate::features::services::peers::peer_transport::AwareConnectionConfig;
 use crate::features::services::peers::peer_transport::aware_config_for_peer;
-use crate::libs::db::chat_store::peers;
+use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use serde::Serialize;

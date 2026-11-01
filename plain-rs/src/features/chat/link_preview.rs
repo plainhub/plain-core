@@ -61,11 +61,11 @@ pub fn is_valid_url(url: &str) -> bool {
 }
 
 use crate::features::chat::attachments::app_file_store::content_refs;
-use crate::libs::db::CHAT_COLS;
-use crate::libs::db::DChat;
-use crate::libs::db::Db;
-use crate::libs::db::now_iso;
-use crate::libs::db::row_to_chat;
+use crate::infrastructure::db::CHAT_COLS;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::now_iso;
+use crate::infrastructure::db::row_to_chat;
 use anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 use serde::Serialize;

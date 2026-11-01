@@ -3,10 +3,10 @@ use crate::server::ContentServer;
 use futures_util::{SinkExt, StreamExt};
 use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::chat::enums::PeerStatus;
-use plain_rs::libs::db::DPeer;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::db::chat_store::SaveMode;
-use plain_rs::libs::db::chat_store::peers;
+use plain_rs::infrastructure::db::DPeer;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::db::chat_store::SaveMode;
+use plain_rs::infrastructure::db::chat_store::peers;
 use std::sync::Arc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
@@ -19,13 +19,13 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
     let path = dir.path().join("plain.db");
     let db = Db::open(&path).unwrap();
     let key = [8; 32];
-    let (kp, pk) = plain_rs::libs::crypto::ed25519_generate();
+    let (kp, pk) = plain_libs::crypto::ed25519_generate();
     let mut peer = DPeer::new("peer", "phone", "127.0.0.1", Some(443), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = plain_rs::libs::utils::base64::base64_encode(&key);
-    peer.public_key = plain_rs::libs::utils::base64::base64_encode(&pk);
+    peer.key = plain_libs::utils::base64::base64_encode(&key);
+    peer.public_key = plain_libs::utils::base64::base64_encode(&pk);
     peers::save(&db, &[peer.clone()], SaveMode::Insert).unwrap();
-    let token = plain_rs::libs::utils::base64::base64_encode(&[1; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[1; 32]);
     let server = ContentServer::start(path.parent().unwrap(), &token, prefs.clone()).unwrap();
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let (http, _) = server
@@ -96,9 +96,9 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
     first.close(None).await.unwrap();
     assert_eq!(snapshot(&server)["online"], json!(["peer"]));
     let new_key = [9; 32];
-    let (new_kp, new_pk) = plain_rs::libs::crypto::ed25519_generate();
-    peer.key = plain_rs::libs::utils::base64::base64_encode(&new_key);
-    peer.public_key = plain_rs::libs::utils::base64::base64_encode(&new_pk);
+    let (new_kp, new_pk) = plain_libs::crypto::ed25519_generate();
+    peer.key = plain_libs::utils::base64::base64_encode(&new_key);
+    peer.public_key = plain_libs::utils::base64::base64_encode(&new_pk);
     peers::save(&db, &[peer], SaveMode::Update).unwrap();
     assert_eq!(snapshot(&server)["online"], json!([]));
     let (mut replacement, _) = connect_async(&url).await.unwrap();
@@ -146,8 +146,8 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
 
 #[tokio::test]
 async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_revival() {
-    use plain_rs::libs::db::chat_store::SaveMode;
-    use plain_rs::libs::db::chat_store::peers;
+    use plain_rs::infrastructure::db::chat_store::SaveMode;
+    use plain_rs::infrastructure::db::chat_store::peers;
     async fn wait_online(server: &ContentServer, id: &str, online: bool) {
         tokio::time::timeout(Duration::from_secs(12), async {
             loop {
@@ -177,13 +177,13 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
     ) -> (Arc<plain_rs::features::prefs::Prefs>, Vec<u8>) {
         let prefs =
             Arc::new(plain_rs::features::prefs::Prefs::load(&dir.join("system.json")).unwrap());
-        let (kp, pk) = plain_rs::libs::crypto::ed25519_generate();
+        let (kp, pk) = plain_libs::crypto::ed25519_generate();
         prefs.set("background_service_enabled", true).unwrap();
         prefs.set("client_id", id).unwrap();
         prefs
             .set(
                 "signature_key_pair",
-                plain_rs::libs::utils::base64::base64_encode(&kp),
+                plain_libs::utils::base64::base64_encode(&kp),
             )
             .unwrap();
         (prefs, pk.to_vec())
@@ -192,19 +192,19 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
     let b_dir = tempfile::tempdir().unwrap();
     let (a_prefs, a_pk) = configured(a_dir.path(), "a");
     let (b_prefs, b_pk) = configured(b_dir.path(), "b");
-    let shared = plain_rs::libs::utils::base64::base64_encode(&[17; 32]);
+    let shared = plain_libs::utils::base64::base64_encode(&[17; 32]);
     let a_path = a_dir.path().join("plain.db");
     let b_path = b_dir.path().join("plain.db");
     let a_db = Db::open(&a_path).unwrap();
     let b_db = Db::open(&b_path).unwrap();
     let mut a_peer = DPeer::new("a", "a", "127.0.0.1", Some(443), DeviceType::Phone);
     a_peer.key = shared.clone();
-    a_peer.public_key = plain_rs::libs::utils::base64::base64_encode(&a_pk);
+    a_peer.public_key = plain_libs::utils::base64::base64_encode(&a_pk);
     a_peer.status = PeerStatus::Paired;
     peers::save(&b_db, &[a_peer], SaveMode::Insert).unwrap();
     let b = ContentServer::start(
         b_path.parent().unwrap(),
-        &plain_rs::libs::utils::base64::base64_encode(&[12; 32]),
+        &plain_libs::utils::base64::base64_encode(&[12; 32]),
         b_prefs.clone(),
     )
     .unwrap();
@@ -220,10 +220,10 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
         .unwrap();
     let mut b_peer = DPeer::new("b", "b", "127.0.0.1", Some(b_https), DeviceType::Phone);
     b_peer.key = shared;
-    b_peer.public_key = plain_rs::libs::utils::base64::base64_encode(&b_pk);
+    b_peer.public_key = plain_libs::utils::base64::base64_encode(&b_pk);
     b_peer.status = PeerStatus::Paired;
     peers::save(&a_db, &[b_peer.clone()], SaveMode::Insert).unwrap();
-    let a_token = plain_rs::libs::utils::base64::base64_encode(&[13; 32]);
+    let a_token = plain_libs::utils::base64::base64_encode(&[13; 32]);
     let a = ContentServer::start(a_path.parent().unwrap(), &a_token, a_prefs).unwrap();
     a.start_public(
         0,

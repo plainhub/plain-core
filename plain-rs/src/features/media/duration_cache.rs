@@ -1,5 +1,6 @@
-use crate::libs::kv::{Db, LazyDb};
 use anyhow::{Result, bail};
+use plain_libs::kv::Db;
+use plain_libs::kv::LazyDb;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::{
@@ -39,7 +40,7 @@ pub struct DurationCache {
 impl DurationCache {
     pub fn new(data_dir: &Path) -> Self {
         Self::with_store(Arc::new(LazyDb::new(
-            crate::libs::data_paths::DataPaths::new(data_dir).database(),
+            crate::infrastructure::data_paths::DataPaths::new(data_dir).database(),
         )))
     }
 
@@ -124,7 +125,7 @@ impl DurationCache {
         value.modified_at = chrono::DateTime::parse_from_rfc3339(&value.modified_at)?
             .with_timezone(&chrono::Utc)
             .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-        value.updated_at = crate::libs::utils::dbtime::now_iso_millis();
+        value.updated_at = plain_libs::utils::dbtime::now_iso_millis();
         self.with_db(|db| db.insert(key, serde_json::to_string(&value)?))
     }
 

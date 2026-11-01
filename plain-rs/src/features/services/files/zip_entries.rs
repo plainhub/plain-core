@@ -41,7 +41,7 @@ pub fn extract(cache: &Path, reference: &str) -> Result<PathBuf, String> {
     hash.update(metadata.len().to_le_bytes());
     hash.update(name.as_bytes());
     hash.update(entry.crc32().to_le_bytes());
-    let key = crate::libs::utils::hex::bytes_to_hex(&hash.finalize());
+    let key = plain_libs::utils::hex::bytes_to_hex(&hash.finalize());
     let extension = Path::new(name)
         .extension()
         .and_then(|value| value.to_str())

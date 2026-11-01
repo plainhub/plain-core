@@ -1,8 +1,9 @@
-use crate::libs::protocols::graphql::events as registry;
-use crate::libs::protocols::graphql::events::EventSpec;
-use crate::libs::protocols::graphql::messages::ClientMessage;
-use crate::libs::protocols::graphql::messages::ServerMessage;
-use crate::libs::protocols::graphql::{self, Role};
+use crate::infrastructure::protocols::graphql;
+use crate::infrastructure::protocols::graphql::Role;
+use crate::infrastructure::protocols::graphql::events as registry;
+use crate::infrastructure::protocols::graphql::events::EventSpec;
+use crate::infrastructure::protocols::graphql::messages::ClientMessage;
+use crate::infrastructure::protocols::graphql::messages::ServerMessage;
 use anyhow::{Result, anyhow, ensure};
 
 pub(super) fn operations() -> impl Iterator<Item = &'static EventSpec> {
@@ -20,9 +21,9 @@ pub(super) fn operations() -> impl Iterator<Item = &'static EventSpec> {
     })
 }
 pub(super) fn registration(key: &[u8], client: &str, timestamp: i64) -> Result<Vec<u8>> {
-    let init = crate::libs::protocols::graphql::Init {
+    let init = crate::infrastructure::protocols::graphql::Init {
         timestamp_millis: timestamp,
-        client_nonce: crate::libs::utils::hex::bytes_to_hex(&crate::libs::crypto::random_bytes(32)),
+        client_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(32)),
     };
     graphql::seal_init(key, client, &serde_json::to_vec(&init)?)
         .ok_or_else(|| anyhow!("Invalid management session key"))
@@ -35,7 +36,7 @@ pub(super) fn acknowledge(
 ) -> Result<graphql::Stream> {
     let plain = graphql::open_ack(key, client, init, ack)
         .ok_or_else(|| anyhow!("Invalid management acknowledgement"))?;
-    let ack_body: crate::libs::protocols::graphql::Ack = serde_json::from_slice(&plain)?;
+    let ack_body: crate::infrastructure::protocols::graphql::Ack = serde_json::from_slice(&plain)?;
     ensure!(
         ack_body.server_nonce.len() == 64
             && ack_body

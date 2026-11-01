@@ -1,6 +1,6 @@
 use crate::server::ContentServer;
 use crate::test_support::{graphql_http as call, graphql_http_variables as call_variables};
-use plain_rs::libs::db::Db;
+use plain_rs::infrastructure::db::Db;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -10,7 +10,7 @@ use std::sync::{
 async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("plain.db");
-    let token = plain_rs::libs::utils::base64::base64_encode(&[10; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[10; 32]);
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let server = ContentServer::start(path.parent().unwrap(), &token, prefs.clone()).unwrap();
@@ -44,7 +44,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     assert_eq!(created["data"]["addBookmarks"].as_array().unwrap().len(), 1);
     let id = created["data"]["addBookmarks"][0]["id"].as_str().unwrap();
     let db = Arc::new(Db::open(&path).unwrap());
-    let before = plain_rs::libs::db::bookmark::get_bookmark_by_id(&db, id)
+    let before = plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id)
         .unwrap()
         .unwrap();
     let count_files = || {
@@ -80,7 +80,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     .await;
     assert_eq!(repeated["data"], meta["data"]);
     assert_eq!(icon_requests.load(Ordering::SeqCst), 0);
-    let unchanged = plain_rs::libs::db::bookmark::get_bookmark_by_id(&db, id)
+    let unchanged = plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id)
         .unwrap()
         .unwrap();
     assert_eq!(unchanged.title, before.title);
@@ -170,7 +170,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     .await;
     assert!(failed.get("errors").is_some(), "{failed}");
     assert_eq!(
-        plain_rs::libs::db::bookmark::get_bookmark_by_id(&db, id)
+        plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id)
             .unwrap()
             .unwrap()
             .title,
@@ -200,7 +200,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     let repeated = call_variables(server.port, &token, metadata_query, metadata_variables).await;
     assert_eq!(repeated["data"], meta["data"]);
     assert_eq!(
-        plain_rs::libs::db::bookmark::get_bookmark_by_id(&db, id)
+        plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id)
             .unwrap()
             .unwrap()
             .title,
@@ -211,7 +211,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     let query = format!("mutation {{recordBookmarkClick(id:\"{id}\")}}");
     futures_util::future::join_all((0..20).map(|_| call(server.port, &token, &query))).await;
     assert_eq!(
-        plain_rs::libs::db::bookmark::get_bookmark_by_id(&db, id)
+        plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id)
             .unwrap()
             .unwrap()
             .click_count,
@@ -224,7 +224,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         call(server.port, &token, &edit).await["data"]["updateBookmark"]["clickCount"],
         20
     );
-    let edited = plain_rs::libs::db::bookmark::get_bookmark_by_id(&db, id)
+    let edited = plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id)
         .unwrap()
         .unwrap();
     assert_eq!(edited.title, "Edited");
@@ -239,7 +239,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     )
     .await;
     assert_eq!(
-        plain_rs::libs::db::bookmark::get_bookmark_by_id(&db, id)
+        plain_rs::infrastructure::db::bookmark::get_bookmark_by_id(&db, id)
             .unwrap()
             .unwrap()
             .group_id,

@@ -1,8 +1,8 @@
 use crate::graphql::types::ActionResult;
 use async_graphql::{Context, Enum, Object, SimpleObject};
-use plain_rs::libs::db::DChat;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::types::Instant;
+use plain_rs::infrastructure::db::DChat;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::types::Instant;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -51,7 +51,7 @@ pub struct ChatChannel {
     pub members: Vec<ChatChannelMember>,
     /// Monotonically increasing mutation counter; receivers ignore channel
     /// updates whose version is not greater than their local copy.
-    pub version: plain_rs::libs::types::Long,
+    pub version: plain_rs::infrastructure::types::Long,
     pub status: ChatChannelStatus,
     #[graphql(name = "createdAt")]
     pub created_at: Instant,
@@ -66,7 +66,7 @@ impl ChatChannel {
         let db = db(ctx)?.clone();
         let id = self.id.clone();
         let row = tokio::task::spawn_blocking(move || {
-            plain_rs::libs::db::chat_store::channels::get(&db, &id)
+            plain_rs::infrastructure::db::chat_store::channels::get(&db, &id)
         })
         .await??;
         Ok(row
@@ -139,7 +139,7 @@ impl ChatQuery {
         id: async_graphql::ID,
     ) -> async_graphql::Result<Option<ChatItem>> {
         Ok(
-            plain_rs::libs::db::chat_store::messages::get(db(ctx)?, id.as_str())?
+            plain_rs::infrastructure::db::chat_store::messages::get(db(ctx)?, id.as_str())?
                 .as_ref()
                 .map(item),
         )
@@ -322,7 +322,8 @@ async fn action(
         request,
     )
     .await?;
-    let row: plain_rs::libs::db::DChannel = serde_json::from_value(result["channel"].clone())?;
+    let row: plain_rs::infrastructure::db::DChannel =
+        serde_json::from_value(result["channel"].clone())?;
     Ok(channel(&plain_rs::features::chat::events::channel_to_json(
         &row,
         &actor(ctx)?,
@@ -398,7 +399,7 @@ fn channel(value: &Value) -> ChatChannel {
                 _ => ChannelMemberStatus::Joined,
             },
         }),
-        version: plain_rs::libs::types::Long(crate::graphql::types::facts::integer(
+        version: plain_rs::infrastructure::types::Long(crate::graphql::types::facts::integer(
             value, "version",
         )),
         status: match crate::graphql::types::facts::text(value, "status").as_str() {
@@ -416,7 +417,7 @@ fn channel(value: &Value) -> ChatChannel {
 }
 
 fn text_of(query: &str) -> String {
-    plain_rs::libs::utils::search_dsl::parse(query)
+    plain_libs::utils::search_dsl::parse(query)
         .into_iter()
         .find(|field| field.name == "text")
         .map(|field| field.value)

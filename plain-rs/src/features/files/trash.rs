@@ -1,7 +1,9 @@
-use crate::libs::db::{Db, files::PathChange};
-use crate::libs::platform::mountinfo::{self, CleanPath};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::files::PathChange;
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{DateTime, Utc};
+use plain_libs::platform::mountinfo;
+use plain_libs::platform::mountinfo::CleanPath;
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -55,13 +57,13 @@ fn trash_item(row: &rusqlite::Row<'_>) -> rusqlite::Result<TrashItem> {
         .to_owned();
     let relative = absolute
         .strip_prefix(root)
-        .map_err(crate::libs::db::files::sql_error)?
+        .map_err(crate::infrastructure::db::files::sql_error)?
         .to_str()
         .ok_or(rusqlite::Error::InvalidQuery)?
         .to_owned();
     let time: String = row.get(4)?;
     let deleted_at = DateTime::parse_from_rfc3339(&time)
-        .map_err(crate::libs::db::files::sql_error)?
+        .map_err(crate::infrastructure::db::files::sql_error)?
         .timestamp();
     let (uid, gid, mode) = std::fs::symlink_metadata(absolute)
         .map(|metadata| owner_mode(&metadata))
@@ -98,7 +100,7 @@ impl Trash {
     pub async fn trash_paths(&self, paths: Vec<String>) -> Result<Vec<String>> {
         let mut result = Vec::with_capacity(paths.len());
         for raw in paths {
-            let source = crate::libs::db::files::locate(&raw)?.path;
+            let source = crate::infrastructure::db::files::locate(&raw)?.path;
             validate_trashable_path(&source)?;
             let metadata = std::fs::symlink_metadata(&source)?;
             let source_text = source.to_str().context("Invalid file path encoding")?;
@@ -125,7 +127,7 @@ impl Trash {
             let _guard = lock.lock().await;
             self.db
                 .prepare_file_path_change(file.id, source_text, target, PathChange::Trash)?;
-            if let Err(error) = crate::libs::filesystem::rename::no_replace(&source, &destination) {
+            if let Err(error) = plain_libs::filesystem::rename::no_replace(&source, &destination) {
                 self.db
                     .key_values()
                     .remove(format!("file_path_change:{}", file.id))?;
@@ -149,7 +151,7 @@ impl Trash {
             if let Some(parent) = target.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            let target = crate::libs::utils::unique_path::unique_sibling(target)?;
+            let target = plain_libs::utils::unique_path::unique_sibling(target)?;
             let source_text = source.to_str().context("Invalid trash path encoding")?;
             let target_text = target.to_str().context("Invalid restore path encoding")?;
             let lock = lock_for_disk(&item.disk);
@@ -157,7 +159,7 @@ impl Trash {
             let id = item.id.parse()?;
             self.db
                 .prepare_file_path_change(id, source_text, target_text, PathChange::Restore)?;
-            if let Err(error) = crate::libs::filesystem::rename::no_replace(&source, &target) {
+            if let Err(error) = plain_libs::filesystem::rename::no_replace(&source, &target) {
                 self.db
                     .key_values()
                     .remove(format!("file_path_change:{id}"))?;
@@ -177,7 +179,7 @@ impl Trash {
         let physical = Self::physical_path(&item);
         let lock = lock_for_disk(&item.disk);
         let _guard = lock.lock().await;
-        crate::libs::filesystem::remove(&physical).await?;
+        plain_libs::filesystem::remove(&physical).await?;
         let path = physical
             .to_str()
             .context("Invalid trash path encoding")?
@@ -460,7 +462,7 @@ pub fn fill_stats(it: &mut TrashItem) -> Result<()> {
 }
 
 fn dir_size(p: &Path) -> i64 {
-    crate::libs::filesystem::walk::Walk::new(p)
+    plain_libs::filesystem::walk::Walk::new(p)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter_map(|e| e.metadata().ok())
@@ -468,7 +470,7 @@ fn dir_size(p: &Path) -> i64 {
         .sum()
 }
 fn count_entries(p: &Path) -> i64 {
-    crate::libs::filesystem::walk::Walk::new(p)
+    plain_libs::filesystem::walk::Walk::new(p)
         .into_iter()
         .filter_map(|e| e.ok())
         .count() as i64

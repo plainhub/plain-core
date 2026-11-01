@@ -208,7 +208,7 @@ fn dest_path_joins_data_dir_with_relative() {
 }
 
 fn seed_named_chat(db: &Db, at: &str, uri: &str, name: &str) {
-    let mut chat = crate::libs::db::DChat::new(
+    let mut chat = crate::infrastructure::db::DChat::new(
         "me",
         "peer1",
         "",

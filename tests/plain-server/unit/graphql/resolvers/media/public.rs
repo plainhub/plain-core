@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
-use plain_rs::libs::db::Db;
+use plain_rs::infrastructure::db::Db;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -79,8 +79,8 @@ fn media(
     title: &str,
     size: i64,
     bucket: &str,
-) -> plain_rs::libs::db::MediaFileMetadata {
-    plain_rs::libs::db::MediaFileMetadata {
+) -> plain_rs::infrastructure::db::MediaFileMetadata {
+    plain_rs::infrastructure::db::MediaFileMetadata {
         album: String::new(),
         album_artist: String::new(),
 
@@ -689,7 +689,7 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     let models = schema.data::<Arc<Runtime>>().unwrap();
     let index = schema.data::<Arc<ImageIndex>>().unwrap();
     index.use_native_catalog_for_test();
-    plain_rs::libs::ai_image_search::models::test_fixture::fixture(
+    plain_libs::ai_image_search::models::test_fixture::fixture(
         &dir.path().join("ai_models/incoming"),
     );
     models.import().await.unwrap();
@@ -754,7 +754,7 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     let embedding = |id: String, path: String, score: f32| EmbeddingInput {
         id,
         path,
-        embedding_base64: plain_rs::libs::utils::base64::base64_encode(
+        embedding_base64: plain_libs::utils::base64::base64_encode(
             &[score, 0.0, 0.0, 0.0]
                 .into_iter()
                 .flat_map(f32::to_be_bytes)

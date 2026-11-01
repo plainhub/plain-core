@@ -1,8 +1,9 @@
+use crate::features::prefs::settings::Settings;
 use crate::features::services::feeds::sync_service::*;
-use crate::libs::platform::network::host as network;
-use crate::libs::platform::network::lan::NetworkType;
+use crate::infrastructure::db::notes_feeds::FeedRow;
+use crate::infrastructure::platform::network::host as network;
+use crate::infrastructure::platform::network::lan::NetworkType;
 use crate::runtime::Runtime as CoreRuntime;
-use crate::{features::prefs::settings::Settings, libs::db::notes_feeds::FeedRow};
 use anyhow::{Result, ensure};
 use std::time::Duration;
 
@@ -157,7 +158,7 @@ fn register(service: &SyncService, id: &str) -> Result<Lease> {
         "Background execution ID already active"
     );
     ensure!(
-        leases.len() < crate::libs::host::bridge::REQUEST_CAPACITY,
+        leases.len() < crate::infrastructure::host::bridge::REQUEST_CAPACITY,
         "Background execution capacity exceeded"
     );
     let (revoke, _) = watch::channel(false);

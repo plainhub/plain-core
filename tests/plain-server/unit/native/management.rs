@@ -164,7 +164,7 @@ async fn retired_management_roots_are_unavailable_to_local_and_authenticated_rem
     assert_eq!(state.db.session_list().unwrap().len(), before);
     assert_eq!(state.http_server.snapshot().revision.0, 0);
     assert!(
-        !plain_rs::libs::data_paths::DataPaths::new(&directory.path().join("data"))
+        !plain_rs::infrastructure::data_paths::DataPaths::new(&directory.path().join("data"))
             .pending_restore()
             .exists()
     );

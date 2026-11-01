@@ -1,5 +1,5 @@
 use crate::features::prefs::Prefs;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 /// `WRITE_CONTACTS` implies `READ_CONTACTS` and `WRITE_CALL_LOG` implies

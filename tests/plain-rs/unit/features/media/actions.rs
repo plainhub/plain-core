@@ -134,8 +134,8 @@ fn video_cleanup_keeps_other_types_and_move_keeps_user_tags() {
     .unwrap();
 }
 
-fn catalog_file(path: &str) -> crate::libs::db::MediaFileMetadata {
-    crate::libs::db::MediaFileMetadata {
+fn catalog_file(path: &str) -> crate::infrastructure::db::MediaFileMetadata {
+    crate::infrastructure::db::MediaFileMetadata {
         album: String::new(),
         album_artist: String::new(),
 

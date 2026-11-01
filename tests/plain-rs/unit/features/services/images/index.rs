@@ -55,18 +55,18 @@ fn setup(
         db,
         host.clone(),
         tokio::sync::broadcast::channel(16).0,
-        Arc::new(crate::libs::host::resources::NativeResources::new(host)),
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host)),
         std::env::temp_dir(),
     ));
     service.use_system_catalog_for_test();
     struct Encoder(Arc<AtomicUsize>);
-    impl crate::libs::ai_image_search::embedding::ImageEncoder for Encoder {
+    impl plain_libs::ai_image_search::embedding::ImageEncoder for Encoder {
         fn release(&self) {
             self.0.fetch_add(1, Ordering::SeqCst);
         }
         fn image_reader(
             &self,
-            _: &mut dyn crate::libs::ai_image_search::embedding::ImageSource,
+            _: &mut dyn plain_libs::ai_image_search::embedding::ImageSource,
         ) -> Result<Option<Vec<f32>>, String> {
             panic!("Synthetic local images must use the direct file path")
         }
@@ -108,7 +108,7 @@ async fn cancelled_generation_cannot_resurrect_deleted_embeddings() {
     let input = EmbeddingInput {
         id: "one".into(),
         path: "/synthetic/one".into(),
-        embedding_base64: crate::libs::utils::base64::base64_encode(&1.0_f32.to_be_bytes()),
+        embedding_base64: plain_libs::utils::base64::base64_encode(&1.0_f32.to_be_bytes()),
     };
     image_embeddings::save(&service.db, std::slice::from_ref(&input)).unwrap();
     assert_eq!(service.remove(&["one".into()]).unwrap(), 1);
@@ -120,11 +120,11 @@ async fn cancelled_generation_cannot_resurrect_deleted_embeddings() {
 #[tokio::test]
 async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without_host_requests() {
     struct Encoder;
-    impl crate::libs::ai_image_search::embedding::ImageEncoder for Encoder {
+    impl plain_libs::ai_image_search::embedding::ImageEncoder for Encoder {
         fn release(&self) {}
         fn image_reader(
             &self,
-            _: &mut dyn crate::libs::ai_image_search::embedding::ImageSource,
+            _: &mut dyn plain_libs::ai_image_search::embedding::ImageSource,
         ) -> Result<Option<Vec<f32>>, String> {
             panic!("Native catalog must provide local file paths")
         }
@@ -142,7 +142,7 @@ async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without
     std::fs::write(&supported, b"supported").unwrap();
     std::fs::write(&unsupported, b"unsupported").unwrap();
     for path in [&supported, &unsupported] {
-        db.record_media_files(&[crate::libs::db::MediaFileMetadata {
+        db.record_media_files(&[crate::infrastructure::db::MediaFileMetadata {
             data_type: crate::features::enums::DataType::Image,
             path: path.to_str().unwrap().into(),
             title: String::new(),
@@ -167,7 +167,7 @@ async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without
         &[EmbeddingInput {
             id: "obsolete".into(),
             path: "/obsolete.png".into(),
-            embedding_base64: crate::libs::utils::base64::base64_encode(&1.0f32.to_be_bytes()),
+            embedding_base64: plain_libs::utils::base64::base64_encode(&1.0f32.to_be_bytes()),
         }],
     )
     .unwrap();
@@ -177,7 +177,7 @@ async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without
         db.clone(),
         host.clone(),
         tokio::sync::broadcast::channel(16).0,
-        Arc::new(crate::libs::host::resources::NativeResources::new(host)),
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host)),
         directory.path().join("cache"),
     ));
     service.use_native_catalog_for_test();
@@ -208,9 +208,7 @@ async fn cancellation_waits_for_actual_worker_exit_and_notifies_all_idle_waiters
         db,
         host.clone(),
         tokio::sync::broadcast::channel(16).0,
-        Arc::new(crate::libs::host::resources::NativeResources::new(
-            host.clone(),
-        )),
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone())),
         std::env::temp_dir(),
     ));
     service.use_system_catalog_for_test();
@@ -254,7 +252,7 @@ async fn generation_failure_finishes_the_worker_and_idle_is_immediately_ready() 
         db,
         host.clone(),
         tokio::sync::broadcast::channel(16).0,
-        Arc::new(crate::libs::host::resources::NativeResources::new(host)),
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host)),
         std::env::temp_dir(),
     ));
     assert!(service.wait_until_idle().now_or_never().is_some());

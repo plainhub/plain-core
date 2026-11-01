@@ -1,9 +1,8 @@
 use crate::features::prefs::pref_keys::{AUTO_CHECK_UPDATE, SKIP_VERSION};
+use crate::features::prefs::security::UpdateInfo;
+use crate::features::updates::Release;
+use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
-use crate::{
-    features::{prefs::security::UpdateInfo, updates::Release},
-    libs::events::WsEvent,
-};
 use anyhow::{Result, anyhow, ensure};
 use std::{sync::OnceLock, time::Duration};
 
@@ -131,7 +130,7 @@ fn project(state: &CoreRuntime) -> Result<crate::features::services::settings::t
             .unwrap_or_default(),
         published_at: latest
             .and_then(|release| chrono::DateTime::parse_from_rfc3339(&release.published_at).ok())
-            .map(|time| crate::libs::types::Instant(time.with_timezone(&chrono::Utc))),
+            .map(|time| crate::infrastructure::types::Instant(time.with_timezone(&chrono::Utc))),
     })
 }
 

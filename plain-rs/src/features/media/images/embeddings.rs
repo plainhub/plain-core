@@ -1,6 +1,6 @@
-use crate::libs::db::Db;
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 use rusqlite::params;
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,10 +16,10 @@ pub struct SearchResult {
     pub score: f32,
 }
 fn vector(bytes: &[u8]) -> DomainResult<Vec<f32>> {
-    crate::libs::utils::vector::decode_f32_be(bytes).map_err(DomainError::Other)
+    plain_libs::utils::vector::decode_f32_be(bytes).map_err(DomainError::Other)
 }
 fn decode(value: &str) -> DomainResult<Vec<u8>> {
-    crate::libs::utils::base64::base64_decode_checked(value)
+    plain_libs::utils::base64::base64_decode_checked(value)
         .map_err(|e| DomainError::Other(e.to_string()))
 }
 pub fn save(db: &Db, items: &[EmbeddingInput]) -> DomainResult<()> {
@@ -40,7 +40,7 @@ pub fn save(db: &Db, items: &[EmbeddingInput]) -> DomainResult<()> {
     db.with_conn(|c| {
         let tx=c.unchecked_transaction()?;
         for (i,blob) in items.iter().zip(blobs) {
-            tx.execute("INSERT INTO image_embeddings (file_id,path,embedding,created_at,updated_at) VALUES (?1,?2,?3,?4,?4) ON CONFLICT(file_id) DO UPDATE SET path=excluded.path,embedding=excluded.embedding,updated_at=excluded.updated_at",params![i.id,i.path,blob,crate::libs::utils::dbtime::now_iso_millis()])?;
+            tx.execute("INSERT INTO image_embeddings (file_id,path,embedding,created_at,updated_at) VALUES (?1,?2,?3,?4,?4) ON CONFLICT(file_id) DO UPDATE SET path=excluded.path,embedding=excluded.embedding,updated_at=excluded.updated_at",params![i.id,i.path,blob,plain_libs::utils::dbtime::now_iso_millis()])?;
         }
         tx.commit()?;Ok(())
     })

@@ -1,7 +1,7 @@
-use crate::libs::db::CHAT_COLS;
-use crate::libs::db::DChat;
-use crate::libs::db::Db;
-use crate::libs::db::row_to_chat;
+use crate::infrastructure::db::CHAT_COLS;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::row_to_chat;
 use anyhow::{Result, ensure};
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -34,7 +34,7 @@ fn parse(chat: &DChat) -> Result<(Value, Card)> {
     Ok((value, card))
 }
 pub fn current(db: &Db, id: &str, expected: &Card) -> Result<String> {
-    let row = crate::libs::db::chat_store::messages::get(db, id)?
+    let row = crate::infrastructure::db::chat_store::messages::get(db, id)?
         .ok_or_else(|| anyhow::anyhow!("Share message removed"))?;
     let (_, card) = parse(&row)?;
     ensure!(card == *expected, "Share card changed");

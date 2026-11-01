@@ -54,7 +54,7 @@ pub fn claim(tx: &Transaction<'_>, additions: BTreeMap<String, i64>) -> Result<(
         if extra > 0 {
             tx.execute(
                 "UPDATE app_files SET ref_count=?2,updated_at=?3 WHERE id=?1",
-                params![id, next, crate::libs::db::now_iso()],
+                params![id, next, crate::infrastructure::db::now_iso()],
             )?;
         }
     }
@@ -80,7 +80,7 @@ pub fn release(
         if refs > count {
             tx.execute(
                 "UPDATE app_files SET ref_count=ref_count-?1,updated_at=?2 WHERE id=?3",
-                params![count, crate::libs::db::now_iso(), id],
+                params![count, crate::infrastructure::db::now_iso(), id],
             )?;
         } else {
             let path = crate::features::chat::attachments::app_file_store::owned_path(
@@ -93,7 +93,7 @@ pub fn release(
                     }
                     let quarantine = path.with_file_name(format!(
                         ".release-{}",
-                        crate::libs::utils::short_uuid::short_uuid()
+                        plain_libs::utils::short_uuid::short_uuid()
                     ));
                     fs::rename(&path, &quarantine)?;
                     staged.push((path, quarantine));
@@ -139,7 +139,7 @@ pub fn finish<T>(result: Result<T>, staged: Vec<(PathBuf, PathBuf)>) -> Result<T
 }
 
 pub fn release_unbound(
-    db: &crate::libs::db::Db,
+    db: &crate::infrastructure::db::Db,
     directory: &Path,
     imports: BTreeMap<String, i64>,
 ) -> Result<()> {

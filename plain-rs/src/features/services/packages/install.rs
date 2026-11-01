@@ -1,7 +1,7 @@
 use crate::features::services::packages::splits;
-use crate::libs::apk::manifest;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use anyhow::{Result, anyhow, ensure};
+use plain_libs::apk::manifest;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::{
@@ -201,7 +201,7 @@ pub async fn execute(
     } else {
         None
     };
-    let source = crate::libs::utils::file_uri::local_path(&path).map_err(anyhow::Error::msg)?;
+    let source = plain_libs::utils::file_uri::local_path(&path).map_err(anyhow::Error::msg)?;
     let local = Path::new(&source)
         .is_absolute()
         .then(|| PathBuf::from(source));

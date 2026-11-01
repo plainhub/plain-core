@@ -1,5 +1,5 @@
 use super::*;
-use crate::libs::host::startup::StartupConfig;
+use crate::infrastructure::host::startup::StartupConfig;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ fn android_startup_config() -> StartupConfig {
         android_java_vm_version: Some("vm".into()),
         android_gl_es_version: Some("3.2".into()),
         android_build_time: Some(1700000000123),
-        ..crate::libs::platform::startup::config()
+        ..crate::infrastructure::platform::startup::config()
     }
 }
 
@@ -232,7 +232,7 @@ async fn fixed_device_information_is_reused_without_platform_requests() {
 async fn default_device_name_reuses_startup_metadata_without_a_host_request() {
     let host = Host::with_startup_config(StartupConfig {
         name: "startup-name".into(),
-        ..crate::libs::platform::startup::config()
+        ..crate::infrastructure::platform::startup::config()
     })
     .unwrap();
     let (generation, mut requests) = host.connect();

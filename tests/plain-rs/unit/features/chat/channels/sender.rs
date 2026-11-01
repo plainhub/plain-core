@@ -1,9 +1,9 @@
 use super::*;
 use crate::features::chat::enums::DeviceType;
 use crate::features::chat::enums::MemberStatus;
-use crate::libs::crypto::ed25519_generate;
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use plain_libs::crypto::ed25519_generate;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -63,7 +63,7 @@ fn build_member_peers_includes_owner_when_owner_is_member() {
     let owner_entry = owner_entry.unwrap();
     assert_eq!(
         owner_entry.public_key,
-        crate::libs::utils::base64::base64_encode(&kp_bytes[32..])
+        plain_libs::utils::base64::base64_encode(&kp_bytes[32..])
     );
     assert_eq!(owner_entry.device_type, DeviceType::Nas);
 }

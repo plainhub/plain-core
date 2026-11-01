@@ -33,7 +33,7 @@ pub(crate) async fn init(
     );
     let authenticated = key
         .as_ref()
-        .is_some_and(|key| plain_rs::libs::crypto::xchacha_decrypt_raw(key, &body).is_some());
+        .is_some_and(|key| plain_libs::crypto::xchacha_decrypt_raw(key, &body).is_some());
     let password_required = match plain_rs::features::prefs::security::password_type(&state.prefs) {
         Ok(value) => value == PasswordType::Fixed,
         Err(error) => {
@@ -53,7 +53,7 @@ pub(crate) async fn init(
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
         };
-    let mut result = json!({"signaturePublicKey":plain_rs::libs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required});
+    let mut result = json!({"signaturePublicKey":plain_libs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required});
     if needs_setup {
         result["needsSetup"] = json!(true);
         result["setupHttpsPort"] = json!(state.prefs.get_or("https_port", 8443u16));

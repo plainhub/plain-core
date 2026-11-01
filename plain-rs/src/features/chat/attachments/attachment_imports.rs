@@ -1,7 +1,7 @@
 use crate::features::chat::attachments::app_file_store;
 use crate::features::chat::attachments::app_file_store::ImportResult;
-use crate::libs::db::Db;
-use crate::libs::db::chat_store::messages as chats;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::chat_store::messages as chats;
 use anyhow::{Result, bail};
 use serde::Serialize;
 use serde_json::Value;

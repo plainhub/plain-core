@@ -12,7 +12,7 @@
 use anyhow::Result;
 
 fn probe_iso_bmff_video_fourcc(path: &std::path::Path) -> Option<String> {
-    crate::libs::media::isobmff::tracks(path)?.first_video_codec
+    plain_libs::media::isobmff::tracks(path)?.first_video_codec
 }
 
 /// fourcc of the first video track's codec tag (e.g. "hvc1", "avc1"), or ""

@@ -3,7 +3,7 @@
 use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::text;
 use async_graphql::{Context, Enum, Object, SimpleObject};
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::Value;
 use std::sync::Arc;
 

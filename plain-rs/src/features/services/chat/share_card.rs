@@ -24,7 +24,7 @@ pub async fn content(state: &CoreRuntime, service: Arc<Service>, id: String) -> 
         url_token: token,
         peer_info: Peer {
             id: state.native_client_id().map_err(anyhow::Error::msg)?,
-            ip: crate::libs::platform::network::host::lan_ipv4(&state.host)
+            ip: crate::infrastructure::platform::network::host::lan_ipv4(&state.host)
                 .await
                 .map_err(anyhow::Error::msg)?,
             port: state.public_ports().await.map(|ports| ports.1).unwrap_or(0),

@@ -3,9 +3,9 @@ use crate::features::chat::enums::ChatStatus;
 use crate::features::chat::enums::DeviceType;
 use crate::features::chat::enums::PeerStatus;
 use crate::features::chat::messages::message_lifecycle;
-use crate::libs::db::DPeer;
-use crate::libs::db::chat_store::SaveMode;
-use crate::libs::utils::base64::base64_encode;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::chat_store::SaveMode;
+use plain_libs::utils::base64::base64_encode;
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicUsize, Ordering};
 struct Transport {
@@ -67,7 +67,7 @@ fn setup() -> (Db, Vec<u8>) {
         };
         peers::save(&db, &[peer], SaveMode::Insert).unwrap();
     }
-    (db, crate::libs::crypto::ed25519_generate().0.to_vec())
+    (db, plain_libs::crypto::ed25519_generate().0.to_vec())
 }
 const TEXT: &str = r#"{"type":"TEXT","value":{"text":"fixture"}}"#;
 #[tokio::test]
@@ -113,7 +113,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
             .status,
         ChatStatus::Sent
     );
-    let mut channel = crate::libs::db::DChannel::new("group", "self");
+    let mut channel = crate::infrastructure::db::DChannel::new("group", "self");
     channel.id = "group".into();
     channel.key = base64_encode(&[7; 32]);
     channel.members=json!([{"peerId":"self","status":"JOINED"},{"peerId":"peer","status":"JOINED"},{"peerId":"offline","status":"JOINED"},{"peerId":"pending","status":"PENDING"}]).to_string();
@@ -217,7 +217,7 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
                 .unwrap();
         let resource = crate::features::files::resource_link::open(
             &scope,
-            &crate::libs::utils::base64::base64_decode(&token),
+            &plain_libs::utils::base64::base64_decode(&token),
             payload,
         )
         .unwrap();
@@ -228,19 +228,19 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
         assert!(crate::features::chat::messages::content::peer_content(&content, "").is_err());
     }
     assert!(
-        crate::libs::transport::contract::message_response(
+        crate::infrastructure::transport::contract::message_response(
             &json!({"data":{"createChatItem":[]},"errors":[]})
         )
         .is_ok()
     );
     assert!(
-        crate::libs::transport::contract::message_response(
+        crate::infrastructure::transport::contract::message_response(
             &json!({"data":{"createChatItem":null}})
         )
         .is_err()
     );
     assert!(
-        crate::libs::transport::contract::message_response(
+        crate::infrastructure::transport::contract::message_response(
             &json!({"data":{"createChatItem":[]},"errors":[{"message":"rejected"}]})
         )
         .is_err()

@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::libs::db::Db;
+use plain_rs::infrastructure::db::Db;
 use serde_json::json;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -96,7 +96,7 @@ async fn delete_notifications_counts_only_what_the_platform_confirmed() {
         other => panic!("unexpected host call {other}"),
     });
     let mut events = schema
-        .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
+        .data::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()
         .unwrap()
         .subscribe();
     let response = schema
@@ -264,7 +264,7 @@ async fn rejected_and_empty_cancellation_receipts_do_not_publish_refresh_hints()
             method => panic!("unexpected host call {method}"),
         });
         let mut events = schema
-            .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
+            .data::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()
             .unwrap()
             .subscribe();
         let response = schema

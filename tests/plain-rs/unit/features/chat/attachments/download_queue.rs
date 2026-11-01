@@ -9,9 +9,14 @@ fn fixture(count: usize) -> (tempfile::TempDir, Db, Queue) {
         Some(443),
         crate::features::chat::enums::DeviceType::Phone,
     );
-    peers::save(&db, &[peer], crate::libs::db::chat_store::SaveMode::Insert).unwrap();
+    peers::save(
+        &db,
+        &[peer],
+        crate::infrastructure::db::chat_store::SaveMode::Insert,
+    )
+    .unwrap();
     let items=(0..count).map(|n|json!({"id":n.to_string(),"uri":format!("fsid:remote-{n}"),"fileName":"fixture.txt","size":3})).collect::<Vec<_>>();
-    let mut chat = crate::libs::db::DChat::new(
+    let mut chat = crate::infrastructure::db::DChat::new(
         "me",
         "peer",
         "",

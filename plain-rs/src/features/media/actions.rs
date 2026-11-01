@@ -1,8 +1,8 @@
 use crate::features::enums::DataType;
 use crate::features::media::audio::queue as audio_queue;
-use crate::libs::db::Db;
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 use rusqlite::{OptionalExtension, Transaction, params};
 use std::collections::HashSet;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -106,7 +106,7 @@ pub fn cleanup(
         if kind==DataType::Audio && action==Action::Trash && successful.iter().any(|item|state.current_file_id.as_deref()==Some(&item.id)) { state.select("")?; }
         if kind==DataType::Audio && action==Action::Move {
             if let Some(item)=successful.iter().find(|item|item.path==state.playback.path) {
-                crate::libs::db::audio_queue::io::save_current(tx,&item.destination_path,state)?;
+                crate::infrastructure::db::audio_queue::io::save_current(tx,&item.destination_path,state)?;
                 state.select(&item.destination_path)?;
             }
         }
@@ -162,8 +162,8 @@ fn update_catalog(
         }
         _ => return Err(rusqlite::Error::InvalidQuery),
     };
-    let location = crate::libs::db::files::locate(&destination)?;
-    let (volume_id, relative) = crate::libs::db::files::bind_volume(tx, &location)?;
+    let location = crate::infrastructure::db::files::locate(&destination)?;
+    let (volume_id, relative) = crate::infrastructure::db::files::bind_volume(tx, &location)?;
     let previous: (i64, String) = tx.query_row(
         "SELECT volume_id,path FROM files WHERE id=?1",
         [id],
@@ -179,7 +179,7 @@ fn update_catalog(
         .ok_or(rusqlite::Error::InvalidQuery)?;
     let (time, original) = if action == Action::Trash {
         (
-            Some(crate::libs::utils::dbtime::now_iso_millis()),
+            Some(plain_libs::utils::dbtime::now_iso_millis()),
             Some(previous.1),
         )
     } else {

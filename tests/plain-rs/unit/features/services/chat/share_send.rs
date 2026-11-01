@@ -5,7 +5,7 @@ use crate::test_runtime::Core as ContentServer;
 fn server(directory: &std::path::Path) -> ContentServer {
     ContentServer::start(
         directory,
-        &crate::libs::utils::base64::base64_encode(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
         Arc::new(crate::features::prefs::Prefs::load(&directory.join("prefs.json")).unwrap()),
     )
     .unwrap()

@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 fn server(dir: &tempfile::TempDir) -> ContentServer {
     ContentServer::start(
         dir.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[9; 32]),
+        &plain_libs::utils::base64::base64_encode(&[9; 32]),
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap()),
     )
     .unwrap()
@@ -28,7 +28,7 @@ async fn native_events_enforce_direction_and_reconcile_lag() {
         "IMAGE_INDEX_ERROR_REPORTED",
         "NETWORK_CHANGED",
         "AUDIO_LIBRARY_UPDATED",
-        plain_rs::libs::events::MEDIA_LIBRARY_UPDATED,
+        plain_rs::infrastructure::events::MEDIA_LIBRARY_UPDATED,
         "HTTP_SERVER_STATE_CHANGED",
         "MEDIA_ACTION_FINISHED",
         "MEDIA_CATALOG_CHANGED",

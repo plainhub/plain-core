@@ -1,5 +1,6 @@
-use crate::libs::host::resources::NativeResources;
-use crate::{features::files::app_files::FileStore, libs::db::DAppFile};
+use crate::features::files::app_files::FileStore;
+use crate::infrastructure::db::DAppFile;
+use crate::infrastructure::host::resources::NativeResources;
 use std::sync::Arc;
 use tokio::sync::watch;
 

@@ -96,7 +96,7 @@ async fn call(port: u16, token: &str, query: &str) -> Value {
 fn start(
     dir: &tempfile::TempDir,
 ) -> (ContentServer, String, Arc<plain_rs::features::prefs::Prefs>) {
-    let token = plain_rs::libs::utils::base64::base64_encode(&[9; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[9; 32]);
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", json!(["CLIPBOARD"])).unwrap();

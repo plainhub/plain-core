@@ -1,4 +1,5 @@
-use crate::libs::db::{DPeer, chat_store::peers};
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, anyhow, ensure};
 use futures_util::{SinkExt, StreamExt};
@@ -48,7 +49,7 @@ pub struct Runtime {
 impl Runtime {
     pub fn notify_clipboard_snapshot(
         &self,
-        host: &crate::libs::host::bridge::Host,
+        host: &crate::infrastructure::host::bridge::Host,
     ) -> Result<(), String> {
         let _delivery = self.clipboard_delivery.lock().unwrap();
         host.notify(
@@ -157,7 +158,7 @@ pub fn identity(peer: &DPeer, actor: &str, base: &str) -> Option<Identity> {
     if peer.id == actor
         || peer.port.is_none_or(|port| port == 0)
         || actor.is_empty()
-        || crate::libs::utils::base64::base64_decode(&peer.token).len() != 32
+        || plain_libs::utils::base64::base64_decode(&peer.token).len() != 32
     {
         return None;
     }
@@ -185,7 +186,7 @@ async fn desired(
     let state = state.clone();
     let actor = actor.to_owned();
     tokio::task::spawn_blocking(move || -> Result<(Vec<DPeer>, HashMap<String, Identity>)> {
-        let interfaces = crate::libs::transport::lan::local_interfaces();
+        let interfaces = crate::infrastructure::transport::lan::local_interfaces();
         let peers = peers::all(&state.db)?;
         let wanted = peers
             .iter()
@@ -412,7 +413,7 @@ async fn connection_loop(
     data_changed: &tokio::sync::Notify,
     clipboard_changed: &tokio::sync::Notify,
 ) {
-    let key = crate::libs::utils::base64::base64_decode(&identity.token);
+    let key = plain_libs::utils::base64::base64_decode(&identity.token);
     let mut stop = state.stop.clone();
     let mut delay = Duration::from_secs(1);
     loop {
@@ -430,7 +431,7 @@ async fn connection_loop(
             let exchange = async {
                 use crate::features::services::peers::management_wire;
                 use crate::features::services::peers::management_wire::Incoming;
-                use crate::libs::protocols::graphql::messages::ClientMessage;
+                use crate::infrastructure::protocols::graphql::messages::ClientMessage;
                 let url = reqwest::Url::parse(&identity.url)?;
                 let client = url
                     .query_pairs()
@@ -456,7 +457,7 @@ async fn connection_loop(
                     let message = ClientMessage::Subscribe {
                         id: spec.field.into(),
                         payload: async_graphql::Request::new(
-                            crate::libs::protocols::graphql::events::document(spec),
+                            crate::infrastructure::protocols::graphql::events::document(spec),
                         ),
                     };
                     socket

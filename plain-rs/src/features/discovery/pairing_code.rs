@@ -1,5 +1,5 @@
 use super::nearby_devices::Device;
-use crate::libs::utils::query::percent_decode;
+use plain_libs::utils::query::percent_decode;
 
 #[derive(Debug, PartialEq, serde::Deserialize)]
 pub struct Payload {
@@ -10,7 +10,7 @@ pub struct Payload {
 }
 
 pub fn format(value: &Payload) -> Option<String> {
-    let encode = crate::libs::utils::query::url_encode;
+    let encode = plain_libs::utils::query::url_encode;
     let code = format!(
         "plainapp://pair?v=1&id={}&name={}&ips={}&port={}",
         encode(&value.id),
@@ -67,7 +67,7 @@ impl Payload {
             device_type: "COMPUTER".into(),
             version: String::new(),
             platform: String::new(),
-            last_seen_at: crate::libs::db::now_iso(),
+            last_seen_at: crate::infrastructure::db::now_iso(),
             discovery_methods: vec!["LAN".into(), "QR".into()],
         }
     }

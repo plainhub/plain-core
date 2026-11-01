@@ -1,9 +1,9 @@
-use crate::libs::db::CHAT_COLS;
-use crate::libs::db::DAppFile;
-use crate::libs::db::DChat;
-use crate::libs::db::Db;
-use crate::libs::db::now_iso;
-use crate::libs::db::row_to_chat;
+use crate::infrastructure::db::CHAT_COLS;
+use crate::infrastructure::db::DAppFile;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::now_iso;
+use crate::infrastructure::db::row_to_chat;
 use anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 use serde_json::Value;
@@ -54,13 +54,13 @@ pub(crate) fn commit(
                 },
             }
             row.content=content.to_string();row.updated_at=now_iso();
-            if tx.execute("UPDATE chats SET content=?2,updated_at=?3 WHERE id=?1",params![row.id,row.content,crate::libs::utils::dbtime::normalize(&row.updated_at)?])?!=1 {bail!("Message update failed");}
+            if tx.execute("UPDATE chats SET content=?2,updated_at=?3 WHERE id=?1",params![row.id,row.content,plain_libs::utils::dbtime::normalize(&row.updated_at)?])?!=1 {bail!("Message update failed");}
             chat=Some(row);
         }
         if exists {
-            if tx.execute("UPDATE app_files SET ref_count=ref_count+?2,updated_at=?3 WHERE id=?1",params![file.id,references,crate::libs::utils::dbtime::normalize(&file.updated_at)?])?!=1 {bail!("App file unavailable");}
+            if tx.execute("UPDATE app_files SET ref_count=ref_count+?2,updated_at=?3 WHERE id=?1",params![file.id,references,plain_libs::utils::dbtime::normalize(&file.updated_at)?])?!=1 {bail!("App file unavailable");}
         } else {
-            tx.execute("INSERT INTO app_files(id,size_bytes,mime_type,real_path,ref_count,weak_hash,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",params![file.id,file.size_bytes,file.mime_type,file.real_path,references,file.weak_hash,crate::libs::utils::dbtime::normalize(&file.created_at)?,crate::libs::utils::dbtime::normalize(&file.updated_at)?])?;
+            tx.execute("INSERT INTO app_files(id,size_bytes,mime_type,real_path,ref_count,weak_hash,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",params![file.id,file.size_bytes,file.mime_type,file.real_path,references,file.weak_hash,plain_libs::utils::dbtime::normalize(&file.created_at)?,plain_libs::utils::dbtime::normalize(&file.updated_at)?])?;
         }
         tx.commit()?;Ok(chat)
     })

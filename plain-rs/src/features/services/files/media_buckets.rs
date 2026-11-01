@@ -49,7 +49,7 @@ pub struct Bucket {
 }
 
 pub fn aggregate(data_type: &str, items: Vec<ItemFact>) -> anyhow::Result<Vec<Bucket>> {
-    aggregate_with_sort_key(data_type, items, crate::libs::utils::sort_name::sort_name)
+    aggregate_with_sort_key(data_type, items, plain_libs::utils::sort_name::sort_name)
 }
 
 fn aggregate_with_sort_key(

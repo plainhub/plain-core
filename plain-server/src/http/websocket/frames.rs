@@ -22,7 +22,7 @@ pub(super) fn admit<'a>(
             &[][..],
         )
     };
-    let nonce = plain_rs::libs::utils::hex::bytes_to_hex(frame.get(..24).ok_or(())?);
+    let nonce = plain_libs::utils::hex::bytes_to_hex(frame.get(..24).ok_or(())?);
     replay.admit(client, &format!("{timestamp}|{nonce}|"), now)?;
     Ok(payload)
 }

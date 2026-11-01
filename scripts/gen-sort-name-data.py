@@ -35,7 +35,7 @@ def main():
     indices = indices[:0x9FA5 - 0x4E00 + 1]
     if max(indices) >= len(syllables):
         raise ValueError("Invalid character table index")
-    target = Path(__file__).resolve().parent.parent / "plain-rs/src/libs/utils/sort_name"
+    target = Path(__file__).resolve().parent.parent / "plain-libs/src/utils/sort_name"
     target.mkdir(parents=True, exist_ok=True)
     (target / "characters.bin").write_bytes(b"".join(struct.pack("<H", value) for value in indices))
     rows = [

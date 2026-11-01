@@ -1,5 +1,5 @@
 use super::*;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use std::sync::Arc;
 #[test]
 fn archived_conversation_search_matches_address_and_snippet_case_insensitively() {
@@ -29,18 +29,18 @@ fn db(dir: &tempfile::TempDir) -> Db {
 fn sms_mms_plans_partition_ids_literal_text_trash_and_archive_boundaries() {
     let dir = tempfile::tempdir().unwrap();
     let db = db(&dir);
-    db.archived_conversation_save(&crate::libs::db::ArchivedConversationRow {
+    db.archived_conversation_save(&crate::infrastructure::db::ArchivedConversationRow {
         conversation_id: "4".into(),
         archived_at: "2026-10-05T01:00:00.123Z".into(),
     })
     .unwrap();
     db.trashed_message_save_many(&[
-        crate::libs::db::TrashedMessageRow {
+        crate::infrastructure::db::TrashedMessageRow {
             message_id: "2".into(),
             is_mms: true,
             trashed_at: "2026-01-01T00:00:00.000Z".into(),
         },
-        crate::libs::db::TrashedMessageRow {
+        crate::infrastructure::db::TrashedMessageRow {
             message_id: "1".into(),
             is_mms: false,
             trashed_at: "2026-01-01T00:00:00.000Z".into(),
@@ -235,7 +235,7 @@ fn mms_text_search_joins_parts_and_requires_every_filter() {
 #[tokio::test]
 async fn conversation_provider_reports_raw_candidates_and_rust_filters_own_numbers() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
-    let host = std::sync::Arc::new(crate::libs::host::bridge::Host::default());
+    let host = std::sync::Arc::new(crate::infrastructure::host::bridge::Host::default());
     let (generation, mut requests) = host.connect();
     let replies = host.clone();
     let responder = tokio::spawn(async move {
@@ -299,12 +299,12 @@ fn query_trash_selector_applies_to_sms_and_mms_even_for_internal_all_reads() {
     let dir = tempfile::tempdir().unwrap();
     let db = db(&dir);
     db.trashed_message_save_many(&[
-        crate::libs::db::TrashedMessageRow {
+        crate::infrastructure::db::TrashedMessageRow {
             message_id: "1".into(),
             is_mms: false,
             trashed_at: "2026-01-01T00:00:00Z".into(),
         },
-        crate::libs::db::TrashedMessageRow {
+        crate::infrastructure::db::TrashedMessageRow {
             message_id: "2".into(),
             is_mms: true,
             trashed_at: "2026-01-01T00:00:00Z".into(),

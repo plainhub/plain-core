@@ -5,9 +5,9 @@ use crate::features::chat::service::ChatIdentity;
 use crate::features::chat::service::ChatService;
 use crate::features::chat::service::NoChatHooks;
 use crate::features::chat::service::no_link_previews;
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
-use crate::libs::transport::contract::PeerTransport;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::transport::contract::PeerTransport;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -41,15 +41,15 @@ fn unique_tmp_dir(label: &str) -> PathBuf {
 fn service(dir_label: &str) -> ChatService<TestTransport> {
     let dir = unique_tmp_dir(dir_label);
     let db = Db::open(&dir.join("plain.db")).unwrap();
-    let (kp, _vk) = crate::libs::crypto::ed25519_generate();
+    let (kp, _vk) = plain_libs::crypto::ed25519_generate();
     let identity = ChatIdentity::new(
         "me-server",
         "plainapp-box",
-        crate::libs::utils::base64::base64_encode(&kp),
+        plain_libs::utils::base64::base64_encode(&kp),
     );
     ChatService::new(
         db,
-        crate::libs::utils::base64::base64_encode(&[5u8; 32]),
+        plain_libs::utils::base64::base64_encode(&[5u8; 32]),
         std::sync::Arc::new(identity),
         DeviceType::Nas,
         dir,
@@ -69,7 +69,7 @@ async fn create_channel_sets_owner_member_and_key() {
     // Owner is a JOINED member from the start (invite-rejection guard).
     assert_eq!(ch.members, r#"[{"peerId":"me-server","status":"JOINED"}]"#);
     // Channel key is a base64 32-byte value.
-    assert_eq!(crate::libs::utils::base64::base64_decode(&ch.key).len(), 32);
+    assert_eq!(plain_libs::utils::base64::base64_decode(&ch.key).len(), 32);
     // WS_CHANNELS_UPDATED fired with the joined-channel payload.
     let ev = svc.event_tx.subscribe();
     let _ = ev;
@@ -115,7 +115,7 @@ async fn add_channel_member_enforces_owner_and_duplicates() {
 async fn decline_channel_invite_removes_channel_and_chats() {
     let svc = service("decline");
     let ch = svc.create_channel("Team").unwrap();
-    let mut chat = crate::libs::db::DChat::new("me", "", &ch.id, "{}");
+    let mut chat = crate::infrastructure::db::DChat::new("me", "", &ch.id, "{}");
     chat.id = "m1".to_string();
     svc.db.insert_chat(&chat);
 
@@ -140,7 +140,7 @@ async fn delete_peer_demotes_channel_members() {
         Some(8443),
         DeviceType::Phone,
     ));
-    let mut chat = crate::libs::db::DChat::new("me", "peer-x", "", "{}");
+    let mut chat = crate::infrastructure::db::DChat::new("me", "peer-x", "", "{}");
     chat.id = "m1".to_string();
     svc.db.insert_chat(&chat);
 
@@ -168,12 +168,12 @@ async fn delete_peer_demotes_channel_members() {
 async fn leave_channel_as_member_removes_self_and_marks_left() {
     let svc = service("leave");
     // A channel owned by someone else, with us as a member.
-    let mut ch = crate::libs::db::DChannel::new("Team", "owner-1");
+    let mut ch = crate::infrastructure::db::DChannel::new("Team", "owner-1");
     ch.id = "ch-foreign".to_string();
     ch.members =
         r#"[{"peerId":"owner-1","status":"JOINED"},{"peerId":"me-server","status":"JOINED"}]"#
             .to_string();
-    ch.key = crate::libs::utils::base64::base64_encode(&[7u8; 32]);
+    ch.key = plain_libs::utils::base64::base64_encode(&[7u8; 32]);
     svc.db.insert_channel(&ch);
 
     assert!(svc.leave_channel("ch-foreign").await);

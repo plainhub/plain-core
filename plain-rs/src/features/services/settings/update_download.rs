@@ -1,7 +1,7 @@
 use crate::features::prefs::pref_keys::SKIP_VERSION;
 use crate::features::prefs::security::UpdateInfo;
 use crate::features::services::settings::updates;
-use crate::libs::types::Long;
+use crate::infrastructure::types::Long;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, anyhow, ensure};
 use futures_util::StreamExt;
@@ -69,7 +69,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             snapshot: AppUpdateDownload {
-                core_id: crate::libs::utils::short_uuid::short_uuid().into(),
+                core_id: plain_libs::utils::short_uuid::short_uuid().into(),
                 ..Default::default()
             },
             cancel: None,
@@ -94,7 +94,10 @@ impl Runtime {
             }
         });
     }
-    pub fn notify_snapshot(&self, host: &crate::libs::host::bridge::Host) -> Result<(), String> {
+    pub fn notify_snapshot(
+        &self,
+        host: &crate::infrastructure::host::bridge::Host,
+    ) -> Result<(), String> {
         let current = self.state.lock().unwrap();
         let snapshot =
             serde_json::to_value(&current.snapshot).map_err(|error| error.to_string())?;
@@ -214,7 +217,7 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
             validate_url(&identity.url)?;
             discard(&state, &info.downloaded_apk_path)?;
             updates::update(&state, serde_json::json!({"downloadedApkPath":""}))?;
-            let id = crate::libs::utils::short_uuid::short_uuid();
+            let id = plain_libs::utils::short_uuid::short_uuid();
             let (cancel, receiver) = watch::channel(false);
             runtime.state.lock().unwrap().cancel = Some(cancel.clone());
             let snapshot = runtime.publish(

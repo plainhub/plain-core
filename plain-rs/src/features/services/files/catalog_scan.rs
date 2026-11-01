@@ -1,5 +1,6 @@
 use crate::features::enums::DataType;
-use crate::libs::db::{MediaFileMetadata, MediaFileRow};
+use crate::infrastructure::db::MediaFileMetadata;
+use crate::infrastructure::db::MediaFileRow;
 use crate::runtime::Runtime as CoreRuntime;
 
 pub async fn host_connected(state: CoreRuntime, generation: u64) -> Result<(), String> {
@@ -90,7 +91,7 @@ impl NativeMediaCatalog {
         &self,
         data_type: DataType,
         reference: &str,
-    ) -> Result<crate::libs::db::MediaFileMetadataRead, String> {
+    ) -> Result<crate::infrastructure::db::MediaFileMetadataRead, String> {
         #[cfg(test)]
         if let Some(gate) = &self.read_gate {
             gate.0.notify_one();
@@ -381,7 +382,7 @@ impl NativeMediaCatalog {
         let sources = self.source_directories()?;
         let roots =
             crate::features::media::catalog_paths::selected_roots(root.to_owned(), &sources);
-        crate::libs::filesystem::roots::prune_nested(roots, |root| {
+        plain_libs::filesystem::roots::prune_nested(roots, |root| {
             root.ends_with("Library/Mobile Documents/com~apple~CloudDocs")
         })
         .into_iter()
@@ -528,7 +529,7 @@ impl NativeMediaCatalog {
                         continue;
                     }
                 };
-                let current_volume = match crate::libs::platform::volumes::locate(&canonical_root) {
+                let current_volume = match plain_libs::platform::volumes::locate(&canonical_root) {
                     Ok(location) => location.volume,
                     Err(error) => {
                         let error = format!("{reference}: {error}");
@@ -562,7 +563,7 @@ impl NativeMediaCatalog {
                 let producer_root = canonical_root.clone();
                 let producer = tokio::task::spawn_blocking(move || -> Result<usize, String> {
                     let mut discovered = 0;
-                    crate::libs::file_walk::walk_entries(
+                    plain_libs::file_walk::walk_entries(
                         &producer_root,
                         |path| {
                             path.to_str().is_some_and(|path| {
@@ -635,7 +636,7 @@ impl NativeMediaCatalog {
                         .ok_or("Invalid file path encoding")?
                         .to_owned();
                     let file_count = usize::from(actual.is_file());
-                    let kind = crate::libs::db::FileKind::try_from(data_type)
+                    let kind = crate::infrastructure::db::FileKind::try_from(data_type)
                         .map_err(|error| error.to_string())?;
                     session
                         .record_when_running(file_count, || {
@@ -811,7 +812,7 @@ impl NativeMediaCatalog {
 
     pub fn record_file_reads(
         &self,
-        files: &[crate::libs::db::MediaFileMetadataRead],
+        files: &[crate::infrastructure::db::MediaFileMetadataRead],
     ) -> Result<Vec<MediaFileRow>, String> {
         #[cfg(feature = "runtime-media")]
         let rows = self
@@ -829,7 +830,7 @@ impl NativeMediaCatalog {
 
     fn persist_file_reads(
         &self,
-        files: &[crate::libs::db::MediaFileMetadataRead],
+        files: &[crate::infrastructure::db::MediaFileMetadataRead],
         scope: Option<&crate::features::prefs::file_index::Scope>,
     ) -> Result<Vec<MediaFileRow>, String> {
         self.state.native_client_id()?;

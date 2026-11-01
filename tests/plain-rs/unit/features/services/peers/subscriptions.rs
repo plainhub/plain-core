@@ -1,15 +1,14 @@
 use super::*;
+use crate::features::chat::enums::DeviceType;
+use crate::features::chat::enums::PeerStatus;
+use crate::infrastructure::db::chat_store::SaveMode;
 use crate::test_runtime::Core as ContentServer;
-use crate::{
-    features::chat::enums::{DeviceType, PeerStatus},
-    libs::db::chat_store::SaveMode,
-};
 
 fn fixture_peer() -> DPeer {
     let mut peer = DPeer::new("peer", "Fixture", "127.0.0.1", Some(9), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
     peer.public_key = "fixture-signing-identity".into();
-    peer.token = crate::libs::utils::base64::base64_encode(&[7; 32]);
+    peer.token = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peer
 }
 fn target(peer: &DPeer) -> PeerSubscriptionTarget {

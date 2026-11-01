@@ -29,7 +29,7 @@ async fn browser_login(
 ) -> (
     Socket,
     plain_rs::features::services::confirmation_channel::Channel,
-    plain_rs::libs::crypto::EcdhSession,
+    plain_libs::crypto::EcdhSession,
 ) {
     use plain_rs::features::services::confirmation_channel::{Client, ConfirmationMode};
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
@@ -51,7 +51,7 @@ async fn browser_login(
     let (channel, reveal) = client
         .accept(
             &serde_json::from_str(&hello).unwrap(),
-            &plain_rs::libs::utils::base64::base64_encode(&public[32..]),
+            &plain_libs::utils::base64::base64_encode(&public[32..]),
             &state.native_client_id().unwrap(),
             now_ms(),
         )
@@ -62,8 +62,8 @@ async fn browser_login(
         ))
         .await
         .unwrap();
-    let session = plain_rs::libs::crypto::EcdhSession::generate();
-    let request = json!({"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_rs::libs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
+    let session = plain_libs::crypto::EcdhSession::generate();
+    let request = json!({"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
     let encrypted = channel
         .encrypt_request(&serde_json::to_vec(&request).unwrap(), now_ms())
         .unwrap();
@@ -128,13 +128,13 @@ async fn local_approval_socket_controls_real_passwordless_browser_sessions() {
                     .unwrap();
             assert_eq!(completed["status"], "COMPLETED");
             let shared = session
-                .compute_shared_key(&plain_rs::libs::utils::base64::base64_decode(
+                .compute_shared_key(&plain_libs::utils::base64::base64_decode(
                     completed["ecdhPublicKey"].as_str().unwrap(),
                 ))
                 .unwrap();
             assert_eq!(
                 state.db.session_get(client_id).unwrap().unwrap().token,
-                plain_rs::libs::utils::base64::base64_encode(&shared)
+                plain_libs::utils::base64::base64_encode(&shared)
             );
         } else {
             assert!(matches!(response, Message::Close(Some(close)) if close.reason == "rejected"));

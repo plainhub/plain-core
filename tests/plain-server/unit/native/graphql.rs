@@ -10,7 +10,7 @@ async fn closed_native_page_cancels_its_pending_main_schema_request_before_radio
     );
     let server = ContentServer::start(
         directory.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap();
@@ -63,7 +63,7 @@ async fn native_subscription_delivers_without_an_http_listener() {
     );
     let server = ContentServer::start_core(
         directory.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap();
@@ -83,7 +83,7 @@ async fn native_subscription_delivers_without_an_http_listener() {
     server
         .runtime_state()
         .events
-        .send(plain_rs::libs::events::WsEvent::broadcast(
+        .send(plain_rs::infrastructure::events::WsEvent::broadcast(
             "CONTENT_CHANGED",
             "{}".into(),
         ))
@@ -116,7 +116,7 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
     );
     let server = ContentServer::start_core(
         directory.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap();
@@ -141,7 +141,7 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
         .unwrap();
         assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
         for details in [None, Some(r#"{"results":[]}"#.to_string()), None] {
-            let row = plain_rs::libs::db::DChat {
+            let row = plain_rs::infrastructure::db::DChat {
                 id: "message".into(),
                 from_id: "me".into(),
                 to_id: "peer".into(),
@@ -155,7 +155,7 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
             server
                 .runtime_state()
                 .events
-                .send(plain_rs::libs::events::WsEvent::broadcast(
+                .send(plain_rs::infrastructure::events::WsEvent::broadcast(
                     event,
                     serde_json::json!([plain_rs::features::chat::service::chat_to_json(&row)])
                         .to_string(),

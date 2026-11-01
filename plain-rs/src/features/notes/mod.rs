@@ -1,9 +1,9 @@
 use crate::features::enums::DataType;
 use crate::features::tags;
-use crate::libs::db::Db;
-use crate::libs::db::notes_feeds::NoteRow;
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::notes_feeds::NoteRow;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 
 fn now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)

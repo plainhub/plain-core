@@ -1,5 +1,5 @@
-use crate::libs::utils::keyed_locks::KeyedLocks;
 use crate::runtime::Runtime as CoreRuntime;
+use plain_libs::utils::keyed_locks::KeyedLocks;
 use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -59,9 +59,9 @@ async fn fingerprint(request: &Request) -> Result<Option<String>, String> {
         "mobile-v1"
     ])
     .to_string();
-    Ok(Some(crate::libs::utils::hex::bytes_to_hex(
-        &Sha256::digest(input.as_bytes()),
-    )))
+    Ok(Some(plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(
+        input.as_bytes(),
+    ))))
 }
 fn validate_output(bytes: &[u8]) -> Result<(), String> {
     if bytes.is_empty() || bytes.len() > 32 * 1024 * 1024 {
@@ -83,7 +83,7 @@ async fn decode(
             .native_decodes
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         #[cfg(feature = "media")]
-        let bytes = crate::libs::media::thumbnails::render(
+        let bytes = plain_libs::media::thumbnails::render(
             &request.path,
             request.width,
             request.height,

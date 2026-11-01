@@ -1,6 +1,6 @@
 use async_graphql::Request;
-use plain_rs::libs::protocols::graphql::events::EVENTS;
-use plain_rs::libs::protocols::graphql::events::EventSpec;
+use plain_rs::infrastructure::protocols::graphql::events::EVENTS;
+use plain_rs::infrastructure::protocols::graphql::events::EventSpec;
 
 pub(crate) fn spec(request: &Request) -> Result<&'static EventSpec, String> {
     use async_graphql::parser::{

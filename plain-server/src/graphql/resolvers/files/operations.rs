@@ -9,8 +9,8 @@ use crate::http::auth::public_gate;
 use async_graphql::{Context, Enum, Object, SimpleObject};
 use plain_rs::features::services::files::provider_query as provider_plan;
 use plain_rs::features::services::files::provider_query::Provider;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::types::Long;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -89,7 +89,7 @@ impl FileOpsMutation {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let record = plain_rs::features::services::files::writes::execute(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
-            plain_rs::libs::filesystem::writes::Operation::CreateFile { path },
+            plain_libs::filesystem::writes::Operation::CreateFile { path },
         )
         .await
         .map_err(async_graphql::Error::new)?;
@@ -163,7 +163,7 @@ impl FileOpsMutation {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let record = plain_rs::features::services::files::writes::execute(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
-            plain_rs::libs::filesystem::writes::Operation::CreateDirectory { path },
+            plain_libs::filesystem::writes::Operation::CreateDirectory { path },
         )
         .await
         .map_err(async_graphql::Error::new)?;
@@ -193,7 +193,7 @@ impl FileOpsMutation {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let record = plain_rs::features::services::files::writes::execute(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
-            plain_rs::libs::filesystem::writes::Operation::WriteText {
+            plain_libs::filesystem::writes::Operation::WriteText {
                 path,
                 content,
                 overwrite,
@@ -270,7 +270,7 @@ impl FileOpsMutation {
         total_chunks: i32,
         path: String,
         replace: bool,
-        total_size: plain_rs::libs::types::Long,
+        total_size: plain_rs::infrastructure::types::Long,
     ) -> async_graphql::Result<MergeTask> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let platform =
@@ -281,7 +281,7 @@ impl FileOpsMutation {
                 return Err("Resource upload requires replacement".into());
             }
             let host = ctx
-                .data::<Arc<plain_rs::libs::host::bridge::Host>>()?
+                .data::<Arc<plain_rs::infrastructure::host::bridge::Host>>()?
                 .clone();
             let destination = path.clone();
             plain_rs::features::files::uploads::Kind::Resource {
@@ -319,7 +319,7 @@ impl FileOpsMutation {
         file_id: String,
         total_chunks: i32,
         file_name: String,
-        total_size: plain_rs::libs::types::Long,
+        total_size: plain_rs::infrastructure::types::Long,
     ) -> async_graphql::Result<MergeTask> {
         start_merge(
             ctx,
@@ -484,7 +484,7 @@ async fn media_action(
         .map_err(Into::into)
 }
 
-fn written_file(record: plain_rs::libs::filesystem::record::FileRecord) -> File {
+fn written_file(record: plain_libs::filesystem::record::FileRecord) -> File {
     File {
         permission: record.permission,
         file_id: (!record.file_id.is_empty()).then(|| record.file_id.into()),
@@ -493,8 +493,8 @@ fn written_file(record: plain_rs::libs::filesystem::record::FileRecord) -> File 
         created_at: record
             .created_at
             .and_then(chrono::DateTime::from_timestamp_millis)
-            .map(plain_rs::libs::types::Instant),
-        updated_at: plain_rs::libs::types::Instant(
+            .map(plain_rs::infrastructure::types::Instant),
+        updated_at: plain_rs::infrastructure::types::Instant(
             chrono::DateTime::from_timestamp_millis(record.updated_at).unwrap_or_default(),
         ),
         size: Long(record.size),
@@ -541,7 +541,7 @@ async fn start_merge(
         .data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
         .clone();
     let events = ctx
-        .data_unchecked::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
+        .data_unchecked::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()
         .clone();
     let value = runtime
         .start(store, base, id, count, size, kind, events)

@@ -1,6 +1,6 @@
 use super::*;
 use crate::features::peers::pairing::sessions::{RESPONSE_TIMEOUT, Sessions, Target};
-use crate::libs::crypto::EcdhSession;
+use plain_libs::crypto::EcdhSession;
 use std::sync::Arc;
 use std::time::Duration;
 

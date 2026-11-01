@@ -1,6 +1,6 @@
-use crate::libs::db::Db;
-use crate::libs::events::WsEvent;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::events::WsEvent;
+use crate::infrastructure::host::bridge::Host;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -54,13 +54,13 @@ pub struct Runtime {
     state: Mutex<PendingState>,
     send: tokio::sync::Mutex<()>,
     host: Arc<Host>,
-    store: Arc<crate::libs::kv::LazyDb>,
+    store: Arc<plain_libs::kv::LazyDb>,
     db: Arc<Db>,
     directory: std::path::PathBuf,
     events: broadcast::Sender<WsEvent>,
     resources: Mutex<
         Option<(
-            Arc<crate::libs::host::resources::NativeResources>,
+            Arc<crate::infrastructure::host::resources::NativeResources>,
             watch::Receiver<bool>,
         )>,
     >,
@@ -70,7 +70,7 @@ impl Runtime {
         host: Arc<Host>,
         db: Arc<Db>,
         directory: std::path::PathBuf,
-        store: Arc<crate::libs::kv::LazyDb>,
+        store: Arc<plain_libs::kv::LazyDb>,
         events: broadcast::Sender<WsEvent>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -87,7 +87,7 @@ impl Runtime {
     }
     pub fn set_resources(
         &self,
-        resources: Arc<crate::libs::host::resources::NativeResources>,
+        resources: Arc<crate::infrastructure::host::resources::NativeResources>,
         stop: watch::Receiver<bool>,
     ) {
         *self.resources.lock().unwrap() = Some((resources, stop));
@@ -138,7 +138,7 @@ impl Runtime {
             "Attachment file not found: {path}"
         );
         tokio::fs::copy(path, destination).await?;
-        Ok(crate::libs::utils::mime::mime_from_ext(path).to_owned())
+        Ok(plain_libs::utils::mime::mime_from_ext(path).to_owned())
     }
     pub async fn cancel_all(&self) {
         let _guard = self.send.lock().await;

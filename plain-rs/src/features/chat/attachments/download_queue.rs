@@ -1,11 +1,11 @@
 use crate::features::chat::attachments::attachment_imports::Imports;
 use crate::features::chat::attachments::attachment_imports::Ticket;
 use crate::features::chat::attachments::download_status::DownloadStatus as Status;
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
-use crate::libs::db::chat_store::messages;
-use crate::libs::db::chat_store::peers;
-use crate::libs::transport::router::Attempt;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::chat_store::messages;
+use crate::infrastructure::db::chat_store::peers;
+use crate::infrastructure::transport::router::Attempt;
 use anyhow::{Result, bail};
 use serde::Serialize;
 use serde_json::{Value, json};

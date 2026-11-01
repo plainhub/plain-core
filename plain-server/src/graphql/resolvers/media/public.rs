@@ -6,9 +6,9 @@ use crate::http::auth::public_gate;
 use async_graphql::{Context, Object};
 use chrono::{DateTime, Utc};
 use plain_rs::features::enums::DataType;
-use plain_rs::libs::host::bridge::Host;
-use plain_rs::libs::types::Instant;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::host::bridge::Host;
+use plain_rs::infrastructure::types::Instant;
+use plain_rs::infrastructure::types::Long;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -85,7 +85,7 @@ impl MediaQuery {
 /// `text` off the query and hands the rest to the platform as the
 /// structured filter, so the platform never sees the text twice.
 pub(crate) fn text_field(query: &str) -> String {
-    plain_rs::libs::utils::search_dsl::parse(query)
+    plain_libs::utils::search_dsl::parse(query)
         .into_iter()
         .find(|field| field.name == "text")
         .map(|field| field.value)
@@ -148,7 +148,8 @@ pub(crate) fn catalog(
     ctx: &Context<'_>,
 ) -> plain_rs::features::services::files::catalog::MediaCatalog {
     plain_rs::features::services::files::catalog::MediaCatalog::new(
-        ctx.data_unchecked::<Arc<plain_rs::libs::db::Db>>().clone(),
+        ctx.data_unchecked::<Arc<plain_rs::infrastructure::db::Db>>()
+            .clone(),
         ctx.data_unchecked::<Arc<Host>>().clone(),
         ctx.data_unchecked::<Arc<plain_rs::features::prefs::Prefs>>()
             .clone(),

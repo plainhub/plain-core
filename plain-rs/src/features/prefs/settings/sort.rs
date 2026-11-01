@@ -43,9 +43,9 @@ impl FileSortBy {
 }
 
 #[cfg(feature = "filesystem")]
-impl From<FileSortBy> for crate::libs::filesystem::SortBy {
+impl From<FileSortBy> for plain_libs::filesystem::SortBy {
     fn from(sort_by: FileSortBy) -> Self {
-        use crate::libs::filesystem::SortBy;
+        use plain_libs::filesystem::SortBy;
         match sort_by {
             FileSortBy::DateAsc => SortBy::DateAsc,
             FileSortBy::DateDesc => SortBy::DateDesc,

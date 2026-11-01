@@ -1,5 +1,5 @@
 use crate::features::media::audio::{playback, queue::AudioTrack};
-use crate::libs::host::audio::AudioHostReport;
+use crate::infrastructure::host::audio::AudioHostReport;
 use crate::runtime::Runtime as CoreRuntime;
 pub async fn accept(
     state: &CoreRuntime,
@@ -17,7 +17,7 @@ pub async fn accept(
             audio
                 .run_playback(move |db, _| {
                     if !host.is_current(generation) {
-                        return Err(crate::libs::error::DomainError::Other(
+                        return Err(crate::infrastructure::error::DomainError::Other(
                             "host disconnected".into(),
                         ));
                     }
@@ -30,7 +30,7 @@ pub async fn accept(
             let accepted = audio
                 .run_playback(move |db, _| {
                     if !host.is_current(generation) {
-                        return Err(crate::libs::error::DomainError::Other(
+                        return Err(crate::infrastructure::error::DomainError::Other(
                             "host disconnected".into(),
                         ));
                     }
@@ -59,7 +59,7 @@ pub async fn accept(
             let accepted = audio
                 .run_playback(move |db, engine| {
                     if !host.is_current(generation) {
-                        return Err(crate::libs::error::DomainError::Other(
+                        return Err(crate::infrastructure::error::DomainError::Other(
                             "host disconnected".into(),
                         ));
                     }
@@ -79,17 +79,19 @@ pub async fn accept(
                 .await
                 .map_err(|error| error.to_string())?;
             if accepted {
-                let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-                    "CONTENT_CHANGED",
-                    "{}".into(),
-                ));
+                let _ = state
+                    .events
+                    .send(crate::infrastructure::events::WsEvent::broadcast(
+                        "CONTENT_CHANGED",
+                        "{}".into(),
+                    ));
             }
         }
     }
     Ok(true)
 }
 
-pub fn publish_library_updated(host: &std::sync::Arc<crate::libs::host::bridge::Host>) {
+pub fn publish_library_updated(host: &std::sync::Arc<crate::infrastructure::host::bridge::Host>) {
     host.invalidate("audioLibraryRefresh");
 }
 

@@ -1,5 +1,6 @@
+use crate::features::prefs::Prefs;
 use crate::features::prefs::pref_keys::AI_IMAGE_SEARCH_MODEL;
-use crate::{features::prefs::Prefs, libs::events::WsEvent};
+use crate::infrastructure::events::WsEvent;
 use serde_json::Value;
 use tokio::sync::broadcast;
 

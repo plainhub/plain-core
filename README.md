@@ -4,8 +4,9 @@ Shared Rust code for PlainApp desktop, mobile and command-line hosts.
 
 ```text
 plain-core/
-├── Cargo.toml                Builds and tests the three packages together
-├── plain-rs/                 Domain services, storage, protocols, media and AI image search
+├── Cargo.toml                Builds and tests the four packages together
+├── plain-libs/               Business-independent algorithms, formats, files and native primitives
+├── plain-rs/                 Domain services, application storage and runtime composition
 ├── plain-server/             GraphQL, HTTP and native transport adapters
 ├── plain-cli/                The plainapp command-line executable
 ├── tests/                    Tests grouped by package; unit paths mirror src/
@@ -14,15 +15,18 @@ plain-core/
 └── scripts/                  Development tools
 ```
 
-Tests live under `tests/plain-rs/`, `tests/plain-server/` and `tests/plain-cli/`.
+Tests live under `tests/plain-libs/`, `tests/plain-rs/`, `tests/plain-server/` and `tests/plain-cli/`.
 Each contains its own unit tests and any shared fixtures or support code.
 Unit tests remain compiled inside their owning package; HTTP integration tests
 are registered explicitly in that package's `Cargo.toml`.
 
-The `features/` and `libs/` directories classify source responsibilities, not
-Cargo feature switches. Rust module paths follow the source tree, such as
-`plain_rs::features::chat` and `plain_rs::libs::crypto`. Unit tests
-mirror both directory groups under `tests/plain-rs/unit/`.
+`plain-libs` owns reusable components and depends only on third-party libraries.
+Its optional Cargo features select components without importing application state,
+models, host commands or GraphQL. `plain-rs` owns product behavior in `features/`
+and application storage, host contracts and protocol policy in `infrastructure/`.
+Callers import reusable components directly, such as `plain_libs::crypto`, and
+application modules through `plain_rs::features` or `plain_rs::infrastructure`.
+Unit-test paths mirror each package's source tree under `tests/<package>/unit/`.
 
 Each `plain-*` directory is a Rust package managed by the root `Cargo.toml`.
 Desktop shell and mobile JNI/C ABI code live in plain-desktop and plain-app, respectively.
@@ -44,19 +48,27 @@ plain-rs/src/
 │   ├── prefs/              Application preferences and identity
 │   └── services/           Runtime operations by domain
 │       └── files/          Browsing, previews, indexing and transfers
-└── libs/                   Reusable libraries and host infrastructure
-    ├── ai_image_search/    Models, preprocessing and inference
-    ├── apk/                Android binary XML and resource parsing
-    ├── media/              Format parsing, decoding and thumbnails
-    ├── filesystem/         Filesystem reads, writes and traversal
-    ├── crypto/             Cryptography and key formats
-    ├── db/                 SQLite schema, models and repositories
-    ├── host/               Host commands, scopes and resource streams
-    ├── platform/           Native OS and filesystem primitives
-    ├── protocols/          Wire formats and framing
-    ├── transport/          Shared authenticated peer transport
-    ├── data_paths/         Validated data roots and ownership
-    └── utils/              Parsing, encoding and file utilities
+└── infrastructure/         Application storage, host contracts and protocol policy
+    ├── db/                 Product schema, models and repositories
+    ├── host/               Application host commands, scopes and resource streams
+    ├── platform/           Application startup, host facts and system coordination
+    ├── protocols/          Peer framing and product discovery policy
+    ├── transport/          Authenticated peer transport
+    └── data_paths/         Application data roots and ownership
+
+plain-libs/src/
+├── crypto/                 Encryption, signatures, hashes and key formats
+├── media/                  Format parsing, decoding and thumbnails
+├── ai_image_search/        Model validation, preprocessing and inference
+├── apk/                    Android binary XML and resource parsing
+├── tls/                    Certificates and PKCS#12
+├── dlna/                   UPnP/DLNA parsing and protocol encoding
+├── protocols/mdns/         DNS/mDNS wire codecs and records
+├── phone/                  Number parsing and offline metadata lookup
+├── filesystem/             File operations and native watching
+├── kv.rs                   Generic SQLite key-value storage
+├── platform/               Native network, volume and filesystem primitives
+└── utils/                  Parsing, encoding, time and file utilities
 
 plain-cli/src/
 ├── bootstrap.rs            Process initialization and command dispatch
@@ -132,7 +144,7 @@ separate assembly directory or duplicate service container.
 
 `plain-cli/src/service.rs` combines the server with CLI host adapters and local
 approval. Linux mounting, disk formatting and Samba implementations remain in
-`plain-rs/src/libs/platform/linux/`. `plain-server` contains no CLI/headless runtime;
+`plain-rs/src/infrastructure/platform/linux/`. `plain-server` contains no CLI/headless runtime;
 its native APIs and `ContentServer::runtime()` provide the in-process entry points
 used by CLI, desktop and mobile hosts.
 

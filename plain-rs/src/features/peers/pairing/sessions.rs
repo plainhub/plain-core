@@ -1,4 +1,4 @@
-use crate::libs::crypto::EcdhSession;
+use plain_libs::crypto::EcdhSession;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,

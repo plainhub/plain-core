@@ -1,11 +1,11 @@
 use super::*;
-use crate::libs::db::chat_store::peers;
+use crate::infrastructure::db::chat_store::peers;
 use serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]
 async fn shared_capabilities_use_current_host_facts_and_reject_invalid_receipts() {
-    let host = Arc::new(crate::libs::host::bridge::Host::default());
+    let host = Arc::new(crate::infrastructure::host::bridge::Host::default());
     assert!(capabilities(&host).await.unwrap().is_empty());
     let (generation, mut requests) = host.connect();
     for (facts, expected) in [
@@ -40,7 +40,7 @@ fn peer() -> DPeer {
         Some(443),
         crate::features::chat::enums::DeviceType::Phone,
     );
-    p.key = crate::libs::utils::base64::base64_encode(&[7; 32]);
+    p.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     p
 }
 fn state() -> (tempfile::TempDir, crate::test_runtime::Core, CoreRuntime) {
@@ -50,7 +50,7 @@ fn state() -> (tempfile::TempDir, crate::test_runtime::Core, CoreRuntime) {
     prefs.set("client_id", "actor").unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
-        &crate::libs::utils::base64::base64_encode(&[1; 32]),
+        &plain_libs::utils::base64::base64_encode(&[1; 32]),
         prefs,
     )
     .unwrap();
@@ -58,7 +58,7 @@ fn state() -> (tempfile::TempDir, crate::test_runtime::Core, CoreRuntime) {
     peers::save(
         &state.db,
         &[peer()],
-        crate::libs::db::chat_store::SaveMode::Insert,
+        crate::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     (dir, server, state)
@@ -80,7 +80,7 @@ async fn authenticated_reply_accepts_discovery_refresh_and_rejects_revoked_pairi
             .unwrap();
         let exchange = requests.recv().await.unwrap();
         assert_eq!(exchange["method"], "peerTransportBleExchange");
-        let crate::libs::protocols::ble::Request::PeerGraphql { body, .. } =
+        let crate::infrastructure::protocols::ble::Request::PeerGraphql { body, .. } =
             state.ble_transport.request_for_test(&exchange["params"])
         else {
             panic!("Expected peer request")
@@ -92,7 +92,7 @@ async fn authenticated_reply_accepts_discovery_refresh_and_rejects_revoked_pairi
                 changed.port = Some(2443);
                 changed.name = "Refreshed name".into();
             }
-            "key" => changed.key = crate::libs::utils::base64::base64_encode(&[9; 32]),
+            "key" => changed.key = plain_libs::utils::base64::base64_encode(&[9; 32]),
             "public_key" => changed.public_key = "replacement".into(),
             "status" => changed.status = crate::features::chat::enums::PeerStatus::Paired,
             "removed" => {}
@@ -104,16 +104,17 @@ async fn authenticated_reply_accepts_discovery_refresh_and_rejects_revoked_pairi
             peers::save(
                 &state.db,
                 &[changed],
-                crate::libs::db::chat_store::SaveMode::Update,
+                crate::infrastructure::db::chat_store::SaveMode::Update,
             )
             .unwrap();
         }
-        let bytes = crate::libs::transport::http_response::Context::new("/peer_graphql", &body)
-            .encrypt(&[7; 32], br#"{"data":{"message":true}}"#)
-            .unwrap();
+        let bytes =
+            crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &body)
+                .encrypt(&[7; 32], br#"{"data":{"message":true}}"#)
+                .unwrap();
         let reply = state.ble_transport.reply_for_test(
             &exchange["params"],
-            crate::libs::protocols::ble::response(200, &bytes).unwrap(),
+            crate::infrastructure::protocols::ble::response(200, &bytes).unwrap(),
         );
         host.reply(generation, json!({"id":exchange["id"],"result":reply}))
             .unwrap();
@@ -166,7 +167,7 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
                     json!({"id":request["id"],"result":true})
                 }
                 "peerTransportBleExchange" => {
-                    let crate::libs::protocols::ble::Request::PeerGraphql {
+                    let crate::infrastructure::protocols::ble::Request::PeerGraphql {
                         client_id,
                         channel_id,
                         body,
@@ -177,17 +178,19 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
                     assert_eq!(client_id, "actor");
                     assert_eq!(channel_id, "channel");
                     assert_eq!(
-                        crate::libs::crypto::xchacha_decrypt_raw(&[7; 32], &body).unwrap(),
+                        plain_libs::crypto::xchacha_decrypt_raw(&[7; 32], &body).unwrap(),
                         b"signed request"
                     );
-                    let bytes =
-                        crate::libs::transport::http_response::Context::new("/peer_graphql", &body)
-                            .encrypt(
-                                &[7; 32],
-                                br#"{"errors":[{"message":"business rejection"}]}"#,
-                            )
-                            .unwrap();
-                    json!({"id":request["id"],"result":ble.reply_for_test(&request["params"],crate::libs::protocols::ble::response(200,&bytes).unwrap())})
+                    let bytes = crate::infrastructure::transport::http_response::Context::new(
+                        "/peer_graphql",
+                        &body,
+                    )
+                    .encrypt(
+                        &[7; 32],
+                        br#"{"errors":[{"message":"business rejection"}]}"#,
+                    )
+                    .unwrap();
+                    json!({"id":request["id"],"result":ble.reply_for_test(&request["params"],crate::infrastructure::protocols::ble::response(200,&bytes).unwrap())})
                 }
                 _ => panic!("{request}"),
             };

@@ -73,7 +73,7 @@ pub(super) fn external(
             continue;
         }
         if write {
-            crate::libs::filesystem::deletion::validate(&resolved)?;
+            plain_libs::filesystem::deletion::validate(&resolved)?;
             #[cfg(target_os = "android")]
             {
                 validate_android(Path::new(path))?;

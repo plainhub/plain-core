@@ -1,8 +1,9 @@
 use async_graphql::{Context, Result};
+use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::settings::preferences::Preferences;
 use plain_rs::features::services::settings::security_preferences::SecurityPreferences;
 use plain_rs::features::services::settings::security_preferences::security_key;
-use plain_rs::{features::prefs::Prefs, libs::events::WsEvent};
+use plain_rs::infrastructure::events::WsEvent;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::broadcast;

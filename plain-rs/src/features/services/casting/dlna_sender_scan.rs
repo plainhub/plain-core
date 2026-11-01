@@ -1,7 +1,7 @@
 use crate::features::services::casting::dlna_sender_runtime::Device;
-use crate::libs::dlna::desc;
-use crate::libs::dlna::ssdp;
 use crate::runtime::Runtime as CoreRuntime;
+use plain_libs::dlna::desc;
+use plain_libs::dlna::ssdp;
 use std::{collections::HashSet, time::Duration};
 
 pub fn start(state: &CoreRuntime) {

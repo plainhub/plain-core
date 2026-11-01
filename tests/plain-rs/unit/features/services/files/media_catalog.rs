@@ -1,5 +1,5 @@
 use super::*;
-use crate::libs::db::MediaFileMetadata;
+use crate::infrastructure::db::MediaFileMetadata;
 
 fn file(data_type: DataType, path: &str, title: &str, size_bytes: i64) -> MediaFileMetadata {
     MediaFileMetadata {

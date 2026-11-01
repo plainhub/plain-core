@@ -9,3 +9,5 @@ pub mod thumbnails;
 pub mod thumbnail_decoder;
 
 pub mod status;
+
+pub mod default_model;

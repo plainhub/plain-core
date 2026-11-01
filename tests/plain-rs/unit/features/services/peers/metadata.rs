@@ -1,14 +1,11 @@
 use super::*;
+use crate::features::chat::enums::DeviceType;
 use crate::features::services::peers::management::Identity;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::chat_store::SaveMode;
+use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use crate::test_runtime::Core as ContentServer;
-use crate::{
-    features::chat::enums::DeviceType,
-    libs::db::{
-        DPeer,
-        chat_store::{SaveMode, peers},
-    },
-};
 use serde_json::json;
 use tokio::sync::watch;
 
@@ -34,7 +31,7 @@ async fn fixture() -> (
         Some(18443),
         DeviceType::Computer,
     );
-    peer.token = crate::libs::utils::base64::base64_encode(&[7; 32]);
+    peer.token = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peer.key = "pairing-key".into();
     peer.public_key = "signature-key".into();
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
@@ -120,7 +117,7 @@ async fn cancellation_credentials_and_address_changes_reject_stale_observations_
     for field in ["token", "ip", "port", "cancel"] {
         let mut old = identity.clone();
         match field {
-            "token" => old.token = crate::libs::utils::base64::base64_encode(&[8; 32]),
+            "token" => old.token = plain_libs::utils::base64::base64_encode(&[8; 32]),
             "ip" => old.ip = "127.0.0.2".into(),
             "port" => old.port = Some(19443),
             _ => {

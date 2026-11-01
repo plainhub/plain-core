@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 pub fn resolve(
-    db: std::sync::Arc<crate::libs::db::Db>,
+    db: std::sync::Arc<crate::infrastructure::db::Db>,
     directory: PathBuf,
     path: &str,
 ) -> anyhow::Result<String> {
@@ -33,7 +33,7 @@ pub fn resolve(
         );
         return Ok(directory.join(suffix).to_string_lossy().into_owned());
     }
-    let path = crate::libs::utils::file_uri::local_path(path).map_err(anyhow::Error::msg)?;
+    let path = plain_libs::utils::file_uri::local_path(path).map_err(anyhow::Error::msg)?;
     if Path::new(&path).is_absolute() || path.contains("://") {
         return Ok(path);
     }

@@ -1,6 +1,6 @@
 use plain_rs::features::discovery::nearby_devices::Device;
 use plain_rs::features::services::discovery::nearby_devices::*;
-use plain_rs::libs::db::chat_store;
+use plain_rs::infrastructure::db::chat_store;
 use serde_json::json;
 
 #[tokio::test]
@@ -12,7 +12,7 @@ async fn rust_sweep_honors_radio_pause_and_real_tls_verdicts() {
     prefs.set("client_id", "local").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -74,7 +74,7 @@ async fn rust_sweep_honors_radio_pause_and_real_tls_verdicts() {
     assert_eq!(state.nearby_devices.snapshot().devices[0].id, "alive");
     assert_eq!(chat_store::nearby::all(&state.db).unwrap().len(), 1);
     assert!(state.nearby_devices.stale(&state.db).unwrap().is_empty());
-    let mut peer = plain_rs::libs::db::DPeer::new(
+    let mut peer = plain_rs::infrastructure::db::DPeer::new(
         "live",
         "old",
         "",

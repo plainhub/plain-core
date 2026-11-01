@@ -1,6 +1,6 @@
 use crate::features::services::peers::peer_transport::Pending;
-use crate::libs::transport::router::Outcome;
-use crate::libs::transport::router::TransportType;
+use crate::infrastructure::transport::router::Outcome;
+use crate::infrastructure::transport::router::TransportType;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use futures_util::StreamExt;
@@ -11,7 +11,7 @@ pub async fn run(
     state: &CoreRuntime,
     task: &crate::features::chat::attachments::download_queue::Snapshot,
     path: &str,
-    attempt: crate::libs::transport::router::Attempt,
+    attempt: crate::infrastructure::transport::router::Attempt,
 ) -> Result<()> {
     let peer = crate::features::services::peers::peer_address::current_identity(
         &state.db,
@@ -135,7 +135,7 @@ pub async fn run(
                     let response = crate::features::services::peers::peer_sdk::ble(
                         state,
                         &peer,
-                        crate::libs::protocols::ble::Request::FileChunk {
+                        crate::infrastructure::protocols::ble::Request::FileChunk {
                             client_id: crate::features::services::peers::peer_sdk::ble_actor(state)
                                 .map_err(|e| anyhow::anyhow!("{e:?}"))?,
                             file_id: file_id.into(),
@@ -145,7 +145,8 @@ pub async fn run(
                     )
                     .await
                     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-                    let (status, chunk) = crate::libs::protocols::ble::decode_response(&response)?;
+                    let (status, chunk) =
+                        crate::infrastructure::protocols::ble::decode_response(&response)?;
                     ensure!(status == 200, "BLE file HTTP failure");
                     ensure!(chunk.len() <= 8192, "Invalid BLE chunk length");
                     write(state, task, &mut file, &mut bytes, &chunk).await?;

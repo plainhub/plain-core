@@ -1,8 +1,8 @@
 use crate::features::services::files::file_task_media::Identity;
-use crate::libs::filesystem::watch_backend::Kind;
-use crate::libs::filesystem::watch_backend::Watcher;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, bail};
+use plain_libs::filesystem::watch_backend::Kind;
+use plain_libs::filesystem::watch_backend::Watcher;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
@@ -135,7 +135,7 @@ async fn roots(state: &CoreRuntime) -> Result<Vec<PathBuf>> {
             roots.push(path);
         }
     }
-    Ok(crate::libs::filesystem::roots::prune_nested(roots, |_| {
+    Ok(plain_libs::filesystem::roots::prune_nested(roots, |_| {
         false
     }))
 }
@@ -570,7 +570,7 @@ impl Catalog {
 }
 
 fn save_identities(
-    store: &crate::libs::kv::Db,
+    store: &plain_libs::kv::Db,
     updates: &[(PathBuf, Known)],
     removed: &[PathBuf],
 ) -> Result<()> {
@@ -607,20 +607,18 @@ async fn missing_path(path: &Path) -> Result<bool> {
 
 async fn file_key(path: &Path) -> Result<Option<String>> {
     let path = path.to_owned();
-    tokio::task::spawn_blocking(
-        move || match crate::libs::utils::file_identity::key(&path) {
-            Ok(key) => Ok(key),
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    std::io::ErrorKind::NotFound | std::io::ErrorKind::Unsupported
-                ) =>
-            {
-                Ok(None)
-            }
-            Err(error) => Err(error.into()),
-        },
-    )
+    tokio::task::spawn_blocking(move || match plain_libs::utils::file_identity::key(&path) {
+        Ok(key) => Ok(key),
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::Unsupported
+            ) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error.into()),
+    })
     .await?
 }
 

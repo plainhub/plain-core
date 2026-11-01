@@ -9,7 +9,7 @@ impl FileTasks {
     pub async fn trash_paths(&self, paths: Vec<String>) -> Result<usize> {
         let _guard = self.deletion_lock.lock().await;
         for path in &paths {
-            crate::libs::filesystem::deletion::validate(std::path::Path::new(path))?;
+            plain_libs::filesystem::deletion::validate(std::path::Path::new(path))?;
         }
         let trash = self.trash_store()?;
         let mut count = 0;

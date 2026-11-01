@@ -105,14 +105,14 @@ async fn saturated_host_receives_latest_sender_snapshot() {
     let server = crate::test_runtime::Core::open(dir.path()).unwrap();
     let state = server.runtime_state();
     let (generation, mut requests) = state.host.connect();
-    for _ in 0..crate::libs::host::bridge::REQUEST_CAPACITY {
+    for _ in 0..crate::infrastructure::host::bridge::REQUEST_CAPACITY {
         state.host.notify("blocked", json!({})).unwrap();
     }
     state.cast.snapshot.lock().unwrap().current_uri = "first".into();
     state.cast.publish(&state);
     state.cast.snapshot.lock().unwrap().current_uri = "latest".into();
     state.cast.publish(&state);
-    for _ in 0..crate::libs::host::bridge::REQUEST_CAPACITY {
+    for _ in 0..crate::infrastructure::host::bridge::REQUEST_CAPACITY {
         let request = requests.recv().await.unwrap();
         state
             .host

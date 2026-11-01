@@ -50,7 +50,7 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
     assert_eq!(after.password.len(), 6);
     assert_eq!(after.adb_token.len(), 32);
     assert_eq!(
-        plain_rs::libs::utils::base64::base64_decode_checked(&after.url_token)
+        plain_libs::utils::base64::base64_decode_checked(&after.url_token)
             .unwrap()
             .len(),
         32
@@ -123,7 +123,7 @@ async fn native_scan_history_preserves_order_and_scoped_deletion() {
 }
 
 fn preference_updates(
-    events: &mut tokio::sync::broadcast::Receiver<plain_rs::libs::events::WsEvent>,
+    events: &mut tokio::sync::broadcast::Receiver<plain_rs::infrastructure::events::WsEvent>,
 ) -> usize {
     std::iter::from_fn(|| events.try_recv().ok())
         .filter(|event| event.event_type == "PREFS_UPDATED")

@@ -4,7 +4,7 @@ mod fixtures;
 
 fn add(db: &Db, playlist: &str, id: &str, album: &str, order: i64) {
     db.cache_platform_audio(
-        &[crate::libs::db::audio_catalog::AudioMedia {
+        &[crate::infrastructure::db::audio_catalog::AudioMedia {
             file_id: Some(id.into()),
             aliases: Vec::new(),
             track: crate::features::media::audio::queue::AudioTrack {

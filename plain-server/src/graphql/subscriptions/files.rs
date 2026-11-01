@@ -7,10 +7,11 @@ use futures_util::{
     StreamExt,
     stream::{self, BoxStream},
 };
+use plain_libs::filesystem::browse::Request;
 use plain_rs::features::prefs::settings::FileSortBy;
-use plain_rs::libs::filesystem::browse::Request;
-use plain_rs::libs::protocols::graphql::events::EventSpec;
-use plain_rs::libs::types::{Instant, Long};
+use plain_rs::infrastructure::protocols::graphql::events::EventSpec;
+use plain_rs::infrastructure::types::Instant;
+use plain_rs::infrastructure::types::Long;
 
 pub(super) const SPEC: EventSpec = EventSpec {
     field: "fileSearchResults",
@@ -84,7 +85,7 @@ impl FileSubscriptions {
 }
 
 fn batches(
-    page: plain_rs::libs::filesystem::browse::Page,
+    page: plain_libs::filesystem::browse::Page,
     complete: bool,
 ) -> std::collections::VecDeque<Result<FileSearchResults>> {
     let mut batches = std::collections::VecDeque::new();

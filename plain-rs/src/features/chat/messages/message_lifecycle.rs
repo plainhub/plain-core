@@ -3,18 +3,18 @@ use crate::features::chat::channels::chat_helper::build_status_data_json;
 use crate::features::chat::channels::chat_helper::compute_status;
 use crate::features::chat::enums::ChannelStatus;
 use crate::features::chat::enums::ChatStatus;
-use crate::libs::db::CHANNEL_COLS;
-use crate::libs::db::CHAT_COLS;
-use crate::libs::db::DChannel;
-use crate::libs::db::DChat;
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
-use crate::libs::db::PEER_COLS;
-use crate::libs::db::chat_store::messages;
-use crate::libs::db::now_iso;
-use crate::libs::db::row_to_channel;
-use crate::libs::db::row_to_chat;
-use crate::libs::db::row_to_peer;
+use crate::infrastructure::db::CHANNEL_COLS;
+use crate::infrastructure::db::CHAT_COLS;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::PEER_COLS;
+use crate::infrastructure::db::chat_store::messages;
+use crate::infrastructure::db::now_iso;
+use crate::infrastructure::db::row_to_channel;
+use crate::infrastructure::db::row_to_chat;
+use crate::infrastructure::db::row_to_peer;
 use anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 use sha2::{Digest, Sha256};
@@ -88,19 +88,19 @@ pub fn receive(
     signature: &str,
     timestamp: i64,
 ) -> Result<Option<Received>> {
-    let raw = crate::libs::utils::base64::base64_decode(signature);
+    let raw = plain_libs::utils::base64::base64_decode(signature);
     let now = crate::features::peers::pairing::now_ms();
     if raw.len() != 64
         || timestamp <= 0
-        || now.abs_diff(timestamp) > crate::libs::transport::auth::TIMESTAMP_WINDOW_MS
+        || now.abs_diff(timestamp) > crate::infrastructure::transport::auth::TIMESTAMP_WINDOW_MS
     {
         bail!("Invalid message receipt");
     }
     let receipt =
-        crate::libs::utils::base64::base64_encode(&Sha256::digest(serde_json::to_vec(&(
+        plain_libs::utils::base64::base64_encode(&Sha256::digest(serde_json::to_vec(&(
             from_id,
             channel_id,
-            crate::libs::utils::base64::base64_encode(&raw),
+            plain_libs::utils::base64::base64_encode(&raw),
             timestamp,
         ))?));
     db.with_conn(|c|->Result<Option<Received>>{
@@ -116,8 +116,8 @@ pub fn receive(
             Some(channel)
         };
         messages::validate_content(content)?;
-        tx.execute("DELETE FROM chat_receipts WHERE sent_at<?1",[crate::libs::db::iso_from_unix_millis(now.saturating_sub(crate::libs::transport::auth::TIMESTAMP_WINDOW_MS as i64))])?;
-        if tx.execute("INSERT INTO chat_receipts(receipt_id,peer_id,sent_at) VALUES(?1,?2,?3) ON CONFLICT(receipt_id) DO NOTHING",params![receipt,from_id,crate::libs::db::iso_from_unix_millis(timestamp)])?==0 {tx.commit()?;
+        tx.execute("DELETE FROM chat_receipts WHERE sent_at<?1",[crate::infrastructure::db::iso_from_unix_millis(now.saturating_sub(crate::infrastructure::transport::auth::TIMESTAMP_WINDOW_MS as i64))])?;
+        if tx.execute("INSERT INTO chat_receipts(receipt_id,peer_id,sent_at) VALUES(?1,?2,?3) ON CONFLICT(receipt_id) DO NOTHING",params![receipt,from_id,crate::infrastructure::db::iso_from_unix_millis(timestamp)])?==0 {tx.commit()?;
             return Ok(None);}
         let chat=DChat::new(from_id,if channel_id.is_empty(){"me"}else{""},channel_id,content);
         tx.execute("INSERT INTO chats(id,from_id,to_id,channel_id,content,status,status_data,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",params![chat.id,chat.from_id,chat.to_id,chat.channel_id.as_deref().filter(|value|!value.is_empty()),chat.content,chat.status,chat.status_data.as_deref().filter(|value|!value.is_empty()),chat.created_at,chat.updated_at])?;

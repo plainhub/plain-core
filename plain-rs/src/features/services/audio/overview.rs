@@ -1,12 +1,10 @@
+use crate::features::enums::DataType;
+use crate::features::media::audio::overview;
+use crate::features::media::audio::overview::Accumulator;
+use crate::features::media::audio::overview::Overview;
 use crate::features::prefs::settings::FileSortBy;
 use crate::features::services::files::catalog::MediaCatalog;
-use crate::{
-    features::{
-        enums::DataType,
-        media::audio::overview::{self, Accumulator, Overview},
-    },
-    libs::db::Db,
-};
+use crate::infrastructure::db::Db;
 use serde_json::Value;
 use std::sync::Arc;
 

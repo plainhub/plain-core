@@ -1,9 +1,9 @@
 use super::audio_moves;
 use crate::features::enums::DataType;
 use crate::features::media::audio::queue as audio_queue;
-use crate::libs::db::Db;
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;

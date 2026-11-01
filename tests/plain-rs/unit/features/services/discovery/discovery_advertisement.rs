@@ -12,7 +12,7 @@ fn core_with_host(directory: &std::path::Path) -> (crate::test_runtime::Core, Co
     prefs.set("client_id", "fixture-root").unwrap();
     let core = crate::test_runtime::Core::start_core(
         &directory,
-        &crate::libs::utils::base64::base64_encode(&[9; 32]),
+        &plain_libs::utils::base64::base64_encode(&[9; 32]),
         prefs,
     )
     .unwrap();

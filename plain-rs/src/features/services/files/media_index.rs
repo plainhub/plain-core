@@ -1,4 +1,5 @@
-use crate::{features::enums::DataType, libs::db::MediaFileMetadataRead};
+use crate::features::enums::DataType;
+use crate::infrastructure::db::MediaFileMetadataRead;
 use std::{fs::File, io::BufReader, path::Path};
 
 pub struct FileReads {
@@ -83,7 +84,10 @@ pub fn read_files(
     Ok(files)
 }
 
-pub fn record_generic(db: &crate::libs::db::Db, paths: &[String]) -> Result<Vec<i32>, String> {
+pub fn record_generic(
+    db: &crate::infrastructure::db::Db,
+    paths: &[String],
+) -> Result<Vec<i32>, String> {
     if paths.is_empty() {
         return Ok(Vec::new());
     }
@@ -94,7 +98,7 @@ pub fn record_generic(db: &crate::libs::db::Db, paths: &[String]) -> Result<Vec<
             .collect::<rusqlite::Result<Vec<_>>>()
     }).map_err(|error| error.to_string())?;
     let rows = db
-        .record_file_paths(paths, Some(crate::libs::db::FileKind::File))
+        .record_file_paths(paths, Some(crate::infrastructure::db::FileKind::File))
         .map_err(|error| error.to_string())?;
     types.extend(rows.into_iter().map(|row| row.kind.data_type().kind()));
     Ok(types)

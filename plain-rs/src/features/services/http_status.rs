@@ -1,4 +1,4 @@
-use crate::libs::types::Long;
+use crate::infrastructure::types::Long;
 use crate::runtime::Runtime as CoreRuntime;
 use std::sync::Mutex;
 
@@ -125,7 +125,10 @@ impl Runtime {
         }
     }
 
-    pub fn notify_snapshot(&self, host: &crate::libs::host::bridge::Host) -> Result<(), String> {
+    pub fn notify_snapshot(
+        &self,
+        host: &crate::infrastructure::host::bridge::Host,
+    ) -> Result<(), String> {
         let _delivery = self.host_delivery.lock().unwrap();
         host.notify(
             "httpServerStatusChanged",

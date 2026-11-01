@@ -1,4 +1,4 @@
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::path::Path;
 
@@ -24,13 +24,13 @@ pub async fn read(
                 .await;
         }
         return Ok(Value::String(
-            crate::libs::utils::mime::mime_from_ext(path).into(),
+            plain_libs::utils::mime::mime_from_ext(path).into(),
         ));
     }
     if operation == "probe" {
         let input = path.to_owned();
         let tracks = tokio::task::spawn_blocking(move || {
-            crate::libs::media::isobmff::tracks(Path::new(&input))
+            plain_libs::media::isobmff::tracks(Path::new(&input))
         })
         .await
         .map_err(|error| error.to_string())?;
@@ -45,7 +45,7 @@ pub async fn read(
     if operation == "animated" {
         let path = path.to_owned();
         return tokio::task::spawn_blocking(move || {
-            crate::libs::filesystem::image_format::is_animated_image_or_svg(Path::new(&path))
+            plain_libs::filesystem::image_format::is_animated_image_or_svg(Path::new(&path))
         })
         .await
         .map(Value::Bool)
@@ -81,7 +81,7 @@ pub async fn write(host: &Host, source: &Path, destination: &str) -> Result<(), 
 async fn native(operation: &str, path: &str, params: Value) -> Result<Value, String> {
     match operation {
         "decodePng" => {
-            let mime = crate::libs::utils::mime::mime_from_ext(path);
+            let mime = plain_libs::utils::mime::mime_from_ext(path);
             if !mime.starts_with("image/")
                 || matches!(
                     mime,

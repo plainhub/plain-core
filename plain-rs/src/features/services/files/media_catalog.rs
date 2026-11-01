@@ -1,7 +1,8 @@
 use crate::features::enums::DataType;
 use crate::features::prefs::settings::FileSortBy;
 use crate::features::services::files::provider_query::{self as query, Provider};
-use crate::libs::db::{Db, MediaFileRow};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::MediaFileRow;
 use anyhow::Result;
 use rusqlite::{params_from_iter, types::Value};
 
@@ -37,7 +38,7 @@ fn selection_with_trash(
     )?;
     if data_type == DataType::Doc {
         for field in fields.iter().filter(|field| field.name == "text") {
-            let (predicate, args) = crate::libs::db::files::name_filter(&field.value);
+            let (predicate, args) = crate::infrastructure::db::files::name_filter(&field.value);
             plan.clauses.push(predicate);
             plan.args.extend(args);
         }
@@ -141,14 +142,14 @@ fn selected_rows(
     ]);
     let sql = format!(
         "{} ORDER BY {order} LIMIT ? OFFSET ?",
-        sql.replace("{columns}", crate::libs::db::media_file::COLUMNS)
+        sql.replace("{columns}", crate::infrastructure::db::media_file::COLUMNS)
     );
     Ok(db.with_conn(|conn| {
         let mut statement = conn.prepare(&sql)?;
         statement
             .query_map(
                 params_from_iter(args.iter()),
-                crate::libs::db::media_file::from_row,
+                crate::infrastructure::db::media_file::from_row,
             )?
             .collect::<rusqlite::Result<Vec<_>>>()
     })?)

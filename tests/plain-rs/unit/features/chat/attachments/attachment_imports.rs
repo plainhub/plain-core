@@ -2,10 +2,10 @@ use super::*;
 fn fixture() -> (PathBuf, Db, Imports) {
     let dir = std::env::temp_dir().join(format!(
         "plain-attachment-test-{}",
-        crate::libs::utils::short_uuid::short_uuid()
+        plain_libs::utils::short_uuid::short_uuid()
     ));
     let db = Db::open(&dir.join("plain.db")).unwrap();
-    let mut chat = crate::libs::db::DChat::new(
+    let mut chat = crate::infrastructure::db::DChat::new(
         "me",
         "peer",
         "",
@@ -74,7 +74,7 @@ fn sql_failure_rolls_back_message_and_new_physical_file() {
         0
     );
     use sha2::{Digest, Sha256};
-    let hash = crate::libs::utils::hex::bytes_to_hex(&Sha256::digest(b"abc"));
+    let hash = plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(b"abc"));
     assert!(!app_file_store::dest_path(&dir, &hash, "txt").exists());
     assert!(!Path::new(&a.path).exists());
     fs::remove_dir_all(dir).unwrap();

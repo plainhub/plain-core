@@ -8,7 +8,7 @@ use crate::http::auth::public_gate;
 use async_graphql::{Context, Object};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::notifications::types::Notification;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -95,8 +95,8 @@ impl NotificationsMutation {
         }
         if !cancelled.is_empty() {
             let _ = ctx
-                .data_unchecked::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
-                .send(plain_rs::libs::events::WsEvent::broadcast(
+                .data_unchecked::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()
+                .send(plain_rs::infrastructure::events::WsEvent::broadcast(
                     "NOTIFICATION_REFRESHED",
                     "{}".into(),
                 ));
@@ -189,7 +189,7 @@ pub(crate) struct EventFacts {
 }
 pub(crate) fn publish(
     prefs: &plain_rs::features::prefs::Prefs,
-    events: &tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>,
+    events: &tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>,
     facts: EventFacts,
 ) -> Result<(), String> {
     let kind = match facts.event_type.as_str() {
@@ -212,7 +212,9 @@ pub(crate) fn publish(
     }
     let payload = serde_json::to_string(&notification(&facts.notification))
         .map_err(|error| error.to_string())?;
-    let _ = events.send(plain_rs::libs::events::WsEvent::broadcast(kind, payload));
+    let _ = events.send(plain_rs::infrastructure::events::WsEvent::broadcast(
+        kind, payload,
+    ));
     if kind != "NOTIFICATION_DELETED" {
         plain_rs::features::services::sms::provider_events::notification_changed(
             events,

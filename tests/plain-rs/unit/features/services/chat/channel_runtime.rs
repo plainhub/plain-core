@@ -1,23 +1,23 @@
 use super::*;
-use crate::libs::db::chat_store::channels;
+use crate::infrastructure::db::chat_store::channels;
 
 fn fixture() -> (tempfile::TempDir, crate::test_runtime::Core) {
     use std::sync::Arc;
     let dir = tempfile::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    let (key, _public) = crate::libs::crypto::ed25519_generate();
+    let (key, _public) = plain_libs::crypto::ed25519_generate();
     prefs.set("device_name", "Actual tablet").unwrap();
     prefs.set("client_id", "actor").unwrap();
     prefs
         .set(
             "signature_key_pair",
-            crate::libs::utils::base64::base64_encode(&key),
+            plain_libs::utils::base64::base64_encode(&key),
         )
         .unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
-        &crate::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();

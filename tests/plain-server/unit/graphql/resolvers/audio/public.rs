@@ -2,8 +2,8 @@ use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::media::play_history;
 use plain_rs::features::prefs::Prefs;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -445,7 +445,7 @@ async fn clearing_empties_the_queue_and_tells_the_player() {
     seed_queue(&schema, &[("/music/one.mp3", "One", "Artist")]);
     seed_queue(&schema, &[("/music/a.mp3", "Alpha", "One")]);
     let mut events = schema
-        .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
+        .data::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()
         .unwrap()
         .subscribe();
     let cleared = query(&schema, r#"mutation { clearAudioQueue }"#).await;
@@ -684,7 +684,7 @@ async fn a_library_row_keeps_the_album_art_reference() {
         _other => panic!("unexpected host call {_other}"),
     });
     database(&schema)
-        .record_media_files(&[plain_rs::libs::db::MediaFileMetadata {
+        .record_media_files(&[plain_rs::infrastructure::db::MediaFileMetadata {
             album: String::new(),
             album_artist: String::new(),
 
@@ -711,7 +711,7 @@ async fn a_library_row_keeps_the_album_art_reference() {
         .unwrap()
         .set(
             plain_rs::features::prefs::pref_keys::URL_TOKEN,
-            plain_rs::libs::utils::base64::base64_encode(&key),
+            plain_libs::utils::base64::base64_encode(&key),
         )
         .unwrap();
     let document = r#"query { audios(offset: 0, limit: 10, query: "", sortBy: NAME_ASC) {
@@ -798,7 +798,7 @@ async fn adding_tracks_reads_every_search_page_without_an_item_limit() {
         other => panic!("unexpected host call {other}"),
     });
     let rows: Vec<_> = (0..1205)
-        .map(|i| plain_rs::libs::db::MediaFileMetadata {
+        .map(|i| plain_rs::infrastructure::db::MediaFileMetadata {
             album: String::new(),
             album_artist: String::new(),
 
@@ -977,7 +977,7 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token(
         "query Art { audio { ...Cover } } fragment Cover on Audio { cover: albumFileId }";
     let mut previous: Option<[u8; 32]> = None;
     for key in [[3u8; 32], [5u8; 32]] {
-        let token = plain_rs::libs::utils::base64::base64_encode(&key);
+        let token = plain_libs::utils::base64::base64_encode(&key);
         prefs
             .set(plain_rs::features::prefs::pref_keys::URL_TOKEN, &token)
             .unwrap();
@@ -1104,7 +1104,7 @@ async fn playlist_covers_use_the_shared_catalog_without_platform_requests() {
     let db = database(&schema);
     db.use_platform_audio_catalog().unwrap();
     db.cache_platform_audio(
-        &[plain_rs::libs::db::audio_catalog::AudioMedia {
+        &[plain_rs::infrastructure::db::audio_catalog::AudioMedia {
             file_id: Some("track".into()),
             aliases: Vec::new(),
             track: AudioTrack {
@@ -1225,7 +1225,7 @@ async fn overview_projects_the_authoritative_catalog_without_sdk_metadata_calls(
     let db = database(&schema);
     let rows = db
         .record_media_files(&[
-            plain_rs::libs::db::MediaFileMetadata {
+            plain_rs::infrastructure::db::MediaFileMetadata {
                 data_type: plain_rs::features::enums::DataType::Audio,
                 path: "/one.mp3".into(),
                 title: "One".into(),
@@ -1243,7 +1243,7 @@ async fn overview_projects_the_authoritative_catalog_without_sdk_metadata_calls(
                 created_at: "2026-01-01T00:00:00Z".into(),
                 updated_at: "2026-01-01T00:00:00Z".into(),
             },
-            plain_rs::libs::db::MediaFileMetadata {
+            plain_rs::infrastructure::db::MediaFileMetadata {
                 data_type: plain_rs::features::enums::DataType::Audio,
                 path: "/two.mp3".into(),
                 title: "Two".into(),
@@ -1352,7 +1352,7 @@ async fn browser_history_writes_do_not_change_the_current_player_or_control_the_
         plain_rs::features::media::audio::playback::snapshot(database(&schema)).unwrap();
     let db = database(&schema);
     let mut events = schema
-        .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
+        .data::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()
         .unwrap()
         .subscribe();
     for (method, position) in [
@@ -1486,7 +1486,7 @@ async fn replace_queue_uses_the_requested_sort_instead_of_target_preferences() {
         .unwrap()
         .set("audio_sort_by", "NAME_ASC")
         .unwrap();
-    let files = ["Alpha", "Zulu"].map(|title| plain_rs::libs::db::MediaFileMetadata {
+    let files = ["Alpha", "Zulu"].map(|title| plain_rs::infrastructure::db::MediaFileMetadata {
         data_type: plain_rs::features::enums::DataType::Audio,
         path: format!("/sorted/{title}.mp3"),
         title: title.into(),

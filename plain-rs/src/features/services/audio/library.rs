@@ -1,8 +1,9 @@
 use crate::features::media::audio::queue::AudioTrack;
-use crate::libs::db::{Db, audio_catalog::AudioMedia};
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::audio_catalog::AudioMedia;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
+use crate::infrastructure::host::bridge::Host;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -11,14 +12,14 @@ pub struct HostLibrary {
     host: Arc<Host>,
     db: Arc<Db>,
     runtime: tokio::runtime::Handle,
-    resources: Arc<crate::libs::host::resources::NativeResources>,
+    resources: Arc<crate::infrastructure::host::resources::NativeResources>,
     cache: std::path::PathBuf,
 }
 impl HostLibrary {
     pub fn new(
         host: Arc<Host>,
         db: Arc<Db>,
-        resources: Arc<crate::libs::host::resources::NativeResources>,
+        resources: Arc<crate::infrastructure::host::resources::NativeResources>,
         cache: std::path::PathBuf,
     ) -> Self {
         Self {

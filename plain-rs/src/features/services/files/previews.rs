@@ -73,7 +73,7 @@ async fn convert_3gp(
         crate::features::services::files::browser::encode_android_file(
             input,
             output.to_owned(),
-            crate::libs::platform::android::media::Operation::Convert3gp,
+            crate::infrastructure::platform::android::media::Operation::Convert3gp,
             state.stop.clone(),
         )
         .await

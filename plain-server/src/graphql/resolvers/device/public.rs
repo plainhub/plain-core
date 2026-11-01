@@ -4,8 +4,8 @@ use crate::graphql::types::facts::flag;
 use async_graphql::{ComplexObject, Context, Object, SimpleObject};
 use plain_rs::features::services::device::permission::Permission;
 use plain_rs::features::services::device::types::*;
-use plain_rs::libs::host::bridge::Host;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::host::bridge::Host;
+use plain_rs::infrastructure::types::Long;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -297,7 +297,7 @@ impl DeviceMutation {
         key: String,
         value: String,
     ) -> async_graphql::Result<KeyValuePair> {
-        ctx.data::<plain_rs::libs::temp_values::TempValues>()?
+        ctx.data::<plain_rs::infrastructure::temp_values::TempValues>()?
             .set(key.clone(), value.clone());
         Ok(KeyValuePair { key, value })
     }
@@ -355,7 +355,7 @@ impl DeviceMutation {
 /// The `text` field of the search DSL, which is what the log view filters
 /// on. A query with other fields but no `text` still filters on nothing.
 fn text_of(query: &str) -> String {
-    plain_rs::libs::utils::search_dsl::parse(query)
+    plain_libs::utils::search_dsl::parse(query)
         .into_iter()
         .find(|field| field.name == "text")
         .map(|field| field.value)

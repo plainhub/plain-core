@@ -4,7 +4,7 @@ use std::{io::Read, path::PathBuf};
 async fn native_main_uses_the_shared_default_path_without_host_requests() {
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
-    let path = plain_rs::libs::data_paths::DataPaths::new(directory.path()).log_file();
+    let path = plain_rs::infrastructure::data_paths::DataPaths::new(directory.path()).log_file();
     assert_eq!(core.log_file().unwrap(), path);
     let contents = b"INFO previous\nERROR current\n";
     std::fs::write(&path, contents).unwrap();
@@ -70,7 +70,7 @@ async fn main_log_export_and_clear_cover_app_and_rust_log_families() {
     std::fs::write(&backup, b"rotated bytes").unwrap();
     std::fs::write(&unrelated, b"not a log").unwrap();
     let rust_path =
-        plain_rs::libs::data_paths::DataPaths::new(core.data_directory()).rust_log_file();
+        plain_rs::infrastructure::data_paths::DataPaths::new(core.data_directory()).rust_log_file();
     std::fs::write(&rust_path, b"rust current").unwrap();
     std::fs::write(rust_path.with_extension("log.bak"), b"rust rotated").unwrap();
     core.set_log_file(&path).unwrap();

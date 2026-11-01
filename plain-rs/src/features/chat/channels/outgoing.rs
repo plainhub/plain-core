@@ -3,11 +3,11 @@ use crate::features::chat::channels::messages::*;
 use crate::features::chat::enums::ChannelSystemMessageAction as Action;
 use crate::features::chat::enums::ChannelSystemMessageType as Type;
 use crate::features::chat::enums::DeviceType;
-use crate::libs::crypto::ed25519_sign;
-use crate::libs::db::DChannel;
-use crate::libs::db::Db;
-use crate::libs::utils::base64::base64_encode;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::Db;
 use anyhow::{Result, bail};
+use plain_libs::crypto::ed25519_sign;
+use plain_libs::utils::base64::base64_encode;
 
 pub fn build(
     db: Option<&Db>,
@@ -25,7 +25,7 @@ pub fn build(
     let signature = |action, target| -> Result<String> {
         let payload = channel_message_payload(&channel.id, channel.version, action, target);
         let sig = ed25519_sign(keypair, payload.as_bytes());
-        if !crate::libs::crypto::ed25519_verify(
+        if !plain_libs::crypto::ed25519_verify(
             &base64_encode(&keypair[32..]),
             payload.as_bytes(),
             &sig,

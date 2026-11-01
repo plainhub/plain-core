@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
-use plain_rs::libs::db::Db;
+use plain_rs::infrastructure::db::Db;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -50,12 +50,12 @@ fn fixture(
     prefs.set("developer_mode", true).unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(
-        Host::with_startup_config(plain_rs::libs::host::startup::StartupConfig {
+        Host::with_startup_config(plain_rs::infrastructure::host::startup::StartupConfig {
             device_type: plain_rs::features::chat::enums::DeviceType::Phone,
             build_channel: "GITHUB".into(),
             downloads_dir: "/downloads".into(),
             debug: false,
-            ..plain_rs::libs::platform::startup::config()
+            ..plain_rs::infrastructure::platform::startup::config()
         })
         .unwrap(),
     );
@@ -334,7 +334,7 @@ async fn discovery_commands_use_the_shared_runtime_and_platform_multicast_lease(
     prefs.set("client_id", "discovery-test").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[4; 32]),
+        &plain_libs::utils::base64::base64_encode(&[4; 32]),
         prefs,
     )
     .unwrap();

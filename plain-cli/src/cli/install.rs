@@ -2,7 +2,7 @@ use anyhow::Result;
 
 #[cfg(target_os = "linux")]
 pub fn run(with_libreoffice: bool) -> Result<()> {
-    plain_rs::libs::platform::linux::install::service::install(with_libreoffice)?;
+    plain_rs::infrastructure::platform::linux::install::service::install(with_libreoffice)?;
     println!("plainapp install: done");
     Ok(())
 }

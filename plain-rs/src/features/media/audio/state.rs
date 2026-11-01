@@ -1,6 +1,7 @@
 use super::playback::Playback;
-use crate::libs::db::Db;
-use crate::libs::error::{DomainError, DomainResult};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 use std::sync::Mutex;
 
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -108,7 +109,7 @@ impl Runtime {
             let transaction = connection.unchecked_transaction()?;
             let result = operation(&transaction, &mut next)?;
             if next.current_file_id != state.current_file_id {
-                crate::libs::kv::set_in_connection(
+                plain_libs::kv::set_in_connection(
                     &transaction,
                     self.key,
                     next.current_file_id.as_deref(),

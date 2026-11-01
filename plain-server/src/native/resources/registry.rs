@@ -1,7 +1,7 @@
 use super::{
     MAX_RESOURCE_READ_BYTES, MAX_RESOURCE_RESPONSE_BYTES, NativeFileResources, ResourceInfo,
 };
-use plain_rs::libs::host::request_scope::NativeRequestScope;
+use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 use std::{
     collections::HashMap,
     path::Path,

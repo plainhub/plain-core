@@ -34,12 +34,12 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::libs::utils::hex::bytes_to_hex;
-use crate::libs::utils::mime::mime_extension;
+use plain_libs::utils::hex::bytes_to_hex;
+use plain_libs::utils::mime::mime_extension;
 
-use crate::libs::db::DAppFile;
-use crate::libs::db::DChat;
-use crate::libs::db::Db;
+use crate::infrastructure::db::DAppFile;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::Db;
 
 /// Default MIME type when the client did not supply one.
 const DEFAULT_MIME: &str = "application/octet-stream";
@@ -181,7 +181,7 @@ pub fn import_file(
     file_name: &str,
     mime_type: &str,
 ) -> std::io::Result<ImportResult> {
-    let guessed_mime = crate::libs::utils::mime::mime_from_ext(if file_name.is_empty() {
+    let guessed_mime = plain_libs::utils::mime::mime_from_ext(if file_name.is_empty() {
         src.to_str().unwrap_or_default()
     } else {
         file_name
@@ -266,7 +266,7 @@ fn store(
     if !path.is_file() {
         let temporary = path.with_file_name(format!(
             ".import-{}",
-            crate::libs::utils::short_uuid::short_uuid()
+            plain_libs::utils::short_uuid::short_uuid()
         ));
         let result = write(&temporary).and_then(|_| {
             fs::File::open(&temporary)?.sync_all()?;
@@ -287,8 +287,8 @@ fn store(
             real_path: relative,
             ref_count: 1,
             weak_hash: weak.into(),
-            created_at: crate::libs::db::now_iso(),
-            updated_at: crate::libs::db::now_iso(),
+            created_at: crate::infrastructure::db::now_iso(),
+            updated_at: crate::infrastructure::db::now_iso(),
         },
         existing.is_some(),
         &fid_suffix_of(&path, strong),
@@ -351,7 +351,7 @@ pub fn release(db: &Db, directory: &Path, id: &str) -> std::io::Result<bool> {
     let path = owned_path(directory, &file.real_path)?;
     let quarantine = path.with_file_name(format!(
         ".release-{}",
-        crate::libs::utils::short_uuid::short_uuid()
+        plain_libs::utils::short_uuid::short_uuid()
     ));
     let moved = file.ref_count <= 1 && path.exists();
     if moved {
@@ -362,7 +362,7 @@ pub fn release(db: &Db, directory: &Path, id: &str) -> std::io::Result<bool> {
         if file.ref_count > 1 {
             tx.execute(
                 "UPDATE app_files SET ref_count=ref_count-1,updated_at=?1 WHERE id=?2",
-                rusqlite::params![crate::libs::db::now_iso(), id],
+                rusqlite::params![crate::infrastructure::db::now_iso(), id],
             )?;
         } else {
             tx.execute("DELETE FROM app_files WHERE id=?1", rusqlite::params![id])?;
@@ -498,7 +498,7 @@ pub fn import_attachment(
         &weak,
         size,
         file_name,
-        crate::libs::utils::mime::mime_from_ext(file_name),
+        plain_libs::utils::mime::mime_from_ext(file_name),
         Some(attachment_commit::Selection::Attachment {
             message_id,
             id,

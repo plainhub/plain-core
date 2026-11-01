@@ -1,12 +1,12 @@
 #[cfg(any(target_os = "ios", all(test, target_os = "macos")))]
-use crate::libs::platform::apple_device;
+use plain_libs::platform::apple_device;
 pub mod info;
 pub mod permissions;
 
 use crate::features::services::device::types::{DeviceStatus, Temperature};
 
-use crate::libs::host::bridge::Host;
-use crate::libs::types::Long;
+use crate::infrastructure::host::bridge::Host;
+use crate::infrastructure::types::Long;
 use serde::Deserialize;
 use std::{sync::Arc, time::Instant};
 use tokio::sync::Mutex;
@@ -176,7 +176,7 @@ fn direct(selection: Selection, directory: &std::path::Path) -> Result<DeviceSta
     };
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     if selection.battery {
-        (status.battery_level, status.charging) = crate::libs::platform::battery::read();
+        (status.battery_level, status.charging) = plain_libs::platform::battery::read();
     }
     #[cfg(not(target_os = "ios"))]
     if selection.memory {
@@ -189,7 +189,7 @@ fn direct(selection: Selection, directory: &std::path::Path) -> Result<DeviceSta
     }
     #[cfg(target_os = "linux")]
     if selection.temperatures {
-        status.temperatures = crate::libs::platform::linux::device_info::thermal_zones(
+        status.temperatures = crate::infrastructure::platform::linux::device_info::thermal_zones(
             std::path::Path::new("/sys/class/thermal"),
         )
         .into_iter()

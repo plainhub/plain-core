@@ -1,8 +1,9 @@
+use crate::features::enums::DataType;
 use crate::features::prefs::settings::FileSortBy;
 use crate::features::services::files::media_catalog;
 use crate::features::services::files::media_catalog_facts;
-use crate::libs::host::bridge::Host;
-use crate::{features::enums::DataType, libs::db::Db};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 

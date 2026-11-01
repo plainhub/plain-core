@@ -21,17 +21,17 @@ fn fixture(id: &str) -> (tempfile::TempDir, crate::test_runtime::Core) {
     let dir = tempfile::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    let (key, _public) = crate::libs::crypto::ed25519_generate();
+    let (key, _public) = plain_libs::crypto::ed25519_generate();
     prefs.set("client_id", id).unwrap();
     prefs
         .set(
             "signature_key_pair",
-            crate::libs::utils::base64::base64_encode(&key),
+            plain_libs::utils::base64::base64_encode(&key),
         )
         .unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
-        &crate::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -95,7 +95,7 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
         );
     }
     assert!(
-        crate::libs::db::chat_store::peers::all(&state.db)
+        crate::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
             .is_empty()
     );

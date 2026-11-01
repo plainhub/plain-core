@@ -2,8 +2,8 @@ use crate::features::chat::events::ChatEvent;
 use crate::features::chat::events::WS_MESSAGE_UPDATED;
 use crate::features::chat::manager::chat_to_json;
 use crate::features::chat::service::ChatService;
-use crate::libs::db::DChat;
-use crate::libs::transport::contract::PeerTransport;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::transport::contract::PeerTransport;
 use serde_json::json;
 
 impl<T: PeerTransport + 'static> ChatService<T> {
@@ -23,7 +23,7 @@ impl<T: PeerTransport + 'static> ChatService<T> {
                 .send(
                     &transport,
                     &identity.client_id,
-                    &crate::libs::utils::base64::base64_decode(&identity.ed25519_keypair),
+                    &plain_libs::utils::base64::base64_decode(&identity.ed25519_keypair),
                     &token,
                     &id,
                     None,

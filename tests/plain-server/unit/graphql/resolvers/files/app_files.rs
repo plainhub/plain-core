@@ -5,7 +5,7 @@ use std::sync::Arc;
 #[tokio::test]
 async fn file_import_dedupe_release_and_restart_use_core_storage() {
     let dir = tempfile::tempdir().unwrap();
-    let token = plain_rs::libs::utils::base64::base64_encode(&[14; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[14; 32]);
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs
@@ -51,7 +51,7 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
     let url_token = plain_rs::features::prefs::ensure_url_token(&prefs);
     let encoded = plain_rs::features::files::resource_link::seal(
         &plain_rs::features::files::resource_link::Scope::Global,
-        &plain_rs::libs::utils::base64::base64_decode(&url_token),
+        &plain_libs::utils::base64::base64_decode(&url_token),
         &plain_rs::features::files::resource_link::Resource {
             r#type: plain_rs::features::files::resource_link::ResourceType::AppFile,
             id: id.to_owned(),

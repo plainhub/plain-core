@@ -7,10 +7,10 @@
 
 use crate::features::prefs::Prefs;
 
-use crate::libs::crypto::ed25519_generate;
-use crate::libs::crypto::gen_token;
-use crate::libs::utils::base64::base64_encode;
-use crate::libs::utils::short_uuid;
+use plain_libs::crypto::ed25519_generate;
+use plain_libs::crypto::gen_token;
+use plain_libs::utils::base64::base64_encode;
+use plain_libs::utils::short_uuid;
 
 /// Persistent device identity loaded from the preferences store.
 #[derive(Clone, Debug)]
@@ -25,7 +25,7 @@ pub struct AppIdentity {
 /// the OS hostname (`.local`/trailing dot stripped), falling back to
 /// `Plain-<short uuid>` when the hostname is empty.
 pub fn default_device_name() -> String {
-    let host = crate::libs::utils::hostname::get();
+    let host = plain_libs::utils::hostname::get();
     let trimmed = host.trim().trim_end_matches('.').trim_end_matches(".local");
     if trimmed.is_empty() {
         format!("Plain-{}", short_uuid::short_uuid())

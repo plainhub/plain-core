@@ -1,5 +1,5 @@
 use crate::features::files::app_files::FileStore;
-use crate::libs::events::WsEvent;
+use crate::infrastructure::events::WsEvent;
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
@@ -275,7 +275,7 @@ pub async fn merge(
             let selected = if replace {
                 path.clone()
             } else {
-                crate::libs::utils::unique_path::unique_sibling(&path)?
+                plain_libs::utils::unique_path::unique_sibling(&path)?
             };
             let staging =
                 Temp(path.with_file_name(format!(".merge_destination_{}", uuid::Uuid::new_v4())));
@@ -309,10 +309,10 @@ fn commit_file(
         return Ok(destination);
     }
     loop {
-        match crate::libs::filesystem::rename::no_replace(staged, &destination) {
+        match plain_libs::filesystem::rename::no_replace(staged, &destination) {
             Ok(()) => return Ok(destination),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                destination = crate::libs::utils::unique_path::unique_sibling(original)?;
+                destination = plain_libs::utils::unique_path::unique_sibling(original)?;
             }
             Err(error) => return Err(error),
         }

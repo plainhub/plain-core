@@ -17,7 +17,7 @@ pub async fn fetch_page_metadata(url: &str) -> Result<PageMetadata> {
 }
 
 fn parse_page_metadata(html: &str, base: &str) -> PageMetadata {
-    let dom = crate::libs::utils::html_to_markdown::dom::Dom::parse(html);
+    let dom = plain_libs::utils::html_to_markdown::dom::Dom::parse(html);
     let title = dom
         .0
         .iter()

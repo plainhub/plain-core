@@ -1,10 +1,10 @@
 use super::*;
 use crate::features::chat::enums::ChannelSystemMessageAction;
 use crate::features::chat::enums::DeviceType;
-use crate::libs::crypto::ed25519_generate;
-use crate::libs::crypto::ed25519_sign;
-use crate::libs::crypto::ed25519_verify;
-use crate::libs::utils::base64::base64_encode;
+use plain_libs::crypto::ed25519_generate;
+use plain_libs::crypto::ed25519_sign;
+use plain_libs::crypto::ed25519_verify;
+use plain_libs::utils::base64::base64_encode;
 
 /// Verify the canonical payload format matches plain-app's
 /// `channelMessagePayload`: `"$channelId|$version|$action|$target"`.

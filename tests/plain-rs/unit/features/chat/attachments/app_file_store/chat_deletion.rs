@@ -1,14 +1,14 @@
 use super::*;
 use crate::features::chat::attachments::app_file_store::import_bytes;
-use crate::libs::db::DChat;
-use crate::libs::db::chat_store::SaveMode;
-use crate::libs::db::chat_store::messages;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::chat_store::SaveMode;
+use crate::infrastructure::db::chat_store::messages;
 
 #[test]
 fn deletion_releases_exact_references_and_preserves_other_conversations() {
     let root = std::env::temp_dir().join(format!(
         "plain-chat-delete-{}",
-        crate::libs::utils::short_uuid::short_uuid()
+        plain_libs::utils::short_uuid::short_uuid()
     ));
     fs::create_dir_all(&root).unwrap();
     let db = Db::open(&root.join("plain.db")).unwrap();
@@ -44,7 +44,7 @@ fn deletion_releases_exact_references_and_preserves_other_conversations() {
 fn failed_sql_restores_attachment_and_message_then_retry_deletes_once() {
     let root = std::env::temp_dir().join(format!(
         "plain-chat-rollback-{}",
-        crate::libs::utils::short_uuid::short_uuid()
+        plain_libs::utils::short_uuid::short_uuid()
     ));
     fs::create_dir_all(&root).unwrap();
     let db = Db::open(&root.join("plain.db")).unwrap();
@@ -77,13 +77,13 @@ fn failed_sql_restores_attachment_and_message_then_retry_deletes_once() {
 fn entity_removal_is_atomic_retains_channel_peer_and_returns_removed_channel_snapshot() {
     use crate::features::chat::enums::DeviceType;
     use crate::features::chat::enums::PeerStatus;
-    use crate::libs::db::DChannel;
-    use crate::libs::db::DPeer;
-    use crate::libs::db::chat_store::channels;
-    use crate::libs::db::chat_store::peers;
+    use crate::infrastructure::db::DChannel;
+    use crate::infrastructure::db::DPeer;
+    use crate::infrastructure::db::chat_store::channels;
+    use crate::infrastructure::db::chat_store::peers;
     let root = std::env::temp_dir().join(format!(
         "plain-entity-delete-{}",
-        crate::libs::utils::short_uuid::short_uuid()
+        plain_libs::utils::short_uuid::short_uuid()
     ));
     fs::create_dir_all(&root).unwrap();
     let db = Db::open(&root.join("plain.db")).unwrap();
@@ -153,8 +153,8 @@ fn entity_removal_is_atomic_retains_channel_peer_and_returns_removed_channel_sna
 fn discovery_and_unpair_update_only_owned_fields_and_require_paired_peer() {
     use crate::features::chat::enums::DeviceType;
     use crate::features::chat::enums::PeerStatus;
-    use crate::libs::db::DPeer;
-    use crate::libs::db::chat_store::peers;
+    use crate::infrastructure::db::DPeer;
+    use crate::infrastructure::db::chat_store::peers;
     let db = Db::open(Path::new(":memory:")).unwrap();
     let mut peer = DPeer::new("peer", "old", "old-ip", Some(1), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
@@ -193,11 +193,11 @@ fn discovery_and_unpair_update_only_owned_fields_and_require_paired_peer() {
 fn checked_channel_delete_preserves_newer_row_message_and_attachment() {
     use crate::features::chat::channels::state;
     use crate::features::chat::channels::state::Action;
-    use crate::libs::db::DChannel;
-    use crate::libs::db::chat_store::channels;
+    use crate::infrastructure::db::DChannel;
+    use crate::infrastructure::db::chat_store::channels;
     let root = std::env::temp_dir().join(format!(
         "plain-checked-channel-{}",
-        crate::libs::utils::short_uuid::short_uuid()
+        plain_libs::utils::short_uuid::short_uuid()
     ));
     fs::create_dir_all(&root).unwrap();
     let db = Db::open(&root.join("plain.db")).unwrap();

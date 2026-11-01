@@ -1,4 +1,4 @@
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use anyhow::{Result, anyhow, bail};
 
 pub async fn snapshot(host: &Host) -> Result<Vec<String>> {

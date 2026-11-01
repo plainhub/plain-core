@@ -1,10 +1,11 @@
+use crate::features::files::shares::Service;
+use crate::infrastructure::db::DChat;
 use crate::runtime::Runtime as CoreRuntime;
-use crate::{features::files::shares::Service, libs::db::DChat};
 use anyhow::{Result, ensure};
 use std::sync::Arc;
 
 struct PendingShare {
-    db: Arc<crate::libs::db::Db>,
+    db: Arc<crate::infrastructure::db::Db>,
     id: Option<String>,
 }
 impl Drop for PendingShare {
@@ -73,10 +74,12 @@ pub async fn folder(
         state, &targets, &content,
     )?;
     pending.id = None;
-    let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-        "CONTENT_CHANGED",
-        "{}".into(),
-    ));
+    let _ = state
+        .events
+        .send(crate::infrastructure::events::WsEvent::broadcast(
+            "CONTENT_CHANGED",
+            "{}".into(),
+        ));
     crate::features::services::chat::chat_actions::deliver_many(state, rows).await
 }
 

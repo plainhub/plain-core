@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn start(dir: &tempfile::TempDir) -> (ContentServer, String, Arc<crate::features::prefs::Prefs>) {
-    let token = crate::libs::utils::base64::base64_encode(&[9; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[9; 32]);
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", json!(["CLIPBOARD"])).unwrap();

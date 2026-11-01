@@ -2,9 +2,9 @@ use crate::server::ContentServer;
 use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::chat::enums::PeerStatus;
 use plain_rs::features::services::peers::peer_lan::*;
-use plain_rs::libs::db::DPeer;
-use plain_rs::libs::db::chat_store::SaveMode;
-use plain_rs::libs::db::chat_store::peers;
+use plain_rs::infrastructure::db::DPeer;
+use plain_rs::infrastructure::db::chat_store::SaveMode;
+use plain_rs::infrastructure::db::chat_store::peers;
 use serde_json::json;
 use std::sync::Arc;
 fn root(id: &str) -> (tempfile::TempDir, ContentServer, Vec<u8>, String) {
@@ -13,22 +13,22 @@ fn root(id: &str) -> (tempfile::TempDir, ContentServer, Vec<u8>, String) {
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", id).unwrap();
     prefs.set("background_service_enabled", true).unwrap();
-    let (kp, _pk) = plain_rs::libs::crypto::ed25519_generate();
+    let (kp, _pk) = plain_libs::crypto::ed25519_generate();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::libs::utils::base64::base64_encode(&kp),
+            plain_libs::utils::base64::base64_encode(&kp),
         )
         .unwrap();
-    let token = plain_rs::libs::utils::base64::base64_encode(&[3; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[3; 32]);
     let server = ContentServer::start(dir.path(), &token, prefs).unwrap();
     (dir, server, kp.to_vec(), token)
 }
 fn peer(id: &str, port: u16, pk: &[u8]) -> DPeer {
     let mut peer = DPeer::new(id, id, "invalid,127.0.0.1", Some(port), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
-    peer.public_key = plain_rs::libs::utils::base64::base64_encode(pk);
+    peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
+    peer.public_key = plain_libs::utils::base64::base64_encode(pk);
     peer
 }
 #[tokio::test]
@@ -58,7 +58,7 @@ async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host
         SaveMode::Insert,
     )
     .unwrap();
-    let wire = plain_rs::libs::transport::contract::signed_request(
+    let wire = plain_rs::infrastructure::transport::contract::signed_request(
         &kp,
         "query { __typename }",
         json!({}),
@@ -76,7 +76,7 @@ async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host
     .unwrap();
     assert_eq!(result["data"]["__typename"], "Query");
     let mut changed = remote.clone();
-    changed.key = plain_rs::libs::utils::base64::base64_encode(&[9; 32]);
+    changed.key = plain_libs::utils::base64::base64_encode(&[9; 32]);
     peers::save(&a.runtime_state().core.db, &[changed], SaveMode::Update).unwrap();
     assert!(matches!(
         send(
@@ -118,7 +118,7 @@ async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
         SaveMode::Insert,
     )
     .unwrap();
-    let wire = plain_rs::libs::transport::contract::signed_request(
+    let wire = plain_rs::infrastructure::transport::contract::signed_request(
         &kp,
         "query { __typename }",
         json!({}),

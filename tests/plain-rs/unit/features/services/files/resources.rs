@@ -23,7 +23,8 @@ async fn native_app_paths_and_format_helpers_are_direct_and_do_not_restore_retir
     let directory = tempfile::tempdir().unwrap();
     let host = Arc::new(Host::default());
     let (_generation, mut requests) = host.connect();
-    let db = Arc::new(crate::libs::db::Db::open(&directory.path().join("plain.db")).unwrap());
+    let db =
+        Arc::new(crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap());
     let path = crate::features::services::files::references::resolve(
         db.clone(),
         directory.path().to_path_buf(),

@@ -17,7 +17,10 @@ use std::{
 };
 use tokio::{sync::Mutex, task::JoinHandle};
 
-pub fn downloads_directory(host: &crate::libs::host::bridge::Host, target: &str) -> Result<String> {
+pub fn downloads_directory(
+    host: &crate::infrastructure::host::bridge::Host,
+    target: &str,
+) -> Result<String> {
     let directory = if target.is_empty() {
         let root = &host.startup().downloads_dir;
         ensure!(!root.is_empty(), "Downloads directory unavailable");

@@ -1,8 +1,8 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -66,7 +66,7 @@ fn seed_media(
     count: usize,
     trashed: bool,
     extension: &str,
-) -> Vec<plain_rs::libs::db::MediaFileRow> {
+) -> Vec<plain_rs::infrastructure::db::MediaFileRow> {
     let base = schema
         .data::<Arc<Prefs>>()
         .unwrap()
@@ -78,7 +78,7 @@ fn seed_media(
         .join("media");
     std::fs::create_dir_all(&base).unwrap();
     let rows: Vec<_> = (1..=count)
-        .map(|i| plain_rs::libs::db::MediaFileMetadata {
+        .map(|i| plain_rs::infrastructure::db::MediaFileMetadata {
             album: String::new(),
             album_artist: String::new(),
 
@@ -568,7 +568,7 @@ async fn media_batches_commit_successes_and_notify_only_confirmed_ids() {
     .unwrap();
     plain_rs::features::tags::add_relations(db, &[(tag.id.clone(), casualty.clone())]).unwrap();
     let mut events = schema
-        .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()
+        .data::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()
         .unwrap()
         .subscribe();
     let response = schema
@@ -726,7 +726,7 @@ async fn existing_media_delete_uses_shared_batches_and_refuses_blank_queries_bef
 
 #[test]
 fn file_id_selection_preserves_opaque_values_without_adding_filters() {
-    let fields = plain_rs::libs::utils::search_dsl::parse(
+    let fields = plain_libs::utils::search_dsl::parse(
         r#"ids:==opaque,17\ all:true,\"quoted\"\\path,媒体：42 trash:false"#,
     );
     assert_eq!(fields.len(), 2);

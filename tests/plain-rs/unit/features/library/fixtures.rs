@@ -1,15 +1,15 @@
 #![allow(dead_code)]
 
 use crate::features::media::audio::queue::AudioTrack;
-use crate::libs::db::Db;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainResult;
 pub fn test_db(tag: &str) -> Db {
     let dir = tempfile::Builder::new()
         .prefix(&format!("plain-rs-library-{tag}-"))
         .tempdir()
         .unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
-    crate::test_tempdirs::retain(dir);
+    plain_libs::test_tempdirs::retain(dir);
     db
 }
 
@@ -42,7 +42,7 @@ pub fn register_audio_tracks(db: &Db, tracks: &[AudioTrack]) {
 }
 
 pub fn register_native_audio(db: &Db, track: &AudioTrack) {
-    db.record_media_files(&[crate::libs::db::MediaFileMetadata {
+    db.record_media_files(&[crate::infrastructure::db::MediaFileMetadata {
         data_type: crate::features::enums::DataType::Audio,
         path: track.path.clone(),
         title: track.title.clone(),
@@ -101,10 +101,13 @@ pub fn indexed_current(db: &Db, path: &str) -> DomainResult<()> {
     crate::features::media::audio::queue::save_audio_current(db, path)
 }
 
-pub fn history_row(db: &Db, file_id: &str) -> Option<crate::libs::db::MediaPlayHistoryRow> {
+pub fn history_row(
+    db: &Db,
+    file_id: &str,
+) -> Option<crate::infrastructure::db::MediaPlayHistoryRow> {
     crate::features::media::play_history::matching(
         db,
-        &[crate::libs::utils::search_dsl::FilterField {
+        &[plain_libs::utils::search_dsl::FilterField {
             name: "ids".into(),
             op: String::new(),
             value: file_id.into(),

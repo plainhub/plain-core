@@ -96,11 +96,11 @@ fn which(name: &str) -> Option<PathBuf> {
 
 /// Compute the cache key for a PDF preview.
 fn pdf_preview_key(path: &str, mod_unix: i64, size: i64) -> String {
-    crate::libs::crypto::sha512_hex(&format!("{path}|{mod_unix}|{size}"))
+    plain_libs::crypto::sha512_hex(&format!("{path}|{mod_unix}|{size}"))
 }
 
 fn pdf_preview_cache_dir(cache_dir: &Path) -> PathBuf {
-    crate::libs::cache_paths::CachePaths::new(cache_dir).pdf_previews()
+    crate::infrastructure::cache_paths::CachePaths::new(cache_dir).pdf_previews()
 }
 
 /// Check if LibreOffice is available for PDF conversion.

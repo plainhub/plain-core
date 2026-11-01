@@ -8,7 +8,7 @@ pub struct Runtime {
     pub public_active: std::sync::atomic::AtomicBool,
 }
 impl Runtime {
-    pub fn snapshot(&self, db: &crate::libs::db::Db) -> serde_json::Value {
+    pub fn snapshot(&self, db: &crate::infrastructure::db::Db) -> serde_json::Value {
         let mut row = self.connections.snapshot(db);
         row["outgoing"] = self.outgoing.snapshot();
         row
@@ -26,12 +26,14 @@ impl Default for Runtime {
 }
 pub fn emit(state: &CoreRuntime, id: &str, online: bool) {
     if !id.is_empty() {
-        let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-            crate::features::chat::events::WS_PEER_STATUS_UPDATED,
-            json!({"id":id,"online":online}).to_string(),
-        ));
+        let _ = state
+            .events
+            .send(crate::infrastructure::events::WsEvent::broadcast(
+                crate::features::chat::events::WS_PEER_STATUS_UPDATED,
+                json!({"id":id,"online":online}).to_string(),
+            ));
     }
-    let _=state.events.send(crate::libs::events::WsEvent::broadcast("PEER_CONNECTIONS_UPDATED",json!({"id":id,"online":online,"runtimeId":state.peer_status.snapshot(&state.db)["runtimeId"]}).to_string()));
+    let _=state.events.send(crate::infrastructure::events::WsEvent::broadcast("PEER_CONNECTIONS_UPDATED",json!({"id":id,"online":online,"runtimeId":state.peer_status.snapshot(&state.db)["runtimeId"]}).to_string()));
 }
 pub struct ConnectionGuard {
     pub state: CoreRuntime,

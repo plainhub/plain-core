@@ -10,7 +10,7 @@ use axum::{
 use futures_util::StreamExt;
 use plain_rs::features::prefs::security::PasswordType;
 use plain_rs::features::services::confirmation_channel;
-use plain_rs::libs::events::WsEvent;
+use plain_rs::infrastructure::events::WsEvent;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -132,11 +132,9 @@ impl Runtime {
         if let Some(outgoing) = outgoing {
             tokio::time::timeout(
                 Duration::from_secs(2),
-                outgoing.send(Message::Binary(
-                    plain_rs::libs::utils::base64::base64_decode(
-                        result["frame"].as_str().unwrap_or_default(),
-                    ),
-                )),
+                outgoing.send(Message::Binary(plain_libs::utils::base64::base64_decode(
+                    result["frame"].as_str().unwrap_or_default(),
+                ))),
             )
             .await??;
             completed(state, result).await;
@@ -358,12 +356,12 @@ async fn run(
                     let request = crate::http::auth::ws_login::Request::Issue {
                         client_id: params.cid.clone(),
                         client_ip: ip.clone(),
-                        frame: plain_rs::libs::utils::base64::base64_encode(&frame),
+                        frame: plain_libs::utils::base64::base64_encode(&frame),
                         channel,
                     };
                     match crate::http::auth::ws_login::execute(&state, request).await {
                         Ok(result) => {
-                            if socket.send(Message::Binary(plain_rs::libs::utils::base64::base64_decode(result["frame"].as_str().unwrap_or_default()))).await.is_err() { break; }
+                            if socket.send(Message::Binary(plain_libs::utils::base64::base64_decode(result["frame"].as_str().unwrap_or_default()))).await.is_err() { break; }
                             if result["status"] == "PENDING" {
                                 let request_id = result["requestId"].as_str().unwrap().to_owned();
                                 pending = Some(request_id.clone());
@@ -386,7 +384,7 @@ async fn run(
                 let Some(key) = plain_rs::features::services::sessions::local_key(&state, &params.cid)
                     .or_else(|| plain_rs::features::services::sessions::key(&state.db, &params.cid).ok().flatten())
                     else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
-                let plain = plain_rs::libs::crypto::xchacha_decrypt_raw(&key,&frame);
+                let plain = plain_libs::crypto::xchacha_decrypt_raw(&key,&frame);
                 let Some(plain) = plain else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
                 let plain = match super::frames::admit(&state.main_ws.replay, &params.cid, &frame, &plain, registered, chrono::Utc::now().timestamp_millis()) {
                     Ok(payload) => payload,
@@ -400,7 +398,7 @@ async fn run(
                             break;
                         }
                     }
-                    stream = Some(plain_rs::libs::protocols::websocket::Stream::new(&frame));
+                    stream = Some(plain_rs::infrastructure::protocols::websocket::Stream::new(&frame));
                     registered = true;
                     permit.take();
                     if let Some(c) = state.main_ws.connections.lock().unwrap().get_mut(&id) { c.registered = true; }

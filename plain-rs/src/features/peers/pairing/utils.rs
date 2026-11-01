@@ -45,7 +45,7 @@ pub fn prefer_sender_ip(ips: &[String], sender_ip: &str) -> String {
 /// Private (RFC 1918) non-loopback IPv4 addresses of this host, for the
 /// pairing request `ips` field.
 pub fn local_ipv4_strs() -> Vec<String> {
-    crate::libs::utils::ifaddr::list()
+    plain_libs::utils::ifaddr::list()
         .into_iter()
         .map(|iface| iface.ip)
         .filter(|ip| !ip.is_loopback() && !ip.is_link_local() && ip.is_private())

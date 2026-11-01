@@ -95,7 +95,8 @@ fn chunk_ids_cannot_escape_the_upload_directory() {
 async fn completion_failures_keep_the_committed_file_and_report_failure_once_without_retry() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     let directory = tempfile::tempdir().unwrap();
-    let db = Arc::new(crate::libs::db::Db::open(&directory.path().join("plain.db")).unwrap());
+    let db =
+        Arc::new(crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap());
     let store = FileStore::new(db, directory.path().into());
     let base = directory.path().join("chunks");
     save_chunk(&base, "upload", 0, b"complete").await.unwrap();
@@ -237,7 +238,7 @@ async fn replacement_and_unique_merge_commits_preserve_the_correct_existing_file
 fn a_collision_after_merge_destination_selection_never_overwrites_the_other_writer() {
     let directory = tempfile::tempdir().unwrap();
     let original = directory.path().join("report.txt");
-    let selected = crate::libs::utils::unique_path::unique_sibling(&original).unwrap();
+    let selected = plain_libs::utils::unique_path::unique_sibling(&original).unwrap();
     let staged = directory.path().join("staged");
     std::fs::write(&staged, b"uploaded").unwrap();
     std::fs::write(&original, b"other writer").unwrap();

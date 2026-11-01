@@ -242,7 +242,7 @@ where
 }
 
 fn root_key(root: &Path) -> Result<Option<String>, String> {
-    match crate::libs::utils::file_identity::key(root) {
+    match plain_libs::utils::file_identity::key(root) {
         Ok(key) => Ok(key),
         Err(error)
             if matches!(

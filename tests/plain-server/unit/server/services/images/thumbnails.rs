@@ -69,7 +69,7 @@ fn server_with_cache() -> (tempfile::TempDir, ContentServer, std::path::PathBuf)
     let cache = dir.path().join("cache");
     let core = ContentServer::start(
         dir.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[4; 32]),
+        &plain_libs::utils::base64::base64_encode(&[4; 32]),
         prefs,
     )
     .unwrap();
@@ -219,7 +219,7 @@ async fn a_source_that_vanishes_produces_not_found() {
 }
 
 fn hex(bytes: &[u8]) -> String {
-    plain_rs::libs::utils::hex::bytes_to_hex(&sha2::Sha256::digest(bytes))
+    plain_libs::utils::hex::bytes_to_hex(&sha2::Sha256::digest(bytes))
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

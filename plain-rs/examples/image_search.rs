@@ -1,6 +1,6 @@
-use plain_rs::libs::ai_image_search::embedding::Engine;
-use plain_rs::libs::ai_image_search::embedding::ImageEncoder;
-use plain_rs::libs::ai_image_search::models::manifest::Manifest;
+use plain_libs::ai_image_search::embedding::Engine;
+use plain_libs::ai_image_search::embedding::ImageEncoder;
+use plain_libs::ai_image_search::models::manifest::Manifest;
 use serde::Serialize;
 use std::{path::PathBuf, time::Instant};
 #[derive(Serialize)]

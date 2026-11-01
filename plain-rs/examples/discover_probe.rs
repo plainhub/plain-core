@@ -2,9 +2,9 @@
 //! live network with a raw packet tap so discovery failures can be localized:
 //! queries sent (loop-back copies), external packets received, instance state.
 
-use plain_rs::libs::protocols::mdns::host_responder;
-use plain_rs::libs::protocols::mdns::service_browser::FoundDevice;
-use plain_rs::libs::protocols::mdns::service_browser::MdnsServiceBrowser;
+use plain_rs::infrastructure::protocols::mdns::host_responder;
+use plain_rs::infrastructure::protocols::mdns::service_browser::FoundDevice;
+use plain_rs::infrastructure::protocols::mdns::service_browser::MdnsServiceBrowser;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 

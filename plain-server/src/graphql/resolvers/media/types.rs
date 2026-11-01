@@ -47,7 +47,7 @@ pub struct ScanProgress {
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct MediaBucket {
-    pub size: plain_rs::libs::types::Long,
+    pub size: plain_rs::infrastructure::types::Long,
     pub id: ID,
     pub name: String,
     #[graphql(name = "itemCount")]

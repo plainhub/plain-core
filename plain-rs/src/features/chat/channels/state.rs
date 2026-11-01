@@ -1,12 +1,12 @@
 use crate::features::chat::channels::messages::ChannelMember;
 use crate::features::chat::enums::ChannelStatus;
-use crate::libs::db::CHANNEL_COLS;
-use crate::libs::db::DChannel;
-use crate::libs::db::Db;
-use crate::libs::db::chat_store::SaveMode;
-use crate::libs::db::chat_store::channels;
-use crate::libs::db::now_iso;
-use crate::libs::db::row_to_channel;
+use crate::infrastructure::db::CHANNEL_COLS;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::chat_store::SaveMode;
+use crate::infrastructure::db::chat_store::channels;
+use crate::infrastructure::db::now_iso;
+use crate::infrastructure::db::row_to_channel;
 use anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 
@@ -47,7 +47,7 @@ pub fn create(db: &Db, actor: &str, name: &str) -> Result<DChannel> {
         bail!("Missing channel actor");
     }
     let mut channel = DChannel::new(name.trim(), actor);
-    channel.key = crate::libs::utils::base64::base64_encode(&crate::libs::crypto::random_bytes(32));
+    channel.key = plain_libs::utils::base64::base64_encode(&plain_libs::crypto::random_bytes(32));
     channel.members = serde_json::to_string(&[ChannelMember::new(actor)])?;
     channels::save(db, std::slice::from_ref(&channel), SaveMode::Insert)?;
     Ok(channel)
@@ -102,7 +102,7 @@ pub fn apply(db: &Db, actor: &str, id: &str, action: Action) -> Result<DChannel>
             if versioned { channel.version=channel.version.checked_add(1).ok_or_else(||anyhow::anyhow!("Channel version overflow"))?; }
             channel.members=serde_json::to_string(&members)?;
             channel.updated_at=now_iso();
-            if tx.execute("UPDATE chat_channels SET name=?2,members=?3,version=?4,status=?5,updated_at=?6 WHERE id=?1",params![channel.id,channel.name,channel.members,channel.version,channel.status,crate::libs::utils::dbtime::normalize(&channel.updated_at)?])? != 1 { bail!("Channel update failed"); }
+            if tx.execute("UPDATE chat_channels SET name=?2,members=?3,version=?4,status=?5,updated_at=?6 WHERE id=?1",params![channel.id,channel.name,channel.members,channel.version,channel.status,plain_libs::utils::dbtime::normalize(&channel.updated_at)?])? != 1 { bail!("Channel update failed"); }
         }
         tx.commit()?;
         Ok(channel)

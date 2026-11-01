@@ -1,8 +1,8 @@
 use async_graphql::Enum;
 use async_graphql::ID;
 use async_graphql::SimpleObject;
-use plain_rs::libs::types::Instant;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::types::Instant;
+use plain_rs::infrastructure::types::Long;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub enum DriveType {
@@ -73,7 +73,8 @@ pub struct File {
 #[async_graphql::ComplexObject]
 impl File {
     async fn is_system(&self) -> async_graphql::Result<bool> {
-        plain_rs::libs::filesystem::system_items::contains(&self.path).map_err(async_graphql::Error::new)
+        plain_libs::filesystem::system_items::contains(&self.path)
+            .map_err(async_graphql::Error::new)
     }
 }
 
@@ -93,7 +94,7 @@ pub struct ImageFileInfo {
     pub exposure_time: String,
     pub focal_length: String,
     pub iso_speed: i32,
-    pub taken_at: Option<plain_rs::libs::types::Instant>,
+    pub taken_at: Option<plain_rs::infrastructure::types::Instant>,
     pub flash: i32,
     pub f_number: f64,
     pub exposure_program: i32,

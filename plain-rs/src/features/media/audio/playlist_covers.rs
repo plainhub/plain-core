@@ -1,4 +1,5 @@
-use crate::libs::{db::Db, error::DomainResult};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainResult;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AlbumCover {

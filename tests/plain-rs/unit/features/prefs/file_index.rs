@@ -83,7 +83,7 @@ fn directory_walk_skips_excluded_subtrees_before_visiting_them() {
         defaults: scope().defaults,
     };
     let mut visited = Vec::new();
-    crate::libs::file_walk::walk_entries(
+    plain_libs::file_walk::walk_entries(
         fixture.path(),
         |path| !scope.contains(path),
         || false,

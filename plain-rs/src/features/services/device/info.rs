@@ -2,9 +2,10 @@ use crate::features::services::device::types::{
     AndroidExtras, DeviceInfo, DevicePlatform, DisplayInfo,
 };
 
-use crate::libs::types::{Instant, Long};
+use crate::infrastructure::types::Instant;
+use crate::infrastructure::types::Long;
 
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde_json::{Map, Value};
 
 pub const FIELDS: &[&str] = &[
@@ -243,7 +244,7 @@ fn direct(fields: &[String], directory: &std::path::Path) -> Result<DeviceInfo, 
     if selected("kernelVersion") {
         #[cfg(target_os = "ios")]
         {
-            info.kernel_version = crate::libs::platform::apple_device::kernel_version()?;
+            info.kernel_version = plain_libs::platform::apple_device::kernel_version()?;
         }
         #[cfg(not(target_os = "ios"))]
         {
@@ -253,7 +254,7 @@ fn direct(fields: &[String], directory: &std::path::Path) -> Result<DeviceInfo, 
     if selected("totalMemory") {
         #[cfg(target_os = "ios")]
         {
-            info.total_memory = Long(crate::libs::platform::apple_device::total_memory()?);
+            info.total_memory = Long(plain_libs::platform::apple_device::total_memory()?);
         }
         #[cfg(not(target_os = "ios"))]
         {

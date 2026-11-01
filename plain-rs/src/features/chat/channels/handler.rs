@@ -9,8 +9,8 @@ use crate::features::chat::events::WS_CHANNELS_UPDATED;
 use crate::features::chat::events::channels_updated_payload;
 use crate::features::chat::events::load_key_cache;
 use crate::features::chat::service::ChatService;
-use crate::libs::transport::contract::PeerTransport;
-use crate::libs::utils::base64::base64_decode;
+use crate::infrastructure::transport::contract::PeerTransport;
+use plain_libs::utils::base64::base64_decode;
 use serde_json::json;
 
 pub fn handle<T: PeerTransport + 'static>(

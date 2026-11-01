@@ -3,7 +3,7 @@ use crate::features::{
     enums::DataType,
     media::duration_cache::{Duration, DurationCache, Identity},
 };
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::{
     collections::HashSet,
@@ -16,7 +16,7 @@ use tokio::sync::{Notify, Semaphore, watch};
 pub struct Runtime {
     cache: Arc<DurationCache>,
     host: Arc<Host>,
-    resources: Arc<crate::libs::host::resources::NativeResources>,
+    resources: Arc<crate::infrastructure::host::resources::NativeResources>,
     directory: std::path::PathBuf,
     pending: Mutex<HashSet<Identity>>,
     permits: Semaphore,
@@ -70,7 +70,7 @@ impl Runtime {
     pub fn new(
         cache: Arc<DurationCache>,
         host: Arc<Host>,
-        resources: Arc<crate::libs::host::resources::NativeResources>,
+        resources: Arc<crate::infrastructure::host::resources::NativeResources>,
         directory: std::path::PathBuf,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -94,7 +94,7 @@ impl Runtime {
             biased;
             _ = core_stop.changed() => Err("Media duration runtime stopped".into()),
             result = crate::features::services::files::input::read_source(&self.resources, &self.directory, path, |reader| {
-                Ok(crate::libs::media::probe::probe_duration_reader(reader))
+                Ok(plain_libs::media::probe::probe_duration_reader(reader))
             }) => result,
         }
     }
@@ -172,7 +172,7 @@ impl Runtime {
                     reader: file,
                     stop,
                 };
-                crate::libs::media::probe::probe_duration_reader(&mut reader)
+                plain_libs::media::probe::probe_duration_reader(&mut reader)
                     .filter(|duration| *duration > 0)
             });
             Some((before, duration))

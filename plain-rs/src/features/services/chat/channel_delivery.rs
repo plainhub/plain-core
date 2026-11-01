@@ -1,9 +1,9 @@
 use crate::features::chat::channels::messages::ChannelMember;
 use crate::features::chat::enums::ChannelSystemMessageType;
 use crate::features::chat::enums::DeviceType;
-use crate::libs::db::DChannel;
-use crate::libs::db::chat_store::channels;
-use crate::libs::db::chat_store::peers;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::chat_store::channels;
+use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use serde_json::{Value, json};
@@ -160,7 +160,7 @@ async fn deliver(
                 state,
                 &peer,
                 cid,
-                &crate::libs::utils::base64::base64_decode(key),
+                &plain_libs::utils::base64::base64_decode(key),
                 wire,
                 || {
                     if !current(state, channel, removed).map_err(|e| e.to_string())? {

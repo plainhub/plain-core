@@ -8,7 +8,7 @@ fn device(id: &str, method: &str) -> Device {
         device_type: "PHONE".into(),
         version: "1".into(),
         platform: "test".into(),
-        last_seen_at: crate::libs::db::now_iso(),
+        last_seen_at: crate::infrastructure::db::now_iso(),
         discovery_methods: vec![method.into()],
     }
 }
@@ -36,7 +36,7 @@ fn merges_methods_and_ips_with_monotonic_event_throttle() {
 #[test]
 fn stale_probe_cannot_remove_a_new_sighting_or_new_cached_version() {
     let dir = tempfile::tempdir().unwrap();
-    let db = crate::libs::db::Db::open(&dir.path().join("test.db")).unwrap();
+    let db = crate::infrastructure::db::Db::open(&dir.path().join("test.db")).unwrap();
     let devices = Devices::default();
     devices.scanning(true, false, vec![]).unwrap();
     let t = Instant::now();
@@ -58,13 +58,15 @@ fn stale_probe_cannot_remove_a_new_sighting_or_new_cached_version() {
         .unwrap();
     let mut newer = stale.device.cache();
     newer.last_seen_at = "2099-01-01T00:00:00.000Z".into();
-    crate::libs::db::chat_store::nearby::save(&db, &newer).unwrap();
+    crate::infrastructure::db::chat_store::nearby::save(&db, &newer).unwrap();
     assert!(!devices.verified(&db, &stale, false).unwrap());
     assert_eq!(
-        crate::libs::db::chat_store::nearby::all(&db).unwrap().len(),
+        crate::infrastructure::db::chat_store::nearby::all(&db)
+            .unwrap()
+            .len(),
         1
     );
-    crate::libs::db::chat_store::nearby::delete(&db, "one").unwrap();
+    crate::infrastructure::db::chat_store::nearby::delete(&db, "one").unwrap();
     let stale = devices
         .stale_at(&db, t + Duration::from_secs(124))
         .unwrap()
@@ -76,7 +78,7 @@ fn stale_probe_cannot_remove_a_new_sighting_or_new_cached_version() {
 #[test]
 fn stopped_scan_cannot_apply_pending_verdict_and_registry_is_bounded() {
     let dir = tempfile::tempdir().unwrap();
-    let db = crate::libs::db::Db::open(&dir.path().join("test.db")).unwrap();
+    let db = crate::infrastructure::db::Db::open(&dir.path().join("test.db")).unwrap();
     let devices = Devices::default();
     devices.scanning(true, false, vec![]).unwrap();
     let t = Instant::now();
@@ -108,12 +110,12 @@ fn stopped_scan_cannot_apply_pending_verdict_and_registry_is_bounded() {
 #[test]
 fn merged_ble_timestamp_still_allows_checked_lan_cache_cleanup() {
     let dir = tempfile::tempdir().unwrap();
-    let db = crate::libs::db::Db::open(&dir.path().join("test.db")).unwrap();
+    let db = crate::infrastructure::db::Db::open(&dir.path().join("test.db")).unwrap();
     let devices = Devices::default();
     devices.scanning(true, false, vec![]).unwrap();
     let t = Instant::now();
     let lan = device("one", "LAN");
-    crate::libs::db::chat_store::nearby::save(&db, &lan.cache()).unwrap();
+    crate::infrastructure::db::chat_store::nearby::save(&db, &lan.cache()).unwrap();
     devices.seen_at(lan, t).unwrap();
     let mut ble = device("one", "BLE");
     ble.last_seen_at = "2099-01-01T00:00:00.000Z".into();
@@ -125,7 +127,7 @@ fn merged_ble_timestamp_still_allows_checked_lan_cache_cleanup() {
         .unwrap();
     assert!(devices.verified(&db, &stale, false).unwrap());
     assert!(
-        crate::libs::db::chat_store::nearby::all(&db)
+        crate::infrastructure::db::chat_store::nearby::all(&db)
             .unwrap()
             .is_empty()
     );

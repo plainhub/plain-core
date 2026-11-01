@@ -72,7 +72,7 @@ async fn session_key(state: &ServerState, headers: &HeaderMap) -> anyhow::Result
         .session_get(client_id)
         .map_err(|error| anyhow::Error::msg(error.to_string()))?
         .ok_or_else(|| anyhow::anyhow!("unknown client"))?;
-    let key = plain_rs::libs::utils::base64::base64_decode(&row.token);
+    let key = plain_libs::utils::base64::base64_decode(&row.token);
     anyhow::ensure!(key.len() == 32, "session token is not a 32-byte key");
     Ok(key)
 }
@@ -87,7 +87,7 @@ async fn read_info<T: for<'de> Deserialize<'de>>(
         .bytes()
         .await
         .map_err(|error| anyhow::Error::msg(error.to_string()))?;
-    let plaintext = plain_rs::libs::crypto::xchacha_decrypt_raw(key, &bytes)
+    let plaintext = plain_libs::crypto::xchacha_decrypt_raw(key, &bytes)
         .ok_or_else(|| anyhow::anyhow!("Unauthorized"))?;
     let plaintext = std::str::from_utf8(&plaintext)?;
     let payload = state
@@ -275,7 +275,7 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
                 let mut destination = if current.replace {
                     original.clone()
                 } else {
-                    match plain_rs::libs::utils::unique_path::unique_sibling(&original) {
+                    match plain_libs::utils::unique_path::unique_sibling(&original) {
                         Ok(path) => path,
                         Err(error) => return plain(StatusCode::BAD_REQUEST, error.to_string()),
                     }
@@ -303,7 +303,7 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
                         let source = temp.clone();
                         let target = destination.clone();
                         let result = tokio::task::spawn_blocking(move || {
-                            plain_rs::libs::filesystem::rename::no_replace(&source, &target)
+                            plain_libs::filesystem::rename::no_replace(&source, &target)
                         })
                         .await;
                         let result = match result {
@@ -315,8 +315,7 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
                             .is_err_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists)
                         {
                             destination =
-                                match plain_rs::libs::utils::unique_path::unique_sibling(&original)
-                                {
+                                match plain_libs::utils::unique_path::unique_sibling(&original) {
                                     Ok(path) => path,
                                     Err(error) => break Err(error),
                                 };

@@ -23,10 +23,10 @@ pub fn url(ip: &str, port: u16) -> Result<String> {
     anyhow::ensure!(port != 0, "Missing nearby port");
     let host = ip.trim().trim_start_matches('[').trim_end_matches(']');
     anyhow::ensure!(
-        crate::libs::transport::lan::valid_host(host),
+        crate::infrastructure::transport::lan::valid_host(host),
         "Invalid nearby host"
     );
-    Ok(crate::libs::utils::http_url::build_url(
+    Ok(plain_libs::utils::http_url::build_url(
         "https", host, port, "/nearby",
     ))
 }

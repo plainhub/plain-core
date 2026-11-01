@@ -4,7 +4,7 @@
 //! which rows exist, so a selected trashed row projects like any other.
 
 use crate::features::enums::DataType;
-use crate::libs::db::MediaFileRow;
+use crate::infrastructure::db::MediaFileRow;
 use serde_json::{Value, json};
 
 fn media_type(kind: i32) -> Result<DataType, String> {

@@ -1,8 +1,8 @@
 use crate::features::media::images::embeddings as image_embeddings;
 use crate::features::media::images::embeddings::EmbeddingInput;
-use crate::libs::db::Db;
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 use std::collections::HashSet;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Image {

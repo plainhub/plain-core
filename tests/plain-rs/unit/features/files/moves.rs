@@ -225,7 +225,7 @@ fn rebinding_swaps_provider_ids_atomically_and_rolls_back_on_failure() {
     assert_eq!(
         crate::features::media::play_history::matching(
             &db,
-            &crate::libs::utils::search_dsl::parse("type:VIDEO ids:a")
+            &plain_libs::utils::search_dsl::parse("type:VIDEO ids:a")
         )
         .unwrap()[0]
             .position_ms,
@@ -236,7 +236,7 @@ fn rebinding_swaps_provider_ids_atomically_and_rolls_back_on_failure() {
     assert_eq!(
         crate::features::media::play_history::matching(
             &db,
-            &crate::libs::utils::search_dsl::parse("type:VIDEO ids:a")
+            &plain_libs::utils::search_dsl::parse("type:VIDEO ids:a")
         )
         .unwrap()[0]
             .position_ms,

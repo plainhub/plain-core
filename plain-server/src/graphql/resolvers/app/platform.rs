@@ -5,12 +5,14 @@ use crate::graphql::resolvers::app::capability_types::{
 use crate::server::ServerState;
 use async_graphql::{Context, Object, Result};
 use plain_rs::features::services::settings::types::AppUpdate;
-use plain_rs::libs::host::bridge::Host;
-use plain_rs::libs::host::commands::{
-    SYSTEM_SAMBA_APPLY, SYSTEM_SAMBA_PASSWORD, SYSTEM_SAMBA_SERVICE_FACTS, SambaApplyRequest,
-    SambaPasswordRequest, SambaServiceFacts,
-};
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::host::bridge::Host;
+use plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_APPLY;
+use plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_PASSWORD;
+use plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_SERVICE_FACTS;
+use plain_rs::infrastructure::host::commands::SambaApplyRequest;
+use plain_rs::infrastructure::host::commands::SambaPasswordRequest;
+use plain_rs::infrastructure::host::commands::SambaServiceFacts;
+use plain_rs::infrastructure::types::Long;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -27,7 +29,7 @@ impl PlatformQuery {
     ) -> Result<Vec<crate::graphql::resolvers::app::capability_types::AuditEvent>> {
         use crate::graphql::resolvers::app::capability_types::{AuditEvent, AuditEventType};
         let state = ctx.data::<ServerState>()?;
-        let needle = plain_rs::libs::utils::search_dsl::parse(&query)
+        let needle = plain_libs::utils::search_dsl::parse(&query)
             .into_iter()
             .find(|field| field.name == "text")
             .map(|field| field.value)
@@ -47,7 +49,7 @@ impl PlatformQuery {
                             r#type: kind,
                             message: row.message,
                             client_id: row.client_id,
-                            created_at: plain_rs::libs::types::Instant(
+                            created_at: plain_rs::infrastructure::types::Instant(
                                 at.with_timezone(&chrono::Utc),
                             ),
                         })
@@ -66,7 +68,7 @@ impl PlatformQuery {
 
     async fn disks(&self, ctx: &Context<'_>) -> Result<Vec<Disk>> {
         require_capability(ctx, "DISK_MANAGER").await?;
-        let disks = tokio::task::spawn_blocking(plain_rs::libs::platform::disks::list)
+        let disks = tokio::task::spawn_blocking(plain_rs::infrastructure::platform::disks::list)
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?
             .map_err(async_graphql::Error::new)?;
@@ -173,14 +175,14 @@ impl PlatformMutation {
     async fn format_disk(&self, ctx: &Context<'_>, path: String) -> Result<bool> {
         require_capability(ctx, "DISK_MANAGER").await?;
         let state = ctx.data::<ServerState>()?;
-        let request = plain_rs::libs::host::commands::DiskFormatRequest {
+        let request = plain_rs::infrastructure::host::commands::DiskFormatRequest {
             path,
             client_id: ctx.data_opt::<String>().cloned().unwrap_or_default(),
         };
         let value = state
             .host
             .call_wait(
-                plain_rs::libs::host::commands::SYSTEM_DISK_FORMAT,
+                plain_rs::infrastructure::host::commands::SYSTEM_DISK_FORMAT,
                 serde_json::to_value(request)?,
             )
             .await
@@ -192,7 +194,7 @@ impl PlatformMutation {
     }
 
     async fn set_hostname(&self, ctx: &Context<'_>, name: String) -> Result<bool> {
-        let name = plain_rs::libs::utils::hostname::platform_hostname(&name);
+        let name = plain_libs::utils::hostname::platform_hostname(&name);
         if name.is_empty() {
             return Err("device_name_invalid".into());
         }
@@ -200,8 +202,8 @@ impl PlatformMutation {
         let value = state
             .host
             .call(
-                plain_rs::libs::host::commands::SYSTEM_HOSTNAME_SET,
-                serde_json::to_value(plain_rs::libs::host::commands::HostnameRequest {
+                plain_rs::infrastructure::host::commands::SYSTEM_HOSTNAME_SET,
+                serde_json::to_value(plain_rs::infrastructure::host::commands::HostnameRequest {
                     name: name.clone(),
                 })?,
             )

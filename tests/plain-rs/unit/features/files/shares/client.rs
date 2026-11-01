@@ -5,7 +5,7 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
         "::1",
         8443,
         "share +/?#中文",
-        &crate::libs::utils::base64::base64_encode_url_safe(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode_url_safe(&[7; 32]),
     )
     .unwrap();
     assert!(link.page_url.starts_with("https://[::1]:8443/s/share"));
@@ -13,7 +13,7 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
     let second = link.request(None).unwrap();
     assert_ne!(&first[..24], &second[..24]);
     let plain =
-        String::from_utf8(crate::libs::crypto::xchacha_decrypt_raw(&[7; 32], &first).unwrap())
+        String::from_utf8(plain_libs::crypto::xchacha_decrypt_raw(&[7; 32], &first).unwrap())
             .unwrap();
     let parts: Vec<_> = plain.splitn(3, '|').collect();
     assert!(
@@ -31,7 +31,7 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
     );
     let url = link
         .file_url(
-            &crate::libs::utils::base64::base64_encode(&[8; 32]),
+            &plain_libs::utils::base64::base64_encode(&[8; 32]),
             "folder/+/?#中文%",
             false,
         )
@@ -59,7 +59,7 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
                 host,
                 443,
                 "id",
-                &crate::libs::utils::base64::base64_encode_url_safe(&[7; 32])
+                &plain_libs::utils::base64::base64_encode_url_safe(&[7; 32])
             )
             .is_err()
         );
@@ -71,12 +71,13 @@ fn guest_response_never_accepts_unauthenticated_data_or_invalid_file_tokens() {
         "localhost",
         443,
         "id",
-        &crate::libs::utils::base64::base64_encode_url_safe(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode_url_safe(&[7; 32]),
     )
     .unwrap();
-    let plain=json!({"data":{"sharedInfo":{"name":"share","readOnly":true,"requiresPassword":false,"expiresAt":null,"urlToken":crate::libs::utils::base64::base64_encode(&[8;32]),"entries":[]}}}).to_string();
+    let plain=json!({"data":{"sharedInfo":{"name":"share","readOnly":true,"requiresPassword":false,"expiresAt":null,"urlToken":plain_libs::utils::base64::base64_encode(&[8;32]),"entries":[]}}}).to_string();
     let request = link.request(None).unwrap();
-    let context = crate::libs::transport::http_response::Context::new("/guest_graphql", &request);
+    let context =
+        crate::infrastructure::transport::http_response::Context::new("/guest_graphql", &request);
     assert!(link.response(&request, plain.as_bytes()).is_err());
     assert_eq!(
         link.response(

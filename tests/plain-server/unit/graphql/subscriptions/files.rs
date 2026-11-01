@@ -128,10 +128,10 @@ async fn large_search_keeps_frames_bounded_and_waits_for_a_slow_reader() {
 
 #[test]
 fn long_paths_split_by_byte_budget_before_the_record_count_limit() {
-    let page = plain_rs::libs::filesystem::browse::Page {
+    let page = plain_libs::filesystem::browse::Page {
         count: 20,
         items: (0..20)
-            .map(|index| plain_rs::libs::filesystem::record::FileRecord {
+            .map(|index| plain_libs::filesystem::record::FileRecord {
                 name: format!("needle-{index:03}"),
                 path: format!("/{}-{index}", "segment/".repeat(4000)),
                 permission: String::new(),

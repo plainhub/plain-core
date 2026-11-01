@@ -4,9 +4,9 @@ use crate::features::chat::events::WS_MESSAGE_CREATED;
 use crate::features::chat::events::WS_MESSAGE_DELETED;
 use crate::features::chat::events::WS_MESSAGE_UPDATED;
 use crate::features::chat::service::ChatService;
-use crate::libs::db::DChat;
-use crate::libs::db::Db;
-use crate::libs::transport::contract::PeerTransport;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::transport::contract::PeerTransport;
 use serde_json::{Value, json};
 
 impl<T: PeerTransport + 'static> ChatService<T> {

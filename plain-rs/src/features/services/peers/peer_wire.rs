@@ -1,11 +1,11 @@
 use crate::features::prefs::Prefs;
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
-use crate::libs::db::chat_store::channels;
-use crate::libs::db::chat_store::peers;
-use crate::libs::transport::contract::START_AWARE;
-use crate::libs::transport::contract::chat_item_request;
-use crate::libs::transport::contract::signed_request;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::chat_store::channels;
+use crate::infrastructure::db::chat_store::peers;
+use crate::infrastructure::transport::contract::START_AWARE;
+use crate::infrastructure::transport::contract::chat_item_request;
+use crate::infrastructure::transport::contract::signed_request;
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -52,7 +52,7 @@ pub fn prepare(db: &Db, prefs: &Prefs, id: &str, operation: Operation) -> Result
             peer.key.clone(),
         ),
     };
-    if crate::libs::utils::base64::base64_decode(&key).len() != 32 {
+    if plain_libs::utils::base64::base64_decode(&key).len() != 32 {
         bail!("Invalid peer transport key");
     }
     Ok(Prepared {

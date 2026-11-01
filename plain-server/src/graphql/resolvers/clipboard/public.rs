@@ -3,8 +3,8 @@ use crate::graphql::types::ActionResult;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Object};
 use plain_rs::features::prefs::Prefs;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::host::bridge::Host;
 use std::sync::Arc;
 
 const PERMISSION: &str = "CLIPBOARD";

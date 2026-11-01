@@ -1,12 +1,13 @@
 use futures_util::SinkExt;
 use futures_util::StreamExt;
+use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::services::peers::clipboard::receive as synchronize_clipboard;
 use plain_rs::features::services::peers::management::*;
-use plain_rs::libs::db::DPeer;
-use plain_rs::libs::db::chat_store::peers;
-use plain_rs::libs::events::WsEvent;
+use plain_rs::infrastructure::db::DPeer;
+use plain_rs::infrastructure::db::chat_store::SaveMode;
+use plain_rs::infrastructure::db::chat_store::peers;
+use plain_rs::infrastructure::events::WsEvent;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_rs::{features::chat::enums::DeviceType, libs::db::chat_store::SaveMode};
 use serde_json::json;
 use std::time::Duration;
 use tokio::sync::watch;
@@ -134,7 +135,7 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     };
-    fn seed(db: &plain_rs::libs::db::Db, text: &str, sensitive: bool, sequence: u8) {
+    fn seed(db: &plain_rs::infrastructure::db::Db, text: &str, sensitive: bool, sequence: u8) {
         let (item, _) = plain_rs::features::clipboard::record(db, text, "", "", sensitive).unwrap();
         let time = format!("2026-01-01T00:00:{sequence:02}.000Z");
         db.with_conn(|connection| {
@@ -313,7 +314,7 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
         &state,
         &reqwest::Url::parse(&format!("https://127.0.0.1:{port}")).unwrap(),
         &session.client_id,
-        &plain_rs::libs::utils::base64::base64_decode(&peer.token),
+        &plain_libs::utils::base64::base64_decode(&peer.token),
         json!({"query":"mutation($text:String!){setClipboard(text:$text)}", "variables":{"text":"encrypted fixture write"}}),
         4 * 1024 * 1024,
     ).await.unwrap();

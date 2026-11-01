@@ -9,7 +9,7 @@ async fn interrupted_platform_read_preserves_the_previous_sound_and_removes_temp
         let core = ContentServer::open(directory.path()).unwrap();
         let state = core.runtime_state();
         let destination =
-            crate::libs::data_paths::DataPaths::new(directory.path()).pomodoro_sound();
+            crate::infrastructure::data_paths::DataPaths::new(directory.path()).pomodoro_sound();
         std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
         std::fs::write(&destination, b"old sound").unwrap();
         let (generation, mut requests) = state.host.connect();
@@ -68,7 +68,7 @@ async fn invalid_or_stopped_sources_do_not_replace_sound() {
     std::fs::write(&source, b"stopped").unwrap();
     assert!(import(&state, source.to_str().unwrap()).await.is_err());
     assert!(
-        !crate::libs::data_paths::DataPaths::new(directory.path())
+        !crate::infrastructure::data_paths::DataPaths::new(directory.path())
             .pomodoro_sound()
             .exists()
     );

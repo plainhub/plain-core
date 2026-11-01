@@ -3,13 +3,13 @@ use std::io::Cursor;
 
 fn archive() -> Vec<u8> {
     let source = tempfile::tempdir().unwrap();
-    let paths = crate::libs::data_paths::DataPaths::new(source.path());
+    let paths = crate::infrastructure::data_paths::DataPaths::new(source.path());
     let prefs = Arc::new(crate::features::prefs::Prefs::load(&paths.prefs()).unwrap());
     crate::features::prefs::identity::ensure_identity(&prefs);
     prefs.set("device_name", "restored device").unwrap();
-    let db = crate::libs::db::Db::open(&paths.database()).unwrap();
+    let db = crate::infrastructure::db::Db::open(&paths.database()).unwrap();
     db.with_conn(|conn| conn.execute_batch("CREATE TABLE restore_fixture (value TEXT); INSERT INTO restore_fixture VALUES ('snapshot');").unwrap());
-    let store = crate::libs::kv::LazyDb::new(paths.database());
+    let store = plain_libs::kv::LazyDb::new(paths.database());
     store.get().unwrap().insert("restored", "snapshot").unwrap();
     std::fs::create_dir(source.path().join("files")).unwrap();
     std::fs::write(source.path().join("files/blob"), b"attachment").unwrap();
@@ -40,12 +40,13 @@ fn prepare(bytes: Vec<u8>, directory: &Path) -> Result<(), String> {
 }
 fn pending(directory: &Path) -> Pending {
     serde_json::from_reader(
-        File::open(crate::libs::data_paths::DataPaths::new(directory).pending_restore()).unwrap(),
+        File::open(crate::infrastructure::data_paths::DataPaths::new(directory).pending_restore())
+            .unwrap(),
     )
     .unwrap()
 }
 fn assert_restored(directory: &Path) {
-    let paths = crate::libs::data_paths::DataPaths::new(directory);
+    let paths = crate::infrastructure::data_paths::DataPaths::new(directory);
     assert!(!directory.join("plain.db-wal").exists());
     assert!(!directory.join("plain.db-shm").exists());
     let db = rusqlite::Connection::open_with_flags(
@@ -64,7 +65,7 @@ fn assert_restored(directory: &Path) {
         prefs.get::<String>("device_name").unwrap().as_deref(),
         Some("restored device")
     );
-    let kv = crate::libs::kv::Db::open(&paths.database()).unwrap();
+    let kv = plain_libs::kv::Db::open(&paths.database()).unwrap();
     assert_eq!(kv.get("restored").unwrap().unwrap(), "snapshot");
     assert!(kv.get("old-only").unwrap().is_none());
     assert_eq!(
@@ -76,12 +77,12 @@ fn assert_restored(directory: &Path) {
 #[test]
 fn staging_keeps_live_stores_untouched_and_startup_replaces_closed_stores() {
     let directory = tempfile::tempdir().unwrap();
-    let paths = crate::libs::data_paths::DataPaths::new(directory.path());
+    let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     let prefs = Arc::new(crate::features::prefs::Prefs::load(&paths.prefs()).unwrap());
     prefs.set("device_name", "live device").unwrap();
-    let db = crate::libs::db::Db::open(&paths.database()).unwrap();
+    let db = crate::infrastructure::db::Db::open(&paths.database()).unwrap();
     db.with_conn(|conn| conn.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE live_fixture (value TEXT); INSERT INTO live_fixture VALUES ('live');").unwrap());
-    let kv = crate::libs::kv::Db::open(&paths.database()).unwrap();
+    let kv = plain_libs::kv::Db::open(&paths.database()).unwrap();
     kv.insert("old-only", "live").unwrap();
     prepare(archive(), directory.path()).unwrap();
     assert_eq!(
@@ -105,9 +106,11 @@ fn staging_keeps_live_stores_untouched_and_startup_replaces_closed_stores() {
     std::fs::write(directory.path().join("plain.db-shm"), b"stale SHM").unwrap();
     let cache = tempfile::tempdir().unwrap();
     std::fs::write(cache.path().join("stale"), b"stale cache").unwrap();
-    let _lease =
-        crate::libs::data_paths::directory::DataDirectory::open(directory.path(), cache.path())
-            .unwrap();
+    let _lease = crate::infrastructure::data_paths::directory::DataDirectory::open(
+        directory.path(),
+        cache.path(),
+    )
+    .unwrap();
     assert_restored(directory.path());
     assert!(cache.path().is_dir());
     assert!(!cache.path().join("stale").exists());
@@ -192,7 +195,7 @@ fn invalid_restore_plan_does_not_replace_current_data() {
     marker.entries.push("../outside".into());
     std::fs::write(directory.path().join("plain.db"), b"current data").unwrap();
     std::fs::write(
-        crate::libs::data_paths::DataPaths::new(directory.path()).pending_restore(),
+        crate::infrastructure::data_paths::DataPaths::new(directory.path()).pending_restore(),
         serde_json::to_vec(&marker).unwrap(),
     )
     .unwrap();
@@ -233,7 +236,7 @@ async fn uri_restore_reads_one_bounded_descriptor_without_copying_the_archive_to
         wrapped.extend_from_slice(&bytes);
         wrapped.extend_from_slice(b"unrelated-suffix");
         std::fs::write(&path, wrapped).unwrap();
-        let host = Arc::new(crate::libs::host::bridge::Host::default());
+        let host = Arc::new(crate::infrastructure::host::bridge::Host::default());
         let (generation, mut requests) = host.connect();
         let resources = Arc::new(NativeResources::new(host.clone()));
         let (_stop, stopped) = watch::channel(false);
@@ -264,7 +267,7 @@ async fn uri_restore_reads_one_bounded_descriptor_without_copying_the_archive_to
         assert_eq!(metadata, serde_json::json!({"path":uri,"file":true}));
         stream
             .file(
-                crate::libs::host::resource_stream::NativeResourceFile::new(
+                crate::infrastructure::host::resource_stream::NativeResourceFile::new(
                     File::open(&path).unwrap(),
                     offset,
                     bytes.len() as i64,
@@ -275,7 +278,7 @@ async fn uri_restore_reads_one_bounded_descriptor_without_copying_the_archive_to
             .unwrap();
         restoring.await.unwrap().unwrap();
         assert!(requests.try_recv().is_err());
-        let paths = crate::libs::data_paths::DataPaths::new(directory.path());
+        let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
         assert!(!directory.path().join("cache").exists());
         assert!(paths.pending_restore().is_file());
         assert!(!paths.database().exists());

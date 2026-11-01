@@ -49,16 +49,18 @@ fn remote_filesystems_are_case_insensitive() {
 #[cfg(all(feature = "runtime", target_os = "linux"))]
 #[test]
 fn linux_mount_conversion_retains_partition_identity_and_nullable_metadata() {
-    let facts = linux_facts(crate::libs::platform::linux::mounts::list::Mount {
-        id: "part:disk:2".into(),
-        name: "Partition".into(),
-        partition_num: Some(2),
-        label: Some("Data".into()),
-        uuid: Some("volume-uuid".into()),
-        disk_id: Some("disk".into()),
-        total_bytes: 100,
-        ..Default::default()
-    });
+    let facts = linux_facts(
+        crate::infrastructure::platform::linux::mounts::list::Mount {
+            id: "part:disk:2".into(),
+            name: "Partition".into(),
+            partition_num: Some(2),
+            label: Some("Data".into()),
+            uuid: Some("volume-uuid".into()),
+            disk_id: Some("disk".into()),
+            total_bytes: 100,
+            ..Default::default()
+        },
+    );
     assert_eq!(facts["id"], "part:disk:2");
     assert_eq!(facts["partitionNum"], 2);
     assert_eq!(facts["label"], "Data");

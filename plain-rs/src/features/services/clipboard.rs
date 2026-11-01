@@ -1,4 +1,4 @@
-use crate::libs::events::WsEvent;
+use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -73,12 +73,12 @@ struct Report {
 }
 
 pub fn record_history(
-    db: &crate::libs::db::Db,
-    host: &Arc<crate::libs::host::bridge::Host>,
+    db: &crate::infrastructure::db::Db,
+    host: &Arc<crate::infrastructure::host::bridge::Host>,
     text: &str,
     source: &str,
     sensitive: bool,
-) -> Result<(crate::libs::db::ClipboardRow, bool), String> {
+) -> Result<(crate::infrastructure::db::ClipboardRow, bool), String> {
     let result = crate::features::clipboard::record(db, text, source, "", sensitive)?;
     if result.1 {
         host.invalidate("clipboardHistoryRefresh");

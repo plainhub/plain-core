@@ -1,8 +1,8 @@
 use crate::features::services::files::provider_query as provider_plan;
 use crate::features::services::files::provider_query::Plan;
 use crate::features::services::sms::addresses::select as addresses;
-use crate::libs::db::Db;
-use crate::libs::utils::search_dsl::FilterField;
+use crate::infrastructure::db::Db;
+use plain_libs::utils::search_dsl::FilterField;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 #[derive(Deserialize)]
@@ -295,8 +295,8 @@ fn narrows_nothing(query: &str, fields: &[FilterField], sms: &Plan) -> bool {
         && !fields.iter().any(|f| f.name == "all" && f.value == "true")
 }
 async fn prepare(
-    db: &crate::libs::db::Db,
-    host: &crate::libs::host::bridge::Host,
+    db: &crate::infrastructure::db::Db,
+    host: &crate::infrastructure::host::bridge::Host,
     query: &str,
     include_trashed: bool,
     destructive: bool,
@@ -328,8 +328,8 @@ async fn prepare(
     Ok(plans)
 }
 async fn count(
-    db: &crate::libs::db::Db,
-    host: &crate::libs::host::bridge::Host,
+    db: &crate::infrastructure::db::Db,
+    host: &crate::infrastructure::host::bridge::Host,
     query: &str,
     include_trashed: bool,
 ) -> anyhow::Result<i64> {
@@ -401,8 +401,8 @@ struct ThreadMatch {
 }
 
 async fn matched_conversation_facts(
-    db: &crate::libs::db::Db,
-    host: &crate::libs::host::bridge::Host,
+    db: &crate::infrastructure::db::Db,
+    host: &crate::infrastructure::host::bridge::Host,
     query: &str,
 ) -> anyhow::Result<ConversationFacts> {
     let mut plans = prepare(db, host, query, true, false).await?;
@@ -439,7 +439,7 @@ async fn matched_conversation_facts(
     conversation_facts(host, Some(ids), None).await
 }
 async fn conversation_facts(
-    host: &crate::libs::host::bridge::Host,
+    host: &crate::infrastructure::host::bridge::Host,
     ids: Option<Vec<String>>,
     limit: Option<i64>,
 ) -> anyhow::Result<ConversationFacts> {
@@ -453,8 +453,8 @@ async fn conversation_facts(
     Ok(serde_json::from_value(facts)?)
 }
 pub async fn execute(
-    db: &crate::libs::db::Db,
-    host: &crate::libs::host::bridge::Host,
+    db: &crate::infrastructure::db::Db,
+    host: &crate::infrastructure::host::bridge::Host,
     request: Request,
 ) -> anyhow::Result<Value> {
     crate::features::services::capabilities::require(host, "SMS").await?;

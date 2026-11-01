@@ -1,4 +1,5 @@
-use crate::libs::db::{Db, SessionRow};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::SessionRow;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use rand::RngCore;
@@ -63,7 +64,7 @@ impl<'a> SessionStore<'a> {
         if info.token.is_empty() {
             let mut key = [0u8; 32];
             rand::thread_rng().fill_bytes(&mut key);
-            info.token = crate::libs::utils::base64::base64_encode(&key);
+            info.token = plain_libs::utils::base64::base64_encode(&key);
         }
         token_key(&info.token)?;
         let existing = self.db.session_get(&info.client_id)?;
@@ -78,7 +79,7 @@ impl<'a> SessionStore<'a> {
                 .as_ref()
                 .filter(|row| row.token == info.token)
                 .map(|row| row.url_token.clone())
-                .unwrap_or_else(crate::libs::crypto::gen_token),
+                .unwrap_or_else(plain_libs::crypto::gen_token),
             client_id: info.client_id.clone(),
             token: info.token.clone(),
             name: info.client_name.clone(),
@@ -121,7 +122,7 @@ impl<'a> SessionStore<'a> {
 }
 
 pub fn token_key(token: &str) -> Result<[u8; 32]> {
-    crate::libs::utils::base64::base64_decode_checked(token)
+    plain_libs::utils::base64::base64_decode_checked(token)
         .map_err(|_| anyhow!("invalid base64 token"))?
         .try_into()
         .map_err(|_| anyhow!("session token must contain 32 bytes"))

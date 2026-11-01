@@ -19,7 +19,7 @@ impl DiscoveryHostQuery {
 }
 
 fn nearby_snapshot(state: &ServerState) -> async_graphql::Result<Vec<NearbyDevice>> {
-    let paired: HashSet<String> = plain_rs::libs::db::chat_store::peers::all(&state.db)?
+    let paired: HashSet<String> = plain_rs::infrastructure::db::chat_store::peers::all(&state.db)?
         .into_iter()
         .filter(|peer| peer.is_paired())
         .map(|peer| peer.id)

@@ -1,11 +1,11 @@
 use crate::features::services::discovery::pairing_attempts::Resolved;
-use crate::libs::{
-    crypto::{self, EcdhSession},
-    utils::base64::{base64_decode, base64_encode},
-};
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use futures_util::{SinkExt, StreamExt};
+use plain_libs::crypto;
+use plain_libs::crypto::EcdhSession;
+use plain_libs::utils::base64::base64_decode;
+use plain_libs::utils::base64::base64_encode;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::time::Duration;
@@ -26,7 +26,7 @@ pub(super) async fn run(
     let saved = if target.target.device_id.is_empty() {
         None
     } else {
-        crate::libs::db::chat_store::peers::get(&state.db, &target.target.device_id)?
+        crate::infrastructure::db::chat_store::peers::get(&state.db, &target.target.device_id)?
     };
     let response = state
         .lan
@@ -72,13 +72,17 @@ pub(super) async fn run(
             );
             let name = text(&metadata, "deviceName")?;
             let changed = state.db.with_conn(|connection| {
-                crate::libs::db::chat_store::peers::update_name(connection, &saved.id, name)
+                crate::infrastructure::db::chat_store::peers::update_name(
+                    connection, &saved.id, name,
+                )
             })?;
             if changed > 0 {
-                let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-                    crate::features::chat::events::WS_PEER_UPDATED,
-                    json!({"id":saved.id}).to_string(),
-                ));
+                let _ = state
+                    .events
+                    .send(crate::infrastructure::events::WsEvent::broadcast(
+                        crate::features::chat::events::WS_PEER_UPDATED,
+                        json!({"id":saved.id}).to_string(),
+                    ));
             }
             state.pairing_runtime.attempts.transition(
                 state,
@@ -110,7 +114,7 @@ pub(super) async fn run(
                     .ok_or_else(|| anyhow::anyhow!("cancelled"))?
             }
         };
-        Some(crate::libs::crypto::sha512_hex(&password))
+        Some(plain_libs::crypto::sha512_hex(&password))
     } else {
         None
     };
@@ -269,7 +273,7 @@ pub(super) async fn run(
         &public_key,
         chrono::Utc::now().timestamp_millis(),
     )?;
-    if let Some(saved) = crate::libs::db::chat_store::peers::get(&state.db, &remote_id)? {
+    if let Some(saved) = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)? {
         check_identity(&saved.id, &saved.public_key, &remote_id, &public_key)?;
     }
     {
@@ -300,7 +304,7 @@ pub(super) async fn run(
             .is_some_and(|s| !matches!(s.phase.as_str(), "CANCELLED" | "FAILED")),
         "cancelled"
     );
-    if let Some(saved) = crate::libs::db::chat_store::peers::get(&state.db, &remote_id)? {
+    if let Some(saved) = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)? {
         check_identity(&saved.id, &saved.public_key, &remote_id, &public_key)?;
     }
     state.pairing_runtime.attempts.transition(
@@ -342,7 +346,7 @@ pub(super) async fn run(
         None,
         Some(&remote_id),
     );
-    if let Some(peer) = crate::libs::db::chat_store::peers::get(&state.db, &remote_id)? {
+    if let Some(peer) = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)? {
         crate::features::services::discovery::pairing_runtime::success(
             state,
             &serde_json::to_value(crate::features::services::peers::peer_address::view(&peer))?,

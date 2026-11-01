@@ -11,7 +11,7 @@ use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::services::contacts::write as contact_write;
 use plain_rs::features::services::contacts::write::Action;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -178,8 +178,8 @@ impl ContactsMutation {
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-        plain_rs::libs::phone::query::require_narrowing(
-            ctx.data_unchecked::<Arc<plain_rs::libs::db::Db>>(),
+        plain_rs::features::services::phone_query::require_narrowing(
+            ctx.data_unchecked::<Arc<plain_rs::infrastructure::db::Db>>(),
             plain_rs::features::services::files::provider_query::Provider::Contact,
             &query,
         )

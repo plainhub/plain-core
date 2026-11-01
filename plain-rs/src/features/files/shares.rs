@@ -2,8 +2,8 @@ pub mod batch_plan;
 pub mod client;
 pub mod summary;
 use crate::features::prefs::Prefs;
-use crate::libs::db::Db;
-use crate::libs::db::ShareRow;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::ShareRow;
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -70,10 +70,10 @@ impl Service {
         validate_expiry(expires.as_deref())?;
         let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
         let row = ShareRow {
-            id: crate::libs::utils::short_uuid::short_uuid(),
+            id: plain_libs::utils::short_uuid::short_uuid(),
             name,
             password: String::new(),
-            url_token: crate::libs::crypto::gen_token(),
+            url_token: plain_libs::crypto::gen_token(),
             read_only,
             expires_at: expires,
             data: Self::build_roots(paths)?,
@@ -131,11 +131,11 @@ impl Service {
             .prefs
             .get::<String>(crate::features::prefs::pref_keys::MASTER_SECRET)?
             .ok_or_else(|| anyhow::anyhow!("master secret not initialized"))?;
-        let key = crate::libs::utils::base64::base64_decode_checked(&secret)?;
+        let key = plain_libs::utils::base64::base64_decode_checked(&secret)?;
         anyhow::ensure!(key.len() == 32, "invalid master secret");
         let mut mac = Hmac::<sha2_mac::Sha256>::new_from_slice(&key)?;
         mac.update(id.as_bytes());
-        Ok(crate::libs::utils::base64::base64_encode_url_safe(
+        Ok(plain_libs::utils::base64::base64_encode_url_safe(
             &mac.finalize().into_bytes(),
         ))
     }
@@ -305,7 +305,7 @@ impl Service {
         if scope != crate::features::files::resource_link::Scope::Share(id.into()) {
             return Ok(None);
         }
-        let key = crate::libs::utils::base64::base64_decode_checked(&row.url_token)?;
+        let key = plain_libs::utils::base64::base64_decode_checked(&row.url_token)?;
         let Ok(resource) = crate::features::files::resource_link::open(&scope, &key, payload)
         else {
             return Ok(None);

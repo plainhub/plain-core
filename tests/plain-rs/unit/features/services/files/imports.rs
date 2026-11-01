@@ -1,10 +1,11 @@
 use super::*;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde_json::json;
 
 fn fixture() -> (tempfile::TempDir, Arc<FileStore>) {
     let directory = tempfile::tempdir().unwrap();
-    let db = Arc::new(crate::libs::db::Db::open(&directory.path().join("plain.db")).unwrap());
+    let db =
+        Arc::new(crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap());
     let store = FileStore::new(db, directory.path().to_path_buf());
     (directory, store)
 }

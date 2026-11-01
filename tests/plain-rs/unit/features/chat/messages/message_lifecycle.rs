@@ -36,7 +36,7 @@ fn reception_is_atomic_and_receipt_survives_restart_and_message_deletion() {
     let path = std::env::temp_dir().join(format!(
         "chat-receipt-{}-{}.db",
         std::process::id(),
-        crate::libs::db::short_id()
+        crate::infrastructure::db::short_id()
     ));
     let db = Db::open(&path).unwrap();
     db.upsert_peer(&DPeer::new(
@@ -46,7 +46,7 @@ fn reception_is_atomic_and_receipt_survives_restart_and_message_deletion() {
         Some(1),
         crate::features::chat::enums::DeviceType::Phone,
     ));
-    let signature = crate::libs::utils::base64::base64_encode(&[7; 64]);
+    let signature = plain_libs::utils::base64::base64_encode(&[7; 64]);
     let timestamp = crate::features::peers::pairing::now_ms();
     db.with_conn(|c|c.execute_batch("CREATE TRIGGER fail_chat BEFORE INSERT ON chats BEGIN SELECT RAISE(ABORT,'fixture failure'); END;")).unwrap();
     assert!(receive(&db, "peer", "", TEXT, &signature, timestamp).is_err());
@@ -70,7 +70,7 @@ fn reception_is_atomic_and_receipt_survives_restart_and_message_deletion() {
     );
     assert!(receive(&db, "unknown", "", TEXT, &signature, timestamp).is_err());
     assert!(receive(&db, "peer", "", TEXT, &signature, i64::MIN).is_err());
-    crate::libs::db::chat_store::peers::delete(&db, &["peer".into()]).unwrap();
+    crate::infrastructure::db::chat_store::peers::delete(&db, &["peer".into()]).unwrap();
     assert_eq!(
         db.with_conn(
             |c| c.query_row("SELECT count(*) FROM chat_receipts", [], |r| r
@@ -156,11 +156,11 @@ fn forwarding_creates_one_atomic_batch_from_the_stored_message() {
 #[test]
 fn channel_reception_requires_current_joined_membership_before_consuming_receipt() {
     use crate::features::chat::channels::messages::ChannelMember;
-    use crate::libs::db::chat_store::{SaveMode, channels};
+    use crate::infrastructure::db::chat_store::{SaveMode, channels};
     let db = db();
     let mut channel =
         crate::features::chat::channels::state::create(&db, "owner", "Fixture").unwrap();
-    let signature = crate::libs::utils::base64::base64_encode(&[19; 64]);
+    let signature = plain_libs::utils::base64::base64_encode(&[19; 64]);
     let timestamp = crate::features::peers::pairing::now_ms();
     for members in [
         serde_json::to_string(&[ChannelMember::new("owner")]).unwrap(),
@@ -214,7 +214,7 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
             "peer",
             &channel.id,
             TEXT,
-            &crate::libs::utils::base64::base64_encode(&[20; 64]),
+            &plain_libs::utils::base64::base64_encode(&[20; 64]),
             timestamp
         )
         .is_err()
@@ -332,7 +332,7 @@ fn failed_attachment_batch_does_not_claim_imports_or_leave_partial_messages() {
 
 fn assert_invalid_attachment(content: Value, db: &Db, file: &app_file_store::ImportResult) {
     let content = content.to_string();
-    let signature = crate::libs::utils::base64::base64_encode(&[7; 64]);
+    let signature = plain_libs::utils::base64::base64_encode(&[7; 64]);
     db.upsert_peer(&DPeer::new(
         "peer",
         "Fixture",

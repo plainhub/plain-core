@@ -1,9 +1,9 @@
 #![cfg(feature = "http_transport")]
 
 use plain_rs::features::services::peers::peer_transport::*;
-use plain_rs::libs::db::DPeer;
-use plain_rs::libs::db::chat_store::peers;
-use plain_rs::libs::transport::router::TransportType;
+use plain_rs::infrastructure::db::DPeer;
+use plain_rs::infrastructure::db::chat_store::peers;
+use plain_rs::infrastructure::transport::router::TransportType;
 use plain_rs::runtime::Runtime as ServerState;
 use serde_json::Value;
 use serde_json::json;
@@ -17,7 +17,7 @@ fn peer() -> DPeer {
         Some(443),
         plain_rs::features::chat::enums::DeviceType::Phone,
     );
-    p.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
+    p.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     p
 }
 fn state() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
@@ -27,7 +27,7 @@ fn state() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
     prefs.set("client_id", "actor").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[1; 32]),
+        &plain_libs::utils::base64::base64_encode(&[1; 32]),
         prefs,
     )
     .unwrap();
@@ -35,7 +35,7 @@ fn state() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
     peers::save(
         &state.db,
         &[peer()],
-        plain_rs::libs::db::chat_store::SaveMode::Insert,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     (dir, server, state)
@@ -51,7 +51,7 @@ async fn aware_config_uses_current_pairing_identity_and_rejects_corrupt_keys() {
     assert_eq!(config.local_port, 2443);
     assert_eq!(
         config.pmk.unwrap(),
-        plain_rs::libs::utils::base64::base64_encode(&[7; 32])
+        plain_libs::utils::base64::base64_encode(&[7; 32])
     );
     let native = server.native_graphql().unwrap();
     assert_eq!(snapshot(&state)["active"], json!([]));
@@ -67,7 +67,7 @@ async fn aware_config_uses_current_pairing_identity_and_rejects_corrupt_keys() {
     peers::save(
         &state.db,
         &[corrupt],
-        plain_rs::libs::db::chat_store::SaveMode::Update,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Update,
     )
     .unwrap();
     assert!(

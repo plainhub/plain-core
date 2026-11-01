@@ -5,10 +5,10 @@ use std::sync::Arc;
 #[test]
 fn default_shared_download_layout_uses_startup_root_without_another_host_call() {
     let root = tempfile::tempdir().unwrap();
-    let host = crate::libs::host::bridge::Host::with_startup_config(
-        crate::libs::host::startup::StartupConfig {
+    let host = crate::infrastructure::host::bridge::Host::with_startup_config(
+        crate::infrastructure::host::startup::StartupConfig {
             downloads_dir: root.path().to_str().unwrap().into(),
-            ..crate::libs::platform::startup::config()
+            ..crate::infrastructure::platform::startup::config()
         },
     )
     .unwrap();
@@ -32,10 +32,10 @@ fn default_shared_download_layout_uses_startup_root_without_another_host_call() 
 fn invalid_default_download_roots_fail_without_replacing_an_explicit_target() {
     let root = tempfile::tempdir().unwrap();
     for value in ["", "relative", "bad\0path"] {
-        let host = crate::libs::host::bridge::Host::with_startup_config(
-            crate::libs::host::startup::StartupConfig {
+        let host = crate::infrastructure::host::bridge::Host::with_startup_config(
+            crate::infrastructure::host::startup::StartupConfig {
                 downloads_dir: value.into(),
-                ..crate::libs::platform::startup::config()
+                ..crate::infrastructure::platform::startup::config()
             },
         )
         .unwrap();
@@ -55,7 +55,7 @@ fn fixture() -> (tempfile::TempDir, crate::test_runtime::Core, CoreRuntime) {
     prefs.set("client_id", "fixture").unwrap();
     let server = crate::test_runtime::Core::start(
         directory.path(),
-        &crate::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();

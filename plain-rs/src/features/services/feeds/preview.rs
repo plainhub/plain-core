@@ -1,8 +1,8 @@
 use crate::features::feeds::{error, require_url};
 use crate::features::services::feeds::fetch_text;
 use crate::features::services::feeds::parse_feed;
-use crate::libs::db::Db;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainResult;
 
 pub async fn title(db: &Db, url: &str) -> DomainResult<String> {
     require_url(url)?;

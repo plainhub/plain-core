@@ -28,7 +28,7 @@ fn provider_types_are_projected_to_domain_types_without_confusing_their_numeric_
 
 #[test]
 fn all_document_mime_rules_come_from_the_shared_document_module() {
-    for mime in crate::libs::media::documents::MIME_TYPES {
+    for mime in plain_libs::media::documents::MIME_TYPES {
         let rows = identities(
             json!([{"id":"document","path":"/files/doc","providerType":0,"mimeType":mime}]),
         )

@@ -52,7 +52,7 @@ fn compact_ble_payload_preserves_all_flags_and_existing_sha256_short_id() {
         assert_eq!(payload.len(), 9);
         assert_eq!(payload[0], flags);
         assert_eq!(
-            crate::libs::utils::hex::bytes_to_hex(&payload[1..]),
+            plain_libs::utils::hex::bytes_to_hex(&payload[1..]),
             super::super::nearby_wire::short_id("fixture")
         );
         assert_eq!(&payload[1..], &Sha256::digest(b"fixture")[..8]);

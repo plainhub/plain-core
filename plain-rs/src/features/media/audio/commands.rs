@@ -3,9 +3,9 @@ use crate::features::media::audio::playback::Playback;
 use crate::features::media::audio::queue as audio_queue;
 use crate::features::media::audio::queue::AudioTrack;
 use crate::features::prefs::Prefs;
-use crate::libs::db::Db;
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]

@@ -1,7 +1,6 @@
-use crate::libs::{
-    db::Db,
-    error::{DomainError, DomainResult},
-};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 const RECENT_LIMIT: usize = 8;
@@ -29,7 +28,7 @@ fn history_from_connection(conn: &rusqlite::Connection) -> DomainResult<Vec<Hist
         .collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-pub fn native(db: &Db) -> DomainResult<Overview<crate::libs::db::MediaFileRow>> {
+pub fn native(db: &Db) -> DomainResult<Overview<crate::infrastructure::db::MediaFileRow>> {
     db.with_conn(|connection| {
         let transaction = connection.unchecked_transaction()?;
         let mut summary = Accumulator::new(history_from_connection(&transaction)?)?;
@@ -41,11 +40,11 @@ pub fn native(db: &Db) -> DomainResult<Overview<crate::libs::db::MediaFileRow>> 
         {
             let mut statement = transaction.prepare(&format!(
                 "SELECT {} FROM file_catalog WHERE data_type=1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1 ORDER BY title COLLATE NOCASE ASC,id",
-                crate::libs::db::media_file::COLUMNS,
+                crate::infrastructure::db::media_file::COLUMNS,
             ))?;
             let mut rows = statement.query([])?;
             while let Some(row) = rows.next()? {
-                let row = crate::libs::db::media_file::from_row(row)?;
+                let row = crate::infrastructure::db::media_file::from_row(row)?;
                 let created_ms = chrono::DateTime::parse_from_rfc3339(&row.created_at)
                     .map_or(0, |time| time.timestamp_millis());
                 let id = row.id.clone();

@@ -121,7 +121,7 @@ fn reserve(target: &Path, directory: bool) -> Result<(Output, Option<File>), Str
         .ok_or("Archive destination parent required")?;
     std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     loop {
-        let path = crate::libs::utils::unique_path::unique_sibling(target)
+        let path = plain_libs::utils::unique_path::unique_sibling(target)
             .map_err(|error| error.to_string())?;
         let result = if directory {
             std::fs::create_dir(&path).map(|_| None)

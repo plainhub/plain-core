@@ -2,7 +2,7 @@ use super::*;
 use crate::graphql::executor::RequestOrigin;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::{enums::DataType, prefs::Prefs};
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 
 fn fixture(permissions: &[&str]) -> (tempfile::TempDir, Arc<Db>, PublicSchema) {

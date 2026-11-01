@@ -1,5 +1,5 @@
 use super::*;
-use crate::libs::db::notes_feeds::FeedEntryRow;
+use crate::infrastructure::db::notes_feeds::FeedEntryRow;
 
 fn database() -> (tempfile::TempDir, Db) {
     let dir = tempfile::tempdir().unwrap();

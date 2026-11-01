@@ -3,28 +3,28 @@ use crate::features::media::images::indexing::Image;
 use crate::features::media::images::indexing::Page;
 use crate::features::media::images::indexing::Provider;
 use crate::features::media::images::indexing::Snapshot;
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
+use crate::infrastructure::host::bridge::Host;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use std::sync::Arc;
 pub struct ImageProvider {
-    catalog: Option<Arc<crate::libs::db::Db>>,
-    resources: Arc<crate::libs::host::resources::NativeResources>,
+    catalog: Option<Arc<crate::infrastructure::db::Db>>,
+    resources: Arc<crate::infrastructure::host::resources::NativeResources>,
     cache: std::path::PathBuf,
     host: Arc<Host>,
     runtime: tokio::runtime::Handle,
     ended: bool,
-    encoder: Option<Arc<dyn crate::libs::ai_image_search::embedding::ImageEncoder>>,
+    encoder: Option<Arc<dyn plain_libs::ai_image_search::embedding::ImageEncoder>>,
 }
 impl ImageProvider {
     pub fn new(
         host: Arc<Host>,
-        resources: Arc<crate::libs::host::resources::NativeResources>,
+        resources: Arc<crate::infrastructure::host::resources::NativeResources>,
         cache: std::path::PathBuf,
-        encoder: Option<Arc<dyn crate::libs::ai_image_search::embedding::ImageEncoder>>,
-        db: Arc<crate::libs::db::Db>,
+        encoder: Option<Arc<dyn plain_libs::ai_image_search::embedding::ImageEncoder>>,
+        db: Arc<crate::infrastructure::db::Db>,
         system_catalog: bool,
     ) -> Self {
         Self {
@@ -59,7 +59,7 @@ impl ImageProvider {
 
     fn encode(
         &self,
-        encoder: Arc<dyn crate::libs::ai_image_search::embedding::ImageEncoder>,
+        encoder: Arc<dyn plain_libs::ai_image_search::embedding::ImageEncoder>,
         item: &Image,
     ) -> DomainResult<Option<Vec<f32>>> {
         self.encode_with(encoder, item, |source, output| {
@@ -75,7 +75,7 @@ impl ImageProvider {
 
     fn encode_with(
         &self,
-        encoder: Arc<dyn crate::libs::ai_image_search::embedding::ImageEncoder>,
+        encoder: Arc<dyn plain_libs::ai_image_search::embedding::ImageEncoder>,
         item: &Image,
         decode: impl FnOnce(&std::path::Path, &std::path::Path) -> Result<Value, String>,
     ) -> DomainResult<Option<Vec<f32>>> {
@@ -138,7 +138,7 @@ impl ImageProvider {
 impl Provider for ImageProvider {
     fn resolve(&mut self, revision: &str, ids: &[String]) -> DomainResult<Vec<Image>> {
         if let Some(db) = &self.catalog {
-            return crate::libs::db::image_catalog::resolve(db, revision, ids);
+            return crate::infrastructure::db::image_catalog::resolve(db, revision, ids);
         }
         self.call(
             "imageCatalogResolve",
@@ -147,13 +147,13 @@ impl Provider for ImageProvider {
     }
     fn snapshot(&mut self) -> DomainResult<Snapshot> {
         if let Some(db) = &self.catalog {
-            return crate::libs::db::image_catalog::snapshot(db);
+            return crate::infrastructure::db::image_catalog::snapshot(db);
         }
         self.call("imageCatalogSnapshot", json!({}))
     }
     fn page(&mut self, revision: &str, cursor: &str, limit: usize) -> DomainResult<Page> {
         if let Some(db) = &self.catalog {
-            return crate::libs::db::image_catalog::page(db, revision, cursor, limit);
+            return crate::infrastructure::db::image_catalog::page(db, revision, cursor, limit);
         }
         self.call(
             "imageCatalogPage",
@@ -177,7 +177,7 @@ impl Provider for ImageProvider {
                     crate::features::media::images::embeddings::EmbeddingInput {
                         id: item.id.clone(),
                         path: item.path.clone(),
-                        embedding_base64: crate::libs::utils::base64::base64_encode(
+                        embedding_base64: plain_libs::utils::base64::base64_encode(
                             &vector
                                 .iter()
                                 .flat_map(|v| v.to_be_bytes())
@@ -193,7 +193,7 @@ impl Provider for ImageProvider {
     }
     fn verify(&mut self, revision: &str) -> DomainResult<()> {
         if let Some(db) = &self.catalog {
-            return crate::libs::db::image_catalog::verify(db, revision);
+            return crate::infrastructure::db::image_catalog::verify(db, revision);
         }
         let verified: bool = self.call("imageCatalogVerify", json!({"revision":revision}))?;
         if !verified {

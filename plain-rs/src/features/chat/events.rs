@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::libs::utils::base64::base64_decode;
+use plain_libs::utils::base64::base64_decode;
 
 use crate::features::chat::channels::messages::decode_members;
 use crate::features::chat::enums::ChannelStatus;
-use crate::libs::db::Db;
+use crate::infrastructure::db::Db;
 
 pub const WS_MESSAGE_CREATED: &'static str = "MESSAGE_CREATED";
 pub const WS_MESSAGE_DELETED: &'static str = "MESSAGE_DELETED";
@@ -15,7 +15,7 @@ pub const WS_CHANNELS_UPDATED: &'static str = "CHANNELS_UPDATED";
 pub const WS_PEER_UPDATED: &'static str = "PEER_UPDATED";
 pub const WS_PEER_STATUS_UPDATED: &'static str = "PEER_STATUS_UPDATED";
 pub const WS_PAIRING_REQUEST_RECEIVED: &'static str = "PAIRING_REQUEST_RECEIVED";
-pub use crate::libs::events::WS_PAIRING_SUCCESS;
+pub use crate::infrastructure::events::WS_PAIRING_SUCCESS;
 pub const WS_PAIRING_CANCELLED: &'static str = "PAIRING_CANCELED";
 pub const WS_PAIRING_STARTED: &'static str = "PAIRING_STARTED";
 pub const WS_PAIRING_FAILED: &'static str = "PAIRING_FAILED";
@@ -70,7 +70,7 @@ pub fn load_key_cache(db: &Db, peer_cache: &PeerKeyCache, channel_cache: &Channe
 }
 
 /// Public channel projection shared by GraphQL and WebSocket events.
-pub fn channel_to_json(ch: &crate::libs::db::DChannel, actor: &str) -> serde_json::Value {
+pub fn channel_to_json(ch: &crate::infrastructure::db::DChannel, actor: &str) -> serde_json::Value {
     let members: Vec<serde_json::Value> = decode_members(&ch.members)
         .into_iter()
         .map(|m| serde_json::json!({"peerId":m.peer_id,"status":m.status.to_string()}))
@@ -81,7 +81,7 @@ pub fn channel_to_json(ch: &crate::libs::db::DChannel, actor: &str) -> serde_jso
 }
 
 pub fn public_channels(db: &Db, actor: &str) -> anyhow::Result<serde_json::Value> {
-    let mut channels = crate::libs::db::chat_store::channels::all(db)?;
+    let mut channels = crate::infrastructure::db::chat_store::channels::all(db)?;
     channels.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(serde_json::Value::Array(
         channels

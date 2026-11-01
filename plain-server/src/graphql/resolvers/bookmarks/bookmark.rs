@@ -2,18 +2,18 @@ use async_graphql::{Context, ID, Object};
 use serde_json::json;
 use std::sync::Arc;
 
-use plain_rs::libs::db::Db;
-use plain_rs::libs::db::bookmark as bookmark_db;
-use plain_rs::libs::db::bookmark::DBookmark;
-use plain_rs::libs::db::bookmark::DBookmarkGroup;
-use plain_rs::libs::db::now_iso;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::db::bookmark as bookmark_db;
+use plain_rs::infrastructure::db::bookmark::DBookmark;
+use plain_rs::infrastructure::db::bookmark::DBookmarkGroup;
+use plain_rs::infrastructure::db::now_iso;
 
 use crate::graphql::resolvers::bookmarks::bookmark_types::Bookmark;
 use crate::graphql::resolvers::bookmarks::bookmark_types::BookmarkGroup;
 use crate::graphql::resolvers::bookmarks::bookmark_types::BookmarkInput;
 use crate::graphql::types::ActionResult;
-use plain_rs::libs::events::WS_BOOKMARK_UPDATED;
-use plain_rs::libs::events::WsEvent;
+use plain_rs::infrastructure::events::WS_BOOKMARK_UPDATED;
+use plain_rs::infrastructure::events::WsEvent;
 use tokio::sync::broadcast;
 
 fn bookmark_to_json(b: &DBookmark) -> serde_json::Value {

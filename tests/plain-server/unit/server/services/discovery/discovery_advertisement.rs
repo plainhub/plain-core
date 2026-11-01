@@ -13,7 +13,7 @@ fn core_with_host(directory: &std::path::Path) -> (crate::server::ContentServer,
     prefs.set("client_id", "fixture-root").unwrap();
     let core = crate::server::ContentServer::start_core(
         &directory,
-        &plain_rs::libs::utils::base64::base64_encode(&[9; 32]),
+        &plain_libs::utils::base64::base64_encode(&[9; 32]),
         prefs,
     )
     .unwrap();

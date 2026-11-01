@@ -1,14 +1,11 @@
 use crate::server::ContentServer;
+use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::services::peers::management::Identity;
 use plain_rs::features::services::peers::metadata::*;
+use plain_rs::infrastructure::db::DPeer;
+use plain_rs::infrastructure::db::chat_store::SaveMode;
+use plain_rs::infrastructure::db::chat_store::peers;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_rs::{
-    features::chat::enums::DeviceType,
-    libs::db::{
-        DPeer,
-        chat_store::{SaveMode, peers},
-    },
-};
 use serde_json::json;
 use std::{
     sync::{
@@ -42,7 +39,7 @@ async fn fixture() -> (
         Some(18443),
         DeviceType::Computer,
     );
-    peer.token = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
+    peer.token = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peer.key = "pairing-key".into();
     peer.public_key = "signature-key".into();
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();

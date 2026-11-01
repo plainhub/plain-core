@@ -4,9 +4,9 @@ use async_graphql::{Context, Object};
 pub use plain_rs::features::enums::DataType;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::tags;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::db::TagRow;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::db::TagRow;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -260,7 +260,7 @@ fn tag(row: &TagRow) -> Tag {
     }
 }
 
-fn failed(error: plain_rs::libs::error::DomainError) -> async_graphql::Error {
+fn failed(error: plain_rs::infrastructure::error::DomainError) -> async_graphql::Error {
     async_graphql::Error::new(error.to_string())
 }
 

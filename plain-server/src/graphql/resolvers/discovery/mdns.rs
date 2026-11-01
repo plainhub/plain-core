@@ -2,7 +2,7 @@ use crate::server::ServerState;
 use async_graphql::{Context, Object, SimpleObject};
 use plain_rs::features::services::discovery::mdns_runtime;
 use plain_rs::features::services::discovery::mdns_runtime::Request;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::types::Long;
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize)]
@@ -131,7 +131,7 @@ mod tests;
 fn discovery_owner(ctx: &Context<'_>) -> async_graphql::Result<String> {
     if crate::http::auth::public_gate::is_local(ctx) {
         return Ok(ctx
-            .data_opt::<plain_rs::libs::host::request_scope::NativeRequestScope>()
+            .data_opt::<plain_rs::infrastructure::host::request_scope::NativeRequestScope>()
             .map(|scope| format!("native:{}", scope.id()))
             .unwrap_or_else(|| "native".into()));
     }

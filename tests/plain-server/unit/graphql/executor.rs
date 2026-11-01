@@ -10,7 +10,7 @@ async fn quoted_enum_literals_are_rejected_before_local_or_remote_mutations_exec
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("auto_check_update", true).unwrap();
-    let token = plain_rs::libs::utils::base64::base64_encode(&[8; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[8; 32]);
     let server = ContentServer::start(dir.path(), &token, prefs.clone()).unwrap();
     let state = server.runtime_state();
     let query = r#"mutation { setPref(key: "auto_check_update", value: false) updateScreenMirrorQuality(mode: "HD") }"#;
@@ -40,7 +40,7 @@ async fn local_and_remote_execute_the_same_envelope_and_preserve_errors() {
     prefs
         .set("api_permissions", vec!["WRITE_EXTERNAL_STORAGE"])
         .unwrap();
-    let token = plain_rs::libs::utils::base64::base64_encode(&[8; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[8; 32]);
     let server = ContentServer::start(dir.path(), &token, prefs).unwrap();
     let state = server.runtime_state();
     let document = json!({"query":"query Count($q: String!) { noteCount(query: $q) } query Other { __typename }", "operationName":"Count", "variables":{"q":""}}).to_string();
@@ -155,7 +155,7 @@ async fn backup_uses_native_management_and_has_no_remote_graphql_entry() {
         ))
         .unwrap(),
     );
-    let token = plain_rs::libs::utils::base64::base64_encode(&[8; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[8; 32]);
     let server = ContentServer::start(directory.path(), &token, prefs).unwrap();
     let state = server.runtime_state();
     let remote = execute_graphql(
@@ -173,7 +173,7 @@ async fn backup_uses_native_management_and_has_no_remote_graphql_entry() {
     .await;
     assert!(!restore.errors.is_empty());
     assert!(
-        !plain_rs::libs::data_paths::DataPaths::new(directory.path())
+        !plain_rs::infrastructure::data_paths::DataPaths::new(directory.path())
             .pending_restore()
             .exists()
     );

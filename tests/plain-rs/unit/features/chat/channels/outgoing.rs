@@ -1,9 +1,9 @@
 use super::*;
 use crate::features::chat::channels::incoming;
-use crate::libs::crypto::ed25519_generate;
-use crate::libs::db::DPeer;
-use crate::libs::db::chat_store::SaveMode;
-use crate::libs::db::chat_store::peers;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::chat_store::SaveMode;
+use crate::infrastructure::db::chat_store::peers;
+use plain_libs::crypto::ed25519_generate;
 
 #[test]
 fn shared_invite_roundtrips_into_receiver_with_owner_key_and_preserves_real_peer_data() {
@@ -88,7 +88,7 @@ fn member_actions_and_directed_or_broadcast_kicks_use_canonical_wire_payloads() 
         )
         .unwrap();
         let kick: ChannelKick = serde_json::from_str(&payload).unwrap();
-        assert!(crate::libs::crypto::ed25519_verify(
+        assert!(plain_libs::crypto::ed25519_verify(
             &base64_encode(&public),
             channel_message_payload(&channel.id, channel.version, Action::Kick, target).as_bytes(),
             &kick.signature
@@ -133,7 +133,7 @@ fn member_actions_and_directed_or_broadcast_kicks_use_canonical_wire_payloads() 
 #[tokio::test]
 async fn encrypted_delivery_requires_a_true_acknowledgement() {
     struct Response(&'static str);
-    impl crate::libs::transport::contract::PeerTransport for Response {
+    impl crate::infrastructure::transport::contract::PeerTransport for Response {
         fn post<'a>(
             &'a self,
             _: &'a str,
@@ -142,11 +142,14 @@ async fn encrypted_delivery_requires_a_true_acknowledgement() {
             body: &'a [u8],
         ) -> impl std::future::Future<Output = Result<Vec<u8>, String>> + Send {
             async move {
-                assert!(crate::libs::crypto::xchacha_decrypt_raw(&[7; 32], body).is_some());
+                assert!(plain_libs::crypto::xchacha_decrypt_raw(&[7; 32], body).is_some());
                 Ok(
-                    crate::libs::transport::http_response::Context::new("/peer_graphql", body)
-                        .encrypt(&[7; 32], self.0.as_bytes())
-                        .unwrap(),
+                    crate::infrastructure::transport::http_response::Context::new(
+                        "/peer_graphql",
+                        body,
+                    )
+                    .encrypt(&[7; 32], self.0.as_bytes())
+                    .unwrap(),
                 )
             }
         }
@@ -163,7 +166,7 @@ async fn encrypted_delivery_requires_a_true_acknowledgement() {
         ),
     ] {
         assert_eq!(
-            crate::libs::transport::contract::deliver_channel_system_message(
+            crate::infrastructure::transport::contract::deliver_channel_system_message(
                 &Response(body),
                 &peer,
                 &[7; 32],

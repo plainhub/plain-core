@@ -70,7 +70,7 @@ use plain_rs::features::services::casting::address::device_name;
 /// advertises. Must agree with the one the advertiser used, or a control
 /// point fetches the description from an address the renderer never joined.
 fn local_ip() -> String {
-    let ips = plain_rs::libs::protocols::mdns::host_responder::local_ipv4_strs();
+    let ips = plain_rs::infrastructure::protocols::mdns::host_responder::local_ipv4_strs();
     ips.iter()
         .find(|ip| !ip.starts_with("127."))
         .or_else(|| ips.first())

@@ -13,7 +13,7 @@ use crate::features::services::casting::receiver::ssdp_messages;
 use crate::features::services::casting::receiver::types::DlnaCommand;
 use crate::features::services::casting::receiver::types::DlnaPlaybackState;
 use crate::features::services::casting::receiver::types::PendingCastRequest;
-use crate::libs::protocols::mdns::host_responder::local_ipv4_strs;
+use crate::infrastructure::protocols::mdns::host_responder::local_ipv4_strs;
 
 const SSDP_ADDR: &str = "239.255.255.250";
 const SSDP_PORT: u16 = 1900;

@@ -1,7 +1,7 @@
 use crate::service::Options;
 use crate::service::Service;
 use anyhow::Result;
-use plain_rs::libs::platform::system::consts::AppPaths;
+use plain_rs::infrastructure::platform::system::consts::AppPaths;
 
 pub async fn run(paths: &AppPaths, options: Options) -> Result<()> {
     #[cfg(unix)]

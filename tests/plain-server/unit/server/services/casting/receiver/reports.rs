@@ -12,7 +12,7 @@ fn fixture() -> (tempfile::TempDir, ContentServer) {
     );
     let core = ContentServer::start(
         directory.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap();

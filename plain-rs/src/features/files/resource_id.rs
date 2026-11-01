@@ -19,7 +19,7 @@ pub fn path_from_file_id(
         .ok_or(FileIdError::Forbidden)?;
     let resource = resource_link::open(
         &scope,
-        &crate::libs::utils::base64::base64_decode(&token),
+        &plain_libs::utils::base64::base64_decode(&token),
         payload,
     )
     .map_err(|_| FileIdError::Forbidden)?;

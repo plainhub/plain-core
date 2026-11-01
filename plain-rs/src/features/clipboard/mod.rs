@@ -1,7 +1,7 @@
 pub mod sync;
 
-use crate::libs::db::ClipboardRow;
-use crate::libs::db::Db;
+use crate::infrastructure::db::ClipboardRow;
+use crate::infrastructure::db::Db;
 use sha2::{Digest, Sha256};
 
 pub fn record(
@@ -14,7 +14,7 @@ pub fn record(
     validate_text(text)?;
     let row = ClipboardRow {
         id: uuid::Uuid::new_v4().to_string(),
-        hash: crate::libs::utils::hex::bytes_to_hex(&Sha256::digest(text.as_bytes())),
+        hash: plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(text.as_bytes())),
         text: text.into(),
         source: source.into(),
         label: label.into(),

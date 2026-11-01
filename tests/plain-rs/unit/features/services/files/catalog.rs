@@ -1,7 +1,7 @@
 use super::*;
 
-fn metadata() -> crate::libs::db::MediaFileMetadata {
-    crate::libs::db::MediaFileMetadata {
+fn metadata() -> crate::infrastructure::db::MediaFileMetadata {
+    crate::infrastructure::db::MediaFileMetadata {
         album: String::new(),
         album_artist: String::new(),
 
@@ -60,9 +60,9 @@ async fn native_catalog_reads_rows_counts_ids_and_buckets_without_a_host() {
 #[tokio::test]
 async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
     let host = Arc::new(
-        Host::with_startup_config(crate::libs::host::startup::StartupConfig {
+        Host::with_startup_config(crate::infrastructure::host::startup::StartupConfig {
             system_media_catalog: true,
-            ..crate::libs::platform::startup::config()
+            ..crate::infrastructure::platform::startup::config()
         })
         .unwrap(),
     );

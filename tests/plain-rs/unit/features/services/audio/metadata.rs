@@ -1,5 +1,6 @@
 use super::*;
-use crate::{features::enums::DataType, libs::db::Db};
+use crate::features::enums::DataType;
+use crate::infrastructure::db::Db;
 
 fn row(title: &str) -> MediaFileRow {
     MediaFileRow {
@@ -77,11 +78,10 @@ async fn uri_audio_tags_use_one_bounded_descriptor_without_sdk_metadata_or_stagi
     wrapped.extend_from_slice(b"private-suffix");
     let source = directory.path().join("descriptor");
     std::fs::write(&source, wrapped).unwrap();
-    let host = Arc::new(crate::libs::host::bridge::Host::default());
+    let host = Arc::new(crate::infrastructure::host::bridge::Host::default());
     let (generation, mut requests) = host.connect();
-    let resources = Arc::new(crate::libs::host::resources::NativeResources::new(
-        host.clone(),
-    ));
+    let resources =
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone()));
     let cache = directory.path().join("cache");
     let reading = tokio::spawn({
         let resources = resources.clone();
@@ -103,7 +103,7 @@ async fn uri_audio_tags_use_one_bounded_descriptor_without_sdk_metadata_or_stagi
     );
     stream
         .file(
-            crate::libs::host::resource_stream::NativeResourceFile::new(
+            crate::infrastructure::host::resource_stream::NativeResourceFile::new(
                 std::fs::File::open(source).unwrap(),
                 offset,
                 bytes.len() as i64,

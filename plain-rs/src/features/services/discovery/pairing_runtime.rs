@@ -130,10 +130,12 @@ pub enum Request {
     },
 }
 pub fn event(state: &CoreRuntime, kind: &'static str, value: Value) {
-    let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-        kind,
-        value.to_string(),
-    ));
+    let _ = state
+        .events
+        .send(crate::infrastructure::events::WsEvent::broadcast(
+            kind,
+            value.to_string(),
+        ));
 }
 pub fn failed(state: &CoreRuntime, target: &Target, error: &str, generation: Option<&str>) {
     let mut result =
@@ -340,9 +342,9 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
             device,
             generation,
         } => {
-            target.device_ip = crate::libs::transport::lan::best_host(
+            target.device_ip = crate::infrastructure::transport::lan::best_host(
                 &ips,
-                &crate::libs::transport::lan::local_interfaces(),
+                &crate::infrastructure::transport::lan::local_interfaces(),
             );
             if target.device_ip.is_empty() {
                 failed(state, &target, "No reachable pairing address", None);

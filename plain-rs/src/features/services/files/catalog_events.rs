@@ -1,4 +1,5 @@
-use crate::libs::events::{MEDIA_LIBRARY_UPDATED, WsEvent};
+use crate::infrastructure::events::MEDIA_LIBRARY_UPDATED;
+use crate::infrastructure::events::WsEvent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use tokio::sync::broadcast;

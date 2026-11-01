@@ -10,16 +10,16 @@ async fn conversation_reads_prepare_once_in_background_and_skip_searches_and_pag
     );
     let core = crate::server::ContentServer::start(
         directory.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[9; 32]),
+        &plain_libs::utils::base64::base64_encode(&[9; 32]),
         prefs,
     )
     .unwrap();
     let state = core.runtime_state();
     let mut peer =
-        plain_rs::libs::db::DPeer::new("peer", "Fixture", "", Some(1), DeviceType::Phone);
+        plain_rs::infrastructure::db::DPeer::new("peer", "Fixture", "", Some(1), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
-    peer.public_key = plain_rs::libs::utils::base64::base64_encode(&[8; 32]);
+    peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[8; 32]);
     state.db.upsert_peer(&peer);
     let (generation, mut requests) = state.host.connect();
     let executor = core.graphql_executor();

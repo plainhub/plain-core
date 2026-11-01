@@ -1,4 +1,4 @@
-use crate::libs::db::Db;
+use crate::infrastructure::db::Db;
 use anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 #[cfg(test)]
@@ -24,15 +24,15 @@ pub fn remove_channel(
     db: &Db,
     directory: &Path,
     id: &str,
-) -> Result<Option<crate::libs::db::DChannel>> {
+) -> Result<Option<crate::infrastructure::db::DChannel>> {
     Ok(mutate(db, directory, Selection::ChannelRecord(id), None)?.channel)
 }
 
 pub fn remove_channel_if_matches(
     db: &Db,
     directory: &Path,
-    expected: &crate::libs::db::DChannel,
-) -> Result<Option<crate::libs::db::DChannel>> {
+    expected: &crate::infrastructure::db::DChannel,
+) -> Result<Option<crate::infrastructure::db::DChannel>> {
     Ok(mutate(
         db,
         directory,
@@ -44,14 +44,14 @@ pub fn remove_channel_if_matches(
 
 struct Outcome {
     count: usize,
-    channel: Option<crate::libs::db::DChannel>,
+    channel: Option<crate::infrastructure::db::DChannel>,
 }
 
 fn mutate(
     db: &Db,
     directory: &Path,
     selection: Selection<'_>,
-    expected: Option<&crate::libs::db::DChannel>,
+    expected: Option<&crate::infrastructure::db::DChannel>,
 ) -> Result<Outcome> {
     let _guard = db.app_files_lock()?;
     let mut staged: Vec<(PathBuf, PathBuf)> = Vec::new();
@@ -62,10 +62,10 @@ fn mutate(
                 .query_row(
                     &format!(
                         "SELECT {} FROM chat_channels WHERE id=?1",
-                        crate::libs::db::CHANNEL_COLS
+                        crate::infrastructure::db::CHANNEL_COLS
                     ),
                     [id],
-                    crate::libs::db::row_to_channel,
+                    crate::infrastructure::db::row_to_channel,
                 )
                 .optional()?;
             if row.is_none() {
@@ -155,7 +155,7 @@ fn mutate(
                 if retained {
                     tx.execute(
                         "UPDATE peers SET key='',status='CHANNEL',updated_at=?2 WHERE id=?1",
-                        params![id, crate::libs::db::now_iso()],
+                        params![id, crate::infrastructure::db::now_iso()],
                     )?
                 } else {
                     tx.execute("DELETE FROM chat_receipts WHERE peer_id=?1", [id])?;

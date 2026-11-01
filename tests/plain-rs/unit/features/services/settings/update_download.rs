@@ -320,7 +320,9 @@ async fn clearing_application_cache_waits_for_the_active_body_before_deleting_it
     });
     *state.update_checks.download.command.lock().await = Some(Task { cancel, join });
     waiting.await.unwrap();
-    crate::libs::cache::clear_application(&state).await.unwrap();
+    crate::infrastructure::cache::clear_application(&state)
+        .await
+        .unwrap();
     assert!(cleaned.load(Ordering::Acquire));
     assert!(!state.cache.app_updates().exists());
     assert_eq!(

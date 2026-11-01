@@ -158,7 +158,8 @@ async fn provider_delete_uses_two_batch_exchanges_and_no_business_action_on_host
     use std::sync::Arc;
     let directory = tempfile::tempdir().unwrap();
     let host = Arc::new(Host::default());
-    let db = Arc::new(crate::libs::db::Db::open(&directory.path().join("plain.db")).unwrap());
+    let db =
+        Arc::new(crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap());
     let platform = super::super::platform::FilePlatform::new(
         host.clone(),
         db,

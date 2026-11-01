@@ -2,7 +2,7 @@ use crate::features::{
     enums::DataType,
     media::actions::{Action, Item, Outcome},
 };
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
@@ -133,7 +133,7 @@ fn plan(
             let before = facts.remove(id).ok_or("Media row not found")?;
             if !Path::new(&before.path).is_absolute()
                 || (kind == DataType::Doc
-                    && !crate::libs::media::documents::is_document_mime(&before.mime_type))
+                    && !plain_libs::media::documents::is_document_mime(&before.mime_type))
             {
                 return Err("Invalid media provider row".into());
             }
@@ -183,7 +183,7 @@ fn plan(
                     let relative = destination
                         .strip_prefix(&root)
                         .map_err(|_| "Media move must stay in its storage volume")?;
-                    let path = crate::libs::utils::unique_path::unique_sibling_excluding(
+                    let path = plain_libs::utils::unique_path::unique_sibling_excluding(
                         &destination.join(source.file_name().ok_or("Media file name required")?),
                         |path| reserved.contains(path),
                     )

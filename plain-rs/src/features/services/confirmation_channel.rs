@@ -1,9 +1,12 @@
-use crate::libs::{
-    crypto::{EcdhSession, ed25519_sign, ed25519_verify, xchacha_decrypt_raw, xchacha_encrypt_raw},
-    utils::base64::{base64_decode, base64_encode},
-};
 use anyhow::{Result, ensure};
 use hmac::{Hmac, KeyInit, Mac};
+use plain_libs::crypto::EcdhSession;
+use plain_libs::crypto::ed25519_sign;
+use plain_libs::crypto::ed25519_verify;
+use plain_libs::crypto::xchacha_decrypt_raw;
+use plain_libs::crypto::xchacha_encrypt_raw;
+use plain_libs::utils::base64::base64_decode;
+use plain_libs::utils::base64::base64_encode;
 use rand::{RngCore, rngs::OsRng};
 use sha2::{Digest, Sha256};
 

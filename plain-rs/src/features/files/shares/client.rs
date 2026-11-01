@@ -42,7 +42,7 @@ impl Link {
                 .any(|c| c.is_whitespace() || "/@?#,\\".contains(c)),
             "Invalid share host"
         );
-        let url = reqwest::Url::parse(&crate::libs::utils::build_url::build_url(
+        let url = reqwest::Url::parse(&plain_libs::utils::build_url::build_url(
             "https", &self.host, self.port, path,
         ))?;
         ensure!(
@@ -56,7 +56,7 @@ impl Link {
         Ok(url)
     }
     pub fn key(&self) -> Result<Vec<u8>> {
-        let key = crate::libs::utils::base64::base64_decode_checked(&self.token)?;
+        let key = plain_libs::utils::base64::base64_decode_checked(&self.token)?;
         ensure!(key.len() == 32, "Invalid share token");
         Ok(key)
     }
@@ -68,13 +68,16 @@ impl Link {
             crate::features::peers::pairing::now_ms(),
             uuid::Uuid::new_v4()
         );
-        crate::libs::crypto::xchacha_encrypt_raw(&self.key()?, envelope.as_bytes())
+        plain_libs::crypto::xchacha_encrypt_raw(&self.key()?, envelope.as_bytes())
             .ok_or_else(|| anyhow::anyhow!("Cannot encrypt shared request"))
     }
     pub fn response(&self, request: &[u8], bytes: &[u8]) -> Result<Info> {
-        let plain = crate::libs::transport::http_response::Context::new("/guest_graphql", request)
-            .decrypt(&self.key()?, bytes)
-            .ok_or_else(|| anyhow::anyhow!("Invalid shared response authentication"))?;
+        let plain = crate::infrastructure::transport::http_response::Context::new(
+            "/guest_graphql",
+            request,
+        )
+        .decrypt(&self.key()?, bytes)
+        .ok_or_else(|| anyhow::anyhow!("Invalid shared response authentication"))?;
         let response: Value = serde_json::from_slice(&plain)?;
         if let Some(error) = response
             .get("errors")
@@ -88,13 +91,13 @@ impl Link {
         }
         let info: Info = serde_json::from_value(response["data"]["sharedInfo"].clone())?;
         ensure!(
-            crate::libs::utils::base64::base64_decode_checked(&info.url_token)?.len() == 32,
+            plain_libs::utils::base64::base64_decode_checked(&info.url_token)?.len() == 32,
             "Invalid shared file token"
         );
         Ok(info)
     }
     pub fn file_url(&self, url_token: &str, relative_path: &str, zip: bool) -> Result<String> {
-        let key = crate::libs::utils::base64::base64_decode_checked(url_token)?;
+        let key = plain_libs::utils::base64::base64_decode_checked(url_token)?;
         ensure!(key.len() == 32, "Invalid shared file token");
         let id = crate::features::files::resource_link::seal(
             &crate::features::files::resource_link::Scope::Share(self.shared_id.clone()),

@@ -1,8 +1,8 @@
 use crate::server::ServerState;
 use anyhow::{Result, ensure};
 use axum::body::Body;
-use plain_rs::libs::protocols::ble;
-use plain_rs::libs::protocols::ble::Request;
+use plain_rs::infrastructure::protocols::ble;
+use plain_rs::infrastructure::protocols::ble::Request;
 
 mod nearby;
 

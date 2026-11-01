@@ -32,8 +32,10 @@ fn add_addresses(
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
         .collect();
-    let best =
-        crate::libs::transport::lan::best(&ips, &crate::libs::transport::lan::local_interfaces());
+    let best = crate::infrastructure::transport::lan::best(
+        &ips,
+        &crate::infrastructure::transport::lan::local_interfaces(),
+    );
     if !best.is_empty() {
         add(links, seen, &best, port, card);
     }
@@ -52,7 +54,7 @@ fn candidates(state: &CoreRuntime, card: &Card, discovered: bool) -> Result<Vec<
     {
         let port = state.prefs.get::<u16>("https_port")?.unwrap_or(8443);
         add(&mut links, &mut seen, "127.0.0.1", port, card);
-        for local in crate::libs::transport::lan::local_interfaces() {
+        for local in crate::infrastructure::transport::lan::local_interfaces() {
             add(&mut links, &mut seen, &local.ip.to_string(), port, card);
         }
     }
@@ -63,7 +65,9 @@ fn candidates(state: &CoreRuntime, card: &Card, discovered: bool) -> Result<Vec<
         card.peer_info.port,
         card,
     );
-    if let Some(peer) = crate::libs::db::chat_store::peers::get(&state.db, &card.peer_info.id)? {
+    if let Some(peer) =
+        crate::infrastructure::db::chat_store::peers::get(&state.db, &card.peer_info.id)?
+    {
         if let Some(port) = peer.port {
             add_addresses(&mut links, &mut seen, &peer.ip, port, card);
         }
@@ -169,10 +173,12 @@ async fn browse_current(
                     info.expires_at,
                 )?;
                 if let Some(row) = updated {
-                    let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-                        crate::features::chat::events::WS_MESSAGE_UPDATED,
-                        json!([crate::features::chat::service::chat_to_json(&row)]).to_string(),
-                    ));
+                    let _ = state
+                        .events
+                        .send(crate::infrastructure::events::WsEvent::broadcast(
+                            crate::features::chat::events::WS_MESSAGE_UPDATED,
+                            json!([crate::features::chat::service::chat_to_json(&row)]).to_string(),
+                        ));
                 }
                 return Ok(Some(BrowseResult { info, link, card }));
             }
@@ -205,7 +211,7 @@ pub async fn own_link(state: &CoreRuntime, id: &str, host: Option<String>) -> Re
             crate::features::files::shares::Service::new(state.db.clone(), state.prefs.clone());
         let token = service.token(id)?;
         let host = host.unwrap_or_else(|| {
-            crate::libs::transport::lan::local_interfaces()
+            crate::infrastructure::transport::lan::local_interfaces()
                 .first()
                 .map(|interface| interface.ip.to_string())
                 .unwrap_or_else(|| "127.0.0.1".into())

@@ -23,7 +23,7 @@ pub(super) fn identities(facts: serde_json::Value) -> anyhow::Result<Vec<Identit
                 _ if row
                     .mime_type
                     .as_deref()
-                    .is_some_and(crate::libs::media::documents::is_document_mime) =>
+                    .is_some_and(plain_libs::media::documents::is_document_mime) =>
                 {
                     DataType::Doc
                 }

@@ -1,6 +1,6 @@
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
-use crate::libs::db::chat_store::peers;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::chat_store::peers;
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use std::{

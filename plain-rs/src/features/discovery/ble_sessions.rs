@@ -7,13 +7,13 @@
 //! (Android/iOS) only forwards raw writes here and receives either "need more
 //! frames" or a completed message to dispatch.
 //!
-//! Assembly itself is [`crate::libs::protocols::ble::Assembler`]; this adds the
+//! Assembly itself is [`crate::infrastructure::protocols::ble::Assembler`]; this adds the
 //! multi-connection table, the per-peer capacity limit, and idle expiry that
 //! the old Kotlin `BleServerProtocol` duplicated in a second language.
 
 #[cfg(test)]
-use crate::libs::protocols::ble;
-use crate::libs::protocols::ble::Assembler;
+use crate::infrastructure::protocols::ble;
+use crate::infrastructure::protocols::ble::Assembler;
 use anyhow::{Result, ensure};
 use std::{
     collections::HashMap,

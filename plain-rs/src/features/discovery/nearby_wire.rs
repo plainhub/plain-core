@@ -63,7 +63,7 @@ impl Message {
     }
 }
 pub fn short_id(id: &str) -> String {
-    crate::libs::utils::hex::bytes_to_hex(&Sha256::digest(id.as_bytes())[..8])
+    plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(id.as_bytes())[..8])
 }
 pub fn discover_reply(payload: &str, advertised_id: &str) -> Result<DiscoverReply> {
     let reply: DiscoverReply = serde_json::from_str(payload)?;

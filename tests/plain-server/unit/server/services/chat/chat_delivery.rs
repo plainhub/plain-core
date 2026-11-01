@@ -1,7 +1,7 @@
 #![cfg(feature = "http_transport")]
 
 use plain_rs::features::services::chat::chat_delivery::*;
-use plain_rs::libs::db::DPeer;
+use plain_rs::infrastructure::db::DPeer;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
@@ -9,7 +9,7 @@ use std::sync::Arc;
 #[tokio::test]
 async fn explicit_message_retry_root_probes_open_transport_and_sends_original_row_once() {
     use plain_rs::features::chat::enums::{ChatStatus, PeerStatus};
-    use plain_rs::libs::transport::router::{Outcome, TransportType};
+    use plain_rs::infrastructure::transport::router::{Outcome, TransportType};
     use std::sync::atomic::{AtomicUsize, Ordering};
     let dir = tempfile::tempdir().unwrap();
     let prefs =
@@ -17,7 +17,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
     prefs.set("client_id", "self").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[1; 32]),
+        &plain_libs::utils::base64::base64_encode(&[1; 32]),
         prefs,
     )
     .unwrap();
@@ -29,16 +29,16 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
         Some(443),
         plain_rs::features::chat::enums::DeviceType::Phone,
     );
-    peer.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
+    peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peer.status = PeerStatus::Paired;
-    plain_rs::libs::db::chat_store::peers::save(
+    plain_rs::infrastructure::db::chat_store::peers::save(
         &state.db,
         &[peer.clone()],
-        plain_rs::libs::db::chat_store::SaveMode::Insert,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     let content = json!({"type":"TEXT","value":{"text":"explicit retry fixture"}}).to_string();
-    let mut original = plain_rs::libs::db::DChat::new("me", "fixture", "", &content);
+    let mut original = plain_rs::infrastructure::db::DChat::new("me", "fixture", "", &content);
     original.id = "retry-native".into();
     original.status = ChatStatus::Failed;
     state.db.insert_chat(&original).unwrap();
@@ -79,7 +79,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
                         serde_json::from_str(wire.splitn(3, '|').nth(2).unwrap()).unwrap();
                     assert_eq!(
                         document["query"],
-                        plain_rs::libs::transport::contract::CREATE_CHAT_ITEM
+                        plain_rs::infrastructure::transport::contract::CREATE_CHAT_ITEM
                     );
                     assert_eq!(document["variables"]["content"], expected);
                     count.fetch_add(1, Ordering::SeqCst);
@@ -128,9 +128,10 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
     );
     let sent = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
-            let row = plain_rs::libs::db::chat_store::messages::get(&state.db, &original.id)
-                .unwrap()
-                .unwrap();
+            let row =
+                plain_rs::infrastructure::db::chat_store::messages::get(&state.db, &original.id)
+                    .unwrap()
+                    .unwrap();
             if row.status == ChatStatus::Sent {
                 break row;
             }

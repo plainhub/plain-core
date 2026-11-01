@@ -10,17 +10,17 @@ fn fixture(id: &str) -> (tempfile::TempDir, crate::server::ContentServer) {
     let dir = tempfile::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    let (key, _public) = plain_rs::libs::crypto::ed25519_generate();
+    let (key, _public) = plain_libs::crypto::ed25519_generate();
     prefs.set("client_id", id).unwrap();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::libs::utils::base64::base64_encode(&key),
+            plain_libs::utils::base64::base64_encode(&key),
         )
         .unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();

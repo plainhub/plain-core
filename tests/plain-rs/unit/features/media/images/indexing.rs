@@ -30,7 +30,7 @@ fn input(id: &str) -> EmbeddingInput {
     EmbeddingInput {
         id: id.into(),
         path: format!("/image/{id}"),
-        embedding_base64: crate::libs::utils::base64::base64_encode(&1.0_f32.to_be_bytes()),
+        embedding_base64: plain_libs::utils::base64::base64_encode(&1.0_f32.to_be_bytes()),
     }
 }
 impl Provider for Mock {

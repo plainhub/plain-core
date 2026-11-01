@@ -40,3 +40,5 @@ pub mod confirmation_channel;
 pub mod contacts;
 
 pub mod http_status;
+
+pub mod phone_query;

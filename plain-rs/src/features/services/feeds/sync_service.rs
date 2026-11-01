@@ -1,4 +1,5 @@
-use crate::libs::{db::Db, events::WsEvent};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::events::WsEvent;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
@@ -10,7 +11,7 @@ use tokio::sync::{Semaphore, broadcast, watch};
 pub struct FeedSyncState {
     pub feed_id: async_graphql::ID,
     pub task_id: async_graphql::ID,
-    pub revision: crate::libs::types::Long,
+    pub revision: crate::infrastructure::types::Long,
     pub status: String,
     pub error: String,
 }
@@ -48,7 +49,7 @@ impl Drop for Deletion<'_> {
 pub struct SyncService {
     db: Arc<Db>,
     events: broadcast::Sender<WsEvent>,
-    host: Arc<crate::libs::host::bridge::Host>,
+    host: Arc<crate::infrastructure::host::bridge::Host>,
     state: Mutex<State>,
     assets: Option<Arc<crate::features::services::feeds::FeedAssets>>,
     permits: Semaphore,
@@ -63,7 +64,7 @@ impl SyncService {
     pub fn new(
         db: Arc<Db>,
         events: broadcast::Sender<WsEvent>,
-        host: Arc<crate::libs::host::bridge::Host>,
+        host: Arc<crate::infrastructure::host::bridge::Host>,
         assets: Option<Arc<crate::features::services::feeds::FeedAssets>>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -85,8 +86,8 @@ impl SyncService {
         self.execution_changed.notify_one();
     }
 
-    fn next_revision(&self) -> crate::libs::types::Long {
-        crate::libs::types::Long(
+    fn next_revision(&self) -> crate::infrastructure::types::Long {
+        crate::infrastructure::types::Long(
             self.revision
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
                 + 1,
@@ -182,7 +183,7 @@ impl SyncService {
     }
     fn queue_feeds(
         self: &Arc<Self>,
-        feeds: Vec<crate::libs::db::notes_feeds::FeedRow>,
+        feeds: Vec<crate::infrastructure::db::notes_feeds::FeedRow>,
         lease: Option<&str>,
         aggregate: bool,
     ) -> anyhow::Result<Vec<watch::Receiver<FeedSyncState>>> {
@@ -313,7 +314,11 @@ impl SyncService {
         }
         Ok(waiters)
     }
-    async fn run(self: Arc<Self>, feed: crate::libs::db::notes_feeds::FeedRow, task: Arc<Task>) {
+    async fn run(
+        self: Arc<Self>,
+        feed: crate::infrastructure::db::notes_feeds::FeedRow,
+        task: Arc<Task>,
+    ) {
         let mut cancel = task.cancel.subscribe();
         let assets = self.assets.as_ref().map(|assets| assets.scoped());
         let work = async {

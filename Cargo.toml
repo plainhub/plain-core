@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["plain-rs", "plain-server", "plain-cli"]
+members = ["plain-libs", "plain-rs", "plain-server", "plain-cli"]
 
 # Light optimization for workspace code: the thumbnail engine's hot
-# loops (progressive DC decode, box resample) live in plain-rs's media
+# loops (progressive DC decode, box resample) live in plain-libs's media
 # module and are 5-10x slower at opt-level 0 — dev instances must not
 # look broken.
 [profile.dev]
@@ -15,6 +15,9 @@ incremental = true
 # these crates, so they need -O3 for acceptable performance.
 [profile.dev.package."*"]
 opt-level = 3
+
+[profile.dev.package.plain-libs]
+debug = "line-tables-only"
 
 [profile.dev.package.plain-rs]
 debug = "line-tables-only"

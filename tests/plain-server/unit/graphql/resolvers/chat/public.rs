@@ -1,8 +1,8 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -191,14 +191,14 @@ async fn the_latest_page_covers_every_conversation() {
     seed(db, "m2", "me", "peer-1", "", "second", T2);
     seed(db, "c1", "me", "", "chan-1", "channel note", T2);
 
-    db.upsert_peer(&plain_rs::libs::db::DPeer::new(
+    db.upsert_peer(&plain_rs::infrastructure::db::DPeer::new(
         "peer-1",
         "fixture",
         "",
         None,
         plain_rs::features::chat::enums::DeviceType::Unknown,
     ));
-    let mut channel = plain_rs::libs::db::DChannel::new("fixture", "me");
+    let mut channel = plain_rs::infrastructure::db::DChannel::new("fixture", "me");
     channel.id = "chan-1".into();
     db.insert_channel(&channel).unwrap();
     let latest = channel_query(
@@ -224,13 +224,13 @@ async fn the_latest_page_covers_every_conversation() {
 #[cfg(feature = "http_transport")]
 fn chat_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let (dir, server) = channel_fixture();
-    let (key, _) = plain_rs::libs::crypto::ed25519_generate();
+    let (key, _) = plain_libs::crypto::ed25519_generate();
     server
         .runtime_state()
         .prefs
         .set(
             "signature_key_pair",
-            plain_rs::libs::utils::base64::base64_encode(&key),
+            plain_libs::utils::base64::base64_encode(&key),
         )
         .unwrap();
     (dir, server)
@@ -247,9 +247,12 @@ async fn sending_persists_and_emits_without_native_business_callbacks() {
     assert_eq!(rows.len(), 1, "{sent}");
     assert!(rows[0]["channelId"].is_null(), "{sent}");
     assert!(
-        plain_rs::libs::db::chat_store::messages::get(&state.db, rows[0]["id"].as_str().unwrap())
-            .unwrap()
-            .is_some()
+        plain_rs::infrastructure::db::chat_store::messages::get(
+            &state.db,
+            rows[0]["id"].as_str().unwrap()
+        )
+        .unwrap()
+        .is_some()
     );
     assert_eq!(
         events.recv().await.unwrap().event_type,
@@ -285,12 +288,12 @@ async fn bulk_delete_preserves_literal_id_boundaries_instead_of_retargeting_trim
     assert!(deleted["errors"].is_null(), "{deleted}");
     assert_eq!(deleted["data"]["deleteChatItems"]["affectedCount"], 1);
     assert!(
-        plain_rs::libs::db::chat_store::messages::get(&state.db, "literal-id")
+        plain_rs::infrastructure::db::chat_store::messages::get(&state.db, "literal-id")
             .unwrap()
             .is_some()
     );
     assert!(
-        plain_rs::libs::db::chat_store::messages::get(&state.db, " literal-id ")
+        plain_rs::infrastructure::db::chat_store::messages::get(&state.db, " literal-id ")
             .unwrap()
             .is_none()
     );
@@ -332,12 +335,12 @@ async fn bulk_delete_counts_persisted_rows() {
         "{deleted}"
     );
     assert!(
-        plain_rs::libs::db::chat_store::messages::get(&state.db, "m1")
+        plain_rs::infrastructure::db::chat_store::messages::get(&state.db, "m1")
             .unwrap()
             .is_none()
     );
     assert!(
-        plain_rs::libs::db::chat_store::messages::get(&state.db, "other-channel-message")
+        plain_rs::infrastructure::db::chat_store::messages::get(&state.db, "other-channel-message")
             .unwrap()
             .is_some()
     );
@@ -409,7 +412,7 @@ fn channel_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     prefs.set("client_id", "actor").unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -502,7 +505,7 @@ async fn channel_roots_read_current_store_and_share_runtime_mutations_without_ho
     .await;
     assert_eq!(deleted["data"]["deleteChatChannel"], true, "{deleted}");
     assert!(
-        plain_rs::libs::db::chat_store::channels::get(&state.db, id)
+        plain_rs::infrastructure::db::chat_store::channels::get(&state.db, id)
             .unwrap()
             .is_none()
     );
@@ -540,10 +543,10 @@ async fn channel_query_reads_all_statuses_sorted_by_name_without_native_cache() 
         let mut row =
             plain_rs::features::chat::channels::state::create(&state.db, "actor", name).unwrap();
         row.status = status;
-        plain_rs::libs::db::chat_store::channels::save(
+        plain_rs::infrastructure::db::chat_store::channels::save(
             &state.db,
             &[row],
-            plain_rs::libs::db::chat_store::SaveMode::Update,
+            plain_rs::infrastructure::db::chat_store::SaveMode::Update,
         )
         .unwrap();
     }
@@ -568,7 +571,7 @@ async fn channel_snapshot_recovers_current_public_list_without_emitting_another_
     let client = reqwest::Client::new();
     let response = client
         .post(format!("http://127.0.0.1:{}/graphql", server.port))
-        .bearer_auth(plain_rs::libs::utils::base64::base64_encode(&[3; 32]))
+        .bearer_auth(plain_libs::utils::base64::base64_encode(&[3; 32]))
         .header("Content-Type", "application/json")
         .body(json!({"query":"{ chatChannels { id name } }"}).to_string())
         .send()

@@ -301,7 +301,7 @@ pub async fn start(
     mode: Option<Mode>,
     password: Option<String>,
     generation: Option<String>,
-    scope: Option<crate::libs::host::request_scope::NativeRequestScope>,
+    scope: Option<crate::infrastructure::host::request_scope::NativeRequestScope>,
 ) -> Result<State> {
     ensure!(
         password.as_ref().is_none_or(|p| p.len() <= 4096),
@@ -441,7 +441,7 @@ fn resolve(
         .into_iter()
         .find(|d| Some(d.id.as_str()) == id);
     let saved = id
-        .map(|id| crate::libs::db::chat_store::peers::get(&state.db, id))
+        .map(|id| crate::infrastructure::db::chat_store::peers::get(&state.db, id))
         .transpose()?
         .flatten();
     let name = nearby
@@ -495,9 +495,9 @@ fn resolve(
         methods = vec!["LAN".into()];
         Some(url)
     } else if mode == Mode::Manage {
-        let ip = crate::libs::transport::lan::best_host(
+        let ip = crate::infrastructure::transport::lan::best_host(
             &ips,
-            &crate::libs::transport::lan::local_interfaces(),
+            &crate::infrastructure::transport::lan::local_interfaces(),
         );
         ensure!(
             !ip.is_empty() && port != 0,

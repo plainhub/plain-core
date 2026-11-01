@@ -1,7 +1,7 @@
 use super::*;
 use crate::features::chat::enums::DeviceType;
-use crate::libs::db::DPeer;
-use crate::libs::db::chat_store::peers;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::chat_store::peers;
 
 #[test]
 fn owner_cannot_remove_itself_or_change_membership_on_failure() {
@@ -88,7 +88,7 @@ fn creation_mutations_and_invite_validation_preserve_credentials_and_version_rul
     assert_eq!(channel.name, "中文 group");
     assert_eq!(channel.version, 1);
     assert_eq!(
-        crate::libs::utils::base64::base64_decode(&channel.key).len(),
+        plain_libs::utils::base64::base64_decode(&channel.key).len(),
         32
     );
     assert_eq!(

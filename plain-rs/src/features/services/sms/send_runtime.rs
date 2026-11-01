@@ -1,4 +1,5 @@
-use crate::{features::sms_sends, libs::events::WsEvent};
+use crate::features::sms_sends;
+use crate::infrastructure::events::WsEvent;
 use std::{
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -6,7 +7,7 @@ use std::{
 use tokio::sync::{Notify, broadcast, watch};
 
 pub struct Runtime {
-    store: Arc<crate::libs::kv::LazyDb>,
+    store: Arc<plain_libs::kv::LazyDb>,
     events: broadcast::Sender<WsEvent>,
     changed: Notify,
 }
@@ -27,11 +28,11 @@ pub fn now() -> u64 {
         .min(u64::MAX as u128) as u64
 }
 impl Runtime {
-    pub fn store(&self) -> anyhow::Result<Arc<crate::libs::kv::Db>> {
+    pub fn store(&self) -> anyhow::Result<Arc<plain_libs::kv::Db>> {
         self.store.get()
     }
     pub fn new(
-        store: Arc<crate::libs::kv::LazyDb>,
+        store: Arc<plain_libs::kv::LazyDb>,
         events: broadcast::Sender<WsEvent>,
     ) -> Arc<Self> {
         Arc::new(Self {

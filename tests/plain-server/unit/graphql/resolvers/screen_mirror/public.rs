@@ -25,7 +25,7 @@ fn fixture() -> (tempfile::TempDir, PublicSchema) {
     let dir = tempfile::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    let db = Arc::new(plain_rs::libs::db::Db::open(&dir.path().join("data.db")).unwrap());
+    let db = Arc::new(plain_rs::infrastructure::db::Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
     let directory = dir.path().to_path_buf();
     let (events, _) = tokio::sync::broadcast::channel(16);

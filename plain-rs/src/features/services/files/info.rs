@@ -1,5 +1,5 @@
 use crate::features::enums::DataType;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::{
     io::{BufReader, Read, Seek, SeekFrom},
@@ -10,12 +10,12 @@ pub struct Info {
     host: std::sync::Arc<Host>,
     sdk: bool,
     cache: PathBuf,
-    resources: std::sync::Arc<crate::libs::host::resources::NativeResources>,
+    resources: std::sync::Arc<crate::infrastructure::host::resources::NativeResources>,
 }
 impl Info {
     pub fn new(
         host: std::sync::Arc<Host>,
-        resources: std::sync::Arc<crate::libs::host::resources::NativeResources>,
+        resources: std::sync::Arc<crate::infrastructure::host::resources::NativeResources>,
         cache: PathBuf,
     ) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self {
@@ -28,9 +28,9 @@ impl Info {
     #[cfg(any(test, feature = "test-seams"))]
     pub fn sdk(host: std::sync::Arc<Host>) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self {
-            resources: std::sync::Arc::new(crate::libs::host::resources::NativeResources::new(
-                host.clone(),
-            )),
+            resources: std::sync::Arc::new(
+                crate::infrastructure::host::resources::NativeResources::new(host.clone()),
+            ),
             host,
             cache: std::env::temp_dir().join("plain-test-cache"),
             sdk: true,
@@ -43,7 +43,7 @@ impl Info {
                 &self.cache,
                 path,
                 |reader| {
-                    crate::libs::media::video_info::read(reader)
+                    plain_libs::media::video_info::read(reader)
                         .map(serde_json::to_value)
                         .transpose()
                         .map_err(|error| error.to_string())
@@ -64,8 +64,8 @@ impl Info {
                 &self.cache,
                 path,
                 |reader| {
-                    let duration = crate::libs::media::probe::probe_duration_reader(reader);
-                    let location = crate::libs::media::isobmff::location_reader(reader);
+                    let duration = plain_libs::media::probe::probe_duration_reader(reader);
+                    let location = plain_libs::media::isobmff::location_reader(reader);
                     Ok(duration
                         .map(|duration| json!({"durationMs":duration,"rawLocation":location})))
                 },
@@ -96,7 +96,7 @@ impl Info {
                 .host
                 .call(
                     "imageDecodeBounds",
-                    json!({"path":crate::libs::utils::file_uri::local_path(path)?}),
+                    json!({"path":plain_libs::utils::file_uri::local_path(path)?}),
                 )
                 .await?;
             apply_image_bounds(&mut facts, fallback)?;
@@ -138,7 +138,7 @@ fn apply_image_bounds(facts: &mut Value, sample: Value) -> Result<(), String> {
 
 fn image_reader(mut reader: impl Read + Seek) -> Result<Value, String> {
     let bytes = image_prefix(&mut reader).map_err(|error| error.to_string())?;
-    let exif = match crate::libs::utils::image_exif::read(&mut reader) {
+    let exif = match plain_libs::utils::image_exif::read(&mut reader) {
         Ok(exif) => exif,
         Err(error) => {
             log::debug!("Image EXIF read failed: {error}");
@@ -164,11 +164,11 @@ fn image_reader(mut reader: impl Read + Seek) -> Result<Value, String> {
 }
 fn image_facts_with_exif(bytes: &[u8], exif: Option<&[u8]>) -> Value {
     let metadata_bytes = exif.unwrap_or(bytes);
-    let metadata = crate::libs::utils::image_metadata::read(metadata_bytes);
+    let metadata = plain_libs::utils::image_metadata::read(metadata_bytes);
     let date = metadata.taken_at();
     let mut facts = serde_json::to_value(metadata).unwrap_or_else(|_| json!({}));
-    let (mut width, mut height) = crate::libs::utils::image_dimensions::dimensions(bytes)
-        .or_else(|| exif.and_then(crate::libs::utils::image_dimensions::dimensions))
+    let (mut width, mut height) = plain_libs::utils::image_dimensions::dimensions(bytes)
+        .or_else(|| exif.and_then(plain_libs::utils::image_dimensions::dimensions))
         .unwrap_or((0, 0));
     if matches!(facts["rotation"].as_i64(), Some(90 | 270)) {
         std::mem::swap(&mut width, &mut height);
@@ -176,7 +176,7 @@ fn image_facts_with_exif(bytes: &[u8], exif: Option<&[u8]>) -> Value {
     facts["width"] = json!(width);
     facts["height"] = json!(height);
     facts["takenAt"] = json!(date);
-    facts["location"] = crate::libs::utils::image_metadata::gps(metadata_bytes)
+    facts["location"] = plain_libs::utils::image_metadata::gps(metadata_bytes)
         .map(|(latitude, longitude)| json!({"latitude":latitude,"longitude":longitude}))
         .unwrap_or(Value::Null);
     facts

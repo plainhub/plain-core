@@ -1,4 +1,4 @@
-use crate::libs::host::resource_stream::NativeResourceFile;
+use crate::infrastructure::host::resource_stream::NativeResourceFile;
 #[cfg(unix)]
 use std::io::Read;
 use std::{
@@ -175,17 +175,17 @@ impl<R: Seek> Seek for CancellableReader<R> {
 }
 
 pub type SourceReader =
-    CancellableReader<crate::libs::utils::range_reader::RangeReader<std::fs::File>>;
+    CancellableReader<plain_libs::utils::range_reader::RangeReader<std::fs::File>>;
 
 pub async fn read_source<T: Send + 'static>(
-    resources: &crate::libs::host::resources::NativeResources,
+    resources: &crate::infrastructure::host::resources::NativeResources,
     cache: &Path,
     path: &str,
     read: impl FnOnce(&mut SourceReader) -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     let (cancel, stop) = watch::channel(false);
     let _cancel = ReadCancellation(cancel);
-    let path = crate::libs::utils::file_uri::local_path(path)?;
+    let path = plain_libs::utils::file_uri::local_path(path)?;
     let input = if path.starts_with("content://") || path.starts_with("ph://") {
         let input = resources.read_file(&path, stop.clone()).await?;
         prepare(input, cache, stop.clone()).await?

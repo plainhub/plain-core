@@ -1,5 +1,5 @@
 use crate::server::ServerState;
-use plain_rs::libs::events::WsEvent;
+use plain_rs::infrastructure::events::WsEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -51,7 +51,8 @@ impl NativeManagement {
 
     pub async fn lan_ipv4_addresses(&self) -> Result<Vec<String>, String> {
         self.state.native_client_id()?;
-        plain_rs::libs::platform::network::host::lan_ipv4_addresses(&self.state.host).await
+        plain_rs::infrastructure::platform::network::host::lan_ipv4_addresses(&self.state.host)
+            .await
     }
 
     pub fn complete_onboarding(&self) -> Result<bool, String> {
@@ -160,12 +161,13 @@ impl NativeManagement {
         data: Vec<u8>,
         password: String,
     ) -> Result<Vec<u8>, String> {
-        self.certificate(json!({"action":"importPkcs12","data":plain_rs::libs::utils::base64::base64_encode(&data),"password":password})).await
+        self.certificate(json!({"action":"importPkcs12","data":plain_libs::utils::base64::base64_encode(&data),"password":password})).await
     }
 
     async fn certificate(&self, command: serde_json::Value) -> Result<Vec<u8>, String> {
         self.state.native_client_id()?;
-        let signature = plain_rs::libs::tls_identity::server_action(&self.state, command).await?;
+        let signature =
+            plain_rs::infrastructure::tls_identity::server_action(&self.state, command).await?;
         self.content_changed();
         Ok(signature)
     }

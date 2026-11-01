@@ -1,13 +1,13 @@
 use crate::features::chat::channels::messages::ChannelMember;
 use crate::features::chat::channels::messages::MemberPeerInfo;
 use crate::features::chat::enums::PeerStatus;
-use crate::libs::db::CHANNEL_COLS;
-use crate::libs::db::DChannel;
-use crate::libs::db::DPeer;
-use crate::libs::db::PEER_COLS;
-use crate::libs::db::now_iso;
-use crate::libs::db::row_to_channel;
-use crate::libs::db::row_to_peer;
+use crate::infrastructure::db::CHANNEL_COLS;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::PEER_COLS;
+use crate::infrastructure::db::now_iso;
+use crate::infrastructure::db::row_to_channel;
+use crate::infrastructure::db::row_to_peer;
 use anyhow::{Result, bail};
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -31,7 +31,7 @@ pub(crate) fn members(raw: &str) -> Result<Vec<ChannelMember>> {
     Ok(serde_json::from_str(raw)?)
 }
 pub(crate) fn public_key(key: &str) -> Result<()> {
-    if crate::libs::utils::base64::base64_decode(key).len() != 32 {
+    if plain_libs::utils::base64::base64_decode(key).len() != 32 {
         bail!("Invalid member public key");
     }
     Ok(())
@@ -63,8 +63,8 @@ pub(crate) fn accepting_peer(
     match peer(c, id)? {
         Some(existing) => {
             if !existing.public_key.is_empty()
-                && crate::libs::utils::base64::base64_decode(&existing.public_key)
-                    != crate::libs::utils::base64::base64_decode(key)
+                && plain_libs::utils::base64::base64_decode(&existing.public_key)
+                    != plain_libs::utils::base64::base64_decode(key)
             {
                 bail!("Member public key mismatch");
             }
@@ -104,8 +104,8 @@ pub(crate) fn save(c: &Connection, channel: &DChannel, new: bool) -> Result<()> 
             channel.key,
             channel.version,
             channel.status,
-            crate::libs::utils::dbtime::normalize(&channel.created_at)?,
-            crate::libs::utils::dbtime::normalize(&channel.updated_at)?
+            plain_libs::utils::dbtime::normalize(&channel.created_at)?,
+            plain_libs::utils::dbtime::normalize(&channel.updated_at)?
         ],
     )? != 1
     {

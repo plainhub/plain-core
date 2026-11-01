@@ -31,14 +31,18 @@ fn emit(state: &CoreRuntime, id: &str, online: bool) {
     if id.is_empty() {
         return;
     }
-    let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-        crate::features::chat::events::WS_PEER_STATUS_UPDATED,
-        json!({"id": id, "online": online}).to_string(),
-    ));
-    let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-        "PEER_CONNECTIONS_UPDATED",
-        json!({"id": id, "online": online}).to_string(),
-    ));
+    let _ = state
+        .events
+        .send(crate::infrastructure::events::WsEvent::broadcast(
+            crate::features::chat::events::WS_PEER_STATUS_UPDATED,
+            json!({"id": id, "online": online}).to_string(),
+        ));
+    let _ = state
+        .events
+        .send(crate::infrastructure::events::WsEvent::broadcast(
+            "PEER_CONNECTIONS_UPDATED",
+            json!({"id": id, "online": online}).to_string(),
+        ));
 }
 
 async fn execute(state: &CoreRuntime, request: Action) -> Result<(), String> {

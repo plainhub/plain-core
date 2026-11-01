@@ -12,8 +12,8 @@ use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::sms::query as sms_query;
 use plain_rs::features::services::sms::send as sms_send;
 use plain_rs::features::services::sms::state as sms_state;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -60,7 +60,7 @@ pub struct Sms {
     pub body: String,
     pub address: String,
     #[graphql(name = "sentAt")]
-    pub sent_at: plain_rs::libs::types::Instant,
+    pub sent_at: plain_rs::infrastructure::types::Instant,
     #[graphql(name = "serviceCenter")]
     pub service_center: String,
     pub read: bool,
@@ -93,7 +93,7 @@ pub struct SmsConversation {
     pub address: String,
     pub snippet: String,
     #[graphql(name = "lastMessageAt")]
-    pub last_message_at: plain_rs::libs::types::Instant,
+    pub last_message_at: plain_rs::infrastructure::types::Instant,
     #[graphql(name = "messageCount")]
     pub message_count: i32,
     pub read: bool,
@@ -214,7 +214,7 @@ impl SmsMutation {
         &self,
         ctx: &Context<'_>,
         id: ID,
-        date: Option<plain_rs::libs::types::Instant>,
+        date: Option<plain_rs::infrastructure::types::Instant>,
     ) -> async_graphql::Result<bool> {
         let date = if let Some(date) = date {
             date.0.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)

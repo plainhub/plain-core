@@ -14,7 +14,7 @@ pub struct RemoteCache {
     cache: PathBuf,
     client: OnceLock<Result<reqwest::Client, String>>,
     verified_client: OnceLock<Result<reqwest::Client, String>>,
-    locks: crate::libs::utils::keyed_locks::KeyedLocks,
+    locks: plain_libs::utils::keyed_locks::KeyedLocks,
     permits: Semaphore,
 }
 impl RemoteCache {
@@ -23,7 +23,7 @@ impl RemoteCache {
             cache,
             client: OnceLock::new(),
             verified_client: OnceLock::new(),
-            locks: crate::libs::utils::keyed_locks::KeyedLocks::new(),
+            locks: plain_libs::utils::keyed_locks::KeyedLocks::new(),
             permits: Semaphore::new(4),
         }
     }
@@ -256,7 +256,7 @@ fn destination(
             hash.update((part.len() as u64).to_be_bytes());
             hash.update(part.as_bytes());
         }
-        crate::libs::utils::hex::bytes_to_hex(&hash.finalize())
+        plain_libs::utils::hex::bytes_to_hex(&hash.finalize())
     } else {
         uuid::Uuid::new_v4().to_string()
     };

@@ -6,7 +6,7 @@ fn fixture() -> (tempfile::TempDir, Arc<Service>) {
     prefs
         .set(
             "master_secret",
-            crate::libs::utils::base64::base64_encode(&[7; 32]),
+            plain_libs::utils::base64::base64_encode(&[7; 32]),
         )
         .unwrap();
     (dir, Service::new(db, prefs))
@@ -29,7 +29,7 @@ fn generated_url_token_is_unique_and_32_bytes() {
     let a = create(&s, vec![root.clone()]);
     let b = create(&s, vec![root]);
     assert_eq!(
-        crate::libs::utils::base64::base64_decode_checked(&a.url_token)
+        plain_libs::utils::base64::base64_decode_checked(&a.url_token)
             .unwrap()
             .len(),
         32
@@ -133,7 +133,7 @@ fn fresh_auth_revocation_expiry_and_disabled_service() {
     assert!(s.active(&row.id, true).unwrap().is_some());
     let token = s.token(&row.id).unwrap();
     assert_eq!(
-        crate::libs::utils::base64::base64_decode_checked(&token)
+        plain_libs::utils::base64::base64_decode_checked(&token)
             .unwrap()
             .len(),
         32
@@ -166,7 +166,7 @@ fn encrypted_file_ids_are_share_bound_and_roots_are_fresh() {
     let row = create(&s, vec![a]);
     // Guests encrypt the file id with the share's URL token — the same
     // key the web client uses in `getSharedFileId(urlToken, …)`.
-    let key = crate::libs::utils::base64::base64_decode_checked(&row.url_token).unwrap();
+    let key = plain_libs::utils::base64::base64_decode_checked(&row.url_token).unwrap();
     let encrypt = |id: &str| {
         crate::features::files::resource_link::seal(
             &crate::features::files::resource_link::Scope::Share(id.into()),
@@ -242,7 +242,7 @@ fn browse_and_archive_exclude_escaping_symlinks() {
     );
     let encrypted = crate::features::files::resource_link::seal(
         &crate::features::files::resource_link::Scope::Share(row.id.clone()),
-        &crate::libs::utils::base64::base64_decode_checked(&row.url_token).unwrap(),
+        &plain_libs::utils::base64::base64_decode_checked(&row.url_token).unwrap(),
         &crate::features::files::resource_link::Resource {
             r#type: crate::features::files::resource_link::ResourceType::SharedFile,
             id: "root".into(),
@@ -268,13 +268,13 @@ fn token_matches_standard_hmac_vector() {
     s.prefs
         .set(
             "master_secret",
-            crate::libs::utils::base64::base64_encode(&[0x0b; 32]),
+            plain_libs::utils::base64::base64_encode(&[0x0b; 32]),
         )
         .unwrap();
     let expected = "198a607eb44bfbc69903a0f1cf2bbdc5ba0aa3f3d9ae3c1c7a3b1696a0b68cf7";
     let actual =
-        crate::libs::utils::base64::base64_decode_checked(&s.token(&row.id).unwrap()).unwrap();
-    assert_eq!(crate::libs::utils::hex::bytes_to_hex(&actual), expected);
+        plain_libs::utils::base64::base64_decode_checked(&s.token(&row.id).unwrap()).unwrap();
+    assert_eq!(plain_libs::utils::hex::bytes_to_hex(&actual), expected);
 }
 
 #[test]

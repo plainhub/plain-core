@@ -14,8 +14,8 @@ use async_graphql::{Context, Enum, ID, Object, SimpleObject};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::services::files::provider_query::Provider;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -70,7 +70,7 @@ pub struct Call {
     #[graphql(name = "photoId")]
     pub photo_id: String,
     #[graphql(name = "startedAt")]
-    pub started_at: plain_rs::libs::types::Instant,
+    pub started_at: plain_rs::infrastructure::types::Instant,
     #[graphql(name = "durationSec")]
     pub duration_sec: i32,
     pub r#type: CallType,
@@ -79,8 +79,8 @@ pub struct Call {
     pub geo: Option<PhoneGeo>,
 }
 
-impl From<plain_rs::libs::phone::Metadata> for PhoneGeo {
-    fn from(value: plain_rs::libs::phone::Metadata) -> Self {
+impl From<plain_libs::phone::Metadata> for PhoneGeo {
+    fn from(value: plain_libs::phone::Metadata) -> Self {
         Self {
             country: value.country,
             number_type: value.number_type,
@@ -140,14 +140,14 @@ impl CallsQuery {
                 .await
                 .ok()
                 .and_then(|facts| {
-                    serde_json::from_value::<plain_rs::libs::phone::batch::LocaleFacts>(facts).ok()
+                    serde_json::from_value::<plain_libs::phone::batch::LocaleFacts>(facts).ok()
                 })
         } else {
             None
         };
-        let runtime = ctx.data_unchecked::<Arc<plain_rs::libs::phone::Service>>();
+        let runtime = ctx.data_unchecked::<Arc<plain_libs::phone::Service>>();
         let (scope, token) = crate::graphql::executor::resource_credentials(ctx)?;
-        let key = plain_rs::libs::utils::base64::base64_decode(&token);
+        let key = plain_libs::utils::base64::base64_decode(&token);
         let mut calls = Vec::with_capacity(facts.len());
         for fact in &facts {
             let mut row = call(fact);
@@ -170,7 +170,7 @@ impl CallsQuery {
         if let Some(locale) = locale {
             let numbers = calls.iter().map(|call| call.number.clone()).collect();
             let metadata =
-                plain_rs::libs::phone::batch::lookup_many(runtime.clone(), numbers, locale).await?;
+                plain_libs::phone::batch::lookup_many(runtime.clone(), numbers, locale).await?;
             for (call, geo) in calls.iter_mut().zip(metadata) {
                 call.geo = geo.map(Into::into);
             }
@@ -221,7 +221,7 @@ impl CallsMutation {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[WRITE])?;
         // Call contributes no clause of its own, so a query carrying only
         // fields it does not act on resolves to the entire call log.
-        plain_rs::libs::phone::query::require_narrowing(
+        plain_rs::features::services::phone_query::require_narrowing(
             ctx.data_unchecked::<Arc<Db>>(),
             Provider::Call,
             &query,

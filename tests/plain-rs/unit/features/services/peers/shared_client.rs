@@ -1,10 +1,10 @@
 use super::*;
 use crate::features::files::shares::client::Link;
 use crate::features::services::peers::shared_download::download_url;
-use crate::libs::db::DPeer;
-use crate::libs::db::chat_store::SaveMode;
-use crate::libs::db::chat_store::messages;
-use crate::libs::db::chat_store::peers;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::chat_store::SaveMode;
+use crate::infrastructure::db::chat_store::messages;
+use crate::infrastructure::db::chat_store::peers;
 use serde_json::json;
 use std::sync::{
     Arc,
@@ -30,12 +30,12 @@ fn discovery_selects_complete_matching_records_and_safe_ipv6_urls() {
         "localhost",
         443,
         "fixture",
-        &crate::libs::utils::base64::base64_encode(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
     )
     .unwrap();
     let url = link
         .file_url(
-            &crate::libs::utils::base64::base64_encode(&[8; 32]),
+            &plain_libs::utils::base64::base64_encode(&[8; 32]),
             "folder/file",
             false,
         )
@@ -87,7 +87,7 @@ async fn stopped_core_rejects_every_typed_shared_operation_before_side_effects()
         "127.0.0.1",
         port,
         "fixture",
-        &crate::libs::utils::base64::base64_encode(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
     )
     .unwrap();
     server.stop_core().await;
@@ -121,7 +121,7 @@ async fn stopped_core_rejects_every_typed_shared_operation_before_side_effects()
             &state,
             &cache,
             link,
-            crate::libs::utils::base64::base64_encode(&[8; 32]),
+            plain_libs::utils::base64::base64_encode(&[8; 32]),
             file,
             false
         )
@@ -244,10 +244,10 @@ async fn thumbnail_requests_keep_aspect_ratio_and_replace_cropped_cache_entries(
         "127.0.0.1",
         port,
         "fixture",
-        &crate::libs::utils::base64::base64_encode(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
     )
     .unwrap();
-    let url_token = crate::libs::utils::base64::base64_encode(&[8; 32]);
+    let url_token = plain_libs::utils::base64::base64_encode(&[8; 32]);
     let entry = crate::features::files::shares::client::File {
         name: "photo.jpg".into(),
         relative_path: "folder/ +?#中文%".into(),

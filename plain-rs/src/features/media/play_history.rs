@@ -1,7 +1,10 @@
 use crate::features::enums::DataType;
-use crate::libs::db::{Db, MediaPlayHistoryRow, media_play_history};
-use crate::libs::error::{DomainError, DomainResult};
-use crate::libs::utils::search_dsl::FilterField;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::MediaPlayHistoryRow;
+use crate::infrastructure::db::media_play_history;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
+use plain_libs::utils::search_dsl::FilterField;
 use rusqlite::{params_from_iter, types::Value};
 
 pub fn matching(db: &Db, fields: &[FilterField]) -> DomainResult<Vec<MediaPlayHistoryRow>> {
@@ -54,7 +57,7 @@ pub fn matching(db: &Db, fields: &[FilterField]) -> DomainResult<Vec<MediaPlayHi
                 };
                 let value =
                     if field.name == "played_at" {
-                        Value::Text(crate::libs::utils::dbtime::normalize(&field.value)?)
+                        Value::Text(plain_libs::utils::dbtime::normalize(&field.value)?)
                     } else {
                         Value::Integer(field.value.parse().map_err(|_| {
                             invalid("Media history numeric filter requires an integer")

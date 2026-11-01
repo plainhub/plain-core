@@ -29,7 +29,7 @@ async fn configured_device_names_need_no_network_or_host_facts() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn native_default_name_never_asks_for_a_combined_address_report() {
-    let host = crate::libs::host::bridge::Host::default();
+    let host = crate::infrastructure::host::bridge::Host::default();
     let (_generation, mut requests) = host.connect();
     assert!(!host.startup().name.is_empty());
     assert!(requests.try_recv().is_err());

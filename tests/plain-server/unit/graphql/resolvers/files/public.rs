@@ -1,8 +1,8 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::{fs, sync::Arc};
 
@@ -14,14 +14,24 @@ async fn file_classification_is_available_in_the_main_file_contract_without_hidi
     #[async_graphql::Object]
     impl Files {
         async fn entries(&self) -> Vec<File> {
-            ["/etc", "/home/person/etc"].into_iter().map(|path| file(&json!({"path":path}))).collect()
+            ["/etc", "/home/person/etc"]
+                .into_iter()
+                .map(|path| file(&json!({"path":path})))
+                .collect()
         }
     }
-    let schema = async_graphql::Schema::new(Files, async_graphql::EmptyMutation, async_graphql::EmptySubscription);
+    let schema = async_graphql::Schema::new(
+        Files,
+        async_graphql::EmptyMutation,
+        async_graphql::EmptySubscription,
+    );
     let response = schema.execute("{entries{path isSystem}}").await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let value = response.data.into_json().unwrap();
-    assert_eq!(value["entries"][0]["isSystem"], cfg!(any(target_os = "linux", target_os = "android")));
+    assert_eq!(
+        value["entries"][0]["isSystem"],
+        cfg!(any(target_os = "linux", target_os = "android"))
+    );
     assert_eq!(value["entries"][1]["isSystem"], false);
     assert_eq!(value["entries"].as_array().unwrap().len(), 2);
 }
@@ -516,19 +526,19 @@ async fn removing_an_unknown_favorite_folder_is_a_no_op() {
 fn sort_by_maps_onto_what_the_directory_walk_can_do() {
     assert!(matches!(
         FileSortBy::DateDesc.into(),
-        plain_rs::libs::filesystem::SortBy::DateDesc
+        plain_libs::filesystem::SortBy::DateDesc
     ));
     assert!(matches!(
         FileSortBy::SizeAsc.into(),
-        plain_rs::libs::filesystem::SortBy::SizeAsc
+        plain_libs::filesystem::SortBy::SizeAsc
     ));
     assert!(matches!(
         FileSortBy::NameDesc.into(),
-        plain_rs::libs::filesystem::SortBy::NameDesc
+        plain_libs::filesystem::SortBy::NameDesc
     ));
     assert!(matches!(
         FileSortBy::TakenAtDesc.into(),
-        plain_rs::libs::filesystem::SortBy::NameAsc
+        plain_libs::filesystem::SortBy::NameAsc
     ));
 }
 

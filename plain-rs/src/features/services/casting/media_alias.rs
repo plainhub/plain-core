@@ -106,7 +106,7 @@ pub fn safe_media_url(input_url: &str, mime: &str) -> String {
 }
 
 /// Same as [`safe_media_url`] but resolves the encrypted `file_id` to a
-/// filesystem path using the provided `crate::libs::db::Db` (required for the
+/// filesystem path using the provided `crate::infrastructure::db::Db` (required for the
 /// `url_token` lookup). When `db` is `None`, the encrypted id is used
 /// verbatim as the alias key — this is a fallback for tests.
 #[cfg(feature = "runtime-media")]
@@ -115,7 +115,7 @@ pub fn safe_media_url_with_prefs(
     mime: &str,
     prefs: Option<&crate::features::prefs::Prefs>,
 ) -> String {
-    let parsed = match crate::libs::utils::http_url::parse_http_url(input_url) {
+    let parsed = match plain_libs::utils::http_url::parse_http_url(input_url) {
         Some(u) => u,
         None => return input_url.to_string(),
     };

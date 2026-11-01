@@ -12,7 +12,7 @@ async fn binary_updates_have_bounded_queue_and_exact_payload() {
     for (id, state) in [("", "AQID"), ("p", "!"), (&"p".repeat(256), "AQID")] {
         assert!(updates.publish(id, state).is_err());
     }
-    let data = crate::libs::utils::base64::base64_encode(&vec![0; 8 * 1024 * 1024]);
+    let data = plain_libs::utils::base64::base64_encode(&vec![0; 8 * 1024 * 1024]);
     for _ in 0..3 {
         updates.publish("p", &data).unwrap();
     }

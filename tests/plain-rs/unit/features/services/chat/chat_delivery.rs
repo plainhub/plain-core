@@ -1,6 +1,6 @@
 use super::*;
-use crate::libs::db::DPeer;
-use crate::libs::transport::contract::PeerTransport;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::transport::contract::PeerTransport;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
     prefs.set("client_id", "self").unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
-        &crate::libs::utils::base64::base64_encode(&[1; 32]),
+        &plain_libs::utils::base64::base64_encode(&[1; 32]),
         prefs,
     )
     .unwrap();
@@ -22,7 +22,7 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
     let (generation, mut receiver) = crate::test_support::HostRequests::connect(&host);
     let transport = Transport {
         state: state.clone(),
-        attempt: crate::libs::transport::router::Attempt::Automatic,
+        attempt: crate::infrastructure::transport::router::Attempt::Automatic,
     };
     let mut peer = DPeer::new(
         "fixture",
@@ -31,11 +31,11 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
         Some(443),
         crate::features::chat::enums::DeviceType::Phone,
     );
-    peer.key = crate::libs::utils::base64::base64_encode(&[7; 32]);
-    crate::libs::db::chat_store::peers::save(
+    peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
+    crate::infrastructure::db::chat_store::peers::save(
         &state.db,
         &[peer.clone()],
-        crate::libs::db::chat_store::SaveMode::Insert,
+        crate::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     let responder = {
@@ -61,7 +61,7 @@ async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
                 assert_eq!(request["method"], "peerTransportBleExchange");
                 assert_eq!(request["params"]["peer"]["id"], "fixture");
                 assert!(
-                    matches!(ble.request_for_test(&request["params"]), crate::libs::protocols::ble::Request::PeerGraphql { channel_id, .. } if channel_id == "channel")
+                    matches!(ble.request_for_test(&request["params"]), crate::infrastructure::protocols::ble::Request::PeerGraphql { channel_id, .. } if channel_id == "channel")
                 );
                 assert_eq!(
                     crate::features::services::peers::ble_transport::test_peer_wire(

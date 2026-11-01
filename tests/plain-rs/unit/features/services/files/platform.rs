@@ -74,7 +74,7 @@ async fn sdk_file_access_without_a_system_media_catalog_records_portable_file_me
 }
 
 async fn sdk_recents(
-    config: crate::libs::host::startup::StartupConfig,
+    config: crate::infrastructure::host::startup::StartupConfig,
     volumes: serde_json::Value,
     provider_rows: serde_json::Value,
 ) -> (Result<Vec<serde_json::Value>>, Vec<String>) {
@@ -135,9 +135,9 @@ async fn sdk_recents(
 async fn sdk_catalog_reuses_startup_metadata_and_queries_only_provider_rows() {
     let rows = json!([{"name":"catalog.txt","path":"/catalog.txt","size":42}]);
     let (result, calls) = sdk_recents(
-        crate::libs::host::startup::StartupConfig {
+        crate::infrastructure::host::startup::StartupConfig {
             recent_files_catalog: true,
-            ..crate::libs::platform::startup::config()
+            ..crate::infrastructure::platform::startup::config()
         },
         json!([]),
         rows.clone(),
@@ -152,9 +152,9 @@ async fn sdk_filesystem_scan_runs_in_rust_without_provider_or_per_file_host_call
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("file.txt"), b"sample").unwrap();
     let (result, calls) = sdk_recents(
-        crate::libs::host::startup::StartupConfig {
+        crate::infrastructure::host::startup::StartupConfig {
             recent_files_catalog: false,
-            ..crate::libs::platform::startup::config()
+            ..crate::infrastructure::platform::startup::config()
         },
         json!([{"driveType":"INTERNAL_STORAGE","path":dir.path()}]),
         json!([]),
@@ -175,8 +175,12 @@ async fn invalid_recent_source_is_rejected_without_guessing_or_provider_fallback
         json!([]),
         json!([{"driveType":"INTERNAL_STORAGE","path":"relative"}]),
     ] {
-        let (result, calls) =
-            sdk_recents(crate::libs::platform::startup::config(), volumes, json!([])).await;
+        let (result, calls) = sdk_recents(
+            crate::infrastructure::platform::startup::config(),
+            volumes,
+            json!([]),
+        )
+        .await;
         assert!(result.is_err());
         assert_eq!(calls, ["systemMountFacts"]);
     }
@@ -185,7 +189,7 @@ async fn invalid_recent_source_is_rejected_without_guessing_or_provider_fallback
 #[tokio::test]
 async fn sdk_without_a_catalog_requires_a_primary_storage_directory() {
     let (result, calls) = sdk_recents(
-        crate::libs::platform::startup::config(),
+        crate::infrastructure::platform::startup::config(),
         json!([]),
         json!([{ "name":"must not request provider rows" }]),
     )

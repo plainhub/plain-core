@@ -1,15 +1,15 @@
-use crate::libs::db::audio_queue::io;
-use crate::libs::error::DomainError;
+use crate::infrastructure::db::audio_queue::io;
+use crate::infrastructure::error::DomainError;
 use rusqlite::OptionalExtension;
 use std::collections::HashSet;
 
-use crate::libs::db::Db;
-use crate::libs::db::Playlist;
-use crate::libs::db::PlaylistItem;
-use crate::libs::db::QueueItem;
-use crate::libs::error::DomainResult;
-use crate::libs::utils::dbtime::now_iso_millis;
-use crate::libs::utils::shortid;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::Playlist;
+use crate::infrastructure::db::PlaylistItem;
+use crate::infrastructure::db::QueueItem;
+use crate::infrastructure::error::DomainResult;
+use plain_libs::utils::dbtime::now_iso_millis;
+use plain_libs::utils::shortid;
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioTrack {
@@ -420,14 +420,14 @@ pub fn queue_total(db: &Db) -> DomainResult<usize> {
         c.query_row(
             "SELECT COUNT(*) FROM audio_queue_items q JOIN audio_media m USING(file_id)",
             [],
-            |row| crate::libs::db::read_count(row, 0),
+            |row| crate::infrastructure::db::read_count(row, 0),
         )
     })?)
 }
 
 pub fn queue_page(db: &Db, offset: i64, limit: i64, query: &str) -> DomainResult<Vec<AudioTrack>> {
     validate_page(offset, limit)?;
-    Ok(crate::libs::db::audio_queue::all_queue_items(db)?
+    Ok(crate::infrastructure::db::audio_queue::all_queue_items(db)?
         .into_iter()
         .map(AudioTrack::from)
         .filter(|item| matches_query(item, query))
@@ -444,7 +444,7 @@ fn validate_page(offset: i64, limit: i64) -> DomainResult<()> {
 }
 
 pub fn matches_query(track: &AudioTrack, query: &str) -> bool {
-    crate::libs::utils::search_dsl::parse(query)
+    plain_libs::utils::search_dsl::parse(query)
         .iter()
         .all(|field| {
             let matched = match field.name.as_str() {
@@ -484,8 +484,8 @@ pub fn track_by_id(db: &Db, file_id: &str) -> DomainResult<AudioTrack> {
 }
 
 pub fn playlists(db: &Db) -> DomainResult<Vec<(Playlist, usize)>> {
-    let all = crate::libs::db::audio_queue::all_playlists(db)?;
-    let counts = crate::libs::db::audio_queue::playlist_item_counts(db)?;
+    let all = crate::infrastructure::db::audio_queue::all_playlists(db)?;
+    let counts = crate::infrastructure::db::audio_queue::playlist_item_counts(db)?;
     Ok(all
         .into_iter()
         .map(|pl| {
@@ -496,7 +496,9 @@ pub fn playlists(db: &Db) -> DomainResult<Vec<(Playlist, usize)>> {
 }
 
 pub fn playlist_by_id(db: &Db, id: &str) -> DomainResult<Option<Playlist>> {
-    Ok(crate::libs::db::audio_queue::playlist_by_id(db, id)?)
+    Ok(crate::infrastructure::db::audio_queue::playlist_by_id(
+        db, id,
+    )?)
 }
 
 pub fn create_playlist(db: &Db, name: &str) -> DomainResult<Playlist> {
@@ -507,7 +509,7 @@ pub fn create_playlist(db: &Db, name: &str) -> DomainResult<Playlist> {
         created_at: now.clone(),
         updated_at: now,
     };
-    crate::libs::db::audio_queue::insert_playlist(db, &pl)?;
+    crate::infrastructure::db::audio_queue::insert_playlist(db, &pl)?;
     Ok(pl)
 }
 
@@ -600,7 +602,7 @@ pub fn playlist_items_page(
 }
 
 pub fn playlist_item_count(db: &Db, playlist_id: &str) -> DomainResult<usize> {
-    Ok(crate::libs::db::audio_queue::playlist_count(
+    Ok(crate::infrastructure::db::audio_queue::playlist_count(
         db,
         playlist_id,
     )?)
@@ -608,7 +610,7 @@ pub fn playlist_item_count(db: &Db, playlist_id: &str) -> DomainResult<usize> {
 
 pub fn playlist_filtered_count(db: &Db, playlist_id: &str, query: &str) -> DomainResult<usize> {
     Ok(
-        crate::libs::db::audio_queue::playlist_items(db, playlist_id)?
+        crate::infrastructure::db::audio_queue::playlist_items(db, playlist_id)?
             .iter()
             .filter(|item| matches_query(&AudioTrack::from(*item), query))
             .count(),
@@ -655,7 +657,7 @@ pub(crate) fn record_history_conn(c: &rusqlite::Connection, path: &str) -> Domai
     let Some(file_id) = file_id else {
         return Ok(());
     };
-    crate::libs::db::media_play_history::record_play(
+    crate::infrastructure::db::media_play_history::record_play(
         c,
         crate::features::enums::DataType::Audio,
         &file_id,
@@ -679,7 +681,7 @@ pub fn playlist_item_records_page(
         return Err(DomainError::Other("invalid pagination".into()));
     }
     Ok(
-        crate::libs::db::audio_queue::playlist_items(db, playlist_id)?
+        crate::infrastructure::db::audio_queue::playlist_items(db, playlist_id)?
             .into_iter()
             .filter(|item| matches_query(&AudioTrack::from(item), text))
             .skip(offset as usize)
@@ -723,7 +725,7 @@ pub fn track_by_path_conn(
 }
 
 pub fn selection_ids(query: &str) -> DomainResult<Option<Vec<String>>> {
-    let fields = crate::libs::utils::search_dsl::parse(query);
+    let fields = plain_libs::utils::search_dsl::parse(query);
     if fields.len() != 1 || fields[0].name != "ids" || fields[0].op != "=" {
         return Ok(None);
     }
@@ -733,7 +735,7 @@ pub fn selection_ids(query: &str) -> DomainResult<Option<Vec<String>>> {
         .map(str::to_owned)
         .collect::<Vec<_>>();
     if ids.iter().any(|id| id.trim().is_empty()) {
-        return Err(crate::libs::error::DomainError::Other(
+        return Err(crate::infrastructure::error::DomainError::Other(
             "media IDs required".into(),
         ));
     }

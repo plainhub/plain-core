@@ -4,7 +4,7 @@ use std::io::Read;
 #[tokio::test]
 async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host_calls() {
     let directory = tempfile::tempdir().unwrap();
-    let paths = crate::libs::data_paths::DataPaths::new(directory.path());
+    let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     let prefs = Arc::new(Prefs::load(&paths.prefs()).unwrap());
     prefs.set("device_name", "Backup fixture").unwrap();
     let db = Arc::new(Db::open(&paths.database()).unwrap());
@@ -57,7 +57,7 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
             .unwrap(),
         "committed"
     );
-    let kv = crate::libs::kv::Db::open(&restored.path().join("files/plain.db")).unwrap();
+    let kv = plain_libs::kv::Db::open(&restored.path().join("files/plain.db")).unwrap();
     assert_eq!(
         kv.get("state").unwrap().as_deref(),
         Some("中文 backup state")
@@ -81,7 +81,7 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
 #[test]
 fn cancellation_removes_staging_and_keeps_source_data() {
     let directory = tempfile::tempdir().unwrap();
-    let paths = crate::libs::data_paths::DataPaths::new(directory.path());
+    let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     let prefs = Prefs::load(&paths.prefs()).unwrap();
     let db = Db::open(&paths.database()).unwrap();
     let roots = roots(directory.path(), &directory.path().join("cache"));

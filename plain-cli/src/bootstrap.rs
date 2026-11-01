@@ -3,12 +3,12 @@ use anyhow::Result;
 pub fn run() -> Result<()> {
     initialize_tls();
 
-    plain_rs::libs::platform::version::set(
+    plain_rs::infrastructure::platform::version::set(
         crate::version::VERSION,
         crate::version::COMMIT,
         crate::version::BUILD_TIME,
     );
-    plain_rs::libs::platform::system::log::init("info").map_err(anyhow::Error::msg)?;
+    plain_rs::infrastructure::platform::system::log::init("info").map_err(anyhow::Error::msg)?;
 
     let cli = crate::cli::Cli::parse();
     let paths = cli.paths()?;

@@ -80,7 +80,7 @@ pub async fn read(
             &name
         };
         return Ok(Content::File {
-            mime: crate::libs::utils::mime::mime_from_ext(&cached.to_string_lossy()).to_owned(),
+            mime: plain_libs::utils::mime::mime_from_ext(&cached.to_string_lossy()).to_owned(),
             path: cached,
             name: filename.to_owned(),
             download: options.download,
@@ -154,7 +154,7 @@ pub async fn read(
             download: false,
         });
     }
-    let mime = crate::libs::utils::mime::mime_from_ext(&path);
+    let mime = plain_libs::utils::mime::mime_from_ext(&path);
     if options.probe {
         let codec = crate::features::services::files::resources::read(
             &state.host,
@@ -179,7 +179,7 @@ pub async fn read(
                 &state.host,
                 "animated",
                 &path,
-                json!({"fileName":crate::libs::utils::query::url_encode(filename)}),
+                json!({"fileName":plain_libs::utils::query::url_encode(filename)}),
             )
             .await
             .map_err(anyhow::Error::msg)?
@@ -200,7 +200,7 @@ pub async fn read(
                             height,
                             center_crop: options.center_crop,
                             file_id: media_id,
-                            file_name: crate::libs::utils::query::url_encode(filename),
+                            file_name: plain_libs::utils::query::url_encode(filename),
                         },
                     )
                     .await;

@@ -28,17 +28,14 @@ async fn every_runtime_uses_the_current_schema_and_the_same_persisted_identity_k
     let pair = plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     assert_eq!(identity.client_id, client_id);
     assert_eq!(
-        plain_rs::libs::utils::base64::base64_decode(&identity.ed25519_keypair),
+        plain_libs::utils::base64::base64_decode(&identity.ed25519_keypair),
         pair
     );
     assert_eq!(
         plain_rs::features::prefs::ensure_url_token(&state.prefs),
         token
     );
-    assert_eq!(
-        plain_rs::libs::utils::base64::base64_decode(&token).len(),
-        32
-    );
+    assert_eq!(plain_libs::utils::base64::base64_decode(&token).len(), 32);
     first.shutdown().await;
     drop(state);
     let second = ContentServer::open(directory.path()).unwrap();

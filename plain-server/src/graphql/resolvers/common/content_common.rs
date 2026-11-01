@@ -1,10 +1,10 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use async_graphql::{Context, ID};
 use chrono::{DateTime, Utc};
-use plain_rs::libs::types::Instant;
+use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 
-use plain_rs::libs::db::Db;
+use plain_rs::infrastructure::db::Db;
 
 pub fn instant(value: &str) -> async_graphql::Result<Instant> {
     let date = DateTime::parse_from_rfc3339(value)

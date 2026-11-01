@@ -82,7 +82,7 @@ fn sort_keys_are_computed_once_per_bucket_and_shared_across_provider_sources() {
         ],
         |name| {
             calls.push(name.to_owned());
-            crate::libs::utils::sort_name::sort_name(name)
+            plain_libs::utils::sort_name::sort_name(name)
         },
     )
     .unwrap();
@@ -141,7 +141,7 @@ fn document_bucket_plan_reuses_shared_mimes_and_retains_size_and_named_bucket_ru
     assert_eq!(
         plan.args,
         std::iter::once("text/%")
-            .chain(crate::libs::media::documents::MIME_TYPES.iter().copied())
+            .chain(plain_libs::media::documents::MIME_TYPES.iter().copied())
             .map(str::to_owned)
             .collect::<Vec<_>>()
     );

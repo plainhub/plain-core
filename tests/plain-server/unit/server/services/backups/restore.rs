@@ -31,7 +31,7 @@ async fn native_restore_stages_without_overwriting_the_running_database() {
         "live"
     );
     assert!(
-        plain_rs::libs::data_paths::directory::DataDirectory::open(
+        plain_rs::infrastructure::data_paths::directory::DataDirectory::open(
             directory.path(),
             core.cache_paths().root()
         )

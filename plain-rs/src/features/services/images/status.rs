@@ -21,7 +21,7 @@ pub struct ImageSearchStatus {
     #[cfg_attr(feature = "graphql", graphql(name = "errorMessage"))]
     pub error_message: String,
     #[cfg_attr(feature = "graphql", graphql(name = "modelSize"))]
-    pub model_size: crate::libs::types::Long,
+    pub model_size: crate::infrastructure::types::Long,
     #[cfg_attr(feature = "graphql", graphql(name = "modelDir"))]
     pub model_dir: String,
     #[cfg_attr(feature = "graphql", graphql(name = "isIndexing"))]

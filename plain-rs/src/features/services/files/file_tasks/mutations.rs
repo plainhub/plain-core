@@ -3,8 +3,8 @@ use crate::features::files::tasks::FileTaskStatus;
 use crate::features::files::tasks::FileTaskType;
 use crate::features::files::tasks::Hooks;
 use crate::features::services::files::file_tasks::*;
-use crate::libs::filesystem::deletion::Outcome;
-use crate::libs::filesystem::deletion::Plan;
+use plain_libs::filesystem::deletion::Outcome;
+use plain_libs::filesystem::deletion::Plan;
 impl FileTasks {
     pub async fn rename(
         &self,
@@ -71,7 +71,7 @@ impl FileTasks {
     }
     pub async fn delete(&self, path: String) -> Result<Outcome> {
         let _guard = self.deletion_lock.lock().await;
-        crate::libs::filesystem::deletion::validate(std::path::Path::new(&path))?;
+        plain_libs::filesystem::deletion::validate(std::path::Path::new(&path))?;
         self.hooks.platform.authorize(&path, true).await?;
         self.delete_prepared(path).await
     }
@@ -83,7 +83,7 @@ impl FileTasks {
             .filter(|path| seen.insert(path.clone()))
             .collect::<Vec<_>>();
         for path in &paths {
-            crate::libs::filesystem::deletion::validate(std::path::Path::new(path))?;
+            plain_libs::filesystem::deletion::validate(std::path::Path::new(path))?;
         }
         if paths.is_empty() {
             return Ok(0);
@@ -203,7 +203,7 @@ impl FileTasks {
                     let cleanup = |db: &Db| {
                         for path in &removed_paths {
                             require_absent(path).map_err(|e| {
-                                crate::libs::error::DomainError::Other(e.to_string())
+                                crate::infrastructure::error::DomainError::Other(e.to_string())
                             })?;
                         }
                         media_deletes::cleanup(db, &items, &removed_paths, &roots)

@@ -23,7 +23,7 @@ pub fn album_id(album: &str, album_artist: &str, artist: &str) -> String {
     }
     format!(
         "album:{}",
-        crate::libs::utils::hex::bytes_to_hex(&digest.finalize())
+        plain_libs::utils::hex::bytes_to_hex(&digest.finalize())
     )
 }
 

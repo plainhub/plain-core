@@ -477,7 +477,8 @@ async fn filesystem_watch_events_from_an_os_thread_update_the_shared_catalog() {
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
-    use plain_rs::{features::enums::DataType, libs::db::FileKind};
+    use plain_rs::features::enums::DataType;
+    use plain_rs::infrastructure::db::FileKind;
     let directory = directory_scan_fixture();
     let core = catalog_test_core(&directory.path().join("core"));
     let catalog = core.native_media_catalog().unwrap();
@@ -512,7 +513,7 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
     let event = events.try_recv().unwrap();
     assert_eq!(
         event.event_type,
-        plain_rs::libs::events::MEDIA_LIBRARY_UPDATED
+        plain_rs::infrastructure::events::MEDIA_LIBRARY_UPDATED
     );
     assert!(
         plain_rs::features::services::files::catalog_events::includes(

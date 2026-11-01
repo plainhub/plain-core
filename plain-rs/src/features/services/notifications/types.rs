@@ -1,4 +1,4 @@
-use crate::libs::types::Instant;
+use crate::infrastructure::types::Instant;
 use async_graphql::ID;
 use async_graphql::SimpleObject;
 

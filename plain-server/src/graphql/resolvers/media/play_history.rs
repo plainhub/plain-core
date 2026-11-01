@@ -8,13 +8,12 @@ use crate::graphql::resolvers::common::content_common::instant;
 use crate::graphql::resolvers::videos::public::video_from_facts;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, ID, Object, Result, SimpleObject};
+use plain_libs::utils::search_dsl;
+use plain_rs::features::media::play_history;
 use plain_rs::features::prefs::settings::FileSortBy;
-use plain_rs::libs::types::Instant;
-use plain_rs::libs::types::Long;
-use plain_rs::{
-    features::media::play_history,
-    libs::{db::Db, utils::search_dsl},
-};
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::types::Instant;
+use plain_rs::infrastructure::types::Long;
 use std::{collections::HashMap, sync::Arc};
 
 #[derive(SimpleObject)]
@@ -135,7 +134,7 @@ impl MediaPlayHistoryMutation {
         .await??;
         if r#type == MediaDataType::AUDIO {
             plain_rs::features::services::audio::reports::publish_library_updated(
-                ctx.data::<Arc<plain_rs::libs::host::bridge::Host>>()?,
+                ctx.data::<Arc<plain_rs::infrastructure::host::bridge::Host>>()?,
             );
         }
         Ok(true)

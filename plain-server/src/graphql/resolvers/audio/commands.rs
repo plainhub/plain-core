@@ -3,7 +3,7 @@ use async_graphql::{Context, ID, Object, Result, SimpleObject};
 use plain_rs::features::media::audio::{commands, playback, queue};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::audio::host::Audio;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::types::Long;
 use std::sync::Arc;
 
 #[derive(SimpleObject)]
@@ -73,8 +73,9 @@ impl AudioCommandsMutation {
             .await?;
         if selection.is_some() {
             let _ = ctx
-                .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()?
-                .send(plain_rs::libs::events::WsEvent::broadcast(
+                .data::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>(
+                )?
+                .send(plain_rs::infrastructure::events::WsEvent::broadcast(
                     "CONTENT_CHANGED",
                     "{}".into(),
                 ));

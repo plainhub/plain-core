@@ -1,5 +1,5 @@
 use super::*;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde_json::json;
 
 #[tokio::test]

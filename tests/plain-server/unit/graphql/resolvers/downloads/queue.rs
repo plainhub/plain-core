@@ -3,7 +3,7 @@ use serde_json::json;
 
 #[test]
 fn queue_projection_preserves_large_progress_and_normalizes_attachment_defaults() {
-    let peer = plain_rs::libs::db::DPeer::new(
+    let peer = plain_rs::infrastructure::db::DPeer::new(
         "peer",
         "Peer",
         "127.0.0.1",

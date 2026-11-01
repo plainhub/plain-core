@@ -1,5 +1,5 @@
 use crate::features::services::files::media_scans::MediaScans;
-use crate::libs::db::Db;
+use crate::infrastructure::db::Db;
 use std::path::Path;
 
 pub fn completed(

@@ -9,7 +9,7 @@ fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     prefs.set("background_service_enabled", true).unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -27,7 +27,7 @@ async fn removed_ble_websocket_does_not_upgrade() {
         "authorization",
         format!(
             "Bearer {}",
-            plain_rs::libs::utils::base64::base64_encode(&[3; 32])
+            plain_libs::utils::base64::base64_encode(&[3; 32])
         )
         .parse()
         .unwrap(),
@@ -42,7 +42,7 @@ async fn outgoing_completes_in_one_host_call() {
     let state = server.runtime_state();
     let (generation, mut requests) = state.host.connect();
     let task_state = state.clone();
-    let peer = plain_rs::libs::db::DPeer::new(
+    let peer = plain_rs::infrastructure::db::DPeer::new(
         "peer",
         "peer",
         "",
@@ -72,7 +72,7 @@ async fn outgoing_completes_in_one_host_call() {
     assert_eq!(call["method"], "peerTransportBleExchange");
     assert!(call["params"].get("token").is_none());
     let request =
-        plain_rs::libs::utils::base64::base64_decode(call["params"]["request"].as_str().unwrap());
+        plain_libs::utils::base64::base64_decode(call["params"]["request"].as_str().unwrap());
     assert_eq!(
         Request::decode(&request).unwrap(),
         Request::PeerGraphql {
@@ -86,7 +86,7 @@ async fn outgoing_completes_in_one_host_call() {
         .host
         .reply(
             generation,
-            serde_json::json!({"id":call["id"],"result":{"response":plain_rs::libs::utils::base64::base64_encode(&reply)}}),
+            serde_json::json!({"id":call["id"],"result":{"response":plain_libs::utils::base64::base64_encode(&reply)}}),
         )
         .unwrap();
     assert_eq!(task.await.unwrap(), reply);
@@ -216,24 +216,23 @@ fn signed_nearby_request() -> (
     plain_rs::features::peers::pairing::protocol::PairingRequest,
     [u8; 64],
 ) {
-    let (key, public) = plain_rs::libs::crypto::ed25519_generate();
+    let (key, public) = plain_libs::crypto::ed25519_generate();
     let mut request = plain_rs::features::peers::pairing::protocol::PairingRequest {
         from_id: "nearby-peer".into(),
         from_name: "Nearby fixture".into(),
         port: 2443,
         device_type: "PHONE".into(),
-        ecdh_public_key: plain_rs::libs::utils::base64::base64_encode(
-            &plain_rs::libs::crypto::EcdhSession::generate().public_key_bytes,
+        ecdh_public_key: plain_libs::utils::base64::base64_encode(
+            &plain_libs::crypto::EcdhSession::generate().public_key_bytes,
         ),
-        signature_public_key: plain_rs::libs::utils::base64::base64_encode(&public),
+        signature_public_key: plain_libs::utils::base64::base64_encode(&public),
         timestamp: plain_rs::features::peers::pairing::now_ms(),
         ips: vec![],
         signature: String::new(),
         aware_supported: false,
         from_ip: String::new(),
     };
-    request.signature =
-        plain_rs::libs::crypto::ed25519_sign(&key, request.signature_data().as_bytes());
+    request.signature = plain_libs::crypto::ed25519_sign(&key, request.signature_data().as_bytes());
     (request, key)
 }
 
@@ -244,12 +243,12 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     use plain_rs::features::services::discovery::pairing_runtime;
     let (_dir, server) = fixture();
     let state = server.runtime_state();
-    let (local_key, _) = plain_rs::libs::crypto::ed25519_generate();
+    let (local_key, _) = plain_libs::crypto::ed25519_generate();
     state
         .prefs
         .set(
             "signature_key_pair",
-            plain_rs::libs::utils::base64::base64_encode(&local_key),
+            plain_libs::utils::base64::base64_encode(&local_key),
         )
         .unwrap();
     let (request, _) = signed_nearby_request();
@@ -351,7 +350,7 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
             .unwrap()
     );
     assert!(
-        plain_rs::libs::db::chat_store::peers::get(&state.db, "nearby-peer")
+        plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "nearby-peer")
             .unwrap()
             .is_none()
     );
@@ -389,7 +388,7 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
             cancel.request_signature = request.signature.clone();
         }
         cancel.signature =
-            plain_rs::libs::crypto::ed25519_sign(&key, cancel.signature_data().as_bytes());
+            plain_libs::crypto::ed25519_sign(&key, cancel.signature_data().as_bytes());
         let body = Message::PairCancel(cancel.clone()).wire().unwrap();
         let ack = incoming_exchange(
             &server,
@@ -409,7 +408,7 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
         );
     }
     assert!(
-        plain_rs::libs::db::chat_store::peers::get(&state.db, "nearby-peer")
+        plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "nearby-peer")
             .unwrap()
             .is_none()
     );

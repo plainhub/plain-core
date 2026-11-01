@@ -1,6 +1,6 @@
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
-use crate::libs::transport::auth as peer_auth;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::transport::auth as peer_auth;
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
 use std::{collections::HashMap, sync::Mutex};
@@ -69,7 +69,7 @@ impl Connections {
             .is_some_and(|expected| Self::current(db, expected))
     }
     fn current(db: &Db, expected: &DPeer) -> bool {
-        crate::libs::db::chat_store::peers::get(db, &expected.id)
+        crate::infrastructure::db::chat_store::peers::get(db, &expected.id)
             .ok()
             .flatten()
             .is_some_and(|peer| {
@@ -96,7 +96,7 @@ impl Connections {
         Some((peer.id, online))
     }
     fn current_hint(db: &Db, expected: &DPeer) -> bool {
-        crate::libs::db::chat_store::peers::get(db, &expected.id)
+        crate::infrastructure::db::chat_store::peers::get(db, &expected.id)
             .ok()
             .flatten()
             .is_some_and(|p| {
@@ -106,7 +106,7 @@ impl Connections {
             })
     }
     pub fn hint(&self, db: &Db, id: &str) -> Result<bool> {
-        let Some(peer) = crate::libs::db::chat_store::peers::get(db, id)? else {
+        let Some(peer) = crate::infrastructure::db::chat_store::peers::get(db, id)? else {
             return Ok(false);
         };
         let mut state = self.state.lock().unwrap();
@@ -197,14 +197,14 @@ pub fn handshake(key: &[u8], keypair: &[u8], client_id: &str, challenge: &str) -
         challenge: challenge.to_owned(),
     })?;
     let timestamp = chrono::Utc::now().timestamp_millis();
-    let signature = crate::libs::crypto::ed25519_sign(
+    let signature = plain_libs::crypto::ed25519_sign(
         keypair,
         peer_auth::status_signature_payload(timestamp, &content).as_bytes(),
     );
     if signature.is_empty() {
         bail!("Invalid signing identity");
     }
-    crate::libs::crypto::xchacha_encrypt_raw(
+    plain_libs::crypto::xchacha_encrypt_raw(
         key,
         format!("{signature}|{timestamp}|{content}").as_bytes(),
     )

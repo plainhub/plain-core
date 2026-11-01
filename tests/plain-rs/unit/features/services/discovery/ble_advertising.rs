@@ -17,16 +17,16 @@ fn fixture() -> (
     prefs.set("client_id", "ble-advertising-fixture").unwrap();
     let core = crate::test_runtime::Core::start_core(
         directory.path(),
-        &crate::libs::utils::base64::base64_encode(&[9; 32]),
+        &plain_libs::utils::base64::base64_encode(&[9; 32]),
         prefs,
     )
     .unwrap();
     let mut state = core.runtime_state();
     state.host = Arc::new(
-        crate::libs::host::bridge::Host::with_startup_config(
-            crate::libs::host::startup::StartupConfig {
+        crate::infrastructure::host::bridge::Host::with_startup_config(
+            crate::infrastructure::host::startup::StartupConfig {
                 wifi_aware_supported: true,
-                ..crate::libs::platform::startup::config()
+                ..crate::infrastructure::platform::startup::config()
             },
         )
         .unwrap(),
@@ -134,7 +134,7 @@ async fn facts_drive_shared_bytes_and_skip_duplicate_platform_work() {
     assert_eq!(first["active"], true);
     assert_eq!(first["revision"], 1);
     assert_eq!(
-        crate::libs::utils::base64::base64_decode(first["bytes"].as_str().unwrap()),
+        plain_libs::utils::base64::base64_decode(first["bytes"].as_str().unwrap()),
         crate::features::discovery::advertisement::ble("ble-advertising-fixture", true, false)
             .unwrap()
     );
@@ -161,7 +161,7 @@ async fn facts_drive_shared_bytes_and_skip_duplicate_platform_work() {
     result.unwrap();
     assert_eq!(command(&calls)["revision"], 2);
     assert_eq!(
-        crate::libs::utils::base64::base64_decode(command(&calls)["bytes"].as_str().unwrap()),
+        plain_libs::utils::base64::base64_decode(command(&calls)["bytes"].as_str().unwrap()),
         crate::features::discovery::advertisement::ble("ble-advertising-fixture", true, true)
             .unwrap()
     );

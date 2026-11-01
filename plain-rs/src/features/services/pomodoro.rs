@@ -1,8 +1,8 @@
 use crate::features::prefs::Prefs;
-use crate::libs::db::Db;
-use crate::libs::events::WS_POMODORO_ACTION;
-use crate::libs::events::WsEvent;
-use crate::libs::types::Instant;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::events::WS_POMODORO_ACTION;
+use crate::infrastructure::events::WsEvent;
+use crate::infrastructure::types::Instant;
 use async_graphql::{Enum, SimpleObject};
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;

@@ -4,10 +4,10 @@ use std::sync::Arc;
 use crate::graphql::types::parse_instant;
 use plain_rs::features::chat::attachments::app_file_store::display_name;
 use plain_rs::features::chat::attachments::app_file_store::file_name_map;
-use plain_rs::libs::db::DAppFile;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::types::Instant;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::db::DAppFile;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::types::Instant;
+use plain_rs::infrastructure::types::Long;
 
 #[derive(SimpleObject)]
 #[graphql(name = "AppFile")]

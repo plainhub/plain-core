@@ -1,14 +1,11 @@
 use crate::server::ContentServer;
+use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::services::peers::clipboard::*;
 use plain_rs::features::services::peers::management::Identity;
+use plain_rs::infrastructure::db::DPeer;
+use plain_rs::infrastructure::db::chat_store::SaveMode;
+use plain_rs::infrastructure::db::chat_store::peers;
 use plain_rs::runtime::Runtime as ServerState;
-use plain_rs::{
-    features::chat::enums::DeviceType,
-    libs::db::{
-        DPeer,
-        chat_store::{SaveMode, peers},
-    },
-};
 use serde_json::Value;
 use serde_json::json;
 use std::sync::{

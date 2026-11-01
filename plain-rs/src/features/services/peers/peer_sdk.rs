@@ -1,5 +1,5 @@
 use crate::features::services::peers::peer_lan::Failure;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use serde_json::{Value, json};
@@ -29,13 +29,13 @@ impl Drop for Lease {
 }
 async fn socket(
     state: &CoreRuntime,
-    peer: &crate::libs::db::DPeer,
+    peer: &crate::infrastructure::db::DPeer,
 ) -> Result<(DuplexStream, Lease)> {
     ensure!(
         state.aware.subscribe(state, &peer.id).await?,
         "Aware unavailable"
     );
-    let token = crate::libs::utils::short_uuid::short_uuid();
+    let token = plain_libs::utils::short_uuid::short_uuid();
     let mut lease = Lease {
         host: state.host.clone(),
         token: token.clone(),
@@ -61,7 +61,7 @@ async fn socket(
             let Ok(response)=response else {break};
             if response["eof"]==true {break;}
             if let Some(encoded)=response["bytes"].as_str() {
-                let bytes=crate::libs::utils::base64::base64_decode(encoded);
+                let bytes=plain_libs::utils::base64::base64_decode(encoded);
                 if bytes.len()>32768 || writer.write_all(&bytes).await.is_err() {break;}
             }
         }
@@ -79,7 +79,7 @@ async fn socket(
             let result = host
                 .call(
                     "peerTransportSocketWrite",
-                    json!({"token":token,"bytes":crate::libs::utils::base64::base64_encode(&bytes[..n])}),
+                    json!({"token":token,"bytes":plain_libs::utils::base64::base64_encode(&bytes[..n])}),
                 )
                 .await;
             if !matches!(result,Ok(value) if value==json!(n)) {
@@ -113,7 +113,7 @@ pub struct Response {
 }
 pub async fn aware(
     state: &CoreRuntime,
-    peer: &crate::libs::db::DPeer,
+    peer: &crate::infrastructure::db::DPeer,
     method: &str,
     path: &str,
     channel: &str,
@@ -160,14 +160,15 @@ pub async fn aware(
 }
 pub async fn aware_send(
     state: &CoreRuntime,
-    peer: &crate::libs::db::DPeer,
+    peer: &crate::infrastructure::db::DPeer,
     channel: &str,
     key: &[u8],
     body: &str,
 ) -> Result<Value, Failure> {
-    let encrypted = crate::libs::crypto::xchacha_encrypt_raw(key, body.as_bytes())
+    let encrypted = plain_libs::crypto::xchacha_encrypt_raw(key, body.as_bytes())
         .ok_or_else(|| Failure::Fatal("Invalid peer key".into()))?;
-    let context = crate::libs::transport::http_response::Context::new("/peer_graphql", &encrypted);
+    let context =
+        crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &encrypted);
     let response = aware(state, peer, "POST", "/peer_graphql", channel, encrypted).await?;
     async {
         let status = response.status;
@@ -185,7 +186,7 @@ pub async fn aware_send(
 fn decode_response(
     status: u16,
     key: &[u8],
-    context: &crate::libs::transport::http_response::Context,
+    context: &crate::infrastructure::transport::http_response::Context,
     bytes: &[u8],
 ) -> Result<Value> {
     let plain = context
@@ -200,8 +201,8 @@ fn decode_response(
 }
 pub async fn ble(
     state: &CoreRuntime,
-    peer: &crate::libs::db::DPeer,
-    request: crate::libs::protocols::ble::Request,
+    peer: &crate::infrastructure::db::DPeer,
+    request: crate::infrastructure::protocols::ble::Request,
 ) -> Result<Vec<u8>, Failure> {
     state
         .ble_transport
@@ -225,25 +226,26 @@ pub fn ble_actor(state: &CoreRuntime) -> Result<String, Failure> {
 }
 pub async fn ble_send(
     state: &CoreRuntime,
-    peer: &crate::libs::db::DPeer,
+    peer: &crate::infrastructure::db::DPeer,
     channel: &str,
     key: &[u8],
     body: &str,
 ) -> Result<Value, Failure> {
-    let encrypted = crate::libs::crypto::xchacha_encrypt_raw(key, body.as_bytes())
+    let encrypted = plain_libs::crypto::xchacha_encrypt_raw(key, body.as_bytes())
         .ok_or_else(|| Failure::Fatal("Invalid peer key".into()))?;
-    let context = crate::libs::transport::http_response::Context::new("/peer_graphql", &encrypted);
+    let context =
+        crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &encrypted);
     let response = ble(
         state,
         peer,
-        crate::libs::protocols::ble::Request::PeerGraphql {
+        crate::infrastructure::protocols::ble::Request::PeerGraphql {
             client_id: ble_actor(state)?,
             channel_id: channel.into(),
             body: encrypted,
         },
     )
     .await?;
-    let (status, bytes) = crate::libs::protocols::ble::decode_response(&response)
+    let (status, bytes) = crate::infrastructure::protocols::ble::decode_response(&response)
         .map_err(|e| Failure::Fatal(e.to_string()))?;
     decode_response(status, key, &context, bytes).map_err(|e| Failure::Fatal(e.to_string()))
 }

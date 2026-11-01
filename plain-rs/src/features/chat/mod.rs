@@ -8,7 +8,7 @@
 //!   `PAIR_RESPONSE:` / `PAIR_CANCEL:` over HTTPS `POST /nearby`).
 //! - [`channel`] — group-chat system-message wire types + canonical
 //!   signature payloads.
-//! - [`crate::libs::db`] — the SQLite storage layer, same schema as plain-app's
+//! - [`crate::infrastructure::db`] — the SQLite storage layer, same schema as plain-app's
 //!   Room DB (`plain.db`: chats / chat_channels / peers /
 //!   nearby_devices / app_files / bookmarks / bookmark_groups).
 //! - files/cacher/service — content-addressed attachments, the

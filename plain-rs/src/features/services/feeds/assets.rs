@@ -1,10 +1,10 @@
-use crate::libs::db::Db;
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
-use crate::libs::utils::html_to_markdown::dom::Dom;
-use crate::libs::utils::http_url::join;
-use crate::libs::utils::http_url::parse_http_url;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 use futures_util::StreamExt;
+use plain_libs::utils::html_to_markdown::dom::Dom;
+use plain_libs::utils::http_url::join;
+use plain_libs::utils::http_url::parse_http_url;
 use std::{
     path::{Path, PathBuf},
     sync::{

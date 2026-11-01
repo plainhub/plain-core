@@ -1,6 +1,6 @@
 use crate::features::prefs::{Prefs, pref_keys::API_PERMISSIONS};
 use crate::features::services::device::permission::Permission;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 
 pub async fn granted(host: &Host) -> Result<Vec<String>, String> {

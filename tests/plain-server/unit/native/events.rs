@@ -1,6 +1,6 @@
 use super::*;
 use crate::server::ContentServer;
-use plain_rs::libs::host::request_scope::NativeRequestScope;
+use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 
 const KEY: [u8; 32] = [7; 32];
 
@@ -20,7 +20,7 @@ fn fixture() -> (
         .prefs
         .set(
             plain_rs::features::prefs::pref_keys::URL_TOKEN,
-            plain_rs::libs::utils::base64::base64_encode(&KEY),
+            plain_libs::utils::base64::base64_encode(&KEY),
         )
         .unwrap();
     let scope = NativeRequestScope::default();
@@ -60,7 +60,7 @@ async fn native_view_receives_binary_media_and_skips_text_host_and_other_client_
             .unwrap();
         assert_eq!(
             frame,
-            plain_rs::libs::protocols::websocket::encode_raw(kind, &[1, 2, 3])
+            plain_rs::infrastructure::protocols::websocket::encode_raw(kind, &[1, 2, 3])
         );
     }
     core.stop_core().await;
@@ -109,7 +109,7 @@ async fn a_lagged_view_continues_with_retained_binary_frames() {
         .unwrap();
     assert_eq!(
         frame,
-        plain_rs::libs::protocols::websocket::encode_raw("IMAGE_EDITOR_UPDATE", &[4, 5])
+        plain_rs::infrastructure::protocols::websocket::encode_raw("IMAGE_EDITOR_UPDATE", &[4, 5])
     );
     core.stop_core().await;
 }
@@ -121,7 +121,7 @@ async fn invalid_stored_event_keys_refuse_subscription() {
         .prefs
         .set(
             plain_rs::features::prefs::pref_keys::URL_TOKEN,
-            plain_rs::libs::utils::base64::base64_encode(&KEY[..31]),
+            plain_libs::utils::base64::base64_encode(&KEY[..31]),
         )
         .unwrap();
     assert!(

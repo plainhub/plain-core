@@ -22,7 +22,7 @@ impl Default for Defaults {
 }
 
 fn resolve_defaults() -> Defaults {
-    let home = crate::libs::platform::system::consts::home_directory();
+    let home = crate::infrastructure::platform::system::consts::home_directory();
     let mut scan_directories: Vec<String> = if cfg!(any(target_os = "linux", target_os = "macos")) {
         vec!["/".into()]
     } else if cfg!(target_os = "windows") {

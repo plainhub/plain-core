@@ -1,8 +1,9 @@
-use crate::libs::db::{DPeer, chat_store::peers};
-use crate::libs::host::request_scope::NativeRequestScope;
-use crate::libs::protocols::graphql::PeerSubscriptionTarget;
-use crate::libs::protocols::graphql::messages::ClientMessage;
-use crate::libs::protocols::graphql::messages::ServerMessage;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::chat_store::peers;
+use crate::infrastructure::host::request_scope::NativeRequestScope;
+use crate::infrastructure::protocols::graphql::PeerSubscriptionTarget;
+use crate::infrastructure::protocols::graphql::messages::ClientMessage;
+use crate::infrastructure::protocols::graphql::messages::ServerMessage;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, anyhow, ensure};
 use futures_util::{SinkExt, StreamExt};
@@ -31,7 +32,7 @@ impl PeerSubscription {
         if !peer.is_paired()
             || target.public_key.is_empty()
             || peer.public_key != target.public_key
-            || crate::libs::utils::base64::base64_decode(&peer.token).len() != 32
+            || plain_libs::utils::base64::base64_decode(&peer.token).len() != 32
         {
             return Err("Management session unavailable".into());
         }
@@ -132,7 +133,7 @@ impl PeerSubscription {
     ) -> Result<()> {
         self.current()?;
         let mut changed = self.state.db.peer_changes();
-        let key = crate::libs::utils::base64::base64_decode(&self.peer.token);
+        let key = plain_libs::utils::base64::base64_decode(&self.peer.token);
         let mut url = reqwest::Url::parse(
             &crate::features::services::peers::peer_address::address(&self.peer).base_url,
         )?;

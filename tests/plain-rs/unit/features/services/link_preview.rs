@@ -8,7 +8,7 @@ use axum::{
 };
 async fn fixture_server() -> (std::net::SocketAddr, tokio::task::JoinHandle<()>) {
     let server=Router::new().route("/",get(||async{Html("<meta property='og:title' content='Fixture title'><meta property='og:description' content='Fixture description'><meta property='og:image' content='/favicon.png'>")}))
-        .route("/favicon.png",get(||async{Response::builder().header(header::CONTENT_TYPE,"image/png").body(Body::from(crate::libs::utils::base64::base64_decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lYUAAAAASUVORK5CYII="))).unwrap()}))
+        .route("/favicon.png",get(||async{Response::builder().header(header::CONTENT_TYPE,"image/png").body(Body::from(plain_libs::utils::base64::base64_decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lYUAAAAASUVORK5CYII="))).unwrap()}))
         .route("/chunked",get(||async{Response::builder().header(header::CONTENT_TYPE,"text/html").body(Body::from_stream(futures_util::stream::iter((0..4).map(|_|Ok::<_,std::io::Error>(vec![b'x';16]))))).unwrap()}));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -28,7 +28,7 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
     let url = format!("http://fixture.example:{}/", addr.port());
     let dir = tempfile::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
-    let mut row = crate::libs::db::DChat::new(
+    let mut row = crate::infrastructure::db::DChat::new(
         "me",
         "local",
         "",
@@ -57,7 +57,7 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
     assert_eq!(file.ref_count, 1);
     assert_eq!(
         std::fs::read(dir.path().join(&file.real_path)).unwrap(),
-        crate::libs::utils::base64::base64_decode(
+        plain_libs::utils::base64::base64_decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lYUAAAAASUVORK5CYII="
         )
     );

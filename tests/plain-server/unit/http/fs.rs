@@ -10,7 +10,7 @@ fn test_state() -> (tempfile::TempDir, ContentServer, ServerState, Vec<u8>) {
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
-    let key = plain_rs::libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
+    let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
     (directory, core, state, key)
 }
 
@@ -295,7 +295,7 @@ async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion(
             None,
         )
         .unwrap();
-    let key = plain_rs::libs::utils::base64::base64_decode(&share.url_token);
+    let key = plain_libs::utils::base64::base64_decode(&share.url_token);
     let id = plain_rs::features::files::resource_link::seal(
         &plain_rs::features::files::resource_link::Scope::Share(share.id.clone()),
         &key,
@@ -365,7 +365,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     let prefs = std::sync::Arc::new(
         plain_rs::features::prefs::Prefs::load(&data.join("prefs.json")).unwrap(),
     );
-    let server = ContentServer::start(&data, &plain_rs::libs::crypto::gen_token(), prefs).unwrap();
+    let server = ContentServer::start(&data, &plain_libs::crypto::gen_token(), prefs).unwrap();
     let state = server.runtime_state();
     let mut first = plain_rs::features::services::sessions::create(&state, "first".into()).unwrap();
     state.db.session_delete(&first.client_id).unwrap();
@@ -378,12 +378,12 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     let file = directory.path().join("large.bin");
     std::fs::write(&file, &bytes).unwrap();
     let resource = Resource::reference(file.to_str().unwrap());
-    let key = plain_rs::libs::utils::base64::base64_decode(&first.url_token);
+    let key = plain_libs::utils::base64::base64_decode(&first.url_token);
     let id =
         resource_link::seal(&Scope::Session(first.client_id.clone()), &key, &resource).unwrap();
     let global = resource_link::seal(
         &Scope::Global,
-        &plain_rs::libs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
+        &plain_libs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
         &resource,
     )
     .unwrap();
@@ -441,7 +441,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     );
     let fresh = resource_link::seal(
         &Scope::Session(replacement.client_id),
-        &plain_rs::libs::utils::base64::base64_decode(&replacement.url_token),
+        &plain_libs::utils::base64::base64_decode(&replacement.url_token),
         &resource,
     )
     .unwrap();
@@ -470,7 +470,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     for internal in [data.join("prefs.json"), data.join("plain.db")] {
         let id = resource_link::seal(
             &Scope::Global,
-            &plain_rs::libs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
+            &plain_libs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
             &Resource::reference(internal.to_str().unwrap()),
         )
         .unwrap();

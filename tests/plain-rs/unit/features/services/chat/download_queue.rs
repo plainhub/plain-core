@@ -9,28 +9,28 @@ fn fixture() -> (tempfile::TempDir, crate::test_runtime::Core, CoreRuntime) {
     prefs.set("client_id", "actor").unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
-        &crate::libs::utils::base64::base64_encode(&[1; 32]),
+        &plain_libs::utils::base64::base64_encode(&[1; 32]),
         prefs,
     )
     .unwrap();
     let state = server.runtime_state();
-    let peer = crate::libs::db::DPeer::new(
+    let peer = crate::infrastructure::db::DPeer::new(
         "peer",
         "fixture",
         "",
         Some(443),
         crate::features::chat::enums::DeviceType::Phone,
     );
-    crate::libs::db::chat_store::peers::save(
+    crate::infrastructure::db::chat_store::peers::save(
         &state.db,
         &[peer],
-        crate::libs::db::chat_store::SaveMode::Insert,
+        crate::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     (dir, server, state)
 }
 fn seed_chat(state: &CoreRuntime, id: &str, size: usize) {
-    let row=crate::libs::db::DChat::new("peer","me","",&json!({"type":"FILES","value":{"items":[{"id":id,"uri":format!("fsid:{id}"),"fileName":"fixture.bin","size":size}]}}).to_string());
+    let row=crate::infrastructure::db::DChat::new("peer","me","",&json!({"type":"FILES","value":{"items":[{"id":id,"uri":format!("fsid:{id}"),"fileName":"fixture.bin","size":size}]}}).to_string());
     let mut row = row;
     row.id = id.into();
     state.db.insert_chat(&row);
@@ -49,7 +49,7 @@ async fn paused_generation_and_shutdown_reject_late_bytes_and_release_transfer_f
     let old = requests.recv().await.unwrap();
     let row = state.downloads.snapshot()["tasks"][0].clone();
     state.downloads.control("slow", "pause").unwrap();
-    state.host.reply(generation,json!({"id":old["id"],"result":json!({"s":200,"b":crate::libs::utils::base64::base64_encode(&vec![1;8192])}).to_string()})).unwrap();
+    state.host.reply(generation,json!({"id":old["id"],"result":json!({"s":200,"b":plain_libs::utils::base64::base64_encode(&vec![1;8192])}).to_string()})).unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(30)).await;
     assert_eq!(state.downloads.snapshot()["tasks"][0]["status"], "PAUSED");
     assert!(

@@ -1,10 +1,10 @@
 use crate::features::chat::enums::DeviceType;
 use crate::features::chat::enums::PeerStatus;
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
-use crate::libs::db::PEER_COLS;
-use crate::libs::db::now_iso;
-use crate::libs::db::row_to_peer;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::PEER_COLS;
+use crate::infrastructure::db::now_iso;
+use crate::infrastructure::db::row_to_peer;
 use anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 #[derive(serde::Deserialize)]
@@ -19,8 +19,8 @@ pub struct Facts {
 }
 pub fn save(db: &Db, facts: Facts) -> Result<DPeer> {
     if facts.id.is_empty()
-        || crate::libs::utils::base64::base64_decode(&facts.key).len() != 32
-        || crate::libs::utils::base64::base64_decode(&facts.public_key).len() != 32
+        || plain_libs::utils::base64::base64_decode(&facts.key).len() != 32
+        || plain_libs::utils::base64::base64_decode(&facts.public_key).len() != 32
     {
         bail!("Invalid paired peer credentials");
     }

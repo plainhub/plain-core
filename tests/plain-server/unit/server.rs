@@ -9,13 +9,13 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
     );
     prefs.set("background_service_enabled", false).unwrap();
     prefs.set("desktop_access", false).unwrap();
-    let token = plain_rs::libs::utils::base64::base64_encode(&[19; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[19; 32]);
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let server = ContentServer::start_http(
         directory.path(),
         &token,
         prefs.clone(),
-        plain_rs::libs::platform::startup::config(),
+        plain_rs::infrastructure::platform::startup::config(),
         0,
         0,
         cert.cert.pem().into_bytes(),
@@ -241,7 +241,7 @@ async fn core_startup_propagates_system_initialization_failure_without_publishin
     let before = prefs.entries();
     let blocker = path.with_extension("json.tmp");
     std::fs::create_dir(&blocker).unwrap();
-    let token = plain_rs::libs::utils::base64::base64_encode(&[21; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[21; 32]);
     assert!(ContentServer::start_core(directory.path(), &token, prefs.clone()).is_err());
     assert_eq!(prefs.entries(), before);
     assert_eq!(
@@ -288,7 +288,7 @@ async fn every_transport_build_serves_the_main_guest_and_peer_contracts_without_
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs.set("desktop_access", true).unwrap();
-    let token = plain_rs::libs::utils::base64::base64_encode(&[3; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[3; 32]);
     let server = ContentServer::start(directory.path(), &token, prefs).unwrap();
     let client = reqwest::Client::new();
     let document = serde_json::json!({"query":"query Main { __typename audioQueueItems(query: \"\", offset: 0, limit: 10) { mediaId } }","operationName":"Main"});
@@ -372,18 +372,18 @@ async fn startup_device_name_initialization_is_shared_and_preserves_user_changes
         let directory = tempfile::tempdir().unwrap();
         let prefs = Arc::new(
             plain_rs::features::prefs::Prefs::load(
-                &plain_rs::libs::data_paths::DataPaths::new(directory.path()).prefs(),
+                &plain_rs::infrastructure::data_paths::DataPaths::new(directory.path()).prefs(),
             )
             .unwrap(),
         );
         if let Some(initial) = initial {
             prefs.set("device_name", initial).unwrap();
         }
-        let config = plain_rs::libs::host::startup::StartupConfig {
+        let config = plain_rs::infrastructure::host::startup::StartupConfig {
             name: "Startup Name".into(),
-            ..plain_rs::libs::platform::startup::config()
+            ..plain_rs::infrastructure::platform::startup::config()
         };
-        let token = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
+        let token = plain_libs::utils::base64::base64_encode(&[7; 32]);
         let (state, stop, _stopped) =
             ContentServer::build_state_with_config(directory.path(), &token, prefs.clone(), config)
                 .unwrap();
@@ -499,7 +499,7 @@ async fn app_certificate_fingerprint_describes_the_active_listener() {
     core.state.prefs.set("https_port", 0).unwrap();
     core.start_configured_public().await.unwrap();
     let (_, _, cert, _) = core.state.http_configuration().await.unwrap();
-    let expected = plain_rs::libs::tls_identity::certificate_sha256(&cert).unwrap();
+    let expected = plain_rs::infrastructure::tls_identity::certificate_sha256(&cert).unwrap();
     assert_eq!(read().await, expected);
     std::fs::write(directory.path().join("tls-identity.json"), "{}").unwrap();
     assert_eq!(read().await, expected);

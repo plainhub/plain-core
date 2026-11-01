@@ -25,7 +25,7 @@ pub(super) fn source_directories(
 #[cfg(target_os = "linux")]
 pub(crate) fn event_sink(
     core: &plain_server::server::ContentServer,
-) -> Result<plain_rs::libs::platform::linux::mounts::automount::EventSink, String> {
+) -> Result<plain_rs::infrastructure::platform::linux::mounts::automount::EventSink, String> {
     let db = core.runtime().db.clone();
     let catalog = core.native_media_catalog()?;
     let state = core.runtime().clone();

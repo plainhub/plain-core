@@ -7,10 +7,10 @@ fn intent(kind: Kind) -> Intent {
             "127.0.0.1",
             8443,
             "share",
-            &crate::libs::utils::base64::base64_encode(&[7; 32]),
+            &plain_libs::utils::base64::base64_encode(&[7; 32]),
         )
         .unwrap(),
-        url_token: crate::libs::utils::base64::base64_encode(&[8; 32]),
+        url_token: plain_libs::utils::base64::base64_encode(&[8; 32]),
         entries: vec![File {
             name: "fixture.txt".into(),
             relative_path: "fixture.txt".into(),

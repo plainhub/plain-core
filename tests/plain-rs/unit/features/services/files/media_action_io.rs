@@ -5,7 +5,7 @@ fn seed(db: &Db, path: &Path) -> String {
 }
 
 fn seed_kind(db: &Db, path: &Path, kind: DataType) -> String {
-    db.record_media_files(&[crate::libs::db::MediaFileMetadata {
+    db.record_media_files(&[crate::infrastructure::db::MediaFileMetadata {
         album: String::new(),
         album_artist: String::new(),
 

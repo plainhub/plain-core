@@ -1,5 +1,5 @@
 use async_graphql::SimpleObject;
-use plain_rs::libs::types::Instant;
+use plain_rs::infrastructure::types::Instant;
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize, Clone, Debug)]

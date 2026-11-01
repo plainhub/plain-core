@@ -1,10 +1,10 @@
 use async_graphql::{Context, ID, InputObject, Object, SimpleObject};
-use plain_rs::libs::types::Instant;
+use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 
 use plain_rs::features::media::images::editor::Updates;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::db::image_editor_project as store;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::db::image_editor_project as store;
 
 #[derive(SimpleObject)]
 pub struct ImageEditorProject {

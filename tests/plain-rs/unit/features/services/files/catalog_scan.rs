@@ -363,13 +363,16 @@ async fn native_catalog_records_and_removal_publish_one_typed_change_per_batch()
     .unwrap();
     catalog.record_files(&[file.clone(), file]).unwrap();
     let event = events.try_recv().unwrap();
-    assert_eq!(event.event_type, crate::libs::events::MEDIA_LIBRARY_UPDATED);
+    assert_eq!(
+        event.event_type,
+        crate::infrastructure::events::MEDIA_LIBRARY_UPDATED
+    );
     assert_eq!(event.payload, r#"{"types":[1]}"#);
     assert!(events.try_recv().is_err());
     assert_eq!(catalog.forget_path(path.to_str().unwrap()).unwrap(), 1);
     assert_eq!(
         events.try_recv().unwrap().event_type,
-        crate::libs::events::MEDIA_LIBRARY_UPDATED
+        crate::infrastructure::events::MEDIA_LIBRARY_UPDATED
     );
     assert!(events.try_recv().is_err());
     assert_eq!(catalog.forget_path(path.to_str().unwrap()).unwrap(), 0);

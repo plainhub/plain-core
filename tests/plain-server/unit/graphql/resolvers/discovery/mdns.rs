@@ -12,7 +12,7 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
     prefs.set("client_id", "mdns-fixture").unwrap();
     let server = ContentServer::start(
         directory.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -84,7 +84,7 @@ async fn native_schema_does_not_expose_platform_scan_lifecycle() {
     );
     let server = ContentServer::start(
         directory.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();

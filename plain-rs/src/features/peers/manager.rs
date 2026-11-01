@@ -1,7 +1,7 @@
 use crate::features::chat::events::WS_PEER_STATUS_UPDATED;
 use crate::features::chat::events::refresh_peer_key_cache;
 use crate::features::chat::service::ChatService;
-use crate::libs::transport::contract::PeerTransport;
+use crate::infrastructure::transport::contract::PeerTransport;
 use serde_json::json;
 
 impl<T: PeerTransport + 'static> ChatService<T> {
@@ -41,7 +41,7 @@ impl<T: PeerTransport + 'static> ChatService<T> {
     /// shared key intact so a future re-pair can reuse the stored
     /// credentials. Returns `false` if the peer id is unknown.
     pub fn unpair_peer(&self, id: &str) -> bool {
-        match crate::libs::db::chat_store::peers::unpair(&self.db, id) {
+        match crate::infrastructure::db::chat_store::peers::unpair(&self.db, id) {
             Ok(true) => {}
             Ok(false) => return false,
             Err(error) => {

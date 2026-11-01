@@ -2,9 +2,8 @@ use crate::graphql::executor::GraphqlExecutor;
 use crate::native::events::NativeEventStream;
 use crate::server::ServerState;
 use async_graphql::{Request, Response};
-use plain_rs::libs::{
-    host::request_scope::NativeRequestScope, protocols::graphql::PeerSubscriptionTarget,
-};
+use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
+use plain_rs::infrastructure::protocols::graphql::PeerSubscriptionTarget;
 
 #[derive(Clone)]
 pub struct NativeGraphqlExecutor {

@@ -5,9 +5,9 @@ use crate::features::chat::events::WS_MESSAGE_CREATED;
 use crate::features::chat::events::channels_updated_payload;
 use crate::features::chat::manager::chat_to_json;
 use crate::features::chat::service::ChatService;
-use crate::libs::db::DChat;
-use crate::libs::transport::contract::PeerTransport;
-use crate::libs::utils::base64::base64_decode;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::transport::contract::PeerTransport;
+use plain_libs::utils::base64::base64_decode;
 use serde_json::json;
 
 impl<T: PeerTransport + 'static> ChatService<T> {

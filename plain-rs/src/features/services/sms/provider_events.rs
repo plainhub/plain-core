@@ -1,4 +1,4 @@
-use crate::libs::events::WsEvent;
+use crate::infrastructure::events::WsEvent;
 use tokio::sync::broadcast;
 
 pub fn notification_changed(events: &broadcast::Sender<WsEvent>, app_id: &str) {

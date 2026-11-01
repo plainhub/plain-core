@@ -29,12 +29,12 @@ use serde_json::{Value, json};
 
 use crate::features::chat::enums::ChatStatus;
 use crate::features::chat::events::ChannelKeyCache;
-use crate::libs::db::DChannel;
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
-use crate::libs::transport::contract::PeerTransport;
-use crate::libs::transport::contract::deliver_to_peer;
-use crate::libs::transport::contract::peer_graphql_urls;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::transport::contract::PeerTransport;
+use crate::infrastructure::transport::contract::deliver_to_peer;
+use crate::infrastructure::transport::contract::peer_graphql_urls;
 
 // ── DMessageDeliveryResult ──────────────────────────────────────────────────
 

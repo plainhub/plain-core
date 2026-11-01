@@ -35,15 +35,17 @@ impl ChatHostQuery {
     ) -> async_graphql::Result<Vec<ChatItem>> {
         let state = ctx.data::<ServerState>()?;
         let filter = filter(&query, offset, limit, false);
-        let value = plain_rs::libs::db::chat_store::messages::list(&state.db, &filter)?;
-        let rows: Vec<plain_rs::libs::db::DChat> = serde_json::from_value(value)?;
+        let value = plain_rs::infrastructure::db::chat_store::messages::list(&state.db, &filter)?;
+        let rows: Vec<plain_rs::infrastructure::db::DChat> = serde_json::from_value(value)?;
         plain_rs::features::services::chat::prewarm::prepare_conversation(state, &filter);
         Ok(rows.iter().map(item).collect())
     }
     async fn chat_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
         let state = ctx.data::<ServerState>()?;
-        let value =
-            plain_rs::libs::db::chat_store::messages::list(&state.db, &filter(&query, 0, 0, true))?;
+        let value = plain_rs::infrastructure::db::chat_store::messages::list(
+            &state.db,
+            &filter(&query, 0, 0, true),
+        )?;
         Ok(i32::try_from(value.as_i64().unwrap_or_default())?)
     }
 }
@@ -96,7 +98,7 @@ impl ChatHostMutation {
         targets: Vec<String>,
         path: String,
         name: String,
-        expires_at: Option<plain_rs::libs::types::Instant>,
+        expires_at: Option<plain_rs::infrastructure::types::Instant>,
     ) -> async_graphql::Result<Vec<ChatItem>> {
         Ok(plain_rs::features::services::chat::share_send::folder(
             ctx.data::<ServerState>()?,
@@ -177,15 +179,15 @@ fn filter(
     offset: i32,
     limit: i32,
     count_only: bool,
-) -> plain_rs::libs::db::chat_store::messages::Filter {
-    let fields = plain_rs::libs::utils::search_dsl::parse(query);
+) -> plain_rs::infrastructure::db::chat_store::messages::Filter {
+    let fields = plain_libs::utils::search_dsl::parse(query);
     let field = |name: &str| {
         fields
             .iter()
             .find(|field| field.name == name)
             .map(|field| field.value.clone())
     };
-    plain_rs::libs::db::chat_store::messages::Filter {
+    plain_rs::infrastructure::db::chat_store::messages::Filter {
         peer: field("peer"),
         channel: field("channel"),
         text: field("text").unwrap_or_default(),

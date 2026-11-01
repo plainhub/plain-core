@@ -12,7 +12,7 @@ use plain_rs::features::services::files::links;
 
 pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
     let request = request.into_parts().0;
-    let query = |key| plain_rs::libs::utils::query::query_get(&request.uri.to_string(), key);
+    let query = |key| plain_libs::utils::query::query_get(&request.uri.to_string(), key);
     let id = query("id").unwrap_or_default();
     if id.is_empty() {
         return StatusCode::BAD_REQUEST.into_response();
@@ -37,9 +37,9 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         starts_view: range.is_empty()
             || matches!(
-                plain_rs::libs::utils::http::parse_range_header(range, u64::MAX),
-                plain_rs::libs::utils::http::RangeParse::Full
-                    | plain_rs::libs::utils::http::RangeParse::Partial(0, _)
+                plain_libs::utils::http::parse_range_header(range, u64::MAX),
+                plain_libs::utils::http::RangeParse::Full
+                    | plain_libs::utils::http::RangeParse::Partial(0, _)
             ),
     };
     let result = async {

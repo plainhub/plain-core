@@ -5,8 +5,8 @@ use plain_rs::features::files::tasks::FileTaskOp;
 use plain_rs::features::files::tasks::FileTaskStatus;
 use plain_rs::features::files::tasks::FileTaskType;
 use plain_rs::features::services::files::file_tasks::FileTasks;
-use plain_rs::libs::types::Instant;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::types::Instant;
+use plain_rs::infrastructure::types::Long;
 use std::sync::Arc;
 #[derive(InputObject)]
 struct FileTaskOpInput {

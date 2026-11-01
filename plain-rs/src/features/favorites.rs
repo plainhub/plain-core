@@ -8,9 +8,9 @@
 //! (`full_path_of`, `split_full_path`) live here so every consumer joins
 //! and splits phone-contract `fullPath` values the same way.
 
-use crate::libs::db::Db;
-use crate::libs::db::favorite_folder::FavoriteFolderRow;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::favorite_folder::FavoriteFolderRow;
+use crate::infrastructure::error::DomainResult;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FavoriteFolder {
@@ -79,18 +79,19 @@ pub fn add(db: &Db, root_path: &str, relative_path: &str) -> DomainResult<Favori
     let (root, rel) = normalize_args(root_path, relative_path);
     db.with_conn(|c| {
         let tx = c.unchecked_transaction()?;
-        let row =
-            if let Some(existing) = crate::libs::db::favorite_folder::io::get(&tx, &root, &rel)? {
-                existing
-            } else {
-                let row = FavoriteFolderRow {
-                    root_path: to_slash(&root),
-                    relative_path: to_slash(&rel),
-                    alias: None,
-                };
-                crate::libs::db::favorite_folder::io::insert(&tx, &row)?;
-                row
+        let row = if let Some(existing) =
+            crate::infrastructure::db::favorite_folder::io::get(&tx, &root, &rel)?
+        {
+            existing
+        } else {
+            let row = FavoriteFolderRow {
+                root_path: to_slash(&root),
+                relative_path: to_slash(&rel),
+                alias: None,
             };
+            crate::infrastructure::db::favorite_folder::io::insert(&tx, &row)?;
+            row
+        };
         tx.commit()?;
         Ok(FavoriteFolder::from(row))
     })
@@ -101,7 +102,7 @@ pub fn add(db: &Db, root_path: &str, relative_path: &str) -> DomainResult<Favori
 /// alias) on miss — the "never error" behavior of the Go side.
 pub fn remove(db: &Db, root_path: &str, relative_path: &str) -> DomainResult<FavoriteFolder> {
     let (root, rel) = normalize_args(root_path, relative_path);
-    let removed = crate::libs::db::favorite_folder::remove_folder(db, &root, &rel)?;
+    let removed = crate::infrastructure::db::favorite_folder::remove_folder(db, &root, &rel)?;
     Ok(match removed {
         Some(row) => FavoriteFolder::from(row),
         None => FavoriteFolder {
@@ -119,15 +120,13 @@ pub fn set_alias(db: &Db, root_path: &str, relative_path: &str, alias: &str) -> 
     let (root, rel) = normalize_args(root_path, relative_path);
     let alias = alias.trim();
     let alias = if alias.is_empty() { None } else { Some(alias) };
-    Ok(crate::libs::db::favorite_folder::set_folder_alias(
-        db, &root, &rel, alias,
-    )?)
+    Ok(crate::infrastructure::db::favorite_folder::set_folder_alias(db, &root, &rel, alias)?)
 }
 
 /// List all favorites with paths normalized to forward slashes and
 /// aliases trimmed (empty trimmed aliases collapse to None).
 pub fn list(db: &Db) -> DomainResult<Vec<FavoriteFolder>> {
-    Ok(crate::libs::db::favorite_folder::all_folders(db)?
+    Ok(crate::infrastructure::db::favorite_folder::all_folders(db)?
         .into_iter()
         .map(|mut f| {
             f.root_path = to_slash(&f.root_path);
@@ -170,7 +169,7 @@ pub fn split_full_path(root: &str, full: &str) -> DomainResult<(String, String)>
         .chain(std::path::Path::new(&full).components())
         .any(|part| part == std::path::Component::ParentDir)
     {
-        return Err(crate::libs::error::DomainError::Other(
+        return Err(crate::infrastructure::error::DomainError::Other(
             "favorite path contains parent traversal".into(),
         ));
     }
@@ -181,7 +180,7 @@ pub fn split_full_path(root: &str, full: &str) -> DomainResult<(String, String)>
     let relative = full
         .strip_prefix(&prefix)
         .ok_or_else(|| {
-            crate::libs::error::DomainError::Other("favorite path is outside root".into())
+            crate::infrastructure::error::DomainError::Other("favorite path is outside root".into())
         })?
         .to_string();
     Ok((root, relative))
@@ -198,18 +197,18 @@ pub fn add_full_path(db: &Db, root: &str, full: &str) -> DomainResult<FavoriteFo
     db.with_conn(|c| {
         let tx = c.unchecked_transaction()?;
         let mut value = candidate.clone();
-        for row in crate::libs::db::favorite_folder::io::all(&tx)? {
+        for row in crate::infrastructure::db::favorite_folder::io::all(&tx)? {
             let existing = FavoriteFolder::from(row);
             if full_path_of(&existing) == target {
                 value.alias = existing.alias;
-                crate::libs::db::favorite_folder::io::remove(
+                crate::infrastructure::db::favorite_folder::io::remove(
                     &tx,
                     &existing.root_path,
                     &existing.relative_path,
                 )?;
             }
         }
-        crate::libs::db::favorite_folder::io::insert(
+        crate::infrastructure::db::favorite_folder::io::insert(
             &tx,
             &FavoriteFolderRow {
                 root_path: value.root_path.clone(),

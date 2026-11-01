@@ -1,8 +1,9 @@
 use super::*;
 use crate::features::chat::enums::DeviceType;
 use crate::features::chat::enums::PeerStatus;
-use crate::libs::db::chat_store::peers;
-use crate::libs::db::{DPeer, chat_store::SaveMode};
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::chat_store::SaveMode;
+use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use crate::test_runtime::Core as ContentServer;
 use serde_json::Value;
@@ -17,14 +18,14 @@ fn server() -> (tempfile::TempDir, ContentServer, CoreRuntime) {
     prefs.set("client_id", "local").unwrap();
     let server = ContentServer::start(
         directory.path(),
-        &crate::libs::utils::base64::base64_encode(&[5; 32]),
+        &plain_libs::utils::base64::base64_encode(&[5; 32]),
         prefs,
     )
     .unwrap();
     let state = server.runtime_state();
     let mut peer = DPeer::new("remote", "remote", "", Some(443), DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = crate::libs::utils::base64::base64_encode(&[7; 32]);
+    peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peers::save(&state.db, &[peer], SaveMode::Insert).unwrap();
     (directory, server, state)
 }
@@ -73,10 +74,10 @@ async fn subscriptions_reuse_unchanged_parameters_and_refresh_live_key_role_and_
     let first = messages.lock().unwrap()[0]["params"].clone();
     assert_eq!(
         first,
-        json!({"peer":{"id":"remote","port":443},"config":{"pmk":crate::libs::utils::base64::base64_encode(&[7;32]),"isClient":true,"localPort":8443}})
+        json!({"peer":{"id":"remote","port":443},"config":{"pmk":plain_libs::utils::base64::base64_encode(&[7;32]),"isClient":true,"localPort":8443}})
     );
     let mut peer = peers::get(&state.db, "remote").unwrap().unwrap();
-    peer.key = crate::libs::utils::base64::base64_encode(&[9; 32]);
+    peer.key = plain_libs::utils::base64::base64_encode(&[9; 32]);
     peer.port = Some(5443);
     peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
     state.prefs.set("client_id", "z-local").unwrap();
@@ -85,7 +86,7 @@ async fn subscriptions_reuse_unchanged_parameters_and_refresh_live_key_role_and_
     assert_eq!(messages.lock().unwrap().len(), 2);
     assert_eq!(
         messages.lock().unwrap()[1]["params"],
-        json!({"peer":{"id":"remote","port":5443},"config":{"pmk":crate::libs::utils::base64::base64_encode(&[9;32]),"isClient":false,"localPort":6443}})
+        json!({"peer":{"id":"remote","port":5443},"config":{"pmk":plain_libs::utils::base64::base64_encode(&[9;32]),"isClient":false,"localPort":6443}})
     );
     runtime.refresh(&state).await.unwrap();
     assert_eq!(messages.lock().unwrap().len(), 2);
@@ -299,7 +300,10 @@ async fn permission_events_retry_rejected_subscriptions_without_a_page_command()
     assert!(received.try_recv().is_err());
     state
         .events
-        .send(crate::libs::events::WsEvent::host_text("PERMISSIONS_UPDATED", "[]".into()).unwrap())
+        .send(
+            crate::infrastructure::events::WsEvent::host_text("PERMISSIONS_UPDATED", "[]".into())
+                .unwrap(),
+        )
         .unwrap();
     let restored = tokio::time::timeout(std::time::Duration::from_secs(2), received.recv())
         .await

@@ -2,7 +2,7 @@ use crate::graphql::resolvers::peers::public::Peer;
 use crate::server::ServerState;
 use async_graphql::{Context, Object, SimpleObject};
 use plain_rs::features::chat::attachments::download_status::DownloadStatus;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::types::Long;
 use serde::Deserialize;
 
 #[derive(SimpleObject)]
@@ -63,7 +63,7 @@ struct TaskReceipt {
     id: String,
     message_id: async_graphql::ID,
     file: FileReceipt,
-    peer: plain_rs::libs::db::DPeer,
+    peer: plain_rs::infrastructure::db::DPeer,
     status: DownloadStatus,
     error: String,
     downloaded: Long,
@@ -99,7 +99,7 @@ fn snapshot(
     value: serde_json::Value,
     online: &std::collections::HashSet<&str>,
 ) -> async_graphql::Result<ChatDownloadQueue> {
-    let local = plain_rs::libs::transport::lan::local_interfaces();
+    let local = plain_rs::infrastructure::transport::lan::local_interfaces();
     let receipt: QueueReceipt = serde_json::from_value(value)?;
     Ok(ChatDownloadQueue {
         runtime_id: receipt.runtime_id,

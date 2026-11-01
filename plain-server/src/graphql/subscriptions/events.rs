@@ -5,8 +5,8 @@ use futures_util::{
     StreamExt,
     stream::{self, BoxStream},
 };
-use plain_rs::libs::protocols::graphql::events::EVENTS;
-use plain_rs::libs::protocols::graphql::events::EventSpec;
+use plain_rs::infrastructure::protocols::graphql::events::EVENTS;
+use plain_rs::infrastructure::protocols::graphql::events::EventSpec;
 use serde::de::DeserializeOwned;
 
 pub(super) async fn authorize(

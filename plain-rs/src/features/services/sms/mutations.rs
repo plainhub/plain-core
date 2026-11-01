@@ -1,10 +1,9 @@
+use crate::features::prefs::Prefs;
 use crate::features::services::sms::query;
 use crate::features::services::sms::query::Request;
-use crate::libs::host::bridge::Host;
-use crate::{
-    features::prefs::Prefs,
-    libs::db::{Db, TrashedMessageRow},
-};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::TrashedMessageRow;
+use crate::infrastructure::host::bridge::Host;
 use anyhow::{Result, anyhow, bail};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -203,7 +202,7 @@ impl Mutations {
 }
 
 fn save_trash(db: &Db, ids: &[String]) -> Result<usize> {
-    let now = crate::libs::utils::dbtime::now_iso();
+    let now = plain_libs::utils::dbtime::now_iso();
     let rows = ids
         .iter()
         .map(|id| {

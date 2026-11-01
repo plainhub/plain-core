@@ -9,7 +9,7 @@ fn all_address_fields_reuse_the_supplied_interface_snapshot() {
         Some(8443),
         crate::features::chat::enums::DeviceType::Computer,
     );
-    let interfaces = vec![crate::libs::transport::lan::Interface {
+    let interfaces = vec![crate::infrastructure::transport::lan::Interface {
         ip: "198.51.100.8".parse().unwrap(),
         prefix_length: 24,
     }];

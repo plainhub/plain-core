@@ -3,9 +3,9 @@ use crate::features::chat::channels::state;
 use crate::features::chat::channels::state::Action;
 use crate::features::chat::enums::ChannelSystemMessageType;
 use crate::features::services::chat::channel_delivery;
-use crate::libs::db::DChannel;
-use crate::libs::db::chat_store::channels;
-use crate::libs::db::chat_store::peers;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::chat_store::channels;
+use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use serde::Deserialize;
@@ -72,10 +72,12 @@ fn snapshot(state: &CoreRuntime) -> Result<Value> {
     )
 }
 fn emit(state: &CoreRuntime, result: Value) {
-    let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-        crate::features::chat::events::WS_CHANNELS_UPDATED,
-        result.to_string(),
-    ));
+    let _ = state
+        .events
+        .send(crate::infrastructure::events::WsEvent::broadcast(
+            crate::features::chat::events::WS_CHANNELS_UPDATED,
+            result.to_string(),
+        ));
 }
 pub fn publish(state: &CoreRuntime, result: Value) -> Result<()> {
     emit(state, with_channels(state, result)?);

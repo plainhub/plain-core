@@ -21,7 +21,7 @@ fn scopes_roundtrip_variable_identifiers_and_encode_only_binary_payload() {
         assert_eq!(decoded, scope);
         assert!(!payload.contains(['=', '+', '/', '.']));
         assert_eq!(open(&decoded, &[7; 32], payload).unwrap(), resource);
-        let bytes = crate::libs::utils::base64::base64_decode_checked(payload).unwrap();
+        let bytes = plain_libs::utils::base64::base64_decode_checked(payload).unwrap();
         assert_eq!(
             bytes.len(),
             24 + serde_json::to_vec(&resource).unwrap().len() + 16
@@ -74,7 +74,7 @@ fn noble_vector_decrypts_with_the_same_envelope_and_associated_data() {
     );
     let resource = open(
         &scope,
-        &crate::libs::utils::base64::base64_decode(vector["key"].as_str().unwrap()),
+        &plain_libs::utils::base64::base64_decode(vector["key"].as_str().unwrap()),
         payload,
     )
     .unwrap();

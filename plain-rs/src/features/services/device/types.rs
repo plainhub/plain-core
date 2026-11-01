@@ -1,4 +1,5 @@
-use crate::libs::types::{Instant, Long};
+use crate::infrastructure::types::Instant;
+use crate::infrastructure::types::Long;
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
 #[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
 pub enum DeviceType {

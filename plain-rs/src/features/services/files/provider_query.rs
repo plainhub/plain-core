@@ -1,6 +1,6 @@
-use crate::libs::db::Db;
-use crate::libs::utils::search_dsl;
-use crate::libs::utils::search_dsl::FilterField;
+use crate::infrastructure::db::Db;
+use plain_libs::utils::search_dsl;
+use plain_libs::utils::search_dsl::FilterField;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 #[derive(Deserialize, Serialize, Clone, Copy, Debug)]
@@ -80,7 +80,7 @@ pub fn fields(db: &Db, query: &str) -> anyhow::Result<Vec<FilterField>> {
     if !tag_ids.is_empty() {
         let mut ids = std::collections::BTreeSet::new();
         for id in tag_ids {
-            ids.extend(crate::libs::db::tag::keys_for_tag(db, &id)?);
+            ids.extend(crate::infrastructure::db::tag::keys_for_tag(db, &id)?);
         }
         fields.push(FilterField {
             name: "ids".into(),
@@ -149,11 +149,11 @@ pub fn plan(
         plan.add(
             format!(
                 "(mime_type LIKE ? OR mime_type IN ({}))",
-                vec!["?"; crate::libs::media::documents::MIME_TYPES.len()].join(",")
+                vec!["?"; plain_libs::media::documents::MIME_TYPES.len()].join(",")
             ),
             std::iter::once("text/%".to_owned())
                 .chain(
-                    crate::libs::media::documents::MIME_TYPES
+                    plain_libs::media::documents::MIME_TYPES
                         .iter()
                         .map(|value| (*value).to_owned()),
                 )
@@ -254,7 +254,7 @@ pub fn prepare(
     let fields = fields(db, query)?;
     let dates = dates(&fields);
     if matches!(provider, Provider::Call | Provider::Contact) {
-        return crate::libs::phone::query::plan(provider, &fields, &dates);
+        return crate::features::services::phone_query::plan(provider, &fields, &dates);
     }
     plan(
         provider,
@@ -296,7 +296,7 @@ pub fn dates(fields: &[FilterField]) -> Value {
             let value = comparison(field).1;
             (
                 value.to_owned(),
-                json!(crate::libs::utils::epoch_millis::parse(value)),
+                json!(plain_libs::utils::epoch_millis::parse(value)),
             )
         })
         .collect();

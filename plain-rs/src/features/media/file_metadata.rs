@@ -1,5 +1,7 @@
 use crate::features::enums::DataType;
-use crate::libs::db::{MediaFileMetadata, MediaFileMetadataAvailability, MediaFileMetadataRead};
+use crate::infrastructure::db::MediaFileMetadata;
+use crate::infrastructure::db::MediaFileMetadataAvailability;
+use crate::infrastructure::db::MediaFileMetadataRead;
 use anyhow::{Context, Result, bail};
 use std::fs::{File, Metadata};
 use std::io::{Read, Seek, SeekFrom};
@@ -38,7 +40,7 @@ pub fn read(
         .modified()
         .with_context(|| format!("{path_str} has no readable modified time"))?;
 
-    let probed = crate::libs::media::probe::probe_media(&path_str, kind);
+    let probed = plain_libs::media::probe::probe_media(&path_str, kind);
     let duration_ms = probed.duration_ms;
     let (width, height, rotation, taken_at) = visual_facts(&canonical, kind, decode_dimensions);
     let available = MediaFileMetadataAvailability {
@@ -50,7 +52,7 @@ pub fn read(
         cover_image_id: false,
     };
     Ok(MediaFileMetadataRead {
-        file_identity: crate::libs::utils::file_identity::within_volume_key(&canonical)?,
+        file_identity: plain_libs::utils::file_identity::within_volume_key(&canonical)?,
         available,
         metadata: MediaFileMetadata {
             data_type,
@@ -90,7 +92,7 @@ fn row_timestamp(at: SystemTime) -> String {
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|since| i64::try_from(since.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or_default();
-    crate::libs::utils::dbtime::iso_from_unix_millis(millis)
+    plain_libs::utils::dbtime::iso_from_unix_millis(millis)
 }
 
 fn created_at_of(birth: Option<SystemTime>, modified: SystemTime) -> String {
@@ -117,7 +119,7 @@ fn visual_facts(
     if kind == "video" {
         return File::open(path)
             .ok()
-            .and_then(|mut reader| crate::libs::media::video_info::read(&mut reader))
+            .and_then(|mut reader| plain_libs::media::video_info::read(&mut reader))
             .and_then(|video| {
                 Some((
                     i32::try_from(video.width).ok()?,
@@ -157,14 +159,14 @@ fn image_reader<R: Read + Seek>(
     {
         return (0, 0, None, None);
     }
-    let exif = crate::libs::utils::image_exif::read(&mut reader)
+    let exif = plain_libs::utils::image_exif::read(&mut reader)
         .ok()
         .flatten();
-    let metadata = crate::libs::utils::image_metadata::read(exif.as_deref().unwrap_or(&head));
-    let dimensions = crate::libs::utils::image_dimensions::dimensions(&head)
+    let metadata = plain_libs::utils::image_metadata::read(exif.as_deref().unwrap_or(&head));
+    let dimensions = plain_libs::utils::image_dimensions::dimensions(&head)
         .or_else(|| {
             exif.as_deref()
-                .and_then(crate::libs::utils::image_dimensions::dimensions)
+                .and_then(plain_libs::utils::image_dimensions::dimensions)
         })
         .filter(|(width, height)| *width > 0 && *height > 0)
         .or_else(|| {

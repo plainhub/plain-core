@@ -9,7 +9,7 @@ pub(crate) async fn stream_file(
     mime: &str,
     headers: &HeaderMap,
 ) -> axum::response::Response {
-    use plain_rs::libs::utils::http::RangeParse;
+    use plain_libs::utils::http::RangeParse;
     use tokio::io::{AsyncReadExt, AsyncSeekExt};
     let Ok(mut file) = tokio::fs::File::open(path).await else {
         return StatusCode::NOT_FOUND.into_response();
@@ -26,7 +26,7 @@ pub(crate) async fn stream_file(
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
     let (status, start, length, end) =
-        match plain_rs::libs::utils::http::parse_range_header(range, size) {
+        match plain_libs::utils::http::parse_range_header(range, size) {
             RangeParse::Full => (StatusCode::OK, 0, size, None),
             RangeParse::Partial(start, end) => (
                 StatusCode::PARTIAL_CONTENT,
@@ -164,7 +164,7 @@ pub(crate) fn thumbnail(
             };
             let etag = format!(
                 "\"{}\"",
-                plain_rs::libs::utils::hex::bytes_to_hex(&Sha256::digest(&bytes))
+                plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(&bytes))
             );
             if conditional.is_some_and(|value| {
                 value.split(',').any(|tag| {
@@ -205,11 +205,11 @@ pub(crate) fn thumbnail(
 mod tests;
 
 pub(crate) async fn resource(
-    resources: &plain_rs::libs::host::resources::NativeResources,
+    resources: &plain_rs::infrastructure::host::resources::NativeResources,
     path: &str,
     stop: tokio::sync::watch::Receiver<bool>,
 ) -> Result<axum::body::Body, StatusCode> {
-    use plain_rs::libs::host::resources::ResourceError;
+    use plain_rs::infrastructure::host::resources::ResourceError;
     let reader = resources
         .read_native(path, stop)
         .await

@@ -109,7 +109,7 @@ impl fmt::Debug for Prefs {
     }
 }
 pub fn default_path(data_dir: &Path) -> PathBuf {
-    crate::libs::data_paths::DataPaths::new(data_dir).prefs()
+    crate::infrastructure::data_paths::DataPaths::new(data_dir).prefs()
 }
 impl Prefs {
     pub fn set_change_hook(&self, hook: Option<Arc<dyn Fn() + Send + Sync>>) {

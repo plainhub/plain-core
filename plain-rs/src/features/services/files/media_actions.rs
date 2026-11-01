@@ -7,8 +7,8 @@ use crate::features::media::audio::playback as audio_playback;
 use crate::features::prefs::Prefs;
 use crate::features::services::audio::host::Audio;
 use crate::features::services::images::index::ImageIndex;
-use crate::libs::db::Db;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::host::bridge::Host;
 use anyhow::Result;
 use std::sync::Arc;
 pub struct MediaActions {
@@ -21,7 +21,7 @@ pub struct MediaActions {
     audio: Arc<Audio>,
     index: Arc<ImageIndex>,
     prefs: Arc<Prefs>,
-    events: tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>,
+    events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
 }
 pub struct Completed {
     pub affected_count: i32,
@@ -38,7 +38,7 @@ impl MediaActions {
         audio: Arc<Audio>,
         index: Arc<ImageIndex>,
         prefs: Arc<Prefs>,
-        events: tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>,
+        events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
         duration_cache: Arc<crate::features::media::duration_cache::DurationCache>,
     ) -> Self {
         Self {
@@ -241,10 +241,12 @@ impl MediaActions {
                 &self.events,
                 [r#type.kind()],
             );
-            let _ = self.events.send(crate::libs::events::WsEvent::broadcast(
-                "CONTENT_CHANGED",
-                "{}".into(),
-            ));
+            let _ = self
+                .events
+                .send(crate::infrastructure::events::WsEvent::broadcast(
+                    "CONTENT_CHANGED",
+                    "{}".into(),
+                ));
         }
         Ok(Completed {
             affected_count: affected.try_into()?,

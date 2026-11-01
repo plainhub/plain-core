@@ -1,7 +1,7 @@
 use super::*;
 use crate::features::enums::DataType;
-use crate::libs::db::MediaFileMetadata;
-use crate::libs::utils::dbtime::iso_from_unix_millis;
+use crate::infrastructure::db::MediaFileMetadata;
+use plain_libs::utils::dbtime::iso_from_unix_millis;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -12,7 +12,7 @@ fn read_file_metadata(path: &Path, data_type: DataType) -> anyhow::Result<MediaF
 fn read_file_metadata_with_availability(
     path: &Path,
     data_type: DataType,
-) -> anyhow::Result<crate::libs::db::MediaFileMetadataRead> {
+) -> anyhow::Result<crate::infrastructure::db::MediaFileMetadataRead> {
     super::read(path, data_type, |_| None)
 }
 
@@ -128,7 +128,7 @@ fn audio_row_carries_probe_tags_and_real_stat_facts() {
     assert_eq!(m.artist, "Hydrate Artist");
     assert_eq!(m.title, "Hydrate Title");
     assert_eq!(m.cover_image_id, None);
-    let probed = crate::libs::media::probe::probe_media(m.path.as_str(), "audio");
+    let probed = plain_libs::media::probe::probe_media(m.path.as_str(), "audio");
     assert_eq!(m.duration_ms, probed.duration_ms);
     assert!(m.duration_ms > 0);
     assert_eq!((m.width, m.height, m.rotation), (0, 0, 0));
@@ -513,7 +513,7 @@ fn video_row_keeps_fractional_milliseconds_from_the_single_probe() {
         [36u32.to_be_bytes().to_vec(), b"moov".to_vec(), mvhd].concat(),
     )
     .unwrap();
-    let probe = crate::libs::media::probe::probe_media(path.to_str().unwrap(), "video");
+    let probe = plain_libs::media::probe::probe_media(path.to_str().unwrap(), "video");
     assert_eq!(probe.duration_ms, 3211);
     assert_eq!(probe.duration_secs, 3);
     assert_eq!(

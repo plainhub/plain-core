@@ -99,7 +99,7 @@ async fn receiver_starts_without_http_and_retries_when_platform_permissions_chan
         .unwrap();
     let server = crate::test_runtime::Core::start(
         directory.path(),
-        &crate::libs::utils::base64::base64_encode(&[8; 32]),
+        &plain_libs::utils::base64::base64_encode(&[8; 32]),
         prefs,
     )
     .unwrap();
@@ -165,7 +165,7 @@ async fn receiver_starts_without_http_and_retries_when_platform_permissions_chan
 #[tokio::test]
 async fn file_sharing_capability_does_not_authorize_peer_discovery_or_acquire_multicast() {
     let directory = tempfile::tempdir().unwrap();
-    let token = crate::libs::utils::base64::base64_encode(&[17; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[17; 32]);
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );

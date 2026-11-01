@@ -2,7 +2,7 @@ use super::client_inputs::{SharedEntryInput, SharedLinkInput};
 use super::client_models::{SharedEntry, SharedLink};
 use crate::server::ServerState;
 use async_graphql::{Context, Enum, InputObject, Object, SimpleObject};
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::types::Long;
 use serde::Deserialize;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Deserialize)]

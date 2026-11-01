@@ -1,5 +1,5 @@
-use crate::libs::events::WS_IMAGE_EDITOR_UPDATE;
-use crate::libs::events::WsEvent;
+use crate::infrastructure::events::WS_IMAGE_EDITOR_UPDATE;
+use crate::infrastructure::events::WsEvent;
 use std::sync::Arc;
 use tokio::sync::{Semaphore, broadcast};
 
@@ -11,7 +11,7 @@ pub fn decode(value: &str) -> Result<Vec<u8>, String> {
         .chars()
         .filter(|c| !c.is_ascii_whitespace())
         .collect::<String>();
-    crate::libs::utils::base64::base64_decode_checked(&value)
+    plain_libs::utils::base64::base64_decode_checked(&value)
         .map_err(|_| "invalid image editor base64".into())
 }
 

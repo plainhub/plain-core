@@ -108,10 +108,10 @@ async fn scheduled_read_supplies_canonical_request_and_checks_reply_identity() {
         assert_eq!(request["method"], "bleScanRead");
         assert_eq!(request["params"]["shortId"], "f16d05ec6b29248d");
         assert_eq!(request["params"]["scan"], scan.to_string());
-        let bytes = crate::libs::utils::base64::base64_decode(
+        let bytes = plain_libs::utils::base64::base64_decode(
             request["params"]["request"].as_str().unwrap(),
         );
-        let (metadata, body) = crate::libs::protocols::ble::parts(&bytes).unwrap();
+        let (metadata, body) = crate::infrastructure::protocols::ble::parts(&bytes).unwrap();
         assert!(metadata.is_empty());
         assert_eq!(body, b"DISCOVER:");
         let payload = json!({

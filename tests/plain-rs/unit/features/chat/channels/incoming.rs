@@ -1,12 +1,12 @@
 use super::*;
 use crate::features::chat::enums::DeviceType;
-use crate::libs::crypto::ed25519_generate;
-use crate::libs::crypto::ed25519_sign;
-use crate::libs::db::DPeer;
-use crate::libs::db::chat_store::SaveMode;
-use crate::libs::db::chat_store::channels;
-use crate::libs::db::chat_store::peers;
-use crate::libs::utils::base64::base64_encode;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::chat_store::SaveMode;
+use crate::infrastructure::db::chat_store::channels;
+use crate::infrastructure::db::chat_store::peers;
+use plain_libs::crypto::ed25519_generate;
+use plain_libs::crypto::ed25519_sign;
+use plain_libs::utils::base64::base64_encode;
 use serde_json::{Value, json};
 
 fn setup() -> (Db, Vec<u8>, String) {

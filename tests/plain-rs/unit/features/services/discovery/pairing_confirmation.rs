@@ -9,8 +9,8 @@ use crate::features::peers::pairing::sessions::Target;
 use crate::features::peers::pairing::sessions::Ticket;
 use crate::features::services::discovery::pairing;
 use crate::features::services::discovery::pairing_attempts::Mode;
-use crate::libs::utils::base64::base64_encode;
 use crate::runtime::Runtime as CoreRuntime;
+use plain_libs::utils::base64::base64_encode;
 use sha2::Digest;
 use std::sync::Arc;
 use std::time::Instant;
@@ -20,7 +20,7 @@ fn fixture(id: &str) -> (tempfile::TempDir, crate::test_runtime::Core) {
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("system.json")).unwrap(),
     );
-    let (key, _) = crate::libs::crypto::ed25519_generate();
+    let (key, _) = plain_libs::crypto::ed25519_generate();
     prefs.set("client_id", id).unwrap();
     prefs
         .set("signature_key_pair", base64_encode(&key))
@@ -168,12 +168,12 @@ async fn same_code_and_authenticated_confirmation_precede_shared_key_commit() {
     );
     assert_eq!(code.len(), 9);
     assert!(
-        crate::libs::db::chat_store::peers::get(&local.db, "remote")
+        crate::infrastructure::db::chat_store::peers::get(&local.db, "remote")
             .unwrap()
             .is_none()
     );
     assert!(
-        crate::libs::db::chat_store::peers::get(&remote.db, "local")
+        crate::infrastructure::db::chat_store::peers::get(&remote.db, "local")
             .unwrap()
             .is_none()
     );
@@ -198,11 +198,11 @@ async fn same_code_and_authenticated_confirmation_precede_shared_key_commit() {
     .unwrap();
     assert!(!completed["peer"].is_null());
     assert_eq!(
-        crate::libs::db::chat_store::peers::get(&local.db, "remote")
+        crate::infrastructure::db::chat_store::peers::get(&local.db, "remote")
             .unwrap()
             .unwrap()
             .key,
-        crate::libs::db::chat_store::peers::get(&remote.db, "local")
+        crate::infrastructure::db::chat_store::peers::get(&remote.db, "local")
             .unwrap()
             .unwrap()
             .key
@@ -219,7 +219,7 @@ async fn forged_identity_and_changed_final_key_cannot_reuse_a_matching_code() {
     let mut response = response(&remote, request);
     let valid = response.clone();
     response.ecdh_public_key =
-        base64_encode(&crate::libs::crypto::EcdhSession::generate().public_key_bytes);
+        base64_encode(&plain_libs::crypto::EcdhSession::generate().public_key_bytes);
     assert!(
         local
             .pairing_runtime
@@ -228,10 +228,10 @@ async fn forged_identity_and_changed_final_key_cannot_reuse_a_matching_code() {
             .is_err()
     );
     response = valid.clone();
-    let (key, public_key) = crate::libs::crypto::ed25519_generate();
+    let (key, public_key) = plain_libs::crypto::ed25519_generate();
     response.signature_public_key = base64_encode(&public_key);
     response.signature =
-        crate::libs::crypto::ed25519_sign(&key, response.signature_data().as_bytes());
+        plain_libs::crypto::ed25519_sign(&key, response.signature_data().as_bytes());
     assert!(
         local
             .pairing_runtime

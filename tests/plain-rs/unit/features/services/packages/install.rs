@@ -1,5 +1,5 @@
 use super::*;
-use crate::libs::apk::manifest::tests::apk;
+use plain_libs::test_apk::apk;
 use std::io::{Cursor, Write};
 
 fn profile() -> splits::Profile {

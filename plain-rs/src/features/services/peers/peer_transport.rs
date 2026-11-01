@@ -1,13 +1,14 @@
-use crate::libs::db::DPeer;
-use crate::libs::transport::router::Router;
-use crate::libs::transport::router::Ticket;
-use crate::libs::transport::router::TransportType;
-use crate::libs::transport::router::{Attempt, Outcome};
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::transport::router::Attempt;
+use crate::infrastructure::transport::router::Outcome;
+use crate::infrastructure::transport::router::Router;
+use crate::infrastructure::transport::router::Ticket;
+use crate::infrastructure::transport::router::TransportType;
 use crate::runtime::Runtime as CoreRuntime;
 use serde_json::{Value, json};
 use std::time::Duration;
 pub async fn capabilities(
-    host: &crate::libs::host::bridge::Host,
+    host: &crate::infrastructure::host::bridge::Host,
 ) -> Result<Vec<TransportType>, String> {
     if !host.connected() {
         return Ok(Vec::new());
@@ -248,7 +249,7 @@ pub fn aware_config_for_peer(
     let key = if peer.key.is_empty() {
         Vec::new()
     } else {
-        crate::libs::utils::base64::base64_decode_checked(&peer.key)?
+        plain_libs::utils::base64::base64_decode_checked(&peer.key)?
     };
     anyhow::ensure!(
         key.is_empty() || key.len() == 32,
@@ -263,7 +264,7 @@ pub fn aware_config_for_peer(
         pmk: if key.is_empty() {
             None
         } else {
-            Some(crate::libs::utils::base64::base64_encode(&key))
+            Some(plain_libs::utils::base64::base64_encode(&key))
         },
         is_client: actor < peer.id,
         local_port: state.prefs.get::<u16>("https_port")?.unwrap_or(8443),

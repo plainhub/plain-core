@@ -4,10 +4,10 @@ use crate::graphql::executor::RequestContext;
 use crate::graphql::executor::RequestOrigin;
 use crate::server::ServerState;
 use futures_util::StreamExt;
-use plain_rs::libs::host::request_scope::NativeRequestScope;
-use plain_rs::libs::protocols::graphql::events::EventSpec;
-use plain_rs::libs::protocols::graphql::messages::ClientMessage;
-use plain_rs::libs::protocols::graphql::messages::ServerMessage;
+use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
+use plain_rs::infrastructure::protocols::graphql::events::EventSpec;
+use plain_rs::infrastructure::protocols::graphql::messages::ClientMessage;
+use plain_rs::infrastructure::protocols::graphql::messages::ServerMessage;
 use std::{
     collections::HashMap,
     sync::{
@@ -142,7 +142,7 @@ impl Sessions {
     pub(crate) fn open_peer(
         self: &Arc<Self>,
         state: ServerState,
-        target: plain_rs::libs::protocols::graphql::PeerSubscriptionTarget,
+        target: plain_rs::infrastructure::protocols::graphql::PeerSubscriptionTarget,
         scope: NativeRequestScope,
     ) -> Result<u64, String> {
         let id = next_id()?;
@@ -189,7 +189,7 @@ impl Sessions {
     }
     pub(crate) fn notify_snapshot(
         &self,
-        host: &plain_rs::libs::host::bridge::Host,
+        host: &plain_rs::infrastructure::host::bridge::Host,
     ) -> Result<(), String> {
         let _delivery = self.host_delivery.lock().unwrap();
         host.notify(

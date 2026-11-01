@@ -1,7 +1,7 @@
 use crate::features::services::audio::library::HostLibrary;
-use crate::libs::db::Db;
-use crate::libs::error::DomainResult;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainResult;
+use crate::infrastructure::host::bridge::Host;
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
@@ -16,7 +16,7 @@ pub struct Audio {
     lock: Arc<Mutex<()>>,
     restored_host: Arc<AtomicU64>,
     capacity: Arc<Semaphore>,
-    resources: Arc<crate::libs::host::resources::NativeResources>,
+    resources: Arc<crate::infrastructure::host::resources::NativeResources>,
     cache: std::path::PathBuf,
 }
 enum Preparation {
@@ -28,7 +28,7 @@ impl Audio {
     pub fn new(
         db: Arc<Db>,
         host: Arc<Host>,
-        resources: Arc<crate::libs::host::resources::NativeResources>,
+        resources: Arc<crate::infrastructure::host::resources::NativeResources>,
         cache: std::path::PathBuf,
     ) -> Self {
         Self {
@@ -53,21 +53,22 @@ impl Audio {
     pub async fn run<T: Send + 'static>(
         &self,
         operation: impl FnOnce(&Db, &mut HostLibrary) -> DomainResult<T> + Send + 'static,
-    ) -> crate::libs::error::DomainResult<T> {
+    ) -> crate::infrastructure::error::DomainResult<T> {
         self.execute(Preparation::References, operation).await
     }
 
     pub async fn run_playback<T: Send + 'static>(
         &self,
         operation: impl FnOnce(&Db, &mut HostLibrary) -> DomainResult<T> + Send + 'static,
-    ) -> crate::libs::error::DomainResult<T> {
+    ) -> crate::infrastructure::error::DomainResult<T> {
         self.execute(Preparation::Current, operation).await
     }
 
     pub async fn metadata(
         &self,
         path: String,
-    ) -> crate::libs::error::DomainResult<crate::features::media::audio::queue::AudioTrack> {
+    ) -> crate::infrastructure::error::DomainResult<crate::features::media::audio::queue::AudioTrack>
+    {
         self.execute(Preparation::None, move |_, library| {
             crate::features::media::audio::commands::Engine::metadata(library, &path)
         })
@@ -82,10 +83,12 @@ impl Audio {
         &self,
         preparation: Preparation,
         operation: impl FnOnce(&Db, &mut HostLibrary) -> DomainResult<T> + Send + 'static,
-    ) -> crate::libs::error::DomainResult<T> {
+    ) -> crate::infrastructure::error::DomainResult<T> {
         let db = self.db.clone();
         let permit = self.capacity.clone().try_acquire_owned().map_err(|_| {
-            crate::libs::error::DomainError::Other("audio request capacity exceeded".into())
+            crate::infrastructure::error::DomainError::Other(
+                "audio request capacity exceeded".into(),
+            )
         })?;
         let guard = self.lock.clone().lock_owned().await;
         let mut library = HostLibrary::new(
@@ -112,7 +115,7 @@ impl Audio {
                 && let Some(generation) = generation
             {
                 if !host.is_current(generation) {
-                    return Err(crate::libs::error::DomainError::Other(
+                    return Err(crate::infrastructure::error::DomainError::Other(
                         "host disconnected".into(),
                     ));
                 }
@@ -124,7 +127,7 @@ impl Audio {
             operation(&db, &mut library)
         })
         .await
-        .map_err(|e| crate::libs::error::DomainError::Other(e.to_string()))?
-        .map_err(|e| crate::libs::error::DomainError::Other(e.to_string()))
+        .map_err(|e| crate::infrastructure::error::DomainError::Other(e.to_string()))?
+        .map_err(|e| crate::infrastructure::error::DomainError::Other(e.to_string()))
     }
 }

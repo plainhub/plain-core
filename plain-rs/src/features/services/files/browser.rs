@@ -78,10 +78,10 @@ impl Runtime {
                         output,
                         match operation {
                             Operation::Remux => {
-                                crate::libs::platform::android::media::Operation::Remux
+                                crate::infrastructure::platform::android::media::Operation::Remux
                             }
                             Operation::Transcode => {
-                                crate::libs::platform::android::media::Operation::Transcode
+                                crate::infrastructure::platform::android::media::Operation::Transcode
                             }
                         },
                     )
@@ -127,14 +127,14 @@ impl Runtime {
         }
         let input = source.clone();
         let decision = tokio::task::spawn_blocking(move || {
-            let Some(tracks) = crate::libs::media::isobmff::tracks(&input) else {
+            let Some(tracks) = plain_libs::media::isobmff::tracks(&input) else {
                 return false;
             };
             match operation {
                 Operation::Remux => tracks.needs_remux,
                 Operation::Transcode => {
                     matches!(tracks.first_video_codec.as_deref(), Some("hvc1" | "hev1"))
-                        && crate::libs::media::isobmff::mp4_milliseconds(&input).unwrap_or(0)
+                        && plain_libs::media::isobmff::mp4_milliseconds(&input).unwrap_or(0)
                             <= 600_000
                 }
             }
@@ -197,7 +197,7 @@ fn cache_path(root: &Path, path: &str, source: &Source, operation: Operation) ->
     let modified = chrono::DateTime::<chrono::Utc>::from(source.modified);
     hash.update(modified.timestamp().to_be_bytes());
     hash.update(modified.timestamp_subsec_nanos().to_be_bytes());
-    let key = crate::libs::utils::hex::bytes_to_hex(&hash.finalize());
+    let key = plain_libs::utils::hex::bytes_to_hex(&hash.finalize());
     root.join("videos")
         .join(&key[..2])
         .join(format!("{key}.mp4"))
@@ -213,7 +213,7 @@ fn declared_capabilities(available: bool) -> Vec<&'static str> {
 pub fn capabilities() -> Vec<&'static str> {
     #[cfg(target_os = "android")]
     {
-        crate::libs::platform::android::media::capabilities()
+        crate::infrastructure::platform::android::media::capabilities()
     }
     #[cfg(target_os = "ios")]
     {
@@ -254,26 +254,26 @@ pub fn capabilities() -> Vec<&'static str> {
 pub async fn encode_android(
     input: PathBuf,
     output: PathBuf,
-    operation: crate::libs::platform::android::media::Operation,
+    operation: crate::infrastructure::platform::android::media::Operation,
 ) -> Result<bool, String> {
     android_task(move |cancel| {
-        crate::libs::platform::android::media::encode(&input, &output, operation, cancel)
+        crate::infrastructure::platform::android::media::encode(&input, &output, operation, cancel)
     })
     .await
 }
 
 #[cfg(target_os = "android")]
 pub async fn encode_android_file(
-    input: crate::libs::host::resource_stream::NativeResourceFile,
+    input: crate::infrastructure::host::resource_stream::NativeResourceFile,
     output: PathBuf,
-    operation: crate::libs::platform::android::media::Operation,
+    operation: crate::infrastructure::platform::android::media::Operation,
     stop: tokio::sync::watch::Receiver<bool>,
 ) -> Result<bool, String> {
     let directory = output.parent().ok_or("Missing media output directory")?;
     let input =
         crate::features::services::files::input::prepare(input, directory, stop.clone()).await?;
     let encoding = android_task(move |cancel| {
-        crate::libs::platform::android::media::encode_file(
+        crate::infrastructure::platform::android::media::encode_file(
             input.file,
             input.offset,
             input.length,

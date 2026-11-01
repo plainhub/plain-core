@@ -1,8 +1,8 @@
 use crate::features::chat::events;
 use crate::features::chat::messages::share_send;
 use crate::features::chat::messages::target as message_target;
-use crate::libs::db::DChat;
-use crate::libs::events::WsEvent;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use serde_json::json;
@@ -105,7 +105,7 @@ pub fn delete_query(state: &CoreRuntime, query: &str) -> Result<usize> {
     let ids = if query.trim().is_empty() {
         vec![]
     } else {
-        crate::libs::db::chat_store::messages::ids(&state.db, query)?
+        crate::infrastructure::db::chat_store::messages::ids(&state.db, query)?
     };
     delete(state, ids)
 }
@@ -124,7 +124,7 @@ pub fn delete(state: &CoreRuntime, ids: Vec<String>) -> Result<usize> {
 }
 
 struct Imported {
-    db: std::sync::Arc<crate::libs::db::Db>,
+    db: std::sync::Arc<crate::infrastructure::db::Db>,
     directory: std::path::PathBuf,
     ids: std::collections::BTreeMap<String, i64>,
 }
@@ -147,7 +147,7 @@ pub async fn retry(state: &CoreRuntime, id: String) -> Result<DChat> {
         let mut stop = state.stop.clone();
         let result = tokio::select! {
             _=stop.changed()=>Err(anyhow::anyhow!("Chat service stopped")),
-            result=crate::features::services::chat::chat_delivery::deliver_observed(&state,&id,None,crate::libs::transport::router::Attempt::Retry,|chat| {
+            result=crate::features::services::chat::chat_delivery::deliver_observed(&state,&id,None,crate::infrastructure::transport::router::Attempt::Retry,|chat| {
                 if let Some(sender)=sender.lock().unwrap().take() {let _=sender.send(Ok(chat.clone()));}
             })=>result.and_then(|receipt|receipt.chat.ok_or_else(||anyhow::anyhow!("Message unavailable"))),
         };

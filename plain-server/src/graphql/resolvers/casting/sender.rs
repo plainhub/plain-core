@@ -4,7 +4,7 @@ use crate::server::ServerState;
 use async_graphql::{Context, InputObject, Object, Result, SimpleObject};
 use plain_rs::features::services::casting::dlna_sender_runtime as sender;
 use plain_rs::features::services::casting::dlna_sender_runtime::Command;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::types::Long;
 
 #[derive(SimpleObject, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

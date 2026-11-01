@@ -24,7 +24,7 @@ async fn local_listener_rejects_invalid_commands_preserves_live_sockets_and_clea
     let root = tempfile::tempdir().unwrap();
     let core = plain_server::server::ContentServer::open(root.path()).unwrap();
     let service = Service::start(&core).await.unwrap().unwrap();
-    let path = plain_rs::libs::platform::local_socket::client_path(root.path())
+    let path = plain_libs::platform::local_socket::client_path(root.path())
         .unwrap()
         .0;
     assert!(
@@ -74,7 +74,7 @@ async fn local_listener_rejects_invalid_commands_preserves_live_sockets_and_clea
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[tokio::test]
 async fn stale_listener_is_replaced_without_affecting_another_instance() {
-    use plain_rs::libs::platform::local_socket::SocketDirectory;
+    use plain_libs::platform::local_socket::SocketDirectory;
     let root = tempfile::tempdir().unwrap();
     let other_root = tempfile::tempdir().unwrap();
     let directory = SocketDirectory::open(root.path()).unwrap();

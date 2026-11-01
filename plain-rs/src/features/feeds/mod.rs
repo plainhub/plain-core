@@ -1,13 +1,12 @@
-use crate::libs::db::{
-    Db,
-    notes_feeds::{FeedEntryRow, FeedRow},
-};
-use crate::libs::error::{DomainError, DomainResult};
-use crate::libs::utils::{
-    http_url::parse_http_url,
-    xml::{self, Event},
-};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::notes_feeds::FeedEntryRow;
+use crate::infrastructure::db::notes_feeds::FeedRow;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 use chrono::Utc;
+use plain_libs::utils::http_url::parse_http_url;
+use plain_libs::utils::xml;
+use plain_libs::utils::xml::Event;
 
 pub fn now() -> String {
     Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)

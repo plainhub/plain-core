@@ -36,9 +36,9 @@ impl Cli {
 
     pub(crate) fn paths(
         &self,
-    ) -> anyhow::Result<plain_rs::libs::platform::system::consts::AppPaths> {
+    ) -> anyhow::Result<plain_rs::infrastructure::platform::system::consts::AppPaths> {
         let mut paths =
-            plain_rs::libs::platform::system::consts::AppPaths::detect_with_directories(
+            plain_rs::infrastructure::platform::system::consts::AppPaths::detect_with_directories(
                 self.data_dir.clone(),
                 self.cache_dir.clone(),
             )

@@ -1,7 +1,8 @@
 use crate::runtime::Runtime as CoreRuntime;
 
 pub async fn import(state: &CoreRuntime, source: &str) -> Result<String, String> {
-    let destination = crate::libs::data_paths::DataPaths::new(&state.directory).pomodoro_sound();
+    let destination =
+        crate::infrastructure::data_paths::DataPaths::new(&state.directory).pomodoro_sound();
     let temporary = crate::features::services::files::source_files::stage(
         source,
         state.db.clone(),

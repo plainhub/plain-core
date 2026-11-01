@@ -61,7 +61,7 @@ fn server_with_cache() -> (tempfile::TempDir, ContentServer, std::path::PathBuf)
     let cache = dir.path().join("cache");
     let core = ContentServer::start(
         dir.path(),
-        &crate::libs::utils::base64::base64_encode(&[4; 32]),
+        &plain_libs::utils::base64::base64_encode(&[4; 32]),
         prefs,
     )
     .unwrap();

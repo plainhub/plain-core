@@ -22,7 +22,8 @@ pub async fn import(state: &CoreRuntime, source: &str, name: &str) -> Result<Str
     {
         return Err("Reserved image name".into());
     }
-    let directory = crate::libs::data_paths::DataPaths::new(&state.directory).note_images();
+    let directory =
+        crate::infrastructure::data_paths::DataPaths::new(&state.directory).note_images();
     let temporary = crate::features::services::files::source_files::stage(
         source,
         state.db.clone(),
@@ -36,7 +37,7 @@ pub async fn import(state: &CoreRuntime, source: &str, name: &str) -> Result<Str
     tokio::task::spawn_blocking(move || {
         let mut temporary = temporary;
         loop {
-            let destination = crate::libs::utils::unique_path::unique_sibling(&target)
+            let destination = plain_libs::utils::unique_path::unique_sibling(&target)
                 .map_err(|error| error.to_string())?;
             match temporary.persist_noclobber(&destination) {
                 Ok(_) => {

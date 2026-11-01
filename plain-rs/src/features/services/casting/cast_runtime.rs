@@ -6,8 +6,8 @@ pub fn time_ms(time: &str) -> i64 {
     crate::features::services::casting::receiver::soap_handler::parse_dlna_time_to_ms(time).max(0)
 }
 pub fn attributes(xml: &str) -> std::collections::HashMap<String, String> {
-    use crate::libs::utils::xml::Event;
-    use crate::libs::utils::xml::Reader;
+    use plain_libs::utils::xml::Event;
+    use plain_libs::utils::xml::Reader;
     let mut values = std::collections::HashMap::new();
     let mut documents = vec![xml.to_owned()];
     let mut remaining = 8;

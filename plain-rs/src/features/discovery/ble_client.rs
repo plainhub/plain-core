@@ -12,7 +12,8 @@
 //! a Rust→host call (or a local GATT call on a native platform), so the state
 //! machine stays portable while the radio stays in the platform layer.
 
-use crate::libs::protocols::ble::{self, Assembler};
+use crate::infrastructure::protocols::ble;
+use crate::infrastructure::protocols::ble::Assembler;
 use anyhow::{Result, ensure};
 use std::{
     sync::Mutex,

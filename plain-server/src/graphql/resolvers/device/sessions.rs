@@ -1,8 +1,8 @@
 use crate::server::ServerState;
 use async_graphql::{Context, Object, Result, SimpleObject};
 use plain_rs::features::sessions::SessionInfo;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::types::Instant;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 
 #[derive(SimpleObject)]
@@ -25,9 +25,9 @@ struct Session {
     updated_at: Instant,
 }
 
-impl TryFrom<plain_rs::libs::db::SessionRow> for Session {
+impl TryFrom<plain_rs::infrastructure::db::SessionRow> for Session {
     type Error = async_graphql::Error;
-    fn try_from(row: plain_rs::libs::db::SessionRow) -> Result<Self> {
+    fn try_from(row: plain_rs::infrastructure::db::SessionRow) -> Result<Self> {
         let value = SessionInfo::try_from(row.clone())?;
         Ok(Self {
             client_id: value.client_id,

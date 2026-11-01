@@ -2,8 +2,8 @@ use plain_rs::features::chat::channels::state;
 use plain_rs::features::chat::channels::state::Action;
 use plain_rs::features::chat::enums::ChannelSystemMessageType;
 use plain_rs::features::services::chat::channel_runtime::*;
-use plain_rs::libs::db::chat_store::channels;
-use plain_rs::libs::db::chat_store::peers;
+use plain_rs::infrastructure::db::chat_store::channels;
+use plain_rs::infrastructure::db::chat_store::peers;
 use plain_rs::runtime::Runtime as ServerState;
 use serde_json::Value;
 use serde_json::json;
@@ -14,18 +14,18 @@ fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let dir = tempfile::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
-    let (key, _public) = plain_rs::libs::crypto::ed25519_generate();
+    let (key, _public) = plain_libs::crypto::ed25519_generate();
     prefs.set("device_name", "Actual tablet").unwrap();
     prefs.set("client_id", "actor").unwrap();
     prefs
         .set(
             "signature_key_pair",
-            plain_rs::libs::utils::base64::base64_encode(&key),
+            plain_libs::utils::base64::base64_encode(&key),
         )
         .unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -33,7 +33,7 @@ fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
 }
 #[cfg(feature = "http_transport")]
 fn add_peer(state: &ServerState, id: &str, paired: bool) {
-    let mut peer = plain_rs::libs::db::DPeer::new(
+    let mut peer = plain_rs::infrastructure::db::DPeer::new(
         id,
         id,
         "",
@@ -41,12 +41,12 @@ fn add_peer(state: &ServerState, id: &str, paired: bool) {
         plain_rs::features::chat::enums::DeviceType::Tablet,
     );
     if paired {
-        peer.key = plain_rs::libs::utils::base64::base64_encode(&[8; 32]);
+        peer.key = plain_libs::utils::base64::base64_encode(&[8; 32]);
     }
     peers::save(
         &state.db,
         &[peer],
-        plain_rs::libs::db::chat_store::SaveMode::Insert,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
 }
@@ -75,19 +75,19 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                     let key = if p["peer"]["id"] == "paired" {
                         vec![8; 32]
                     } else {
-                        plain_rs::libs::utils::base64::base64_decode(&channel_key)
+                        plain_libs::utils::base64::base64_decode(&channel_key)
                     };
                     let body = plain_rs::features::services::peers::ble_transport::test_peer_wire(
                         &ble, p, &key,
                     );
                     let pieces: Vec<_> = body.splitn(3, '|').collect();
-                    let public = plain_rs::libs::utils::base64::base64_encode(
+                    let public = plain_libs::utils::base64::base64_encode(
                         &plain_rs::features::services::peers::peer_wire::signing_keypair(&prefs)
                             .unwrap()[32..],
                     );
-                    assert!(plain_rs::libs::crypto::ed25519_verify(
+                    assert!(plain_libs::crypto::ed25519_verify(
                         &public,
-                        plain_rs::libs::transport::auth::signature_payload(
+                        plain_rs::infrastructure::transport::auth::signature_payload(
                             pieces[1].parse().unwrap(),
                             if p["peer"]["id"] == "paired" {
                                 ""
@@ -108,11 +108,11 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                     }
                     if p["peer"]["id"] == "paired" {
                         assert!(
-                            matches!(ble.request_for_test(p), plain_rs::libs::protocols::ble::Request::PeerGraphql { channel_id, .. } if channel_id.is_empty())
+                            matches!(ble.request_for_test(p), plain_rs::infrastructure::protocols::ble::Request::PeerGraphql { channel_id, .. } if channel_id.is_empty())
                         );
                     } else {
                         assert!(
-                            matches!(ble.request_for_test(p), plain_rs::libs::protocols::ble::Request::PeerGraphql { channel_id: cid, .. } if cid == channel_id)
+                            matches!(ble.request_for_test(p), plain_rs::infrastructure::protocols::ble::Request::PeerGraphql { channel_id: cid, .. } if cid == channel_id)
                         );
                     }
                     attempts.push(wire["variables"]["type"].as_str().unwrap().to_owned());
@@ -191,7 +191,7 @@ async fn queued_send_and_decline_ack_cannot_act_on_replacement() {
     channels::save(
         &state.db,
         &[channel.clone()],
-        plain_rs::libs::db::chat_store::SaveMode::Update,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Update,
     )
     .unwrap();
     let (generation, mut rx) = crate::test_support::HostRequests::connect(&state.host);
@@ -273,7 +273,7 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
     channels::save(
         &state.db,
         &[channel.clone()],
-        plain_rs::libs::db::chat_store::SaveMode::Update,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Update,
     )
     .unwrap();
     let (generation, mut rx) = crate::test_support::HostRequests::connect(&state.host);
@@ -284,11 +284,11 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
     };
     let cap = rx.recv().await.unwrap();
     let mut peer = peers::get(&state.db, "owner").unwrap().unwrap();
-    peer.key = plain_rs::libs::utils::base64::base64_encode(&[9; 32]);
+    peer.key = plain_libs::utils::base64::base64_encode(&[9; 32]);
     peers::save(
         &state.db,
         &[peer],
-        plain_rs::libs::db::chat_store::SaveMode::Update,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Update,
     )
     .unwrap();
     state
@@ -369,7 +369,7 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
     channels::save(
         &state.db,
         &[channel.clone()],
-        plain_rs::libs::db::chat_store::SaveMode::Update,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Update,
     )
     .unwrap();
     execute(

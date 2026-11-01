@@ -1,7 +1,7 @@
 use crate::features::services::peers::management::Identity;
 use crate::features::services::peers::management::current;
 use crate::features::services::peers::management::current_peer;
-use crate::libs::events::WsEvent;
+use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::Result;
 use serde::Deserialize;
@@ -32,7 +32,7 @@ fn apply(
         let previous: String =
             connection.query_row("SELECT name FROM peers WHERE id=?1", [id], |row| row.get(0))?;
         if previous != name {
-            crate::libs::db::chat_store::peers::update_name(connection, id, name)?;
+            crate::infrastructure::db::chat_store::peers::update_name(connection, id, name)?;
             let _ = state.events.send(WsEvent::broadcast(
                 crate::features::chat::events::WS_PEER_UPDATED,
                 json!({"id":id}).to_string(),
@@ -55,7 +55,7 @@ pub async fn refresh(
         state,
         &identity.http_url()?,
         &state.native_client_id().map_err(anyhow::Error::msg)?,
-        &crate::libs::utils::base64::base64_decode(&identity.token),
+        &plain_libs::utils::base64::base64_decode(&identity.token),
         json!({"query":"{ app { deviceName capabilities permissions urlToken } }"}),
         256 * 1024,
     )

@@ -1,12 +1,12 @@
-use crate::libs::db::Db;
-use crate::libs::db::TagRelationRow;
-use crate::libs::db::TagRow;
-use crate::libs::db::tag;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::TagRelationRow;
+use crate::infrastructure::db::TagRow;
+use crate::infrastructure::db::tag;
+use crate::infrastructure::error::DomainResult;
 
 pub fn create_tag(db: &Db, kind: i32, name: &str) -> DomainResult<TagRow> {
     let row = TagRow {
-        id: crate::libs::utils::shortid::new_id(),
+        id: plain_libs::utils::shortid::new_id(),
         name: name.into(),
         kind,
         count: 0,

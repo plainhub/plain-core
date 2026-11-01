@@ -32,9 +32,8 @@ fn fixture(provider_catalog: bool, mp4: bool) -> (tempfile::TempDir, Arc<Runtime
         .unwrap();
     let cache = Arc::new(DurationCache::new(&dir.path().join("cache")));
     let host = Arc::new(Host::default());
-    let resources = Arc::new(crate::libs::host::resources::NativeResources::new(
-        host.clone(),
-    ));
+    let resources =
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone()));
     let mut runtime = Runtime::new(cache, host, resources, dir.path().join("cache"));
     Arc::get_mut(&mut runtime).unwrap().provider_catalog = provider_catalog;
     let row = json!({"id":"7","path":path,"size":data.len(),"updatedAt":"2023-11-14T22:13:20Z","durationMs":0});
@@ -232,7 +231,7 @@ async fn opaque_audio_duration_reads_only_the_descriptor_range_without_sdk_metad
     );
     stream
         .file(
-            crate::libs::host::resource_stream::NativeResourceFile::new(
+            crate::infrastructure::host::resource_stream::NativeResourceFile::new(
                 File::open(&path).unwrap(),
                 base,
                 audio.len() as i64,

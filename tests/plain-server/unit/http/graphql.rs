@@ -15,7 +15,7 @@ fn contract_schema() -> (
     crate::test_support::schema::SchemaFixture,
 ) {
     use plain_rs::features::prefs::Prefs;
-    use plain_rs::libs::db::Db;
+    use plain_rs::infrastructure::db::Db;
     use std::sync::Arc;
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
@@ -25,7 +25,7 @@ fn contract_schema() -> (
     (
         dir,
         crate::test_support::schema::build(
-            Arc::new(plain_rs::libs::host::bridge::Host::default()),
+            Arc::new(plain_rs::infrastructure::host::bridge::Host::default()),
             events,
             prefs,
             db,

@@ -1,4 +1,4 @@
-use plain_rs::libs::cache::*;
+use plain_rs::infrastructure::cache::*;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]

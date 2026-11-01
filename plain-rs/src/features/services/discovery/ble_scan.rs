@@ -24,7 +24,7 @@
 use crate::features::discovery::nearby_devices::Device;
 use crate::features::discovery::nearby_scan::Step;
 use crate::features::services::discovery::nearby_devices::Context;
-use crate::libs::db::now_iso;
+use crate::infrastructure::db::now_iso;
 use crate::runtime::Runtime as CoreRuntime;
 use serde_json::json;
 use std::sync::Mutex;
@@ -100,7 +100,7 @@ async fn run(state: CoreRuntime, pending: Pending) {
         let body = crate::features::discovery::nearby_wire::Message::Discover
             .wire()
             .map_err(|error| error.to_string())?;
-        let request = crate::libs::protocols::ble::message(&[], body.as_bytes())
+        let request = crate::infrastructure::protocols::ble::message(&[], body.as_bytes())
             .map_err(|error| error.to_string())?;
         state
             .host
@@ -110,7 +110,7 @@ async fn run(state: CoreRuntime, pending: Pending) {
                 json!({
                     "shortId": pending.short_id,
                     "scan": pending.scan,
-                    "request": crate::libs::utils::base64::base64_encode(&request),
+                    "request": plain_libs::utils::base64::base64_encode(&request),
                 }),
             )
             .await

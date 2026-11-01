@@ -1,6 +1,6 @@
 use crate::features::discovery::nearby_devices::Device;
-use crate::libs::db::chat_store;
-use crate::libs::events::WsEvent;
+use crate::infrastructure::db::chat_store;
+use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 use serde_json::json;
 pub const EVENT_UPDATED: &'static str = "NEARBY_DEVICES_UPDATED";
@@ -13,7 +13,7 @@ fn publish(state: &CoreRuntime) {
 }
 #[derive(Clone)]
 pub struct Context {
-    pub db: std::sync::Arc<crate::libs::db::Db>,
+    pub db: std::sync::Arc<crate::infrastructure::db::Db>,
     pub prefs: std::sync::Arc<crate::features::prefs::Prefs>,
     pub devices: std::sync::Arc<crate::features::discovery::nearby_devices::Devices>,
     pub events: tokio::sync::broadcast::Sender<WsEvent>,
@@ -92,7 +92,7 @@ impl Context {
     }
 }
 pub fn snapshot(
-    db: &crate::libs::db::Db,
+    db: &crate::infrastructure::db::Db,
     devices: &crate::features::discovery::nearby_devices::Devices,
 ) -> anyhow::Result<serde_json::Value> {
     let paired: std::collections::HashSet<_> = chat_store::peers::all(db)?
@@ -101,10 +101,13 @@ pub fn snapshot(
         .map(|p| p.id)
         .collect();
     let mut snapshot = serde_json::to_value(devices.snapshot())?;
-    let interfaces = crate::libs::transport::lan::local_interfaces();
+    let interfaces = crate::infrastructure::transport::lan::local_interfaces();
     for device in snapshot["devices"].as_array_mut().unwrap() {
         let ips: Vec<String> = serde_json::from_value(device["ips"].clone())?;
-        device["bestIp"] = json!(crate::libs::transport::lan::best(&ips, &interfaces));
+        device["bestIp"] = json!(crate::infrastructure::transport::lan::best(
+            &ips,
+            &interfaces
+        ));
         device["status"] = json!(if paired.contains(device["id"].as_str().unwrap()) {
             "PAIRED"
         } else {
@@ -126,7 +129,7 @@ pub async fn sweep(state: &CoreRuntime) -> anyhow::Result<()> {
     if facts.get("paused").and_then(serde_json::Value::as_bool) != Some(false) {
         return Ok(());
     }
-    let interfaces = crate::libs::transport::lan::local_interfaces();
+    let interfaces = crate::infrastructure::transport::lan::local_interfaces();
     let mut changed = false;
     for chunk in stale.chunks(4) {
         if !state.nearby_devices.active() {
@@ -134,7 +137,7 @@ pub async fn sweep(state: &CoreRuntime) -> anyhow::Result<()> {
         }
         let interfaces = &interfaces;
         let results = futures_util::future::join_all(chunk.iter().map(|p| async move {
-            let ip = crate::libs::transport::lan::best(&p.device.ips, &interfaces);
+            let ip = crate::infrastructure::transport::lan::best(&p.device.ips, &interfaces);
             let alive = p.device.discovery_methods.iter().any(|v| v == "LAN")
                 && !ip.is_empty()
                 && crate::features::discovery::nearby_http::probe(&ip, p.device.port)

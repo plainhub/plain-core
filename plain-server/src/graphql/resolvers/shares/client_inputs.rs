@@ -1,4 +1,5 @@
-use plain_rs::libs::types::{Instant, Long};
+use plain_rs::infrastructure::types::Instant;
+use plain_rs::infrastructure::types::Long;
 
 use async_graphql::{ID, InputObject};
 use chrono::SubsecRound;

@@ -9,8 +9,8 @@ use crate::features::files::tasks::Hooks;
 use crate::features::files::tasks::PrepareResult;
 use crate::features::files::tasks::Service;
 use crate::features::services::files::platform::FilePlatform;
-use crate::libs::db::Db;
-use crate::libs::events::WsEvent;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::events::WsEvent;
 use anyhow::{Result, anyhow, bail};
 use std::{
     path::{Path, PathBuf},
@@ -178,7 +178,7 @@ impl FileTasks {
         paths.sort();
         paths.dedup();
         let snapshot = serde_json::json!({"root":root,"items":items});
-        let outcome = crate::libs::filesystem::deletion::Outcome {
+        let outcome = plain_libs::filesystem::deletion::Outcome {
             removed: true,
             paths,
             failures: Vec::new(),
@@ -273,10 +273,10 @@ impl FileTasks {
         name: String,
     ) -> Result<Option<String>> {
         let directory = named_directory(&directory, &name)?;
-        let src = crate::libs::utils::file_uri::local_path(&src).map_err(anyhow::Error::msg)?;
+        let src = plain_libs::utils::file_uri::local_path(&src).map_err(anyhow::Error::msg)?;
         let destination = directory.join(name);
         let destination = tokio::task::spawn_blocking(move || {
-            crate::libs::utils::unique_path::unique_sibling(&destination)
+            plain_libs::utils::unique_path::unique_sibling(&destination)
         })
         .await??;
         let task = self
@@ -397,7 +397,7 @@ impl NativeHooks {
             self.platform.db.clone().change_file_paths(
                 &source,
                 &destination,
-                crate::libs::db::files::PathChange::Move,
+                crate::infrastructure::db::files::PathChange::Move,
             )?;
         }
         self.duration_cache

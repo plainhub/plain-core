@@ -1,6 +1,6 @@
 use crate::features::prefs::Prefs;
 use crate::features::services::capabilities;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde::Deserialize;
 use serde_json::{Value, json};
 

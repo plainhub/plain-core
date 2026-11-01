@@ -1,8 +1,8 @@
 use crate::features::peers::status::handshake;
 use crate::features::services::peers::status_runtime::ConnectionGuard;
 use crate::features::services::peers::status_runtime::emit;
-use crate::libs::db::DPeer;
-use crate::libs::db::chat_store::peers;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use futures_util::{SinkExt, StreamExt};
@@ -198,7 +198,7 @@ impl Outgoing {
             .filter(|id| !id.is_empty())
             .ok_or_else(|| anyhow::anyhow!("Missing identity"))?;
         let selected_ip = peer.best_ip();
-        let url = crate::libs::utils::build_url::build_url(
+        let url = plain_libs::utils::build_url::build_url(
             "wss",
             &selected_ip,
             port,
@@ -243,7 +243,7 @@ impl Outgoing {
         })
         .await??;
         let body = handshake(
-            &crate::libs::utils::base64::base64_decode(&peer.key),
+            &plain_libs::utils::base64::base64_decode(&peer.key),
             &keypair,
             &actor,
             &challenge,

@@ -53,7 +53,7 @@ pub fn native_facts(prefs: &crate::features::prefs::Prefs) -> Result<serde_json:
     #[cfg(target_os = "linux")]
     {
         Ok(serde_json::Value::Array(
-            crate::libs::platform::linux::mounts::list::list_mounts(prefs)
+            crate::infrastructure::platform::linux::mounts::list::list_mounts(prefs)
                 .into_iter()
                 .map(linux_facts)
                 .collect(),
@@ -67,7 +67,9 @@ pub fn native_facts(prefs: &crate::features::prefs::Prefs) -> Result<serde_json:
 }
 
 #[cfg(all(feature = "runtime", target_os = "linux"))]
-fn linux_facts(mount: crate::libs::platform::linux::mounts::list::Mount) -> serde_json::Value {
+fn linux_facts(
+    mount: crate::infrastructure::platform::linux::mounts::list::Mount,
+) -> serde_json::Value {
     serde_json::json!({
         "id":mount.id,"name":mount.name,"path":mount.path,"mountPoint":mount.mount_point,
         "fsType":mount.fs_type,"totalBytes":mount.total_bytes,"usedBytes":mount.used_bytes,

@@ -1,9 +1,10 @@
+use crate::features::chat::enums::DeviceType;
 use crate::features::services::notifications::types::Notification;
 use crate::features::services::peers::management::Identity;
 use crate::features::services::peers::management::current_peer;
 use crate::features::services::peers::metadata::AppSnapshot;
+use crate::infrastructure::db::DPeer;
 use crate::runtime::Runtime as CoreRuntime;
-use crate::{features::chat::enums::DeviceType, libs::db::DPeer};
 use anyhow::{Result, ensure};
 use serde::Serialize;
 use serde_json::json;
@@ -81,7 +82,7 @@ impl Store {
         id: &str,
         alerts: Vec<Item>,
         permissions_changed: bool,
-        host: &Arc<crate::libs::host::bridge::Host>,
+        host: &Arc<crate::infrastructure::host::bridge::Host>,
     ) {
         state.revision += 1;
         if state.recovery_pending {
@@ -129,7 +130,7 @@ impl Store {
         &self,
         peers: &[DPeer],
         wanted: &HashMap<String, Identity>,
-        host: &Arc<crate::libs::host::bridge::Host>,
+        host: &Arc<crate::infrastructure::host::bridge::Host>,
     ) {
         let mut state = self.0.lock().unwrap();
         let removed: Vec<_> = state
@@ -190,7 +191,10 @@ impl Store {
         self.0.lock().unwrap().snapshot()
     }
 
-    pub fn notify_snapshot(&self, host: &crate::libs::host::bridge::Host) -> Result<(), String> {
+    pub fn notify_snapshot(
+        &self,
+        host: &crate::infrastructure::host::bridge::Host,
+    ) -> Result<(), String> {
         let mut state = self.0.lock().unwrap();
         let mut snapshot = state.snapshot();
         if !state.missed_alerts.is_empty() {
@@ -211,7 +215,7 @@ impl Store {
         id: &str,
         identity: &Identity,
         result: Result<(AppSnapshot, Vec<Notification>, reqwest::Url)>,
-        host: &Arc<crate::libs::host::bridge::Host>,
+        host: &Arc<crate::infrastructure::host::bridge::Host>,
     ) -> Result<()> {
         let mut state = self.0.lock().unwrap();
         let Some(peer) = state
@@ -247,7 +251,7 @@ impl Store {
                                     &crate::features::files::resource_link::Scope::Session(
                                         client_id.into(),
                                     ),
-                                    &crate::libs::utils::base64::base64_decode(&peer.url_token),
+                                    &plain_libs::utils::base64::base64_decode(&peer.url_token),
                                     &crate::features::files::resource_link::Resource::reference(&format!(
                                         "pkgicon://{}",
                                         notification.app_id.as_str()
@@ -325,7 +329,7 @@ fn validate_snapshot(app: &AppSnapshot, items: &[Notification]) -> Result<()> {
     ensure!(
         !allowed(app)
             || items.is_empty()
-            || crate::libs::utils::base64::base64_decode(&app.url_token).len() == 32,
+            || plain_libs::utils::base64::base64_decode(&app.url_token).len() == 32,
         "Invalid notification icon key"
     );
     Ok(())
@@ -343,7 +347,7 @@ pub async fn refresh_from_app(
     }
     let base = identity.http_url()?;
     let client_id = state.native_client_id().map_err(anyhow::Error::msg)?;
-    let key = crate::libs::utils::base64::base64_decode(&identity.token);
+    let key = plain_libs::utils::base64::base64_decode(&identity.token);
     let result = async {
         let app = app?;
         let items: Vec<Notification> = if allowed(&app) {

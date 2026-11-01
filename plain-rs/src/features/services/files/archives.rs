@@ -6,15 +6,15 @@ use std::{
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, watch};
 
 pub struct Archives {
-    previews: Arc<crate::libs::utils::keyed_locks::KeyedLocks>,
-    cache: crate::libs::cache_paths::CachePaths,
+    previews: Arc<plain_libs::utils::keyed_locks::KeyedLocks>,
+    cache: crate::infrastructure::cache_paths::CachePaths,
     gate: Arc<Semaphore>,
 }
 
 impl Archives {
-    pub fn new(cache: crate::libs::cache_paths::CachePaths) -> Self {
+    pub fn new(cache: crate::infrastructure::cache_paths::CachePaths) -> Self {
         Self {
-            previews: Arc::new(crate::libs::utils::keyed_locks::KeyedLocks::new()),
+            previews: Arc::new(plain_libs::utils::keyed_locks::KeyedLocks::new()),
             cache,
             gate: Arc::new(Semaphore::new(1)),
         }

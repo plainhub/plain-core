@@ -1,8 +1,8 @@
 use super::*;
 use crate::features::chat::enums::PeerStatus;
-use crate::libs::crypto::ed25519_generate;
-use crate::libs::db::chat_store::SaveMode;
-use crate::libs::utils::base64::base64_encode;
+use crate::infrastructure::db::chat_store::SaveMode;
+use plain_libs::crypto::ed25519_generate;
+use plain_libs::utils::base64::base64_encode;
 #[test]
 fn private_prepare_uses_persisted_signing_identity_and_current_peer_keys() {
     let dir = std::env::temp_dir().join(format!(
@@ -50,10 +50,14 @@ fn private_prepare_uses_persisted_signing_identity_and_current_peer_keys() {
     assert_eq!(result.targets[1].channel_id, channel.id);
     let body = wire(&prefs, result.message_type, &result.payload, "").unwrap();
     let pieces: Vec<_> = body.splitn(3, '|').collect();
-    assert!(crate::libs::crypto::ed25519_verify(
+    assert!(plain_libs::crypto::ed25519_verify(
         &base64_encode(&public),
-        crate::libs::transport::auth::signature_payload(pieces[1].parse().unwrap(), "", pieces[2])
-            .as_bytes(),
+        crate::infrastructure::transport::auth::signature_payload(
+            pieces[1].parse().unwrap(),
+            "",
+            pieces[2]
+        )
+        .as_bytes(),
         pieces[0]
     ));
     let wire: serde_json::Value = serde_json::from_str(pieces[2]).unwrap();

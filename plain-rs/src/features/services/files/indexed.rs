@@ -1,8 +1,8 @@
 use crate::features::prefs::settings::FileSortBy;
 use crate::features::services::files::provider_query as query;
 use crate::features::services::files::provider_query::Provider;
-use crate::libs::db::Db;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::host::bridge::Host;
 use anyhow::Result;
 use rusqlite::{params_from_iter, types::Value as SqlValue};
 use serde_json::{Value, json};
@@ -97,7 +97,7 @@ pub fn native(
         .map(SqlValue::Text)
         .collect::<Vec<_>>();
     for text in texts {
-        let (predicate, values) = crate::libs::db::files::name_filter(text);
+        let (predicate, values) = crate::infrastructure::db::files::name_filter(text);
         clauses.push(predicate);
         args.extend(values.into_iter().map(SqlValue::Text));
     }

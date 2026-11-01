@@ -4,8 +4,8 @@ use crate::features::peers::pairing::protocol::PairingResponse;
 use crate::features::peers::pairing::security;
 use crate::features::prefs::Prefs;
 use crate::features::services::peers::peer_wire::signing_keypair;
-use crate::libs::crypto::EcdhSession;
 use anyhow::{Result, bail};
+use plain_libs::crypto::EcdhSession;
 use serde::Deserialize;
 use serde_json::{Value, json};
 #[derive(Deserialize)]
@@ -30,15 +30,15 @@ fn request(prefs: &Prefs, device: Device) -> Result<(PairingRequest, EcdhSession
         from_name: device.name,
         port: device.port,
         device_type: device.device_type,
-        ecdh_public_key: crate::libs::utils::base64::base64_encode(&ecdh.public_key_bytes),
-        signature_public_key: crate::libs::utils::base64::base64_encode(&kp[32..]),
+        ecdh_public_key: plain_libs::utils::base64::base64_encode(&ecdh.public_key_bytes),
+        signature_public_key: plain_libs::utils::base64::base64_encode(&kp[32..]),
         timestamp: now_ms(),
         ips: device.ips,
         signature: String::new(),
         aware_supported: device.aware_supported,
         from_ip: String::new(),
     };
-    request.signature = crate::libs::crypto::ed25519_sign(&kp, request.signature_data().as_bytes());
+    request.signature = plain_libs::crypto::ed25519_sign(&kp, request.signature_data().as_bytes());
     if !security::verify_request(&request) {
         bail!("Invalid pairing signing identity");
     }
@@ -64,9 +64,9 @@ fn response(
         device_type: device.device_type,
         ecdh_public_key: ecdh
             .as_ref()
-            .map(|e| crate::libs::utils::base64::base64_encode(&e.public_key_bytes))
+            .map(|e| plain_libs::utils::base64::base64_encode(&e.public_key_bytes))
             .unwrap_or_default(),
-        signature_public_key: crate::libs::utils::base64::base64_encode(&kp[32..]),
+        signature_public_key: plain_libs::utils::base64::base64_encode(&kp[32..]),
         accepted,
         timestamp: now_ms(),
         ips: device.ips,
@@ -74,7 +74,7 @@ fn response(
         aware_supported: device.aware_supported,
     };
     response.signature =
-        crate::libs::crypto::ed25519_sign(&kp, response.signature_data().as_bytes());
+        plain_libs::crypto::ed25519_sign(&kp, response.signature_data().as_bytes());
     if !security::verify_response(&response, &response.to_id, &response.from_id) {
         bail!("Invalid pairing signing identity");
     }
@@ -97,7 +97,7 @@ use crate::features::peers::pairing::peer_store::Facts;
 use crate::features::peers::pairing::protocol::PairingCancel;
 use crate::features::peers::pairing::sessions::Sessions;
 use crate::features::peers::pairing::sessions::Target;
-use crate::libs::db::Db;
+use crate::infrastructure::db::Db;
 use std::str::FromStr;
 #[cfg(test)]
 pub fn start(prefs: &Prefs, sessions: &Sessions, target: Target, device: Device) -> Result<Value> {
@@ -153,14 +153,16 @@ pub fn complete_checked(
         return Ok(Value::Null);
     };
     let ticket = pending.ticket.clone();
-    let result = (|| -> Result<crate::libs::db::DPeer> {
+    let result = (|| -> Result<crate::infrastructure::db::DPeer> {
         if pending.expired() {
             bail!("Pairing timed out");
         }
         if !response.accepted {
             bail!("Pairing request was rejected");
         }
-        if let Some(saved) = crate::libs::db::chat_store::peers::get(db, &response.from_id)? {
+        if let Some(saved) =
+            crate::infrastructure::db::chat_store::peers::get(db, &response.from_id)?
+        {
             anyhow::ensure!(
                 saved.public_key.is_empty() || saved.public_key == response.signature_public_key,
                 "Peer identity changed"
@@ -168,7 +170,7 @@ pub fn complete_checked(
         }
         let key = pending
             .ecdh
-            .compute_shared_key(&crate::libs::utils::base64::base64_decode(
+            .compute_shared_key(&plain_libs::utils::base64::base64_decode(
                 &response.ecdh_public_key,
             ))
             .ok_or_else(|| anyhow::anyhow!("Failed to compute shared key"))?;
@@ -183,7 +185,7 @@ pub fn complete_checked(
                 port: response.port,
                 device_type: DeviceType::from_str(&response.device_type)
                     .unwrap_or(DeviceType::Unknown),
-                key: crate::libs::utils::base64::base64_encode(&key),
+                key: plain_libs::utils::base64::base64_encode(&key),
                 public_key: response.signature_public_key,
             },
         )
@@ -211,7 +213,7 @@ pub fn respond(
     };
     let peer = if let Some(ecdh) = ecdh {
         let key = ecdh
-            .compute_shared_key(&crate::libs::utils::base64::base64_decode(
+            .compute_shared_key(&plain_libs::utils::base64::base64_decode(
                 &request.ecdh_public_key,
             ))
             .ok_or_else(|| anyhow::anyhow!("Failed to compute shared key"))?;
@@ -226,7 +228,7 @@ pub fn respond(
                 port: request.port,
                 device_type: DeviceType::from_str(&request.device_type)
                     .unwrap_or(DeviceType::Unknown),
-                key: crate::libs::utils::base64::base64_encode(&key),
+                key: plain_libs::utils::base64::base64_encode(&key),
                 public_key: request.signature_public_key,
             },
         )?)
@@ -252,12 +254,12 @@ pub fn cancel(
         from_id,
         to_id: id.into(),
         request_signature: ticket.request_signature.clone(),
-        signature_public_key: crate::libs::utils::base64::base64_encode(&keypair[32..]),
+        signature_public_key: plain_libs::utils::base64::base64_encode(&keypair[32..]),
         timestamp: now_ms(),
         signature: String::new(),
     };
     cancel.signature =
-        crate::libs::crypto::ed25519_sign(&keypair, cancel.signature_data().as_bytes());
+        plain_libs::crypto::ed25519_sign(&keypair, cancel.signature_data().as_bytes());
     Ok(json!({"ticket":ticket,"cancel":cancel}))
 }
 pub fn receive_request(sessions: &Sessions, request: &PairingRequest) -> Option<bool> {

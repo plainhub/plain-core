@@ -1,4 +1,5 @@
-use crate::libs::{db::Db, utils::search_dsl};
+use crate::infrastructure::db::Db;
+use plain_libs::utils::search_dsl;
 use serde_json::Value;
 
 fn text(value: &Value, key: &str) -> String {
@@ -38,7 +39,7 @@ pub fn packages(
     } else {
         let mut ids = std::collections::HashSet::new();
         for tag in tag_ids {
-            ids.extend(crate::libs::db::tag::keys_for_tag(db, tag)?);
+            ids.extend(crate::infrastructure::db::tag::keys_for_tag(db, tag)?);
         }
         Some(ids)
     };
@@ -60,7 +61,7 @@ pub fn packages(
     Ok(sort_packages(
         facts,
         sort_by,
-        crate::libs::utils::sort_name::sort_name,
+        plain_libs::utils::sort_name::sort_name,
     ))
 }
 

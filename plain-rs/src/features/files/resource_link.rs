@@ -102,9 +102,9 @@ pub fn parse(envelope: &str) -> Result<(Scope, &str)> {
 }
 
 pub fn encrypt(scope: &Scope, purpose: &str, key: &[u8], plain: &[u8]) -> Result<String> {
-    let bytes = crate::libs::crypto::xchacha_encrypt_raw_with_aad(key, plain, &scope.aad(purpose))
+    let bytes = plain_libs::crypto::xchacha_encrypt_raw_with_aad(key, plain, &scope.aad(purpose))
         .ok_or_else(|| anyhow::anyhow!("Invalid resource key"))?;
-    let payload = crate::libs::utils::base64::base64_encode_url_safe(&bytes);
+    let payload = plain_libs::utils::base64::base64_encode_url_safe(&bytes);
     let payload = payload.trim_end_matches('=');
     let (mode, owner) = scope.parts();
     let envelope = if matches!(scope, Scope::Global) {
@@ -117,8 +117,8 @@ pub fn encrypt(scope: &Scope, purpose: &str, key: &[u8], plain: &[u8]) -> Result
 }
 
 pub fn decrypt(scope: &Scope, purpose: &str, key: &[u8], payload: &str) -> Result<Vec<u8>> {
-    let bytes = crate::libs::utils::base64::base64_decode_checked(payload)?;
-    crate::libs::crypto::xchacha_decrypt_raw_with_aad(key, &bytes, &scope.aad(purpose))
+    let bytes = plain_libs::utils::base64::base64_decode_checked(payload)?;
+    plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, &bytes, &scope.aad(purpose))
         .ok_or_else(|| anyhow::anyhow!("Invalid resource authentication"))
 }
 

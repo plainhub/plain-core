@@ -1,4 +1,4 @@
-use crate::libs::db::DPeer;
+use crate::infrastructure::db::DPeer;
 use serde::{Serialize, Serializer};
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,18 +16,21 @@ pub struct View<'a> {
     address: Address,
 }
 pub fn address(peer: &DPeer) -> Address {
-    address_with_interfaces(peer, &crate::libs::transport::lan::local_interfaces())
+    address_with_interfaces(
+        peer,
+        &crate::infrastructure::transport::lan::local_interfaces(),
+    )
 }
 pub fn address_with_interfaces(
     peer: &DPeer,
-    local: &[crate::libs::transport::lan::Interface],
+    local: &[crate::infrastructure::transport::lan::Interface],
 ) -> Address {
     let ip = peer.best_ip_with_interfaces(local);
     let base_url = peer
         .port
         .filter(|port| *port > 0)
         .filter(|_| !ip.is_empty())
-        .map(|port| crate::libs::utils::http_url::build_url("https", &ip, port, ""))
+        .map(|port| plain_libs::utils::http_url::build_url("https", &ip, port, ""))
         .unwrap_or_default();
     Address {
         name: if peer.name.trim().is_empty() {
@@ -58,7 +61,11 @@ pub fn view(peer: &DPeer) -> View<'_> {
 pub fn serialize_view<S: Serializer>(peer: &DPeer, serializer: S) -> Result<S::Ok, S::Error> {
     view(peer).serialize(serializer)
 }
-pub fn current(db: &crate::libs::db::Db, id: &str, expected: &DPeer) -> anyhow::Result<DPeer> {
+pub fn current(
+    db: &crate::infrastructure::db::Db,
+    id: &str,
+    expected: &DPeer,
+) -> anyhow::Result<DPeer> {
     let peer = current_identity(db, id, expected)?;
     anyhow::ensure!(
         peer.ip == expected.ip && peer.port == expected.port,
@@ -67,11 +74,11 @@ pub fn current(db: &crate::libs::db::Db, id: &str, expected: &DPeer) -> anyhow::
     Ok(peer)
 }
 pub fn current_identity(
-    db: &crate::libs::db::Db,
+    db: &crate::infrastructure::db::Db,
     id: &str,
     expected: &DPeer,
 ) -> anyhow::Result<DPeer> {
-    let peer = crate::libs::db::chat_store::peers::get(db, id)?
+    let peer = crate::infrastructure::db::chat_store::peers::get(db, id)?
         .ok_or_else(|| anyhow::anyhow!("Peer removed"))?;
     anyhow::ensure!(same_identity(&peer, expected), "Peer changed");
     Ok(peer)
@@ -91,8 +98,11 @@ pub fn file_url(peer: &DPeer, file_id: &str) -> anyhow::Result<String> {
     url.query_pairs_mut().append_pair("id", file_id);
     Ok(url.to_string())
 }
-pub fn proxy_address(db: &crate::libs::db::Db, id: &str) -> anyhow::Result<Option<String>> {
-    let peer = crate::libs::db::chat_store::peers::get(db, id)?
+pub fn proxy_address(
+    db: &crate::infrastructure::db::Db,
+    id: &str,
+) -> anyhow::Result<Option<String>> {
+    let peer = crate::infrastructure::db::chat_store::peers::get(db, id)?
         .filter(|peer| peer.is_paired() || !peer.token.is_empty());
     Ok(peer.and_then(|peer| {
         if peer.ip.is_empty() {

@@ -42,7 +42,7 @@ pub(super) async fn fixture() -> (
     )
     .unwrap();
     let (events, receiver) = broadcast::channel(256);
-    let host = Arc::new(crate::libs::host::bridge::Host::default());
+    let host = Arc::new(crate::infrastructure::host::bridge::Host::default());
     let service = SyncService::new(db, events, host, None);
     service.apply_auto_policy(true, false);
     (dir, service, calls, started, release, server, receiver)

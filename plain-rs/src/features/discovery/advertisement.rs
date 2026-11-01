@@ -1,8 +1,8 @@
 use crate::features::chat::enums::DeviceType;
 use crate::features::discovery::nearby_wire::DiscoverReply;
-use crate::libs::protocols::mdns::service_info::MdnsServiceInfo;
-use crate::libs::protocols::mdns::service_info::build_service_info;
+use crate::infrastructure::protocols::mdns::service_info::build_service_info;
 use anyhow::{Result, ensure};
+use plain_libs::protocols::mdns::records::MdnsServiceInfo;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -70,7 +70,7 @@ pub fn decode_ble(payload: &[u8]) -> Option<BleParts> {
         return None;
     }
     Some(BleParts {
-        short_id: crate::libs::utils::hex::bytes_to_hex(&payload[1..9]),
+        short_id: plain_libs::utils::hex::bytes_to_hex(&payload[1..9]),
         aware_supported: payload[0] & 1 != 0,
         aware_running: payload[0] & 2 != 0,
     })

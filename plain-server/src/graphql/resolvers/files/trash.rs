@@ -3,7 +3,8 @@ use crate::http::auth::public_gate;
 use async_graphql::{Context, Enum, ID, Object, Result, SimpleObject};
 use plain_rs::features::files::trash::{SortOrder, Trash, TrashItem};
 use plain_rs::features::services::files::file_tasks::FileTasks;
-use plain_rs::libs::types::{Instant, Long};
+use plain_rs::infrastructure::types::Instant;
+use plain_rs::infrastructure::types::Long;
 use std::sync::Arc;
 
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]

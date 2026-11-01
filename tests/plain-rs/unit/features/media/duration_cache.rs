@@ -60,7 +60,8 @@ fn path_invalidation_respects_directory_boundaries_and_other_prefixes() {
         .save(value("video", "failed", "/other/failed", 40))
         .unwrap();
     let db =
-        Db::open(&crate::libs::data_paths::DataPaths::new(directory.path()).database()).unwrap();
+        Db::open(&crate::infrastructure::data_paths::DataPaths::new(directory.path()).database())
+            .unwrap();
     db.insert("session:keep", "not a duration").unwrap();
     cache.invalidate_paths(&["/root/song".into()], &[]).unwrap();
     assert_eq!(cache.all().unwrap().len(), 3);
@@ -97,13 +98,14 @@ fn invalid_entries_do_not_replace_valid_cache() {
 fn malformed_cache_is_reported_and_open_failure_is_not_an_empty_list() {
     let directory = tempfile::tempdir().unwrap();
     let db =
-        Db::open(&crate::libs::data_paths::DataPaths::new(directory.path()).database()).unwrap();
+        Db::open(&crate::infrastructure::data_paths::DataPaths::new(directory.path()).database())
+            .unwrap();
     db.insert(format!("{PREFIX}audio:bad"), "invalid JSON")
         .unwrap();
     assert!(DurationCache::new(directory.path()).all().is_err());
     let blocked = tempfile::tempdir().unwrap();
     std::fs::write(
-        crate::libs::data_paths::DataPaths::new(blocked.path()).database(),
+        crate::infrastructure::data_paths::DataPaths::new(blocked.path()).database(),
         b"file",
     )
     .unwrap();
@@ -112,7 +114,7 @@ fn malformed_cache_is_reported_and_open_failure_is_not_an_empty_list() {
 
 #[test]
 fn fresh_sqlite_schema_has_no_duration_cache_table() {
-    let db = crate::libs::db::Db::open(Path::new(":memory:")).unwrap();
+    let db = crate::infrastructure::db::Db::open(Path::new(":memory:")).unwrap();
     let exists = db
         .with_conn(|conn| {
             conn.query_row(
@@ -189,7 +191,7 @@ fn removal_and_path_invalidation_prevent_inflight_probes_from_resurrecting_entri
 fn unrelated_removals_cancel_pending_probes_without_committing_or_flushing() {
     let directory = tempfile::tempdir().unwrap();
     let store = Arc::new(LazyDb::new(
-        crate::libs::data_paths::DataPaths::new(directory.path()).database(),
+        crate::infrastructure::data_paths::DataPaths::new(directory.path()).database(),
     ));
     let cache = DurationCache::with_store(store.clone());
     cache

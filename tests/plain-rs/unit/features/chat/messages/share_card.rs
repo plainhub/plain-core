@@ -1,6 +1,6 @@
 use super::*;
-use crate::libs::db::chat_store::SaveMode;
-use crate::libs::db::chat_store::messages;
+use crate::infrastructure::db::chat_store::SaveMode;
+use crate::infrastructure::db::chat_store::messages;
 fn fixture() -> (Db, DChat, Card) {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let card:Card=serde_json::from_value(serde_json::json!({"shareId":"fixture","urlToken":"token","peerInfo":{"id":"peer","ip":"old","port":443},"name":"old","itemCount":3,"totalSize":42,"expiresAt":"2030-01-01T00:00:00.000Z"})).unwrap();

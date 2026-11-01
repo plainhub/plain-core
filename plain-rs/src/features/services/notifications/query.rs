@@ -1,4 +1,5 @@
-use crate::{features::prefs::Prefs, libs::utils::search_dsl};
+use crate::features::prefs::Prefs;
+use plain_libs::utils::search_dsl;
 use serde_json::Value;
 
 fn text(value: &Value, key: &str) -> String {

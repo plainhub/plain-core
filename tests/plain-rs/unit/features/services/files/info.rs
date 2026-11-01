@@ -151,9 +151,8 @@ async fn opaque_image_descriptors_use_logical_ranges_and_the_same_rust_exif_path
     std::fs::write(&source, wrapped).unwrap();
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
-    let resources = Arc::new(crate::libs::host::resources::NativeResources::new(
-        host.clone(),
-    ));
+    let resources =
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone()));
     let mut info = Info::new(
         host.clone(),
         resources.clone(),
@@ -177,7 +176,7 @@ async fn opaque_image_descriptors_use_logical_ranges_and_the_same_rust_exif_path
     );
     stream
         .file(
-            crate::libs::host::resource_stream::NativeResourceFile::new(
+            crate::infrastructure::host::resource_stream::NativeResourceFile::new(
                 std::fs::File::open(source).unwrap(),
                 offset as i64,
                 bytes.len() as i64,
@@ -218,9 +217,8 @@ async fn nonseekable_opaque_image_streams_are_prepared_in_rust_and_cleaned_after
     });
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
-    let resources = Arc::new(crate::libs::host::resources::NativeResources::new(
-        host.clone(),
-    ));
+    let resources =
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone()));
     let info = Info::new(
         host.clone(),
         resources.clone(),
@@ -237,7 +235,7 @@ async fn nonseekable_opaque_image_streams_are_prepared_in_rust_and_cleaned_after
     stream.next_request().await.unwrap().unwrap();
     stream
         .file(
-            crate::libs::host::resource_stream::NativeResourceFile::new(
+            crate::infrastructure::host::resource_stream::NativeResourceFile::new(
                 std::fs::File::from(OwnedFd::from(read)),
                 6,
                 length as i64,
@@ -463,9 +461,8 @@ async fn assert_owned_video_info(name: &str, width: i64, height: i64, duration: 
     std::fs::write(&source, wrapped).unwrap();
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
-    let resources = Arc::new(crate::libs::host::resources::NativeResources::new(
-        host.clone(),
-    ));
+    let resources =
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone()));
     let mut info = Info::new(
         host.clone(),
         resources.clone(),
@@ -489,7 +486,7 @@ async fn assert_owned_video_info(name: &str, width: i64, height: i64, duration: 
     );
     stream
         .file(
-            crate::libs::host::resource_stream::NativeResourceFile::new(
+            crate::infrastructure::host::resource_stream::NativeResourceFile::new(
                 std::fs::File::open(source).unwrap(),
                 offset,
                 bytes.len() as i64,

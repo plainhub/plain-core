@@ -33,15 +33,15 @@ fn find_task(response: &Value, id: &str) -> Value {
 #[tokio::test]
 async fn main_tasks_track_resolved_paths_and_gate_sdk_execution_on_platform_authorization() {
     let temp = tempfile::tempdir().unwrap();
-    let token = plain_rs::libs::utils::base64::base64_encode(&[12; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[12; 32]);
     let db_path = temp.path().join("core/tasks.db");
     let server = ContentServer::start_with_config(
         db_path.parent().unwrap(),
         &token,
         Arc::new(plain_rs::features::prefs::Prefs::load(&temp.path().join("prefs.json")).unwrap()),
-        plain_rs::libs::host::startup::StartupConfig {
+        plain_rs::infrastructure::host::startup::StartupConfig {
             system_media_catalog: true,
-            ..plain_rs::libs::platform::startup::config()
+            ..plain_rs::infrastructure::platform::startup::config()
         },
     )
     .unwrap();
@@ -169,14 +169,14 @@ async fn media_move_case(missing_destination: bool) {
     let destination = base.join("target");
     std::fs::write(&destination, b"existing").unwrap();
     let db_path = base.join("core/db");
-    let token = plain_rs::libs::utils::base64::base64_encode(&[16; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[16; 32]);
     let server = ContentServer::start_with_config(
         db_path.parent().unwrap(),
         &token,
         Arc::new(plain_rs::features::prefs::Prefs::load(&base.join("prefs")).unwrap()),
-        plain_rs::libs::host::startup::StartupConfig {
+        plain_rs::infrastructure::host::startup::StartupConfig {
             system_media_catalog: true,
-            ..plain_rs::libs::platform::startup::config()
+            ..plain_rs::infrastructure::platform::startup::config()
         },
     )
     .unwrap();
@@ -207,7 +207,7 @@ async fn media_move_case(missing_destination: bool) {
         .unwrap();
     db.use_platform_audio_catalog().unwrap();
     db.cache_platform_audio(
-        &[plain_rs::libs::db::audio_catalog::AudioMedia {
+        &[plain_rs::infrastructure::db::audio_catalog::AudioMedia {
             file_id: Some("1".into()),
             aliases: Vec::new(),
             track: plain_rs::features::media::audio::queue::AudioTrack::from_path_stem(&audio_path),

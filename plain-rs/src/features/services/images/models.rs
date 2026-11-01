@@ -2,10 +2,10 @@ use crate::features::prefs::pref_keys::AI_IMAGE_SEARCH_MODEL;
 use crate::features::services::images::index::ImageIndex;
 use crate::features::services::images::status::ImageSearchStatus;
 use crate::features::services::images::status::ImageSearchStatusType;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 
 use crate::features::prefs::Prefs;
-use crate::libs::events::WsEvent;
+use crate::infrastructure::events::WsEvent;
 use serde::Serialize;
 use serde_json::json;
 use std::{
@@ -49,12 +49,12 @@ pub struct Runtime {
     directory: PathBuf,
     host: Arc<Host>,
     prefs: Arc<Prefs>,
-    store: Arc<crate::libs::kv::LazyDb>,
+    store: Arc<plain_libs::kv::LazyDb>,
     index: Arc<ImageIndex>,
     state: Mutex<ModelState>,
     #[cfg(any(test, feature = "test-seams"))]
     snapshot_reads: std::sync::atomic::AtomicUsize,
-    engine: Mutex<Option<Arc<crate::libs::ai_image_search::embedding::Engine>>>,
+    engine: Mutex<Option<Arc<plain_libs::ai_image_search::embedding::Engine>>>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     operations: tokio::sync::Mutex<()>,
     cancelled: AtomicBool,
@@ -67,7 +67,7 @@ impl Runtime {
         directory: PathBuf,
         host: Arc<Host>,
         prefs: Arc<Prefs>,
-        store: Arc<crate::libs::kv::LazyDb>,
+        store: Arc<plain_libs::kv::LazyDb>,
         index: Arc<ImageIndex>,
         events: tokio::sync::broadcast::Sender<WsEvent>,
     ) -> Arc<Self> {
@@ -111,9 +111,9 @@ impl Runtime {
                 } else {
                     index.error_message
                 },
-                model_size: crate::libs::types::Long(
+                model_size: crate::infrastructure::types::Long(
                     self.engine.lock().unwrap().as_ref().map_or_else(
-                        || crate::libs::ai_image_search::models::default_model::manifest().size(),
+                        || crate::features::services::images::default_model::manifest().size(),
                         |e| e.manifest.size(),
                     ) as i64,
                 ),
@@ -252,13 +252,13 @@ impl Runtime {
             Selection::Active => self.selected_model()?,
         };
         let active = self.directory.join(model);
-        let default_is_current = crate::libs::ai_image_search::models::manifest::Manifest::read(
+        let default_is_current = plain_libs::ai_image_search::models::manifest::Manifest::read(
             &active.join("manifest.json"),
         )
         .ok()
         .is_some_and(|manifest| {
             manifest.fingerprint().ok()
-                == crate::libs::ai_image_search::models::default_model::manifest()
+                == crate::features::services::images::default_model::manifest()
                     .fingerprint()
                     .ok()
         });
@@ -273,7 +273,7 @@ impl Runtime {
             _ => active.clone(),
         };
         self.set_status(ImageSearchStatusType::Loading, String::new());
-        let manifest = crate::libs::ai_image_search::models::manifest::Manifest::read(
+        let manifest = plain_libs::ai_image_search::models::manifest::Manifest::read(
             &source.join("manifest.json"),
         )?;
         let fingerprint = manifest.fingerprint()?;
@@ -283,7 +283,7 @@ impl Runtime {
         }
         let directory = source.clone();
         let engine = tokio::task::spawn_blocking(move || {
-            crate::libs::ai_image_search::embedding::Engine::open(directory, manifest)
+            plain_libs::ai_image_search::embedding::Engine::open(directory, manifest)
         })
         .await
         .map_err(|e| e.to_string())??;
@@ -352,12 +352,10 @@ impl Runtime {
             .read_timeout(Duration::from_secs(30))
             .build()
             .map_err(|e| e.to_string())?;
-        let manifest = crate::libs::ai_image_search::models::default_model::manifest();
+        let manifest = crate::features::services::images::default_model::manifest();
         let total = manifest.size();
         let mut downloaded = 0u64;
-        for (asset, url) in
-            crate::libs::ai_image_search::models::default_model::downloads(&manifest)
-        {
+        for (asset, url) in crate::features::services::images::default_model::downloads(&manifest) {
             if self.cancelled.load(Ordering::Acquire) {
                 return Err("Model download cancelled".into());
             }
@@ -407,7 +405,7 @@ impl Runtime {
         }
         tokio::fs::write(
             directory.join("LICENSE"),
-            include_str!("../../../libs/ai_image_search/APACHE-2.0.txt"),
+            include_str!("../../../../../plain-libs/src/ai_image_search/APACHE-2.0.txt"),
         )
         .await
         .map_err(|e| e.to_string())?;
@@ -448,7 +446,7 @@ impl Runtime {
             .iter()
             .flat_map(|value| value.to_be_bytes())
             .collect::<Vec<_>>();
-        let encoded = crate::libs::utils::base64::base64_encode(&bytes);
+        let encoded = plain_libs::utils::base64::base64_encode(&bytes);
         let index = self.index.clone();
         tokio::task::spawn_blocking(move || index.search_with_score(&encoded, limit, minimum_score))
             .await
@@ -562,7 +560,7 @@ impl Runtime {
                     _ = stop.changed() => break,
                     event = catalog_events.recv() => match event {
                         Ok(event) if event.event_type == "IMAGE_INDEX_UPDATED" => runtime.publish(),
-                        Ok(event) if event.event_type == crate::libs::events::MEDIA_LIBRARY_UPDATED && crate::features::services::files::catalog_events::includes(&event.payload, crate::features::enums::DataType::Image) => runtime.catalog_changed(),
+                        Ok(event) if event.event_type == crate::infrastructure::events::MEDIA_LIBRARY_UPDATED && crate::features::services::files::catalog_events::includes(&event.payload, crate::features::enums::DataType::Image) => runtime.catalog_changed(),
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => { runtime.catalog_changed(); runtime.publish(); },
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                         _ => continue,

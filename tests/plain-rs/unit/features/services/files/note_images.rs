@@ -39,9 +39,11 @@ async fn concurrent_imports_do_not_overwrite_each_other_or_leave_temporary_files
         assert!(references.contains(&format!("app://note-images/{name}")));
     }
     assert_eq!(
-        std::fs::read_dir(crate::libs::data_paths::DataPaths::new(directory.path()).note_images())
-            .unwrap()
-            .count(),
+        std::fs::read_dir(
+            crate::infrastructure::data_paths::DataPaths::new(directory.path()).note_images()
+        )
+        .unwrap()
+        .count(),
         8
     );
     core.stop_core().await;
@@ -82,7 +84,7 @@ async fn picked_names_remain_inside_the_store_and_failed_input_cleans_staging() 
             .await
             .is_err()
     );
-    let root = crate::libs::data_paths::DataPaths::new(directory.path()).note_images();
+    let root = crate::infrastructure::data_paths::DataPaths::new(directory.path()).note_images();
     assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
     assert_eq!(
         std::fs::read(root.join(".._outside.png")).unwrap(),

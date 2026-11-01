@@ -131,8 +131,8 @@ async fn execute(
     };
 
     let request = if token_mode {
-        let decrypted = plain_rs::libs::crypto::xchacha_decrypt_raw(&key, &body)
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+        let decrypted =
+            plain_libs::crypto::xchacha_decrypt_raw(&key, &body).ok_or(StatusCode::UNAUTHORIZED)?;
         if decrypted.is_empty() {
             return Err(StatusCode::UNAUTHORIZED);
         }
@@ -159,9 +159,10 @@ async fn execute(
     )
     .await?;
     let mut response = if token_mode {
-        let encrypted = plain_rs::libs::transport::http_response::Context::new("/graphql", &body)
-            .encrypt(&key, &result)
-            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let encrypted =
+            plain_rs::infrastructure::transport::http_response::Context::new("/graphql", &body)
+                .encrypt(&key, &result)
+                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
         encrypted.into_response()
     } else {
         result.into_response()
@@ -257,19 +258,21 @@ async fn execute_guest(state: &ServerState, id: &str, body: &[u8]) -> (u16, Vec<
     if !matches!(shares.active(id, true), Ok(Some(_))) {
         return (403, vec![]);
     }
-    let key = match shares.token(id).and_then(|key| {
-        plain_rs::libs::utils::base64::base64_decode_checked(&key).map_err(Into::into)
-    }) {
+    let key = match shares
+        .token(id)
+        .and_then(|key| plain_libs::utils::base64::base64_decode_checked(&key).map_err(Into::into))
+    {
         Ok(key) => key,
         Err(_) => return (500, vec![]),
     };
-    let plain = match plain_rs::libs::crypto::xchacha_decrypt_raw(&key, body)
+    let plain = match plain_libs::crypto::xchacha_decrypt_raw(&key, body)
         .and_then(|p| String::from_utf8(p).ok())
     {
         Some(p) if !p.is_empty() => p,
         _ => return (401, vec![]),
     };
-    let context = plain_rs::libs::transport::http_response::Context::new("/guest_graphql", body);
+    let context =
+        plain_rs::infrastructure::transport::http_response::Context::new("/guest_graphql", body);
     let now = chrono::Utc::now().timestamp_millis();
     let body = match state.guest_replay.admit(id, &plain, now) {
         Ok(p) => p,

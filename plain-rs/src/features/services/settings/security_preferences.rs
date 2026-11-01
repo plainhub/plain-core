@@ -1,11 +1,8 @@
+use crate::features::prefs::Prefs;
 use crate::features::prefs::pref_keys::{API_PERMISSIONS, AUTO_CHECK_UPDATE, SKIP_VERSION};
-use crate::{
-    features::prefs::{
-        Prefs,
-        security::{self, Command},
-    },
-    libs::events::WsEvent,
-};
+use crate::features::prefs::security;
+use crate::features::prefs::security::Command;
+use crate::infrastructure::events::WsEvent;
 use serde_json::Value;
 use tokio::sync::broadcast;
 

@@ -1,5 +1,5 @@
 use crate::features::prefs::Prefs;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -31,7 +31,7 @@ fn permission_allowed(configured: &[String]) -> bool {
 }
 
 fn digest(bytes: &[u8]) -> String {
-    crate::libs::utils::hex::bytes_to_hex(&Sha256::digest(bytes))
+    plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(bytes))
 }
 
 fn claim(

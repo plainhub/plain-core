@@ -72,7 +72,7 @@ impl Command {
                     put(map, ROTATE_URL_TOKEN_ON_RESTART, enabled)?
                 }
                 Self::ResetPassword => put(map, PASSWORD, random_password(6))?,
-                Self::ResetUrlToken => put(map, URL_TOKEN, crate::libs::crypto::gen_token())?,
+                Self::ResetUrlToken => put(map, URL_TOKEN, plain_libs::crypto::gen_token())?,
                 Self::ResetAdbToken => put(map, ADB_TOKEN, random_password(32))?,
                 Self::SetApiPermission {
                     permission,

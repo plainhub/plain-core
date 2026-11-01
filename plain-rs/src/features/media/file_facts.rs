@@ -1,7 +1,6 @@
-use crate::{
-    features::enums::DataType,
-    libs::db::{MediaFileMetadata, MediaFileMetadataRead},
-};
+use crate::features::enums::DataType;
+use crate::infrastructure::db::MediaFileMetadata;
+use crate::infrastructure::db::MediaFileMetadataRead;
 use anyhow::Result;
 use std::{fs::File, io::BufReader, path::Path};
 

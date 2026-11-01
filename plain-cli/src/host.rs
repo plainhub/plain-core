@@ -9,7 +9,7 @@ mod linux;
 pub struct Host {
     core: Arc<ContentServer>,
     capabilities: Vec<String>,
-    multicast: std::sync::Mutex<plain_rs::libs::host::multicast::MulticastLeases>,
+    multicast: std::sync::Mutex<plain_rs::infrastructure::host::multicast::MulticastLeases>,
     failure: tokio::sync::watch::Sender<Option<String>>,
 }
 
@@ -61,7 +61,7 @@ impl Host {
                 serde_json::to_value(&self.capabilities).map_err(|error| error.to_string())
             }
             "peerTransportCapabilities" => Ok(serde_json::json!([])),
-            "systemPermissionFacts" => plain_rs::libs::host::permission_facts::facts(
+            "systemPermissionFacts" => plain_rs::infrastructure::host::permission_facts::facts(
                 &["WRITE_EXTERNAL_STORAGE".to_owned()],
                 params,
             ),
@@ -83,7 +83,8 @@ impl Host {
     }
 
     pub async fn run(self: Arc<Self>) -> Result<(), String> {
-        let _multicast = plain_rs::libs::host::multicast::MulticastSession::new(&self.multicast);
+        let _multicast =
+            plain_rs::infrastructure::host::multicast::MulticastSession::new(&self.multicast);
         let session = Arc::new(self.core.host_events()?);
         let mut failure = self.failure.subscribe();
         let requests = self.clone();

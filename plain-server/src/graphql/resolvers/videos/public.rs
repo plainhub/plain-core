@@ -5,8 +5,8 @@ use crate::graphql::types::facts::optional_instant;
 use crate::graphql::types::facts::rows;
 use crate::http::auth::public_gate;
 use async_graphql::{Context, Object, SimpleObject};
-use plain_rs::libs::types::Instant;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::types::Instant;
+use plain_rs::infrastructure::types::Long;
 use serde_json::{Value, json};
 
 use crate::graphql::resolvers::media::public::STORAGE;

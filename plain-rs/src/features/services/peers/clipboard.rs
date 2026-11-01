@@ -32,7 +32,7 @@ pub async fn receive(
         state,
         &base,
         &state.native_client_id().map_err(anyhow::Error::msg)?,
-        &crate::libs::utils::base64::base64_decode(&identity.token),
+        &plain_libs::utils::base64::base64_decode(&identity.token),
         json!({"query":r#"{ clipboardItems(query:"",offset:0,limit:1) { id text sensitive } }"#}),
         4 * 1024 * 1024,
     )
@@ -97,7 +97,7 @@ pub async fn send(
         state,
         &identity.http_url()?,
         &state.native_client_id().map_err(anyhow::Error::msg)?,
-        &crate::libs::utils::base64::base64_decode(&identity.token),
+        &plain_libs::utils::base64::base64_decode(&identity.token),
         json!({"query":"mutation($text:String!){setClipboard(text:$text)}","variables":{"text":text}}),
         65536,
     ).await?;

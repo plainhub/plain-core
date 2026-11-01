@@ -24,7 +24,7 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
         .map(|index| {
             let path = directory.path().join(format!("source-{index}.txt"));
             std::fs::write(&path, format!("bytes-{index}")).unwrap();
-            plain_rs::libs::db::MediaFileMetadata {
+            plain_rs::infrastructure::db::MediaFileMetadata {
                 data_type: DataType::Doc,
                 path: path.to_string_lossy().into_owned(),
                 title: format!("display title {index}"),
@@ -50,7 +50,7 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
     let id = plain_rs::features::files::resource_link::encrypt(
         &plain_rs::features::files::resource_link::Scope::Global,
         "zip-files",
-        &plain_rs::libs::utils::base64::base64_decode(&token),
+        &plain_libs::utils::base64::base64_decode(&token),
         payload.as_bytes(),
     )
     .unwrap();
@@ -102,7 +102,7 @@ async fn shared_directory_download_preserves_empty_directories_and_excludes_outs
                 None,
             )
             .unwrap();
-        let key = plain_rs::libs::utils::base64::base64_decode(&share.url_token);
+        let key = plain_libs::utils::base64::base64_decode(&share.url_token);
         let id = plain_rs::features::files::resource_link::seal(
             &plain_rs::features::files::resource_link::Scope::Share(share.id.clone()),
             &key,

@@ -1,9 +1,9 @@
 use super::*;
 use crate::features::chat::enums::DeviceType;
-use crate::libs::crypto::ed25519_generate;
-use crate::libs::db::DChannel;
-use crate::libs::db::chat_store::SaveMode;
-use crate::libs::utils::base64::base64_encode;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::chat_store::SaveMode;
+use plain_libs::crypto::ed25519_generate;
+use plain_libs::utils::base64::base64_encode;
 #[test]
 fn signing_current_peer_and_channel_keys_and_authenticated_crypto_roundtrip() {
     let dir = std::env::temp_dir().join(format!(
@@ -35,24 +35,28 @@ fn signing_current_peer_and_channel_keys_and_authenticated_crypto_roundtrip() {
     )
     .unwrap();
     let split: Vec<_> = first.body.splitn(3, '|').collect();
-    assert!(crate::libs::crypto::ed25519_verify(
+    assert!(plain_libs::crypto::ed25519_verify(
         &base64_encode(&public),
-        crate::libs::transport::auth::signature_payload(split[1].parse().unwrap(), "", split[2])
-            .as_bytes(),
+        crate::infrastructure::transport::auth::signature_payload(
+            split[1].parse().unwrap(),
+            "",
+            split[2]
+        )
+        .as_bytes(),
         split[0]
     ));
     let gql: serde_json::Value = serde_json::from_str(split[2]).unwrap();
     assert_eq!(gql["variables"]["content"], content);
     assert_eq!(first.key, peer.key);
-    let decoded_key = crate::libs::utils::base64::base64_decode(&first.key);
+    let decoded_key = plain_libs::utils::base64::base64_decode(&first.key);
     let encrypted =
-        crate::libs::crypto::xchacha_encrypt_raw(&decoded_key, first.body.as_bytes()).unwrap();
+        plain_libs::crypto::xchacha_encrypt_raw(&decoded_key, first.body.as_bytes()).unwrap();
     assert_eq!(
-        crate::libs::crypto::xchacha_decrypt_raw(&decoded_key, &encrypted).unwrap(),
+        plain_libs::crypto::xchacha_decrypt_raw(&decoded_key, &encrypted).unwrap(),
         first.body.as_bytes()
     );
-    assert!(crate::libs::crypto::xchacha_decrypt_raw(&[8; 32], &encrypted).is_none());
-    assert!(crate::libs::crypto::xchacha_decrypt_raw(&decoded_key, b"plaintext").is_none());
+    assert!(plain_libs::crypto::xchacha_decrypt_raw(&[8; 32], &encrypted).is_none());
+    assert!(plain_libs::crypto::xchacha_decrypt_raw(&decoded_key, b"plaintext").is_none());
     let mut channel = DChannel::new("group", "owner");
     channel.key = base64_encode(&[9; 32]);
     channels::save(&db, &[channel.clone()], SaveMode::Insert).unwrap();
@@ -86,7 +90,7 @@ fn signing_current_peer_and_channel_keys_and_authenticated_crypto_roundtrip() {
         )
         .is_err()
     );
-    assert!(crate::libs::crypto::xchacha_encrypt_raw(b"bad", b"text").is_none());
-    assert!(crate::libs::crypto::xchacha_decrypt_raw(b"bad", &encrypted).is_none());
+    assert!(plain_libs::crypto::xchacha_encrypt_raw(b"bad", b"text").is_none());
+    assert!(plain_libs::crypto::xchacha_decrypt_raw(b"bad", &encrypted).is_none());
     std::fs::remove_dir_all(dir).unwrap();
 }

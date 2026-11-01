@@ -1,16 +1,17 @@
 use super::*;
 use crate::features::chat::enums::{DeviceType, PeerStatus};
-use crate::libs::db::chat_store::{SaveMode, peers};
+use crate::infrastructure::db::chat_store::SaveMode;
+use crate::infrastructure::db::chat_store::peers;
 
 #[test]
 fn status_proof_is_bound_to_connection_and_rejects_old_signed_content() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let key = [9; 32];
-    let (keypair, public_key) = crate::libs::crypto::ed25519_generate();
+    let (keypair, public_key) = plain_libs::crypto::ed25519_generate();
     let mut peer = DPeer::new("peer", "fixture", "127.0.0.1", None, DeviceType::Phone);
     peer.status = PeerStatus::Paired;
-    peer.key = crate::libs::utils::base64::base64_encode(&key);
-    peer.public_key = crate::libs::utils::base64::base64_encode(&public_key);
+    peer.key = plain_libs::utils::base64::base64_encode(&key);
+    peer.public_key = plain_libs::utils::base64::base64_encode(&public_key);
     peers::save(&db, &[peer], SaveMode::Insert).unwrap();
     let first = uuid::Uuid::new_v4().to_string();
     let second = uuid::Uuid::new_v4().to_string();
@@ -18,19 +19,19 @@ fn status_proof_is_bound_to_connection_and_rejects_old_signed_content() {
     let connections = Connections::default();
     assert!(connections.open(&db, "peer", &second, &body).is_err());
     assert_eq!(connections.snapshot(&db)["online"], json!([]));
-    let plain = crate::libs::crypto::xchacha_decrypt_raw(&key, &body).unwrap();
-    let reencrypted = crate::libs::crypto::xchacha_encrypt_raw(&key, &plain).unwrap();
+    let plain = plain_libs::crypto::xchacha_decrypt_raw(&key, &body).unwrap();
+    let reencrypted = plain_libs::crypto::xchacha_encrypt_raw(&key, &plain).unwrap();
     assert!(
         connections
             .open(&db, "peer", &second, &reencrypted)
             .is_err()
     );
     let timestamp = chrono::Utc::now().timestamp_millis();
-    let signature = crate::libs::crypto::ed25519_sign(
+    let signature = plain_libs::crypto::ed25519_sign(
         &keypair,
         peer_auth::status_signature_payload(timestamp, "peer").as_bytes(),
     );
-    let old = crate::libs::crypto::xchacha_encrypt_raw(
+    let old = plain_libs::crypto::xchacha_encrypt_raw(
         &key,
         format!("{signature}|{timestamp}|peer").as_bytes(),
     )
@@ -54,13 +55,13 @@ fn peer_list_snapshot_uses_supplied_rows_without_any_database_access() {
         Some(8443),
         crate::features::chat::enums::DeviceType::Phone,
     );
-    peer.key = crate::libs::utils::base64::base64_encode(&[1; 32]);
-    peer.public_key = crate::libs::utils::base64::base64_encode(&[2; 32]);
+    peer.key = plain_libs::utils::base64::base64_encode(&[1; 32]);
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[2; 32]);
     peer.status = crate::features::chat::enums::PeerStatus::Paired;
-    crate::libs::db::chat_store::peers::save(
+    crate::infrastructure::db::chat_store::peers::save(
         &db,
         &[peer.clone()],
-        crate::libs::db::chat_store::SaveMode::Insert,
+        crate::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     let connections = Connections::default();
@@ -72,7 +73,7 @@ fn peer_list_snapshot_uses_supplied_rows_without_any_database_access() {
             json!(["snapshot"])
         );
         let mut rotated = peer.clone();
-        rotated.key = crate::libs::utils::base64::base64_encode(&[3; 32]);
+        rotated.key = plain_libs::utils::base64::base64_encode(&[3; 32]);
         assert_eq!(connections.snapshot_peers(&[rotated])["online"], json!([]));
         assert_eq!(connections.snapshot_peers(&[])["online"], json!([]));
     });

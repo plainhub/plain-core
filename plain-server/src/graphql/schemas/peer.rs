@@ -3,9 +3,9 @@ use crate::server::ServerState;
 use async_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
 use plain_rs::features::chat::enums::ChannelSystemMessageType;
 use plain_rs::features::chat::enums::ChatStatus;
-use plain_rs::libs::db::DChat;
-use plain_rs::libs::transport::auth::AuthenticatedPeer;
-use plain_rs::libs::types::Instant;
+use plain_rs::infrastructure::db::DChat;
+use plain_rs::infrastructure::transport::auth::AuthenticatedPeer;
+use plain_rs::infrastructure::types::Instant;
 use serde_json::{Value, json};
 
 #[derive(SimpleObject)]
@@ -65,7 +65,7 @@ impl Mutation {
         let _ = c
             .state
             .events
-            .send(plain_rs::libs::events::WsEvent::broadcast(
+            .send(plain_rs::infrastructure::events::WsEvent::broadcast(
                 plain_rs::features::chat::events::WS_MESSAGE_CREATED,
                 json!([plain_rs::features::chat::service::chat_to_json(
                     &received.chat
@@ -126,7 +126,7 @@ pub(crate) type PeerSchema = Schema<Query, Mutation, EmptySubscription>;
 pub(crate) fn schema() -> PeerSchema {
     Schema::build(Query, Mutation, EmptySubscription)
         .extension(crate::graphql::enum_literals::EnumLiteralValidation)
-        .register_output_type::<plain_rs::libs::types::Long>()
+        .register_output_type::<plain_rs::infrastructure::types::Long>()
         .register_output_type::<plain_rs::features::chat::enums::PeerStatus>()
         .limit_depth(16)
         .limit_complexity(256)
@@ -138,12 +138,12 @@ pub(crate) async fn execute(
     channel_id: &str,
     body: &[u8],
 ) -> (u16, Vec<u8>) {
-    let authenticated =
-        match plain_rs::libs::transport::auth::authenticate(&state.db, client_id, channel_id, body)
-        {
-            Ok(authenticated) => authenticated,
-            Err(error) => return (error.http_status(), vec![]),
-        };
+    let authenticated = match plain_rs::infrastructure::transport::auth::authenticate(
+        &state.db, client_id, channel_id, body,
+    ) {
+        Ok(authenticated) => authenticated,
+        Err(error) => return (error.http_status(), vec![]),
+    };
     let request = match serde_json::from_str::<async_graphql::Request>(&authenticated.graphql_json)
     {
         Ok(request) => request,
@@ -158,7 +158,8 @@ pub(crate) async fn execute(
             channel_id: channel_id.into(),
         }))
         .await;
-    let context = plain_rs::libs::transport::http_response::Context::new("/peer_graphql", body);
+    let context =
+        plain_rs::infrastructure::transport::http_response::Context::new("/peer_graphql", body);
     match serde_json::to_vec(&response) {
         Ok(body) => context
             .encrypt(&key, &body)

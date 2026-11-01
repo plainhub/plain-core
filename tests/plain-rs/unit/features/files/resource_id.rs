@@ -8,7 +8,7 @@ fn path_from_file_id_accepts_typed_global_paths_and_rejects_other_scopes() {
     prefs
         .set(
             "url_token",
-            crate::libs::utils::base64::base64_encode(&[7; 32]),
+            plain_libs::utils::base64::base64_encode(&[7; 32]),
         )
         .unwrap();
     let id = resource_link::seal(

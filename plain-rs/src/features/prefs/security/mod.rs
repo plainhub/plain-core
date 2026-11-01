@@ -72,11 +72,11 @@ pub fn random_password(length: usize) -> String {
 pub fn bootstrap(prefs: &Prefs) -> Result<()> {
     let password_type = password_type(prefs)?;
     prefs.update(|map| {
-        ensure(map, CLIENT_ID, crate::libs::utils::short_uuid::short_uuid)?;
+        ensure(map, CLIENT_ID, plain_libs::utils::short_uuid::short_uuid)?;
         ensure(map, SIGNATURE_KEY_PAIR, || {
-            crate::libs::utils::base64::base64_encode(&crate::libs::crypto::ed25519_generate().0)
+            plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
         })?;
-        ensure(map, MASTER_SECRET, crate::libs::crypto::gen_token)?;
+        ensure(map, MASTER_SECRET, plain_libs::crypto::gen_token)?;
         if password_type != PasswordType::Fixed {
             ensure(map, PASSWORD, || random_password(6))?;
         }
@@ -84,9 +84,9 @@ pub fn bootstrap(prefs: &Prefs) -> Result<()> {
         ensure(map, MDNS_HOSTNAME, generate_mdns_hostname)?;
         let rotate = read::<bool>(map, ROTATE_URL_TOKEN_ON_RESTART)?;
         if rotate {
-            put(map, URL_TOKEN, crate::libs::crypto::gen_token())?;
+            put(map, URL_TOKEN, plain_libs::crypto::gen_token())?;
         } else {
-            ensure(map, URL_TOKEN, crate::libs::crypto::gen_token)?;
+            ensure(map, URL_TOKEN, plain_libs::crypto::gen_token)?;
         }
         if !map.contains_key(PASSWORD_TYPE) {
             put(map, PASSWORD_TYPE, DEFAULT_PASSWORD_TYPE)?;
@@ -202,7 +202,7 @@ pub fn remove_entry(prefs: &Prefs, key: &str) -> Result<bool> {
 pub fn ensure_signing_keypair(prefs: &Prefs) -> anyhow::Result<Vec<u8>> {
     prefs.update(|map| {
         ensure(map, SIGNATURE_KEY_PAIR, || {
-            crate::libs::utils::base64::base64_encode(&crate::libs::crypto::ed25519_generate().0)
+            plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
         })
     })?;
     signing_keypair(prefs)
@@ -212,9 +212,9 @@ pub fn signing_keypair(prefs: &Prefs) -> anyhow::Result<Vec<u8>> {
     let raw = prefs
         .get::<String>(SIGNATURE_KEY_PAIR)?
         .ok_or_else(|| anyhow::anyhow!("Missing signing identity"))?;
-    let bytes = crate::libs::utils::base64::base64_decode_checked(&raw)?;
+    let bytes = plain_libs::utils::base64::base64_decode_checked(&raw)?;
     anyhow::ensure!(
-        crate::libs::crypto::ed25519_public_from_keypair(&bytes).is_some(),
+        plain_libs::crypto::ed25519_public_from_keypair(&bytes).is_some(),
         "Invalid signing identity"
     );
     Ok(bytes)
@@ -222,8 +222,8 @@ pub fn signing_keypair(prefs: &Prefs) -> anyhow::Result<Vec<u8>> {
 
 fn signature_public_key(prefs: &Prefs) -> anyhow::Result<String> {
     let keypair = signing_keypair(prefs)?;
-    Ok(crate::libs::utils::base64::base64_encode(
-        &crate::libs::crypto::ed25519_public_from_keypair(&keypair).unwrap(),
+    Ok(plain_libs::utils::base64::base64_encode(
+        &plain_libs::crypto::ed25519_public_from_keypair(&keypair).unwrap(),
     ))
 }
 

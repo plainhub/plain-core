@@ -2,7 +2,7 @@ use crate::host::Host;
 use crate::login_socket as login;
 use crate::storage;
 use anyhow::{Result, anyhow};
-use plain_rs::libs::platform::system::consts::AppPaths;
+use plain_rs::infrastructure::platform::system::consts::AppPaths;
 use plain_server::server::ContentServer;
 use std::{path::PathBuf, sync::Arc};
 
@@ -19,7 +19,7 @@ pub struct Service {
     host: tokio::task::JoinHandle<Result<(), String>>,
     login: Option<login::Service>,
     #[cfg(target_os = "linux")]
-    watcher: Option<plain_rs::libs::platform::linux::mounts::automount::Watcher>,
+    watcher: Option<plain_rs::infrastructure::platform::linux::mounts::automount::Watcher>,
 }
 
 impl Service {
@@ -43,8 +43,9 @@ impl Service {
             prefs.set(permissions, [plain_rs::features::services::device::permission::Permission::WriteExternalStorage])?;
         }
         storage::source_directories(&prefs, &options.media_directories)?;
-        let log_file = plain_rs::libs::platform::system::log::default_log_file(&paths.data_dir);
-        plain_rs::libs::platform::system::log::set_file(&log_file)?;
+        let log_file =
+            plain_rs::infrastructure::platform::system::log::default_log_file(&paths.data_dir);
+        plain_rs::infrastructure::platform::system::log::set_file(&log_file)?;
         core.set_log_file(&log_file).map_err(anyhow::Error::msg)?;
         let runtime = Arc::new(Host::new(core.clone(), capabilities()));
         let host = tokio::spawn(runtime.run());
@@ -70,20 +71,22 @@ impl Service {
             );
         }
         #[cfg(target_os = "linux")]
-        if plain_rs::libs::platform::unix::is_root() {
+        if plain_libs::platform::unix::is_root() {
             let store = self.core.runtime().store.get()?;
             let events = storage::event_sink(&self.core).map_err(anyhow::Error::msg)?;
             let mount_store = store.clone();
             let mount_events = events.clone();
             tokio::task::spawn_blocking(move || {
-                plain_rs::libs::platform::linux::mounts::automount::ensure_mounted_usb_volumes(
+                plain_rs::infrastructure::platform::linux::mounts::automount::ensure_mounted_usb_volumes(
                     &mount_store,
                     &mount_events,
                 )
             })
             .await??;
             self.watcher = Some(
-                plain_rs::libs::platform::linux::mounts::automount::Watcher::start(store, events),
+                plain_rs::infrastructure::platform::linux::mounts::automount::Watcher::start(
+                    store, events,
+                ),
             );
         }
         *self
@@ -92,7 +95,7 @@ impl Service {
             .tls_identity
             .write()
             .map_err(|_| anyhow!("TLS identity configuration unavailable"))? =
-            plain_rs::libs::tls_identity::IdentitySource::Pem {
+            plain_rs::infrastructure::tls_identity::IdentitySource::Pem {
                 certificate: paths.tls_cert.clone(),
                 key: paths.tls_key.clone(),
             };
@@ -181,7 +184,9 @@ fn capabilities() -> Vec<String> {
     #[cfg(target_os = "linux")]
     {
         capabilities.push("APP_RELAUNCH".into());
-        if !plain_rs::libs::platform::linux::samba::detect_systemd_service_name().is_empty() {
+        if !plain_rs::infrastructure::platform::linux::samba::detect_systemd_service_name()
+            .is_empty()
+        {
             capabilities.push("LAN_SHARE".into());
         }
         if has_command("lsblk") {

@@ -8,7 +8,7 @@ async fn completion_fact_dispatches_once_and_never_rebroadcasts_the_platform_eve
     let dir = tempfile::tempdir().unwrap();
     let server = ContentServer::start(
         dir.path(),
-        &crate::libs::utils::base64::base64_encode(&[9; 32]),
+        &plain_libs::utils::base64::base64_encode(&[9; 32]),
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap()),
     )
     .unwrap();
@@ -82,7 +82,7 @@ async fn an_acknowledged_start_notifies_the_library_once_without_echoing_the_sdk
     let dir = tempfile::tempdir().unwrap();
     let server = ContentServer::start(
         dir.path(),
-        &crate::libs::utils::base64::base64_encode(&[9; 32]),
+        &plain_libs::utils::base64::base64_encode(&[9; 32]),
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap()),
     )
     .unwrap();
@@ -92,7 +92,7 @@ async fn an_acknowledged_start_notifies_the_library_once_without_echoing_the_sdk
     state
         .db
         .cache_platform_audio(
-            &[crate::libs::db::audio_catalog::AudioMedia {
+            &[crate::infrastructure::db::audio_catalog::AudioMedia {
                 file_id: Some("track".into()),
                 aliases: vec![],
                 track: AudioTrack::from_path_stem("one"),

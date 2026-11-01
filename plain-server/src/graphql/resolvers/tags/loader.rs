@@ -3,7 +3,8 @@ use async_graphql::{
     Context,
     dataloader::{DataLoader, Loader},
 };
-use plain_rs::{features::enums::DataType, libs::db::Db};
+use plain_rs::features::enums::DataType;
+use plain_rs::infrastructure::db::Db;
 use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]

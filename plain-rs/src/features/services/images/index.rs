@@ -1,13 +1,13 @@
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::host::bridge::Host;
 mod provider;
 use crate::features::media::images::embeddings as image_embeddings;
 use crate::features::media::images::embeddings::EmbeddingInput;
 use crate::features::media::images::indexing as image_indexing;
 use crate::features::media::images::indexing::Control;
 use crate::features::media::images::indexing::Progress;
-use crate::libs::db::Db;
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 use provider::ImageProvider;
 use serde::Serialize;
 use std::{
@@ -41,26 +41,26 @@ pub struct ImageIndex {
     #[cfg(any(test, feature = "test-seams"))]
     system_catalog: std::sync::atomic::AtomicBool,
     host: Arc<Host>,
-    resources: Arc<crate::libs::host::resources::NativeResources>,
+    resources: Arc<crate::infrastructure::host::resources::NativeResources>,
     cache: std::path::PathBuf,
-    events: tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>,
+    events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
     state: Arc<Mutex<State>>,
-    encoder: Mutex<Option<Arc<dyn crate::libs::ai_image_search::embedding::ImageEncoder>>>,
+    encoder: Mutex<Option<Arc<dyn plain_libs::ai_image_search::embedding::ImageEncoder>>>,
     idle: tokio::sync::Notify,
 }
 impl ImageIndex {
     pub fn new(
         db: Arc<Db>,
         host: Arc<Host>,
-        events: tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>,
-        resources: Arc<crate::libs::host::resources::NativeResources>,
+        events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
+        resources: Arc<crate::infrastructure::host::resources::NativeResources>,
         cache: std::path::PathBuf,
     ) -> Self {
         Self {
             db,
             #[cfg(any(test, feature = "test-seams"))]
             system_catalog: std::sync::atomic::AtomicBool::new(
-                crate::libs::platform::image_catalog::uses_system_catalog(),
+                crate::infrastructure::platform::image_catalog::uses_system_catalog(),
             ),
             host,
             resources,
@@ -98,7 +98,7 @@ impl ImageIndex {
         }
         #[cfg(not(any(test, feature = "test-seams")))]
         {
-            crate::libs::platform::image_catalog::uses_system_catalog()
+            crate::infrastructure::platform::image_catalog::uses_system_catalog()
         }
     }
     #[cfg(any(test, feature = "test-seams"))]
@@ -113,7 +113,7 @@ impl ImageIndex {
     }
     pub fn set_encoder(
         &self,
-        encoder: Option<Arc<dyn crate::libs::ai_image_search::embedding::ImageEncoder>>,
+        encoder: Option<Arc<dyn plain_libs::ai_image_search::embedding::ImageEncoder>>,
     ) {
         *self.encoder.lock().unwrap() = encoder;
     }
@@ -326,7 +326,7 @@ impl ImageIndex {
 struct IndexControl {
     generation: u64,
     state: Arc<Mutex<State>>,
-    events: tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>,
+    events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
 }
 impl IndexControl {
     fn valid(&self, s: &State) -> DomainResult<()> {
@@ -368,10 +368,10 @@ impl Control for IndexControl {
 }
 
 fn publish_status(
-    events: &tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>,
+    events: &tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
     status: Status,
 ) {
-    let _ = events.send(crate::libs::events::WsEvent::broadcast(
+    let _ = events.send(crate::infrastructure::events::WsEvent::broadcast(
         "IMAGE_INDEX_UPDATED",
         serde_json::to_string(&status).unwrap(),
     ));

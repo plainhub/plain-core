@@ -1,5 +1,6 @@
 use super::*;
-use crate::{features::enums::DataType, libs::db::MediaFileMetadata};
+use crate::features::enums::DataType;
+use crate::infrastructure::db::MediaFileMetadata;
 use std::sync::{Arc, Mutex};
 
 fn seed(db: &Db, path: &str, size: i64) {

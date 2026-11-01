@@ -1,4 +1,5 @@
-use crate::libs::{db::Db, events::WsEvent};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::events::WsEvent;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -10,11 +11,11 @@ use tokio::{
 #[derive(Clone)]
 pub struct Runtime {
     pub ble_advertising: Arc<crate::features::services::discovery::ble_advertising::Runtime>,
-    _data_directory: Arc<crate::libs::data_paths::directory::DataDirectory>,
-    pub cache: crate::libs::cache_paths::CachePaths,
+    _data_directory: Arc<crate::infrastructure::data_paths::directory::DataDirectory>,
+    pub cache: crate::infrastructure::cache_paths::CachePaths,
     pub cache_changes: Arc<tokio::sync::RwLock<()>>,
     pub remote_cache: Arc<crate::features::services::files::remote_cache::RemoteCache>,
-    pub logs: Arc<crate::libs::logs::Logs>,
+    pub logs: Arc<crate::infrastructure::logs::Logs>,
     pub device: Arc<crate::features::services::device::Status>,
     pub(crate) browser: Arc<crate::features::services::files::browser::Runtime>,
     pub file_platform: Arc<crate::features::services::files::platform::FilePlatform>,
@@ -25,10 +26,10 @@ pub struct Runtime {
     pub duration_updates: Arc<crate::features::services::files::duration_updates::Runtime>,
 
     pub duration_cache: Arc<crate::features::media::duration_cache::DurationCache>,
-    pub store: Arc<crate::libs::kv::LazyDb>,
+    pub store: Arc<plain_libs::kv::LazyDb>,
     pub http_server: Arc<crate::features::services::http_status::Runtime>,
     pub web_root: Arc<std::sync::RwLock<Option<PathBuf>>>,
-    pub tls_identity: Arc<std::sync::RwLock<crate::libs::tls_identity::IdentitySource>>,
+    pub tls_identity: Arc<std::sync::RwLock<crate::infrastructure::tls_identity::IdentitySource>>,
     pub aware: Arc<crate::features::services::peers::aware::Runtime>,
     pub peer_status: Arc<crate::features::services::peers::status_runtime::Runtime>,
     pub management: Arc<crate::features::services::peers::management::Runtime>,
@@ -46,11 +47,11 @@ pub struct Runtime {
     pub media_watch: std::sync::Arc<
         std::sync::Mutex<Option<crate::features::services::files::media_watch::WatcherHandle>>,
     >,
-    pub host: Arc<crate::libs::host::bridge::Host>,
+    pub host: Arc<crate::infrastructure::host::bridge::Host>,
     pub thumbnails: Arc<crate::features::services::images::thumbnails::Thumbnails>,
     pub db: Arc<Db>,
     pub lan: Arc<crate::features::services::peers::peer_lan::Lan>,
-    pub transport: Arc<crate::libs::transport::router::Router>,
+    pub transport: Arc<crate::infrastructure::transport::router::Router>,
     pub(crate) transport_delivery: Arc<std::sync::Mutex<bool>>,
     pub previews: Arc<crate::features::services::link_preview::Schedule>,
     pub prewarmer: Arc<crate::features::chat::attachments::prewarm::Prewarmer>,
@@ -74,11 +75,11 @@ pub struct Runtime {
     pub audio: Arc<crate::features::services::audio::host::Audio>,
     pub directory: std::path::PathBuf,
     pub token: Arc<str>,
-    pub temp_values: crate::libs::temp_values::TempValues,
+    pub temp_values: crate::infrastructure::temp_values::TempValues,
     pub events: broadcast::Sender<WsEvent>,
     pub stop: watch::Receiver<bool>,
     pub media_info: Arc<crate::features::services::files::info::Info>,
-    pub resources: Arc<crate::libs::host::resources::NativeResources>,
+    pub resources: Arc<crate::infrastructure::host::resources::NativeResources>,
     pub sms: Arc<crate::features::services::sms::mutations::Mutations>,
     pub app_files: Arc<crate::features::files::app_files::FileStore>,
     pub shares: Arc<crate::features::files::shares::Service>,
@@ -89,17 +90,17 @@ pub struct Runtime {
     pub image_updates: Arc<crate::features::media::images::editor::Updates>,
     pub uploads: Arc<crate::features::files::uploads::Runtime>,
     pub mms: Arc<crate::features::services::sms::mms::Runtime>,
-    pub(crate) clients: Arc<dyn crate::libs::host::client_connections::ClientConnections>,
+    pub(crate) clients: Arc<dyn crate::infrastructure::host::client_connections::ClientConnections>,
 }
 impl Runtime {
     pub fn open(
         directory: &Path,
         token: &str,
         prefs: Arc<crate::features::prefs::Prefs>,
-        host: Arc<crate::libs::host::bridge::Host>,
-        clients: Arc<dyn crate::libs::host::client_connections::ClientConnections>,
+        host: Arc<crate::infrastructure::host::bridge::Host>,
+        clients: Arc<dyn crate::infrastructure::host::client_connections::ClientConnections>,
     ) -> Result<(Self, watch::Sender<bool>), String> {
-        if crate::libs::utils::base64::base64_decode(token).len() != 32 {
+        if plain_libs::utils::base64::base64_decode(token).len() != 32 {
             return Err("token must contain 32 random bytes".into());
         }
         if !directory.is_absolute() {
@@ -108,11 +109,13 @@ impl Runtime {
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
         let cache_directory = match host.startup().cache_dir.as_deref() {
             Some(path) => PathBuf::from(path),
-            None => crate::libs::cache_paths::system::resolve(directory)?,
+            None => crate::infrastructure::cache_paths::system::resolve(directory)?,
         };
-        let data_directory =
-            crate::libs::data_paths::directory::DataDirectory::open(directory, &cache_directory)?;
-        let paths = crate::libs::data_paths::DataPaths::new(directory);
+        let data_directory = crate::infrastructure::data_paths::directory::DataDirectory::open(
+            directory,
+            &cache_directory,
+        )?;
+        let paths = crate::infrastructure::data_paths::DataPaths::new(directory);
         let db = Arc::new(Db::open(&paths.database()).map_err(|e| e.to_string())?);
         let (events, _) = broadcast::channel(256);
         Self::from_storage(
@@ -130,10 +133,10 @@ impl Runtime {
         directory: &Path,
         token: &str,
         prefs: Arc<crate::features::prefs::Prefs>,
-        host: Arc<crate::libs::host::bridge::Host>,
-        clients: Arc<dyn crate::libs::host::client_connections::ClientConnections>,
+        host: Arc<crate::infrastructure::host::bridge::Host>,
+        clients: Arc<dyn crate::infrastructure::host::client_connections::ClientConnections>,
         db: Arc<Db>,
-        data_directory: Arc<crate::libs::data_paths::directory::DataDirectory>,
+        data_directory: Arc<crate::infrastructure::data_paths::directory::DataDirectory>,
         events: broadcast::Sender<WsEvent>,
     ) -> Result<(Self, watch::Sender<bool>), String> {
         let directory = directory.to_path_buf();
@@ -165,14 +168,13 @@ impl Runtime {
         );
         let cache = data_directory.cache_paths().clone();
 
-        let path = crate::libs::data_paths::DataPaths::new(&directory).database();
-        let store = Arc::new(crate::libs::kv::LazyDb::from_open(path, db.key_values()));
+        let path = crate::infrastructure::data_paths::DataPaths::new(&directory).database();
+        let store = Arc::new(plain_libs::kv::LazyDb::from_open(path, db.key_values()));
         let duration_cache = Arc::new(
             crate::features::media::duration_cache::DurationCache::with_store(store.clone()),
         );
-        let resources = Arc::new(crate::libs::host::resources::NativeResources::new(
-            host.clone(),
-        ));
+        let resources =
+            Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone()));
         let media_info = crate::features::services::files::info::Info::new(
             host.clone(),
             resources.clone(),
@@ -238,7 +240,7 @@ impl Runtime {
             store.clone(),
             events.clone(),
         );
-        let logs = Arc::new(crate::libs::logs::Logs::new(&directory));
+        let logs = Arc::new(crate::infrastructure::logs::Logs::new(&directory));
         let remote_cache = Arc::new(
             crate::features::services::files::remote_cache::RemoteCache::new(
                 cache.root().to_owned(),
@@ -363,7 +365,7 @@ impl Runtime {
             clipboard_changes: Arc::new(crate::features::services::clipboard::Changes::default()),
             network_revision: watch::channel(0).0,
             mdns: Arc::new(crate::features::services::discovery::mdns_runtime::Runtime::default()),
-            transport: Arc::new(crate::libs::transport::router::Router::default()),
+            transport: Arc::new(crate::infrastructure::transport::router::Router::default()),
             transport_delivery: Arc::new(std::sync::Mutex::new(false)),
             previews,
             prewarmer: Arc::new(crate::features::chat::attachments::prewarm::Prewarmer::default()),
@@ -416,8 +418,8 @@ impl Runtime {
             http_server: Arc::new(crate::features::services::http_status::Runtime::default()),
             web_root: Arc::new(std::sync::RwLock::new(None)),
             tls_identity: Arc::new(std::sync::RwLock::new(
-                crate::libs::tls_identity::IdentitySource::Json(
-                    crate::libs::data_paths::DataPaths::new(&directory).tls_identity(),
+                crate::infrastructure::tls_identity::IdentitySource::Json(
+                    crate::infrastructure::data_paths::DataPaths::new(&directory).tls_identity(),
                 ),
             )),
             token: Arc::from(token.as_str()),

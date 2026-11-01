@@ -1,4 +1,4 @@
-use crate::libs::protocols::ble;
+use crate::infrastructure::protocols::ble;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::Result;
 use std::time::Duration;
@@ -15,7 +15,7 @@ impl Runtime {
     pub async fn exchange(
         &self,
         state: &CoreRuntime,
-        peer: &crate::libs::db::DPeer,
+        peer: &crate::infrastructure::db::DPeer,
         bytes: Vec<u8>,
     ) -> Result<Vec<u8>> {
         let generation = state
@@ -23,7 +23,7 @@ impl Runtime {
             .generation()
             .ok_or_else(|| anyhow::anyhow!("BLE host unavailable"))?;
         let request = serde_json::json!({
-            "request": crate::libs::utils::base64::base64_encode(&bytes),
+            "request": plain_libs::utils::base64::base64_encode(&bytes),
             "shortId": crate::features::discovery::nearby_wire::short_id(&peer.id),
             "peer": crate::features::services::peers::peer_address::view(peer),
         });
@@ -41,7 +41,7 @@ impl Runtime {
             .get("response")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| anyhow::anyhow!("BLE exchange returned no response"))?;
-        let bytes = crate::libs::utils::base64::base64_decode(encoded);
+        let bytes = plain_libs::utils::base64::base64_decode(encoded);
         ble::decode_response(&bytes)?;
         Ok(bytes)
     }
@@ -51,7 +51,7 @@ impl Runtime {
 impl Runtime {
     /// Decodes the request bytes the host was asked to send.
     pub fn request_for_test(&self, params: &serde_json::Value) -> ble::Request {
-        let bytes = crate::libs::utils::base64::base64_decode(
+        let bytes = plain_libs::utils::base64::base64_decode(
             params["request"].as_str().expect("host request bytes"),
         );
         ble::Request::decode(&bytes).unwrap()
@@ -59,18 +59,18 @@ impl Runtime {
     /// Builds the host reply body for a given encoded response.
     pub fn reply_for_test(&self, _params: &serde_json::Value, bytes: Vec<u8>) -> serde_json::Value {
         serde_json::json!({
-            "response": crate::libs::utils::base64::base64_encode(&bytes),
+            "response": plain_libs::utils::base64::base64_encode(&bytes),
         })
     }
 }
 
-use crate::libs::protocols::ble::Request;
+use crate::infrastructure::protocols::ble::Request;
 #[cfg(any(test, feature = "test-seams"))]
 pub fn test_peer_wire(runtime: &Runtime, params: &serde_json::Value, key: &[u8]) -> String {
     let Request::PeerGraphql { body, .. } = runtime.request_for_test(params) else {
         panic!("Expected peer request")
     };
-    String::from_utf8(crate::libs::crypto::xchacha_decrypt_raw(key, &body).unwrap()).unwrap()
+    String::from_utf8(plain_libs::crypto::xchacha_decrypt_raw(key, &body).unwrap()).unwrap()
 }
 #[cfg(any(test, feature = "test-seams"))]
 pub fn test_reply(
@@ -82,8 +82,9 @@ pub fn test_reply(
     let Request::PeerGraphql { body: request, .. } = runtime.request_for_test(params) else {
         panic!("Expected peer request")
     };
-    let body = crate::libs::transport::http_response::Context::new("/peer_graphql", &request)
-        .encrypt(key, value.to_string().as_bytes())
-        .unwrap();
+    let body =
+        crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &request)
+            .encrypt(key, value.to_string().as_bytes())
+            .unwrap();
     runtime.reply_for_test(params, ble::response(200, &body).unwrap())
 }

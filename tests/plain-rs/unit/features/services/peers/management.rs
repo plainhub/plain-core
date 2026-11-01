@@ -1,5 +1,6 @@
 use super::*;
-use crate::{features::chat::enums::DeviceType, libs::db::chat_store::SaveMode};
+use crate::features::chat::enums::DeviceType;
+use crate::infrastructure::db::chat_store::SaveMode;
 use serde_json::json;
 
 #[test]
@@ -13,7 +14,7 @@ fn reconnect_backoff_has_the_existing_one_to_thirty_second_bounds() {
 
 fn peer() -> DPeer {
     let mut peer = DPeer::new("peer", "Fixture", "::1", Some(18443), DeviceType::Computer);
-    peer.token = crate::libs::utils::base64::base64_encode(&[7; 32]);
+    peer.token = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peer
 }
 
@@ -62,7 +63,7 @@ fn chat_only_self_invalid_token_and_missing_address_records_do_not_open_manageme
     for token in [
         String::new(),
         "invalid".into(),
-        crate::libs::utils::base64::base64_encode(&[7; 31]),
+        plain_libs::utils::base64::base64_encode(&[7; 31]),
     ] {
         peer.token = token;
         assert!(identity(&peer, "actor", "https://[::1]:18443").is_none());
@@ -94,7 +95,7 @@ async fn reconciliation_reuses_unchanged_workers_and_retires_replaced_and_remove
     assert!(!*cancelled.borrow());
     core.stop_core().await;
     let mut replacement = identity;
-    replacement.token = crate::libs::utils::base64::base64_encode(&[8; 32]);
+    replacement.token = plain_libs::utils::base64::base64_encode(&[8; 32]);
     reconcile(
         &state,
         &mut workers,

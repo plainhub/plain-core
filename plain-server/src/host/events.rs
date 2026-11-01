@@ -1,5 +1,7 @@
 use crate::server::ServerState;
-use plain_rs::libs::events::{HOST_BINARY_TYPES, HOST_TEXT_TYPES, WsEvent};
+use plain_rs::infrastructure::events::HOST_BINARY_TYPES;
+use plain_rs::infrastructure::events::HOST_TEXT_TYPES;
+use plain_rs::infrastructure::events::WsEvent;
 use serde_json::{Value, json};
 use tokio::sync::{Mutex, mpsc};
 
@@ -165,7 +167,7 @@ impl HostEvents {
                     };
                     self.reply(reply)?;
                 },
-                request = self.next_request(), if workers.len() < plain_rs::libs::host::bridge::REQUEST_CAPACITY => {
+                request = self.next_request(), if workers.len() < plain_rs::infrastructure::host::bridge::REQUEST_CAPACITY => {
                     let Some(request) = request else { break };
                     let id = request.get("id").and_then(Value::as_u64)
                         .ok_or("invalid host request ID")?;
@@ -198,7 +200,7 @@ impl HostEvents {
     pub fn attach_resource(
         &self,
         id: &str,
-    ) -> Result<plain_rs::libs::host::resource_stream::NativeResourceStream, String> {
+    ) -> Result<plain_rs::infrastructure::host::resource_stream::NativeResourceStream, String> {
         self.state.resources.attach_native(id, self.generation)
     }
 

@@ -12,7 +12,7 @@ pub async fn read_manifest(
         &services.resources,
         services.cache.root(),
         &path,
-        |reader| crate::libs::apk::manifest::xml(reader).map_err(|error| error.to_string()),
+        |reader| plain_libs::apk::manifest::xml(reader).map_err(|error| error.to_string()),
     )
     .await
     .map_err(anyhow::Error::msg)

@@ -6,11 +6,11 @@ use plain_rs::features::media::audio::queue as domain;
 use plain_rs::features::media::audio::queue::AudioTrack;
 use plain_rs::features::prefs::settings::FileSortBy;
 use plain_rs::features::services::audio::host::Audio as AudioService;
-use plain_rs::libs::db::Playlist;
-use plain_rs::libs::host::audio::AudioPlaybackFacts;
-use plain_rs::libs::host::bridge::Host;
-use plain_rs::libs::types::Instant;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::db::Playlist;
+use plain_rs::infrastructure::host::audio::AudioPlaybackFacts;
+use plain_rs::infrastructure::host::bridge::Host;
+use plain_rs::infrastructure::types::Instant;
+use plain_rs::infrastructure::types::Long;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -76,7 +76,7 @@ impl Audio {
         let (scope, token) = crate::graphql::executor::resource_credentials(ctx)?;
         plain_rs::features::files::resource_link::seal(
             &scope,
-            &plain_rs::libs::utils::base64::base64_decode(&token),
+            &plain_libs::utils::base64::base64_decode(&token),
             &resource,
         )
         .map_err(|error| async_graphql::Error::new(error.to_string()))
@@ -158,7 +158,7 @@ impl AudioQuery {
         .await
         .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         let mut summary = plain_rs::features::services::audio::overview::read(
-            ctx.data::<Arc<plain_rs::libs::db::Db>>()?.clone(),
+            ctx.data::<Arc<plain_rs::infrastructure::db::Db>>()?.clone(),
             crate::graphql::resolvers::media::public::catalog(ctx),
         )
         .await
@@ -646,8 +646,8 @@ impl AudioMutation {
 
 fn notify_playback(ctx: &Context<'_>) -> async_graphql::Result<()> {
     let _ = ctx
-        .data::<tokio::sync::broadcast::Sender<plain_rs::libs::events::WsEvent>>()?
-        .send(plain_rs::libs::events::WsEvent::broadcast(
+        .data::<tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>>()?
+        .send(plain_rs::infrastructure::events::WsEvent::broadcast(
             "CONTENT_CHANGED",
             "{}".into(),
         ));
@@ -662,7 +662,7 @@ pub(crate) async fn search_tracks(
     if query.trim().is_empty() {
         return Err(async_graphql::Error::new("bulk_query_required"));
     }
-    if let Some(id) = plain_rs::libs::utils::search_dsl::field_value(query, "playlist_id") {
+    if let Some(id) = plain_libs::utils::search_dsl::field_value(query, "playlist_id") {
         let query = query.to_owned();
         return audio(ctx)?
             .run(move |db, _| domain::playlist_items_page(db, &id, 0, i64::MAX, &query))
@@ -718,7 +718,7 @@ fn item(track: AudioTrack) -> AudioItem {
     }
 }
 
-fn playlist_item(row: plain_rs::libs::db::PlaylistItem) -> AudioItem {
+fn playlist_item(row: plain_rs::infrastructure::db::PlaylistItem) -> AudioItem {
     AudioItem {
         file_id: Some(row.file_id.into()),
         title: row.title,

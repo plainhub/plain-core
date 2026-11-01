@@ -1,5 +1,5 @@
-use crate::libs::kv::Db;
 use anyhow::Result;
+use plain_libs::kv::Db;
 const KEY: &str = "recent_files";
 pub fn add(store: &Db, path: &str) -> Result<()> {
     store.update_json(KEY, |paths: &mut Vec<String>| {

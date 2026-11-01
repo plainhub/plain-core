@@ -150,7 +150,7 @@ impl Runtime {
         let bytes = advertisement
             .bytes
             .as_ref()
-            .map(|bytes| crate::libs::utils::base64::base64_encode(bytes))
+            .map(|bytes| plain_libs::utils::base64::base64_encode(bytes))
             .unwrap_or_default();
         let accepted = state
             .host

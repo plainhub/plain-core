@@ -19,16 +19,16 @@
 
 use std::str::FromStr;
 
-use crate::libs::utils::base64::base64_encode;
+use plain_libs::utils::base64::base64_encode;
 
 use crate::features::chat::enums::ChannelSystemMessageType;
 use crate::features::chat::enums::DeviceType;
 use crate::features::chat::events::PeerKeyCache;
-use crate::libs::db::DChannel;
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
-use crate::libs::transport::contract::PeerTransport;
-use crate::libs::transport::contract::deliver_channel_system_message;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::transport::contract::PeerTransport;
+use crate::infrastructure::transport::contract::deliver_channel_system_message;
 
 use crate::features::chat::channels::messages::*;
 

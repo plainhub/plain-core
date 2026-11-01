@@ -1,5 +1,6 @@
-use crate::libs::db::Db;
-use crate::libs::error::{DomainError, DomainResult};
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,7 +58,7 @@ pub fn prepare_track(
     track: &crate::features::media::audio::queue::AudioTrack,
 ) -> DomainResult<Playback> {
     db.audio_transaction(|tx, state| {
-        crate::libs::db::audio_queue::io::save_current(tx, &track.path, state)?;
+        crate::infrastructure::db::audio_queue::io::save_current(tx, &track.path, state)?;
         state.select(&track.path)?;
         state.advance()?;
         state.playback.position_ms = 0;
@@ -126,7 +127,7 @@ fn save_position(
         )
         .optional()?;
     if let Some(file_id) = file_id {
-        crate::libs::db::media_play_history::update_progress(
+        crate::infrastructure::db::media_play_history::update_progress(
             conn,
             crate::features::enums::DataType::Audio,
             &file_id,

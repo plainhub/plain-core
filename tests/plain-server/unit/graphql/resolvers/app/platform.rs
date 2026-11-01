@@ -122,7 +122,7 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
         let request = requests.recv().await.unwrap();
         assert_eq!(
             request["method"],
-            plain_rs::libs::host::commands::SYSTEM_DISK_FORMAT
+            plain_rs::infrastructure::host::commands::SYSTEM_DISK_FORMAT
         );
         assert_eq!(request["params"]["path"], "/dev/example");
         host.reply(
@@ -133,7 +133,7 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
         let request = requests.recv().await.unwrap();
         assert_eq!(
             request["method"],
-            plain_rs::libs::host::commands::SYSTEM_HOSTNAME_SET
+            plain_rs::infrastructure::host::commands::SYSTEM_HOSTNAME_SET
         );
         assert_eq!(request["params"]["name"], "my-server");
         host.reply(
@@ -239,13 +239,10 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
 #[test]
 fn hostname_sanitization_is_shared() {
     assert_eq!(
-        plain_rs::libs::utils::hostname::platform_hostname("  Foo_. Bar-- "),
+        plain_libs::utils::hostname::platform_hostname("  Foo_. Bar-- "),
         "foo-bar"
     );
-    assert_eq!(
-        plain_rs::libs::utils::hostname::platform_hostname("!.."),
-        ""
-    );
+    assert_eq!(plain_libs::utils::hostname::platform_hostname("!.."), "");
 }
 
 #[tokio::test]

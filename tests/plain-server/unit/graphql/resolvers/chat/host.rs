@@ -7,7 +7,7 @@ fn server(dir: &std::path::Path) -> ContentServer {
     let prefs = Arc::new(plain_rs::features::prefs::Prefs::load(&dir.join("prefs.json")).unwrap());
     ContentServer::start(
         &dir,
-        &plain_rs::libs::utils::base64::base64_encode(&[7; 32]),
+        &plain_libs::utils::base64::base64_encode(&[7; 32]),
         prefs,
     )
     .unwrap()
@@ -182,17 +182,17 @@ async fn long_text_files_and_invalid_targets_use_the_same_message_lifecycle() {
 async fn retry_returns_pending_before_platform_transport_completes() {
     let dir = tempfile::tempdir().unwrap();
     let server = server(dir.path());
-    let (kp, pk) = plain_rs::libs::crypto::ed25519_generate();
+    let (kp, pk) = plain_libs::crypto::ed25519_generate();
     let state = server.runtime_state();
     state.prefs.set("client_id", "local").unwrap();
     state
         .prefs
         .set(
             "signature_key_pair",
-            plain_rs::libs::utils::base64::base64_encode(&kp),
+            plain_libs::utils::base64::base64_encode(&kp),
         )
         .unwrap();
-    let mut remote = plain_rs::libs::db::DPeer::new(
+    let mut remote = plain_rs::infrastructure::db::DPeer::new(
         "remote",
         "remote",
         "",
@@ -200,12 +200,12 @@ async fn retry_returns_pending_before_platform_transport_completes() {
         plain_rs::features::chat::enums::DeviceType::Phone,
     );
     remote.status = plain_rs::features::chat::enums::PeerStatus::Paired;
-    remote.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
-    remote.public_key = plain_rs::libs::utils::base64::base64_encode(&pk);
-    plain_rs::libs::db::chat_store::peers::save(
+    remote.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
+    remote.public_key = plain_libs::utils::base64::base64_encode(&pk);
+    plain_rs::infrastructure::db::chat_store::peers::save(
         &state.db,
         &[remote],
-        plain_rs::libs::db::chat_store::SaveMode::Insert,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     let row = plain_rs::features::chat::messages::message_lifecycle::create(
@@ -243,7 +243,7 @@ async fn retry_returns_pending_before_platform_transport_completes() {
         .unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(2), async {
         loop {
-            if plain_rs::libs::db::chat_store::messages::get(&state.db, &row.id)
+            if plain_rs::infrastructure::db::chat_store::messages::get(&state.db, &row.id)
                 .unwrap()
                 .unwrap()
                 .status

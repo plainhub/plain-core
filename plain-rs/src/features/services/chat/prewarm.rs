@@ -15,9 +15,10 @@ impl Driver for Native<'_> {
             .await
             .map_err(anyhow::Error::msg)?;
         Ok(Capabilities {
-            ble_ready: supported.contains(&crate::libs::transport::router::TransportType::Ble),
+            ble_ready: supported
+                .contains(&crate::infrastructure::transport::router::TransportType::Ble),
             aware_supported: supported
-                .contains(&crate::libs::transport::router::TransportType::Aware),
+                .contains(&crate::infrastructure::transport::router::TransportType::Aware),
         })
     }
     async fn scan(&self, short_id: &str) -> Result<Option<Advertisement>> {
@@ -46,7 +47,7 @@ impl Driver for Native<'_> {
             self.0,
             &prepared.peer,
             &prepared.channel_id,
-            &crate::libs::utils::base64::base64_decode(&prepared.key),
+            &plain_libs::utils::base64::base64_decode(&prepared.key),
             &prepared.body,
         )
         .await
@@ -65,7 +66,9 @@ fn started(response: &Value) -> Result<bool> {
         .as_bool()
         .ok_or_else(|| anyhow::anyhow!("Invalid peer startAware receipt"))
 }
-fn conversation_peer(filter: &crate::libs::db::chat_store::messages::Filter) -> Option<&str> {
+fn conversation_peer(
+    filter: &crate::infrastructure::db::chat_store::messages::Filter,
+) -> Option<&str> {
     if filter.offset != 0
         || filter.count_only
         || filter.latest
@@ -87,7 +90,7 @@ pub fn prepare_page(state: &CoreRuntime, target: &str, text: &str, offset: i32, 
     };
     prepare_conversation(
         state,
-        &crate::libs::db::chat_store::messages::Filter {
+        &crate::infrastructure::db::chat_store::messages::Filter {
             peer: channel.is_empty().then_some(peer),
             channel: (!channel.is_empty()).then_some(channel),
             text: text.to_owned(),
@@ -102,7 +105,7 @@ pub fn prepare_page(state: &CoreRuntime, target: &str, text: &str, offset: i32, 
 
 pub fn prepare_conversation(
     state: &CoreRuntime,
-    filter: &crate::libs::db::chat_store::messages::Filter,
+    filter: &crate::infrastructure::db::chat_store::messages::Filter,
 ) {
     let Some(id) = conversation_peer(filter) else {
         return;

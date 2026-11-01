@@ -4,23 +4,28 @@ use crate::features::chat::attachments::download_queue::{Effect, Queue};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-fn fixture() -> (tempfile::TempDir, crate::libs::db::Db, Queue, Ticket) {
+fn fixture() -> (
+    tempfile::TempDir,
+    crate::infrastructure::db::Db,
+    Queue,
+    Ticket,
+) {
     let root = tempfile::tempdir().unwrap();
-    let db = crate::libs::db::Db::open(&root.path().join("plain.db")).unwrap();
-    let peer = crate::libs::db::DPeer::new(
+    let db = crate::infrastructure::db::Db::open(&root.path().join("plain.db")).unwrap();
+    let peer = crate::infrastructure::db::DPeer::new(
         "peer",
         "fixture",
         "",
         Some(443),
         crate::features::chat::enums::DeviceType::Phone,
     );
-    crate::libs::db::chat_store::peers::save(
+    crate::infrastructure::db::chat_store::peers::save(
         &db,
         &[peer],
-        crate::libs::db::chat_store::SaveMode::Insert,
+        crate::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
-    let mut chat = crate::libs::db::DChat::new("peer", "me", "", &json!({
+    let mut chat = crate::infrastructure::db::DChat::new("peer", "me", "", &json!({
         "type":"FILES", "value":{"items":[{"id":"file","uri":"fsid:remote-file","fileName":"fixture.bin","size":7}]}
     }).to_string());
     chat.id = "message".into();
@@ -98,7 +103,7 @@ async fn existing_ticket_is_truncated_and_exact_download_bytes_commit_normally()
     assert!(queue.finish("file", &ticket.token, None).unwrap());
     assert!(!std::path::Path::new(&ticket.path).exists());
     assert!(queue.snapshot()["tasks"].as_array().unwrap().is_empty());
-    let chat = crate::libs::db::chat_store::messages::get(&db, "message")
+    let chat = crate::infrastructure::db::chat_store::messages::get(&db, "message")
         .unwrap()
         .unwrap();
     let content: Value = serde_json::from_str(&chat.content).unwrap();
@@ -132,7 +137,7 @@ fn terminal_failure_aborts_its_ticket_but_an_active_import_legitimately_has_a_fi
     );
     assert_eq!(queue.snapshot()["tasks"][0]["status"], "FAILED");
     assert!(!std::path::Path::new(&ticket.path).exists());
-    let chat = crate::libs::db::chat_store::messages::get(&db, "message")
+    let chat = crate::infrastructure::db::chat_store::messages::get(&db, "message")
         .unwrap()
         .unwrap();
     let content: Value = serde_json::from_str(&chat.content).unwrap();

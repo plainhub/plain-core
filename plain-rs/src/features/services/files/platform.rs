@@ -2,8 +2,8 @@ mod media_rows;
 pub(super) mod paths;
 
 use crate::features::files::tasks::{FileTaskOp, FileTaskType};
-use crate::libs::db::Db;
-use crate::libs::host::bridge::Host;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::host::bridge::Host;
 use anyhow::{Result, anyhow, bail};
 use serde_json::json;
 use std::{
@@ -18,7 +18,7 @@ pub struct FilePlatform {
     directory: PathBuf,
     cache: PathBuf,
     private_roots: std::result::Result<[PathBuf; 2], String>,
-    events: tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>,
+    events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
     #[cfg(any(test, feature = "test-seams"))]
     sdk: std::sync::atomic::AtomicBool,
     #[cfg(feature = "runtime-media")]
@@ -31,7 +31,7 @@ impl FilePlatform {
         prefs: Arc<crate::features::prefs::Prefs>,
         directory: PathBuf,
         cache: PathBuf,
-        events: tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>,
+        events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
         #[cfg(feature = "runtime-media")] scans: Arc<
             crate::features::services::files::media_scans::MediaScans,
         >,
@@ -98,7 +98,10 @@ impl FilePlatform {
         if self.uses_sdk() {
             return self
                 .host
-                .call(crate::libs::host::commands::SYSTEM_MOUNT_FACTS, json!({}))
+                .call(
+                    crate::infrastructure::host::commands::SYSTEM_MOUNT_FACTS,
+                    json!({}),
+                )
                 .await
                 .map_err(anyhow::Error::msg);
         }
@@ -188,7 +191,10 @@ impl FilePlatform {
             }
             let volumes = self
                 .host
-                .call(crate::libs::host::commands::SYSTEM_MOUNT_FACTS, json!({}))
+                .call(
+                    crate::infrastructure::host::commands::SYSTEM_MOUNT_FACTS,
+                    json!({}),
+                )
                 .await
                 .map_err(anyhow::Error::msg)?;
             let root = volumes
@@ -203,7 +209,7 @@ impl FilePlatform {
             }
             let root = PathBuf::from(root);
             let entries = tokio::task::spawn_blocking(move || {
-                crate::libs::filesystem::recent::list(&root, 100)
+                plain_libs::filesystem::recent::list(&root, 100)
             })
             .await?;
             return Ok(entries.into_iter().map(|entry| json!({
@@ -215,7 +221,7 @@ impl FilePlatform {
         }
         let mut items = Vec::new();
         for path in crate::features::recent_files::list(self.db.key_values().as_ref(), 500)? {
-            let Ok(entry) = crate::libs::filesystem::stat(Path::new(&path)).await else {
+            let Ok(entry) = plain_libs::filesystem::stat(Path::new(&path)).await else {
                 continue;
             };
             items.push(json!({"name":Path::new(&entry.path).file_name().and_then(|name| name.to_str()).unwrap_or_default(),
@@ -466,7 +472,7 @@ pub(super) fn authorize_native(path: &Path, write: bool) -> Result<()> {
         bail!("absolute file path required");
     }
     if write {
-        crate::libs::filesystem::deletion::validate(path)?;
+        plain_libs::filesystem::deletion::validate(path)?;
         let mut ancestor = path
             .parent()
             .ok_or_else(|| anyhow!("file parent required"))?;

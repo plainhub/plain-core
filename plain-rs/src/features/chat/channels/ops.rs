@@ -3,7 +3,7 @@
 //! plain-desktop's `ChatChannelMutation` resolvers, minus the GraphQL
 //! layer; error strings are the wire messages the resolvers surface.
 
-use crate::libs::utils::base64::base64_decode;
+use plain_libs::utils::base64::base64_decode;
 
 use crate::features::chat::events::ChatEvent;
 use crate::features::chat::events::WS_CHANNELS_UPDATED;
@@ -11,8 +11,8 @@ use crate::features::chat::events::channels_updated_payload;
 use crate::features::chat::events::load_key_cache;
 use crate::features::chat::events::refresh_peer_key_cache;
 use crate::features::chat::service::ChatService;
-use crate::libs::db::DChannel;
-use crate::libs::transport::contract::PeerTransport;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::transport::contract::PeerTransport;
 
 use crate::features::chat::channels::sender;
 

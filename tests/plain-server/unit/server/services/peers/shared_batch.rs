@@ -84,7 +84,7 @@ fn fixture() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
     prefs.set("client_id", "fixture").unwrap();
     let server = crate::server::ContentServer::start(
         directory.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -98,8 +98,8 @@ async fn enqueue(
     target: &std::path::Path,
 ) -> String {
     let response = server.native_graphql().unwrap().execute(Request::new("mutation($input: SharedDownloadInput!) { enqueueSharedDownload(input: $input) }").variables(Variables::from_json(json!({"input":{
-        "messageId":format!("message-{path}"),"kind":"FILE","link":{"host":"127.0.0.1","port":port,"sharedId":"fixture","token":plain_rs::libs::utils::base64::base64_encode(&[7;32]),"pageUrl":""},
-        "urlToken":plain_rs::libs::utils::base64::base64_encode(&[8;32]),"entries":[{"name":format!("{path}.bin"),"relativePath":path,"isDir":false,"size":3,"mimeType":"application/octet-stream","hasThumb":false}],
+        "messageId":format!("message-{path}"),"kind":"FILE","link":{"host":"127.0.0.1","port":port,"sharedId":"fixture","token":plain_libs::utils::base64::base64_encode(&[7;32]),"pageUrl":""},
+        "urlToken":plain_libs::utils::base64::base64_encode(&[8;32]),"entries":[{"name":format!("{path}.bin"),"relativePath":path,"isDir":false,"size":3,"mimeType":"application/octet-stream","hasThumb":false}],
         "targetDir":target.to_str().unwrap(),"zipName":""
     }})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

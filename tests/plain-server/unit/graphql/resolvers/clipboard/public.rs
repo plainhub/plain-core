@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::libs::db::Db;
+use plain_rs::infrastructure::db::Db;
 use serde_json::{Value, json};
 
 fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema, Arc<Db>) {
@@ -116,7 +116,7 @@ fn write_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", json!(["CLIPBOARD"])).unwrap();
-    let token = plain_rs::libs::utils::base64::base64_encode(&[9; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[9; 32]);
     let server = crate::server::ContentServer::start(dir.path(), &token, prefs).unwrap();
     (dir, server)
 }
@@ -137,7 +137,7 @@ async fn write_request(state: &crate::server::ServerState, text: &str) -> async_
 fn write_host(
     state: &crate::server::ServerState,
     result: Value,
-) -> Arc<std::sync::Mutex<Vec<Option<plain_rs::libs::db::ClipboardRow>>>> {
+) -> Arc<std::sync::Mutex<Vec<Option<plain_rs::infrastructure::db::ClipboardRow>>>> {
     let observations = Arc::new(std::sync::Mutex::new(Vec::new()));
     let seen = observations.clone();
     let db = state.db.clone();

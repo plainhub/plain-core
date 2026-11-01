@@ -10,12 +10,12 @@ fn device() -> Device {
 }
 fn prefs(dir: &std::path::Path, id: &str) -> Prefs {
     let prefs = Prefs::load(&dir.join(format!("{id}.json"))).unwrap();
-    let (kp, _pubkey) = crate::libs::crypto::ed25519_generate();
+    let (kp, _pubkey) = plain_libs::crypto::ed25519_generate();
     prefs.set("client_id", id).unwrap();
     prefs
         .set(
             "signature_key_pair",
-            crate::libs::utils::base64::base64_encode(&kp),
+            plain_libs::utils::base64::base64_encode(&kp),
         )
         .unwrap();
     prefs
@@ -41,8 +41,7 @@ fn signed_cancel(prefs: &Prefs, request: &PairingRequest, to: &str) -> PairingCa
         timestamp: now_ms(),
         signature: String::new(),
     };
-    value.signature =
-        crate::libs::crypto::ed25519_sign(&keypair, value.signature_data().as_bytes());
+    value.signature = plain_libs::crypto::ed25519_sign(&keypair, value.signature_data().as_bytes());
     value
 }
 #[test]
@@ -125,7 +124,7 @@ fn signed_handshake_and_atomic_session_consumption_and_recipient_binding() {
         EcdhSession::from_private_key(&raw)
             .unwrap()
             .public_key_bytes,
-        crate::libs::utils::base64::base64_decode(&request.ecdh_public_key)
+        plain_libs::utils::base64::base64_decode(&request.ecdh_public_key)
     );
     assert!(EcdhSession::from_private_key(&[0; 32]).is_none());
     drop(a);

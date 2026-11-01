@@ -11,17 +11,17 @@ fn no_peers() -> PeerResolver {
 #[test]
 fn sha1_rfc3174_vectors() {
     assert_eq!(
-        plain_rs::libs::utils::hex::bytes_to_hex(&sha1(b"abc")),
+        plain_libs::utils::hex::bytes_to_hex(&sha1(b"abc")),
         "a9993e364706816aba3e25717850c26c9cd0d89d"
     );
     assert_eq!(
-        plain_rs::libs::utils::hex::bytes_to_hex(&sha1(
+        plain_libs::utils::hex::bytes_to_hex(&sha1(
             b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
         )),
         "84983e441c3bd26ebaae4aa1f95129e5e54670f1"
     );
     assert_eq!(
-        plain_rs::libs::utils::hex::bytes_to_hex(&sha1(b"")),
+        plain_libs::utils::hex::bytes_to_hex(&sha1(b"")),
         "da39a3ee5e6b4b0d3255bfef95601890afd80709"
     );
 }

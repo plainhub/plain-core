@@ -2,21 +2,21 @@ mod preview;
 pub use preview::title as preview_title;
 
 use crate::features::feeds::{error, now, require_url};
-use crate::libs::db::Db;
-use crate::libs::db::notes_feeds::FeedEntryRow;
-use crate::libs::db::notes_feeds::FeedRow;
-use crate::libs::error::DomainError;
-use crate::libs::error::DomainResult;
-use crate::libs::events::WsEvent;
-use crate::libs::utils::html_to_markdown::dom::Dom;
-use crate::libs::utils::html_to_markdown::dom::Node;
-use crate::libs::utils::html_to_markdown::html_to_markdown;
-use crate::libs::utils::xml;
-use crate::libs::utils::xml::Event;
-use crate::libs::utils::xml::StartTag;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::notes_feeds::FeedEntryRow;
+use crate::infrastructure::db::notes_feeds::FeedRow;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
+use crate::infrastructure::events::WsEvent;
 use chrono::Utc;
 use futures_util::StreamExt;
 use futures_util::stream;
+use plain_libs::utils::html_to_markdown::dom::Dom;
+use plain_libs::utils::html_to_markdown::dom::Node;
+use plain_libs::utils::html_to_markdown::html_to_markdown;
+use plain_libs::utils::xml;
+use plain_libs::utils::xml::Event;
+use plain_libs::utils::xml::StartTag;
 use sha2::{Digest, Sha256};
 use tokio::sync::broadcast;
 
@@ -202,7 +202,7 @@ fn article_html(html: &str) -> String {
 
 fn item_to_row(feed: &FeedRow, item: ParsedEntry) -> FeedEntryRow {
     let at = now();
-    let fallback = crate::libs::utils::hex::bytes_to_hex(&Sha256::digest(
+    let fallback = plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(
         serde_json::to_vec(&(
             &item.title,
             &item.author,
@@ -222,7 +222,7 @@ fn item_to_row(feed: &FeedRow, item: ParsedEntry) -> FeedEntryRow {
     } else {
         fallback.as_str()
     };
-    let source_entry_id = crate::libs::utils::hex::bytes_to_hex(&Sha256::digest(
+    let source_entry_id = plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(
         format!("{}_{}", feed.id, raw_key).as_bytes(),
     ));
     let image = assets::absolute_url(&feed.url, &item.image)

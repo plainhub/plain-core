@@ -7,9 +7,9 @@ use crate::features::peers::pairing::{
 use crate::features::services::confirmation_channel::{
     Channel, Client, ConfirmationMode, ServerHandshake,
 };
-use crate::libs::utils::base64::base64_encode;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
+use plain_libs::utils::base64::base64_encode;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{collections::HashMap, sync::Mutex, time::Instant};
@@ -117,7 +117,7 @@ impl Confirmations {
                 "Peer identity changed"
             );
             let proof = channel.decrypt_response(
-                &crate::libs::utils::base64::base64_decode(&response.confirmation_proof),
+                &plain_libs::utils::base64::base64_decode(&response.confirmation_proof),
                 crate::features::peers::pairing::now_ms() as u64,
             )?;
             ensure!(
@@ -220,9 +220,10 @@ impl Confirmations {
                         .is_some(),
                     "Pairing expired"
                 );
-                if let Some(saved) =
-                    crate::libs::db::chat_store::peers::get(&state.db, &ticket.target.device_id)?
-                {
+                if let Some(saved) = crate::infrastructure::db::chat_store::peers::get(
+                    &state.db,
+                    &ticket.target.device_id,
+                )? {
                     ensure!(
                         saved.public_key.is_empty() || saved.public_key == signature_public_key,
                         "Peer identity changed"

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use plain_rs::libs::platform::system::consts::AppPaths;
+use plain_rs::infrastructure::platform::system::consts::AppPaths;
 
 pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
     let password = if stdin {
@@ -17,9 +17,8 @@ pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
 
 #[cfg(unix)]
 fn prompt_password() -> Result<String> {
-    let password =
-        plain_rs::libs::platform::unix::read_password::prompt_password("New password: ")?;
-    let confirm = plain_rs::libs::platform::unix::read_password::prompt_password("Confirm: ")?;
+    let password = plain_libs::platform::unix::read_password::prompt_password("New password: ")?;
+    let confirm = plain_libs::platform::unix::read_password::prompt_password("Confirm: ")?;
     anyhow::ensure!(password == confirm, "Passwords do not match");
     Ok(password)
 }
@@ -35,7 +34,7 @@ fn set_password(
     password: &str,
 ) -> Result<()> {
     let _data_directory =
-        plain_rs::libs::data_paths::directory::DataDirectory::open(directory, cache)
+        plain_rs::infrastructure::data_paths::directory::DataDirectory::open(directory, cache)
             .map_err(anyhow::Error::msg)?;
     let prefs = plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(
         directory,

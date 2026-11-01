@@ -192,7 +192,10 @@ fn core_scan_events_report_real_lifecycle_and_unknown_totals() {
     ));
     let session = scans.begin_discovery().unwrap();
     let event = received.try_recv().unwrap();
-    assert_eq!(event.event_type, crate::libs::events::MEDIA_SCAN_PROGRESS);
+    assert_eq!(
+        event.event_type,
+        crate::infrastructure::events::MEDIA_SCAN_PROGRESS
+    );
     let first: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
     assert_eq!(first["state"], "RUNNING");
     assert_eq!(first["total"], serde_json::Value::Null);

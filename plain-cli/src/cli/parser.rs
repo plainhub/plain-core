@@ -143,12 +143,24 @@ impl Cli {
             }
         };
         if values.data_dir.is_some()
-            && !matches!(scope, Scope::Run | Scope::Uninstall | Scope::Passwd | Scope::Requests | Scope::Allow | Scope::Deny)
+            && !matches!(
+                scope,
+                Scope::Run
+                    | Scope::Uninstall
+                    | Scope::Passwd
+                    | Scope::Requests
+                    | Scope::Allow
+                    | Scope::Deny
+            )
         {
-            return Err(ParseError::invalid("--data-dir is not used by this command"));
+            return Err(ParseError::invalid(
+                "--data-dir is not used by this command",
+            ));
         }
         if values.cache_dir.is_some() && !matches!(scope, Scope::Run | Scope::Passwd) {
-            return Err(ParseError::invalid("--cache-dir is not used by this command"));
+            return Err(ParseError::invalid(
+                "--cache-dir is not used by this command",
+            ));
         }
         Ok(Self {
             data_dir: values.data_dir,

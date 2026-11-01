@@ -3,13 +3,10 @@ use super::{
     playback::{self, Playback},
     queue::{self, AudioTrack},
 };
-use crate::{
-    features::prefs::Prefs,
-    libs::{
-        db::Db,
-        error::{DomainError, DomainResult},
-    },
-};
+use crate::features::prefs::Prefs;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]

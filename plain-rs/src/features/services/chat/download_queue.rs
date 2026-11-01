@@ -1,5 +1,5 @@
 use crate::features::chat::attachments::download_queue::Effect;
-use crate::libs::events::WsEvent;
+use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 pub struct Runtime {
     job: tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -66,7 +66,7 @@ pub fn start(state: CoreRuntime) {
                             .await;
                             if matches!(committed, Ok(Ok(true))) {
                                 if let Ok(Some(chat)) =
-                                    crate::libs::db::chat_store::messages::get(&db, &id)
+                                    crate::infrastructure::db::chat_store::messages::get(&db, &id)
                                 {
                                     let _ = state.events.send(WsEvent::broadcast(
                                         crate::features::chat::events::WS_MESSAGE_UPDATED,

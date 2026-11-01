@@ -1,26 +1,26 @@
 use crate::features::chat::enums::DeviceType;
 use crate::features::services::notifications::types::Notification;
 use crate::features::services::peers::management::Identity;
-use crate::libs::db::DPeer;
+use crate::infrastructure::db::DPeer;
 use anyhow::Result;
 use serde_json::json;
 use std::collections::HashMap;
 
 use super::*;
 use crate::features::services::peers::metadata::AppSnapshot as App;
-use crate::libs::types::Instant;
+use crate::infrastructure::types::Instant;
 use std::sync::Arc;
 use std::time::Duration;
 
 struct CallbackReceiver {
-    host: Arc<crate::libs::host::bridge::Host>,
+    host: Arc<crate::infrastructure::host::bridge::Host>,
     generation: u64,
     requests: tokio::sync::mpsc::Receiver<serde_json::Value>,
     buffered: std::collections::VecDeque<serde_json::Value>,
 }
 
 impl CallbackReceiver {
-    fn new(host: Arc<crate::libs::host::bridge::Host>) -> Self {
+    fn new(host: Arc<crate::infrastructure::host::bridge::Host>) -> Self {
         let (generation, requests) = host.connect();
         Self {
             host,
@@ -65,7 +65,7 @@ fn fixture() -> (
     Store,
     DPeer,
     Identity,
-    Arc<crate::libs::host::bridge::Host>,
+    Arc<crate::infrastructure::host::bridge::Host>,
     CallbackReceiver,
 ) {
     let peer = DPeer::new(
@@ -77,11 +77,11 @@ fn fixture() -> (
     );
     let identity = Identity {
         url: "wss://127.0.0.1:18443/?cid=fixture".into(),
-        token: crate::libs::utils::base64::base64_encode(&[7; 32]),
+        token: plain_libs::utils::base64::base64_encode(&[7; 32]),
         ip: peer.ip.clone(),
         port: peer.port,
     };
-    let host = Arc::new(crate::libs::host::bridge::Host::default());
+    let host = Arc::new(crate::infrastructure::host::bridge::Host::default());
     let receiver = CallbackReceiver::new(host.clone());
     let store = Store::default();
     store.reconcile(
@@ -114,7 +114,7 @@ fn observation(items: Vec<Notification>) -> Result<(App, Vec<Notification>, reqw
             device_name: "Fixture".into(),
             capabilities: vec!["NOTIFICATIONS".into()],
             permissions: vec!["NOTIFICATION_LISTENER".into()],
-            url_token: crate::libs::utils::base64::base64_encode(&[9; 32]),
+            url_token: plain_libs::utils::base64::base64_encode(&[9; 32]),
         },
         items,
         reqwest::Url::parse("https://127.0.0.1:18443").unwrap(),
@@ -373,7 +373,7 @@ async fn snapshots_recover_without_alerts_and_credentials_or_membership_retire_o
             .starts_with("https://127.0.0.2:18443/")
     );
     let mut replacement = moved.clone();
-    replacement.token = crate::libs::utils::base64::base64_encode(&[8; 32]);
+    replacement.token = plain_libs::utils::base64::base64_encode(&[8; 32]);
     store.reconcile(
         std::slice::from_ref(&peer),
         &HashMap::from([(peer.id.clone(), replacement)]),
@@ -427,7 +427,7 @@ async fn invalid_snapshots_do_not_mutate_projection_and_icons_decrypt_with_stand
     );
     assert!(receiver.try_recv().is_err());
     let (mut app, items, base) = observation(vec![notification("valid")]).unwrap();
-    app.url_token = crate::libs::utils::base64::base64_encode(&[9; 31]);
+    app.url_token = plain_libs::utils::base64::base64_encode(&[9; 31]);
     assert!(
         store
             .apply(
@@ -593,7 +593,7 @@ async fn saturated_host_recovers_the_latest_snapshot_and_missed_alerts() {
         )
         .unwrap();
     event(&mut callbacks);
-    for _ in 0..crate::libs::host::bridge::REQUEST_CAPACITY {
+    for _ in 0..crate::infrastructure::host::bridge::REQUEST_CAPACITY {
         host.notify("blocked", json!({})).unwrap();
     }
     store

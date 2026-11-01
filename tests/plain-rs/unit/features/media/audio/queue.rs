@@ -72,13 +72,13 @@ fn enqueue_appends_moves_and_never_duplicates() {
         false,
     )
     .unwrap();
-    let queued = crate::libs::db::audio_queue::all_queue_items(&db).unwrap();
+    let queued = crate::infrastructure::db::audio_queue::all_queue_items(&db).unwrap();
     assert_eq!(
         queued.iter().map(|q| q.path.as_str()).collect::<Vec<_>>(),
         ["/tq1/a.mp3", "/tq1/b.mp3", "/tq1/c.mp3"]
     );
     indexed_enqueue(&db, &[audio("/tq1/z.mp3", "Z", 9)], true).unwrap();
-    let queued = crate::libs::db::audio_queue::all_queue_items(&db).unwrap();
+    let queued = crate::infrastructure::db::audio_queue::all_queue_items(&db).unwrap();
     assert_eq!(queued[0].path, "/tq1/z.mp3");
     for (i, q) in queued.iter().enumerate() {
         assert_eq!(q.sort_order, i as i64);
@@ -107,7 +107,7 @@ fn remove_paths_prunes_queue_history_playlist_items_and_current() {
     remove_paths(&db, &["/tq3/a.mp3".to_string()]).unwrap();
 
     assert!(
-        crate::libs::db::audio_queue::queue_item_by_path(&db, "/tq3/a.mp3")
+        crate::infrastructure::db::audio_queue::queue_item_by_path(&db, "/tq3/a.mp3")
             .unwrap()
             .is_none()
     );
@@ -115,7 +115,7 @@ fn remove_paths_prunes_queue_history_playlist_items_and_current() {
     assert_eq!(playlist_item_count(&db, &pl.id).unwrap(), 1);
     assert_eq!(get_audio_current(&db).unwrap(), "");
     assert!(
-        crate::libs::db::audio_queue::queue_item_by_path(&db, "/tq3/b.mp3")
+        crate::infrastructure::db::audio_queue::queue_item_by_path(&db, "/tq3/b.mp3")
             .unwrap()
             .is_some()
     );
@@ -165,7 +165,7 @@ fn playlist_crud_items_and_counts() {
     delete_playlist(&db, &pl.id).unwrap();
     assert!(playlist_by_id(&db, &pl.id).unwrap().is_none());
     assert!(
-        crate::libs::db::audio_queue::playlist_items(&db, &pl.id)
+        crate::infrastructure::db::audio_queue::playlist_items(&db, &pl.id)
             .unwrap()
             .is_empty()
     );
@@ -226,14 +226,14 @@ fn play_starts_increment_counts_and_trim_old_audio_history() {
     let metadata = track_by_id(&db, "test:/tq7/a.mp3").unwrap();
     assert_eq!(metadata.title, "A2");
     assert_eq!(metadata.duration_ms, 2);
-    for i in 0..(crate::libs::db::HISTORY_KEEP * 5 / 4 + 2) {
+    for i in 0..(crate::infrastructure::db::HISTORY_KEEP * 5 / 4 + 2) {
         indexed_on_playing(&db, &format!("/tq7/x{i}.mp3"), "T", "X", 1).unwrap();
     }
     assert_eq!(
         crate::features::media::audio::overview::history(&db)
             .unwrap()
             .len(),
-        crate::libs::db::HISTORY_KEEP + 2
+        crate::infrastructure::db::HISTORY_KEEP + 2
     );
     let page = crate::features::media::audio::overview::history(&db).unwrap();
     assert!(page[0].id.starts_with("test:/tq7/x"));
@@ -283,12 +283,12 @@ fn state_survives_reopen() {
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("plain.db");
     {
-        let db = crate::libs::db::Db::open(&path).unwrap();
+        let db = crate::infrastructure::db::Db::open(&path).unwrap();
         let pl = create_playlist(&db, "Persist").unwrap();
         indexed_add_playlist_items(&db, &pl.id, &[audio("/p/a.mp3", "A", 1)]).unwrap();
         indexed_on_playing(&db, "/p/a.mp3", "A", "X", 1).unwrap();
     }
-    let db = crate::libs::db::Db::open(&path).unwrap();
+    let db = crate::infrastructure::db::Db::open(&path).unwrap();
     fixtures::register_audio(&db, &audio("/p/a.mp3", "A", 1));
     let listed = playlists(&db).unwrap();
     assert_eq!(listed.len(), 1);
@@ -306,7 +306,7 @@ fn state_survives_reopen() {
 fn milliseconds_survive_restart_without_persisting_album_snapshots() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("audio.db");
-    let db = crate::libs::db::Db::open(&path).unwrap();
+    let db = crate::infrastructure::db::Db::open(&path).unwrap();
     let pl = create_playlist(&db, "Precise").unwrap();
     let mut item = audio("/precise.mp3", "Precise", 117_123);
     item.album_id = "album-42".into();
@@ -315,9 +315,9 @@ fn milliseconds_survive_restart_without_persisting_album_snapshots() {
     enqueue(&db, std::slice::from_ref(&item), false).unwrap();
     on_playing(&db, &item.path).unwrap();
     drop(db);
-    let db = crate::libs::db::Db::open(&path).unwrap();
+    let db = crate::infrastructure::db::Db::open(&path).unwrap();
     assert_eq!(
-        crate::libs::db::audio_queue::all_queue_items(&db).unwrap()[0].duration_ms,
+        crate::infrastructure::db::audio_queue::all_queue_items(&db).unwrap()[0].duration_ms,
         117_123
     );
     let saved = playlist_items_page(&db, &pl.id, 0, 10, "")
@@ -344,14 +344,14 @@ fn duplicate_enqueue_uses_last_snapshot_and_preserves_other_tracks() {
         true,
     )
     .unwrap();
-    let rows = crate::libs::db::audio_queue::all_queue_items(&db).unwrap();
+    let rows = crate::infrastructure::db::audio_queue::all_queue_items(&db).unwrap();
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].title, "Latest");
     assert_eq!(rows[0].duration_ms, 123);
     assert_eq!(rows[1].path, "/old");
     assert!(reorder_queued(&db, &["test:/old".into(), "test:/old".into()]).is_err());
     assert_eq!(
-        crate::libs::db::audio_queue::all_queue_items(&db)
+        crate::infrastructure::db::audio_queue::all_queue_items(&db)
             .unwrap()
             .len(),
         2
@@ -372,7 +372,7 @@ fn failed_queue_and_playlist_batch_writes_roll_back() {
         .is_err()
     );
     assert_eq!(
-        crate::libs::db::audio_queue::all_queue_items(&db)
+        crate::infrastructure::db::audio_queue::all_queue_items(&db)
             .unwrap()
             .iter()
             .map(|r| r.path.as_str())
@@ -409,7 +409,7 @@ fn concurrent_queue_and_history_writes_do_not_lose_updates() {
         worker.join().unwrap();
     }
     assert_eq!(
-        crate::libs::db::audio_queue::all_queue_items(&db)
+        crate::infrastructure::db::audio_queue::all_queue_items(&db)
             .unwrap()
             .len(),
         16
@@ -427,7 +427,7 @@ fn failed_media_cleanup_rolls_back_every_audio_table() {
     db.with_conn(|c|c.execute_batch("CREATE TRIGGER reject_history_delete BEFORE DELETE ON media_play_history BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;")).unwrap();
     assert!(remove_paths(&db, &["/one".into()]).is_err());
     assert_eq!(
-        crate::libs::db::audio_queue::all_queue_items(&db)
+        crate::infrastructure::db::audio_queue::all_queue_items(&db)
             .unwrap()
             .len(),
         1
@@ -580,7 +580,7 @@ fn file_cleanup_clears_a_selected_uri_alias_even_when_it_is_not_queued() {
     db.use_platform_audio_catalog().unwrap();
     let uri = "content://media/external/audio/media/42";
     db.cache_platform_audio(
-        &[crate::libs::db::audio_catalog::AudioMedia {
+        &[crate::infrastructure::db::audio_catalog::AudioMedia {
             file_id: Some("42".into()),
             aliases: vec![uri.into()],
             track: AudioTrack::from_path_stem("/music/one.mp3"),

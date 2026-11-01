@@ -107,7 +107,7 @@ fn password_browser_vector_requires_both_encryption_layers_and_agrees_with_rust(
 }
 
 fn pair() -> (Channel, Channel) {
-    let (private, public) = crate::libs::crypto::ed25519_generate();
+    let (private, public) = plain_libs::crypto::ed25519_generate();
     let (client, hello) = Client::start("browser", ConfirmationMode::DeviceConfirmation).unwrap();
     let (server, response) = ServerHandshake::start(
         "browser",
@@ -132,7 +132,7 @@ fn derivation_matches_rfc5869_sha256_case_one() {
         &(0xf0_u8..=0xf9).collect::<Vec<_>>(),
     );
     assert_eq!(
-        crate::libs::utils::hex::bytes_to_hex(&key),
+        plain_libs::utils::hex::bytes_to_hex(&key),
         "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf"
     );
 }
@@ -191,7 +191,7 @@ fn every_signed_field_and_signature_reject_substitution() {
         "expiresAt",
         "signature",
     ] {
-        let (private, public) = crate::libs::crypto::ed25519_generate();
+        let (private, public) = plain_libs::crypto::ed25519_generate();
         let (client, hello) =
             Client::start("browser", ConfirmationMode::DeviceConfirmation).unwrap();
         let (_, response) = ServerHandshake::start(
@@ -229,7 +229,7 @@ fn every_signed_field_and_signature_reject_substitution() {
 #[test]
 fn reveal_cannot_change_committed_key_nonce_or_client_identity() {
     for field in ["publicKey", "nonce", "clientId"] {
-        let (private, _) = crate::libs::crypto::ed25519_generate();
+        let (private, _) = plain_libs::crypto::ed25519_generate();
         let (client, hello) =
             Client::start("browser", ConfirmationMode::DeviceConfirmation).unwrap();
         let reveal = client.reveal();
@@ -282,7 +282,7 @@ fn commitment_is_hiding_and_legacy_or_extra_hello_fields_are_rejected() {
         )
         .is_err()
     );
-    let (private, _) = crate::libs::crypto::ed25519_generate();
+    let (private, _) = plain_libs::crypto::ed25519_generate();
     for commitment in [
         String::new(),
         base64_encode(&[0; 31]),
@@ -304,7 +304,7 @@ fn commitment_is_hiding_and_legacy_or_extra_hello_fields_are_rejected() {
 
 #[test]
 fn trusted_identity_and_fresh_commitment_cannot_be_replaced() {
-    let (private, public) = crate::libs::crypto::ed25519_generate();
+    let (private, public) = plain_libs::crypto::ed25519_generate();
     let (client, hello) = Client::start("browser", ConfirmationMode::DeviceConfirmation).unwrap();
     let (_, response) = ServerHandshake::start(
         "browser",
@@ -336,7 +336,7 @@ fn trusted_identity_and_fresh_commitment_cannot_be_replaced() {
         1000,
     )
     .unwrap();
-    let (_, replacement) = crate::libs::crypto::ed25519_generate();
+    let (_, replacement) = plain_libs::crypto::ed25519_generate();
     assert!(
         client
             .accept(&response, &base64_encode(&replacement), "device", 1000)
@@ -346,7 +346,7 @@ fn trusted_identity_and_fresh_commitment_cannot_be_replaced() {
 
 #[test]
 fn reveal_and_signed_hello_expire_and_client_clock_cannot_extend_lifetime() {
-    let (private, public) = crate::libs::crypto::ed25519_generate();
+    let (private, public) = plain_libs::crypto::ed25519_generate();
     let (client, hello) = Client::start("browser", ConfirmationMode::DeviceConfirmation).unwrap();
     let (server, response) = ServerHandshake::start(
         "browser",
@@ -382,7 +382,7 @@ fn reveal_and_signed_hello_expire_and_client_clock_cannot_extend_lifetime() {
 
 #[test]
 fn server_rejects_invalid_committed_points_nonces_and_identities() {
-    let (private, _) = crate::libs::crypto::ed25519_generate();
+    let (private, _) = plain_libs::crypto::ed25519_generate();
     for (public_key, nonce) in [
         (base64_encode(&[0; 65]), nonce()),
         (
@@ -445,7 +445,7 @@ fn server_rejects_invalid_committed_points_nonces_and_identities() {
 
 #[test]
 fn confirmation_domains_reject_cross_protocol_challenges() {
-    let (private, public) = crate::libs::crypto::ed25519_generate();
+    let (private, public) = plain_libs::crypto::ed25519_generate();
     for (client_mode, server_mode) in [
         (
             ConfirmationMode::ChatPairing,

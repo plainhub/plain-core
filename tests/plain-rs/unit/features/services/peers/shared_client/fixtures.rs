@@ -1,8 +1,7 @@
 use super::*;
-use crate::libs::db::{
-    DChat,
-    chat_store::{SaveMode, messages},
-};
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::chat_store::SaveMode;
+use crate::infrastructure::db::chat_store::messages;
 use crate::test_runtime::Core as ContentServer;
 use serde_json::json;
 
@@ -11,12 +10,12 @@ pub(super) fn root() -> (tempfile::TempDir, ContentServer, String) {
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "local").unwrap();
-    let token = crate::libs::utils::base64::base64_encode(&[4; 32]);
+    let token = plain_libs::utils::base64::base64_encode(&[4; 32]);
     let server = ContentServer::start(dir.path(), &token, prefs).unwrap();
     (dir, server, token)
 }
 pub(super) fn card(port: u16) -> Card {
-    serde_json::from_value(json!({"shareId":"fixture","urlToken":crate::libs::utils::base64::base64_encode_url_safe(&[7;32]),"peerInfo":{"id":"peer","ip":"127.0.0.1","port":port},"name":"old","itemCount":2,"totalSize":8,"expiresAt":"2030-01-01T00:00:00.000Z"})).unwrap()
+    serde_json::from_value(json!({"shareId":"fixture","urlToken":plain_libs::utils::base64::base64_encode_url_safe(&[7;32]),"peerInfo":{"id":"peer","ip":"127.0.0.1","port":port},"name":"old","itemCount":2,"totalSize":8,"expiresAt":"2030-01-01T00:00:00.000Z"})).unwrap()
 }
 pub(super) fn save_card(state: &CoreRuntime, card: &Card) -> DChat {
     let row = DChat::new(
@@ -63,7 +62,7 @@ pub(super) async fn tls() -> (
         let release = release.clone();
         async move {
             assert_eq!(headers["c-id"], "fixture");
-            let plain = crate::libs::crypto::xchacha_decrypt_raw(&[7;32], &body).unwrap();
+            let plain = plain_libs::crypto::xchacha_decrypt_raw(&[7;32], &body).unwrap();
             let plain = String::from_utf8(plain).unwrap();
             let parts: Vec<_> = plain.splitn(3, '|').collect();
             assert!(uuid::Uuid::parse_str(parts[1]).is_ok());
@@ -73,8 +72,8 @@ pub(super) async fn tls() -> (
                 started.notify_one();
                 release.notified().await;
             }
-            let info = json!({"data":{"sharedInfo":{"name":"current","readOnly":true,"requiresPassword":false,"expiresAt":null,"urlToken":crate::libs::utils::base64::base64_encode(&[8;32]),"entries":[{"name":"a 中文.txt","relativePath":"folder/ +?#中文%","isDir":false,"size":8,"mimeType":"text/plain","hasThumb":false}]}}});
-            crate::libs::transport::http_response::Context::new("/guest_graphql", &body).encrypt(&[7;32], info.to_string().as_bytes()).unwrap()
+            let info = json!({"data":{"sharedInfo":{"name":"current","readOnly":true,"requiresPassword":false,"expiresAt":null,"urlToken":plain_libs::utils::base64::base64_encode(&[8;32]),"entries":[{"name":"a 中文.txt","relativePath":"folder/ +?#中文%","isDir":false,"size":8,"mimeType":"text/plain","hasThumb":false}]}}});
+            crate::infrastructure::transport::http_response::Context::new("/guest_graphql", &body).encrypt(&[7;32], info.to_string().as_bytes()).unwrap()
         }
     })).route("/fs", get(|Query(params): Query<std::collections::HashMap<String, String>>| async move {
         assert!(!params.contains_key("sid"));

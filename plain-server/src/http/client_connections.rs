@@ -1,12 +1,12 @@
 use std::sync::{Arc, Mutex};
 
 pub(crate) struct ClientConnections {
-    pub(crate) host: Arc<plain_rs::libs::host::bridge::Host>,
+    pub(crate) host: Arc<plain_rs::infrastructure::host::bridge::Host>,
     pub(crate) login_attempts: Arc<Mutex<crate::http::auth::ws_login::LoginAttempts>>,
     pub(crate) subscriptions: Arc<crate::graphql::subscriptions::session::Sessions>,
     pub(crate) sockets: Arc<crate::http::websocket::runtime::Runtime>,
 }
-impl plain_rs::libs::host::client_connections::ClientConnections for ClientConnections {
+impl plain_rs::infrastructure::host::client_connections::ClientConnections for ClientConnections {
     fn close(&self, client: Option<&str>) {
         self.sockets.close_client(&self.subscriptions, client);
     }

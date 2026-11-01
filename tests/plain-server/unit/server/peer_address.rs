@@ -1,5 +1,5 @@
 use plain_rs::features::services::peers::peer_address::*;
-use plain_rs::libs::db::DPeer;
+use plain_rs::infrastructure::db::DPeer;
 use serde_json::json;
 #[tokio::test]
 async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_identity_without_host()
@@ -14,10 +14,10 @@ async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_
         Some(443),
         plain_rs::features::chat::enums::DeviceType::Tablet,
     );
-    plain_rs::libs::db::chat_store::peers::save(
+    plain_rs::infrastructure::db::chat_store::peers::save(
         &state.db,
         &[peer.clone()],
-        plain_rs::libs::db::chat_store::SaveMode::Insert,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     let (_generation, mut requests) = state.host.connect();
@@ -53,10 +53,10 @@ async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_
     let old = peer.clone();
     peer.ip = "::1".into();
     peer.port = Some(2443);
-    plain_rs::libs::db::chat_store::peers::save(
+    plain_rs::infrastructure::db::chat_store::peers::save(
         &state.db,
         &[peer.clone()],
-        plain_rs::libs::db::chat_store::SaveMode::Update,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Update,
     )
     .unwrap();
     assert_eq!(
@@ -66,7 +66,7 @@ async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_
     let current = address(&peer);
     assert_eq!(current.api_url, "https://[::1]:2443/peer_graphql");
     assert_eq!(current.status_ws_url, "wss://[::1]:2443/status");
-    plain_rs::libs::db::chat_store::peers::delete(&state.db, &[peer.id.clone()]).unwrap();
+    plain_rs::infrastructure::db::chat_store::peers::delete(&state.db, &[peer.id.clone()]).unwrap();
     assert_eq!(
         file(&server, &peer, file_id).await.errors[0].message,
         "Peer removed"

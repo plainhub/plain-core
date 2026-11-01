@@ -1,10 +1,12 @@
 use crate::features::media::audio::queue::AudioTrack;
 #[cfg(test)]
-use crate::libs::db::{MediaFileRow, audio_catalog::AudioMedia};
-use crate::libs::error::{DomainError, DomainResult};
+use crate::infrastructure::db::MediaFileRow;
+use crate::infrastructure::db::audio_catalog::AudioMedia;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
 
 pub async fn read_uri(
-    resources: &crate::libs::host::resources::NativeResources,
+    resources: &crate::infrastructure::host::resources::NativeResources,
     cache: &std::path::Path,
     path: &str,
 ) -> DomainResult<AudioTrack> {
@@ -12,14 +14,14 @@ pub async fn read_uri(
     crate::features::services::files::input::read_source(resources, cache, path, move |reader| {
         Ok(track(
             &source,
-            crate::libs::media::probe::probe_audio_reader(reader),
+            plain_libs::media::probe::probe_audio_reader(reader),
         ))
     })
     .await
     .map_err(DomainError::Other)
 }
 
-fn track(path: &str, facts: crate::libs::media::probe::ProbedMeta) -> AudioTrack {
+fn track(path: &str, facts: plain_libs::media::probe::ProbedMeta) -> AudioTrack {
     AudioTrack {
         file_id: None,
         path: path.to_owned(),
@@ -59,7 +61,7 @@ pub fn from_row(row: MediaFileRow) -> AudioMedia {
 }
 
 pub fn read_file(path: &str) -> DomainResult<AudioTrack> {
-    let local = crate::libs::utils::file_uri::local_path(path).map_err(DomainError::Other)?;
+    let local = plain_libs::utils::file_uri::local_path(path).map_err(DomainError::Other)?;
     if !std::fs::metadata(&local)
         .map_err(|error| DomainError::Other(error.to_string()))?
         .is_file()
@@ -68,7 +70,7 @@ pub fn read_file(path: &str) -> DomainResult<AudioTrack> {
             "Audio source is not a regular file".into(),
         ));
     }
-    let mut facts = crate::libs::media::probe::probe_media(&local, "audio");
+    let mut facts = plain_libs::media::probe::probe_media(&local, "audio");
     if facts.title.is_empty() {
         facts.title = AudioTrack::from_path_stem(&local).title;
     }

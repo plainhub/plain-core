@@ -6,6 +6,7 @@ from pathlib import Path
 
 URL = "https://github.com/plainhub/plain-core.git"
 PACKAGES = {
+    "plain-libs": "plain-libs",
     "plain-rs": "plain-rs",
     "plain-server": "plain-server",
 }
@@ -56,13 +57,10 @@ def refresh_local(root, manifest, core, config, state):
     before_lock = lock.read_bytes()
     record = json.loads(before_record)
     try:
+        patch = local_patch(core, PACKAGES)
+        config.write_bytes(before_config.replace(record["patch"].encode(), patch.encode(), 1))
         metadata = cargo(root, manifest, "metadata", "--format-version", "1")
         used = resolved_patches(metadata)
-        patch = local_patch(core, {name for name, _ in used})
-        if patch != record["patch"]:
-            config.write_bytes(before_config.replace(record["patch"].encode(), patch.encode(), 1))
-            metadata = cargo(root, manifest, "metadata", "--format-version", "1")
-            used = resolved_patches(metadata)
         for name, path in used:
             if path != core / PACKAGES[name] / "Cargo.toml":
                 raise ValueError(f"Local override was not applied: {name}")

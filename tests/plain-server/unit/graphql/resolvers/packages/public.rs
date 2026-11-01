@@ -139,7 +139,7 @@ async fn package_statuses_keep_missing_packages_in_the_reply() {
 async fn install_package_parses_identity_in_rust_and_dispatches_only_sdk_execution() {
     let (dir, schema, _prefs) = fixture(json!(["QUERY_ALL_PACKAGES"]));
     let path = dir.path().join("source.apk");
-    std::fs::write(&path, plain_rs::test_apk::apk("com.a", None)).unwrap();
+    std::fs::write(&path, plain_libs::test_apk::apk("com.a", None)).unwrap();
     let expected = path.clone();
     let host = schema_host(&schema);
     stub(host.clone(), move |method, params| match method {
@@ -174,7 +174,7 @@ fn schema_host(schema: &PublicSchema) -> Arc<Host> {
 async fn package_manifest_uses_the_installed_path_and_no_platform_parser() {
     let (dir, schema, _prefs) = fixture(json!(["QUERY_ALL_PACKAGES"]));
     let path = dir.path().join("installed.apk");
-    std::fs::write(&path, plain_rs::test_apk::apk("com.a", None)).unwrap();
+    std::fs::write(&path, plain_libs::test_apk::apk("com.a", None)).unwrap();
     let host = schema_host(&schema);
     stub(host, move |method, params| match method {
         "systemPackageStatuses" => {

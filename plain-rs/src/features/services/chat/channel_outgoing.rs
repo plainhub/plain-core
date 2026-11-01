@@ -4,11 +4,11 @@ use crate::features::chat::enums::ChannelSystemMessageType;
 use crate::features::chat::enums::DeviceType;
 use crate::features::prefs::Prefs;
 use crate::features::services::peers::peer_wire::signing_keypair;
-use crate::libs::db::DChannel;
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
-use crate::libs::db::chat_store::peers;
-use crate::libs::transport::contract::channel_system_request;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::chat_store::peers;
+use crate::infrastructure::transport::contract::channel_system_request;
 use anyhow::{Result, bail};
 use serde::Serialize;
 
@@ -78,7 +78,7 @@ pub fn prepare(
         } else {
             (channel.key.clone(), channel.id.clone())
         };
-        if crate::libs::utils::base64::base64_decode(&key).len() != 32 {
+        if plain_libs::utils::base64::base64_decode(&key).len() != 32 {
             bail!("Invalid channel transport key for {}", peer.id);
         }
         targets.push(Target {

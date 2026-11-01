@@ -18,7 +18,7 @@ impl Policy {
                     return Err("Absolute media configuration path required".into());
                 }
                 match std::fs::read_to_string(path) {
-                    Ok(text) => crate::libs::utils::config::Config::parse(&text),
+                    Ok(text) => plain_libs::utils::config::Config::parse(&text),
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                         Default::default()
                     }

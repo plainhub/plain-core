@@ -13,6 +13,7 @@ description = "Shared Plain GraphQL, HTTP and native transport adapters"
 
 
 [dependencies]
+plain-libs = { path = "../plain-libs", default-features = false }
 "subtle" = { "version" = "2", "optional" = true }
 "futures-util" = { "version" = "0.3", "default-features" = false, "features" = ["sink", "std"], "optional" = true }
 "axum" = { "version" = "0.7", "default-features" = false, "features" = ["ws", "multipart", "json", "query", "tokio", "http1"], "optional" = true }

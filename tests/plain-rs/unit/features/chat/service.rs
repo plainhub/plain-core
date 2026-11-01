@@ -1,17 +1,17 @@
 use super::*;
 use crate::features::chat::enums::ChannelStatus;
 use crate::features::chat::enums::ChatStatus;
-use crate::libs::crypto::xchacha_decrypt;
-use crate::libs::db::DChat;
-use crate::libs::db::Db;
-use crate::libs::utils::base64::base64_decode;
-use crate::libs::utils::base64::base64_encode;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::Db;
+use plain_libs::crypto::xchacha_decrypt;
+use plain_libs::utils::base64::base64_decode;
+use plain_libs::utils::base64::base64_encode;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 struct TestTransport;
 
-impl crate::libs::transport::contract::PeerTransport for TestTransport {
+impl crate::infrastructure::transport::contract::PeerTransport for TestTransport {
     async fn post<'a>(
         &'a self,
         _url: &'a str,
@@ -159,7 +159,7 @@ fn to_peer_content_converts_fid_to_fsid() {
         crate::features::files::resource_link::parse(uri.strip_prefix("fsid:").unwrap()).unwrap();
     let resource = crate::features::files::resource_link::open(
         &scope,
-        &crate::libs::utils::base64::base64_decode(&token),
+        &plain_libs::utils::base64::base64_decode(&token),
         payload,
     )
     .unwrap();
@@ -209,14 +209,16 @@ async fn kicked_channel_rejects_incoming_message() {
         std::sync::Arc::new(NoChatHooks),
         no_link_previews(),
     );
-    let mut channel = crate::libs::db::DChannel::new("group", "self");
-    service.db.upsert_peer(&crate::libs::db::DPeer::new(
-        "peer",
-        "Fixture",
-        "",
-        Some(1),
-        DeviceType::Phone,
-    ));
+    let mut channel = crate::infrastructure::db::DChannel::new("group", "self");
+    service
+        .db
+        .upsert_peer(&crate::infrastructure::db::DPeer::new(
+            "peer",
+            "Fixture",
+            "",
+            Some(1),
+            DeviceType::Phone,
+        ));
     channel.status = ChannelStatus::Kicked;
     service.db.insert_channel(&channel);
 
@@ -226,7 +228,7 @@ async fn kicked_channel_rejects_incoming_message() {
                 "peer",
                 &channel.id,
                 "{}",
-                &crate::libs::utils::base64::base64_encode(&[7; 64]),
+                &plain_libs::utils::base64::base64_encode(&[7; 64]),
                 crate::features::peers::pairing::now_ms()
             )
             .unwrap_err(),
@@ -239,7 +241,7 @@ async fn kicked_channel_rejects_incoming_message() {
                 "peer",
                 "missing",
                 "{}",
-                &crate::libs::utils::base64::base64_encode(&[7; 64]),
+                &plain_libs::utils::base64::base64_encode(&[7; 64]),
                 crate::features::peers::pairing::now_ms()
             )
             .unwrap_err(),
@@ -251,8 +253,13 @@ async fn kicked_channel_rejects_incoming_message() {
 async fn unpaired_peer_send_fails_and_local_cache_tracks_deletion() {
     let dir = unique_tmp_dir("unpaired-send");
     let db = Db::open(&dir.join("plain.db")).expect("open db");
-    let peer =
-        crate::libs::db::DPeer::new("peer", "Peer", "127.0.0.1", Some(8443), DeviceType::Phone);
+    let peer = crate::infrastructure::db::DPeer::new(
+        "peer",
+        "Peer",
+        "127.0.0.1",
+        Some(8443),
+        DeviceType::Phone,
+    );
     db.upsert_peer(&peer);
     let service = ChatService::new(
         db,

@@ -1,10 +1,10 @@
 use crate::features::services::casting::dlna_sender_runtime::Item;
-use crate::libs::dlna::didl;
-use crate::libs::dlna::soap as protocol;
-use crate::libs::dlna::types::DiscoveredDevice;
-use crate::libs::dlna::types::MediaType;
-use crate::libs::dlna::util::xml_escape;
 use crate::runtime::Runtime as CoreRuntime;
+use plain_libs::dlna::didl;
+use plain_libs::dlna::soap as protocol;
+use plain_libs::dlna::types::DiscoveredDevice;
+use plain_libs::dlna::types::MediaType;
+use plain_libs::dlna::util::xml_escape;
 use serde_json::json;
 use std::time::Duration;
 
@@ -27,7 +27,7 @@ async fn mime_type(state: &CoreRuntime, path: &str) -> String {
                 .filter(|value| !value.is_empty())
                 .map(str::to_owned)
         })
-        .unwrap_or_else(|| crate::libs::utils::mime::mime_from_ext(path).to_owned())
+        .unwrap_or_else(|| plain_libs::utils::mime::mime_from_ext(path).to_owned())
 }
 
 async fn media_url(state: &CoreRuntime, path: &str, art: bool) -> Result<String, String> {
@@ -80,7 +80,18 @@ pub async fn cast_with_mime(
     let meta = if item.title.is_empty() {
         String::new()
     } else {
-        didl::metadata(&url, &item.title, &mime, media_type, &art, true)
+        didl::metadata(
+            &url,
+            if item.title.trim().is_empty() {
+                "PlainApp"
+            } else {
+                &item.title
+            },
+            &mime,
+            media_type,
+            &art,
+            true,
+        )
     };
     soap(state,&device,"SetAVTransportURI",&format!("<InstanceID>0</InstanceID><CurrentURI>{}</CurrentURI><CurrentURIMetaData>{}</CurrentURIMetaData>",xml_escape(&url),xml_escape(&meta))).await?;
     if !advance {
@@ -254,8 +265,8 @@ fn start_tasks(state: &CoreRuntime) {
     }));
 }
 fn xml_fields(xml: &str) -> std::collections::HashMap<String, String> {
-    use crate::libs::dlna::xml_sax::Event;
-    use crate::libs::dlna::xml_sax::Reader;
+    use plain_libs::dlna::xml_sax::Event;
+    use plain_libs::dlna::xml_sax::Reader;
     let mut reader = Reader::new(xml.as_bytes());
     let mut path = Vec::new();
     let mut values = std::collections::HashMap::new();

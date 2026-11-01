@@ -64,8 +64,8 @@ fn deleted_receipts_cascade_atomically_and_preserve_failed_and_foreign_records()
     .unwrap();
 }
 
-fn catalog_file(data_type: DataType, path: &str) -> crate::libs::db::MediaFileMetadata {
-    crate::libs::db::MediaFileMetadata {
+fn catalog_file(data_type: DataType, path: &str) -> crate::infrastructure::db::MediaFileMetadata {
+    crate::infrastructure::db::MediaFileMetadata {
         album: String::new(),
         album_artist: String::new(),
 
@@ -93,7 +93,7 @@ fn catalog_file(data_type: DataType, path: &str) -> crate::libs::db::MediaFileMe
 #[test]
 fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_foreign_types() {
     let dir = tempfile::tempdir().unwrap();
-    let root = crate::libs::platform::volumes::locate(dir.path())
+    let root = plain_libs::platform::volumes::locate(dir.path())
         .unwrap()
         .path;
     let path = |relative: &str| format!("{}/{relative}", root.display());
@@ -157,7 +157,7 @@ fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_f
 #[test]
 fn confirmed_directory_removal_cleans_descendants_using_literal_boundaries() {
     let dir = tempfile::tempdir().unwrap();
-    let root = crate::libs::platform::volumes::locate(dir.path())
+    let root = plain_libs::platform::volumes::locate(dir.path())
         .unwrap()
         .path;
     let path = |relative: &str| format!("{}/{relative}", root.display());
@@ -191,7 +191,7 @@ fn confirmed_directory_removal_cleans_descendants_using_literal_boundaries() {
 #[test]
 fn catalog_deletion_failure_rolls_back_all_associated_state_cleanup() {
     let dir = tempfile::tempdir().unwrap();
-    let root = crate::libs::platform::volumes::locate(dir.path())
+    let root = plain_libs::platform::volumes::locate(dir.path())
         .unwrap()
         .path;
     let path = |relative: &str| format!("{}/{relative}", root.display());
@@ -234,7 +234,7 @@ fn directory_prefix_uses_the_same_separator_as_native_canonical_paths() {
 #[test]
 fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
     let dir = tempfile::tempdir().unwrap();
-    let root = crate::libs::platform::volumes::locate(dir.path())
+    let root = plain_libs::platform::volumes::locate(dir.path())
         .unwrap()
         .path;
     let path = |relative: &str| format!("{}/{relative}", root.display());
@@ -308,7 +308,7 @@ fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
 #[test]
 fn retired_identity_preserves_replacement_and_file_tags_at_the_same_path() {
     let dir = tempfile::tempdir().unwrap();
-    let root = crate::libs::platform::volumes::locate(dir.path())
+    let root = plain_libs::platform::volumes::locate(dir.path())
         .unwrap()
         .path;
     let path = |relative: &str| format!("{}/{relative}", root.display());

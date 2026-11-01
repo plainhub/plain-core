@@ -13,9 +13,9 @@ use crate::http::auth::public_gate;
 use async_graphql::{Context, Object};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::prefs::settings::FileSortBy;
-use plain_rs::libs::db::Db;
-use plain_rs::libs::host::bridge::Host;
-use plain_rs::libs::types::Long;
+use plain_rs::infrastructure::db::Db;
+use plain_rs::infrastructure::host::bridge::Host;
+use plain_rs::infrastructure::types::Long;
 use serde_json::Value;
 use std::sync::Arc;
 

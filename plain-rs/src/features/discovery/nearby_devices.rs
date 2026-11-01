@@ -46,8 +46,8 @@ impl Device {
         ))?;
         Ok(())
     }
-    pub fn cache(&self) -> crate::libs::db::DNearbyDeviceCache {
-        crate::libs::db::DNearbyDeviceCache {
+    pub fn cache(&self) -> crate::infrastructure::db::DNearbyDeviceCache {
+        crate::infrastructure::db::DNearbyDeviceCache {
             id: self.id.clone(),
             name: self.name.clone(),
             ips: self.ips.clone(),
@@ -106,7 +106,7 @@ impl Devices {
         &self,
         lan: bool,
         ble: bool,
-        cached: Vec<crate::libs::db::DNearbyDeviceCache>,
+        cached: Vec<crate::infrastructure::db::DNearbyDeviceCache>,
     ) -> Result<()> {
         self.scanning_modes(Some(lan), Some(ble), cached)
     }
@@ -114,7 +114,7 @@ impl Devices {
         &self,
         lan: Option<bool>,
         ble: Option<bool>,
-        cached: Vec<crate::libs::db::DNearbyDeviceCache>,
+        cached: Vec<crate::infrastructure::db::DNearbyDeviceCache>,
     ) -> Result<()> {
         let mut s = self.0.lock().unwrap();
         let lan = lan.unwrap_or(s.lan);
@@ -235,15 +235,15 @@ impl Devices {
                 .collect(),
         }
     }
-    pub fn stale(&self, db: &crate::libs::db::Db) -> Result<Vec<Probe>> {
+    pub fn stale(&self, db: &crate::infrastructure::db::Db) -> Result<Vec<Probe>> {
         self.stale_at(db, Instant::now())
     }
-    fn stale_at(&self, db: &crate::libs::db::Db, now: Instant) -> Result<Vec<Probe>> {
+    fn stale_at(&self, db: &crate::infrastructure::db::Db, now: Instant) -> Result<Vec<Probe>> {
         let s = self.0.lock().unwrap();
         if !(s.lan || s.ble) {
             return Ok(vec![]);
         }
-        let cached: HashMap<_, _> = crate::libs::db::chat_store::nearby::all(db)?
+        let cached: HashMap<_, _> = crate::infrastructure::db::chat_store::nearby::all(db)?
             .into_iter()
             .map(|d| (d.id, d.last_seen_at))
             .collect();
@@ -260,7 +260,12 @@ impl Devices {
             })
             .collect())
     }
-    pub fn verified(&self, db: &crate::libs::db::Db, probe: &Probe, alive: bool) -> Result<bool> {
+    pub fn verified(
+        &self,
+        db: &crate::infrastructure::db::Db,
+        probe: &Probe,
+        alive: bool,
+    ) -> Result<bool> {
         let mut s = self.0.lock().unwrap();
         if !(s.lan || s.ble)
             || !s
@@ -270,14 +275,14 @@ impl Devices {
         {
             return Ok(false);
         }
-        let cached = crate::libs::db::chat_store::nearby::all(db)?
+        let cached = crate::infrastructure::db::chat_store::nearby::all(db)?
             .into_iter()
             .find(|d| d.id == probe.device.id);
         if cached.as_ref().map(|d| &d.last_seen_at) != probe.cache_seen.as_ref() {
             return Ok(false);
         }
         if alive {
-            let now = crate::libs::db::now_iso();
+            let now = crate::infrastructure::db::now_iso();
             let updated = db.refresh_cached_nearby_device_if_last_seen_matches(
                 &probe.device.id,
                 probe.cache_seen.as_deref().unwrap_or(""),

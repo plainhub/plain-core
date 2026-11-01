@@ -23,9 +23,9 @@ use crate::features::chat::events::PeerKeyCache;
 use crate::features::chat::events::load_key_cache;
 use crate::features::chat::events::new_channel_key_cache;
 use crate::features::chat::events::new_peer_key_cache;
-use crate::libs::db::DChat;
-use crate::libs::db::Db;
-use crate::libs::transport::contract::PeerTransport;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::transport::contract::PeerTransport;
 
 /// Local device identity for pairing and message signing.
 pub struct ChatIdentity {

@@ -1,10 +1,11 @@
 use crate::server::ContentServer;
 use async_graphql::{Request, Variables};
 use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
-use plain_rs::libs::db::{
-    DChannel, DPeer,
-    chat_store::{SaveMode, channels, peers},
-};
+use plain_rs::infrastructure::db::DChannel;
+use plain_rs::infrastructure::db::DPeer;
+use plain_rs::infrastructure::db::chat_store::SaveMode;
+use plain_rs::infrastructure::db::chat_store::channels;
+use plain_rs::infrastructure::db::chat_store::peers;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -17,13 +18,13 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     prefs.set("client_id", "fixture").unwrap();
     let server = ContentServer::start(
         directory.path(),
-        &plain_rs::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
     let state = server.runtime_state();
     let mut peer = DPeer::new("peer", "Device", "127.0.0.1", Some(8443), DeviceType::Phone);
-    peer.key = plain_rs::libs::utils::base64::base64_encode(&[7; 32]);
+    peer.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     peer.status = PeerStatus::Paired;
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     let mut channel = DChannel::new("Channel", "fixture");
@@ -57,7 +58,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
         url.query_pairs().find(|(key, _)| key == "id").unwrap().1,
         "a +?#%"
     );
-    peer.key = plain_rs::libs::utils::base64::base64_encode(&[8; 32]);
+    peer.key = plain_libs::utils::base64::base64_encode(&[8; 32]);
     peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
     assert!(!native.execute(request()).await.errors.is_empty());
     let response = native
@@ -121,7 +122,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
         response.data.into_json().unwrap()["peers"][0]["token"],
         serde_json::json!("")
     );
-    let mut row = plain_rs::libs::db::chat_store::peers::get(&state.db, "peer-a")
+    let mut row = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "peer-a")
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -132,10 +133,10 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
     assert!(row.token.is_empty());
     assert_eq!(resolve("peer-a"), Some("127.0.0.1:9443".into()));
     row.port = None;
-    plain_rs::libs::db::chat_store::peers::save(
+    plain_rs::infrastructure::db::chat_store::peers::save(
         &state.db,
         &[row],
-        plain_rs::libs::db::chat_store::SaveMode::Update,
+        plain_rs::infrastructure::db::chat_store::SaveMode::Update,
     )
     .unwrap();
     assert_eq!(resolve("peer-a"), None);
@@ -181,7 +182,7 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
         assert_eq!(response.errors.len(), 1);
         assert_eq!(response.errors[0].message, "no_permission");
     }
-    let rows = plain_rs::libs::db::chat_store::peers::all(&state.db).unwrap();
+    let rows = plain_rs::infrastructure::db::chat_store::peers::all(&state.db).unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].token, "unchanged-token");
     core.stop_core().await;

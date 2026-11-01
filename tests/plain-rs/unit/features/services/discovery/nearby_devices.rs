@@ -11,7 +11,7 @@ async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts(
     prefs.set("client_id", "local").unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
-        &crate::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -61,7 +61,7 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
     let directory = tempfile::tempdir().unwrap();
     let server = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = server.runtime_state();
-    let mut peer = crate::libs::db::DPeer::new(
+    let mut peer = crate::infrastructure::db::DPeer::new(
         "fixture-peer",
         "old",
         "192.0.2.1",
@@ -71,10 +71,10 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
     peer.status = crate::features::chat::enums::PeerStatus::Paired;
     peer.key = "fixture-chat-key".into();
     peer.token = "fixture-session-token".into();
-    crate::libs::db::chat_store::peers::save(
+    crate::infrastructure::db::chat_store::peers::save(
         &state.db,
         &[peer],
-        crate::libs::db::chat_store::SaveMode::Insert,
+        crate::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
     let mut events = state.events.subscribe();
@@ -101,7 +101,7 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
         serde_json::from_str::<serde_json::Value>(&event.payload).unwrap(),
         json!({"id":"fixture-peer"})
     );
-    let peer = crate::libs::db::chat_store::peers::get(&state.db, "fixture-peer")
+    let peer = crate::infrastructure::db::chat_store::peers::get(&state.db, "fixture-peer")
         .unwrap()
         .unwrap();
     assert_eq!(peer.name, "new");
@@ -116,7 +116,7 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
     context.seen(transient, false, false).unwrap();
     assert!(events.try_recv().is_err());
     assert_eq!(
-        crate::libs::db::chat_store::peers::get(&state.db, "fixture-peer")
+        crate::infrastructure::db::chat_store::peers::get(&state.db, "fixture-peer")
             .unwrap()
             .unwrap()
             .name,

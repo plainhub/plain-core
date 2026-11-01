@@ -1,5 +1,5 @@
 use super::*;
-use crate::libs::db::Db;
+use crate::infrastructure::db::Db;
 
 async fn settled(runtime: &Runtime) {
     tokio::time::timeout(Duration::from_secs(10), async {
@@ -23,7 +23,7 @@ async fn settled(runtime: &Runtime) {
 async fn failed_replacement_preserves_active_package_index_and_search() {
     let directory = tempfile::tempdir().unwrap();
     let incoming = directory.path().join("ai_models/incoming");
-    let original = crate::libs::ai_image_search::models::test_fixture::fixture(&incoming);
+    let original = plain_libs::ai_image_search::models::test_fixture::fixture(&incoming);
     let photo = directory.path().join("photo.png");
     image::RgbImage::from_pixel(64, 64, image::Rgb([128, 64, 32]))
         .save(&photo)
@@ -52,9 +52,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
         db.clone(),
         host.clone(),
         events.clone(),
-        Arc::new(crate::libs::host::resources::NativeResources::new(
-            host.clone(),
-        )),
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone())),
         directory.path().join("cache"),
     ));
     index.use_system_catalog_for_test();
@@ -62,7 +60,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
         directory.path().into(),
         host,
         prefs,
-        Arc::new(crate::libs::kv::LazyDb::new(
+        Arc::new(plain_libs::kv::LazyDb::new(
             directory.path().join("plain.db"),
         )),
         index,
@@ -79,7 +77,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
         1
     );
     assert_eq!(runtime.search("cat", 50).await.unwrap()[0].image_id, "one");
-    let mut replacement = crate::libs::ai_image_search::models::test_fixture::fixture(&incoming);
+    let mut replacement = plain_libs::ai_image_search::models::test_fixture::fixture(&incoming);
     replacement.files[0].sha256 = "0".repeat(64);
     std::fs::write(
         incoming.join("manifest.json"),
@@ -97,7 +95,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
         crate::features::media::images::embeddings::count(&db).unwrap(),
         1
     );
-    let active = crate::libs::ai_image_search::models::manifest::Manifest::parse(
+    let active = plain_libs::ai_image_search::models::manifest::Manifest::parse(
         &std::fs::read(directory.path().join("ai_models/imported/manifest.json")).unwrap(),
     )
     .unwrap();
@@ -115,7 +113,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
     );
     assert!(runtime.snapshot().status.error_message.is_empty());
     assert_eq!(runtime.search("cat", 50).await.unwrap()[0].score, 1.0);
-    replacement = crate::libs::ai_image_search::models::test_fixture::fixture(&incoming);
+    replacement = plain_libs::ai_image_search::models::test_fixture::fixture(&incoming);
     replacement.id = "different-space".into();
     std::fs::write(
         incoming.join("manifest.json"),
@@ -153,9 +151,7 @@ async fn catalog_changes_share_one_cancellable_timer_and_do_not_retain_the_runti
         db,
         host.clone(),
         events.clone(),
-        Arc::new(crate::libs::host::resources::NativeResources::new(
-            host.clone(),
-        )),
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone())),
         directory.path().join("cache"),
     ));
     index.use_system_catalog_for_test();
@@ -163,7 +159,7 @@ async fn catalog_changes_share_one_cancellable_timer_and_do_not_retain_the_runti
         directory.path().into(),
         host.clone(),
         prefs,
-        Arc::new(crate::libs::kv::LazyDb::new(
+        Arc::new(plain_libs::kv::LazyDb::new(
             directory.path().join("plain.db"),
         )),
         index,
@@ -207,7 +203,7 @@ async fn catalog_changes_share_one_cancellable_timer_and_do_not_retain_the_runti
 #[tokio::test]
 async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_download() {
     let directory = tempfile::tempdir().unwrap();
-    crate::libs::ai_image_search::models::test_fixture::fixture(
+    plain_libs::ai_image_search::models::test_fixture::fixture(
         &directory.path().join("ai_models/imported"),
     );
     let host = Arc::new(Host::default());
@@ -240,9 +236,7 @@ async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_do
         db,
         host.clone(),
         events.clone(),
-        Arc::new(crate::libs::host::resources::NativeResources::new(
-            host.clone(),
-        )),
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone())),
         directory.path().join("cache"),
     ));
     index.use_system_catalog_for_test();
@@ -250,7 +244,7 @@ async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_do
         directory.path().into(),
         host,
         prefs,
-        Arc::new(crate::libs::kv::LazyDb::new(
+        Arc::new(plain_libs::kv::LazyDb::new(
             directory.path().join("plain.db"),
         )),
         index,
@@ -284,7 +278,7 @@ async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_do
 #[tokio::test]
 async fn native_model_restore_and_shutdown_do_not_request_sdk_observers_or_catalogs() {
     let directory = tempfile::tempdir().unwrap();
-    crate::libs::ai_image_search::models::test_fixture::fixture(
+    plain_libs::ai_image_search::models::test_fixture::fixture(
         &directory.path().join("ai_models/imported"),
     );
     let host = Arc::new(Host::default());
@@ -298,9 +292,7 @@ async fn native_model_restore_and_shutdown_do_not_request_sdk_observers_or_catal
         db,
         host.clone(),
         events.clone(),
-        Arc::new(crate::libs::host::resources::NativeResources::new(
-            host.clone(),
-        )),
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone())),
         directory.path().join("cache"),
     ));
     index.use_native_catalog_for_test();
@@ -308,7 +300,7 @@ async fn native_model_restore_and_shutdown_do_not_request_sdk_observers_or_catal
         directory.path().into(),
         host,
         prefs,
-        Arc::new(crate::libs::kv::LazyDb::new(
+        Arc::new(plain_libs::kv::LazyDb::new(
             directory.path().join("plain.db"),
         )),
         index,
@@ -340,9 +332,7 @@ fn projection_runtime() -> (
         db,
         host.clone(),
         events.clone(),
-        Arc::new(crate::libs::host::resources::NativeResources::new(
-            host.clone(),
-        )),
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone())),
         directory.path().join("cache"),
     ));
     index.use_native_catalog_for_test();
@@ -350,7 +340,7 @@ fn projection_runtime() -> (
         directory.path().into(),
         host,
         prefs,
-        Arc::new(crate::libs::kv::LazyDb::new(
+        Arc::new(plain_libs::kv::LazyDb::new(
             directory.path().join("plain.db"),
         )),
         index,

@@ -5,7 +5,7 @@ use std::io::{Cursor, Read};
 async fn streamed_archives_preserve_many_entries_and_repeated_source_bytes() {
     for count in [2, 129] {
         let directory = tempfile::tempdir().unwrap();
-        let archives = Archives::new(crate::libs::cache_paths::CachePaths::new(
+        let archives = Archives::new(crate::infrastructure::cache_paths::CachePaths::new(
             &directory.path().join("cache"),
         ));
         let (_stop, stopped) = watch::channel(false);
@@ -82,7 +82,7 @@ async fn unnamed_media_entries_use_the_source_basename() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("original.txt");
     std::fs::write(&path, b"original bytes").unwrap();
-    let archives = Archives::new(crate::libs::cache_paths::CachePaths::new(
+    let archives = Archives::new(crate::infrastructure::cache_paths::CachePaths::new(
         &directory.path().join("cache"),
     ));
     let (_stop, stopped) = watch::channel(false);

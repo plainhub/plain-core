@@ -1,7 +1,7 @@
 use crate::features::services::backups::Cancel;
 use crate::features::services::files::archive_operations::copy;
 use crate::features::services::files::archive_operations::running;
-use crate::libs::host::resources::NativeResources;
+use crate::infrastructure::host::resources::NativeResources;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
@@ -127,7 +127,7 @@ fn sync_tree(path: &Path) -> Result<(), String> {
     Ok(())
 }
 fn validate(payload: &Path) -> Result<(), String> {
-    let paths = crate::libs::data_paths::DataPaths::new(payload);
+    let paths = crate::infrastructure::data_paths::DataPaths::new(payload);
     for path in [paths.database(), paths.prefs()] {
         if !std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file()) {
             return Err("Backup is missing a required data file".into());
@@ -160,7 +160,7 @@ fn stage_reader(
     cancelled: &AtomicBool,
 ) -> Result<(), String> {
     running(stop, cancelled)?;
-    let paths = crate::libs::data_paths::DataPaths::new(directory);
+    let paths = crate::infrastructure::data_paths::DataPaths::new(directory);
     if exists(&paths.pending_restore())? {
         return Err("A restore is already pending".into());
     }
@@ -247,7 +247,7 @@ fn stage_reader(
 }
 
 pub fn apply(directory: &Path) -> Result<(), String> {
-    let paths = crate::libs::data_paths::DataPaths::new(directory);
+    let paths = crate::infrastructure::data_paths::DataPaths::new(directory);
     if !exists(&paths.pending_restore())? {
         return cleanup(directory);
     }
@@ -355,7 +355,7 @@ pub async fn stage(
 ) -> Result<(), String> {
     let cancel = Cancel(Arc::new(AtomicBool::new(false)));
     running(&stop, &cancel.0)?;
-    if exists(&crate::libs::data_paths::DataPaths::new(&directory).pending_restore())? {
+    if exists(&crate::infrastructure::data_paths::DataPaths::new(&directory).pending_restore())? {
         return Err("A restore is already pending".into());
     }
     let cancelled = cancel.0.clone();

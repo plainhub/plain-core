@@ -1,4 +1,5 @@
-use crate::libs::host::resources::{NativeResourceReader, NativeResources};
+use crate::infrastructure::host::resources::NativeResourceReader;
+use crate::infrastructure::host::resources::NativeResources;
 use std::io::{Cursor, Read};
 use tokio::sync::watch;
 
@@ -45,7 +46,7 @@ pub async fn read_for_playback(
     if path.starts_with("content://") || path.starts_with("ph://") {
         return read(path, resources).await;
     }
-    let path = crate::libs::utils::file_uri::local_path(&path)?;
+    let path = plain_libs::utils::file_uri::local_path(&path)?;
     let task = async {
         tokio::task::spawn_blocking(move || {
             crate::features::media::audio::lyrics::read_with_sidecar(&path)
@@ -72,7 +73,7 @@ pub async fn read(
     resources: Option<(&NativeResources, watch::Receiver<bool>)>,
 ) -> Result<String, String> {
     if !path.starts_with("content://") && !path.starts_with("ph://") {
-        let path = crate::libs::utils::file_uri::local_path(&path)?;
+        let path = plain_libs::utils::file_uri::local_path(&path)?;
         return tokio::task::spawn_blocking(move || {
             crate::features::media::audio::lyrics::extract_lyrics_from_path(&path)
         })

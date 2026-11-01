@@ -1,14 +1,11 @@
-use crate::libs::host::bridge::Host;
-use crate::{
-    features::{
-        enums::DataType,
-        media::actions::{Action, Item, Outcome},
-    },
-    libs::{
-        db::Db,
-        error::{DomainError, DomainResult},
-    },
-};
+use crate::features::enums::DataType;
+use crate::features::media::actions::Action;
+use crate::features::media::actions::Item;
+use crate::features::media::actions::Outcome;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::error::DomainError;
+use crate::infrastructure::error::DomainResult;
+use crate::infrastructure::host::bridge::Host;
 use rusqlite::OptionalExtension;
 use std::path::{Path, PathBuf};
 #[cfg(feature = "runtime-media")]
@@ -221,18 +218,18 @@ fn files(
                     {
                         return Err("Media parent unchanged".into());
                     }
-                    if crate::libs::platform::mountinfo::resolve_mount_point(source)
+                    if plain_libs::platform::mountinfo::resolve_mount_point(source)
                         .map_err(|error| error.to_string())?
-                        != crate::libs::platform::mountinfo::resolve_mount_point(target)
+                        != plain_libs::platform::mountinfo::resolve_mount_point(target)
                             .map_err(|error| error.to_string())?
                     {
                         return Err("Media move must stay in its storage volume".into());
                     }
                     let base = target.join(source.file_name().ok_or("Media file name required")?);
                     loop {
-                        let candidate = crate::libs::utils::unique_path::unique_sibling(&base)
+                        let candidate = plain_libs::utils::unique_path::unique_sibling(&base)
                             .map_err(|error| error.to_string())?;
-                        match crate::libs::filesystem::rename::no_replace(source, &candidate) {
+                        match plain_libs::filesystem::rename::no_replace(source, &candidate) {
                             Ok(()) => break candidate.to_string_lossy().into_owned(),
                             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                                 continue;

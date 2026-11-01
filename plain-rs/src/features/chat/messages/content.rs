@@ -5,7 +5,7 @@ pub fn make_file_id(path: &str, token: &str) -> String {
     use crate::features::files::resource_link::{self, Resource, Scope};
     resource_link::seal(
         &Scope::Global,
-        &crate::libs::utils::base64::base64_decode(token),
+        &plain_libs::utils::base64::base64_decode(token),
         &Resource::reference(path),
     )
     .unwrap_or_default()
@@ -59,7 +59,7 @@ pub fn peer_content(content: &str, token: &str) -> anyhow::Result<String> {
     ) {
         return Ok(content.into());
     }
-    if crate::libs::utils::base64::base64_decode(token).len() != 32 {
+    if plain_libs::utils::base64::base64_decode(token).len() != 32 {
         anyhow::bail!("Invalid URL token");
     }
     let items = value

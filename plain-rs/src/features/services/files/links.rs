@@ -27,7 +27,7 @@ pub(crate) fn key(state: &CoreRuntime, scope: &Scope) -> anyhow::Result<Vec<u8>>
                 .url_token
         }
     };
-    let key = crate::libs::utils::base64::base64_decode_checked(&token)?;
+    let key = plain_libs::utils::base64::base64_decode_checked(&token)?;
     anyhow::ensure!(key.len() == 32, "Invalid resource key");
     Ok(key)
 }
@@ -134,7 +134,7 @@ pub fn authorize_path(state: &CoreRuntime, reference: &str) -> anyhow::Result<()
         return Ok(());
     }
     if candidate.starts_with(&directory) {
-        let paths = crate::libs::data_paths::DataPaths::new(&directory);
+        let paths = crate::infrastructure::data_paths::DataPaths::new(&directory);
         if candidate.starts_with(paths.note_images()) || candidate == paths.pomodoro_sound() {
             return Ok(());
         }

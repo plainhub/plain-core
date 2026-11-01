@@ -1,4 +1,4 @@
-use plain_rs::libs::utils::query::percent_decode;
+use plain_libs::utils::query::percent_decode;
 
 // ─── SHA-1 (RFC 3174) — only for the synthetic WebSocket handshake ────────────
 
@@ -64,7 +64,7 @@ pub(crate) fn sha1(data: &[u8]) -> [u8; 20] {
 pub(crate) fn ws_accept_key(client_key: &str) -> String {
     let mut input = client_key.as_bytes().to_vec();
     input.extend_from_slice(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-    plain_rs::libs::utils::base64::base64_encode(&sha1(&input))
+    plain_libs::utils::base64::base64_encode(&sha1(&input))
 }
 
 pub(crate) struct ProxyParams {

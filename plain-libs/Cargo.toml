@@ -1,0 +1,83 @@
+[package]
+name = "plain-libs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+description = "Reusable cryptography, media, file, format and native components"
+
+[features]
+"kv" = ["sqlite", "dep:serde_json", "dep:anyhow"]
+"volumes" = ["dep:anyhow"]
+"file-walk" = ["dep:anyhow"]
+"default" = ["crypto"]
+"crypto" = ["dep:chacha20poly1305", "dep:p256", "dep:ed25519-dalek"]
+"tls" = ["dep:rcgen", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:x509-parser", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
+"time" = ["dep:chrono"]
+"sqlite" = ["time", "dep:rusqlite"]
+"html" = ["dep:regex"]
+"phone" = ["dep:regex", "dep:flate2", "dep:serde_json"]
+"phone-batch" = ["phone", "tokio/rt"]
+"media" = ["time", "dep:lofty", "dep:anyhow"]
+"thumbnails" = ["media", "crypto", "dep:image", "dep:tempfile", "dep:fast_image_resize", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util"]
+"filesystem" = ["time", "tokio/fs", "tokio/rt", "tokio/time", "tokio/sync"]
+"watch" = ["filesystem", "tokio/net"]
+"apk" = ["dep:anyhow", "dep:zip"]
+"dlna" = ["dep:reqwest", "reqwest/rustls-tls"]
+"unix-platform" = ["dep:anyhow"]
+"storage-platform" = ["dep:anyhow", "dep:serde_json", "dep:sysinfo"]
+"linux-platform" = ["storage-platform"]
+"ai-image-search" = ["dep:tokenizers", "dep:image", "dep:serde_json", "dep:cc"]
+"test-seams" = ["dep:tempfile"]
+
+[dependencies]
+"sysinfo" = { version = "0.32", default-features = false, features = ["disk"], optional = true }
+"kamadak-exif" = "=0.6.1"
+"bytes" = "1"
+"futures-core" = "0.3"
+"libc" = "0.2"
+"log" = "0.4"
+"rand" = "0.8"
+"serde" = { "version" = "1", "features" = ["derive"] }
+"sha2" = "0.10"
+"uuid" = { "version" = "1", "features" = ["v4", "serde"] }
+"tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }
+"anyhow" = { "version" = "1", "optional" = true }
+"chrono" = { "version" = "0.4", "features" = ["serde"], "optional" = true }
+"regex" = { "version" = "1", "optional" = true }
+"rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "backup", "cache"], "optional" = true }
+"flate2" = { version = "1", optional = true }
+"serde_json" = { "version" = "1", "optional" = true }
+"lofty" = { "version" = "0.22", "optional" = true }
+"image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"], "optional" = true }
+"tempfile" = { "version" = "3", "optional" = true }
+"fast_image_resize" = { version = "5", features = ["rayon"], optional = true }
+"jpeg-decoder" = { version = "0.3", optional = true }
+"rusty_h264-decoder" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
+"rusty_h264-common" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
+"chacha20poly1305" = { "version" = "0.10", "optional" = true }
+"p256" = { "version" = "0.14", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
+"ed25519-dalek" = { "version" = "2", "features" = ["rand_core"], "optional" = true }
+"rcgen" = { "version" = "0.13", "default-features" = false, "features" = ["pem", "ring"], "optional" = true }
+"der" = { version = "0.8", features = ["std", "derive"], optional = true }
+"pkcs12" = { version = "=0.2.0-pre.0", default-features = false, features = ["kdf"], optional = true }
+"pkcs5" = { version = "0.8", features = ["alloc", "pbes2"], optional = true }
+"pkcs8" = { version = "0.11", optional = true }
+"x509-parser" = { version = "0.18", optional = true }
+"cbc" = { version = "0.2", features = ["block-padding", "alloc"], optional = true }
+"des" = { version = "0.9", optional = true }
+"rc2" = { version = "0.9", optional = true }
+"sha1" = { version = "0.11", optional = true }
+"hmac" = { "version" = "0.13", "optional" = true }
+"sha2_mac" = { "package" = "sha2", "version" = "0.11", "optional" = true }
+"zip" = { "version" = "9", "default-features" = false, "features" = ["deflate-flate2"], "optional" = true }
+"reqwest" = { version = "0.12", default-features = false, features = ["stream"], optional = true }
+"tokenizers" = { version = "0.22.2", default-features = false, features = ["fancy-regex"], optional = true }
+
+[build-dependencies]
+"cc" = { version = "1", optional = true }
+
+[dev-dependencies]
+"tempfile" = "3"
+"serde_json" = "1"
+"tokio" = { version = "1", features = ["full", "test-util"] }
+"jpeg-decoder" = { version = "0.3", features = ["platform_independent"] }

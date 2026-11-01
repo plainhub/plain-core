@@ -1,7 +1,7 @@
+use plain_libs::utils::base64::base64_encode;
 use plain_rs::features::peers::pairing::sessions::Target;
 use plain_rs::features::services::discovery::pairing;
 use plain_rs::features::services::discovery::pairing_attempts::Mode;
-use plain_rs::libs::utils::base64::base64_encode;
 use sha2::Digest;
 use std::sync::Arc;
 
@@ -10,7 +10,7 @@ fn fixture(id: &str) -> (tempfile::TempDir, crate::server::ContentServer) {
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("system.json")).unwrap(),
     );
-    let (key, _) = plain_rs::libs::crypto::ed25519_generate();
+    let (key, _) = plain_libs::crypto::ed25519_generate();
     prefs.set("client_id", id).unwrap();
     prefs
         .set("signature_key_pair", base64_encode(&key))
@@ -94,12 +94,12 @@ async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authen
         .unwrap();
     assert_eq!(notice["verificationCode"], code);
     assert!(
-        plain_rs::libs::db::chat_store::peers::get(&local.db, "remote")
+        plain_rs::infrastructure::db::chat_store::peers::get(&local.db, "remote")
             .unwrap()
             .is_none()
     );
     assert!(
-        plain_rs::libs::db::chat_store::peers::get(&remote.db, "local")
+        plain_rs::infrastructure::db::chat_store::peers::get(&remote.db, "local")
             .unwrap()
             .is_none()
     );
@@ -126,11 +126,11 @@ async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authen
         "SUCCEEDED"
     );
     assert_eq!(
-        plain_rs::libs::db::chat_store::peers::get(&local.db, "remote")
+        plain_rs::infrastructure::db::chat_store::peers::get(&local.db, "remote")
             .unwrap()
             .unwrap()
             .key,
-        plain_rs::libs::db::chat_store::peers::get(&remote.db, "local")
+        plain_rs::infrastructure::db::chat_store::peers::get(&remote.db, "local")
             .unwrap()
             .unwrap()
             .key

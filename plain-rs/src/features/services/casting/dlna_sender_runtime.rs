@@ -1,5 +1,5 @@
-use crate::libs::dlna::types::DiscoveredDevice;
 use crate::runtime::Runtime as CoreRuntime;
+use plain_libs::dlna::types::DiscoveredDevice;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -79,7 +79,10 @@ impl Runtime {
         object.remove("active");
         value
     }
-    pub fn notify_snapshot(&self, host: &crate::libs::host::bridge::Host) -> Result<(), String> {
+    pub fn notify_snapshot(
+        &self,
+        host: &crate::infrastructure::host::bridge::Host,
+    ) -> Result<(), String> {
         let _delivery = self.delivery.lock().unwrap();
         host.notify("dlnaSenderChanged", self.host_snapshot())
     }
@@ -90,10 +93,12 @@ impl Runtime {
             snapshot.version = snapshot.version.saturating_add(1);
         }
         let snapshot = self.host_snapshot();
-        let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-            "DLNA_SENDER_CHANGED",
-            snapshot.to_string(),
-        ));
+        let _ = state
+            .events
+            .send(crate::infrastructure::events::WsEvent::broadcast(
+                "DLNA_SENDER_CHANGED",
+                snapshot.to_string(),
+            ));
         if let Err(error) = state.host.notify("dlnaSenderChanged", snapshot) {
             log::warn!("DLNA sender callback: {error}");
             if *recovering || !state.host.connected() {

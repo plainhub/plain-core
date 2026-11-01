@@ -4,9 +4,9 @@ use crate::features::chat::enums::ChannelStatus;
 use crate::features::chat::enums::ChannelSystemMessageAction as Action;
 use crate::features::chat::enums::ChannelSystemMessageType as Type;
 use crate::features::chat::enums::MemberStatus;
-use crate::libs::db::DChannel;
-use crate::libs::db::Db;
-use crate::libs::db::now_iso;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::now_iso;
 use anyhow::{Result, bail};
 
 #[derive(Default, serde::Serialize)]
@@ -37,7 +37,7 @@ pub struct Cancel {
 pub fn verify(public_key: &str, payload: &str, signature: &str) -> bool {
     !public_key.is_empty()
         && !signature.is_empty()
-        && crate::libs::crypto::ed25519_verify(public_key, payload.as_bytes(), signature)
+        && plain_libs::crypto::ed25519_verify(public_key, payload.as_bytes(), signature)
 }
 fn signature(
     key: &str,
@@ -108,8 +108,8 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                     .iter()
                     .find(|p| p.id == from)
                     .ok_or_else(|| anyhow::anyhow!("Missing invite owner information"))?;
-                if crate::libs::utils::base64::base64_decode(&info.public_key)
-                    != crate::libs::utils::base64::base64_decode(&owner.public_key)
+                if plain_libs::utils::base64::base64_decode(&info.public_key)
+                    != plain_libs::utils::base64::base64_decode(&owner.public_key)
                 {
                     bail!("Invite owner public key mismatch");
                 }
@@ -121,7 +121,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                     actor,
                     &msg.signature,
                 )?;
-                if crate::libs::utils::base64::base64_decode(&msg.key).len() != 32 {
+                if plain_libs::utils::base64::base64_decode(&msg.key).len() != 32 {
                     bail!("Invalid channel key");
                 }
                 validate_members(&msg.members)?;

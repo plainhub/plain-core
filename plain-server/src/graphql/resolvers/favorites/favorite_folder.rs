@@ -7,7 +7,7 @@ use plain_rs::features::favorites as favorite_folders;
 use std::sync::Arc;
 
 use crate::graphql::resolvers::favorites::types::FavoriteFolder;
-use plain_rs::libs::db::Db;
+use plain_rs::infrastructure::db::Db;
 
 fn to_gql(f: favorite_folders::FavoriteFolder) -> FavoriteFolder {
     FavoriteFolder {

@@ -1,8 +1,8 @@
 use super::*;
 use crate::features::chat::channels::messages::channel_message_payload;
-use crate::libs::crypto::ed25519_generate;
-use crate::libs::crypto::ed25519_sign;
-use crate::libs::utils::base64::base64_encode;
+use plain_libs::crypto::ed25519_generate;
+use plain_libs::crypto::ed25519_sign;
+use plain_libs::utils::base64::base64_encode;
 
 #[test]
 fn verify_channel_signature_rejects_missing_key_or_signature() {

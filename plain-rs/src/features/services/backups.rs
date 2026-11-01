@@ -1,5 +1,6 @@
 pub mod restore;
-use crate::{features::prefs::Prefs, libs::db::Db};
+use crate::features::prefs::Prefs;
+use crate::infrastructure::db::Db;
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -109,7 +110,7 @@ fn snapshot(
     let database_path = db
         .with_conn(|conn| conn.path().map(PathBuf::from))
         .ok_or("Persistent database required")?;
-    let source_db = crate::libs::data_paths::DataPaths::new(directory).database();
+    let source_db = crate::infrastructure::data_paths::DataPaths::new(directory).database();
     if database_path
         .canonicalize()
         .map_err(|error| error.to_string())?
@@ -198,13 +199,13 @@ pub mod test_fixture {
 
     pub fn archive() -> Vec<u8> {
         let source = tempfile::tempdir().unwrap();
-        let paths = crate::libs::data_paths::DataPaths::new(source.path());
+        let paths = crate::infrastructure::data_paths::DataPaths::new(source.path());
         let prefs = Arc::new(crate::features::prefs::Prefs::load(&paths.prefs()).unwrap());
         crate::features::prefs::identity::ensure_identity(&prefs);
         prefs.set("device_name", "restored device").unwrap();
-        let db = crate::libs::db::Db::open(&paths.database()).unwrap();
+        let db = crate::infrastructure::db::Db::open(&paths.database()).unwrap();
         db.with_conn(|conn| conn.execute_batch("CREATE TABLE restore_fixture (value TEXT); INSERT INTO restore_fixture VALUES ('snapshot');").unwrap());
-        let store = crate::libs::kv::LazyDb::new(paths.database());
+        let store = plain_libs::kv::LazyDb::new(paths.database());
         store.get().unwrap().insert("restored", "snapshot").unwrap();
         std::fs::create_dir(source.path().join("files")).unwrap();
         std::fs::write(source.path().join("files/blob"), b"attachment").unwrap();

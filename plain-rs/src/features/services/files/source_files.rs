@@ -1,5 +1,5 @@
-use crate::libs::db::Db;
-use crate::libs::host::resources::NativeResources;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::host::resources::NativeResources;
 use std::{path::Path, sync::Arc};
 use tokio::{io::AsyncWriteExt, sync::watch};
 

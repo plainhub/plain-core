@@ -44,7 +44,7 @@ fn direction(prefs: &Prefs, peer_id: &str) -> Result<String> {
 
 pub fn prepare(
     prefs: &Prefs,
-    store: &crate::libs::kv::Db,
+    store: &plain_libs::kv::Db,
     peer_id: &str,
     item: &Item,
 ) -> Result<bool> {
@@ -69,7 +69,7 @@ pub fn prepare(
     )
 }
 
-pub fn applied(store: &crate::libs::kv::Db, peer_id: &str, item: &Item) -> Result<()> {
+pub fn applied(store: &plain_libs::kv::Db, peer_id: &str, item: &Item) -> Result<()> {
     Ok(
         store.update_json(APPLIED, |map: &mut serde_json::Map<String, Value>| {
             let mut applied: std::collections::BTreeMap<String, String> =

@@ -1,6 +1,7 @@
 use super::*;
-use crate::libs::ai_image_search::embedding::{ImageEncoder, ImageSource};
-use crate::libs::host::resource_stream::NativeResourceFile;
+use crate::infrastructure::host::resource_stream::NativeResourceFile;
+use plain_libs::ai_image_search::embedding::ImageEncoder;
+use plain_libs::ai_image_search::embedding::ImageSource;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct Encoder {
@@ -36,9 +37,8 @@ async fn resource_image(decode: bool, fail: bool, available: bool) {
     let cache = directory.path().join("cache");
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
-    let resources = Arc::new(crate::libs::host::resources::NativeResources::new(
-        host.clone(),
-    ));
+    let resources =
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone()));
     let released = Arc::new(AtomicUsize::new(0));
     let encoder = Arc::new(Encoder {
         decode,
@@ -50,7 +50,7 @@ async fn resource_image(decode: bool, fail: bool, available: bool) {
         resources.clone(),
         cache.clone(),
         Some(encoder.clone()),
-        Arc::new(crate::libs::db::Db::open(std::path::Path::new(":memory:")).unwrap()),
+        Arc::new(crate::infrastructure::db::Db::open(std::path::Path::new(":memory:")).unwrap()),
         true,
     );
     let decoded = Arc::new(AtomicUsize::new(0));

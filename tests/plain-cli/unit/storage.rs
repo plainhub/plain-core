@@ -37,7 +37,7 @@ fn relative_scan_roots_are_rejected_before_saving_preferences() {
 async fn startup_scan_indexes_configured_directories_through_the_headless_host() {
     use plain_rs::features::services::files::media_scans::Status;
     use std::sync::Arc;
-    let home = plain_rs::libs::platform::system::consts::home_directory().unwrap();
+    let home = plain_rs::infrastructure::platform::system::consts::home_directory().unwrap();
     let directory = tempfile::Builder::new()
         .prefix("scan-check-")
         .tempdir_in(home)

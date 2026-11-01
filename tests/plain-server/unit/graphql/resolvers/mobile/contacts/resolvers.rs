@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use plain_rs::libs::db::Db;
+use plain_rs::infrastructure::db::Db;
 use serde_json::{Value, json};
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {

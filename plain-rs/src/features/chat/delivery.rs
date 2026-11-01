@@ -1,13 +1,13 @@
 use crate::features::chat::channels::chat_helper::ChannelDeliveryResult;
 use crate::features::chat::channels::messages::ChannelMember;
 use crate::features::chat::enums::ChannelStatus;
-use crate::libs::db::DChat;
-use crate::libs::db::Db;
-use crate::libs::db::chat_store::channels;
-use crate::libs::db::chat_store::messages;
-use crate::libs::db::chat_store::peers;
-use crate::libs::transport::contract::PeerTransport;
-use crate::libs::transport::contract::chat_item_request;
+use crate::infrastructure::db::DChat;
+use crate::infrastructure::db::Db;
+use crate::infrastructure::db::chat_store::channels;
+use crate::infrastructure::db::chat_store::messages;
+use crate::infrastructure::db::chat_store::peers;
+use crate::infrastructure::transport::contract::PeerTransport;
+use crate::infrastructure::transport::contract::chat_item_request;
 use anyhow::{Result, bail};
 use std::{
     collections::{HashMap, HashSet},
@@ -139,7 +139,7 @@ impl Delivery {
             }
         };
         chat.status = crate::features::chat::enums::ChatStatus::Pending;
-        chat.updated_at = crate::libs::db::now_iso();
+        chat.updated_at = crate::infrastructure::db::now_iso();
         self.db.with_conn(|connection|->Result<()> {
             let changed=connection.execute("UPDATE chats SET status='PENDING',updated_at=?3 WHERE id=?1 AND content=?2 AND from_id='me'",rusqlite::params![chat.id,chat.content,chat.updated_at])?;
             if changed!=1 {bail!("Message changed before delivery");}Ok(())
@@ -183,7 +183,7 @@ impl Delivery {
                         }
                         channel.key
                     };
-                    let key = crate::libs::utils::base64::base64_decode(&key);
+                    let key = plain_libs::utils::base64::base64_decode(&key);
                     if key.len() != 32 {
                         Some("Invalid peer transport key".into())
                     } else {

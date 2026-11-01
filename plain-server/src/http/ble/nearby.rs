@@ -3,7 +3,7 @@ use anyhow::Result;
 use plain_rs::features::discovery::nearby_wire::Message;
 use plain_rs::features::services::discovery::discovery_advertisement;
 use plain_rs::features::services::discovery::pairing_runtime;
-use plain_rs::libs::protocols::ble;
+use plain_rs::infrastructure::protocols::ble;
 
 pub(super) async fn dispatch(
     state: &ServerState,

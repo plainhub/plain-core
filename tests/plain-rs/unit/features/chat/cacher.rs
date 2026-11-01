@@ -2,9 +2,9 @@ use super::*;
 use crate::features::chat::enums::ChannelStatus;
 use crate::features::chat::enums::DeviceType;
 use crate::features::chat::enums::PeerStatus;
-use crate::libs::db::DChannel;
-use crate::libs::db::DPeer;
-use crate::libs::db::Db;
+use crate::infrastructure::db::DChannel;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::db::Db;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -24,7 +24,7 @@ fn seed_chat(db: &Db, id: &str, from_id: &str, to_id: &str, channel_id: &str) {
 }
 
 fn seed_peer(db: &Db, id: &str) {
-    let now = crate::libs::db::now_iso();
+    let now = crate::infrastructure::db::now_iso();
     let peer = DPeer {
         id: id.to_string(),
         name: id.to_string(),

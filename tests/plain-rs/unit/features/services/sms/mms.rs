@@ -85,7 +85,7 @@ fn runtime(directory: &std::path::Path, host: Arc<Host>) -> Arc<Runtime> {
         host,
         Arc::new(Db::open(&directory.join("plain.db")).unwrap()),
         directory.to_path_buf(),
-        Arc::new(crate::libs::kv::LazyDb::new(directory.join("plain.db"))),
+        Arc::new(plain_libs::kv::LazyDb::new(directory.join("plain.db"))),
         broadcast::channel(16).0,
     )
 }
@@ -96,9 +96,8 @@ async fn provider_attachments_use_one_mime_primitive_and_preserve_stream_bytes()
         let directory = tempfile::tempdir().unwrap();
         let host = Arc::new(Host::default());
         let (generation, mut requests) = host.connect();
-        let resources = Arc::new(crate::libs::host::resources::NativeResources::new(
-            host.clone(),
-        ));
+        let resources =
+            Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone()));
         let (_stop, stopped) = watch::channel(false);
         let runtime = runtime(directory.path(), host.clone());
         runtime.set_resources(resources.clone(), stopped);
@@ -153,9 +152,8 @@ async fn failed_or_invalid_mime_facts_do_not_open_or_copy_provider_attachments()
         let directory = tempfile::tempdir().unwrap();
         let host = Arc::new(Host::default());
         let (generation, mut requests) = host.connect();
-        let resources = Arc::new(crate::libs::host::resources::NativeResources::new(
-            host.clone(),
-        ));
+        let resources =
+            Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone()));
         let (_stop, stopped) = watch::channel(false);
         let runtime = runtime(directory.path(), host.clone());
         runtime.set_resources(resources, stopped);

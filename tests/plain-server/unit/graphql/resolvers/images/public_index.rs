@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::services::images::status::ImageSearchStatusType;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -25,7 +25,7 @@ fn fixture() -> (tempfile::TempDir, PublicSchema) {
     let dir = tempfile::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    let db = Arc::new(plain_rs::libs::db::Db::open(&dir.path().join("data.db")).unwrap());
+    let db = Arc::new(plain_rs::infrastructure::db::Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
     let directory = dir.path().to_path_buf();
     let (events, _) = tokio::sync::broadcast::channel(16);
@@ -51,7 +51,7 @@ async fn image_search_status_is_owned_by_rust_without_platform_projection() {
     assert_eq!(row["status"], "UNAVAILABLE");
     assert_eq!(
         row["modelSize"],
-        plain_rs::libs::ai_image_search::models::default_model::manifest().size() as i64
+        plain_rs::features::services::images::default_model::manifest().size() as i64
     );
     assert_eq!(
         row["modelDir"],

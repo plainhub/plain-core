@@ -1,10 +1,10 @@
-use crate::libs::db::DPeer;
-use crate::libs::transport::contract::PeerTransport;
-use crate::libs::transport::contract::message_response;
+use crate::infrastructure::db::DPeer;
+use crate::infrastructure::transport::contract::PeerTransport;
+use crate::infrastructure::transport::contract::message_response;
 use crate::runtime::Runtime as CoreRuntime;
 pub struct Transport {
     state: CoreRuntime,
-    attempt: crate::libs::transport::router::Attempt,
+    attempt: crate::infrastructure::transport::router::Attempt,
 }
 impl PeerTransport for Transport {
     async fn post<'a>(
@@ -45,7 +45,7 @@ pub async fn deliver(
         state,
         id,
         recipients,
-        crate::libs::transport::router::Attempt::Automatic,
+        crate::infrastructure::transport::router::Attempt::Automatic,
         |_| {},
     )
     .await
@@ -54,8 +54,8 @@ pub async fn deliver_observed(
     state: &CoreRuntime,
     id: &str,
     recipients: Option<Vec<String>>,
-    attempt: crate::libs::transport::router::Attempt,
-    pending: impl Fn(&crate::libs::db::DChat) + Send + Sync,
+    attempt: crate::infrastructure::transport::router::Attempt,
+    pending: impl Fn(&crate::infrastructure::db::DChat) + Send + Sync,
 ) -> anyhow::Result<crate::features::chat::delivery::Receipt> {
     let result = async {
         let client_id = state
@@ -82,11 +82,13 @@ pub async fn deliver_observed(
                 recipients,
                 |chat| {
                     pending(chat);
-                    let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-                        crate::features::chat::events::WS_MESSAGE_UPDATED,
-                        serde_json::json!([crate::features::chat::service::chat_to_json(chat)])
-                            .to_string(),
-                    ));
+                    let _ = state
+                        .events
+                        .send(crate::infrastructure::events::WsEvent::broadcast(
+                            crate::features::chat::events::WS_MESSAGE_UPDATED,
+                            serde_json::json!([crate::features::chat::service::chat_to_json(chat)])
+                                .to_string(),
+                        ));
                 },
             )
             .await
@@ -97,10 +99,12 @@ pub async fn deliver_observed(
         state.mdns.browse_resident();
     }
     if let Some(chat) = &receipt.chat {
-        let _ = state.events.send(crate::libs::events::WsEvent::broadcast(
-            crate::features::chat::events::WS_MESSAGE_UPDATED,
-            serde_json::json!([crate::features::chat::service::chat_to_json(chat)]).to_string(),
-        ));
+        let _ = state
+            .events
+            .send(crate::infrastructure::events::WsEvent::broadcast(
+                crate::features::chat::events::WS_MESSAGE_UPDATED,
+                serde_json::json!([crate::features::chat::service::chat_to_json(chat)]).to_string(),
+            ));
     }
     Ok(receipt)
 }

@@ -99,7 +99,7 @@ pub fn available() -> bool {
 async fn exchange(directory: &Path, command: Command) -> Result<ReplyResult> {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
-        use plain_rs::libs::platform::local_socket;
+        use plain_libs::platform::local_socket;
         use std::os::fd::AsFd;
         let (path, owner) = local_socket::client_path(directory)?;
         tokio::time::timeout(DEADLINE, async {
@@ -170,7 +170,7 @@ impl Service {
     pub(crate) async fn start(core: &plain_server::server::ContentServer) -> Result<Option<Self>> {
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
-            use plain_rs::libs::platform::local_socket::{self, SocketDirectory};
+            use plain_libs::platform::local_socket::{self, SocketDirectory};
             use std::os::fd::AsFd;
             let state = core.runtime();
             let directory = SocketDirectory::open(&state.directory)?;

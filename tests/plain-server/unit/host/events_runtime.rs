@@ -16,7 +16,7 @@ fn filesystem_media_host(
 ) {
     let directory = tempfile::Builder::new()
         .prefix("media-host-start-")
-        .tempdir_in(plain_rs::libs::platform::system::consts::home_directory().unwrap())
+        .tempdir_in(plain_rs::infrastructure::platform::system::consts::home_directory().unwrap())
         .unwrap();
     let data = directory.path().join("data");
     let cache = directory.path().join("cache");
@@ -34,12 +34,12 @@ fn filesystem_media_host(
             .unwrap(),
     );
     plain_rs::features::prefs::identity::ensure_url_token(&prefs);
-    let mut config = plain_rs::libs::platform::startup::config();
+    let mut config = plain_rs::infrastructure::platform::startup::config();
     config.cache_dir = Some(cache.to_string_lossy().into_owned());
     config.system_media_catalog = system_catalog;
     let core = crate::server::ContentServer::start_core_with_config(
         &data,
-        &plain_rs::libs::crypto::gen_token(),
+        &plain_libs::crypto::gen_token(),
         prefs,
         config,
     )

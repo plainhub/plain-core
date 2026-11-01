@@ -1,6 +1,6 @@
 use crate::features::services::discovery::nearby_devices::Context;
-use crate::libs::protocols::mdns::host_responder;
-use crate::libs::protocols::mdns::service_browser::MdnsServiceBrowser;
+use crate::infrastructure::protocols::mdns::host_responder;
+use crate::infrastructure::protocols::mdns::service_browser::MdnsServiceBrowser;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use serde::Deserialize;
@@ -18,7 +18,7 @@ struct Session {
     /// macOS only. The system DNS-SD browser sees devices the sandboxed
     /// browser cannot, which is what nearby discovery is for.
     #[cfg(target_os = "macos")]
-    system_browser: crate::libs::platform::discovery::macos_dns_sd::MacDnsSdBrowser,
+    system_browser: crate::infrastructure::platform::discovery::macos_dns_sd::MacDnsSdBrowser,
     hostname: Arc<RwLock<String>>,
     scanning: Arc<AtomicBool>,
     context: Context,
@@ -36,7 +36,7 @@ impl Session {
             Some(active),
             None,
             if active {
-                crate::libs::db::chat_store::nearby::all(&self.context.db)?
+                crate::infrastructure::db::chat_store::nearby::all(&self.context.db)?
             } else {
                 vec![]
             },
@@ -53,7 +53,7 @@ impl Session {
         let _ = self
             .context
             .events
-            .send(crate::libs::events::WsEvent::broadcast(
+            .send(crate::infrastructure::events::WsEvent::broadcast(
                 if active {
                     "NEARBY_DISCOVERY_STARTED"
                 } else {
@@ -126,18 +126,22 @@ impl Runtime {
 
     fn emit(&self, context: &Context, peer: Option<&str>, online: bool) {
         let revision = self.revision.fetch_add(1, Ordering::SeqCst) + 1;
-        let _ = context.events.send(crate::libs::events::WsEvent::broadcast(
-            WS_MDNS_UPDATED,
-            json!({"runtimeId":self.id,"revision":revision,"peerId":peer,"online":online})
-                .to_string(),
-        ));
+        let _ = context
+            .events
+            .send(crate::infrastructure::events::WsEvent::broadcast(
+                WS_MDNS_UPDATED,
+                json!({"runtimeId":self.id,"revision":revision,"peerId":peer,"online":online})
+                    .to_string(),
+            ));
     }
     pub fn browse_resident(&self) {
         if let Some(session) = self.session.lock().unwrap().as_ref() {
             session.browser.send_ptr_query();
         }
     }
-    pub fn browser_activity(&self) -> Vec<crate::libs::platform::discovery::MdnsActivity> {
+    pub fn browser_activity(
+        &self,
+    ) -> Vec<crate::infrastructure::platform::discovery::MdnsActivity> {
         #[cfg(target_os = "macos")]
         {
             let guard = self.session.lock().unwrap();
@@ -164,7 +168,7 @@ impl Runtime {
         let guard = self.session.lock().unwrap();
         let session = guard.as_ref();
         let (packets_in, packets_out) = if include_packets && session.is_some() {
-            crate::libs::protocols::mdns::packet_capture::snapshot()
+            crate::infrastructure::protocols::mdns::packet_capture::snapshot()
         } else {
             (vec![], vec![])
         };
@@ -234,7 +238,7 @@ impl Runtime {
                     .into(),
                 version: found.version,
                 platform: found.platform,
-                last_seen_at: crate::libs::db::now_iso(),
+                last_seen_at: crate::infrastructure::db::now_iso(),
                 discovery_methods: vec!["LAN".into()],
             };
             match observer.seen(device, visible.load(Ordering::SeqCst), true) {
@@ -242,11 +246,12 @@ impl Runtime {
                     if visible.load(Ordering::SeqCst)
                         && status.connections.hint(&status_db, &id).unwrap_or(false)
                     {
-                        let _ = status_events.send(crate::libs::events::WsEvent::broadcast(
-                            crate::features::chat::events::WS_PEER_STATUS_UPDATED,
-                            json!({"id":id,"online":true}).to_string(),
-                        ));
-                        let _=status_events.send(crate::libs::events::WsEvent::broadcast("PEER_CONNECTIONS_UPDATED",json!({"runtimeId":status.connections.snapshot(&status_db)["runtimeId"]}).to_string()));
+                        let _ =
+                            status_events.send(crate::infrastructure::events::WsEvent::broadcast(
+                                crate::features::chat::events::WS_PEER_STATUS_UPDATED,
+                                json!({"id":id,"online":true}).to_string(),
+                            ));
+                        let _=status_events.send(crate::infrastructure::events::WsEvent::broadcast("PEER_CONNECTIONS_UPDATED",json!({"runtimeId":status.connections.snapshot(&status_db)["runtimeId"]}).to_string()));
                     }
                     runtime.emit(&observer, Some(&id), visible.load(Ordering::SeqCst));
                 }
@@ -254,7 +259,7 @@ impl Runtime {
                 Err(error) => log::warn!("mDNS observation: {error}"),
             }
         });
-        let addrs = crate::libs::db::chat_store::peers::all(&state.db)?
+        let addrs = crate::infrastructure::db::chat_store::peers::all(&state.db)?
             .into_iter()
             .flat_map(|p| p.ip.split(',').map(str::to_owned).collect::<Vec<_>>())
             .take(512)
@@ -283,7 +288,7 @@ impl Runtime {
             let system_status = state.peer_status.clone();
             let system_db = state.db.clone();
             let system_browser =
-                crate::libs::platform::discovery::macos_dns_sd::MacDnsSdBrowser::new(
+                crate::infrastructure::platform::discovery::macos_dns_sd::MacDnsSdBrowser::new(
                     move |found| {
                         let Some(runtime) = system_weak.upgrade() else {
                             return;
@@ -303,7 +308,7 @@ impl Runtime {
                                 .into(),
                             version: found.version,
                             platform: found.platform,
-                            last_seen_at: crate::libs::db::now_iso(),
+                            last_seen_at: crate::infrastructure::db::now_iso(),
                             discovery_methods: vec!["LAN".into()],
                         };
                         match system_observer.seen(
@@ -320,7 +325,7 @@ impl Runtime {
                                 {
                                     let _ =
                                         system_events
-                                            .send(crate::libs::events::WsEvent::broadcast(
+                                            .send(crate::infrastructure::events::WsEvent::broadcast(
                                             crate::features::chat::events::WS_PEER_STATUS_UPDATED,
                                             json!({"id":id,"online":true}).to_string(),
                                         ));
@@ -402,7 +407,7 @@ impl Runtime {
         }
         let service = if matches!(request, Request::Publish {} | Request::Update {}) {
             Some(serde_json::from_value::<
-                crate::libs::protocols::mdns::service_info::MdnsServiceInfo,
+                plain_libs::protocols::mdns::records::MdnsServiceInfo,
             >(
                 crate::features::services::discovery::discovery_advertisement::execute(
                     state,
@@ -444,7 +449,7 @@ impl Runtime {
                     );
                     started = session.set_scanning(true)?;
                     session.debug_sessions.insert(token);
-                    crate::libs::protocols::mdns::packet_capture::set_enabled(true);
+                    crate::infrastructure::protocols::mdns::packet_capture::set_enabled(true);
                 }
                 Request::DebugStop { token } => {
                     let token = uuid::Uuid::parse_str(&token)?;
@@ -457,7 +462,7 @@ impl Runtime {
                                 .any(|existing| existing != &token),
                     )?;
                     session.debug_sessions.remove(&token);
-                    crate::libs::protocols::mdns::packet_capture::set_enabled(
+                    crate::infrastructure::protocols::mdns::packet_capture::set_enabled(
                         !session.debug_sessions.is_empty(),
                     );
                 }
@@ -520,7 +525,7 @@ impl Runtime {
 
     pub async fn release_native_scope(
         &self,
-        scope: &crate::libs::host::request_scope::NativeRequestScope,
+        scope: &crate::infrastructure::host::request_scope::NativeRequestScope,
     ) -> Result<()> {
         let _operation = self.operation.lock().await;
         self.release_discovery_owner_locked(&format!("native:{}", scope.id()))
@@ -621,7 +626,7 @@ impl Runtime {
             task.abort();
         }
     }
-    pub async fn close(&self, host: &crate::libs::host::bridge::Host) {
+    pub async fn close(&self, host: &crate::infrastructure::host::bridge::Host) {
         self.cancel_network_restart();
         let _operation = self.operation.lock().await;
         let mut owner = OWNER.lock().await;
@@ -635,7 +640,7 @@ impl Runtime {
         }
         if owner.as_ref() == Some(&self.id) {
             host_responder::stop();
-            crate::libs::protocols::mdns::packet_capture::set_enabled(false);
+            crate::infrastructure::protocols::mdns::packet_capture::set_enabled(false);
             let _ = host
                 .call("mdnsMulticast", json!({"acquire":false,"lease":self.id}))
                 .await;
@@ -654,7 +659,7 @@ pub async fn control(state: &CoreRuntime, request: Request) -> Result<Value> {
 
 fn browser_services(
     session: &Session,
-) -> Vec<crate::libs::protocols::mdns::service_browser::MdnsServiceSnapshot> {
+) -> Vec<crate::infrastructure::protocols::mdns::service_browser::MdnsServiceSnapshot> {
     #[allow(unused_mut)]
     let mut services = session.browser.snapshot();
     #[cfg(target_os = "macos")]

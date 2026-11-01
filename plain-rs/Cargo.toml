@@ -6,24 +6,24 @@ rust-version = "1.99"
 description = "Shared Plain protocol, crypto, persistence and domain primitives"
 
 [features]
-"kv" = ["dep:rusqlite", "dep:serde_json", "dep:anyhow"]
+"kv" = ["dep:rusqlite", "dep:serde_json", "dep:anyhow", "plain-libs/kv"]
 "default" = ["crypto"]
-"crypto" = ["dep:chacha20poly1305", "dep:p256", "dep:ed25519-dalek"]
+"crypto" = ["plain-libs/crypto"]
 "ble" = ["dep:anyhow"]
 "ble-native" = ["ble", "chat", "dep:serde_json", "dep:jni"]
 "mdns" = ["dep:socket2"]
-"tls" = ["dep:rcgen", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:x509-parser", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
-"chat" = ["rusqlite/hooks", "crypto", "mdns", "events", "dep:chrono", "dep:anyhow", "dep:serde_json", "dep:rusqlite", "sqlite_browse", "tokio/sync", "tokio/rt", "tokio/fs", "tokio/time"]
-"library" = ["dep:lofty", "kv", "dep:regex", "dep:rusqlite", "dep:chrono", "dep:anyhow", "prefs", "events", "tokio/rt", "tokio/fs", "tokio/time"]
-"sqlite_browse" = ["dep:rusqlite", "dep:serde_json", "dep:anyhow"]
+"tls" = ["plain-libs/tls"]
+"chat" = ["rusqlite/hooks", "crypto", "mdns", "events", "dep:chrono", "dep:anyhow", "dep:serde_json", "dep:rusqlite", "sqlite_browse", "tokio/sync", "tokio/rt", "tokio/fs", "tokio/time", "plain-libs/time", "plain-libs/sqlite", "plain-libs/file-walk", "plain-libs/kv"]
+"library" = ["kv", "dep:regex", "dep:rusqlite", "dep:chrono", "dep:anyhow", "prefs", "events", "tokio/rt", "tokio/fs", "tokio/time", "plain-libs/time", "plain-libs/media", "plain-libs/sqlite", "plain-libs/file-walk", "plain-libs/volumes"]
+"sqlite_browse" = ["dep:rusqlite", "dep:serde_json", "dep:anyhow", "plain-libs/sqlite"]
 "prefs" = ["crypto", "dep:serde_json", "dep:anyhow"]
 "trash" = ["filesystem", "storage-platform"]
-"filesystem" = ["library", "dep:anyhow", "tokio/fs", "tokio/rt", "tokio/time", "tokio/sync"]
+"filesystem" = ["library", "dep:anyhow", "tokio/fs", "tokio/rt", "tokio/time", "tokio/sync", "plain-libs/filesystem", "plain-libs/file-walk"]
 "events" = ["tokio/sync"]
 "services" = ["link-preview", "http-client", "chat", "library", "events", "dep:hmac", "dep:sha2_mac"]
 "graphql" = ["dep:async-graphql"]
-"html" = ["dep:regex"]
-"phone" = ["dep:regex", "dep:flate2", "dep:serde_json"]
+"html" = ["dep:regex", "plain-libs/html"]
+"phone" = ["dep:regex", "dep:serde_json", "plain-libs/phone"]
 "link-preview" = ["chat", "dep:regex"]
 "http-client" = ["dep:reqwest", "reqwest/rustls-tls", "tokio/net", "tokio/rt", "tokio/time"]
 
@@ -31,38 +31,25 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 # Exposes test-only seams (e.g. mdns host_responder packet-capture
 # helpers, the tempdir registry) to dependent crates' test binaries,
 # which `#[cfg(test)]` cannot reach.
-"test-seams" = ["dep:tempfile"]
+"test-seams" = ["dep:tempfile", "plain-libs/test-seams"]
 
-"storage-platform" = ["dep:anyhow", "dep:sysinfo"]
-"unix-platform" = ["dep:anyhow"]
+"storage-platform" = ["dep:anyhow", "dep:sysinfo", "plain-libs/storage-platform", "plain-libs/volumes"]
+"unix-platform" = ["dep:anyhow", "plain-libs/unix-platform"]
 "linux-system" = ["dep:anyhow"]
-"linux-platform" = ["linux-system", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util"]
+"linux-platform" = ["linux-system", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util", "plain-libs/linux-platform"]
 
 "image-metadata" = ["library", "dep:image"]
-"runtime" = ["ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros"]
+"runtime" = ["ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch"]
 "runtime-media" = ["runtime", "media", "dep:notify", "tokio/process"]
 
-"ai-image-search" = ["dep:tokenizers", "dep:image", "dep:serde_json", "dep:cc"]
-"media" = ["image-metadata", "dep:tempfile", "dep:fast_image_resize", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util"]
+"ai-image-search" = ["plain-libs/ai-image-search"]
+"media" = ["image-metadata", "dep:tempfile", "plain-libs/thumbnails"]
 
 [dependencies]
-"flate2" = { version = "1", optional = true }
-"kamadak-exif" = "=0.6.1"
+plain-libs = { path = "../plain-libs", default-features = false }
 "sysinfo" = { version = "0.32", default-features = false, features = ["disk"], optional = true }
 "tempfile" = { "version" = "3", "optional" = true }
 "reqwest" = { version = "0.12", default-features = false, features = ["stream"], optional = true }
-"chacha20poly1305" = { "version" = "0.10", "optional" = true }
-"p256" = { "version" = "0.14", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
-"ed25519-dalek" = { "version" = "2", "features" = ["rand_core"], "optional" = true }
-"der" = { version = "0.8", features = ["std", "derive"], optional = true }
-"pkcs12" = { version = "=0.2.0-pre.0", default-features = false, features = ["kdf"], optional = true }
-"pkcs5" = { version = "0.8", features = ["alloc", "pbes2"], optional = true }
-"pkcs8" = { version = "0.11", optional = true }
-"x509-parser" = { version = "0.18", optional = true }
-"cbc" = { version = "0.2", features = ["block-padding", "alloc"], optional = true }
-"des" = { version = "0.9", optional = true }
-"rc2" = { version = "0.9", optional = true }
-"sha1" = { version = "0.11", optional = true }
 "sha2" = "0.10"
 "hmac" = { "version" = "0.13", "optional" = true }
 "sha2_mac" = { "package" = "sha2", "version" = "0.11", "optional" = true }
@@ -75,8 +62,6 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "backup", "cache"], "optional" = true }
 "anyhow" = { "version" = "1", "optional" = true }
 "chrono" = { "version" = "0.4", "features" = ["serde"], "optional" = true }
-"rcgen" = { "version" = "0.13", "default-features" = false, "features" = ["pem", "ring"], "optional" = true }
-"lofty" = { "version" = "0.22", "optional" = true }
 "libc" = "0.2"
 "bytes" = "1"
 "futures-core" = "0.3"
@@ -96,17 +81,11 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"], "optional" = true }
 "notify" = { "version" = "7", "optional" = true }
 
-"fast_image_resize" = { version = "5", features = ["rayon"], optional = true }
-"jpeg-decoder" = { version = "0.3", optional = true }
-"rusty_h264-decoder" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
-"rusty_h264-common" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
-"tokenizers" = { version = "0.22.2", default-features = false, features = ["fancy-regex"], optional = true }
-
-[build-dependencies]
-"cc" = { version = "1", optional = true }
 
 [dev-dependencies]
-"jpeg-decoder" = { version = "0.3", features = ["platform_independent"] }
+"chacha20poly1305" = { "version" = "0.10" }
+"rcgen" = { "version" = "0.13", "default-features" = false, "features" = ["pem", "ring"] }
+plain-libs = { path = "../plain-libs", default-features = false, features = ["test-seams"] }
 "axum" = { "version" = "0.7", "default-features" = false, "features" = ["ws", "multipart", "json", "query", "tokio", "http1"] }
 "axum-server" = { "version" = "0.7", "features" = ["tls-rustls-no-provider"] }
 "serde_json" = "1"

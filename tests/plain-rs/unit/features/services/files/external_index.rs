@@ -33,7 +33,7 @@ fn directory_move_identity_batch_survives_reopen_without_stale_sources_or_neighb
     let destination = PathBuf::from("/media/destination/image.png");
     let neighbor = PathBuf::from("/media/source-other/image.png");
     {
-        let store = crate::libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
+        let store = plain_libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
         save_identities(
             &store,
             &[
@@ -57,7 +57,7 @@ fn directory_move_identity_batch_survives_reopen_without_stale_sources_or_neighb
         .unwrap();
         assert!(store.get(identity_key(&old)).unwrap().is_none());
     }
-    let store = crate::libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
+    let store = plain_libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     assert!(store.get(identity_key(&old)).unwrap().is_none());
     for path in [&destination, &neighbor] {
         let row: Known =

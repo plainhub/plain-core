@@ -10,6 +10,7 @@ name = "plainapp"
 path = "src/main.rs"
 
 [dependencies]
+plain-libs = { path = "../plain-libs", default-features = false }
 plain-rs = { path = "../plain-rs", default-features = false, features = ["unix-platform"] }
 plain_server = { path = "../plain-server", package = "plain-server" }
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "net", "signal", "time", "macros", "io-util", "fs", "sync"] }

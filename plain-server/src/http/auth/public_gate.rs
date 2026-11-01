@@ -9,7 +9,7 @@
 
 use async_graphql::Context;
 use plain_rs::features::prefs::Prefs;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::host::bridge::Host;
 use std::sync::Arc;
 
 /// plain-app's `checkEnabledAsync`: error out unless every named permission

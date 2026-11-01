@@ -1,4 +1,5 @@
-use crate::libs::db::{ArchivedConversationRow, Db};
+use crate::infrastructure::db::ArchivedConversationRow;
+use crate::infrastructure::db::Db;
 
 pub fn archive(db: &Db, id: &str, date: &str) -> anyhow::Result<()> {
     if id.is_empty() {

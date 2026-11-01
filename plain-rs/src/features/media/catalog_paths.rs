@@ -264,7 +264,7 @@ pub fn under_root_case_insensitive(p: &str, root: &str) -> bool {
 }
 
 pub fn infer_type(name: &str) -> &'static str {
-    let mime = crate::libs::utils::mime::mime_from_ext(name);
+    let mime = plain_libs::utils::mime::mime_from_ext(name);
     if mime.starts_with("image/") {
         "image"
     } else if mime.starts_with("video/") {

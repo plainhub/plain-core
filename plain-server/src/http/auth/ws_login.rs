@@ -1,6 +1,6 @@
 use crate::server::ServerState;
 use plain_rs::features::prefs::security::PasswordType;
-use plain_rs::libs::db::SessionRow;
+use plain_rs::infrastructure::db::SessionRow;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256, Sha512};
 use std::{
@@ -21,7 +21,7 @@ fn password_digest(prefs: &plain_rs::features::prefs::Prefs) -> String {
         .get::<String>(plain_rs::features::prefs::pref_keys::PASSWORD)
         .unwrap_or_default()
         .unwrap_or_default();
-    plain_rs::libs::utils::hex::bytes_to_hex(&Sha512::digest(password.as_bytes()))
+    plain_libs::utils::hex::bytes_to_hex(&Sha512::digest(password.as_bytes()))
 }
 
 pub(crate) fn admit_attempt(
@@ -60,7 +60,7 @@ pub(crate) struct LoginAttempts {
 impl LoginAttempts {
     pub(crate) fn notify_host(
         &mut self,
-        host: std::sync::Arc<plain_rs::libs::host::bridge::Host>,
+        host: std::sync::Arc<plain_rs::infrastructure::host::bridge::Host>,
         login_attempts: std::sync::Arc<std::sync::Mutex<LoginAttempts>>,
         method: &'static str,
         params: Value,
@@ -188,7 +188,7 @@ impl LoginProtection {
         let bytes = self.channel().decrypt_request(frame, now_ms())?;
         match self {
             Self::Password { digest, .. } => {
-                plain_rs::libs::crypto::xchacha_decrypt_raw(&hash_to_token(digest), &bytes)
+                plain_libs::crypto::xchacha_decrypt_raw(&hash_to_token(digest), &bytes)
                     .ok_or_else(|| anyhow::anyhow!("invalid_password"))
             }
             Self::DeviceConfirmation(_) => Ok(bytes),
@@ -199,7 +199,7 @@ impl LoginProtection {
         match self {
             Self::Password { digest, channel } => {
                 let encrypted =
-                    plain_rs::libs::crypto::xchacha_encrypt_raw(&hash_to_token(digest), bytes)
+                    plain_libs::crypto::xchacha_encrypt_raw(&hash_to_token(digest), bytes)
                         .ok_or_else(|| anyhow::anyhow!("Response encryption failed"))?;
                 channel.encrypt_response(&encrypted, now_ms())
             }
@@ -354,7 +354,7 @@ fn peer_chat_paired(request: &Value) -> bool {
     };
     let port = peer.get("port").and_then(Value::as_u64).unwrap_or(0);
     let key = text(peer, "signaturePublicKey");
-    port >= 1 && port <= 65535 && plain_rs::libs::utils::base64::base64_decode(&key).len() == 32
+    port >= 1 && port <= 65535 && plain_libs::utils::base64::base64_decode(&key).len() == 32
 }
 
 fn signature_data(
@@ -370,7 +370,7 @@ fn signature_data(
 
 fn sign(prefs: &plain_rs::features::prefs::Prefs, text: &str) -> anyhow::Result<String> {
     let keypair = plain_rs::features::services::peers::peer_wire::signing_keypair(prefs)?;
-    let signature = plain_rs::libs::crypto::ed25519_sign(&keypair, text.as_bytes());
+    let signature = plain_libs::crypto::ed25519_sign(&keypair, text.as_bytes());
     anyhow::ensure!(
         !signature.is_empty(),
         "ed25519 signing produced no signature"
@@ -385,14 +385,14 @@ async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> 
         .ok_or_else(|| anyhow::anyhow!("device client id is missing"))?;
     request.protection.validate(state, &request.request)?;
     let chat_paired = peer_chat_paired(&request.request);
-    let keypair = plain_rs::libs::crypto::EcdhSession::generate();
+    let keypair = plain_libs::crypto::EcdhSession::generate();
     let peer_public =
-        plain_rs::libs::utils::base64::base64_decode(&text(&request.request, "ecdhPublicKey"));
-    let ecdh_public_key = plain_rs::libs::utils::base64::base64_encode(&keypair.public_key_bytes);
+        plain_libs::utils::base64::base64_decode(&text(&request.request, "ecdhPublicKey"));
+    let ecdh_public_key = plain_libs::utils::base64::base64_encode(&keypair.public_key_bytes);
     let shared = keypair
         .compute_shared_key(&peer_public)
         .ok_or_else(|| anyhow::anyhow!("ECDH shared key computation failed"))?;
-    let token = plain_rs::libs::utils::base64::base64_encode(&shared);
+    let token = plain_libs::utils::base64::base64_encode(&shared);
     let timestamp = now_ms();
     let mut signed = signature_data(
         &device_client_id,
@@ -417,7 +417,7 @@ async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> 
     if chat_paired {
         let id = &request.client_id;
         let offered_key = text(&request.request["peer"], "signaturePublicKey");
-        if let Some(saved) = plain_rs::libs::db::chat_store::peers::get(&state.db, id)? {
+        if let Some(saved) = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, id)? {
             anyhow::ensure!(
                 saved.public_key.is_empty() || saved.public_key == offered_key,
                 "Peer identity changed"
@@ -444,13 +444,13 @@ async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> 
                 ips,
                 port: peer["port"].as_u64().unwrap() as u16,
                 device_type: serde_json::from_value(peer["deviceType"].clone())?,
-                key: plain_rs::libs::utils::base64::base64_encode(&Sha256::digest(&material)),
+                key: plain_libs::utils::base64::base64_encode(&Sha256::digest(&material)),
                 public_key: text(peer, "signaturePublicKey"),
             },
         )?;
     }
     Ok(
-        json!({"status": "COMPLETED", "token": token, "response": response, "frame": plain_rs::libs::utils::base64::base64_encode(&frame)}),
+        json!({"status": "COMPLETED", "token": token, "response": response, "frame": plain_libs::utils::base64::base64_encode(&frame)}),
     )
 }
 
@@ -459,9 +459,9 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> anyhow::Resul
         .db
         .session_get(&request.client_id)
         .map_err(|error| anyhow::Error::msg(error.to_string()))?;
-    let now = plain_rs::libs::utils::dbtime::now_iso();
+    let now = plain_libs::utils::dbtime::now_iso();
     let row = SessionRow {
-        url_token: plain_rs::libs::crypto::gen_token(),
+        url_token: plain_libs::crypto::gen_token(),
         client_id: request.client_id.clone(),
         name: existing
             .as_ref()
@@ -551,7 +551,7 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                     LoginProtection::DeviceConfirmation(channel)
                 }
             };
-            let frame = plain_rs::libs::utils::base64::base64_decode(&frame);
+            let frame = plain_libs::utils::base64::base64_decode(&frame);
             let bytes = protection.decrypt_request(&frame)?;
             let request: Value = serde_json::from_slice(&bytes)?;
             for field in ["browserName", "browserVersion", "osName", "osVersion"] {
@@ -619,7 +619,7 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                     attempts.pending.insert(id.clone(), pending);
                 }
                 return Ok(
-                    json!({"status":"PENDING","requestId":id,"request":request_facts,"frame":plain_rs::libs::utils::base64::base64_encode(&encrypted)}),
+                    json!({"status":"PENDING","requestId":id,"request":request_facts,"frame":plain_libs::utils::base64::base64_encode(&encrypted)}),
                 );
             }
             (pending, id)

@@ -5,7 +5,7 @@ use std::{
 };
 
 pub async fn cache(
-    resources: &crate::libs::host::resources::NativeResources,
+    resources: &crate::infrastructure::host::resources::NativeResources,
     directory: &Path,
     path: &str,
 ) -> Result<Option<PathBuf>, String> {
@@ -14,14 +14,14 @@ pub async fn cache(
         directory,
         path,
         |reader| {
-            Ok(crate::libs::media::cover::extract_embedded_cover_reader(
+            Ok(plain_libs::media::cover::extract_embedded_cover_reader(
                 reader,
             ))
         },
     )
     .await?;
     let Some(cover) = cover else { return Ok(None) };
-    let directory = crate::libs::cache_paths::CachePaths::new(directory)
+    let directory = crate::infrastructure::cache_paths::CachePaths::new(directory)
         .shared_previews()
         .join("audio-covers");
     tokio::task::spawn_blocking(move || publish(&directory, &cover.bytes))

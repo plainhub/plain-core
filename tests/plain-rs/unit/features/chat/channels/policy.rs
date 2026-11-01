@@ -27,7 +27,7 @@ fn channel_actions_share_the_same_owner_and_membership_policy() {
 
 #[test]
 fn local_event_and_query_collections_use_the_same_actor_policy() {
-    let db = crate::libs::db::Db::open(std::path::Path::new(":memory:")).unwrap();
+    let db = crate::infrastructure::db::Db::open(std::path::Path::new(":memory:")).unwrap();
     let channel =
         crate::features::chat::channels::state::create(&db, "fixture-owner", "Fixture channel")
             .unwrap();

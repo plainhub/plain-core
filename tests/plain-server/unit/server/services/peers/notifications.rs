@@ -2,26 +2,26 @@ use anyhow::Result;
 use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::services::notifications::types::Notification;
 use plain_rs::features::services::peers::management::Identity;
-use plain_rs::libs::db::DPeer;
+use plain_rs::infrastructure::db::DPeer;
 use serde_json::json;
 use std::sync::Mutex;
 use tokio::sync::watch;
 
-use plain_rs::libs::events::WsEvent;
-use plain_rs::libs::types::Instant;
+use plain_rs::infrastructure::events::WsEvent;
+use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Notify;
 
 struct CallbackReceiver {
-    host: Arc<plain_rs::libs::host::bridge::Host>,
+    host: Arc<plain_rs::infrastructure::host::bridge::Host>,
     generation: u64,
     requests: tokio::sync::mpsc::Receiver<serde_json::Value>,
     buffered: std::collections::VecDeque<serde_json::Value>,
 }
 
 impl CallbackReceiver {
-    fn new(host: Arc<plain_rs::libs::host::bridge::Host>) -> Self {
+    fn new(host: Arc<plain_rs::infrastructure::host::bridge::Host>) -> Self {
         let (generation, requests) = host.connect();
         Self {
             host,
@@ -113,7 +113,7 @@ fn event(receiver: &mut CallbackReceiver) -> serde_json::Value {
 #[tokio::test]
 async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_credentials() {
     use crate::server::ContentServer;
-    use plain_rs::libs::db::chat_store::{SaveMode, peers};
+    use plain_rs::infrastructure::db::chat_store::{SaveMode, peers};
     use std::sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -387,7 +387,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
         &state,
         &reqwest::Url::parse(&format!("https://127.0.0.1:{port}")).unwrap(),
         &session.client_id,
-        &plain_rs::libs::utils::base64::base64_decode(&peer.token),
+        &plain_libs::utils::base64::base64_decode(&peer.token),
         json!({"query":"{ notifications(query:\"\",offset:0,limit:1) { id } }"}),
         256 * 1024,
     )

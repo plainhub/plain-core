@@ -6,8 +6,8 @@ fn facts() -> Facts {
         ips: vec!["127.0.0.1".into(), "".into(), "127.0.0.1".into()],
         port: 2443,
         device_type: DeviceType::Phone,
-        key: crate::libs::utils::base64::base64_encode(&[1; 32]),
-        public_key: crate::libs::utils::base64::base64_encode(&[2; 32]),
+        key: plain_libs::utils::base64::base64_encode(&[1; 32]),
+        public_key: plain_libs::utils::base64::base64_encode(&[2; 32]),
     }
 }
 #[test]
@@ -23,13 +23,13 @@ fn repairing_preserves_creation_and_independent_token_and_rolls_back_errors() {
     })
     .unwrap();
     let mut next = facts();
-    next.key = crate::libs::utils::base64::base64_encode(&[3; 32]);
+    next.key = plain_libs::utils::base64::base64_encode(&[3; 32]);
     let updated = save(&db, next).unwrap();
     assert_eq!(updated.token, "keep");
     assert_eq!(updated.created_at, "2000-01-01T00:00:00.000Z");
     assert_eq!(
         updated.key,
-        crate::libs::utils::base64::base64_encode(&[3; 32])
+        plain_libs::utils::base64::base64_encode(&[3; 32])
     );
     db.with_conn(|c|c.execute_batch("CREATE TRIGGER fail_pair BEFORE UPDATE ON peers BEGIN SELECT RAISE(ABORT,'fixture failure'); END;")).unwrap();
     assert!(save(&db, facts()).is_err());
@@ -44,8 +44,8 @@ fn a_known_signing_identity_cannot_be_replaced_by_repairing() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let previous = save(&db, facts()).unwrap();
     let mut replacement = facts();
-    replacement.public_key = crate::libs::utils::base64::base64_encode(&[9; 32]);
-    replacement.key = crate::libs::utils::base64::base64_encode(&[8; 32]);
+    replacement.public_key = plain_libs::utils::base64::base64_encode(&[9; 32]);
+    replacement.key = plain_libs::utils::base64::base64_encode(&[8; 32]);
     assert!(save(&db, replacement).is_err());
     let current = db.get_peer_by_id("peer").unwrap();
     assert_eq!(current.public_key, previous.public_key);
@@ -63,20 +63,20 @@ fn unpair_removes_management_access_before_chat_only_repairing_and_preserves_his
         )
     })
     .unwrap();
-    let chat = crate::libs::db::DChat::new(
+    let chat = crate::infrastructure::db::DChat::new(
         "me",
         "peer",
         "",
         r#"{"type":"TEXT","value":{"text":"saved message"}}"#,
     );
-    crate::libs::db::chat_store::messages::save(
+    crate::infrastructure::db::chat_store::messages::save(
         &db,
         std::slice::from_ref(&chat),
-        crate::libs::db::chat_store::SaveMode::Insert,
+        crate::infrastructure::db::chat_store::SaveMode::Insert,
     )
     .unwrap();
-    assert!(crate::libs::db::chat_store::peers::unpair(&db, "peer").unwrap());
-    let unpaired = crate::libs::db::chat_store::peers::get(&db, "peer")
+    assert!(crate::infrastructure::db::chat_store::peers::unpair(&db, "peer").unwrap());
+    let unpaired = crate::infrastructure::db::chat_store::peers::get(&db, "peer")
         .unwrap()
         .unwrap();
     assert_eq!(unpaired.status, PeerStatus::Unpaired);
@@ -87,7 +87,7 @@ fn unpair_removes_management_access_before_chat_only_repairing_and_preserves_his
     assert!(repaired.token.is_empty());
     assert_eq!(repaired.created_at, original.created_at);
     assert_eq!(
-        crate::libs::db::chat_store::messages::get(&db, &chat.id)
+        crate::infrastructure::db::chat_store::messages::get(&db, &chat.id)
             .unwrap()
             .unwrap()
             .content,

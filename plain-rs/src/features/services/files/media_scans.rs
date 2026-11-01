@@ -61,12 +61,12 @@ struct State {
 #[derive(Default)]
 pub struct MediaScans {
     state: Mutex<State>,
-    events: Option<tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>>,
+    events: Option<tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>>,
 }
 
 impl MediaScans {
     pub fn new(
-        events: tokio::sync::broadcast::Sender<crate::libs::events::WsEvent>,
+        events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
         cache_directory: std::path::PathBuf,
     ) -> Self {
         Self {
@@ -103,8 +103,8 @@ impl MediaScans {
             "state": state,
             "error": snapshot.error,
         });
-        let _ = events.send(crate::libs::events::WsEvent::broadcast(
-            crate::libs::events::MEDIA_SCAN_PROGRESS,
+        let _ = events.send(crate::infrastructure::events::WsEvent::broadcast(
+            crate::infrastructure::events::MEDIA_SCAN_PROGRESS,
             payload.to_string(),
         ));
     }

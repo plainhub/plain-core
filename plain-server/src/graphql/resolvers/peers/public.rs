@@ -5,7 +5,7 @@ use crate::http::auth::public_gate;
 use async_graphql::{Context, Enum, InputObject, Object, SimpleObject};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::device::types::DeviceType;
-use plain_rs::libs::host::bridge::Host;
+use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -28,9 +28,9 @@ pub struct Peer {
     #[graphql(name = "deviceType")]
     pub device_type: DeviceType,
     #[graphql(name = "createdAt")]
-    pub created_at: plain_rs::libs::types::Instant,
+    pub created_at: plain_rs::infrastructure::types::Instant,
     #[graphql(name = "updatedAt")]
-    pub updated_at: plain_rs::libs::types::Instant,
+    pub updated_at: plain_rs::infrastructure::types::Instant,
     pub online: bool,
     #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
     pub key: String,
@@ -42,9 +42,9 @@ pub struct Peer {
 
 impl Peer {
     pub(crate) fn from_record(
-        row: plain_rs::libs::db::DPeer,
+        row: plain_rs::infrastructure::db::DPeer,
         online: bool,
-        local: &[plain_rs::libs::transport::lan::Interface],
+        local: &[plain_rs::infrastructure::transport::lan::Interface],
     ) -> Self {
         Self {
             address: Some(
@@ -104,7 +104,7 @@ pub struct PairingRequestInput {
     pub ecdh_public_key: String,
     #[graphql(name = "signaturePublicKey")]
     pub signature_public_key: String,
-    pub timestamp: plain_rs::libs::types::Long,
+    pub timestamp: plain_rs::infrastructure::types::Long,
     pub ips: Vec<String>,
     pub signature: String,
     #[graphql(name = "fromIp")]
@@ -153,8 +153,8 @@ impl PeersQuery {
     }
     async fn peers(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Peer>> {
         let state = ctx.data::<crate::server::ServerState>()?;
-        let rows = plain_rs::libs::db::chat_store::peers::all(&state.db)?;
-        let local = plain_rs::libs::transport::lan::local_interfaces();
+        let rows = plain_rs::infrastructure::db::chat_store::peers::all(&state.db)?;
+        let local = plain_rs::infrastructure::transport::lan::local_interfaces();
         let connections = state.peer_status.connections.snapshot_peers(&rows);
         let online = connections["online"]
             .as_array()
@@ -209,7 +209,7 @@ impl PeersMutation {
             input.mode.map(Into::into),
             input.password,
             input.generation,
-            ctx.data_opt::<plain_rs::libs::host::request_scope::NativeRequestScope>()
+            ctx.data_opt::<plain_rs::infrastructure::host::request_scope::NativeRequestScope>()
                 .cloned(),
         )
         .await?;

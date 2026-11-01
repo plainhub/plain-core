@@ -158,7 +158,7 @@ impl Service {
             .map_err(|e| anyhow!("file task queue: {e}"))?;
         let now = Utc::now();
         let task = FileTask {
-            id: crate::libs::utils::shortid::new_id(),
+            id: plain_libs::utils::shortid::new_id(),
             client_id: client_id.into(),
             kind,
             title: title.into(),
@@ -234,7 +234,7 @@ async fn execute(
             let mut bytes = 0_i64;
             let mut items = 0_i64;
             for path in paths {
-                let (b, i) = crate::libs::filesystem::measure(Path::new(&path))?;
+                let (b, i) = plain_libs::filesystem::measure(Path::new(&path))?;
                 bytes = bytes
                     .checked_add(b)
                     .ok_or_else(|| anyhow!("file size overflow"))?;
@@ -290,7 +290,7 @@ async fn execute(
                 Ok(())
             };
             let destination = if request.rename {
-                crate::libs::filesystem::rename_with_progress(
+                plain_libs::filesystem::rename_with_progress(
                     Path::new(&op.src),
                     Path::new(&op.dst),
                     Some(&progress),
@@ -300,7 +300,7 @@ async fn execute(
             } else {
                 match task.kind {
                     FileTaskType::Copy => {
-                        crate::libs::filesystem::copy_path_with_progress(
+                        plain_libs::filesystem::copy_path_with_progress(
                             Path::new(&op.src),
                             Path::new(&op.dst),
                             op.overwrite,
@@ -309,7 +309,7 @@ async fn execute(
                         .await?
                     }
                     FileTaskType::Move => {
-                        crate::libs::filesystem::move_path_with_progress(
+                        plain_libs::filesystem::move_path_with_progress(
                             Path::new(&op.src),
                             Path::new(&op.dst),
                             op.overwrite,

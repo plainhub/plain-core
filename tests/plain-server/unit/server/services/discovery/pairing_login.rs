@@ -1,8 +1,8 @@
 use futures_util::SinkExt;
 use futures_util::StreamExt;
+use plain_libs::utils::base64::base64_decode;
+use plain_libs::utils::base64::base64_encode;
 use plain_rs::features::services::discovery::pairing_attempts;
-use plain_rs::libs::utils::base64::base64_decode;
-use plain_rs::libs::utils::base64::base64_encode;
 use plain_rs::runtime::Runtime as ServerState;
 use serde_json::Value;
 use serde_json::json;
@@ -11,7 +11,7 @@ use std::time::Duration;
 
 #[cfg(feature = "http_transport")]
 struct ConfirmationCallbacks {
-    host: std::sync::Arc<plain_rs::libs::host::bridge::Host>,
+    host: std::sync::Arc<plain_rs::infrastructure::host::bridge::Host>,
     generation: u64,
     requests: tokio::sync::mpsc::Receiver<Value>,
 }
@@ -146,7 +146,7 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
     assert_eq!(waiting.verification_code.unwrap().len(), 9);
     assert!(remote_state.db.session_get(&local_id).unwrap().is_none());
     assert!(
-        plain_rs::libs::db::chat_store::peers::all(&state.db)
+        plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
             .is_empty()
     );
@@ -157,10 +157,10 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
         .await
         .unwrap();
     phase(&state, &started.generation, &["SUCCEEDED"]).await;
-    let peer = plain_rs::libs::db::chat_store::peers::get(&state.db, &remote_id)
+    let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
-    let paired = plain_rs::libs::db::chat_store::peers::get(&remote_state.db, &local_id)
+    let paired = plain_rs::infrastructure::db::chat_store::peers::get(&remote_state.db, &local_id)
         .unwrap()
         .unwrap();
     assert_eq!(peer.key, paired.key);
@@ -234,15 +234,15 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
     assert!(
         !completed
             .to_string()
-            .contains(&plain_rs::libs::crypto::sha512_hex("fixture-password"))
+            .contains(&plain_libs::crypto::sha512_hex("fixture-password"))
     );
     let remote_id = remote_state.native_client_id().unwrap();
     assert_eq!(finished.device_id.as_deref(), Some(remote_id.as_str()));
     let local_id = state.native_client_id().unwrap();
-    let peer = plain_rs::libs::db::chat_store::peers::get(&state.db, &remote_id)
+    let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
-    let other = plain_rs::libs::db::chat_store::peers::get(&remote_state.db, &local_id)
+    let other = plain_rs::infrastructure::db::chat_store::peers::get(&remote_state.db, &local_id)
         .unwrap()
         .unwrap();
     assert!(peer.is_paired());
@@ -281,7 +281,7 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
     .await
     .unwrap();
     phase(&state, &again.generation, &["SUCCEEDED"]).await;
-    let refreshed = plain_rs::libs::db::chat_store::peers::get(&state.db, &remote_id)
+    let refreshed = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
     assert_eq!(refreshed.name, "Reused name");
@@ -307,7 +307,7 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
         peer.token
     );
     assert_eq!(
-        plain_rs::libs::db::chat_store::peers::all(&state.db)
+        plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
             .len(),
         1
@@ -352,7 +352,7 @@ async fn no_password_still_requires_remote_approval_and_cancel_prevents_local_co
         .decide(&request, true)
         .await;
     assert!(
-        plain_rs::libs::db::chat_store::peers::all(&state.db)
+        plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
             .is_empty()
     );
@@ -392,7 +392,7 @@ async fn wrong_password_never_creates_a_local_grant() {
     let result = phase(&state, &first.generation, &["FAILED"]).await;
     assert_eq!(result.error.as_deref(), Some("invalid_password"));
     assert!(
-        plain_rs::libs::db::chat_store::peers::all(&state.db)
+        plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
             .is_empty()
     );
@@ -441,7 +441,7 @@ async fn known_key_mismatch_preserves_existing_grants() {
     .unwrap();
     let failed = phase(&state, &first.generation, &["FAILED"]).await;
     assert_eq!(failed.error.as_deref(), Some("peer_identity_changed"));
-    let peer = plain_rs::libs::db::chat_store::peers::get(&state.db, &remote_id)
+    let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
     assert_eq!(peer.token, "previous-session");
@@ -484,13 +484,13 @@ async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
     let failed = phase(&state, &initial.generation, &["FAILED"]).await;
     assert_eq!(failed.error.as_deref(), Some("rejected"));
     assert!(
-        plain_rs::libs::db::chat_store::peers::all(&state.db)
+        plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
             .is_empty()
     );
     other.prefs.set("password_type", "FIXED").unwrap();
     other.prefs.set("password", "fixture-password").unwrap();
-    let scope = plain_rs::libs::host::request_scope::NativeRequestScope::default();
+    let scope = plain_rs::infrastructure::host::request_scope::NativeRequestScope::default();
     let response = local.native_graphql().unwrap().execute_scoped(async_graphql::Request::new(format!("mutation {{ pairDevice(input: {{ host: \"127.0.0.1:{port}\", mode: MANAGE }}) {{ generation }} }}")), scope.clone()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
@@ -499,7 +499,7 @@ async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
     scope.close();
     phase(&state, generation, &["CANCELLED"]).await;
     assert!(
-        plain_rs::libs::db::chat_store::peers::all(&state.db)
+        plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
             .is_empty()
     );
@@ -562,7 +562,7 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
         failed.error.as_deref(),
         Some("Failed to save paired device")
     );
-    let previous = plain_rs::libs::db::chat_store::peers::get(&state.db, &remote_id)
+    let previous = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
     assert_eq!(previous.name, "Previous");

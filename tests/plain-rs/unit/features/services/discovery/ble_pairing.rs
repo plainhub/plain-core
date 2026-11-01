@@ -4,17 +4,17 @@ fn fixture(id: &str) -> (tempfile::TempDir, crate::test_runtime::Core) {
     let dir = tempfile::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    let (key, _public) = crate::libs::crypto::ed25519_generate();
+    let (key, _public) = plain_libs::crypto::ed25519_generate();
     prefs.set("client_id", id).unwrap();
     prefs
         .set(
             "signature_key_pair",
-            crate::libs::utils::base64::base64_encode(&key),
+            plain_libs::utils::base64::base64_encode(&key),
         )
         .unwrap();
     let server = crate::test_runtime::Core::start(
         dir.path(),
-        &crate::libs::utils::base64::base64_encode(&[3; 32]),
+        &plain_libs::utils::base64::base64_encode(&[3; 32]),
         prefs,
     )
     .unwrap();
@@ -172,10 +172,10 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
         .unwrap()
         .unwrap();
     idle(&state).await;
-    let local_peer = crate::libs::db::chat_store::peers::get(&state.db, "remote")
+    let local_peer = crate::infrastructure::db::chat_store::peers::get(&state.db, "remote")
         .unwrap()
         .unwrap();
-    let remote_peer = crate::libs::db::chat_store::peers::get(&other.db, "local")
+    let remote_peer = crate::infrastructure::db::chat_store::peers::get(&other.db, "local")
         .unwrap()
         .unwrap();
     assert_eq!(local_peer.key, remote_peer.key);
@@ -219,7 +219,7 @@ async fn cancellation_interrupts_pending_connect_and_preserves_replacement_gener
         replacement["ticket"]["generation"].as_str().unwrap()
     );
     assert!(
-        crate::libs::db::chat_store::peers::get(&state.db, "remote")
+        crate::infrastructure::db::chat_store::peers::get(&state.db, "remote")
             .unwrap()
             .is_none()
     );
@@ -287,7 +287,7 @@ async fn capacity_and_actual_connect_refusal_release_only_their_ticket() {
     idle(&state).await;
     assert!(state.pairing.tickets().is_empty());
     assert!(
-        crate::libs::db::chat_store::peers::all(&state.db)
+        crate::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
             .is_empty()
     );
