@@ -39,72 +39,92 @@ pub fn decrypt(state: &CoreRuntime, id: &str, purpose: &str) -> anyhow::Result<V
 }
 
 pub async fn resolve(state: &CoreRuntime, id: &str) -> anyhow::Result<File> {
-    let (scope, payload) = resource_link::parse(id)?;
-    let resource = resource_link::open(&scope, &key(state, &scope)?, payload)?;
-    let mut file = File {
-        path: String::new(),
-        media_id: String::new(),
-        name: String::new(),
+    let owner = state.clone();
+    let id = id.to_owned();
+    let (scope, resource) = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+        let (scope, payload) = resource_link::parse(&id)?;
+        let resource = resource_link::open(&scope, &key(&owner, &scope)?, payload)?;
+        Ok((scope, resource))
+    })
+    .await??;
+    let media_path = if matches!(resource.r#type, ResourceType::Media) {
+        state
+            .file_platform
+            .resource_media_path(&resource.id)
+            .await?
+    } else {
+        String::new()
     };
-    match resource.r#type {
-        ResourceType::SharedFile => {
-            let Scope::Share(share_id) = scope else {
-                anyhow::bail!("Invalid share scope")
-            };
-            file.path =
-                crate::features::files::shares::Service::new(state.db.clone(), state.prefs.clone())
-                    .resolve(&share_id, &resource.id, true)?
-                    .ok_or_else(|| anyhow::anyhow!("Shared file unavailable"))?;
-            authorize_path(state, &file.path)?;
+    let state = state.clone();
+    tokio::task::spawn_blocking(move || -> anyhow::Result<File> {
+        let mut file = File {
+            path: media_path,
+            media_id: String::new(),
+            name: String::new(),
+        };
+        let authorize = matches!(
+            resource.r#type,
+            ResourceType::SharedFile | ResourceType::Media | ResourceType::File
+        );
+        match resource.r#type {
+            ResourceType::SharedFile => {
+                let Scope::Share(share_id) = scope else {
+                    anyhow::bail!("Invalid share scope")
+                };
+                file.path = crate::features::files::shares::Service::new(
+                    state.db.clone(),
+                    state.prefs.clone(),
+                )
+                .resolve(&share_id, &resource.id, true)?
+                .ok_or_else(|| anyhow::anyhow!("Shared file unavailable"))?;
+            }
+            ResourceType::PackageIcon => {
+                anyhow::ensure!(
+                    !resource.id.contains(['/', '\\', '\0']),
+                    "Invalid package ID"
+                );
+                file.path = format!("pkgicon://{}", resource.id);
+            }
+            ResourceType::AppFile => {
+                let row = state
+                    .db
+                    .app_file_get(resource.id.split('.').next().unwrap_or_default())?
+                    .ok_or_else(|| anyhow::anyhow!("Attachment unavailable"))?;
+                let suffix = std::path::Path::new(&row.real_path)
+                    .file_name()
+                    .and_then(|v| v.to_str())
+                    .ok_or_else(|| anyhow::anyhow!("Invalid attachment path"))?;
+                file.path = crate::features::files::app_files::FileStore::new(
+                    state.db.clone(),
+                    state.directory.clone(),
+                )
+                .resolve(suffix)
+                .map_err(anyhow::Error::msg)?
+                .to_string_lossy()
+                .into_owned();
+                let names = crate::features::chat::attachments::app_file_store::file_name_map(
+                    &state.db.get_all_chats(),
+                );
+                file.name =
+                    crate::features::chat::attachments::app_file_store::display_name(&row, &names);
+            }
+            ResourceType::Media => {
+                file.media_id = resource.id;
+            }
+            ResourceType::File => {
+                file.path = super::references::resolve(
+                    state.db.clone(),
+                    state.directory.clone(),
+                    &resource.id,
+                )?;
+            }
         }
-        ResourceType::PackageIcon => {
-            anyhow::ensure!(
-                !resource.id.contains(['/', '\\', '\0']),
-                "Invalid package ID"
-            );
-            file.path = format!("pkgicon://{}", resource.id);
+        if authorize {
+            authorize_path(&state, &file.path)?;
         }
-        ResourceType::AppFile => {
-            let row = state
-                .db
-                .app_file_get(resource.id.split('.').next().unwrap_or_default())?
-                .ok_or_else(|| anyhow::anyhow!("Attachment unavailable"))?;
-            let suffix = std::path::Path::new(&row.real_path)
-                .file_name()
-                .and_then(|v| v.to_str())
-                .ok_or_else(|| anyhow::anyhow!("Invalid attachment path"))?;
-            file.path = crate::features::files::app_files::FileStore::new(
-                state.db.clone(),
-                state.directory.clone(),
-            )
-            .resolve(suffix)
-            .map_err(anyhow::Error::msg)?
-            .to_string_lossy()
-            .into_owned();
-            let names = crate::features::chat::attachments::app_file_store::file_name_map(
-                &state.db.get_all_chats(),
-            );
-            file.name =
-                crate::features::chat::attachments::app_file_store::display_name(&row, &names);
-        }
-        ResourceType::Media => {
-            file.path = state
-                .file_platform
-                .resource_media_path(&resource.id)
-                .await?;
-            file.media_id = resource.id;
-            authorize_path(state, &file.path)?;
-        }
-        ResourceType::File => {
-            file.path = super::references::resolve(
-                state.db.clone(),
-                state.directory.clone(),
-                &resource.id,
-            )?;
-            authorize_path(state, &file.path)?;
-        }
-    }
-    Ok(file)
+        Ok(file)
+    })
+    .await?
 }
 
 pub fn authorize_path(state: &CoreRuntime, reference: &str) -> anyhow::Result<()> {
@@ -115,8 +135,11 @@ pub fn authorize_path(state: &CoreRuntime, reference: &str) -> anyhow::Result<()
         .split_once("!zip!/")
         .map_or(reference, |(archive, _)| archive);
     let candidate = super::platform::paths::canonical(std::path::Path::new(path))?;
-    let directory = std::fs::canonicalize(&state.directory)?;
-    let cache = std::fs::canonicalize(state.cache.root())?;
+    let [directory, cache] = state
+        .file_platform
+        .private_roots
+        .as_ref()
+        .map_err(|error| anyhow::anyhow!(error.clone()))?;
     if candidate.starts_with(&cache) {
         let public = [
             "image_cache",
@@ -159,3 +182,7 @@ pub fn authorize_path(state: &CoreRuntime, reference: &str) -> anyhow::Result<()
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-rs/unit/features/services/files/links.rs"]
+mod tests;

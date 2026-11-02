@@ -459,13 +459,13 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
             conn.query_row(
                 "SELECT file_id FROM file_catalog WHERE file_name='report.txt'",
                 [],
-                |row| row.get::<_, i64>(0),
+                |row| row.get::<_, String>(0),
             )
         })
         .unwrap();
     state
         .db
-        .with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [id]))
+        .with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [&id]))
         .unwrap();
     let preferences =
         crate::features::services::settings::preferences::Preferences::from_server(&state);
@@ -533,9 +533,9 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
             .db
             .with_conn(|conn| conn.query_row(
                 "SELECT id,favorited,missing FROM files WHERE id=?1",
-                [id],
+                [&id],
                 |row| Ok((
-                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(0)?,
                     row.get::<_, bool>(1)?,
                     row.get::<_, bool>(2)?
                 ))
@@ -556,11 +556,11 @@ async fn an_unmounted_source_is_a_coverage_gap_and_does_not_retire_catalog_rows(
     let source = source.canonicalize().unwrap();
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
-    let id = state.db.with_conn(|connection| -> rusqlite::Result<i64> {
-        connection.execute("INSERT INTO volumes(identity,path,is_available) VALUES('offline-fixture',?1,1)", [source.to_str().unwrap()])?;
-        let volume_id = connection.last_insert_rowid();
-        connection.execute("INSERT INTO files(volume_id,path,file_name,kind,updated_at,favorited) VALUES(?1,'missing.rs','missing.rs','FILE','2026-01-01T00:00:00.000Z',1)", [volume_id])?;
-        Ok(connection.last_insert_rowid())
+    let id = state.db.with_conn(|connection| -> rusqlite::Result<String> {
+        connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('offline-fixture','offline-fixture',?1,1)", [source.to_str().unwrap()])?;
+        let volume_id: String = connection.query_row("SELECT id FROM volumes ORDER BY rowid DESC LIMIT 1", [], |row| row.get(0)).unwrap();
+        connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,favorited) VALUES('file-'||'missing.rs',?1,'missing.rs','missing.rs','FILE','2026-01-01T00:00:00.000Z',1)", [volume_id])?;
+        Ok("file-missing.rs".into())
     }).unwrap();
     let catalog = NativeMediaCatalog::new(state.clone());
     catalog
@@ -574,7 +574,7 @@ async fn an_unmounted_source_is_a_coverage_gap_and_does_not_retire_catalog_rows(
     );
     assert_eq!(result.total_files, None);
     assert!(result.error.unwrap().contains("volume is offline"));
-    let row = state.db.file(id).unwrap().unwrap();
+    let row = state.db.file(&id).unwrap().unwrap();
     assert!(!row.missing);
     assert!(row.favorited);
     assert!(!state.db.volumes().unwrap()[0].is_available);
@@ -616,7 +616,8 @@ async fn scanning_skips_unreadable_directories_and_preserves_their_existing_rows
         .db
         .record_file_paths(&[private.to_str().unwrap().into()], None)
         .unwrap()[0]
-        .id;
+        .id
+        .clone();
     let catalog = NativeMediaCatalog::new(state.clone());
     std::fs::set_permissions(&denied, std::fs::Permissions::from_mode(0)).unwrap();
     let denied_by_os = std::fs::read_dir(&denied).is_err();
@@ -640,7 +641,7 @@ async fn scanning_skips_unreadable_directories_and_preserves_their_existing_rows
         crate::features::services::files::media_scans::Status::Completed
     );
     assert!(result.error.is_none());
-    assert!(!state.db.file(id).unwrap().unwrap().missing);
+    assert!(!state.db.file(&id).unwrap().unwrap().missing);
     assert_eq!(
         state
             .db

@@ -365,3 +365,345 @@ fn serialized_field_names_are_snake_case() {
     // The Rust keyword field is exposed under its plain name, not `r#type`.
     assert_eq!(object["type"], "WEB");
 }
+
+#[cfg(feature = "chat")]
+#[test]
+fn repeated_session_lookups_do_not_execute_sql() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let db = test_db("session-cache");
+    let row = session_cache_row();
+    db.session_save(&row).unwrap();
+    let steps = Arc::new(AtomicUsize::new(0));
+    let observed = steps.clone();
+    db.with_conn(|connection| {
+        connection.progress_handler(
+            1,
+            Some(move || {
+                observed.fetch_add(1, Ordering::Relaxed);
+                false
+            }),
+        )
+    });
+    for _ in 0..300 {
+        assert_eq!(
+            db.session_get(&row.client_id).unwrap().unwrap().token,
+            row.token
+        );
+        assert!(db.session_get("unknown-session").unwrap().is_none());
+    }
+    db.with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
+    assert_eq!(
+        steps.load(Ordering::Relaxed),
+        0,
+        "cached session reads must not execute SQL"
+    );
+}
+
+#[cfg(feature = "chat")]
+fn session_cache_row() -> SessionRow {
+    SessionRow {
+        client_id: "cache-client".into(),
+        name: "Browser".into(),
+        r#type: "WEB".into(),
+        client_ip: "127.0.0.1".into(),
+        os_name: String::new(),
+        os_version: String::new(),
+        browser_name: String::new(),
+        browser_version: String::new(),
+        token: "session-key".into(),
+        url_token: "resource-key".into(),
+        last_seen_at: None,
+        created_at: "2026-01-01T00:00:00Z".into(),
+        updated_at: "2026-01-01T00:00:00Z".into(),
+    }
+}
+
+#[cfg(feature = "chat")]
+#[test]
+fn session_cache_tracks_mutations_clones_raw_sql_and_rollbacks() {
+    let db = test_db("session-cache-mutations");
+    let mut row = session_cache_row();
+    db.session_save(&row).unwrap();
+    let clone = db.clone();
+    row.token = "rotated-session-key".into();
+    row.url_token = "rotated-resource-key".into();
+    db.session_save(&row).unwrap();
+    assert_eq!(
+        clone.session_get(&row.client_id).unwrap().unwrap().token,
+        row.token
+    );
+    clone
+        .session_rename(&row.client_id, "Renamed", "2026-02-01T00:00:00Z")
+        .unwrap();
+    assert_eq!(
+        db.session_get(&row.client_id).unwrap().unwrap().name,
+        "Renamed"
+    );
+    db.session_touch(&[(row.client_id.clone(), "2026-03-01T00:00:00+01:00".into())])
+        .unwrap();
+    assert_eq!(
+        clone
+            .session_get(&row.client_id)
+            .unwrap()
+            .unwrap()
+            .last_seen_at
+            .as_deref(),
+        Some("2026-02-28T23:00:00.000Z")
+    );
+    db.with_conn(|connection| {
+        connection.execute(
+            "UPDATE sessions SET url_token='raw-resource-key' WHERE client_id=?1",
+            [&row.client_id],
+        )
+    })
+    .unwrap();
+    assert_eq!(
+        clone
+            .session_get(&row.client_id)
+            .unwrap()
+            .unwrap()
+            .url_token,
+        "raw-resource-key"
+    );
+    db.with_conn(|connection| {
+        let transaction = connection.unchecked_transaction().unwrap();
+        transaction
+            .execute(
+                "UPDATE sessions SET token='uncommitted-key' WHERE client_id=?1",
+                [&row.client_id],
+            )
+            .unwrap();
+        transaction.rollback().unwrap();
+    });
+    assert_eq!(
+        clone.session_get(&row.client_id).unwrap().unwrap().token,
+        row.token
+    );
+    let mut invalid = row.clone();
+    invalid.r#type = "invalid-session-type".into();
+    assert!(db.session_save(&invalid).is_err());
+    assert_eq!(
+        db.session_get(&row.client_id).unwrap().unwrap().r#type,
+        "WEB"
+    );
+    db.session_delete(&row.client_id).unwrap();
+    assert!(clone.session_get(&row.client_id).unwrap().is_none());
+    db.session_save(&row).unwrap();
+    db.with_conn(|connection| connection.execute("DELETE FROM sessions", []))
+        .unwrap();
+    assert!(clone.session_get(&row.client_id).unwrap().is_none());
+    for _ in 0..2 {
+        db.session_save(&row).unwrap();
+        db.with_conn(|connection| {
+            connection
+                .prepare_cached("DELETE FROM sessions")
+                .unwrap()
+                .execute([])
+        })
+        .unwrap();
+        assert!(clone.session_get(&row.client_id).unwrap().is_none());
+    }
+}
+
+#[cfg(feature = "chat")]
+#[test]
+fn session_cache_loads_persisted_rows_and_keeps_unchanged_lookups_in_memory() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("plain.db");
+    let row = session_cache_row();
+    let db = crate::infrastructure::db::Db::open(&path).unwrap();
+    db.session_save(&row).unwrap();
+    drop(db);
+    let db = crate::infrastructure::db::Db::open(&path).unwrap();
+    let steps = Arc::new(AtomicUsize::new(0));
+    let observed = steps.clone();
+    db.with_conn(|connection| {
+        connection.progress_handler(
+            1,
+            Some(move || {
+                observed.fetch_add(1, Ordering::Relaxed);
+                false
+            }),
+        )
+    });
+    assert_eq!(
+        db.session_get(&row.client_id).unwrap().unwrap().url_token,
+        row.url_token
+    );
+    db.with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
+    assert_eq!(steps.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn session_activity_is_visible_from_memory_and_300_touches_coalesce_into_one_write() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let db = test_db("buffered-session-activity");
+    let row = session_cache_row();
+    db.session_save(&row).unwrap();
+    db.with_conn(|c|c.execute_batch("CREATE TEMP TABLE activity_writes(value INTEGER); CREATE TEMP TRIGGER activity_write AFTER UPDATE OF last_seen_at ON main.sessions BEGIN INSERT INTO activity_writes VALUES(1); END;")).unwrap();
+    let steps = Arc::new(AtomicUsize::new(0));
+    let observed = steps.clone();
+    db.with_conn(|c| {
+        c.progress_handler(
+            1,
+            Some(move || {
+                observed.fetch_add(1, Ordering::Relaxed);
+                false
+            }),
+        )
+    });
+    for _ in 0..300 {
+        assert_eq!(
+            db.session_touch(&[(row.client_id.clone(), "2026-03-01T00:00:00.000Z".into())])
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            db.session_list().unwrap()[0].last_seen_at.as_deref(),
+            Some("2026-03-01T00:00:00.000Z")
+        );
+    }
+    db.with_conn(|c| c.progress_handler(0, None::<fn() -> bool>));
+    assert_eq!(steps.load(Ordering::Relaxed), 0);
+    assert_eq!(
+        db.with_conn(
+            |c| c.query_row("SELECT count(*) FROM activity_writes", [], |r| r
+                .get::<_, i64>(0))
+        )
+        .unwrap(),
+        0
+    );
+    assert!(
+        db.flush_session_activity(std::time::Instant::now(), false)
+            .unwrap()
+    );
+    assert_eq!(
+        db.with_conn(
+            |c| c.query_row("SELECT count(*) FROM activity_writes", [], |r| r
+                .get::<_, i64>(0))
+        )
+        .unwrap(),
+        1
+    );
+    assert_eq!(
+        db.with_conn(|c| c.query_row(
+            "SELECT last_seen_at FROM sessions WHERE client_id=?1",
+            [&row.client_id],
+            |r| r.get::<_, String>(0)
+        ))
+        .unwrap(),
+        "2026-03-01T00:00:00.000Z"
+    );
+    assert!(
+        !db.flush_session_activity(std::time::Instant::now(), true)
+            .unwrap()
+    );
+}
+
+#[test]
+fn failed_session_activity_flush_retains_pending_values_and_revocation_discards_them() {
+    let db = test_db("session-activity-failure");
+    let mut row = session_cache_row();
+    db.session_save(&row).unwrap();
+    db.session_touch(&[(row.client_id.clone(), "2026-03-01T00:00:00.000Z".into())])
+        .unwrap();
+    db.with_conn(|c|c.execute_batch("CREATE TEMP TRIGGER reject_activity BEFORE UPDATE OF last_seen_at ON main.sessions BEGIN SELECT RAISE(ABORT,'fixture'); END;")).unwrap();
+    assert!(
+        db.flush_session_activity(std::time::Instant::now(), true)
+            .is_err()
+    );
+    assert_eq!(
+        db.session_get(&row.client_id)
+            .unwrap()
+            .unwrap()
+            .last_seen_at
+            .as_deref(),
+        Some("2026-03-01T00:00:00.000Z")
+    );
+    db.with_conn(|c| c.execute_batch("DROP TRIGGER reject_activity"))
+        .unwrap();
+    assert!(
+        db.flush_session_activity(std::time::Instant::now(), true)
+            .unwrap()
+    );
+    db.session_touch(&[(row.client_id.clone(), "2026-04-01T00:00:00.000Z".into())])
+        .unwrap();
+    db.session_delete(&row.client_id).unwrap();
+    row.token = "rotated-token".into();
+    db.session_save(&row).unwrap();
+    assert!(
+        !db.flush_session_activity(std::time::Instant::now(), true)
+            .unwrap()
+    );
+    assert_eq!(
+        db.session_get(&row.client_id)
+            .unwrap()
+            .unwrap()
+            .last_seen_at,
+        None
+    );
+}
+
+#[test]
+fn raw_session_changes_merge_activity_only_for_the_same_credentials() {
+    let db = test_db("raw-buffered-session-activity");
+    let row = session_cache_row();
+    db.session_save(&row).unwrap();
+    db.session_touch(&[(row.client_id.clone(), "2026-03-01T00:00:00.000Z".into())])
+        .unwrap();
+    db.with_conn(|c| {
+        c.execute(
+            "UPDATE sessions SET name='renamed' WHERE client_id=?1",
+            [&row.client_id],
+        )
+    })
+    .unwrap();
+    let cached = db.session_get(&row.client_id).unwrap().unwrap();
+    assert_eq!(cached.name, "renamed");
+    assert_eq!(
+        cached.last_seen_at.as_deref(),
+        Some("2026-03-01T00:00:00.000Z")
+    );
+    db.with_conn(|c| {
+        c.execute(
+            "UPDATE sessions SET name='raw-change' WHERE client_id=?1",
+            [&row.client_id],
+        )
+    })
+    .unwrap();
+    db.session_save(&row).unwrap();
+    assert!(
+        !db.flush_session_activity(std::time::Instant::now(), true)
+            .unwrap()
+    );
+    db.session_touch(&[(row.client_id.clone(), "2026-03-01T00:00:00.000Z".into())])
+        .unwrap();
+    db.with_conn(|c| {
+        c.execute(
+            "UPDATE sessions SET token='rotated' WHERE client_id=?1",
+            [&row.client_id],
+        )
+    })
+    .unwrap();
+    assert_eq!(
+        db.session_get(&row.client_id)
+            .unwrap()
+            .unwrap()
+            .last_seen_at,
+        None
+    );
+    assert!(
+        !db.flush_session_activity(std::time::Instant::now(), true)
+            .unwrap()
+    );
+}

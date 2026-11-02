@@ -60,7 +60,7 @@ async fn trash_and_restore_preserve_file_identity_favorite_and_text_store() {
         .remove(0);
     trash
         .db
-        .with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [first.id]))
+        .with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [&first.id]))
         .unwrap();
     let moved = trash
         .trash_paths(vec![path.to_str().unwrap().into()])
@@ -79,7 +79,7 @@ async fn trash_and_restore_preserve_file_identity_favorite_and_text_store() {
         "report.txt"
     );
     assert_eq!(Trash::physical_path(&row), Path::new(&moved));
-    assert!(trash.db.file(first.id).unwrap().unwrap().favorited);
+    assert!(trash.db.file(&first.id).unwrap().unwrap().favorited);
     std::fs::write(&path, b"existing").unwrap();
     let restored = trash
         .restore_paths(vec![first.id.to_string()])
@@ -90,7 +90,7 @@ async fn trash_and_restore_preserve_file_identity_favorite_and_text_store() {
     assert_eq!(std::fs::read(&restored).unwrap(), b"restore");
     assert_eq!(std::fs::read(&path).unwrap(), b"existing");
     assert_eq!(trash.trash_count().unwrap(), 0);
-    let row = trash.db.file(first.id).unwrap().unwrap();
+    let row = trash.db.file(&first.id).unwrap().unwrap();
     assert!(row.favorited);
     assert!(row.trashed_at.is_none() && row.original_path.is_none());
     assert_eq!(trash.db.key_values().iter().count(), 0);
@@ -111,7 +111,7 @@ async fn permanent_deletion_waits_for_filesystem_success() {
         .list_trash(0, 10, "report", SortOrder::NameAsc)
         .unwrap()
         .remove(0);
-    let id = row.id.parse().unwrap();
+    let id = &row.id;
     let parent = Path::new(&moved).parent().unwrap();
     let saved = parent.with_extension("saved");
     std::fs::rename(parent, &saved).unwrap();
@@ -149,13 +149,13 @@ async fn trash_lists_only_the_directory_root_and_restores_descendant_ids() {
         .unwrap()
         .remove(0);
     assert_eq!(trash.trash_count().unwrap(), 1);
-    let trashed = trash.db.file(original[1].id).unwrap().unwrap();
+    let trashed = trash.db.file(&original[1].id).unwrap().unwrap();
     assert!(trashed.trashed_at.is_some());
     assert!(trashed.path.ends_with("child.txt"));
     trash.restore_paths(vec![moved]).await.unwrap();
     assert_eq!(std::fs::read(child).unwrap(), b"child");
     assert_eq!(
-        trash.db.file(original[1].id).unwrap().unwrap().path,
+        trash.db.file(&original[1].id).unwrap().unwrap().path,
         original[1].path
     );
 }

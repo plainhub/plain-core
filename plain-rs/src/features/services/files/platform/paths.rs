@@ -5,6 +5,11 @@ pub(crate) fn canonical(path: &Path) -> Result<PathBuf> {
     if !path.is_absolute() {
         bail!("absolute file path required");
     }
+    match path.canonicalize() {
+        Ok(path) => return Ok(path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
     let mut resolved = PathBuf::new();
     for component in path.components() {
         match component {

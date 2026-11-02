@@ -148,3 +148,40 @@ fn full_resolution_output_agrees_with_existing_encoder() {
         assert!(max == 0, "quality {quality}: difference {max}");
     }
 }
+
+#[test]
+#[ignore]
+fn jpeg_encode_latency_benchmark() {
+    use sha2::Digest;
+    let rgb = (0..512 * 512)
+        .flat_map(|index| [(index % 200) as u8, ((index / 512) % 200) as u8, 90])
+        .collect::<Vec<_>>();
+    let mut samples = Vec::new();
+    let mut encoded = Vec::new();
+    for _ in 0..20 {
+        let start = std::time::Instant::now();
+        encoded = encode(&rgb, 512, 512, 85).unwrap();
+        samples.push(start.elapsed().as_secs_f64() * 1000.0);
+    }
+    samples.sort_by(f64::total_cmp);
+    println!(
+        "{}",
+        serde_json::json!({"phase":"JPEG encode 512x512 q85","samples":20,"medianMs":samples[10],"p95Ms":samples[18],"digest":sha2::Sha256::digest(&encoded).to_vec()})
+    );
+}
+
+#[test]
+fn thumbnail_encode_preserves_the_baseline_bytes() {
+    use sha2::Digest;
+    let rgb = (0..512 * 512)
+        .flat_map(|index| [(index % 200) as u8, ((index / 512) % 200) as u8, 90])
+        .collect::<Vec<_>>();
+    let encoded = encode(&rgb, 512, 512, 85).unwrap();
+    assert_eq!(
+        &sha2::Sha256::digest(&encoded)[..],
+        &[
+            152, 87, 193, 129, 234, 240, 16, 17, 76, 73, 162, 104, 17, 210, 223, 54, 9, 76, 41,
+            145, 244, 27, 33, 104, 27, 182, 207, 181, 114, 145, 168, 240
+        ]
+    );
+}

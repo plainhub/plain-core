@@ -81,6 +81,8 @@ pub struct ThumbSpec {
     pub quality: u8,
     pub mod_unix: i64,
     pub file_size: i64,
+    pub center_crop: bool,
+    pub modified_nanos: u32,
 }
 
 impl ThumbSpec {
@@ -93,6 +95,8 @@ impl ThumbSpec {
             quality: quality.clamp(1, 100) as u8,
             mod_unix,
             file_size: size,
+            center_crop: false,
+            modified_nanos: 0,
         }
     }
 }
@@ -122,7 +126,82 @@ fn bump_generations(key: &str) {
         .or_insert(0) += 1;
 }
 
+pub fn original_fits(
+    width: u32,
+    height: u32,
+    target_width: u32,
+    target_height: u32,
+    center_crop: bool,
+    bytes: i64,
+) -> bool {
+    u64::try_from(bytes).is_ok_and(|size| size <= PASSTHROUGH_MAX_BYTES)
+        && (target_width == 0 || width <= target_width)
+        && (target_height == 0 || height <= target_height)
+        && (!center_crop
+            || u64::from(width) * u64::from(target_height)
+                == u64::from(height) * u64::from(target_width))
+}
+
+pub fn read_original_thumbnail(
+    path: &std::path::Path,
+    width: u32,
+    height: u32,
+    center_crop: bool,
+) -> std::io::Result<Option<Vec<u8>>> {
+    use std::io::Read;
+    let file = std::fs::File::open(path)?;
+    let size = file.metadata()?.len();
+    if size > PASSTHROUGH_MAX_BYTES {
+        return Ok(None);
+    }
+    let mut bytes = Vec::new();
+    file.take(PASSTHROUGH_MAX_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > PASSTHROUGH_MAX_BYTES {
+        return Ok(None);
+    }
+    let Ok(sniffed) = sniff::sniff_header(&bytes) else {
+        return Ok(None);
+    };
+    if !sniffed.kind.decodable() {
+        return Ok(None);
+    }
+    let orientation = if sniffed.kind == ImageKind::Jpeg {
+        exif::orientation(&bytes).unwrap_or(1)
+    } else {
+        1
+    };
+    let (source_width, source_height) = if Orientation(orientation).swaps_axes() {
+        (sniffed.height, sniffed.width)
+    } else {
+        (sniffed.width, sniffed.height)
+    };
+    if !original_fits(
+        source_width,
+        source_height,
+        width,
+        height,
+        center_crop,
+        size as i64,
+    ) {
+        return Ok(None);
+    }
+    Ok(Some(bytes))
+}
+
 pub async fn get_thumbnail(spec: ThumbSpec, cache: &std::path::Path) -> Result<ThumbOutcome> {
+    if spec.center_crop && (spec.w == 0 || spec.h == 0) {
+        bail!("positive crop dimensions required");
+    }
+    let versioned = cache.join("thumbs").join(format!(
+        "render-v2-{}-{}",
+        spec.center_crop, spec.modified_nanos
+    ));
+    let cache = if spec.center_crop || spec.modified_nanos != 0 {
+        versioned.as_path()
+    } else {
+        cache
+    };
     let head = read_head(&spec.path).await;
     let sniffed = sniff::sniff_header(&head)
         .ok()
@@ -152,13 +231,10 @@ async fn get_image_thumbnail(
     } else {
         (s.width, s.height)
     };
-    let (tw, th) = compute_target_size(uw, uh, spec.w, spec.h);
+    let (tw, th) = target_size(uw, uh, spec.w, spec.h, spec.center_crop);
 
     // Passthrough: already thumbnail-sized, browser-renderable, small.
-    if tw == uw
-        && th == uh
-        && u64::try_from(spec.file_size).unwrap_or(u64::MAX) <= PASSTHROUGH_MAX_BYTES
-    {
+    if original_fits(uw, uh, spec.w, spec.h, spec.center_crop, spec.file_size) {
         let data = tokio::fs::read(&spec.path).await?;
         return Ok(ThumbOutcome::Original {
             data: Arc::new(data),
@@ -196,7 +272,16 @@ async fn get_image_thumbnail(
                 lru::global().put(cache_path.clone(), d.clone());
                 return Ok(ThumbOutcome::Generated(d));
             }
-            generate_and_cache(spec, s, orientation, tw, th, cache_path).await
+            generate_and_cache(
+                spec,
+                s,
+                orientation,
+                tw,
+                th,
+                cache_path,
+                crate::utils::image_metadata::thumbnail(head),
+            )
+            .await
         })
         .await
 }
@@ -208,6 +293,7 @@ async fn generate_and_cache(
     tw: u32,
     th: u32,
     cache_path: std::path::PathBuf,
+    preview: Option<&[u8]>,
 ) -> Result<ThumbOutcome> {
     let swaps = Orientation(orientation).swaps_axes();
     // The stored bitmap must be resized to the swapped target so the
@@ -221,15 +307,43 @@ async fn generate_and_cache(
     if !scaled_jpeg && u64::from(s.width) * u64::from(s.height) > admission::MAX_SOURCE_PIXELS {
         bail!("source {}x{} exceeds pixel guard", s.width, s.height);
     }
-    let est = estimated_decoded_bytes(s, rw, rh);
+    let preview = preview.and_then(|bytes| {
+        let dimensions = sniff::sniff_header(bytes).ok()?;
+        (dimensions.kind == ImageKind::Jpeg && dimensions.width >= rw && dimensions.height >= rh)
+            .then(|| (bytes.to_vec(), dimensions))
+    });
+    let est = estimated_decoded_bytes(s, rw, rh).max(estimated_decoded_bytes(
+        preview.as_ref().map_or(s, |(_, dimensions)| *dimensions),
+        rw,
+        rh,
+    ));
+    let est = est
+        .saturating_mul(2)
+        .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4);
     let _permits = admission::global().acquire(est).await?;
 
     let path = spec.path.clone();
     let quality = spec.quality;
     let cp = cache_path.clone();
+    let crop = spec.center_crop.then_some(if swaps {
+        (spec.h, spec.w)
+    } else {
+        (spec.w, spec.h)
+    });
     let jpg = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let bm = decode_to_target(&path, s, rw, rh)?;
-        let bm = scale::resize_to(bm, rw, rh).apply_orientation(Orientation(orientation));
+        let _permits = _permits;
+        let bm = if let Some((bytes, _)) = preview {
+            decode::jpeg_scaled_bytes(&bytes, rw, rh)
+                .or_else(|_| decode_to_target(&path, s, rw, rh))?
+        } else {
+            decode_to_target(&path, s, rw, rh)?
+        };
+        let bm = if let Some((w, h)) = crop {
+            scale::resize_to_fill(bm, w, h)
+        } else {
+            scale::resize_to(bm, rw, rh)
+        };
+        let bm = bm.apply_orientation(Orientation(orientation));
         let jpg = encode::encode_jpeg(bm, quality)?;
         let _ = write_thumb_cache(&cp, &jpg);
         Ok(jpg)
@@ -344,31 +458,55 @@ async fn generate_non_image(
     cache_path: &std::path::Path,
 ) -> Result<ThumbOutcome> {
     let path = spec.path.clone();
-    let (w, h, quality) = (spec.w, spec.h, spec.quality);
 
-    // 1. Cover art (sidecar file > embedded via lofty) — cheap, CPU permit only.
     {
-        let _permits = admission::global().acquire(0).await?;
-        let p = path.clone();
-        let cover =
-            tokio::task::spawn_blocking(move || crate::media::cover::extract_cover(&p)).await?;
+        let permits = admission::global().acquire(0).await?;
+        let cover = tokio::task::spawn_blocking(move || {
+            let _permits = permits;
+            crate::media::cover::extract_cover(&path)
+        })
+        .await?;
         if let Some(cover) = cover {
-            let jpg = thumb_from_cover_bytes(&cover.bytes, w, h, quality)?;
-            return finish_generated(cache_path, jpg);
+            let dimensions = sniff::sniff_header(&cover.bytes)?;
+            if u64::from(dimensions.width) * u64::from(dimensions.height)
+                > admission::MAX_SOURCE_PIXELS
+            {
+                bail!("cover exceeds pixel guard");
+            }
+            let permits = admission::global()
+                .acquire(
+                    u64::from(dimensions.width) * u64::from(dimensions.height) * 8
+                        + u64::from(spec.w) * u64::from(spec.h) * 4,
+                )
+                .await?;
+            let request = spec.clone();
+            let cache_path = cache_path.to_owned();
+            return tokio::task::spawn_blocking(move || {
+                let _permits = permits;
+                let jpg = encode_bitmap(decode::image_from_bytes(&cover.bytes)?, &request)?;
+                finish_generated(&cache_path, jpg)
+            })
+            .await?;
         }
     }
-
-    // 2. Cover-less video: pure-Rust MP4 demux + H.264 keyframe decode, split
-    //    in two blocking phases so admission prices the decode (YUV+RGB) by
-    //    the real frame size between them.
-    if is_video_ext(&path) {
-        let p = path.clone();
-        let plan = tokio::task::spawn_blocking(move || video::plan_keyframe(&p)).await??;
-        let _permits = admission::global().acquire(plan.estimated_bytes()).await?;
-        let jpg =
-            tokio::task::spawn_blocking(move || video::decode_plan_to_jpeg(plan, w, h, quality))
-                .await??;
-        return finish_generated(cache_path, jpg);
+    if is_video_ext(&spec.path) {
+        let path = spec.path.clone();
+        let plan = tokio::task::spawn_blocking(move || video::plan_keyframe(&path)).await??;
+        let permits = admission::global()
+            .acquire(
+                plan.estimated_bytes()
+                    .saturating_mul(2)
+                    .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4),
+            )
+            .await?;
+        let request = spec.clone();
+        let cache_path = cache_path.to_owned();
+        return tokio::task::spawn_blocking(move || {
+            let _permits = permits;
+            let jpg = encode_bitmap(video::decode_plan(plan)?, &request)?;
+            finish_generated(&cache_path, jpg)
+        })
+        .await?;
     }
 
     bail!("unsupported file type for thumbnail")
@@ -387,15 +525,35 @@ fn finish_generated(cache_path: &std::path::Path, jpg: Vec<u8>) -> Result<ThumbO
     Ok(ThumbOutcome::Generated(data))
 }
 
-fn thumb_from_cover_bytes(bytes: &[u8], w: u32, h: u32, quality: u8) -> Result<Vec<u8>> {
-    let s = sniff::sniff_header(bytes)?;
-    if u64::from(s.width) * u64::from(s.height) > admission::MAX_SOURCE_PIXELS {
-        bail!("cover {}x{} exceeds pixel guard", s.width, s.height);
+fn encode_bitmap(bm: Bitmap, spec: &ThumbSpec) -> Result<Vec<u8>> {
+    let bm = if spec.center_crop {
+        scale::resize_to_fill(bm, spec.w, spec.h)
+    } else {
+        let (w, h) = compute_target_size(bm.width(), bm.height(), spec.w, spec.h);
+        scale::resize_to(bm, w, h)
+    };
+    encode::encode_jpeg(bm, spec.quality)
+}
+
+fn target_size(sw: u32, sh: u32, w: u32, h: u32, crop: bool) -> (u32, u32) {
+    if !crop || w == 0 || h == 0 {
+        return compute_target_size(sw, sh, w, h);
     }
-    let (tw, th) = compute_target_size(s.width, s.height, w, h);
-    let bm = decode::image_from_bytes(bytes)?;
-    let bm = scale::resize_to(bm, tw, th);
-    encode::encode_jpeg(bm, quality)
+    if u64::from(w) * u64::from(sh) >= u64::from(h) * u64::from(sw) {
+        (
+            w.min(sw),
+            (u64::from(sh) * u64::from(w))
+                .div_ceil(u64::from(sw))
+                .min(u64::from(sh)) as u32,
+        )
+    } else {
+        (
+            (u64::from(sw) * u64::from(h))
+                .div_ceil(u64::from(sh))
+                .min(u64::from(sw)) as u32,
+            h.min(sh),
+        )
+    }
 }
 
 fn is_video_ext(path: &str) -> bool {
@@ -542,7 +700,7 @@ pub async fn render(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64;
-    let spec = ThumbSpec::sanitize(
+    let mut spec = ThumbSpec::sanitize(
         path,
         i32::try_from(width).map_err(|error| error.to_string())?,
         i32::try_from(height).map_err(|error| error.to_string())?,
@@ -550,28 +708,19 @@ pub async fn render(
         modified,
         meta.len() as i64,
     );
-    let outcome = get_thumbnail(spec.clone(), cache)
+    spec.center_crop = center_crop;
+    spec.modified_nanos = meta
+        .modified()
+        .map_err(|error| error.to_string())?
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    let outcome = get_thumbnail(spec, cache)
         .await
         .map_err(|error| error.to_string())?;
     let bytes = match outcome {
         ThumbOutcome::Generated(bytes) => bytes,
         ThumbOutcome::Original { data, .. } => data,
     };
-    let bytes = if center_crop {
-        tokio::task::spawn_blocking(move || -> Result<Vec<u8>, String> {
-            let image = image::load_from_memory(&bytes)
-                .map_err(|error| error.to_string())?
-                .resize_to_fill(spec.w, spec.h, image::imageops::FilterType::Lanczos3);
-            let mut bytes = Vec::new();
-            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85)
-                .encode_image(&image)
-                .map_err(|error| error.to_string())?;
-            Ok(bytes)
-        })
-        .await
-        .map_err(|error| error.to_string())??
-    } else {
-        (*bytes).clone()
-    };
-    Ok(Some(bytes))
+    Ok(Some((*bytes).clone()))
 }

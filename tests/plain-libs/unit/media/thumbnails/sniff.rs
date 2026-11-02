@@ -117,3 +117,11 @@ fn sniff_real_bench_photos() {
         assert_eq!((s.width, s.height), (w, h), "{name}");
     }
 }
+
+#[test]
+fn every_truncated_png_header_is_an_error_without_panicking() {
+    let png = minimal_png(800, 600);
+    for length in 12..24 {
+        assert_eq!(sniff_header(&png[..length]), Err(SniffError::Truncated));
+    }
+}

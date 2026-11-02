@@ -418,7 +418,7 @@ pub fn select_next(db: &Db, is_next: bool, shuffle: bool) -> DomainResult<Option
 pub fn queue_total(db: &Db) -> DomainResult<usize> {
     Ok(db.with_conn(|c| {
         c.query_row(
-            "SELECT COUNT(*) FROM audio_queue_items q JOIN audio_media m USING(file_id)",
+            "SELECT CASE WHEN EXISTS(SELECT 1 FROM audio_queue_items) THEN (SELECT COUNT(*) FROM audio_queue_items q JOIN audio_media m USING(file_id)) ELSE 0 END",
             [],
             |row| crate::infrastructure::db::read_count(row, 0),
         )

@@ -211,7 +211,6 @@ async fn thumbnail_cache_opens_the_file_without_sdk_requests_and_rechecks_access
         let cache = state
             .file_platform
             .thumbnail_cache(path.to_str().unwrap())
-            .await
             .unwrap();
         assert_eq!(cache, state.cache.root().to_owned());
     }
@@ -220,7 +219,6 @@ async fn thumbnail_cache_opens_the_file_without_sdk_requests_and_rechecks_access
         state
             .file_platform
             .thumbnail_cache(path.to_str().unwrap())
-            .await
             .is_err()
     );
     std::fs::create_dir(&path).unwrap();
@@ -228,23 +226,15 @@ async fn thumbnail_cache_opens_the_file_without_sdk_requests_and_rechecks_access
         state
             .file_platform
             .thumbnail_cache(path.to_str().unwrap())
-            .await
             .is_err()
     );
     assert!(
         state
             .file_platform
             .thumbnail_cache("content://images/1")
-            .await
             .is_err()
     );
-    assert!(
-        state
-            .file_platform
-            .thumbnail_cache("relative")
-            .await
-            .is_err()
-    );
+    assert!(state.file_platform.thumbnail_cache("relative").is_err());
     assert!(requests.try_recv().is_err());
     core.stop_core().await;
 }
@@ -263,7 +253,6 @@ async fn thumbnail_cache_rechecks_current_os_read_permissions() {
     state
         .file_platform
         .thumbnail_cache(path.to_str().unwrap())
-        .await
         .unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0)).unwrap();
     let can_open = std::fs::File::open(&path).is_ok();
@@ -271,7 +260,6 @@ async fn thumbnail_cache_rechecks_current_os_read_permissions() {
         state
             .file_platform
             .thumbnail_cache(path.to_str().unwrap())
-            .await
             .is_ok(),
         can_open
     );
@@ -279,7 +267,6 @@ async fn thumbnail_cache_rechecks_current_os_read_permissions() {
     state
         .file_platform
         .thumbnail_cache(path.to_str().unwrap())
-        .await
         .unwrap();
     assert!(requests.try_recv().is_err());
     core.stop_core().await;
@@ -469,5 +456,60 @@ async fn automatic_indexing_excludes_private_hidden_nomedia_and_app_storage_path
             .watchable(Path::new("relative/image.png"))
     );
     assert!(!state.file_platform.watchable(&public.join("../image.png")));
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn media_resource_lookup_seeks_one_row_instead_of_scanning_the_catalog() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let id=state.db.with_conn(|connection|{
+        connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('media-lookup','media-lookup','/media-lookup',1)",[]).unwrap();
+        let volume: String = connection.query_row("SELECT id FROM volumes ORDER BY rowid DESC LIMIT 1", [], |row| row.get(0)).unwrap();
+        connection.execute("WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<2000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) SELECT printf('file-%06d',n),?1,'other-'||n,'other-'||n,'FILE','2026-01-01' FROM numbers",[&volume]).unwrap();
+        connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) VALUES('file-'||'photo.jpg',?1,'photo.jpg','photo.jpg','IMAGE','2026-01-01')",[&volume]).unwrap();
+        "file-photo.jpg".to_owned()
+    });
+    let steps = Arc::new(AtomicUsize::new(0));
+    let observed = steps.clone();
+    state.db.with_conn(|connection| {
+        connection.progress_handler(
+            1,
+            Some(move || {
+                observed.fetch_add(1, Ordering::Relaxed);
+                false
+            }),
+        )
+    });
+    let path = state.file_platform.resource_media_path(&id).await.unwrap();
+    state
+        .db
+        .with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
+    assert_eq!(path, "/media-lookup/photo.jpg");
+    assert!(
+        steps.load(Ordering::Relaxed) < 500,
+        "single media lookup executed {} VM steps",
+        steps.load(Ordering::Relaxed)
+    );
+    for invalid in [
+        format!("0{id}"),
+        format!("+{id}"),
+        format!("{id}.0"),
+        format!("{id} OR 1=1"),
+        "media-uuid".into(),
+    ] {
+        assert!(
+            state
+                .file_platform
+                .resource_media_path(&invalid)
+                .await
+                .is_err()
+        );
+    }
     core.stop_core().await;
 }

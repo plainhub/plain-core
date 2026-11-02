@@ -21,6 +21,7 @@ pub struct Runtime {
     pub file_platform: Arc<crate::features::services::files::platform::FilePlatform>,
     pub feeds: Arc<crate::features::services::feeds::SyncService>,
     pomodoro_task: Arc<parking_lot::Mutex<Option<JoinHandle<()>>>>,
+    buffered_writes_task: Arc<parking_lot::Mutex<Option<JoinHandle<()>>>>,
     external_index_task: Arc<parking_lot::Mutex<Option<JoinHandle<()>>>>,
     pub update_checks: Arc<crate::features::services::settings::updates::Runtime>,
     pub duration_updates: Arc<crate::features::services::files::duration_updates::Runtime>,
@@ -344,6 +345,7 @@ impl Runtime {
             remote_cache: remote_cache.clone(),
             feeds: feeds.clone(),
             pomodoro_task: Arc::new(parking_lot::Mutex::new(None)),
+            buffered_writes_task: Default::default(),
             external_index_task: Default::default(),
             update_checks: Arc::new(
                 crate::features::services::settings::updates::Runtime::default(),
@@ -446,6 +448,14 @@ impl Runtime {
         state
             .mms
             .set_resources(state.resources.clone(), receiver.clone());
+        *state.buffered_writes_task.lock() =
+            Some(crate::features::services::buffered_writes::start(
+                state.file_platform.recent_files.clone(),
+                state.duration_cache.clone(),
+                state.db.clone(),
+                receiver.clone(),
+            ));
+        crate::features::services::images::thumbnail_warmup::start(state.clone());
         crate::features::services::feeds::sync_service::schedule::start(state.clone());
         crate::features::services::chat::download_queue::start(state.clone());
         crate::features::services::peers::shared_batch::start(state.clone());
@@ -535,6 +545,7 @@ impl Runtime {
             }
         }
         let _ = stop.send(true);
+        self.thumbnails.shutdown().await;
         self.management.shutdown().await;
         let pomodoro_task = self.pomodoro_task.lock().take();
         if let Some(task) = pomodoro_task {
@@ -547,5 +558,16 @@ impl Runtime {
             log::error!("Media scan task shutdown failed: {error}");
         }
         self.mdns.close(&self.host).await;
+        let writes = self.buffered_writes_task.lock().take();
+        if let Some(task) = writes {
+            task.await.expect("Buffered writes shutdown failed");
+        }
+        crate::features::services::buffered_writes::flush(
+            self.file_platform.recent_files.clone(),
+            self.duration_cache.clone(),
+            self.db.clone(),
+            true,
+        )
+        .await;
     }
 }

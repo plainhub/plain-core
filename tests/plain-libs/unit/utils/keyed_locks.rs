@@ -98,3 +98,23 @@ async fn cancellation_releases_waiting_and_running_keys() {
     locks.with_lock("cancelled".into(), async {}).await;
     assert_eq!(locks.in_flight_keys(), 0);
 }
+
+#[tokio::test]
+async fn owned_and_borrowed_locks_share_exclusion_and_cancelled_waiters_leave_no_keys() {
+    use std::future::Future;
+    let locks = Arc::new(KeyedLocks::new());
+    let held = locks.acquire("image".into()).await;
+    {
+        let waiting = locks.acquire("image".into());
+        tokio::pin!(waiting);
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(waiting.as_mut().poll(&mut context).is_pending());
+    }
+    let borrowed = locks.with_lock("image".into(), async { 42 });
+    tokio::pin!(borrowed);
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    assert!(borrowed.as_mut().poll(&mut context).is_pending());
+    drop(held);
+    assert_eq!(borrowed.await, 42);
+    assert_eq!(locks.in_flight_keys(), 0);
+}

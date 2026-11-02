@@ -45,6 +45,23 @@ impl KeyedLocks {
         out
     }
 
+    pub async fn acquire(self: &Arc<Self>, key: String) -> OwnedLock {
+        let lock = {
+            let mut map = self.map.lock().unwrap();
+            map.entry(key.clone())
+                .or_insert_with(|| Arc::new(AsyncMutex::new(())))
+                .clone()
+        };
+        let mut lease = OwnedLock {
+            owner: self.clone(),
+            key,
+            lock,
+            guard: None,
+        };
+        lease.guard = Some(lease.lock.clone().lock_owned().await);
+        lease
+    }
+
     fn maybe_remove(&self, key: &str, lock: &Arc<AsyncMutex<()>>) {
         let mut map = self.map.lock().unwrap();
         if let Some(cur) = map.get(key) {
@@ -70,6 +87,19 @@ struct Lease<'a> {
 }
 impl Drop for Lease<'_> {
     fn drop(&mut self) {
+        self.owner.maybe_remove(&self.key, &self.lock);
+    }
+}
+
+pub struct OwnedLock {
+    owner: Arc<KeyedLocks>,
+    key: String,
+    lock: Arc<AsyncMutex<()>>,
+    guard: Option<tokio::sync::OwnedMutexGuard<()>>,
+}
+impl Drop for OwnedLock {
+    fn drop(&mut self) {
+        drop(self.guard.take());
         self.owner.maybe_remove(&self.key, &self.lock);
     }
 }

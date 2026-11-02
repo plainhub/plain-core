@@ -114,10 +114,33 @@ async fn native_scan_history_preserves_order_and_scoped_deletion() {
         management.scan_history().unwrap(),
         ["quote'\nvalue", "duplicate", "neighbor", "duplicate"]
     );
+    let ids = core.runtime_state().db.with_conn(|connection| {
+        connection
+            .prepare("SELECT id FROM scan_history")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+    });
+    assert_eq!(ids.len(), 4);
+    assert!(ids.iter().all(|id| id.len() == 22));
     assert!(management.remove_scan_history("duplicate".into()).unwrap());
     assert_eq!(
         management.scan_history().unwrap(),
         ["quote'\nvalue", "neighbor"]
+    );
+    core.runtime_state()
+        .db
+        .with_conn(|connection| {
+            connection.execute_batch(
+                "INSERT INTO scan_history(id,text) VALUES('z-older','older'),('a-newer','newer')",
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        management.scan_history().unwrap(),
+        ["newer", "older", "quote'\nvalue", "neighbor"]
     );
     core.stop_core().await;
 }

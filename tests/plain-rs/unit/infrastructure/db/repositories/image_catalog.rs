@@ -1,7 +1,6 @@
 use super::*;
 
 fn add(connection: &Connection, id: &str, kind: i32, trashed: bool) {
-    let id = id.parse::<i64>().unwrap();
     connection.execute("INSERT OR IGNORE INTO volumes(id,identity,path,is_available) VALUES(1,'TEST','/catalog',1)",[]).unwrap();
     connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,size_bytes,width,height,created_at,updated_at,trashed_at,original_path) VALUES(?1,1,?2,?2,?3,1,1,1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z',CASE WHEN ?4 THEN '2026-01-01T00:00:00Z' END,CASE WHEN ?4 THEN ?2 END)",params![id,format!("{id}.png"),if kind==3 {"IMAGE"} else {"AUDIO"},trashed]).unwrap();
 }
@@ -21,12 +20,12 @@ fn native_pages_are_bounded_keyset_pages_of_live_images_and_resolve_current_ids(
     let first = page(&db, &catalog.revision, "", 128).unwrap();
     assert_eq!(first.items.len(), 128);
     assert_eq!(first.items[0].id, "1");
-    assert_eq!(first.next_cursor, "128");
+    assert_eq!(first.next_cursor, "213");
     assert!(!first.done);
     let second = page(&db, &catalog.revision, &first.next_cursor, 128).unwrap();
     assert_eq!(second.items.len(), 128);
-    assert_eq!(second.items[0].id, "129");
-    assert_eq!(second.next_cursor, "256");
+    assert_eq!(second.items[0].id, "214");
+    assert_eq!(second.next_cursor, "99");
     let end = page(&db, &catalog.revision, &second.next_cursor, 128).unwrap();
     assert!(end.done);
     assert!(end.items.is_empty());

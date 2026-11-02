@@ -37,7 +37,7 @@ pub fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MediaFileRow> {
 pub const SOURCE: &str = "file_catalog";
 
 pub(crate) fn init(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
-    conn.execute_batch("CREATE TEMP VIEW file_catalog AS SELECT CAST(f.id AS TEXT) AS id,f.id AS file_id,
+    conn.execute_batch("CREATE TEMP VIEW file_catalog AS SELECT f.id AS id,f.id AS file_id,
 CASE f.kind WHEN 'AUDIO' THEN 1 WHEN 'VIDEO' THEN 2 WHEN 'IMAGE' THEN 3 WHEN 'DOC' THEN 24 ELSE 22 END AS data_type,
 CASE WHEN substr(v.path,-1)='/' THEN v.path||f.path ELSE v.path||CASE WHEN f.path='' THEN '' ELSE '/'||f.path END END AS path,
 f.file_name,f.kind,f.volume_id,f.file_identity,f.missing,f.indexed,v.is_available,
@@ -117,7 +117,7 @@ impl Db {
         kind(data_type)?;
         let location = super::files::locate(path)?;
         self.with_conn(|conn| {
-            let volume:Option<(i64,String)>=conn.query_row("SELECT id,path FROM volumes WHERE identity=?1",[&location.volume.identity],|row|Ok((row.get(0)?,row.get(1)?))).optional()?;
+            let volume:Option<(String,String)>=conn.query_row("SELECT id,path FROM volumes WHERE identity=?1",[&location.volume.identity],|row|Ok((row.get(0)?,row.get(1)?))).optional()?;
             let Some((volume_id,root))=volume else { return Ok(None); };
             let relative=location.path.strip_prefix(std::path::Path::new(&root)).or_else(|_|location.path.strip_prefix(&location.volume.path)).map_err(super::files::sql_error)?;
             let relative=super::files::relative_path(relative)?;
@@ -147,10 +147,10 @@ impl Db {
         let prefix = format!("{}/", path.trim_end_matches('/'));
         self.audio_transaction(|tx,state| {
             let rows=tx.prepare(&format!("SELECT file_id,data_type FROM {SOURCE} WHERE missing=0 AND (path=?1 OR (?2 AND substr(path,1,length(?3))=?3))"))?
-                .query_map(params![path,recursive,prefix],|row|Ok((row.get::<_,i64>(0)?,row.get::<_,i32>(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+                .query_map(params![path,recursive,prefix],|row|Ok((row.get::<_,String>(0)?,row.get::<_,i32>(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
             for (id,_) in &rows {
                 tx.execute("UPDATE files SET missing=1 WHERE id=?1",[id])?;
-                if state.current_file_id.as_deref()==Some(id.to_string().as_str()) { state.select("")?; }
+                if state.current_file_id.as_deref()==Some(id.as_str()) { state.select("")?; }
             }
             Ok(rows.into_iter().map(|(_,kind)|kind).collect())
         }).map_err(|error|match error {
@@ -165,13 +165,23 @@ impl Db {
         limit: u32,
         offset: u32,
     ) -> rusqlite::Result<Vec<MediaFileRow>> {
-        kind(data_type)?;
-        self.with_conn(|conn| conn.prepare(&format!("SELECT {COLUMNS} FROM {SOURCE} WHERE data_type=?1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1 ORDER BY updated_at DESC,file_id LIMIT ?2 OFFSET ?3"))?
-            .query_map(params![data_type.kind(),limit,offset],from_row)?.collect())
+        let kind = kind(data_type)?;
+        let directories = if data_type == DataType::File {
+            " OR kind='DIRECTORY'"
+        } else {
+            ""
+        };
+        self.with_conn(|conn| conn.prepare(&format!("SELECT {COLUMNS} FROM {SOURCE} WHERE (kind=?1{directories}) AND trashed_at IS NULL AND missing=0 AND indexed=1 AND is_available=1 ORDER BY updated_at DESC,file_id LIMIT ?2 OFFSET ?3"))?
+            .query_map(params![kind,limit,offset],from_row)?.collect())
     }
     pub fn media_file_count(&self, data_type: DataType) -> rusqlite::Result<i64> {
-        kind(data_type)?;
-        self.with_conn(|conn|conn.query_row(&format!("SELECT count(*) FROM {SOURCE} WHERE data_type=?1 AND trashed=0 AND missing=0 AND indexed=1 AND is_available=1"),[data_type.kind()],|row|row.get(0)))
+        let kind = kind(data_type)?;
+        let directories = if data_type == DataType::File {
+            " OR kind='DIRECTORY'"
+        } else {
+            ""
+        };
+        self.with_conn(|conn|conn.query_row(&format!("SELECT count(*) FROM {SOURCE} WHERE (kind=?1{directories}) AND trashed_at IS NULL AND missing=0 AND indexed=1 AND is_available=1"),[kind],|row|row.get(0)))
     }
 }
 

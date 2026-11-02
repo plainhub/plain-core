@@ -630,3 +630,192 @@ async fn explicit_cache_roots_keep_independent_files_for_the_same_source() {
     drop(first);
     assert!(cache_path(second.path()).is_file());
 }
+
+#[tokio::test]
+async fn render_crop_cache_changes_when_source_changes_within_the_same_second() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("source.jpg");
+    let base = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    for (nanos, color) in [(100, [240, 10, 10]), (200, [10, 240, 10])] {
+        image::RgbImage::from_pixel(800, 400, image::Rgb(color))
+            .save(&path)
+            .unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_times(
+                std::fs::FileTimes::new()
+                    .set_modified(base + std::time::Duration::from_nanos(nanos)),
+            )
+            .unwrap();
+        let bytes = render(path.to_str().unwrap(), 128, 128, true, directory.path())
+            .await
+            .unwrap()
+            .unwrap();
+        let decoded = image::load_from_memory(&bytes).unwrap().to_rgb8();
+        assert_eq!(decoded.dimensions(), (128, 128));
+        let pixel = decoded.get_pixel(64, 64);
+        if nanos == 100 {
+            assert!(pixel[0] > pixel[1] + 100);
+        } else {
+            assert!(pixel[1] > pixel[0] + 100, "stale crop cache: {pixel:?}");
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn thumbnail_latency_benchmark() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("photo.jpg");
+    write_jpeg(&path, 4000, 3000);
+    let mut cold = Vec::new();
+    let mut warm = Vec::new();
+    for index in 0..20 {
+        let cache = directory.path().join(format!("cache-{index}"));
+        let start = std::time::Instant::now();
+        let bytes = render(path.to_str().unwrap(), 512, 512, true, &cache)
+            .await
+            .unwrap()
+            .unwrap();
+        cold.push(start.elapsed().as_secs_f64() * 1000.0);
+        assert_eq!(image::load_from_memory(&bytes).unwrap().width(), 512);
+        let start = std::time::Instant::now();
+        let cached = render(path.to_str().unwrap(), 512, 512, true, &cache)
+            .await
+            .unwrap()
+            .unwrap();
+        warm.push(start.elapsed().as_secs_f64() * 1000.0);
+        assert_eq!(bytes, cached);
+    }
+    cold.sort_by(f64::total_cmp);
+    warm.sort_by(f64::total_cmp);
+    println!(
+        "{}",
+        serde_json::json!({"input":"synthetic baseline JPEG 4000x3000","target":"512x512 center crop","samples":20,"coldMedianMs":cold[10],"coldP95Ms":cold[18],"warmMedianMs":warm[10],"warmP95Ms":warm[18]})
+    );
+}
+
+fn jpeg_with_preview(path: &std::path::Path, preview_color: [u8; 3]) {
+    let mut preview = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut preview, 85)
+        .encode_image(&image::RgbImage::from_pixel(
+            640,
+            480,
+            image::Rgb(preview_color),
+        ))
+        .unwrap();
+    let mut tiff = b"II".to_vec();
+    tiff.extend_from_slice(&42u16.to_le_bytes());
+    tiff.extend_from_slice(&8u32.to_le_bytes());
+    tiff.extend_from_slice(&0u16.to_le_bytes());
+    tiff.extend_from_slice(&14u32.to_le_bytes());
+    tiff.extend_from_slice(&2u16.to_le_bytes());
+    for (tag, value) in [(0x0201u16, 44u32), (0x0202u16, preview.len() as u32)] {
+        tiff.extend_from_slice(&tag.to_le_bytes());
+        tiff.extend_from_slice(&4u16.to_le_bytes());
+        tiff.extend_from_slice(&1u32.to_le_bytes());
+        tiff.extend_from_slice(&value.to_le_bytes());
+    }
+    tiff.extend_from_slice(&0u32.to_le_bytes());
+    tiff.extend_from_slice(&preview);
+    let original = std::fs::read(path).unwrap();
+    let mut jpeg = vec![0xff, 0xd8, 0xff, 0xe1];
+    jpeg.extend_from_slice(&((tiff.len() + 8) as u16).to_be_bytes());
+    jpeg.extend_from_slice(b"Exif\0\0");
+    jpeg.extend_from_slice(&tiff);
+    jpeg.extend_from_slice(&original[2..]);
+    std::fs::write(path, jpeg).unwrap();
+}
+
+#[tokio::test]
+async fn sufficiently_large_embedded_preview_is_used_without_decoding_the_original() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("image.jpg");
+    image::RgbImage::from_pixel(1280, 960, image::Rgb([240, 10, 10]))
+        .save(&path)
+        .unwrap();
+    jpeg_with_preview(&path, [10, 240, 10]);
+    let bytes = render(path.to_str().unwrap(), 128, 128, true, directory.path())
+        .await
+        .unwrap()
+        .unwrap();
+    let image = image::load_from_memory(&bytes).unwrap().to_rgb8();
+    let pixel = image.get_pixel(64, 64);
+    assert!(
+        pixel[1] > pixel[0] + 100,
+        "embedded preview was not selected: {pixel:?}"
+    );
+}
+
+#[tokio::test]
+async fn crop_disk_cache_contains_the_final_output_without_a_second_encode() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("image.jpg");
+    write_jpeg(&path, 800, 400);
+    let mut spec = spec_for(&path, 128, 128);
+    spec.quality = 85;
+    spec.center_crop = true;
+    spec.modified_nanos = std::fs::metadata(&path)
+        .unwrap()
+        .modified()
+        .unwrap()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    let namespace = directory
+        .path()
+        .join("thumbs")
+        .join(format!("render-v2-true-{}", spec.modified_nanos));
+    let cached = thumb_cache_path(
+        &namespace,
+        path.to_str().unwrap(),
+        128,
+        128,
+        85,
+        spec.mod_unix,
+        spec.file_size,
+    );
+    let bytes = render(path.to_str().unwrap(), 128, 128, true, directory.path())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(std::fs::read(&cached).unwrap(), bytes);
+    let image = image::open(cached).unwrap();
+    assert_eq!((image.width(), image.height()), (128, 128));
+}
+
+#[tokio::test]
+async fn decoded_pixels_and_output_buffers_are_admitted_before_allocating_them() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("oversized.png");
+    let mut bytes = vec![0; 24];
+    bytes[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+    bytes[16..20].copy_from_slice(&30000u32.to_be_bytes());
+    bytes[20..24].copy_from_slice(&10000u32.to_be_bytes());
+    std::fs::write(&path, bytes).unwrap();
+    let error = render(path.to_str().unwrap(), 512, 512, true, directory.path())
+        .await
+        .unwrap_err();
+    assert!(error.contains("exceeds memory budget"), "{error}");
+}
+
+#[test]
+fn original_thumbnail_selection_preserves_crop_bounds_and_transfer_budget() {
+    assert!(super::original_fits(80, 80, 96, 96, true, 1000));
+    assert!(super::original_fits(96, 96, 96, 96, true, 1000));
+    assert!(super::original_fits(80, 40, 96, 96, false, 1000));
+    assert!(!super::original_fits(80, 40, 96, 96, true, 1000));
+    assert!(!super::original_fits(97, 96, 96, 96, false, 1000));
+    assert!(!super::original_fits(96, 97, 96, 96, false, 1000));
+    assert!(!super::original_fits(
+        80,
+        80,
+        96,
+        96,
+        true,
+        super::PASSTHROUGH_MAX_BYTES as i64 + 1
+    ));
+    assert!(!super::original_fits(80, 80, 96, 96, true, -1));
+}

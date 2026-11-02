@@ -4,6 +4,22 @@ use plain_rs::features::services::images::thumbnails::Request;
 use sha2::Digest;
 use std::sync::{Arc, atomic::Ordering};
 
+#[tokio::test]
+async fn thumbnail_overload_returns_an_explicit_retryable_status() {
+    let response = crate::http::file_response::thumbnail(
+        Err(plain_rs::features::services::images::thumbnails::Error::Busy),
+        None,
+    );
+    assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap()["error"],
+        "Thumbnail request capacity reached"
+    );
+}
+
 fn variant(base: &Request, center_crop: Option<bool>) -> Request {
     Request {
         center_crop: center_crop.unwrap_or(base.center_crop),
@@ -110,7 +126,7 @@ async fn concurrent_requests_for_one_key_decode_once() {
     assert_eq!(header(&first.1, "content-type"), "image/jpeg");
     assert!(host_requests.try_recv().is_err());
     assert_eq!(image::load_from_memory(&first.2).unwrap().width(), 80);
-    assert_eq!(header(&first.1, "cache-control"), "private, max-age=86400");
+    assert_eq!(header(&first.1, "cache-control"), "private, no-cache");
 
     core.stop_core().await;
 }

@@ -244,3 +244,84 @@ fn document_extensions_keep_filters_and_combine_extension_case() {
     );
     assert!(document_extensions(&db, "trash:true").unwrap().is_empty());
 }
+
+#[test]
+fn counting_one_media_kind_does_not_scan_unrelated_files() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let db = Db::open(&directory.path().join("plain.db")).unwrap();
+    db.with_conn(|connection|{
+        connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('media-count','media-count','/media-count',1)",[]).unwrap();
+        let volume: String = connection.query_row("SELECT id FROM volumes ORDER BY rowid DESC LIMIT 1", [], |row| row.get(0)).unwrap();
+        connection.execute("WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<2000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) SELECT printf('file-%06d',n),?1,'file-'||n,'file-'||n,'FILE','2026-01-01' FROM numbers",[&volume]).unwrap();
+        connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) VALUES('file-'||'photo.jpg',?1,'photo.jpg','photo.jpg','IMAGE','2026-01-01')",[&volume]).unwrap();
+    });
+    let steps = Arc::new(AtomicUsize::new(0));
+    let observed = steps.clone();
+    db.with_conn(|connection| {
+        connection.progress_handler(
+            1,
+            Some(move || {
+                observed.fetch_add(1, Ordering::Relaxed);
+                false
+            }),
+        )
+    });
+    let total = count(&db, DataType::Image, "").unwrap();
+    assert_eq!(db.media_file_count(DataType::Image).unwrap(), 1);
+    assert_eq!(db.media_file_list(DataType::Image, 1, 0).unwrap().len(), 1);
+    db.with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
+    assert_eq!(total, 1);
+    assert!(
+        steps.load(Ordering::Relaxed) < 500,
+        "one media count executed {} VM steps",
+        steps.load(Ordering::Relaxed)
+    );
+}
+
+#[test]
+fn counts_and_bucket_facts_use_a_covering_index_without_sorting_all_media() {
+    let db = crate::infrastructure::db::Db::open(std::path::Path::new(":memory:")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO volumes VALUES('v','v','/media',1); WITH RECURSIVE n(x) AS(VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,size_bytes) SELECT 'f'||x,'v','images/'||x||'.jpg',x||'.jpg','IMAGE','2026',100 FROM n;")).unwrap();
+    let (base, args) = super::selection(&db, crate::features::enums::DataType::Image, "").unwrap();
+    for sql in [
+        base.replace("{columns}", "COUNT(*)"),
+        format!(
+            "{} ORDER BY updated_at DESC,file_id",
+            base.replace("{columns}", "bucket_id,path,size_bytes")
+        ),
+    ] {
+        let details = db
+            .with_conn(|c| {
+                c.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?
+                    .query_map(rusqlite::params_from_iter(args.iter()), |r| {
+                        r.get::<_, String>(3)
+                    })?
+                    .collect::<rusqlite::Result<Vec<_>>>()
+            })
+            .unwrap();
+        assert!(
+            details.iter().any(
+                |detail| detail.contains("COVERING INDEX idx_files_kind_indexed_updated_at_id")
+            ),
+            "{details:?}"
+        );
+        assert!(
+            details.iter().all(|detail| !detail.contains("TEMP B-TREE")),
+            "{details:?}"
+        );
+    }
+    assert_eq!(
+        super::count(&db, crate::features::enums::DataType::Image, "").unwrap(),
+        1000
+    );
+    assert_eq!(
+        super::bucket_item_facts(&db, crate::features::enums::DataType::Image)
+            .unwrap()
+            .len(),
+        1000
+    );
+}

@@ -95,3 +95,7 @@ pub(crate) fn init(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "user_version", VERSION)?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-rs/unit/infrastructure/db/schema/mod.rs"]
+mod tests;

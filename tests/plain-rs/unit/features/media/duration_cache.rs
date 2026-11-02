@@ -23,6 +23,7 @@ fn durations_survive_reopening_and_keep_exact_units_and_typed_ids() {
         cache
             .save(value("video", "same", "/video", 6_000_000_001))
             .unwrap();
+        cache.flush().unwrap();
     }
     let cache = DurationCache::new(directory.path());
     let rows = cache.all().unwrap();
@@ -197,6 +198,7 @@ fn unrelated_removals_cancel_pending_probes_without_committing_or_flushing() {
     cache
         .save(value("audio", "kept", "/kept/song", 5000))
         .unwrap();
+    cache.flush().unwrap();
     let db = store.get().unwrap();
     let before = db.get(key("audio", "kept").unwrap()).unwrap().unwrap();
     let revision = cache.revision();
@@ -228,5 +230,91 @@ fn unrelated_removals_cancel_pending_probes_without_committing_or_flushing() {
     db.set_write_failure_for_test(false);
     cache.invalidate_paths(&[], &["/kept".into()]).unwrap();
     assert_eq!(db.write_attempts_for_test(), writes + 2);
+    assert!(cache.all().unwrap().is_empty());
+}
+
+#[test]
+fn duration_probes_are_visible_in_memory_and_commit_fifty_one_entries_once() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Arc::new(LazyDb::new(
+        crate::infrastructure::data_paths::DataPaths::new(directory.path()).database(),
+    ));
+    let db = store.get().unwrap();
+    let cache = DurationCache::with_store(store);
+    let before = db.write_attempts_for_test();
+    for n in 0..50 {
+        cache
+            .save(value(
+                "audio",
+                &format!("id-{n}"),
+                &format!("/file-{n}"),
+                n + 1,
+            ))
+            .unwrap();
+    }
+    assert_eq!(db.write_attempts_for_test(), before);
+    assert!(db.scan_prefix(PREFIX).next().is_none());
+    assert_eq!(cache.all().unwrap().len(), 50);
+    assert_eq!(
+        cache
+            .matching(&[Identity {
+                media_type: "audio".into(),
+                file_id: "id-49".into(),
+                path: "/file-49".into(),
+                size_bytes: 42,
+                modified_at: "2026-01-01T00:00:00Z".into()
+            }])
+            .unwrap(),
+        [Some(50)]
+    );
+    cache.save(value("audio", "last", "/last", 100)).unwrap();
+    assert_eq!(db.write_attempts_for_test(), before + 1);
+    assert_eq!(db.scan_prefix(PREFIX).count(), 51);
+    assert!(!cache.flush().unwrap());
+}
+
+#[test]
+fn pending_duration_invalidation_cannot_be_resurrected_by_a_later_flush() {
+    let directory = tempfile::tempdir().unwrap();
+    let cache = DurationCache::new(directory.path());
+    cache
+        .save(value("audio", "gone", "/root/gone", 10))
+        .unwrap();
+    cache
+        .save(value("audio", "kept", "/root_neighbor/kept", 20))
+        .unwrap();
+    let revision = cache.revision();
+    cache.invalidate_paths(&[], &["/root".into()]).unwrap();
+    assert!(
+        !cache
+            .save_at_revision(value("audio", "gone", "/root/gone", 30), revision)
+            .unwrap()
+    );
+    cache.flush().unwrap();
+    let reopened = DurationCache::new(directory.path());
+    let values = reopened.all().unwrap();
+    assert_eq!(values.len(), 1);
+    assert_eq!(values[0].file_id, "kept");
+    assert_eq!(cache.remove("audio", &["kept".into()]).unwrap(), 1);
+    assert!(cache.all().unwrap().is_empty());
+}
+
+#[test]
+fn duration_write_failures_retain_the_latest_pending_values_without_resurrecting_removals() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Arc::new(LazyDb::new(
+        crate::infrastructure::data_paths::DataPaths::new(directory.path()).database(),
+    ));
+    let db = store.get().unwrap();
+    let cache = DurationCache::with_store(store);
+    cache.save(value("audio", "same", "/same", 10)).unwrap();
+    cache.save(value("audio", "same", "/same", 20)).unwrap();
+    db.set_write_failure_for_test(true);
+    assert!(cache.flush().is_err());
+    assert_eq!(cache.all().unwrap()[0].duration_ms, 20);
+    assert!(db.get(key("audio", "same").unwrap()).unwrap().is_none());
+    assert_eq!(cache.remove("audio", &["same".into()]).unwrap(), 1);
+    assert!(!cache.flush().unwrap());
+    db.set_write_failure_for_test(false);
     assert!(cache.all().unwrap().is_empty());
 }

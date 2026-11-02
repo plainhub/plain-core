@@ -84,7 +84,7 @@ pub fn page(db: &Db, expected: &str, cursor: &str, limit: usize) -> DomainResult
         return Err(DomainError::Other("Invalid image catalog page size".into()));
     }
     read(db, expected, |connection| {
-        let mut statement = connection.prepare("SELECT CAST(f.id AS TEXT),rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND f.indexed=1 AND v.is_available=1 AND f.id>CAST(?1 AS INTEGER) ORDER BY f.id LIMIT ?2")?;
+        let mut statement = connection.prepare("SELECT f.id,rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND f.indexed=1 AND v.is_available=1 AND f.id>?1 ORDER BY f.id LIMIT ?2")?;
         let items = statement
             .query_map(params![cursor, limit as i64], |row| {
                 Ok(Image {
@@ -113,7 +113,7 @@ pub fn resolve(db: &Db, expected: &str, ids: &[String]) -> DomainResult<Vec<Imag
             return Ok(Vec::new());
         }
         let sql = format!(
-            "SELECT CAST(f.id AS TEXT),rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND f.indexed=1 AND v.is_available=1 AND f.id IN ({}) ORDER BY f.id",
+            "SELECT f.id,rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.kind='IMAGE' AND f.trashed_at IS NULL AND f.missing=0 AND f.indexed=1 AND v.is_available=1 AND f.id IN ({}) ORDER BY f.id",
             vec!["?"; ids.len()].join(",")
         );
         let mut statement = connection.prepare(&sql)?;

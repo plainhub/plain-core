@@ -115,7 +115,7 @@ impl Trash {
                 .file_name()
                 .and_then(|name| name.to_str())
                 .context("File name required")?;
-            let relative = compute_bucket_rel_path(kind, &file.id.to_string(), name, Utc::now());
+            let relative = compute_bucket_rel_path(kind, &file.id, name, Utc::now());
             let disk = writable_disk(&source, &mount, |disk| {
                 prepare_trash_parent(disk, &relative)
             })?;
@@ -126,7 +126,7 @@ impl Trash {
             let lock = lock_for_disk(&disk);
             let _guard = lock.lock().await;
             self.db
-                .prepare_file_path_change(file.id, source_text, target, PathChange::Trash)?;
+                .prepare_file_path_change(&file.id, source_text, target, PathChange::Trash)?;
             if let Err(error) = plain_libs::filesystem::rename::no_replace(&source, &destination) {
                 self.db
                     .key_values()
@@ -134,7 +134,7 @@ impl Trash {
                 return Err(error.into());
             }
             self.db
-                .finish_file_path_change(file.id, source_text, target, PathChange::Trash)?;
+                .finish_file_path_change(&file.id, source_text, target, PathChange::Trash)?;
             result.push(target.into());
         }
         Ok(result)
@@ -156,7 +156,7 @@ impl Trash {
             let target_text = target.to_str().context("Invalid restore path encoding")?;
             let lock = lock_for_disk(&item.disk);
             let _guard = lock.lock().await;
-            let id = item.id.parse()?;
+            let id = &item.id;
             self.db
                 .prepare_file_path_change(id, source_text, target_text, PathChange::Restore)?;
             if let Err(error) = plain_libs::filesystem::rename::no_replace(&source, &target) {

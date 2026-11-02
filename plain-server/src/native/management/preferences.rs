@@ -144,7 +144,8 @@ impl NativeManagement {
         self.state
             .db
             .with_conn(|conn| -> rusqlite::Result<Vec<String>> {
-                let mut query = conn.prepare("SELECT text FROM scan_history ORDER BY id DESC")?;
+                let mut query =
+                    conn.prepare("SELECT text FROM scan_history ORDER BY rowid DESC")?;
                 query.query_map([], |row| row.get(0))?.collect()
             })
             .map_err(|error| error.to_string())
@@ -154,7 +155,12 @@ impl NativeManagement {
         self.state.native_client_id()?;
         self.state
             .db
-            .with_conn(|conn| conn.execute("INSERT INTO scan_history(text) VALUES (?1)", [&text]))
+            .with_conn(|conn| {
+                conn.execute(
+                    "INSERT INTO scan_history(id,text) VALUES (?1,?2)",
+                    [plain_libs::utils::shortid::new_id(), text],
+                )
+            })
             .map_err(|error| error.to_string())?;
         Ok(true)
     }

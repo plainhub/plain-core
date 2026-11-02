@@ -258,3 +258,33 @@ pub fn read(bytes: &[u8]) -> ImageMetadata {
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/utils/image_metadata.rs"]
 mod tests;
+
+pub fn thumbnail(jpeg: &[u8]) -> Option<&[u8]> {
+    let tiff = exif_tiff_from_jpeg(jpeg)?;
+    let (little, first) = parse_tiff_header(tiff)?;
+    let count = usize::from(tiff_read_u16(tiff, first as usize, little)?);
+    let next = (first as usize)
+        .checked_add(2)?
+        .checked_add(count.checked_mul(12)?)?;
+    let thumbnail = tiff_read_u32(tiff, next, little)?;
+    if thumbnail == 0 {
+        return None;
+    }
+    let mut offset = None;
+    let mut length = None;
+    visit(tiff, thumbnail, little, |tag, field| {
+        if field.kind != 4 {
+            return;
+        }
+        if tag == 0x0201 {
+            offset = tiff_read_u32(field.bytes, 0, little);
+        }
+        if tag == 0x0202 {
+            length = tiff_read_u32(field.bytes, 0, little);
+        }
+    });
+    let offset = offset? as usize;
+    let end = offset.checked_add(length? as usize)?;
+    let bytes = tiff.get(offset..end)?;
+    bytes.starts_with(&[0xff, 0xd8]).then_some(bytes)
+}

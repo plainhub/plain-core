@@ -498,7 +498,7 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
         .by_path(DataType::Audio, path.to_str().unwrap())
         .unwrap()
         .unwrap();
-    let id: i64 = original.id.parse().unwrap();
+    let id = &original.id;
     let db = core.runtime_state().db.clone();
     db.with_conn(|conn| -> rusqlite::Result<()> {
         conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [id])?;

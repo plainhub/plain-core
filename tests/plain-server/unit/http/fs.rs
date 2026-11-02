@@ -4,7 +4,6 @@ use axum::body::Body;
 use axum::extract::Request;
 use axum::http::{HeaderName, StatusCode, header};
 use axum::response::Response;
-use plain_rs::features::recent_files as recent;
 
 fn test_state() -> (tempfile::TempDir, ContentServer, ServerState, Vec<u8>) {
     let directory = tempfile::tempdir().unwrap();
@@ -114,26 +113,19 @@ async fn fs_recent_tracked_once_per_view_not_per_chunk() {
 
     call_fs(&state, &format!("id={id}"), &[range_header("bytes=4-9")]).await;
     assert!(
-        recent::list(state.store.get().unwrap().as_ref(), 10)
+        state
+            .file_platform
+            .recent_files
+            .list(10)
             .unwrap()
             .is_empty()
     );
 
     call_fs(&state, &format!("id={id}"), &[range_header("bytes=0-9")]).await;
-    assert_eq!(
-        recent::list(state.store.get().unwrap().as_ref(), 10)
-            .unwrap()
-            .len(),
-        1
-    );
+    assert_eq!(state.file_platform.recent_files.list(10).unwrap().len(), 1);
 
     call_fs(&state, &format!("id={id}"), &[]).await;
-    assert_eq!(
-        recent::list(state.store.get().unwrap().as_ref(), 10)
-            .unwrap()
-            .len(),
-        1
-    );
+    assert_eq!(state.file_platform.recent_files.list(10).unwrap().len(), 1);
 }
 
 #[cfg(feature = "media")]
@@ -486,4 +478,143 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
         );
     }
     server.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn fs_thumbnail_latency_benchmark() {
+    let (_root, core, _state, key) = test_state();
+    let source = tempfile::tempdir().unwrap();
+    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let pem = certificate.cert.pem();
+    let (_, port) = core
+        .start_public(
+            0,
+            0,
+            pem.clone().into_bytes(),
+            certificate.key_pair.serialize_pem().into_bytes(),
+        )
+        .await
+        .unwrap();
+    let http = reqwest::Client::builder()
+        .add_root_certificate(reqwest::Certificate::from_pem(pem.as_bytes()).unwrap())
+        .build()
+        .unwrap();
+    let origin = format!("https://localhost:{port}");
+    http.get(format!("{origin}/health")).send().await.unwrap();
+    let mut reports = Vec::new();
+    for (label, width, height, extension) in [
+        ("JPEG 1024x768", 1024, 768, "jpg"),
+        ("JPEG 4000x3000", 4000, 3000, "jpg"),
+        ("PNG 1600x1200", 1600, 1200, "png"),
+    ] {
+        let original = source.path().join(format!("original.{extension}"));
+        image::RgbImage::from_fn(width, height, |x, y| {
+            image::Rgb([(x % 200) as u8, (y % 200) as u8, 90])
+        })
+        .save(&original)
+        .unwrap();
+        let mut cold = Vec::new();
+        let mut warm = Vec::new();
+        for index in 0..20 {
+            let path = source.path().join(format!("{width}-{index}.{extension}"));
+            std::fs::copy(&original, &path).unwrap();
+            let id = file_id(&key, path.to_str().unwrap());
+            let started = std::time::Instant::now();
+            let response = http
+                .get(format!("{origin}/fs"))
+                .query(&[("id", id.as_str()), ("w", "512"), ("h", "512")])
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let bytes = response.bytes().await.unwrap();
+            cold.push(started.elapsed().as_secs_f64() * 1000.0);
+            let image = image::load_from_memory(&bytes).unwrap();
+            assert_eq!((image.width(), image.height()), (512, 512));
+            let started = std::time::Instant::now();
+            let response = http
+                .get(format!("{origin}/fs"))
+                .query(&[("id", id.as_str()), ("w", "512"), ("h", "512")])
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let cached = response.bytes().await.unwrap();
+            warm.push(started.elapsed().as_secs_f64() * 1000.0);
+            assert_eq!(bytes, cached);
+        }
+        cold.sort_by(f64::total_cmp);
+        warm.sort_by(f64::total_cmp);
+        reports.push(serde_json::json!({"input":label,"samples":20,"target":"512x512 crop","coldMedianMs":cold[10],"coldP95Ms":cold[18],"coldMaxMs":cold[19],"warmMedianMs":warm[10],"warmP95Ms":warm[18],"warmMaxMs":warm[19]}));
+    }
+    println!(
+        "{}",
+        serde_json::json!({"transport":"trusted HTTPS HTTP/1.1 loopback, reused TLS connection","os":std::env::consts::OS,"architecture":std::env::consts::ARCH,"thumbnailCacheColdSourcePagesWarm":true,"reports":reports})
+    );
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn fs_300_cached_thumbnails_do_not_write_recent_files() {
+    let (_root, core, state, key) = test_state();
+    let files = tempfile::tempdir().unwrap();
+    let path = files.path().join("thumbnail.jpg");
+    std::fs::write(
+        &path,
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/v-prog420.jpg"
+        )),
+    )
+    .unwrap();
+    let id = file_id(&key, path.to_str().unwrap());
+    let query = format!("id={id}&w=512&h=512");
+    let store = state.store.get().unwrap();
+    let before = store.write_attempts_for_test();
+    let response = call_fs(&state, &query, &[]).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let expected = body_bytes(response).await;
+    let responses =
+        futures_util::future::join_all((0..300).map(|_| call_fs(&state, &query, &[]))).await;
+    for response in responses {
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(body_bytes(response).await, expected);
+    }
+    assert_eq!(
+        store.write_attempts_for_test() - before,
+        0,
+        "thumbnail reads must not write user history"
+    );
+    assert!(
+        state
+            .file_platform
+            .recent_files
+            .list(10)
+            .unwrap()
+            .is_empty()
+    );
+    let below_view_size = call_fs(&state, &format!("id={id}&w=1023&h=1023"), &[]).await;
+    assert_eq!(below_view_size.status(), StatusCode::OK);
+    assert_eq!(store.write_attempts_for_test() - before, 0);
+    let view = call_fs(&state, &format!("id={id}&w=1024&h=1024"), &[]).await;
+    assert_eq!(view.status(), StatusCode::OK);
+    assert_eq!(store.write_attempts_for_test() - before, 0);
+    let original = call_fs(&state, &format!("id={id}"), &[]).await;
+    assert_eq!(original.status(), StatusCode::OK);
+    assert_eq!(store.write_attempts_for_test() - before, 0);
+    assert_eq!(
+        state.file_platform.recent_files.list(10).unwrap(),
+        [path.to_str().unwrap()]
+    );
+    assert!(store.get("recent_files").unwrap().is_none());
+    core.stop_core().await;
+    assert_eq!(store.write_attempts_for_test() - before, 1);
+    assert_eq!(
+        store
+            .get_json::<Vec<String>>("recent_files")
+            .unwrap()
+            .unwrap(),
+        [path.to_str().unwrap()]
+    );
 }

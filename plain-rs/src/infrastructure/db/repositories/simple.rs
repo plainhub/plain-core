@@ -83,8 +83,41 @@ fn in_clause(column: &str, values: &[String]) -> (String, Vec<Value>) {
     )
 }
 
+#[cfg(feature = "chat")]
+pub(crate) fn session_snapshot(
+    connection: &rusqlite::Connection,
+) -> rusqlite::Result<std::collections::HashMap<String, SessionRow>> {
+    let mut statement = connection.prepare(&format!("SELECT {SESSION_COLUMNS} FROM sessions"))?;
+    statement
+        .query_map([], session_from_row)?
+        .map(|row| row.map(|row| (row.client_id.clone(), row)))
+        .collect()
+}
+
 impl Db {
     pub fn session_list(&self) -> rusqlite::Result<Vec<SessionRow>> {
+        #[cfg(feature = "chat")]
+        {
+            if self.cached_sessions().is_none() {
+                self.with_conn(|connection| self.reload_sessions(connection))?;
+            }
+            let mut rows = self
+                .1
+                .sessions
+                .read()
+                .unwrap()
+                .rows
+                .values()
+                .cloned()
+                .collect::<Vec<_>>();
+            rows.sort_by(|a, b| {
+                b.last_seen_at
+                    .cmp(&a.last_seen_at)
+                    .then_with(|| a.client_id.cmp(&b.client_id))
+            });
+            return Ok(rows);
+        }
+        #[cfg(not(feature = "chat"))]
         self.with_conn(|c| {
             let mut stmt = c.prepare(&format!(
                 "SELECT {SESSION_COLUMNS} FROM sessions ORDER BY last_seen_at DESC"
@@ -94,63 +127,196 @@ impl Db {
     }
 
     pub fn session_get(&self, client_id: &str) -> rusqlite::Result<Option<SessionRow>> {
-        self.with_conn(|c| {
-            c.query_row(
-                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE client_id=?1"),
-                [client_id],
-                session_from_row,
-            )
-            .optional()
+        #[cfg(feature = "chat")]
+        {
+            if let Some(row) = self.cached_session(client_id) {
+                return Ok(row);
+            }
+            self.with_conn(|connection| {
+                if let Some(row) = self.cached_session(client_id) {
+                    return Ok(row);
+                }
+                self.reload_sessions(connection)?;
+                let snapshot = self.1.sessions.read().unwrap();
+                Ok(snapshot.rows.get(client_id).cloned())
+            })
+        }
+        #[cfg(not(feature = "chat"))]
+        self.with_conn(|connection| {
+            connection
+                .query_row(
+                    &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE client_id=?1"),
+                    [client_id],
+                    session_from_row,
+                )
+                .optional()
         })
     }
 
-    pub fn session_save(&self, row: &SessionRow) -> rusqlite::Result<()> {
-        self.with_conn(|c| {
-            c.execute(
-                "INSERT OR REPLACE INTO sessions (client_id, name, type, client_ip, os_name,
-                     os_version, browser_name, browser_version, token, url_token, last_seen_at,
-                     created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-                params![
-                    row.client_id,
-                    row.name,
-                    row.r#type,
-                    row.client_ip,
-                    row.os_name,
-                    row.os_version,
-                    row.browser_name,
-                    row.browser_version,
-                    row.token,
-                    row.url_token,
-                    row.last_seen_at
+    #[cfg(feature = "chat")]
+    fn cached_session(&self, client_id: &str) -> Option<Option<SessionRow>> {
+        self.cached_sessions()
+            .map(|snapshot| snapshot.rows.get(client_id).cloned())
+    }
+
+    #[cfg(feature = "chat")]
+    fn cached_sessions(
+        &self,
+    ) -> Option<std::sync::RwLockReadGuard<'_, super::super::state::SessionSnapshot>> {
+        let snapshot = self.1.sessions.read().unwrap();
+        (snapshot.revision
+            == self
+                .1
+                .session_revision
+                .load(std::sync::atomic::Ordering::Acquire))
+        .then_some(snapshot)
+    }
+
+    #[cfg(feature = "chat")]
+    fn reload_sessions(&self, connection: &rusqlite::Connection) -> rusqlite::Result<()> {
+        let rows = session_snapshot(connection)?;
+        let mut snapshot = self.1.sessions.write().unwrap();
+        let old = std::mem::replace(&mut snapshot.rows, rows);
+        let super::super::state::SessionSnapshot { rows, activity, .. } = &mut *snapshot;
+        activity.retain(|(id, at)| {
+            old.get(id).zip(rows.get(id)).is_some_and(|(old, new)| {
+                old.token == new.token
+                    && old.url_token == new.url_token
+                    && new
+                        .last_seen_at
                         .as_deref()
-                        .map(plain_libs::utils::dbtime::normalize)
-                        .transpose()?,
-                    plain_libs::utils::dbtime::normalize(&row.created_at)?,
-                    plain_libs::utils::dbtime::normalize(&row.updated_at)?
-                ],
-            )?;
+                        .is_none_or(|persisted| persisted < at.as_str())
+            })
+        });
+        for (id, at) in activity.pending() {
+            if let Some(row) = rows.get_mut(id) {
+                row.last_seen_at = Some(at.clone());
+            }
+        }
+        snapshot.revision = self
+            .1
+            .session_revision
+            .load(std::sync::atomic::Ordering::Acquire);
+        Ok(())
+    }
+
+    #[cfg(feature = "chat")]
+    fn update_session_snapshot(
+        &self,
+        before: u64,
+        update: impl FnOnce(&mut super::super::state::SessionSnapshot),
+    ) {
+        let mut snapshot = self.1.sessions.write().unwrap();
+        let current = snapshot.revision == before;
+        update(&mut snapshot);
+        if current {
+            snapshot.revision = self
+                .1
+                .session_revision
+                .load(std::sync::atomic::Ordering::Acquire);
+        }
+    }
+
+    pub fn session_save(&self, row: &SessionRow) -> rusqlite::Result<()> {
+        let mut row = row.clone();
+        row.created_at = plain_libs::utils::dbtime::normalize(&row.created_at)?;
+        row.updated_at = plain_libs::utils::dbtime::normalize(&row.updated_at)?;
+        row.last_seen_at = row
+            .last_seen_at
+            .as_deref()
+            .map(plain_libs::utils::dbtime::normalize)
+            .transpose()?;
+        self.with_conn(|connection| {
+            #[cfg(feature = "chat")]
+            let before = self.1.session_revision.load(std::sync::atomic::Ordering::Acquire);
+            connection.execute("INSERT OR REPLACE INTO sessions (client_id,name,type,client_ip,os_name,os_version,browser_name,browser_version,token,url_token,last_seen_at,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",params![row.client_id,row.name,row.r#type,row.client_ip,row.os_name,row.os_version,row.browser_name,row.browser_version,row.token,row.url_token,row.last_seen_at,row.created_at,row.updated_at])?;
+            #[cfg(feature = "chat")]
+            self.update_session_snapshot(before, |snapshot| {snapshot.activity.retain(|(id,_)| id != &row.client_id);snapshot.rows.insert(row.client_id.clone(),row);});
             Ok(())
         })
     }
 
-    /// Bumps only `last_seen_at` for the listed clients (the `updateTs` DAO).
     pub fn session_touch(&self, items: &[(String, String)]) -> rusqlite::Result<usize> {
-        self.with_conn(|c| {
-            let tx = c.unchecked_transaction()?;
+        let items = items
+            .iter()
+            .map(|(id, at)| Ok((id, plain_libs::utils::dbtime::normalize(at)?)))
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        #[cfg(feature = "chat")]
+        {
+            for (id, _) in &items {
+                self.session_get(id)?;
+            }
+            let mut snapshot = self.1.sessions.write().unwrap();
+            let now = std::time::Instant::now();
             let mut updated = 0;
-            {
-                let mut stmt =
-                    tx.prepare("UPDATE sessions SET last_seen_at=?2 WHERE client_id=?1")?;
-                for (client_id, at) in items {
-                    updated += stmt.execute(params![
-                        client_id,
-                        plain_libs::utils::dbtime::normalize(at)?
-                    ])?;
+            for (id, at) in items {
+                if let Some(row) = snapshot.rows.get_mut(id) {
+                    row.last_seen_at = Some(at.clone());
+                    snapshot.activity.push((id.clone(), at), now);
+                    updated += 1;
                 }
             }
-            tx.commit()?;
             Ok(updated)
+        }
+        #[cfg(not(feature = "chat"))]
+        self.with_conn(|connection| {
+            let transaction = connection.unchecked_transaction()?;
+            let mut updated = 0;
+            for (id, at) in items {
+                updated += transaction.execute(
+                    "UPDATE sessions SET last_seen_at=?2 WHERE client_id=?1",
+                    params![id, at],
+                )?;
+            }
+            transaction.commit()?;
+            Ok(updated)
+        })
+    }
+
+    #[cfg(feature = "chat")]
+    pub fn flush_session_activity(
+        &self,
+        now: std::time::Instant,
+        force: bool,
+    ) -> rusqlite::Result<bool> {
+        {
+            let snapshot = self.1.sessions.read().unwrap();
+            if snapshot.activity.pending().is_empty() || (!force && !snapshot.activity.is_due(now))
+            {
+                return Ok(false);
+            }
+        }
+        self.with_conn(|connection| {
+            if self.cached_sessions().is_none() {
+                self.reload_sessions(connection)?;
+            }
+            let mut snapshot = self.1.sessions.write().unwrap();
+            let write = |pending: &[(String, String)]| -> rusqlite::Result<()> {
+                let latest = pending
+                    .iter()
+                    .map(|(id, at)| (id, at))
+                    .collect::<std::collections::BTreeMap<_, _>>();
+                let transaction = connection.unchecked_transaction()?;
+                for (id, at) in latest {
+                    transaction.execute(
+                        "UPDATE sessions SET last_seen_at=?2 WHERE client_id=?1",
+                        params![id, at],
+                    )?;
+                }
+                transaction.commit()
+            };
+            let result = if force {
+                snapshot.activity.flush(write)
+            } else {
+                snapshot.activity.flush_due(now, write)
+            };
+            if result.is_ok() {
+                snapshot.revision = self
+                    .1
+                    .session_revision
+                    .load(std::sync::atomic::Ordering::Acquire);
+            }
+            result
         })
     }
 
@@ -161,15 +327,42 @@ impl Db {
         updated_at: &str,
     ) -> rusqlite::Result<usize> {
         self.with_conn(|connection| {
-            connection.execute(
+            #[cfg(feature = "chat")]
+            let before = self
+                .1
+                .session_revision
+                .load(std::sync::atomic::Ordering::Acquire);
+            let updated = connection.execute(
                 "UPDATE sessions SET name=?2,updated_at=?3 WHERE client_id=?1",
-                rusqlite::params![client_id, name, updated_at],
-            )
+                params![client_id, name, updated_at],
+            )?;
+            #[cfg(feature = "chat")]
+            self.update_session_snapshot(before, |snapshot| {
+                if let Some(row) = snapshot.rows.get_mut(client_id) {
+                    row.name = name.into();
+                    row.updated_at = updated_at.into();
+                }
+            });
+            Ok(updated)
         })
     }
 
     pub fn session_delete(&self, client_id: &str) -> rusqlite::Result<usize> {
-        self.with_conn(|c| c.execute("DELETE FROM sessions WHERE client_id=?1", [client_id]))
+        self.with_conn(|connection| {
+            #[cfg(feature = "chat")]
+            let before = self
+                .1
+                .session_revision
+                .load(std::sync::atomic::Ordering::Acquire);
+            let updated =
+                connection.execute("DELETE FROM sessions WHERE client_id=?1", [client_id])?;
+            #[cfg(feature = "chat")]
+            self.update_session_snapshot(before, |snapshot| {
+                snapshot.activity.retain(|(id, _)| id != client_id);
+                snapshot.rows.remove(client_id);
+            });
+            Ok(updated)
+        })
     }
 
     pub fn share_list(&self) -> rusqlite::Result<Vec<ShareRow>> {

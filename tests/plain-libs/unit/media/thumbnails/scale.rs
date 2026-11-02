@@ -142,3 +142,23 @@ fn resize_to_upscale_identity_edges() {
     let out = resize_to(wide.clone(), 50, 50);
     assert_eq!((out.width(), out.height()), (50, 50));
 }
+
+#[test]
+fn extreme_aspect_crop_resizes_only_the_center_pixel_region() {
+    let bitmap = Bitmap::new_rgb(
+        (0..4096)
+            .flat_map(|row| [(row % 255) as u8, 10, 20])
+            .collect(),
+        1,
+        4096,
+    );
+    let output = resize_to_fill(bitmap, 512, 512);
+    assert_eq!((output.width(), output.height()), (512, 512));
+    assert!(
+        output
+            .raw()
+            .0
+            .chunks_exact(3)
+            .all(|pixel| pixel == [7, 10, 20])
+    );
+}

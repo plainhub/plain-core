@@ -51,13 +51,22 @@ fn selection_from_plan(
     plan: query::Plan,
     from_trash: bool,
 ) -> (String, Vec<Value>) {
-    let mut args = vec![
-        Value::Integer(i64::from(data_type.kind())),
-        Value::Integer(i64::from(from_trash || plan.trash.unwrap_or(false))),
-    ];
-    args.extend(plan.args.into_iter().map(Value::Text));
+    let kind = match data_type {
+        DataType::Audio => "kind='AUDIO'",
+        DataType::Video => "kind='VIDEO'",
+        DataType::Image => "kind='IMAGE'",
+        DataType::Doc => "kind='DOC'",
+        DataType::File => "kind IN ('FILE','DIRECTORY')",
+        _ => "0",
+    };
+    let mut args = plan.args.into_iter().map(Value::Text).collect::<Vec<_>>();
     let mut clauses = vec![
-        "trashed=?".to_string(),
+        if from_trash || plan.trash.unwrap_or(false) {
+            "trashed_at IS NOT NULL"
+        } else {
+            "trashed_at IS NULL"
+        }
+        .to_string(),
         "missing=0".into(),
         "indexed=1".into(),
         "is_available=1".into(),
@@ -71,7 +80,9 @@ fn selection_from_plan(
             args.extend(plan.ids.into_iter().map(Value::Text));
         }
     }
-    let sql = "WITH selected AS (SELECT *,id AS _id,path AS _data,file_name AS _display_name,size_bytes AS _size FROM file_catalog WHERE data_type=?)";
+    let sql = format!(
+        "WITH selected AS (SELECT *,id AS _id,path AS _data,file_name AS _display_name,size_bytes AS _size FROM file_catalog WHERE {kind})"
+    );
     (
         format!(
             "{sql} SELECT {{columns}} FROM selected WHERE {}",
@@ -211,24 +222,29 @@ pub fn bucket_item_facts(db: &Db, data_type: DataType) -> Result<Vec<serde_json:
         "{} ORDER BY updated_at DESC,file_id",
         sql.replace("{columns}", "bucket_id,path,size_bytes")
     );
-    Ok(db.with_conn(|conn| {
+    let items = db.with_conn(|conn| {
         let mut statement = conn.prepare(&sql)?;
         statement
             .query_map(params_from_iter(args.iter()), |row| {
-                let id: String = row.get(0)?;
-                let path: String = row.get(1)?;
-                let size: i64 = row.get(2)?;
-                let name = std::path::Path::new(&path)
-                    .parent()
-                    .and_then(|parent| parent.file_name())
-                    .and_then(|name| name.to_str())
-                    .unwrap_or(&id);
-                Ok(serde_json::json!({
-                    "id":id,"name":name,"size":size,"path":path
-                }))
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
             })?
             .collect::<rusqlite::Result<Vec<_>>>()
-    })?)
+    })?;
+    Ok(items
+        .into_iter()
+        .map(|(id, path, size)| {
+            let name = std::path::Path::new(&path)
+                .parent()
+                .and_then(|parent| parent.file_name())
+                .and_then(|name| name.to_str())
+                .unwrap_or(&id);
+            serde_json::json!({"id":id,"name":name,"size":size,"path":path})
+        })
+        .collect())
 }
 
 #[cfg(test)]

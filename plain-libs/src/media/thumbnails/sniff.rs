@@ -82,8 +82,9 @@ pub fn sniff_header(buf: &[u8]) -> Result<Sniffed, SniffError> {
     }
     if buf.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
         // IHDR must be the first chunk: length(4) + "IHDR" then BE w/h.
-        let w = u32::from_be_bytes([buf[16], buf[17], buf[18], buf[19]]);
-        let h = u32::from_be_bytes([buf[20], buf[21], buf[22], buf[23]]);
+        let dimensions = buf.get(16..24).ok_or(SniffError::Truncated)?;
+        let w = u32::from_be_bytes(dimensions[..4].try_into().unwrap());
+        let h = u32::from_be_bytes(dimensions[4..].try_into().unwrap());
         if w == 0 || h == 0 {
             return Err(SniffError::Unknown);
         }

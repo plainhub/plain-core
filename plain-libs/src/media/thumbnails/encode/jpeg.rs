@@ -226,18 +226,20 @@ fn category(value: i16) -> u8 {
 }
 
 fn transform(block: &[f64; 64], quant: &[u8; 64]) -> [i16; 64] {
+    let basis = &*BASIS;
+    let zigzag = &*ZIGZAG;
     let mut rows = [[0.0; 8]; 8];
     for y in 0..8 {
         for k in 0..8 {
             rows[y][k] = (0..8)
-                .map(|x| (block[y * 8 + x] - 128.0) * BASIS[k][x])
+                .map(|x| (block[y * 8 + x] - 128.0) * basis[k][x])
                 .sum();
         }
     }
     std::array::from_fn(|index| {
-        let natural = ZIGZAG[index];
+        let natural = zigzag[index];
         let value = (0..8)
-            .map(|y| rows[y][natural % 8] * BASIS[natural / 8][y])
+            .map(|y| rows[y][natural % 8] * basis[natural / 8][y])
             .sum::<f64>();
         (value / f64::from(quant[index])).round() as i16
     })

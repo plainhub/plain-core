@@ -41,7 +41,7 @@ pub enum Content {
     Bytes(Vec<u8>),
     Codec(String),
     Thumbnail {
-        bytes: Result<Option<Vec<u8>>, String>,
+        bytes: Result<Option<Vec<u8>>, crate::features::services::images::thumbnails::Error>,
         name: String,
     },
     NotFound,
@@ -125,8 +125,10 @@ pub async fn read(
         return Ok(Content::Directory);
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if options.starts_view && options.width.is_none_or(|width| width > 200) {
-        if let Err(error) = crate::features::recent_files::add(state.store.get()?.as_ref(), &path) {
+    if options.starts_view && options.width.is_none_or(|width| width >= 1024) {
+        let recent = state.file_platform.recent_files.clone();
+        let viewed_path = path.clone();
+        if let Err(error) = tokio::task::spawn_blocking(move || recent.add(&viewed_path)).await? {
             log::warn!("Recent file update failed: {error}");
         }
     }

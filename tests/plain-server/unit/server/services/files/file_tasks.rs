@@ -192,19 +192,19 @@ async fn media_move_case(missing_destination: bool) {
 
         Ok(())
     }).unwrap();
-    let duration_cache =
-        plain_rs::features::media::duration_cache::DurationCache::new(db_path.parent().unwrap());
-    duration_cache
-        .save(plain_rs::features::media::duration_cache::Duration {
-            media_type: "audio".into(),
-            file_id: "1".into(),
-            path: audio_path.clone(),
-            size_bytes: 7,
-            modified_at: "2026-01-01T00:00:00.000Z".into(),
-            duration_ms: 5_000_000_001,
-            updated_at: String::new(),
-        })
-        .unwrap();
+    let duration_cache = server.runtime_state().core.duration_cache.clone();
+    let cached_duration = plain_rs::features::media::duration_cache::Duration {
+        media_type: "audio".into(),
+        file_id: "1".into(),
+        path: audio_path.clone(),
+        size_bytes: 7,
+        modified_at: "2026-01-01T00:00:00.000Z".into(),
+        duration_ms: 5_000_000_001,
+        updated_at: String::new(),
+    };
+    duration_cache.save(cached_duration.clone()).unwrap();
+    duration_cache.flush().unwrap();
+    duration_cache.save(cached_duration).unwrap();
     db.use_platform_audio_catalog().unwrap();
     db.cache_platform_audio(
         &[plain_rs::infrastructure::db::audio_catalog::AudioMedia {
@@ -311,6 +311,7 @@ async fn media_move_case(missing_destination: bool) {
     let moved = base.join("target (1)");
     assert!(!source.exists());
     assert!(duration_cache.all().unwrap().is_empty());
+    assert!(!duration_cache.flush().unwrap());
     assert!(moved.join("audio").is_file());
     assert_eq!(task["completedOps"][0]["dst"], moved.to_str().unwrap());
     assert_eq!(std::fs::read(&destination).unwrap(), b"existing");

@@ -38,3 +38,29 @@ async fn temporary_range_responses_keep_range_headers_and_remove_the_output() {
     assert_eq!(&bytes[..], b"2345");
     assert!(!path.exists());
 }
+
+#[tokio::test]
+async fn original_thumbnail_bytes_keep_their_mime_and_conditional_response() {
+    for (bytes, mime) in [
+        (b"\xff\xd8original".as_slice(), "image/jpeg"),
+        (b"\x89PNGoriginal".as_slice(), "image/png"),
+        (b"GIF89aoriginal".as_slice(), "image/gif"),
+        (b"RIFF0000WEBPoriginal".as_slice(), "image/webp"),
+    ] {
+        let response = thumbnail(Ok(Some(bytes.to_vec())), None);
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], mime);
+        let etag = response.headers()[header::ETAG]
+            .to_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(
+            &axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap()[..],
+            bytes
+        );
+        let response = thumbnail(Ok(Some(bytes.to_vec())), Some(&etag));
+        assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+    }
+}

@@ -334,3 +334,42 @@ fn fir_resize(bm: Bitmap, tw: u32, th: u32) -> Bitmap {
 #[cfg(test)]
 #[path = "../../../../tests/plain-libs/unit/media/thumbnails/scale.rs"]
 mod tests;
+
+pub fn center_crop(bitmap: Bitmap, width: u32, height: u32) -> Bitmap {
+    let (bytes, source_width, source_height) = bitmap.raw();
+    let width = width.min(source_width);
+    let height = height.min(source_height);
+    if width == source_width && height == source_height {
+        return bitmap;
+    }
+    let channels = bitmap.channels();
+    let left = (source_width - width) / 2;
+    let top = (source_height - height) / 2;
+    let mut cropped = Vec::with_capacity(width as usize * height as usize * channels);
+    for row in top..top + height {
+        let start = (row as usize * source_width as usize + left as usize) * channels;
+        cropped.extend_from_slice(&bytes[start..start + width as usize * channels]);
+    }
+    if channels == 3 {
+        Bitmap::new_rgb(cropped, width, height)
+    } else {
+        Bitmap::new_rgba(cropped, width, height)
+    }
+}
+
+pub(super) fn resize_to_fill(bitmap: Bitmap, width: u32, height: u32) -> Bitmap {
+    let (sw, sh) = (bitmap.width(), bitmap.height());
+    let (crop_width, crop_height) =
+        if u64::from(sw) * u64::from(height) > u64::from(sh) * u64::from(width) {
+            (
+                (u64::from(sh) * u64::from(width) / u64::from(height)).max(1) as u32,
+                sh,
+            )
+        } else {
+            (
+                sw,
+                (u64::from(sw) * u64::from(height) / u64::from(width)).max(1) as u32,
+            )
+        };
+    resize_to(center_crop(bitmap, crop_width, crop_height), width, height)
+}

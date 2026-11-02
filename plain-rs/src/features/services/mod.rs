@@ -42,3 +42,5 @@ pub mod contacts;
 pub mod http_status;
 
 pub mod phone_query;
+
+pub mod buffered_writes;

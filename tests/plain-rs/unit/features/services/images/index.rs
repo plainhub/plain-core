@@ -185,16 +185,24 @@ async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without
     service.set_encoder(Some(Arc::new(Encoder)));
     service.start(true).unwrap();
     wait(&service).await;
-    assert_eq!(image_embeddings::ids(&db).unwrap(), ["1"]);
+    let supported_id = db
+        .media_file_by_path(
+            crate::features::enums::DataType::Image,
+            supported.to_str().unwrap(),
+        )
+        .unwrap()
+        .unwrap()
+        .id;
+    assert_eq!(image_embeddings::ids(&db).unwrap(), [supported_id.clone()]);
     assert_eq!(service.status().total_images, 2);
     assert_eq!(service.status().skipped_images, 1);
     assert!(requests.try_recv().is_err());
-    image_embeddings::delete(&db, &["first".into()]).unwrap();
+    image_embeddings::delete(&db, &[supported_id.clone()]).unwrap();
     service
-        .selected(vec!["first".into(), "missing".into()])
+        .selected(vec![supported_id.clone(), "missing".into()])
         .unwrap();
     wait(&service).await;
-    assert_eq!(image_embeddings::ids(&db).unwrap(), ["1"]);
+    assert_eq!(image_embeddings::ids(&db).unwrap(), [supported_id]);
     assert!(requests.try_recv().is_err());
     assert!(!directory.path().join("cache").exists());
 }

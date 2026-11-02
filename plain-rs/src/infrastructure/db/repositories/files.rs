@@ -24,7 +24,7 @@ pub fn name_filter(text: &str) -> (String, Vec<String>) {
     } else {
         (
             format!(
-                "file_id IN (SELECT rowid FROM file_names_fts WHERE file_names_fts MATCH ?) AND {exact}"
+                "file_id IN (SELECT files.id FROM file_names_fts JOIN files ON files.rowid=file_names_fts.rowid WHERE file_names_fts MATCH ?) AND {exact}"
             ),
             vec![format!("\"{}\"", text.replace('"', "\"\"")), literal],
         )
@@ -92,7 +92,7 @@ pub(crate) fn locate(path: &str) -> rusqlite::Result<Location> {
     volumes::locate(Path::new(path)).map_err(|error| sql_error(error.into_boxed_dyn_error()))
 }
 
-fn root_is_current(conn: &Connection, id: i64, old: &Volume) -> rusqlite::Result<bool> {
+fn root_is_current(conn: &Connection, id: &str, old: &Volume) -> rusqlite::Result<bool> {
     let matches = |path: &Path| {
         volumes::locate(path)
             .map(|location| location.volume == *old)
@@ -113,8 +113,8 @@ fn root_is_current(conn: &Connection, id: i64, old: &Volume) -> rusqlite::Result
 pub(crate) fn bind_volume(
     conn: &Connection,
     location: &Location,
-) -> rusqlite::Result<(i64, String)> {
-    let existing: Option<(i64, String)> = conn
+) -> rusqlite::Result<(String, String)> {
+    let existing: Option<(String, String)> = conn
         .query_row(
             "SELECT id,path FROM volumes WHERE identity=?1",
             [&location.volume.identity],
@@ -129,9 +129,9 @@ pub(crate) fn bind_volume(
         };
         let root = if old.path == *candidate {
             old.path
-        } else if root_is_current(conn, id, &old)? && location.path.starts_with(&old.path) {
+        } else if root_is_current(conn, &id, &old)? && location.path.starts_with(&old.path) {
             old.path
-        } else if old.path.starts_with(candidate) && root_is_current(conn, id, &old)? {
+        } else if old.path.starts_with(candidate) && root_is_current(conn, &id, &old)? {
             let prefix = relative_path(old.path.strip_prefix(candidate).map_err(sql_error)?)?;
             conn.execute(
                 "UPDATE files SET path=?1||CASE WHEN path='' THEN '' ELSE '/'||path END,original_path=CASE WHEN original_path IS NULL THEN NULL ELSE ?1||CASE WHEN original_path='' THEN '' ELSE '/'||original_path END END WHERE volume_id=?2",
@@ -147,11 +147,12 @@ pub(crate) fn bind_volume(
         )?;
         (id, root)
     } else {
+        let id = plain_libs::utils::shortid::new_id();
         conn.execute(
-            "INSERT INTO volumes(identity,path,is_available) VALUES(?1,?2,1)",
-            params![location.volume.identity, path_text(candidate)?],
+            "INSERT INTO volumes(id,identity,path,is_available) VALUES(?1,?2,?3,1)",
+            params![id, location.volume.identity, path_text(candidate)?],
         )?;
-        (conn.last_insert_rowid(), candidate.clone())
+        (id, candidate.clone())
     };
     Ok((
         id,
@@ -167,9 +168,9 @@ pub(crate) fn upsert(
     size: Option<i64>,
     created: Option<&str>,
     updated: &str,
-) -> rusqlite::Result<i64> {
+) -> rusqlite::Result<String> {
     let (volume_id, path) = bind_volume(conn, location)?;
-    let existing: Option<(i64, Option<String>)> = conn
+    let existing: Option<(String, Option<String>)> = conn
         .query_row(
             "SELECT id,file_identity FROM files WHERE volume_id=?1 AND path=?2 AND missing=0",
             params![volume_id, path],
@@ -191,19 +192,20 @@ pub(crate) fn upsert(
     if id.is_none() {
         if let Some(identity) = identity {
             let candidates = conn.prepare("SELECT id,path FROM files WHERE volume_id=?1 AND file_identity=?2 AND trashed_at IS NULL")?
-                .query_map(params![volume_id,identity], |row| Ok((row.get::<_,i64>(0)?,row.get::<_,String>(1)?)))?
+                .query_map(params![volume_id,identity], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)))?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             if let [(candidate_id, candidate_path)] = candidates.as_slice() {
-                let root: String =
-                    conn.query_row("SELECT path FROM volumes WHERE id=?1", [volume_id], |row| {
-                        row.get(0)
-                    })?;
+                let root: String = conn.query_row(
+                    "SELECT path FROM volumes WHERE id=?1",
+                    [&volume_id],
+                    |row| row.get(0),
+                )?;
                 if candidate_path == &path {
-                    id = Some(*candidate_id);
+                    id = Some(candidate_id.clone());
                 } else {
                     match std::fs::symlink_metadata(Path::new(&root).join(candidate_path)) {
                         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                            id = Some(*candidate_id)
+                            id = Some(candidate_id.clone())
                         }
                         Err(error) => return Err(sql_error(error)),
                         Ok(_) => {}
@@ -222,7 +224,7 @@ pub(crate) fn upsert(
     if let Some(id) = id {
         let source: String = conn.query_row(
             "SELECT path FROM file_catalog WHERE file_id=?1",
-            [id],
+            [&id],
             |row| row.get(0),
         )?;
         let destination = path_text(&location.path)?;
@@ -230,16 +232,17 @@ pub(crate) fn upsert(
         if source != destination {
             conn.execute(
                 "UPDATE image_embeddings SET path=?1 WHERE file_id=?2",
-                params![destination, id.to_string()],
+                params![destination, id],
             )?;
         }
         conn.execute("UPDATE files SET path=?1,file_name=?2,kind=COALESCE(?3,kind),file_identity=COALESCE(?4,file_identity),size_bytes=COALESCE(?5,size_bytes),created_at=COALESCE(created_at,?6),updated_at=?7,missing=0,indexed=1,mime_type=?8 WHERE id=?9",
             params![path,name,kind,identity,size,created,updated,mime,id])?;
         Ok(id)
     } else {
-        conn.execute("INSERT INTO files(volume_id,path,file_name,kind,file_identity,size_bytes,created_at,updated_at,mime_type) VALUES(?1,?2,?3,COALESCE(?4,'FILE'),?5,?6,?7,?8,?9)",
-            params![volume_id,path,name,kind,identity,size,created,updated,mime])?;
-        Ok(conn.last_insert_rowid())
+        let id = plain_libs::utils::shortid::new_id();
+        conn.execute("INSERT INTO files(id,volume_id,path,file_name,kind,file_identity,size_bytes,created_at,updated_at,mime_type) VALUES(?1,?2,?3,?4,COALESCE(?5,'FILE'),?6,?7,?8,?9,?10)",
+            params![id,volume_id,path,name,kind,identity,size,created,updated,mime])?;
+        Ok(id)
     }
 }
 
@@ -313,7 +316,7 @@ pub(crate) fn change_paths(
 ) -> rusqlite::Result<()> {
     let prefix = format!("{}/", source.trim_end_matches('/'));
     let rows=conn.prepare("SELECT file_id,path FROM file_catalog WHERE missing=0 AND (path=?1 OR substr(path,1,length(?2))=?2) ORDER BY file_id")?
-        .query_map(params![source,prefix],|row|Ok((row.get::<_,i64>(0)?,row.get::<_,String>(1)?)))?
+        .query_map(params![source,prefix],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)))?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let now = plain_libs::utils::dbtime::now_iso_millis();
     for (id, absolute) in rows {
@@ -349,7 +352,7 @@ pub(crate) fn change_paths(
             params![match change { PathChange::Move=>"MOVE",PathChange::Trash=>"TRASH",PathChange::Restore=>"RESTORE" },now,volume_id,path,name,identity,id])?;
         conn.execute(
             "UPDATE image_embeddings SET path=?1 WHERE file_id=?2",
-            params![target.to_str(), id.to_string()],
+            params![target.to_str(), id],
         )?;
     }
     Ok(())
@@ -378,10 +381,39 @@ impl Db {
         paths: Option<&[String]>,
     ) -> rusqlite::Result<()> {
         self.with_conn(|connection| {
-            let selected = paths.map(serde_json::to_string).transpose().map_err(|error| sql_error(error))?;
-            let changes = connection.prepare("SELECT file_id,COALESCE(original_path,path),indexed,kind FROM file_catalog WHERE ?1 IS NULL OR EXISTS(SELECT 1 FROM json_each(?1) WHERE file_catalog.path=value OR substr(file_catalog.path,1,length(value)+1)=value||'/')")?
-                .query_map([selected], |row| Ok((row.get::<_,i64>(0)?, row.get::<_,String>(1)?, row.get::<_,bool>(2)?, row.get::<_,FileKind>(3)?)))?
-                .collect::<rusqlite::Result<Vec<_>>>()?;
+            let read_row = |row: &rusqlite::Row<'_>| -> rusqlite::Result<_> {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, bool>(2)?, row.get::<_, FileKind>(3)?))
+            };
+            let changes = if let Some(paths) = paths {
+                if paths.is_empty() { return Ok(()); }
+                let volumes = connection.prepare("SELECT id,path FROM volumes")?
+                    .query_map([], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)))?
+                    .collect::<rusqlite::Result<Vec<_>>>()?;
+                let fields = "id,COALESCE(original_path,path),indexed,kind";
+                let mut subtree = connection.prepare(&format!("SELECT {fields} FROM files WHERE volume_id=?1 AND path=?2 UNION ALL SELECT {fields} FROM files WHERE volume_id=?1 AND path>=?3 AND path<?4"))?;
+                let mut volume_rows = connection.prepare(&format!("SELECT {fields} FROM files WHERE volume_id=?1"))?;
+                let mut changes = std::collections::BTreeMap::new();
+                for path in paths {
+                    for (volume_id, volume_path) in &volumes {
+                        let root = volume_path.trim_end_matches('/');
+                        let prefix = format!("{root}/");
+                        let relative = if path == root { Some("") } else { path.strip_prefix(&prefix) };
+                        let rows = if relative == Some("") || root.strip_prefix(path).is_some_and(|suffix| suffix.starts_with('/')) || (path == "/" && root.starts_with('/')) {
+                            volume_rows.query_map([volume_id], read_row)?.collect::<rusqlite::Result<Vec<_>>>()?
+                        } else if let Some(relative) = relative {
+                            subtree.query_map(params![volume_id,relative,format!("{relative}/"),format!("{relative}0")], read_row)?.collect::<rusqlite::Result<Vec<_>>>()?
+                        } else { continue; };
+                        for (id, relative, indexed, kind) in rows {
+                            let absolute = if relative.is_empty() { volume_path.clone() } else { format!("{root}/{relative}") };
+                            changes.insert(id, (absolute,indexed,kind));
+                        }
+                    }
+                }
+                changes.into_iter().map(|(id,(path,indexed,kind))|(id,path,indexed,kind)).collect::<Vec<_>>()
+            } else {
+                connection.prepare("SELECT file_id,COALESCE(original_path,path),indexed,kind FROM file_catalog")?
+                    .query_map([],read_row)?.collect::<rusqlite::Result<Vec<_>>>()?
+            };
             let tx = connection.unchecked_transaction()?;
             for (id, path, indexed, kind) in changes {
                 let visible = scope.contains_entry(Path::new(&path), kind == FileKind::Directory);
@@ -397,7 +429,7 @@ impl Db {
                 .prepare("SELECT id,identity,path FROM volumes")?
                 .query_map([], |row| {
                     Ok((
-                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(0)?,
                         Volume {
                             identity: row.get(1)?,
                             path: row.get::<_, String>(2)?.into(),
@@ -407,7 +439,7 @@ impl Db {
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             let facts = volumes
                 .iter()
-                .map(|(id, volume)| Ok((*id, root_is_current(conn, *id, volume)?)))
+                .map(|(id, volume)| Ok((id, root_is_current(conn, id, volume)?)))
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             let tx = conn.unchecked_transaction()?;
             for (id, available) in facts {
@@ -421,7 +453,7 @@ impl Db {
     }
     pub fn prepare_file_path_change(
         &self,
-        id: i64,
+        id: &str,
         source: &str,
         destination: &str,
         change: PathChange,
@@ -451,7 +483,7 @@ impl Db {
 
     pub fn finish_file_path_change(
         &self,
-        id: i64,
+        id: &str,
         source: &str,
         destination: &str,
         change: PathChange,
@@ -493,7 +525,7 @@ impl Db {
         })
     }
 
-    pub fn file(&self, id: i64) -> rusqlite::Result<Option<FileRow>> {
+    pub fn file(&self, id: &str) -> rusqlite::Result<Option<FileRow>> {
         self.with_conn(|conn| {
             conn.query_row(
                 &format!("SELECT {COLUMNS} FROM files WHERE id=?1"),

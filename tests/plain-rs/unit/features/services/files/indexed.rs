@@ -159,7 +159,7 @@ fn scope_changes_hide_existing_records_and_preserve_file_identity_and_user_state
             conn.query_row(
                 "SELECT file_id FROM file_catalog WHERE path='/docs/private/report.pdf'",
                 [],
-                |row| row.get::<_, i64>(0),
+                |row| row.get::<_, String>(0),
             )
         })
         .unwrap();
@@ -190,7 +190,7 @@ fn scope_changes_hide_existing_records_and_preserve_file_identity_and_user_state
         .with_conn(|conn| {
             conn.query_row(
                 "SELECT favorited,missing FROM files WHERE id=?1",
-                [before],
+                [&before],
                 |row| Ok((row.get::<_, bool>(0)?, row.get::<_, bool>(1)?)),
             )
         })
@@ -207,7 +207,7 @@ fn scope_changes_hide_existing_records_and_preserve_file_identity_and_user_state
         db.with_conn(|conn| conn.query_row(
             "SELECT file_id FROM file_catalog WHERE path='/docs/private/report.pdf'",
             [],
-            |row| row.get::<_, i64>(0)
+            |row| row.get::<_, String>(0)
         ))
         .unwrap(),
         before

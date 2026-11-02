@@ -10,8 +10,11 @@ fn file_paths_are_relative_and_preserve_user_state() {
         .record_file_paths(&[path.to_str().unwrap().into()], None)
         .unwrap()
         .remove(0);
+    assert_eq!(first.id.len(), 22);
+    assert_eq!(first.volume_id.len(), 22);
+    assert!(first.id.bytes().all(|byte| byte.is_ascii_alphanumeric()));
     assert!(!Path::new(&first.path).is_absolute());
-    db.with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [first.id]))
+    db.with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [&first.id]))
         .unwrap();
     db.with_conn(|conn|conn.execute_batch("CREATE TRIGGER reject_volume_rewrite BEFORE UPDATE ON volumes WHEN NEW.path=OLD.path AND NEW.is_available=OLD.is_available BEGIN SELECT RAISE(ABORT,'unchanged volume rewritten'); END;")).unwrap();
     let again = db
@@ -32,16 +35,16 @@ fn file_paths_are_relative_and_preserve_user_state() {
 fn fts_updates_and_deletes_follow_the_file_transaction() {
     let db = Db::open(Path::new(":memory:")).unwrap();
     db.with_conn(|conn| {
-        conn.execute("INSERT INTO volumes(identity,path,is_available) VALUES('TEST','/media',1)",[]).unwrap();
-        conn.execute("INSERT INTO files(volume_id,path,file_name,kind,updated_at) VALUES(1,'你好世界.txt','你好世界.txt','FILE','2026-01-01T00:00:00Z')",[]).unwrap();
+        conn.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('TEST','TEST','/media',1)",[]).unwrap();
+        conn.execute("INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) VALUES('file-你好世界.txt','TEST','你好世界.txt','你好世界.txt','FILE','2026-01-01T00:00:00Z')",[]).unwrap();
         let count=|text:&str|conn.query_row("SELECT count(*) FROM file_names_fts WHERE file_names_fts MATCH ?1",[text],|row|row.get::<_,i64>(0)).unwrap();
         assert_eq!(count("你好世"),1);
-        { let tx=conn.unchecked_transaction().unwrap(); tx.execute("UPDATE files SET file_name='replacement.txt' WHERE id=1",[]).unwrap(); }
+        { let tx=conn.unchecked_transaction().unwrap(); tx.execute("UPDATE files SET file_name='replacement.txt' WHERE id='file-你好世界.txt'",[]).unwrap(); }
         assert_eq!(count("你好世"),1);
-        conn.execute("UPDATE files SET file_name='replacement.txt' WHERE id=1",[]).unwrap();
+        conn.execute("UPDATE files SET file_name='replacement.txt' WHERE id='file-你好世界.txt'",[]).unwrap();
         assert_eq!(count("你好世"),0);
         assert_eq!(count("replacement"),1);
-        conn.execute("DELETE FROM files WHERE id=1",[]).unwrap();
+        conn.execute("DELETE FROM files WHERE id='file-你好世界.txt'",[]).unwrap();
         assert_eq!(count("replacement"),0);
     });
 }
@@ -50,9 +53,9 @@ fn fts_updates_and_deletes_follow_the_file_transaction() {
 fn literal_name_search_handles_short_chinese_symbols_and_fts_syntax() {
     let db = Db::open(Path::new(":memory:")).unwrap();
     db.with_conn(|conn| {
-        conn.execute("INSERT INTO volumes(identity,path,is_available) VALUES('TEST','/catalog',1)",[]).unwrap();
+        conn.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('TEST','TEST','/catalog',1)",[]).unwrap();
         for name in ["你好世界.txt","road-AND-test.txt","100%_literal.txt","a\"b-file.txt","prefix.Interior.suffix"] {
-            conn.execute("INSERT INTO files(volume_id,path,file_name,kind,updated_at) VALUES(1,?1,?1,'FILE','2026-01-01T00:00:00Z')",[name]).unwrap();
+            conn.execute("INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) VALUES('file-'||?1,'TEST',?1,?1,'FILE','2026-01-01T00:00:00Z')",[name]).unwrap();
         }
         for (text,total) in [("你好",1),("好世界",1),("AND",1),("%_",1),("%_literal",1),("a\"b",1),("Interior",1),("does-not-exist",0)] {
             let (filter,args)=name_filter(text);
@@ -88,7 +91,7 @@ fn remount_changes_only_the_volume_root_and_preserves_file_id_and_relative_path(
             "2026-01-01T00:00:00Z",
         )
         .unwrap();
-        tx.execute("UPDATE files SET favorited=1 WHERE id=?1", [id])
+        tx.execute("UPDATE files SET favorited=1 WHERE id=?1", [&id])
             .unwrap();
         tx.commit().unwrap();
         id
@@ -109,7 +112,7 @@ fn remount_changes_only_the_volume_root_and_preserves_file_id_and_relative_path(
         id
     });
     assert_eq!(before, after);
-    let row = db.file(after).unwrap().unwrap();
+    let row = db.file(&after).unwrap().unwrap();
     assert_eq!(row.path, "folder/file.txt");
     assert!(row.favorited);
     assert_eq!(db.volumes().unwrap()[0].path, new.to_str().unwrap());
@@ -125,7 +128,7 @@ fn missing_files_keep_business_state_and_reappear_with_the_same_strong_identity(
         .record_file_paths(&[path.to_str().unwrap().into()], None)
         .unwrap()
         .remove(0);
-    db.with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [first.id]))
+    db.with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [&first.id]))
         .unwrap();
     let absolute = locate(path.to_str().unwrap())
         .unwrap()
@@ -134,7 +137,7 @@ fn missing_files_keep_business_state_and_reappear_with_the_same_strong_identity(
         .unwrap()
         .to_owned();
     db.mark_file_paths_missing(&[absolute]).unwrap();
-    let missing = db.file(first.id).unwrap().unwrap();
+    let missing = db.file(&first.id).unwrap().unwrap();
     assert!(missing.missing && missing.favorited);
     let returned = db
         .record_file_paths(&[path.to_str().unwrap().into()], None)
@@ -160,7 +163,7 @@ fn interrupted_rename_finishes_in_sql_on_reopen_without_another_filesystem_move(
         let source = locate(path.to_str().unwrap()).unwrap().path;
         let target = locate(destination.to_str().unwrap()).unwrap().path;
         db.prepare_file_path_change(
-            row.id,
+            &row.id,
             source.to_str().unwrap(),
             target.to_str().unwrap(),
             PathChange::Move,
@@ -170,7 +173,7 @@ fn interrupted_rename_finishes_in_sql_on_reopen_without_another_filesystem_move(
         row.id
     };
     let db = Db::open(&db_path).unwrap();
-    assert!(db.file(id).unwrap().unwrap().path.ends_with("after.txt"));
+    assert!(db.file(&id).unwrap().unwrap().path.ends_with("after.txt"));
     assert_eq!(db.key_values().iter().count(), 0);
     assert_eq!(std::fs::read(destination).unwrap(), b"data");
 }
@@ -192,7 +195,7 @@ fn interrupted_rename_does_not_attach_user_state_to_a_replacement_at_the_destina
         let from = locate(source.to_str().unwrap()).unwrap().path;
         let to = locate(target.to_str().unwrap()).unwrap().path;
         db.prepare_file_path_change(
-            row.id,
+            &row.id,
             from.to_str().unwrap(),
             to.to_str().unwrap(),
             PathChange::Move,
@@ -206,9 +209,131 @@ fn interrupted_rename_does_not_attach_user_state_to_a_replacement_at_the_destina
     assert!(Db::open(&db_path).is_err());
     let connection = rusqlite::Connection::open(&db_path).unwrap();
     let path: String = connection
-        .query_row("SELECT path FROM files WHERE id=?1", [id], |row| row.get(0))
+        .query_row("SELECT path FROM files WHERE id=?1", [&id], |row| {
+            row.get(0)
+        })
         .unwrap();
     assert!(path.ends_with("source.txt"));
     assert_eq!(std::fs::read(target).unwrap(), b"replacement");
     assert_eq!(std::fs::read(retained).unwrap(), b"original");
+}
+
+#[test]
+fn visibility_batch_uses_path_indexes_instead_of_scanning_unrelated_files() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let db = Db::open(Path::new(":memory:")).unwrap();
+    db.with_conn(|c| {
+        c.execute("INSERT INTO volumes VALUES('v','v','/media',1)", []).unwrap();
+        c.execute_batch("WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<10000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) SELECT 'f'||x,'v','images/'||x||'.jpg',x||'.jpg','IMAGE','2026-01-01' FROM n;").unwrap();
+    });
+    let scope = crate::features::prefs::file_index::Scope {
+        directories: vec!["/media".into()],
+        exclusions: vec!["/media/images/1.jpg".into()],
+        defaults: crate::features::prefs::file_index::Defaults {
+            scan_directories: vec![],
+            excluded_directories: vec![],
+            excluded_names: vec![],
+        },
+    };
+    let steps = Arc::new(AtomicUsize::new(0));
+    let observed = steps.clone();
+    db.with_conn(|c| {
+        c.progress_handler(
+            100,
+            Some(move || {
+                observed.fetch_add(100, Ordering::Relaxed);
+                false
+            }),
+        )
+    });
+    let paths = (1..=32)
+        .map(|n| format!("/media/images/{n}.jpg"))
+        .collect::<Vec<_>>();
+    db.update_index_visibility(&scope, Some(&paths)).unwrap();
+    db.with_conn(|c| c.progress_handler(0, None::<fn() -> bool>));
+    assert!(
+        steps.load(Ordering::Relaxed) < 20000,
+        "VM steps: {}",
+        steps.load(Ordering::Relaxed)
+    );
+    assert_eq!(
+        db.with_conn(
+            |c| c.query_row("SELECT indexed FROM files WHERE id='f1'", [], |row| row
+                .get::<_, bool>(0))
+        )
+        .unwrap(),
+        false
+    );
+    assert_eq!(
+        db.with_conn(
+            |c| c.query_row("SELECT COUNT(*) FROM files WHERE indexed=0", [], |row| row
+                .get::<_, i64>(
+                0
+            ))
+        )
+        .unwrap(),
+        1
+    );
+}
+
+#[test]
+fn visibility_subtrees_preserve_missing_trash_boundaries_and_nested_volumes() {
+    let db = Db::open(Path::new(":memory:")).unwrap();
+    db.with_conn(|c| c.execute_batch("INSERT INTO volumes VALUES('v','v','/media',1),('nested','nested','/media/a/mount',0);
+        INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,missing,favorited,trashed_at,original_path) VALUES
+        ('a','v','a','a','DIRECTORY','2026',0,1,NULL,NULL),
+        ('child','v','a/你好%_.jpg','你好%_.jpg','IMAGE','2026',0,1,NULL,NULL),
+        ('missing','v','a/old.jpg','old.jpg','IMAGE','2026',1,1,NULL,NULL),
+        ('trash','v','a/trash.jpg','trash.jpg','IMAGE','2026',0,1,'2026','outside.jpg'),
+        ('neighbor','v','ab/untouched.jpg','untouched.jpg','IMAGE','2026',0,1,NULL,NULL),
+        ('nested','nested','child.jpg','child.jpg','IMAGE','2026',0,1,NULL,NULL);")).unwrap();
+    let scope = crate::features::prefs::file_index::Scope {
+        directories: vec!["/media".into()],
+        exclusions: vec!["/media/a".into()],
+        defaults: crate::features::prefs::file_index::Defaults {
+            scan_directories: vec![],
+            excluded_directories: vec![],
+            excluded_names: vec![],
+        },
+    };
+    db.update_index_visibility(
+        &scope,
+        Some(&[
+            "/media/a".into(),
+            "/media/a/你好%_.jpg".into(),
+            "/unrelated".into(),
+        ]),
+    )
+    .unwrap();
+    let hidden = db
+        .with_conn(|c| {
+            c.prepare("SELECT id FROM files WHERE indexed=0 ORDER BY id")?
+                .query_map([], |r| r.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .unwrap();
+    assert_eq!(hidden, ["a", "child", "missing", "nested"]);
+    assert_eq!(
+        db.with_conn(
+            |c| c.query_row("SELECT COUNT(*) FROM files WHERE favorited=1", [], |r| r
+                .get::<_, i64>(0))
+        )
+        .unwrap(),
+        6
+    );
+    db.with_conn(|c| c.execute("UPDATE files SET indexed=1", []))
+        .unwrap();
+    db.update_index_visibility(&scope, Some(&["/".into()]))
+        .unwrap();
+    assert_eq!(
+        db.with_conn(
+            |c| c.query_row("SELECT COUNT(*) FROM files WHERE indexed=0", [], |r| r
+                .get::<_, i64>(0))
+        )
+        .unwrap(),
+        4
+    );
 }

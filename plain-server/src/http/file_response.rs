@@ -151,7 +151,7 @@ pub(crate) async fn stream_temporary(
 }
 
 pub(crate) fn thumbnail(
-    bytes: Result<Option<Vec<u8>>, String>,
+    bytes: Result<Option<Vec<u8>>, plain_rs::features::services::images::thumbnails::Error>,
     conditional: Option<&str>,
 ) -> Response {
     use sha2::{Digest, Sha256};
@@ -159,6 +159,10 @@ pub(crate) fn thumbnail(
         Ok(Some(bytes)) => {
             let mime = if bytes.starts_with(b"\x89PNG") {
                 "image/png"
+            } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+                "image/gif"
+            } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
+                "image/webp"
             } else {
                 "image/jpeg"
             };
@@ -176,7 +180,7 @@ pub(crate) fn thumbnail(
                     StatusCode::NOT_MODIFIED,
                     [
                         ("etag", etag),
-                        ("cache-control", "private, max-age=86400".to_string()),
+                        ("cache-control", "private, no-cache".to_string()),
                     ],
                 )
                     .into_response();
@@ -185,7 +189,7 @@ pub(crate) fn thumbnail(
                 [
                     ("content-type", mime.to_string()),
                     ("etag", etag),
-                    ("cache-control", "private, max-age=86400".to_string()),
+                    ("cache-control", "private, no-cache".to_string()),
                 ],
                 bytes,
             )
@@ -193,8 +197,15 @@ pub(crate) fn thumbnail(
         }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(error) => (
-            StatusCode::BAD_REQUEST,
-            axum::Json(serde_json::json!({"error":error})),
+            if matches!(
+                error,
+                plain_rs::features::services::images::thumbnails::Error::Busy
+            ) {
+                StatusCode::TOO_MANY_REQUESTS
+            } else {
+                StatusCode::BAD_REQUEST
+            },
+            axum::Json(serde_json::json!({"error":error.to_string()})),
         )
             .into_response(),
     }

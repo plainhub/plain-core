@@ -120,7 +120,7 @@ fn update_catalog(
     action: Action,
     item: &Item,
 ) -> rusqlite::Result<()> {
-    let row: Option<(i64,String,Option<String>,bool)> = tx.query_row(
+    let row: Option<(String,String,Option<String>,bool)> = tx.query_row(
         "SELECT file_id,path,original_path,trashed FROM file_catalog WHERE id=?1 AND data_type=?2",
         params![item.id,kind.kind()],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?)),
     ).optional()?;
@@ -139,7 +139,7 @@ fn update_catalog(
         return Err(rusqlite::Error::InvalidQuery);
     }
     if action == Action::Delete {
-        tx.execute("DELETE FROM files WHERE id=?1", [id])?;
+        tx.execute("DELETE FROM files WHERE id=?1", [&id])?;
         return Ok(());
     }
     let destination = match action {
@@ -164,9 +164,9 @@ fn update_catalog(
     };
     let location = crate::infrastructure::db::files::locate(&destination)?;
     let (volume_id, relative) = crate::infrastructure::db::files::bind_volume(tx, &location)?;
-    let previous: (i64, String) = tx.query_row(
+    let previous: (String, String) = tx.query_row(
         "SELECT volume_id,path FROM files WHERE id=?1",
-        [id],
+        [&id],
         |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
     if action == Action::Trash && volume_id != previous.0 {

@@ -1,12 +1,14 @@
 use anyhow::{Result, bail};
 use plain_libs::kv::Db;
 use plain_libs::kv::LazyDb;
+use plain_libs::utils::write_batch::WriteBatch;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU64, Ordering},
 };
+use std::{collections::BTreeMap, time::Instant};
 
 const PREFIX: &str = "android_media_duration:";
 
@@ -33,7 +35,7 @@ pub struct Identity {
 
 pub struct DurationCache {
     store: Arc<LazyDb>,
-    writes: Mutex<()>,
+    writes: Mutex<WriteBatch<Duration>>,
     revision: AtomicU64,
 }
 
@@ -47,7 +49,7 @@ impl DurationCache {
     pub fn with_store(store: Arc<LazyDb>) -> Self {
         Self {
             store,
-            writes: Mutex::new(()),
+            writes: Mutex::new(WriteBatch::default()),
             revision: AtomicU64::new(0),
         }
     }
@@ -57,15 +59,55 @@ impl DurationCache {
         run(&db)
     }
 
-    pub fn all(&self) -> Result<Vec<Duration>> {
-        self.with_db(|db| {
+    fn merged(&self, pending: &[Duration]) -> Result<BTreeMap<String, Duration>> {
+        let mut values = self.with_db(|db| {
             db.scan_prefix(PREFIX)
                 .map(|entry| {
-                    let (_, value) = entry?;
-                    Ok(serde_json::from_str(&value)?)
+                    let (key, value) = entry?;
+                    Ok((key, serde_json::from_str(&value)?))
                 })
-                .collect()
+                .collect::<Result<BTreeMap<_, Duration>>>()
+        })?;
+        for value in pending {
+            values.insert(key(&value.media_type, &value.file_id)?, value.clone());
+        }
+        Ok(values)
+    }
+
+    pub fn all(&self) -> Result<Vec<Duration>> {
+        let pending = self.writes.lock().unwrap();
+        Ok(self.merged(pending.pending())?.into_values().collect())
+    }
+
+    fn persist(&self, pending: &[Duration]) -> Result<()> {
+        self.with_db(|db| {
+            let mut values = BTreeMap::new();
+            for value in pending {
+                values.insert(
+                    key(&value.media_type, &value.file_id)?,
+                    serde_json::to_string(value)?,
+                );
+            }
+            let mut batch = db.batch();
+            for (key, value) in values {
+                batch.insert(key, value);
+            }
+            db.apply_batch(batch)
         })
+    }
+
+    pub fn flush_due(&self, now: Instant) -> Result<bool> {
+        self.writes
+            .lock()
+            .unwrap()
+            .flush_due(now, |pending| self.persist(pending))
+    }
+
+    pub fn flush(&self) -> Result<bool> {
+        self.writes
+            .lock()
+            .unwrap()
+            .flush(|pending| self.persist(pending))
     }
 
     pub fn cancel_pending_probes(&self) {
@@ -81,14 +123,24 @@ impl DurationCache {
         if identities.is_empty() {
             return Ok(Vec::new());
         }
+        let pending = self.writes.lock().unwrap();
         self.with_db(|db| {
             identities
                 .iter()
                 .map(|identity| {
-                    let Some(bytes) = db.get(key(&identity.media_type, &identity.file_id)?)? else {
-                        return Ok(None);
+                    let value = match pending.pending().iter().rev().find(|value| {
+                        value.media_type == identity.media_type && value.file_id == identity.file_id
+                    }) {
+                        Some(value) => value.clone(),
+                        None => {
+                            let Some(bytes) =
+                                db.get(key(&identity.media_type, &identity.file_id)?)?
+                            else {
+                                return Ok(None);
+                            };
+                            serde_json::from_str(&bytes)?
+                        }
                     };
-                    let value: Duration = serde_json::from_str(&bytes)?;
                     let modified =
                         chrono::DateTime::parse_from_rfc3339(&identity.modified_at)?.timestamp();
                     let stored =
@@ -104,21 +156,21 @@ impl DurationCache {
     }
 
     pub fn save_at_revision(&self, value: Duration, revision: u64) -> Result<bool> {
-        let _write = self.writes.lock().unwrap();
+        let mut pending = self.writes.lock().unwrap();
         if self.revision() != revision {
             return Ok(false);
         }
-        self.save_locked(value)?;
+        self.save_locked(value, &mut pending)?;
         Ok(true)
     }
 
     pub fn save(&self, value: Duration) -> Result<()> {
-        let _write = self.writes.lock().unwrap();
-        self.save_locked(value)
+        let mut pending = self.writes.lock().unwrap();
+        self.save_locked(value, &mut pending)
     }
 
-    fn save_locked(&self, mut value: Duration) -> Result<()> {
-        let key = key(&value.media_type, &value.file_id)?;
+    fn save_locked(&self, mut value: Duration, pending: &mut WriteBatch<Duration>) -> Result<()> {
+        key(&value.media_type, &value.file_id)?;
         if value.path.is_empty() || value.size_bytes < 0 || value.duration_ms <= 0 {
             bail!("Invalid media duration cache entry");
         }
@@ -126,32 +178,65 @@ impl DurationCache {
             .with_timezone(&chrono::Utc)
             .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         value.updated_at = plain_libs::utils::dbtime::now_iso_millis();
-        self.with_db(|db| db.insert(key, serde_json::to_string(&value)?))
+        let now = Instant::now();
+        pending.push(value, now);
+        pending.flush_due(now, |values| self.persist(values))?;
+        Ok(())
     }
 
     pub fn remove(&self, media_type: &str, ids: &[String]) -> Result<usize> {
         let keys = ids
             .iter()
             .map(|id| key(media_type, id))
-            .collect::<Result<Vec<_>>>()?;
-        if ids.is_empty() {
+            .collect::<Result<std::collections::HashSet<_>>>()?;
+        if keys.is_empty() {
             return Ok(0);
         }
-        let _write = self.writes.lock().unwrap();
+        let mut pending = self.writes.lock().unwrap();
         self.revision.fetch_add(1, Ordering::AcqRel);
-        self.with_db(|db| {
+        let removed = self.with_db(|db| {
             let mut batch = db.batch();
-            let mut removed = std::collections::HashSet::new();
-            for key in keys {
-                if db.get(&key)?.is_some() && removed.insert(key.clone()) {
+            let mut changed = false;
+            let mut removed = 0;
+            for key in &keys {
+                let stored = db.get(key)?.is_some();
+                if stored {
                     batch.remove(key);
+                    changed = true;
+                }
+                let buffered = pending
+                    .pending()
+                    .iter()
+                    .any(|value| format!("{PREFIX}{}:{}", value.media_type, value.file_id) == *key);
+                if stored || buffered {
+                    removed += 1;
                 }
             }
-            if removed.is_empty() {
-                return Ok(0);
+            if changed {
+                db.apply_batch(batch)?;
             }
-            db.apply_batch(batch)?;
-            Ok(removed.len())
+            Ok(removed)
+        })?;
+        pending.retain(|value| {
+            !keys.contains(&format!("{PREFIX}{}:{}", value.media_type, value.file_id))
+        });
+        Ok(removed)
+    }
+
+    fn remove_persisted(&self, keys: &std::collections::HashSet<String>) -> Result<()> {
+        self.with_db(|db| {
+            let mut batch = db.batch();
+            let mut changed = false;
+            for key in keys {
+                if db.get(key)?.is_some() {
+                    batch.remove(key);
+                    changed = true;
+                }
+            }
+            if changed {
+                db.apply_batch(batch)?;
+            }
+            Ok(())
         })
     }
 
@@ -159,27 +244,23 @@ impl DurationCache {
         if paths.is_empty() && roots.is_empty() {
             return Ok(());
         }
-        let _write = self.writes.lock().unwrap();
+        let mut pending = self.writes.lock().unwrap();
         self.revision.fetch_add(1, Ordering::AcqRel);
-        self.with_db(|db| {
-            let mut batch = db.batch();
-            let mut changed = false;
-            for entry in db.scan_prefix(PREFIX) {
-                let (key, value) = entry?;
-                let value: Duration = serde_json::from_str(&value)?;
+        let keys = self
+            .merged(pending.pending())?
+            .into_iter()
+            .filter_map(|(key, value)| {
                 let path = Path::new(&value.path);
-                if paths.iter().any(|item| path == Path::new(item))
-                    || roots.iter().any(|root| path.starts_with(root))
-                {
-                    batch.remove(key);
-                    changed = true;
-                }
-            }
-            if !changed {
-                return Ok(());
-            }
-            db.apply_batch(batch)
-        })
+                (paths.iter().any(|item| path == Path::new(item))
+                    || roots.iter().any(|root| path.starts_with(root)))
+                .then_some(key)
+            })
+            .collect();
+        self.remove_persisted(&keys)?;
+        pending.retain(|value| {
+            !keys.contains(&format!("{PREFIX}{}:{}", value.media_type, value.file_id))
+        });
+        Ok(())
     }
 }
 

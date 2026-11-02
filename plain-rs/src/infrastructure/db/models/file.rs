@@ -77,7 +77,7 @@ impl FromSql for FileKind {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct VolumeRow {
-    pub id: i64,
+    pub id: String,
     pub identity: String,
     pub path: String,
     pub is_available: bool,
@@ -85,8 +85,8 @@ pub struct VolumeRow {
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct FileRow {
-    pub id: i64,
-    pub volume_id: i64,
+    pub id: String,
+    pub volume_id: String,
     pub path: String,
     pub file_name: String,
     pub kind: FileKind,

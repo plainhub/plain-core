@@ -14,10 +14,11 @@ use std::{
 pub struct FilePlatform {
     pub(super) host: Arc<Host>,
     pub(super) db: Arc<Db>,
+    pub recent_files: Arc<crate::features::recent_files::RecentFiles>,
     prefs: Arc<crate::features::prefs::Prefs>,
     directory: PathBuf,
     cache: PathBuf,
-    private_roots: std::result::Result<[PathBuf; 2], String>,
+    pub(super) private_roots: std::result::Result<[PathBuf; 2], String>,
     events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
     #[cfg(any(test, feature = "test-seams"))]
     sdk: std::sync::atomic::AtomicBool,
@@ -40,6 +41,9 @@ impl FilePlatform {
             (|| -> std::io::Result<_> { Ok([directory.canonicalize()?, cache.canonicalize()?]) })()
                 .map_err(|error| error.to_string());
         Self {
+            recent_files: Arc::new(crate::features::recent_files::RecentFiles::new(
+                db.key_values(),
+            )),
             private_roots,
             host,
             db,
@@ -77,7 +81,11 @@ impl FilePlatform {
                 .map(str::to_owned)
                 .ok_or_else(|| anyhow!("Media unavailable"));
         }
-        self.db.with_conn(|conn| conn.query_row("SELECT path FROM file_catalog WHERE id=?1 AND kind IN ('IMAGE','VIDEO','AUDIO','DOC') AND missing=0 AND trashed=0 AND is_available=1", [id], |row| row.get(0))).map_err(Into::into)
+        let db = self.db.clone();
+        let id = id.to_owned();
+        tokio::task::spawn_blocking(move || {
+            db.with_conn(|conn| conn.query_row("SELECT rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.id=?1 AND f.kind IN ('IMAGE','VIDEO','AUDIO','DOC') AND f.missing=0 AND f.trashed_at IS NULL AND v.is_available=1", [id], |row| row.get(0))).map_err(Into::into)
+        }).await?
     }
 
     pub fn uses_sdk(&self) -> bool {
@@ -156,15 +164,15 @@ impl FilePlatform {
         self.sdk.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub async fn thumbnail_cache(&self, path: &str) -> Result<PathBuf> {
+    pub fn thumbnail_cache(&self, path: &str) -> Result<PathBuf> {
         if !Path::new(path).is_absolute() {
             bail!("absolute thumbnail path required");
         }
-        let metadata = tokio::fs::metadata(path).await?;
+        let metadata = std::fs::metadata(path)?;
         if !metadata.is_file() {
             bail!("regular thumbnail source required");
         }
-        let _file = tokio::fs::File::open(path).await?;
+        let _file = std::fs::File::open(path)?;
         Ok(self.cache.clone())
     }
 
@@ -220,7 +228,7 @@ impl FilePlatform {
             })).collect());
         }
         let mut items = Vec::new();
-        for path in crate::features::recent_files::list(self.db.key_values().as_ref(), 500)? {
+        for path in self.recent_files.list(500)? {
             let Ok(entry) = plain_libs::filesystem::stat(Path::new(&path)).await else {
                 continue;
             };

@@ -701,3 +701,74 @@ fn replacing_queue_selects_a_track_and_keeps_old_state_when_a_track_is_missing()
     assert_eq!(queue_total(&db).unwrap(), 0);
     assert!(db.audio_current_file_id().is_none());
 }
+
+#[test]
+fn an_empty_audio_queue_does_not_visit_non_audio_files() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let db = crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap();
+    db.with_conn(|connection|{
+        connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('queue-count','queue-count','/queue-count',1)",[]).unwrap();
+        let volume: String = connection.query_row("SELECT id FROM volumes ORDER BY rowid DESC LIMIT 1", [], |row| row.get(0)).unwrap();
+        connection.execute("WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<2000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) SELECT printf('file-%06d',n),?1,'file-'||n,'file-'||n,'FILE','2026-01-01' FROM numbers",[&volume]).unwrap();
+    });
+    let steps = Arc::new(AtomicUsize::new(0));
+    let observed = steps.clone();
+    db.with_conn(|connection| {
+        connection.progress_handler(
+            1,
+            Some(move || {
+                observed.fetch_add(1, Ordering::Relaxed);
+                false
+            }),
+        )
+    });
+    let total = queue_total(&db).unwrap();
+    db.with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
+    assert_eq!(total, 0);
+    assert!(
+        steps.load(Ordering::Relaxed) < 500,
+        "empty queue executed {} VM steps",
+        steps.load(Ordering::Relaxed)
+    );
+}
+
+#[test]
+fn a_nonempty_audio_queue_count_does_not_visit_other_file_kinds() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let db = crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap();
+    db.with_conn(|connection|{
+        connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('queue-member-count','queue-member-count','/queue-member-count',1)",[]).unwrap();
+        let volume: String = connection.query_row("SELECT id FROM volumes ORDER BY rowid DESC LIMIT 1", [], |row| row.get(0)).unwrap();
+        connection.execute("WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<2000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) SELECT printf('file-%06d',n),?1,'file-'||n,'file-'||n,'FILE','2026-01-01' FROM numbers",[&volume]).unwrap();
+        connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) VALUES('file-'||'track.mp3',?1,'track.mp3','track.mp3','AUDIO','2026-01-01')",[&volume]).unwrap();
+        let id="file-track.mp3";
+        connection.execute("INSERT INTO audio_queue_items(file_id,sort_order) VALUES(?1,0)",[&id]).unwrap();
+    });
+    let steps = Arc::new(AtomicUsize::new(0));
+    let observed = steps.clone();
+    db.with_conn(|connection| {
+        connection.progress_handler(
+            1,
+            Some(move || {
+                observed.fetch_add(1, Ordering::Relaxed);
+                false
+            }),
+        )
+    });
+    let total = queue_total(&db).unwrap();
+    db.with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
+    assert_eq!(total, 1);
+    assert!(
+        steps.load(Ordering::Relaxed) < 500,
+        "one queue membership count executed {} VM steps",
+        steps.load(Ordering::Relaxed)
+    );
+}
