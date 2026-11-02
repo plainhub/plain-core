@@ -185,3 +185,68 @@ fn thumbnail_encode_preserves_the_baseline_bytes() {
         ]
     );
 }
+
+#[test]
+fn factored_dct_matches_the_definition_at_every_frequency() {
+    for seed in 1..=64 {
+        let block = std::array::from_fn(|i| ((i * i * 3 + i * seed * 7 + seed * 11) % 256) as f64);
+        let quant = std::array::from_fn(|i| (1 + (seed + i) % 23) as u8);
+        let encoded = transform(&block, &quant);
+        for i in 0..64 {
+            let k = ZIGZAG[i];
+            let expected = (0..64)
+                .map(|p| (block[p] - 128.0) * BASIS[k % 8][p % 8] * BASIS[k / 8][p / 8])
+                .sum::<f64>()
+                / f64::from(quant[i]);
+            assert!((f64::from(encoded[i]) - expected).abs() <= 0.500000001);
+        }
+    }
+}
+
+fn reference_transform(block: &[f64; 64], quant: &[u8; 64]) -> [i16; 64] {
+    let basis = &*BASIS;
+    let zigzag = &*ZIGZAG;
+    let mut rows = [[0.0; 8]; 8];
+    for y in 0..8 {
+        for k in 0..8 {
+            rows[y][k] = (0..8)
+                .map(|x| (block[y * 8 + x] - 128.0) * basis[k][x])
+                .sum();
+        }
+    }
+    std::array::from_fn(|index| {
+        let natural = zigzag[index];
+        let value = (0..8)
+            .map(|y| rows[y][natural % 8] * basis[natural / 8][y])
+            .sum::<f64>();
+        (value / f64::from(quant[index])).round() as i16
+    })
+}
+
+#[test]
+#[ignore]
+fn compare_quantized_dct_cost() {
+    use std::{hint::black_box, time::Instant};
+    let blocks: Vec<[f64; 64]> = (0..1024)
+        .map(|seed| std::array::from_fn(|i| ((i * i * 3 + i * seed * 7 + seed * 11) % 256) as f64))
+        .collect();
+    let q = &profile(85).unwrap().quant[0];
+    for block in &blocks {
+        assert_eq!(transform(block, q), reference_transform(block, q));
+    }
+    for (label, function) in [
+        (
+            "matrix",
+            reference_transform as fn(&[f64; 64], &[u8; 64]) -> [i16; 64],
+        ),
+        ("factored", transform),
+    ] {
+        let start = Instant::now();
+        for _ in 0..64 {
+            for block in &blocks {
+                black_box(function(black_box(block), black_box(q)));
+            }
+        }
+        println!("{label} 65536 blocks {:?}", start.elapsed());
+    }
+}

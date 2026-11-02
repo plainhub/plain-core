@@ -1,6 +1,7 @@
 use super::thumbnails::Request;
 use crate::infrastructure::db::{Db, FileKind};
 use crate::runtime::Runtime;
+use futures_util::{StreamExt, stream};
 
 pub(crate) fn start(state: Runtime) {
     let mut events = state.events.subscribe();
@@ -33,6 +34,7 @@ pub(crate) fn start(state: Runtime) {
 
 async fn warm_catalog(state: &Runtime) -> Result<(), String> {
     trim(state).await?;
+    let workers = background_workers(std::thread::available_parallelism().map_or(1, |n| n.get()));
     let mut warmed_bytes = 0;
     let mut budget_available = true;
     for kind in [FileKind::Image, FileKind::Audio, FileKind::Video] {
@@ -47,40 +49,23 @@ async fn warm_catalog(state: &Runtime) -> Result<(), String> {
                 .map_err(|error| error.to_string())?
                 .map_err(|error| error.to_string())?;
             let count = rows.len();
-            for row in rows {
-                before = Some(Cursor {
-                    updated_at: row.updated_at,
-                    id: row.id.clone(),
-                });
-                if !std::path::Path::new(&row.path).is_absolute() {
-                    continue;
-                }
-                let request = Request {
-                    file_name: plain_libs::utils::query::url_encode(
-                        row.path.rsplit('/').next().unwrap_or_default(),
-                    ),
-                    path: row.path,
-                    file_id: row.id,
-                    width: 512,
-                    height: 512,
-                    center_crop: true,
+            before = rows.last().map(|row| Cursor {
+                updated_at: row.updated_at.clone(),
+                id: row.id.clone(),
+            });
+            let requests = stream::iter(rows)
+                .map(|row| warm_source(state, row, kind))
+                .buffer_unordered(workers);
+            tokio::pin!(requests);
+            loop {
+                let bytes = tokio::select! {
+                    _ = stop.wait_for(|value| *value) => return Ok(()),
+                    result = requests.next() => result,
                 };
-                for size in [96, 512] {
-                    let request = Request {
-                        width: size,
-                        height: size,
-                        ..request.clone()
-                    };
-                    let result = tokio::select! {
-                        _ = stop.wait_for(|value| *value) => return Ok(()),
-                        result = state.thumbnails.get_inner(state, request, true) => result,
-                    };
-                    match result {
-                        Ok(Some(bytes)) => warmed_bytes += bytes.len(),
-                        Ok(None) => {}
-                        Err(error) => log::warn!("Thumbnail prewarm generation: {error}"),
-                    }
-                }
+                let Some(bytes) = bytes else {
+                    break;
+                };
+                warmed_bytes += bytes;
                 if warmed_bytes >= 128 * 1024 * 1024 {
                     budget_available = false;
                     break;
@@ -92,6 +77,36 @@ async fn warm_catalog(state: &Runtime) -> Result<(), String> {
         }
     }
     trim(state).await
+}
+
+fn background_workers(cores: usize) -> usize {
+    cores.saturating_sub(1).clamp(1, 3)
+}
+
+async fn warm_source(state: &Runtime, row: Source, kind: FileKind) -> usize {
+    if !std::path::Path::new(&row.path).is_absolute() {
+        return 0;
+    }
+    let mut total = 0;
+    let grid = if kind == FileKind::Image { 256 } else { 512 };
+    for size in [96, grid] {
+        let request = Request {
+            file_name: plain_libs::utils::query::url_encode(
+                row.path.rsplit('/').next().unwrap_or_default(),
+            ),
+            path: row.path.clone(),
+            file_id: row.id.clone(),
+            width: size,
+            height: size,
+            center_crop: true,
+        };
+        match state.thumbnails.get_inner(state, request, true).await {
+            Ok(Some(bytes)) => total += bytes.len(),
+            Ok(None) => {}
+            Err(error) => log::warn!("Thumbnail prewarm generation: {error}"),
+        }
+    }
+    total
 }
 
 struct Cursor {

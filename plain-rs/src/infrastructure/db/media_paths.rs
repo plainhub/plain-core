@@ -25,6 +25,11 @@ pub(super) struct MediaPaths {
 const VISIBLE: &str =
     "kind IN ('IMAGE','VIDEO','AUDIO','DOC') AND missing=0 AND trashed_at IS NULL";
 
+// Project visibility after the primary-key seek so SQLite cannot select the broad kind index.
+static CHANGED_LOCATIONS: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    format!("SELECT d.id,CASE WHEN {VISIBLE} THEN f.volume_id END,f.path FROM temp.media_path_changes d LEFT JOIN files f ON f.id=d.id")
+});
+
 impl MediaPaths {
     pub(super) fn new(conn: &Connection) -> Result<Self> {
         conn.execute_batch(
@@ -89,10 +94,7 @@ impl MediaPaths {
             let roots = volumes.then(|| Self::volumes(conn)).transpose()?;
             let mut delta = Vec::new();
             if files {
-                let sql = format!(
-                    "SELECT d.id,f.volume_id,f.path FROM temp.media_path_changes d LEFT JOIN files f ON f.id=d.id AND {VISIBLE}"
-                );
-                let mut stmt = conn.prepare_cached(&sql)?;
+                let mut stmt = conn.prepare_cached(&CHANGED_LOCATIONS)?;
                 let mut rows = stmt.query([])?;
                 while let Some(row) = rows.next()? {
                     let volume: Option<String> = row.get(1)?;
@@ -151,3 +153,7 @@ impl super::Db {
         self.1.media_paths.resolve(id)
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-rs/unit/infrastructure/db/media_paths.rs"]
+mod tests;

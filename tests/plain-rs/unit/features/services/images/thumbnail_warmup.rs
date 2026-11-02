@@ -57,7 +57,7 @@ async fn index_updates_prewarm_the_same_cache_used_by_foreground_requests() {
         .thumbnails
         .native_decodes
         .load(std::sync::atomic::Ordering::SeqCst);
-    for size in [96, 512] {
+    for size in [96, 256] {
         let bytes = state
             .thumbnails
             .get(
@@ -229,4 +229,67 @@ fn a_deep_cursor_seeks_directly_to_the_requested_index_range() {
         "cursor query executed {} VM steps",
         steps.load(Ordering::Relaxed)
     );
+}
+
+#[test]
+fn prewarming_reserves_foreground_capacity() {
+    assert_eq!([1, 2, 3, 4, 16].map(background_workers), [1, 1, 2, 3, 3]);
+}
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn foreground_decode_can_start_while_background_decoders_are_occupied() {
+    use std::sync::{Arc, atomic::Ordering};
+    let dir = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(&dir.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let workers = background_workers(std::thread::available_parallelism().map_or(1, |n| n.get()));
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
+    let mut paths = Vec::new();
+    for n in 0..=workers {
+        let path = dir.path().join(format!("source-{n}.jpg"));
+        image::RgbImage::from_pixel(800, 600, image::Rgb([20, 100, 60]))
+            .save(&path)
+            .unwrap();
+        paths.push(path.to_string_lossy().into_owned());
+    }
+    state
+        .db
+        .record_file_paths(&paths[..workers], Some(FileKind::Image))
+        .unwrap();
+    let background = tokio::spawn({
+        let state = state.clone();
+        async move { warm_catalog(&state).await }
+    });
+    let wait_for = |count| {
+        let state = state.clone();
+        async move {
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                while state.thumbnails.native_decodes.load(Ordering::SeqCst) < count {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+        }
+    };
+    wait_for(workers).await;
+    let request = Request {
+        path: paths.pop().unwrap(),
+        width: 256,
+        height: 256,
+        center_crop: true,
+        file_id: String::new(),
+        file_name: String::new(),
+    };
+    let foreground = tokio::spawn({
+        let state = state.clone();
+        async move { state.thumbnails.get(&state, request).await }
+    });
+    wait_for(workers + 1).await;
+    gate.add_permits(2 * workers + 1);
+    assert!(foreground.await.unwrap().unwrap().is_some());
+    background.await.unwrap().unwrap();
+    core.stop_core().await;
 }

@@ -225,23 +225,72 @@ fn category(value: i16) -> u8 {
     (u16::BITS - value.unsigned_abs().leading_zeros()) as u8
 }
 
+// Lee's DCT-II decomposition: the odd outputs are adjacent sums of the half-size transform.
+fn dct4(x: [f64; 4]) -> [f64; 4] {
+    let a = x[0] + x[3];
+    let b = x[1] + x[2];
+    let c = (x[0] - x[3]) * 0.541196100146197;
+    let d = (x[1] - x[2]) * 1.3065629648763766;
+    let high = (c - d) * std::f64::consts::FRAC_1_SQRT_2;
+    [
+        a + b,
+        c + d + high,
+        (a - b) * std::f64::consts::FRAC_1_SQRT_2,
+        high,
+    ]
+}
+
+fn dct8(x: [f64; 8]) -> [f64; 8] {
+    const SECANTS: [f64; 4] = [
+        0.5097955791041592,
+        0.6013448869350453,
+        0.8999762231364156,
+        2.5629154477415064,
+    ];
+    let even = dct4(std::array::from_fn(|j| x[j] + x[7 - j]));
+    let odd = dct4(std::array::from_fn(|j| (x[j] - x[7 - j]) * SECANTS[j]));
+    [
+        even[0],
+        odd[0] + odd[1],
+        even[1],
+        odd[1] + odd[2],
+        even[2],
+        odd[2] + odd[3],
+        even[3],
+        odd[3],
+    ]
+}
+
 fn transform(block: &[f64; 64], quant: &[u8; 64]) -> [i16; 64] {
-    let basis = &*BASIS;
-    let zigzag = &*ZIGZAG;
-    let mut rows = [[0.0; 8]; 8];
-    for y in 0..8 {
-        for k in 0..8 {
-            rows[y][k] = (0..8)
-                .map(|x| (block[y * 8 + x] - 128.0) * basis[k][x])
+    let rows: [[f64; 8]; 8] =
+        std::array::from_fn(|y| dct8(std::array::from_fn(|x| block[y * 8 + x] - 128.0)));
+    let columns: [[f64; 8]; 8] = std::array::from_fn(|x| dct8(std::array::from_fn(|y| rows[y][x])));
+    std::array::from_fn(|i| {
+        let pos = ZIGZAG[i];
+        let (x, y) = (pos % 8, pos / 8);
+        let scale = match (x == 0, y == 0) {
+            (true, true) => 0.125,
+            (false, false) => 0.25,
+            _ => 0.25 * std::f64::consts::FRAC_1_SQRT_2,
+        };
+        let divisor = f64::from(quant[i]);
+        let value = columns[x][y] * scale / divisor;
+        let rounded = value.round();
+        // Retain the reference rounding at half-integers; reassociation changes the last few bits.
+        if (value - rounded).abs() >= 0.5 - 1e-10 {
+            let basis = &*BASIS;
+            let exact: f64 = (0..8)
+                .map(|row| {
+                    let horizontal: f64 = (0..8)
+                        .map(|col| (block[row * 8 + col] - 128.0) * basis[x][col])
+                        .sum();
+                    horizontal * basis[y][row]
+                })
                 .sum();
+            (exact / divisor).round() as i16
+        } else {
+            rounded as i16
         }
-    }
-    std::array::from_fn(|index| {
-        let natural = zigzag[index];
-        let value = (0..8)
-            .map(|y| rows[y][natural % 8] * basis[natural / 8][y])
-            .sum::<f64>();
-        (value / f64::from(quant[index])).round() as i16
     })
 }
 
