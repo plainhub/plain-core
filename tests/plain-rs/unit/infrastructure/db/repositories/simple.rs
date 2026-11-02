@@ -707,3 +707,67 @@ fn raw_session_changes_merge_activity_only_for_the_same_credentials() {
             .unwrap()
     );
 }
+
+#[test]
+fn session_identity_reads_and_new_activity_do_not_wait_for_disk_commit() {
+    let db = test_db("nonblocking-session-activity");
+    let row = session_cache_row();
+    db.session_save(&row).unwrap();
+    db.session_touch(&[(row.client_id.clone(), "2026-03-01T00:00:00.000Z".into())])
+        .unwrap();
+    let (started, waiting) = std::sync::mpsc::sync_channel(1);
+    let (release, commit) = std::sync::mpsc::sync_channel(1);
+    db.with_conn(|c| {
+        c.commit_hook(Some(move || {
+            started.send(()).unwrap();
+            commit.recv().unwrap();
+            false
+        }))
+    });
+    let writer = db.clone();
+    let write =
+        std::thread::spawn(move || writer.flush_session_activity(std::time::Instant::now(), true));
+    waiting.recv().unwrap();
+    let available = db.1.sessions.try_read().is_ok();
+    let cached = available && db.cached_sessions().is_some();
+    if cached {
+        assert_eq!(
+            db.session_get(&row.client_id).unwrap().unwrap().token,
+            row.token
+        );
+        db.session_touch(&[(row.client_id.clone(), "2026-04-01T00:00:00.000Z".into())])
+            .unwrap();
+        assert_eq!(
+            db.session_list().unwrap()[0].last_seen_at.as_deref(),
+            Some("2026-04-01T00:00:00.000Z")
+        );
+    }
+    release.send(()).unwrap();
+    assert!(write.join().unwrap().unwrap());
+    db.with_conn(|c| c.commit_hook(None::<fn() -> bool>));
+    assert!(
+        cached,
+        "session memory must remain available while SQLite commit is blocked"
+    );
+    assert_eq!(
+        db.session_get(&row.client_id)
+            .unwrap()
+            .unwrap()
+            .last_seen_at
+            .as_deref(),
+        Some("2026-04-01T00:00:00.000Z")
+    );
+    assert!(
+        db.flush_session_activity(std::time::Instant::now(), true)
+            .unwrap()
+    );
+    assert_eq!(
+        db.with_conn(|c| c.query_row(
+            "SELECT last_seen_at FROM sessions WHERE client_id=?1",
+            [&row.client_id],
+            |r| r.get::<_, String>(0)
+        ))
+        .unwrap(),
+        "2026-04-01T00:00:00.000Z"
+    );
+}

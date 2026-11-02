@@ -460,7 +460,7 @@ async fn automatic_indexing_excludes_private_hidden_nomedia_and_app_storage_path
 }
 
 #[tokio::test]
-async fn media_resource_lookup_seeks_one_row_instead_of_scanning_the_catalog() {
+async fn media_resource_lookup_uses_zero_sql_and_tracks_committed_changes() {
     use std::sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -492,7 +492,7 @@ async fn media_resource_lookup_seeks_one_row_instead_of_scanning_the_catalog() {
         .with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
     assert_eq!(path, "/media-lookup/photo.jpg");
     assert!(
-        steps.load(Ordering::Relaxed) < 500,
+        steps.load(Ordering::Relaxed) == 0,
         "single media lookup executed {} VM steps",
         steps.load(Ordering::Relaxed)
     );
@@ -511,5 +511,48 @@ async fn media_resource_lookup_seeks_one_row_instead_of_scanning_the_catalog() {
                 .is_err()
         );
     }
+    let change = |sql: &str| state.db.with_conn(|c| c.execute_batch(sql)).unwrap();
+    change("UPDATE files SET path='renamed.jpg' WHERE id='file-photo.jpg'");
+    assert_eq!(
+        state.file_platform.resource_media_path(&id).await.unwrap(),
+        "/media-lookup/renamed.jpg"
+    );
+    change("BEGIN; DELETE FROM files WHERE id='file-photo.jpg'; ROLLBACK");
+    assert!(state.file_platform.resource_media_path(&id).await.is_ok());
+    change("UPDATE volumes SET is_available=0 WHERE id='media-lookup'");
+    assert!(state.file_platform.resource_media_path(&id).await.is_err());
+    change("UPDATE volumes SET path='/remounted',is_available=1 WHERE id='media-lookup'");
+    assert_eq!(
+        state.file_platform.resource_media_path(&id).await.unwrap(),
+        "/remounted/renamed.jpg"
+    );
+    change(
+        "INSERT OR REPLACE INTO files(id,volume_id,path,file_name,kind,updated_at) VALUES('replacement','media-lookup','renamed.jpg','renamed.jpg','IMAGE','2026')",
+    );
+    assert!(state.file_platform.resource_media_path(&id).await.is_err());
+    change("UPDATE files SET trashed_at='2026',original_path='renamed.jpg' WHERE id='replacement'");
+    assert!(
+        state
+            .file_platform
+            .resource_media_path("replacement")
+            .await
+            .is_err()
+    );
+    change("UPDATE files SET trashed_at=NULL,original_path=NULL WHERE id='replacement'");
+    assert!(
+        state
+            .file_platform
+            .resource_media_path("replacement")
+            .await
+            .is_ok()
+    );
+    change("UPDATE files SET missing=1 WHERE id='replacement'");
+    assert!(
+        state
+            .file_platform
+            .resource_media_path("replacement")
+            .await
+            .is_err()
+    );
     core.stop_core().await;
 }

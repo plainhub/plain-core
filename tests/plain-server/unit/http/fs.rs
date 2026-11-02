@@ -618,3 +618,72 @@ async fn fs_300_cached_thumbnails_do_not_write_recent_files() {
         [path.to_str().unwrap()]
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn fs_serves_300_authenticated_media_hits_with_the_sqlite_connection_held() {
+    use plain_rs::features::files::resource_link::{self, Resource, ResourceType, Scope};
+    let (_root, core, state, _) = test_state();
+    let files = tempfile::tempdir().unwrap();
+    let path = files.path().join("image.jpg");
+    std::fs::write(
+        &path,
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../plain-rs/testdata/v-prog420.jpg"
+        )),
+    )
+    .unwrap();
+    let row = state
+        .db
+        .record_file_paths(
+            &[path.to_string_lossy().into_owned()],
+            Some(plain_rs::infrastructure::db::FileKind::Image),
+        )
+        .unwrap()
+        .remove(0);
+    let client = plain_rs::features::services::sessions::create(&state, "reader".into()).unwrap();
+    let id = resource_link::seal(
+        &Scope::Session(client.client_id),
+        &plain_libs::utils::base64::base64_decode(&client.url_token),
+        &Resource {
+            r#type: ResourceType::Media,
+            id: row.id,
+        },
+    )
+    .unwrap();
+    let query = format!("id={id}&w=256&h=256");
+    let first = call_fs(&state, &query, &[]).await;
+    assert_eq!(first.status(), StatusCode::OK);
+    let bytes = body_bytes(first).await;
+    let db = state.db.clone();
+    let (held, waiting) = tokio::sync::oneshot::channel();
+    let (release, gate) = std::sync::mpsc::channel();
+    let holder = std::thread::spawn(move || {
+        db.with_conn(|_| {
+            held.send(()).unwrap();
+            gate.recv().unwrap();
+        })
+    });
+    waiting.await.unwrap();
+    let responses = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        futures_util::future::join_all((0..300).map(|_| call_fs(&state, &query, &[]))),
+    )
+    .await;
+    let raw = format!("id={id}");
+    let originals = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        futures_util::future::join_all((0..51).map(|_| call_fs(&state, &raw, &[]))),
+    )
+    .await;
+    release.send(()).unwrap();
+    holder.join().unwrap();
+    for response in originals.expect("view history waited for SQLite") {
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+    for response in responses.expect("media hits waited for SQLite") {
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(body_bytes(response).await, bytes);
+    }
+    core.stop_core().await;
+}

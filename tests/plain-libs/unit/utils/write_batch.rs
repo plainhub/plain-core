@@ -87,3 +87,24 @@ fn removing_the_last_pending_record_resets_the_deadline() {
     assert!(!batch.is_due(now + Duration::from_secs(149)));
     assert!(batch.is_due(now + Duration::from_secs(150)));
 }
+
+#[test]
+fn detached_writes_preserve_new_records_and_restore_the_oldest_deadline_on_failure() {
+    let now = std::time::Instant::now();
+    let mut batch = super::WriteBatch::new(2, std::time::Duration::from_secs(60));
+    batch.push("old", now);
+    let mut writing = batch.take_pending();
+    batch.push("new", now + std::time::Duration::from_secs(50));
+    assert!(writing.flush(|_| Err::<(), _>("fixture")).is_err());
+    batch.restore_pending(writing);
+    assert_eq!(batch.pending(), ["old", "new"]);
+    assert!(!batch.is_due(now + std::time::Duration::from_secs(59)));
+    assert!(batch.is_due(now + std::time::Duration::from_secs(60)));
+    let mut writing = batch.take_pending();
+    batch.push("after", now + std::time::Duration::from_secs(61));
+    assert!(writing.flush(|_| Ok::<(), ()>(())).unwrap());
+    batch.restore_pending(writing);
+    assert_eq!(batch.pending(), ["after"]);
+    assert!(!batch.is_due(now + std::time::Duration::from_secs(120)));
+    assert!(batch.is_due(now + std::time::Duration::from_secs(121)));
+}

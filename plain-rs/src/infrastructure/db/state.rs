@@ -5,10 +5,13 @@ use std::sync::Mutex;
 pub(super) struct SessionSnapshot {
     pub(super) revision: u64,
     pub(super) rows: std::collections::HashMap<String, super::SessionRow>,
+    pub(super) activity_flushing: bool,
     pub(super) activity: plain_libs::utils::write_batch::WriteBatch<(String, String)>,
 }
 
 pub(super) struct State {
+    #[cfg(all(feature = "chat", feature = "library"))]
+    pub(super) media_paths: std::sync::Arc<super::media_paths::MediaPaths>,
     #[cfg(all(feature = "chat", feature = "library"))]
     pub(super) sessions: std::sync::RwLock<SessionSnapshot>,
     #[cfg(all(feature = "chat", feature = "library"))]
@@ -42,15 +45,22 @@ impl State {
         let sessions = std::sync::RwLock::new(SessionSnapshot {
             revision: 0,
             activity: Default::default(),
+            activity_flushing: false,
             rows: super::repositories::simple::session_snapshot(_connection)?,
         });
+        #[cfg(all(feature = "chat", feature = "library"))]
+        let media_paths = std::sync::Arc::new(super::media_paths::MediaPaths::new(_connection)?);
         #[cfg(feature = "chat")]
         let peers = {
             let sender = tokio::sync::watch::channel(0u64).0;
             let changes = sender.clone();
             #[cfg(feature = "library")]
             let session_revision = session_revision.clone();
+            #[cfg(feature = "library")]
+            let media_paths = media_paths.clone();
             _connection.update_hook(Some(move |_, database: &str, table: &str, _| {
+                #[cfg(feature = "library")]
+                media_paths.changed(database, table);
                 #[cfg(feature = "library")]
                 if database == "main" && table == "sessions" {
                     session_revision.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
@@ -62,6 +72,8 @@ impl State {
             sender
         };
         Ok(Self {
+            #[cfg(all(feature = "chat", feature = "library"))]
+            media_paths,
             app_files: Mutex::new(()),
             #[cfg(all(feature = "chat", feature = "library"))]
             sessions,

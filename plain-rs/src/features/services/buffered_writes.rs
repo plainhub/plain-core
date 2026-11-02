@@ -57,8 +57,10 @@ pub fn start(
         while !*stop.borrow() {
             tokio::select! {
                 changed = stop.changed() => { if changed.is_err() || *stop.borrow() { break; } },
-                _ = interval.tick() => flush(recent.clone(), durations.clone(), db.clone(), false).await,
+                _ = interval.tick() => {},
+                _ = recent.flush_requested.notified() => {},
             }
+            flush(recent.clone(), durations.clone(), db.clone(), false).await;
         }
     })
 }

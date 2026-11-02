@@ -164,11 +164,12 @@ impl Db {
         &self,
     ) -> Option<std::sync::RwLockReadGuard<'_, super::super::state::SessionSnapshot>> {
         let snapshot = self.1.sessions.read().unwrap();
-        (snapshot.revision
-            == self
-                .1
-                .session_revision
-                .load(std::sync::atomic::Ordering::Acquire))
+        (snapshot.activity_flushing
+            || snapshot.revision
+                == self
+                    .1
+                    .session_revision
+                    .load(std::sync::atomic::Ordering::Acquire))
         .then_some(snapshot)
     }
 
@@ -290,7 +291,11 @@ impl Db {
             if self.cached_sessions().is_none() {
                 self.reload_sessions(connection)?;
             }
-            let mut snapshot = self.1.sessions.write().unwrap();
+            let mut batch = {
+                let mut snapshot = self.1.sessions.write().unwrap();
+                snapshot.activity_flushing = true;
+                snapshot.activity.take_pending()
+            };
             let write = |pending: &[(String, String)]| -> rusqlite::Result<()> {
                 let latest = pending
                     .iter()
@@ -306,16 +311,19 @@ impl Db {
                 transaction.commit()
             };
             let result = if force {
-                snapshot.activity.flush(write)
+                batch.flush(write)
             } else {
-                snapshot.activity.flush_due(now, write)
+                batch.flush_due(now, write)
             };
-            if result.is_ok() {
-                snapshot.revision = self
-                    .1
-                    .session_revision
-                    .load(std::sync::atomic::Ordering::Acquire);
-            }
+            self.1
+                .sessions
+                .write()
+                .unwrap()
+                .activity
+                .restore_pending(batch);
+            let reloaded = self.reload_sessions(connection);
+            self.1.sessions.write().unwrap().activity_flushing = false;
+            reloaded?;
             result
         })
     }

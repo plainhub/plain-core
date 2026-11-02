@@ -81,11 +81,7 @@ impl FilePlatform {
                 .map(str::to_owned)
                 .ok_or_else(|| anyhow!("Media unavailable"));
         }
-        let db = self.db.clone();
-        let id = id.to_owned();
-        tokio::task::spawn_blocking(move || {
-            db.with_conn(|conn| conn.query_row("SELECT rtrim(v.path,'/')||'/'||f.path FROM files f JOIN volumes v ON v.id=f.volume_id WHERE f.id=?1 AND f.kind IN ('IMAGE','VIDEO','AUDIO','DOC') AND f.missing=0 AND f.trashed_at IS NULL AND v.is_available=1", [id], |row| row.get(0))).map_err(Into::into)
-        }).await?
+        self.db.media_resource_path(id)
     }
 
     pub fn uses_sdk(&self) -> bool {

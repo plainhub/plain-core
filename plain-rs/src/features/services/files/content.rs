@@ -126,11 +126,7 @@ pub async fn read(
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     if options.starts_view && options.width.is_none_or(|width| width >= 1024) {
-        let recent = state.file_platform.recent_files.clone();
-        let viewed_path = path.clone();
-        if let Err(error) = tokio::task::spawn_blocking(move || recent.add(&viewed_path)).await? {
-            log::warn!("Recent file update failed: {error}");
-        }
+        state.file_platform.recent_files.add(&path);
     }
     #[cfg(feature = "runtime-media")]
     if !options.download && options.pdf {

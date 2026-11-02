@@ -436,14 +436,12 @@ async fn recent_files_are_gated_and_projected_from_the_store() {
         .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()
         .unwrap()
         .recent_files
-        .add(&first.to_string_lossy())
-        .unwrap();
+        .add(&first.to_string_lossy());
     schema
         .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()
         .unwrap()
         .recent_files
-        .add(&second.to_string_lossy())
-        .unwrap();
+        .add(&second.to_string_lossy());
 
     let response = schema
         .execute(r#"query { recentFiles { name path mediaId size isDir } }"#)

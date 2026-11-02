@@ -32,6 +32,24 @@ impl<T> WriteBatch<T> {
         &self.pending
     }
 
+    pub fn take_pending(&mut self) -> Self {
+        Self {
+            pending: std::mem::take(&mut self.pending),
+            since: self.since.take(),
+            limit: self.limit,
+            delay: self.delay,
+        }
+    }
+
+    pub fn restore_pending(&mut self, mut older: Self) {
+        older.pending.append(&mut self.pending);
+        self.pending = older.pending;
+        self.since = match (older.since, self.since) {
+            (Some(old), Some(new)) => Some(old.min(new)),
+            (old, new) => old.or(new),
+        };
+    }
+
     pub fn is_due(&self, now: Instant) -> bool {
         self.pending.len() > self.limit
             || self

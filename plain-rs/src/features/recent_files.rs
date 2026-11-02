@@ -11,6 +11,8 @@ const KEY: &str = "recent_files";
 pub struct RecentFiles {
     store: Arc<Db>,
     pending: Mutex<WriteBatch<String>>,
+    writer: Mutex<()>,
+    pub(crate) flush_requested: tokio::sync::Notify,
 }
 
 fn merge(pending: &[String], stored: Vec<String>) -> Vec<String> {
@@ -30,15 +32,18 @@ impl RecentFiles {
         Self {
             store,
             pending: Mutex::new(WriteBatch::default()),
+            writer: Mutex::new(()),
+            flush_requested: tokio::sync::Notify::new(),
         }
     }
 
-    pub fn add(&self, path: &str) -> Result<()> {
+    pub fn add(&self, path: &str) {
         let now = Instant::now();
         let mut batch = self.pending.lock().unwrap();
         batch.push(path.to_owned(), now);
-        batch.flush_due(now, |pending| self.persist(pending))?;
-        Ok(())
+        if batch.is_due(now) {
+            self.flush_requested.notify_one();
+        }
     }
 
     fn persist(&self, pending: &[String]) -> Result<()> {
@@ -49,8 +54,9 @@ impl RecentFiles {
     }
 
     pub fn list(&self, limit: usize) -> Result<Vec<String>> {
-        let batch = self.pending.lock().unwrap();
+        let _writer = self.writer.lock().unwrap();
         let stored = self.store.get_json(KEY)?.unwrap_or_default();
+        let batch = self.pending.lock().unwrap();
         let mut paths = merge(batch.pending(), stored);
         if limit > 0 {
             paths.truncate(limit);
@@ -59,17 +65,27 @@ impl RecentFiles {
     }
 
     pub fn flush_due(&self, now: Instant) -> Result<bool> {
-        self.pending
-            .lock()
-            .unwrap()
-            .flush_due(now, |pending| self.persist(pending))
+        self.flush_pending(Some(now))
     }
 
     pub fn flush(&self) -> Result<bool> {
-        self.pending
-            .lock()
-            .unwrap()
-            .flush(|pending| self.persist(pending))
+        self.flush_pending(None)
+    }
+
+    fn flush_pending(&self, deadline: Option<Instant>) -> Result<bool> {
+        let _writer = self.writer.lock().unwrap();
+        let mut batch = {
+            let mut pending = self.pending.lock().unwrap();
+            if deadline.is_some_and(|now| !pending.is_due(now)) {
+                return Ok(false);
+            }
+            pending.take_pending()
+        };
+        let result = batch.flush(|items| self.persist(items));
+        if result.is_err() {
+            self.pending.lock().unwrap().restore_pending(batch);
+        }
+        result
     }
 }
 

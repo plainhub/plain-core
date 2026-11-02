@@ -1,4 +1,6 @@
 use rusqlite::Connection;
+#[cfg(all(feature = "chat", feature = "library"))]
+mod media_paths;
 mod state;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -195,7 +197,10 @@ impl Db {
         F: FnOnce(&mut Connection) -> T,
     {
         let mut conn = self.0.lock().unwrap();
-        f(&mut conn)
+        let result = f(&mut conn);
+        #[cfg(all(feature = "chat", feature = "library"))]
+        self.1.media_paths.publish(&conn);
+        result
     }
 }
 
