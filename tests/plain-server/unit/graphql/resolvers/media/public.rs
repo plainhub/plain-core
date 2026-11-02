@@ -148,16 +148,14 @@ async fn counts_degrade_without_the_api_permission_too() {
 #[tokio::test]
 async fn browsing_media_errors_out_without_the_api_permission() {
     let (_dir, schema) = fixture("[]", true);
-    let response = schema
-        .execute(
-            r#"query { images(offset:0, limit:10, query:"", sortBy:NAME_ASC) { id }
-                      videos(offset:0, limit:10, query:"", sortBy:NAME_ASC) { id }
-                      docs(offset:0, limit:10, query:"", sortBy:NAME_ASC) { id } }"#,
-        )
-        .await;
-    assert_eq!(response.errors.len(), 3);
-    for error in &response.errors {
-        assert_eq!(error.message, "no_permission");
+    for field in ["images", "videos", "docs"] {
+        let response = schema
+            .execute(format!(
+                r#"query {{ {field}(offset:0, limit:10, query:"", sortBy:NAME_ASC) {{ id }} }}"#
+            ))
+            .await;
+        assert_eq!(response.errors.len(), 1, "{field}: {:?}", response.errors);
+        assert_eq!(response.errors[0].message, "no_permission", "{field}");
     }
 }
 

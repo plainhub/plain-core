@@ -117,19 +117,22 @@ fn seed_media(
 #[tokio::test]
 async fn file_writes_are_gated_on_storage_permission() {
     let (_dir, schema) = fixture("[]");
-    let response = schema
-        .execute(
-            r#"mutation { deleteFiles(paths:["/a"]) { affectedCount }
-                      createDir(path:"/a/b") { name }
-                      renameFile(path:"/a", name:"c")
-                      writeTextFile(path:"/a/b.txt", content:"x", overwrite:false) { name }
-                      copyFile(src:"/a", dst:"/b", overwrite:false)
-                      moveFile(src:"/a", dst:"/b", overwrite:false) }"#,
-        )
-        .await;
-    assert_eq!(response.errors.len(), 6);
-    for error in &response.errors {
-        assert_eq!(error.message, "no_permission");
+    for operation in [
+        r#"deleteFiles(paths:["/a"]) { affectedCount }"#,
+        r#"createDir(path:"/a/b") { name }"#,
+        r#"renameFile(path:"/a", name:"c")"#,
+        r#"writeTextFile(path:"/a/b.txt", content:"x", overwrite:false) { name }"#,
+        r#"copyFile(src:"/a", dst:"/b", overwrite:false)"#,
+        r#"moveFile(src:"/a", dst:"/b", overwrite:false)"#,
+    ] {
+        let response = schema.execute(format!("mutation {{ {operation} }}")).await;
+        assert_eq!(
+            response.errors.len(),
+            1,
+            "{operation}: {:?}",
+            response.errors
+        );
+        assert_eq!(response.errors[0].message, "no_permission", "{operation}");
     }
 }
 
