@@ -29,7 +29,7 @@ async fn search_waits_for_capacity_and_cancellation_releases_a_blocked_send() {
     tokio::pin!(send);
     assert!(futures_util::poll!(send.as_mut()).is_pending());
     assert!(!*session.closed.borrow());
-    session.incoming.lock().await.recv().await.unwrap();
+    session.incoming.lock().await.messages.recv().await.unwrap();
     send.await.unwrap();
     let send = session.queue_operation(
         ServerMessage::Pong { payload: None },
@@ -75,5 +75,98 @@ async fn stopping_http_preserves_native_subscriptions_and_closes_remote_subscrip
     assert!(state.subscription_sessions.get(remote.id).is_err());
     server.stop_core().await;
     assert!(executor.subscription_session(handle).is_err());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn scan_events_wait_for_capacity_without_closing_the_connection_or_blocking_heartbeat() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = ContentServer::open(directory.path()).unwrap();
+    let executor = server.native_graphql().unwrap();
+    let handle = executor.open_subscriptions(Default::default()).unwrap();
+    let SubscriptionSession::Local(session) = executor.subscription_session(handle).unwrap() else {
+        panic!("local subscription required");
+    };
+    let spec = plain_rs::infrastructure::protocols::graphql::events::EVENTS
+        .iter()
+        .find(|spec| spec.field == "mediaScanProgress")
+        .unwrap();
+    let scope = NativeRequestScope::default();
+    for _ in 0..64 {
+        session
+            .queue_operation(
+                ServerMessage::Complete {
+                    id: "old-page".into(),
+                },
+                spec,
+                scope.clone(),
+            )
+            .await
+            .unwrap();
+    }
+    let send = session.queue_operation(
+        ServerMessage::Complete {
+            id: "old-page".into(),
+        },
+        spec,
+        scope.clone(),
+    );
+    tokio::pin!(send);
+    assert!(futures_util::poll!(send.as_mut()).is_pending());
+    assert!(!*session.closed.borrow());
+    session
+        .send(r#"{"type":"ping","payload":{"probe":1}}"#)
+        .unwrap();
+    let pong: serde_json::Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
+    assert_eq!(pong["type"], "pong");
+    assert_eq!(pong["payload"]["probe"], 1);
+    assert!(futures_util::poll!(send.as_mut()).is_pending());
+    scope.close();
+    assert_eq!(send.await.unwrap_err(), "Subscription operation closed");
+    session.send(r#"{"type":"ping"}"#).unwrap();
+    let pong: serde_json::Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
+    assert_eq!(pong["type"], "pong");
+    assert!(!*session.closed.borrow());
+    executor.close_subscriptions(handle);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn closing_a_session_releases_a_blocked_event_producer() {
+    let directory = tempfile::tempdir().unwrap();
+    let server = ContentServer::open(directory.path()).unwrap();
+    let executor = server.native_graphql().unwrap();
+    let handle = executor.open_subscriptions(Default::default()).unwrap();
+    let SubscriptionSession::Local(session) = executor.subscription_session(handle).unwrap() else {
+        panic!("local subscription required")
+    };
+    let spec = plain_rs::infrastructure::protocols::graphql::events::EVENTS
+        .iter()
+        .find(|spec| spec.field == "contentChanged")
+        .unwrap();
+    let scope = NativeRequestScope::default();
+    for _ in 0..64 {
+        session
+            .queue_operation(
+                ServerMessage::Complete {
+                    id: "old-page".into(),
+                },
+                spec,
+                scope.clone(),
+            )
+            .await
+            .unwrap();
+    }
+    let send = session.queue_operation(
+        ServerMessage::Complete {
+            id: "old-page".into(),
+        },
+        spec,
+        scope,
+    );
+    tokio::pin!(send);
+    assert!(futures_util::poll!(send.as_mut()).is_pending());
+    executor.close_subscriptions(handle);
+    assert_eq!(send.await.unwrap_err(), "Subscription session closed");
     server.shutdown().await;
 }

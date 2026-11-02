@@ -36,6 +36,10 @@ struct Queued {
     spec: Option<&'static EventSpec>,
     scope: Option<NativeRequestScope>,
 }
+struct Incoming {
+    messages: mpsc::Receiver<Queued>,
+    control: mpsc::Receiver<Queued>,
+}
 pub struct Session {
     pub id: u64,
     state: ServerState,
@@ -47,7 +51,8 @@ pub struct Session {
     closed: watch::Sender<bool>,
     online: Mutex<bool>,
     outgoing: mpsc::Sender<Queued>,
-    incoming: tokio::sync::Mutex<mpsc::Receiver<Queued>>,
+    control: mpsc::Sender<Queued>,
+    incoming: tokio::sync::Mutex<Incoming>,
     operations: Mutex<HashMap<String, Operation>>,
 }
 fn next_id() -> Result<u64, String> {
@@ -105,6 +110,7 @@ impl Sessions {
     ) -> Result<Arc<Session>, String> {
         let id = next_id()?;
         let (outgoing, incoming) = mpsc::channel(64);
+        let (control, control_incoming) = mpsc::channel(32);
         let (closed, _) = watch::channel(false);
         let origin = context.origin();
         let session = Arc::new(Session {
@@ -118,7 +124,11 @@ impl Sessions {
             closed,
             online: Mutex::new(false),
             outgoing,
-            incoming: tokio::sync::Mutex::new(incoming),
+            control,
+            incoming: tokio::sync::Mutex::new(Incoming {
+                messages: incoming,
+                control: control_incoming,
+            }),
             operations: Mutex::default(),
         });
         {
@@ -352,13 +362,13 @@ impl Session {
             scope,
         })
     }
-    fn queue(
+    fn queue_control(
         &self,
         message: ServerMessage,
         spec: Option<&'static EventSpec>,
         scope: Option<NativeRequestScope>,
     ) -> Result<(), String> {
-        self.outgoing
+        self.control
             .try_send(self.encode(message, spec, scope)?)
             .map_err(|_| {
                 self.closed.send_replace(true);
@@ -371,9 +381,6 @@ impl Session {
         spec: &'static EventSpec,
         scope: NativeRequestScope,
     ) -> Result<(), String> {
-        if spec.field != "fileSearchResults" {
-            return self.queue(message, Some(spec), Some(scope));
-        }
         let queued = self.encode(message, Some(spec), Some(scope.clone()))?;
         let mut closed = self.closed.subscribe();
         tokio::select! {
@@ -392,7 +399,7 @@ impl Session {
         }
         match serde_json::from_str::<ClientMessage>(encoded).map_err(|e| e.to_string())? {
             ClientMessage::Ping { payload } => {
-                self.queue(ServerMessage::Pong { payload }, None, None)
+                self.queue_control(ServerMessage::Pong { payload }, None, None)
             }
             ClientMessage::Pong { .. } => Ok(()),
             ClientMessage::Complete { id } => {
@@ -426,7 +433,7 @@ impl Session {
                                 task: None,
                             },
                         );
-                        return self.queue(
+                        return self.queue_control(
                             ServerMessage::Error {
                                 id,
                                 payload: vec![async_graphql::ServerError::new(error, None)],
@@ -519,11 +526,13 @@ impl Session {
             .try_lock()
             .map_err(|_| "Concurrent subscription reader")?;
         let mut closed = self.closed.subscribe();
+        let Incoming { messages, control } = &mut *receiver;
         loop {
             let queued = tokio::select! {
                 biased;
                 _ = closed.wait_for(|value| *value) => return Err("Subscription session closed".into()),
-                message = receiver.recv() => message.ok_or("Subscription session closed")?,
+                message = control.recv() => message.ok_or("Subscription session closed")?,
+                message = messages.recv() => message.ok_or("Subscription session closed")?,
             };
             if !self.valid() {
                 self.close();

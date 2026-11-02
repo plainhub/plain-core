@@ -189,3 +189,7 @@ async fn run(mut socket: WebSocket, state: ServerState, client: String) {
     )
     .await;
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-server/unit/http/websocket/graphql.rs"]
+mod tests;
