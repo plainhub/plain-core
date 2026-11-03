@@ -12,6 +12,7 @@ pub const MAX_SOURCE_PIXELS: u64 = 300_000_000;
 pub struct Admission {
     cpu: std::sync::Arc<Semaphore>,
     workers: usize,
+    pool: OnceLock<std::io::Result<super::workers::Workers>>,
     mem: std::sync::Arc<Semaphore>,
     /// Total memory budget in permit units (the semaphore alone cannot tell
     /// "fully used" from "configured total").
@@ -24,6 +25,7 @@ impl Admission {
         Admission {
             cpu: std::sync::Arc::new(Semaphore::new(cpu_permits.max(1))),
             workers: cpu_permits.max(1),
+            pool: OnceLock::new(),
             mem: std::sync::Arc::new(Semaphore::new(total_units.min(u32::MAX as u64) as usize)),
             mem_total: total_units,
         }
@@ -35,6 +37,25 @@ impl Admission {
 
     pub fn mem_budget_mb(&self) -> u32 {
         (self.mem_total * MEM_UNIT / (1024 * 1024)) as u32
+    }
+
+    pub async fn run<T: Send + 'static>(
+        &self,
+        est_bytes: u64,
+        job: impl FnOnce() -> T + Send + 'static,
+    ) -> anyhow::Result<T> {
+        let permits = self.acquire(est_bytes).await?;
+        let pool = self
+            .pool
+            .get_or_init(|| super::workers::Workers::new(self.workers))
+            .as_ref()
+            .map_err(|error| anyhow::anyhow!("start thumbnail workers: {error}"))?;
+        // Admission bounds queued and running jobs; fixed threads reuse their allocation arenas.
+        pool.run(move || {
+            let _permits = permits;
+            job()
+        })
+        .await
     }
 
     /// Acquire CPU + memory permits for a job whose decoded bitmap is

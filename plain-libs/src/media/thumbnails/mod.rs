@@ -26,6 +26,7 @@ pub mod pjpeg;
 pub mod scale;
 pub mod sniff;
 pub mod video;
+mod workers;
 
 use anyhow::{Result, bail};
 use bytes::Bytes;
@@ -310,7 +311,6 @@ async fn generate_and_cache(
         .saturating_mul(2)
         .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4);
     let est = est.saturating_add(dc_input_bytes(s, rw, rh, spec.file_size));
-    let _permits = admission::global().acquire(est).await?;
 
     let path = spec.path.clone();
     let quality = spec.quality;
@@ -320,18 +320,18 @@ async fn generate_and_cache(
     } else {
         (spec.w, spec.h)
     });
-    let jpg = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let _permits = _permits;
-        let preview = preview.as_ref().map(|(bytes, _)| bytes.as_slice());
-        let bm = decode_to_target(&path, &head, s, rw, rh, crop, preview)?;
-        let (w, h) = crop.unwrap_or((rw, rh));
-        let bm = scale::resize_to(bm, w, h);
-        let bm = bm.apply_orientation(Orientation(orientation));
-        let jpg = encode::encode_jpeg(bm, quality)?;
-        let _ = write_thumb_cache(&cp, &jpg);
-        Ok(jpg)
-    })
-    .await??;
+    let jpg = admission::global()
+        .run(est, move || -> Result<Vec<u8>> {
+            let preview = preview.as_ref().map(|(bytes, _)| bytes.as_slice());
+            let bm = decode_to_target(&path, &head, s, rw, rh, crop, preview)?;
+            let (w, h) = crop.unwrap_or((rw, rh));
+            let bm = scale::resize_to(bm, w, h);
+            let bm = bm.apply_orientation(Orientation(orientation));
+            let jpg = encode::encode_jpeg(bm, quality)?;
+            let _ = write_thumb_cache(&cp, &jpg);
+            Ok(jpg)
+        })
+        .await??;
 
     #[cfg(test)]
     {
@@ -452,12 +452,9 @@ async fn generate_non_image(
     let path = spec.path.clone();
 
     {
-        let permits = admission::global().acquire(0).await?;
-        let cover = tokio::task::spawn_blocking(move || {
-            let _permits = permits;
-            crate::media::cover::extract_cover(&path)
-        })
-        .await?;
+        let cover = admission::global()
+            .run(0, move || crate::media::cover::extract_cover(&path))
+            .await?;
         if let Some(cover) = cover {
             let dimensions = sniff::sniff_header(&cover.bytes)?;
             if u64::from(dimensions.width) * u64::from(dimensions.height)
@@ -465,40 +462,33 @@ async fn generate_non_image(
             {
                 bail!("cover exceeds pixel guard");
             }
-            let permits = admission::global()
-                .acquire(
-                    u64::from(dimensions.width) * u64::from(dimensions.height) * 8
-                        + u64::from(spec.w) * u64::from(spec.h) * 4,
-                )
-                .await?;
+            let est = u64::from(dimensions.width) * u64::from(dimensions.height) * 8
+                + u64::from(spec.w) * u64::from(spec.h) * 4;
             let request = spec.clone();
             let cache_path = cache_path.to_owned();
-            return tokio::task::spawn_blocking(move || {
-                let _permits = permits;
-                let jpg = encode_bitmap(decode::image_from_bytes(&cover.bytes)?, &request)?;
-                finish_generated(&cache_path, jpg)
-            })
-            .await?;
+            return admission::global()
+                .run(est, move || {
+                    let jpg = encode_bitmap(decode::image_from_bytes(&cover.bytes)?, &request)?;
+                    finish_generated(&cache_path, jpg)
+                })
+                .await?;
         }
     }
     if is_video_ext(&spec.path) {
         let path = spec.path.clone();
         let plan = tokio::task::spawn_blocking(move || video::plan_keyframe(&path)).await??;
-        let permits = admission::global()
-            .acquire(
-                plan.estimated_bytes()
-                    .saturating_mul(2)
-                    .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4),
-            )
-            .await?;
+        let est = plan
+            .estimated_bytes()
+            .saturating_mul(2)
+            .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4);
         let request = spec.clone();
         let cache_path = cache_path.to_owned();
-        return tokio::task::spawn_blocking(move || {
-            let _permits = permits;
-            let jpg = encode_bitmap(video::decode_plan(plan)?, &request)?;
-            finish_generated(&cache_path, jpg)
-        })
-        .await?;
+        return admission::global()
+            .run(est, move || {
+                let jpg = encode_bitmap(video::decode_plan(plan)?, &request)?;
+                finish_generated(&cache_path, jpg)
+            })
+            .await?;
     }
 
     bail!("unsupported file type for thumbnail")

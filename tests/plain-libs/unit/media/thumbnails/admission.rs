@@ -1,5 +1,48 @@
 use super::*;
 
+#[tokio::test]
+async fn cancelled_running_job_keeps_admission_until_its_buffers_are_released() {
+    let admission = Admission::new(1, 1);
+    let (started, running) = std::sync::mpsc::channel();
+    let (release, wait) = std::sync::mpsc::channel();
+    let buffer = std::sync::Arc::new(vec![1_u8; 4096]);
+    let weak = std::sync::Arc::downgrade(&buffer);
+    let mut task = Box::pin(admission.run(4096, move || {
+        assert!(
+            std::thread::current()
+                .name()
+                .unwrap()
+                .starts_with("thumbnail-")
+        );
+        started.send(()).unwrap();
+        wait.recv().unwrap();
+        drop(buffer);
+    }));
+    assert!(poll_once(task.as_mut()).is_pending());
+    running.recv().unwrap();
+    drop(task);
+    assert_eq!(admission.cpu.available_permits(), 0);
+    assert_eq!(admission.mem.available_permits(), 15);
+    let mut next = Box::pin(admission.run(4096, move || weak.upgrade().is_none()));
+    assert!(poll_once(next.as_mut()).is_pending());
+    release.send(()).unwrap();
+    assert!(next.await.unwrap());
+    assert_eq!(admission.cpu.available_permits(), 1);
+    assert_eq!(admission.mem.available_permits(), 16);
+}
+
+#[tokio::test]
+async fn rejected_job_never_initializes_workers_or_runs() {
+    let admission = Admission::new(1, 1);
+    assert!(
+        admission
+            .run(2 * 1024 * 1024, || panic!("over budget"))
+            .await
+            .is_err()
+    );
+    assert!(admission.pool.get().is_none());
+}
+
 #[test]
 fn memory_charges_round_up() {
     assert_eq!(units_for(0), 0);
