@@ -11,6 +11,7 @@ mod matroska;
 mod midi;
 pub mod probe;
 mod raw_audio;
+pub mod thumbnail_limits;
 #[cfg(feature = "thumbnails")]
 pub mod thumbnails;
 mod transport_stream;

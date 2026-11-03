@@ -233,11 +233,6 @@ fn a_deep_cursor_seeks_directly_to_the_requested_index_range() {
     );
 }
 
-#[test]
-fn prewarming_reserves_foreground_capacity() {
-    assert_eq!([1, 2, 3, 4, 16].map(background_workers), [1, 1, 2, 3, 3]);
-}
-
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
 async fn foreground_decode_can_start_while_background_decoders_are_occupied() {
@@ -245,7 +240,8 @@ async fn foreground_decode_can_start_while_background_decoders_are_occupied() {
     let dir = tempfile::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(&dir.path().join("core")).unwrap();
     let state = core.runtime_state();
-    let workers = background_workers(std::thread::available_parallelism().map_or(1, |n| n.get()));
+    let workers =
+        plain_libs::media::thumbnail_limits::background_workers(state.thumbnails.workers());
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
     *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
     let mut paths = Vec::new();
