@@ -64,3 +64,24 @@ async fn original_thumbnail_bytes_keep_their_mime_and_conditional_response() {
         assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
     }
 }
+
+
+#[tokio::test]
+async fn mutable_file_responses_require_revalidation_and_preserve_full_and_range_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("preview.wav");
+    for bytes in [b"broken-bytes", b"fixed--bytes"] {
+        std::fs::write(&path, bytes).unwrap();
+        for partial in [false, true] {
+            let mut headers = HeaderMap::new();
+            if partial {
+                headers.insert(header::RANGE, "bytes=2-5".parse().unwrap());
+            }
+            let response = stream_file(&path, "audio/wav", &headers).await;
+            assert_eq!(response.status(), if partial { StatusCode::PARTIAL_CONTENT } else { StatusCode::OK });
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "private, no-cache");
+            let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
+            assert_eq!(body.as_ref(), if partial { &bytes[2..6] } else { bytes });
+        }
+    }
+}

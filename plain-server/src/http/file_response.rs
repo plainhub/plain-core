@@ -71,7 +71,7 @@ pub(crate) async fn stream_file(
     output.insert(axum::http::header::ACCEPT_RANGES, "bytes".parse().unwrap());
     output.insert(
         axum::http::header::CACHE_CONTROL,
-        "private, max-age=3600".parse().unwrap(),
+        "private, no-cache".parse().unwrap(),
     );
     if let Ok(value) = mime.parse() {
         output.insert(axum::http::header::CONTENT_TYPE, value);
