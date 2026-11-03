@@ -295,6 +295,7 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
     assert!(
         catalog
             .scan_completed_files(serde_json::json!({"paths":[path]}))
+            .await
             .unwrap()
     );
     assert_eq!(
@@ -306,16 +307,19 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
     assert!(
         catalog
             .scan_completed_files(serde_json::json!([path]))
+            .await
             .is_err()
     );
     assert!(
         catalog
             .scan_completed_files(serde_json::json!({"paths":[path],"extra":true}))
+            .await
             .is_err()
     );
     assert!(
         catalog
             .scan_completed_files(serde_json::json!({"paths":[]}))
+            .await
             .unwrap()
     );
     let opaque = directory.path().join("file.bin");
@@ -323,6 +327,7 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
     assert!(
         catalog
             .scan_completed_files(serde_json::json!({"paths":[opaque]}))
+            .await
             .unwrap()
     );
     assert_eq!(
@@ -335,6 +340,7 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
     assert!(
         catalog
             .scan_completed_files(serde_json::json!({"paths":[]}))
+            .await
             .is_err()
     );
 }
@@ -355,6 +361,7 @@ async fn completion_scan_reports_read_failures_instead_of_partial_success() {
     assert!(
         catalog
             .scan_completed_files(serde_json::json!({"paths":[path,missing]}))
+            .await
             .is_err()
     );
     assert_eq!(
@@ -366,6 +373,7 @@ async fn completion_scan_reports_read_failures_instead_of_partial_success() {
     assert!(
         catalog
             .scan_completed_files(serde_json::json!({"paths":["relative.txt"]}))
+            .await
             .is_err()
     );
     core.stop_core().await;
@@ -427,6 +435,7 @@ async fn the_watcher_stops_with_the_core_and_rejects_after_it() {
     assert!(
         catalog
             .scan_completed_files(serde_json::json!({"paths":[]}))
+            .await
             .is_err(),
         "a stopped core must refuse catalog writes"
     );
@@ -488,12 +497,13 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
     catalog.configure_scan_directories(None).unwrap();
     let path = directory.path().join("song.wav");
     std::fs::write(&path, b"unrecognized audio bytes").unwrap();
-    let scan = || {
+    let scan = async || {
         catalog
             .scan_completed_files(serde_json::json!({"paths":[path]}))
+            .await
             .unwrap()
     };
-    scan();
+    scan().await;
     let original = catalog
         .by_path(DataType::Audio, path.to_str().unwrap())
         .unwrap()
@@ -509,7 +519,7 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
     let marker = directory.path().join(".nomedia");
     std::fs::write(&marker, b"").unwrap();
     let mut events = core.runtime_state().events.subscribe();
-    scan();
+    scan().await;
     let event = events.try_recv().unwrap();
     assert_eq!(
         event.event_type,
@@ -532,7 +542,7 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
     assert_eq!(file.kind, FileKind::File);
     assert!(file.favorited);
     std::fs::remove_file(marker).unwrap();
-    scan();
+    scan().await;
     assert_eq!(catalog.count(DataType::Audio).unwrap(), 1);
     assert_eq!(
         catalog

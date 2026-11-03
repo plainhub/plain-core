@@ -497,6 +497,7 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
         .unwrap();
     catalog
         .scan_completed_files(serde_json::json!({"paths":[original.to_str().unwrap()]}))
+        .await
         .unwrap();
     assert_eq!(
         crate::features::services::files::indexed::native(

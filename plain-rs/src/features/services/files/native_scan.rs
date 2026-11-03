@@ -2,12 +2,29 @@ use crate::features::services::files::media_scans::MediaScans;
 use crate::infrastructure::db::Db;
 use std::path::Path;
 
-pub fn completed(
+pub async fn completed(
+    db: &Db,
+    scans: &std::sync::Arc<MediaScans>,
+    directory: &Path,
+    paths: Vec<String>,
+) -> Result<Vec<crate::infrastructure::db::MediaFileRow>, String> {
+    let db = db.clone();
+    let recorder = scans.clone();
+    let directory = directory.to_owned();
+    let (rows, generic_types) =
+        tokio::task::spawn_blocking(move || record(&db, &recorder, &directory, paths))
+            .await
+            .map_err(|error| error.to_string())??;
+    scans.publish_catalog_types(rows.iter().map(|row| row.data_type).chain(generic_types));
+    Ok(rows)
+}
+
+fn record(
     db: &Db,
     scans: &MediaScans,
     directory: &Path,
     paths: Vec<String>,
-) -> Result<(), String> {
+) -> Result<(Vec<crate::infrastructure::db::MediaFileRow>, Vec<i32>), String> {
     if paths.iter().any(|path| !Path::new(path).is_absolute()) {
         return Err("Absolute completed file path required".into());
     }
@@ -51,7 +68,5 @@ pub fn completed(
             .map_err(|error| error.to_string())?;
         Ok((rows, generic_types))
     })?;
-    let (rows, generic_types) = recorded;
-    scans.publish_catalog_types(rows.iter().map(|row| row.data_type).chain(generic_types));
-    Ok(())
+    Ok(recorded)
 }

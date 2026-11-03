@@ -267,7 +267,12 @@ impl Runtime {
             let platform = file_platform.clone();
             move |path| {
                 let platform = platform.clone();
-                Box::pin(async move { platform.scan(&[path.to_string_lossy().into_owned()]).await })
+                Box::pin(async move {
+                    platform
+                        .scan(&[path.to_string_lossy().into_owned()])
+                        .await
+                        .map(|_| ())
+                })
             }
         }));
         let browser =

@@ -225,6 +225,7 @@ async fn completion_scan_runs_directly_without_another_host_request() {
                 .native_media_catalog()
                 .unwrap()
                 .scan_completed_files(serde_json::json!({"paths":[path]}))
+                .await
         });
     }
     while let Some(result) = calls.join_next().await {
@@ -242,6 +243,7 @@ async fn completion_scan_runs_directly_without_another_host_request() {
         core.native_media_catalog()
             .unwrap()
             .scan_completed_files(serde_json::json!({"paths":[missing]}))
+            .await
             .is_err()
     );
     core.stop_core().await;

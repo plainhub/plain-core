@@ -17,20 +17,51 @@ pub(crate) struct Generation {
     pub(super) cached: PathBuf,
 }
 
+struct Work {
+    job: Mutex<Option<Generation>>,
+    reply: watch::Sender<Reply>,
+}
+
+struct Entry {
+    work: Arc<Work>,
+    foreground: bool,
+}
+
+pub(crate) struct Receivers {
+    foreground: mpsc::Receiver<Arc<Work>>,
+    background: mpsc::Receiver<Arc<Work>>,
+}
+
+impl Receivers {
+    async fn recv(&mut self) -> Option<Arc<Work>> {
+        tokio::select! {
+            biased;
+            work = self.foreground.recv() => work,
+            work = self.background.recv() => work,
+        }
+    }
+}
+
 pub(in crate::features::services::images) struct Queue {
-    sender: mpsc::Sender<Generation>,
-    replies: Mutex<HashMap<String, watch::Sender<Reply>>>,
+    foreground: mpsc::Sender<Arc<Work>>,
+    background: mpsc::Sender<Arc<Work>>,
+    replies: Mutex<HashMap<String, Entry>>,
 }
 
 impl Queue {
-    pub(super) fn new() -> (Self, mpsc::Receiver<Generation>) {
-        let (sender, receiver) = mpsc::channel(320);
+    pub(super) fn new() -> (Self, Receivers) {
+        let (foreground, foreground_receiver) = mpsc::channel(320);
+        let (background, background_receiver) = mpsc::channel(320);
         (
             Self {
-                sender,
+                foreground,
+                background,
                 replies: Mutex::new(HashMap::new()),
             },
-            receiver,
+            Receivers {
+                foreground: foreground_receiver,
+                background: background_receiver,
+            },
         )
     }
 
@@ -40,26 +71,44 @@ impl Queue {
         cache: PathBuf,
         key: String,
         cached: PathBuf,
+        background: bool,
     ) -> Output {
-        let permit = self
-            .sender
-            .reserve()
-            .await
-            .map_err(|_| "Rust core stopped")?;
+        let sender = if background {
+            &self.background
+        } else {
+            &self.foreground
+        };
+        let permit = sender.reserve().await.map_err(|_| "Rust core stopped")?;
         let mut reply = {
             let mut replies = self.replies.lock().unwrap();
-            if let Some(reply) = replies.get(&key) {
-                drop(permit);
-                reply.subscribe()
+            if let Some(entry) = replies.get_mut(&key) {
+                let reply = entry.work.reply.subscribe();
+                if !background && !entry.foreground {
+                    entry.foreground = true;
+                    permit.send(entry.work.clone());
+                } else {
+                    drop(permit);
+                }
+                reply
             } else {
                 let (tx, rx) = watch::channel(None);
-                replies.insert(key.clone(), tx);
-                permit.send(Generation {
-                    request,
-                    cache,
-                    key,
-                    cached,
+                let work = Arc::new(Work {
+                    job: Mutex::new(Some(Generation {
+                        request,
+                        cache,
+                        key: key.clone(),
+                        cached,
+                    })),
+                    reply: tx,
                 });
+                replies.insert(
+                    key,
+                    Entry {
+                        work: work.clone(),
+                        foreground: !background,
+                    },
+                );
+                permit.send(work);
                 rx
             }
         };
@@ -69,30 +118,31 @@ impl Queue {
         Arc::unwrap_or_clone(result)
     }
 
-    pub(super) async fn run(state: CoreRuntime, mut receiver: mpsc::Receiver<Generation>) {
+    pub(super) async fn run(state: CoreRuntime, mut receivers: Receivers) {
         let workers = state.thumbnails.workers();
         let mut stop = state.stop.clone();
         let mut running = FuturesUnordered::new();
-        let mut batch = Vec::with_capacity(workers);
         loop {
-            let slots = workers - running.len();
-            tokio::select! {
+            let work = tokio::select! {
+                biased;
                 _ = stop.wait_for(|value| *value) => break,
-                _ = running.next(), if !running.is_empty() => {},
-                count = receiver.recv_many(&mut batch, slots), if slots > 0 => {
-                    if count == 0 { break; }
-                    for job in batch.drain(..) {
-                        let mut replies = state.thumbnails.queue.replies.lock().unwrap();
-                        if replies[&job.key].receiver_count() == 0 {
-                            replies.remove(&job.key);
-                        } else {
-                            running.push(Self::complete(&state, job));
-                        }
-                    }
+                _ = running.next(), if !running.is_empty() => continue,
+                work = receivers.recv(), if running.len() < workers => work,
+            };
+            let Some(work) = work else {
+                break;
+            };
+            let mut replies = state.thumbnails.queue.replies.lock().unwrap();
+            let job = work.job.lock().unwrap().take();
+            if let Some(job) = job {
+                if work.reply.receiver_count() == 0 {
+                    replies.remove(&job.key);
+                } else {
+                    running.push(Self::complete(&state, job));
                 }
             }
         }
-        drop(receiver);
+        drop(receivers);
         while running.next().await.is_some() {}
         state.thumbnails.queue.replies.lock().unwrap().clear();
     }
@@ -107,7 +157,7 @@ impl Queue {
             .unwrap()
             .remove(&job.key)
             .unwrap();
-        let _ = reply.send(Some(Arc::new(result)));
+        let _ = reply.work.reply.send(Some(Arc::new(result)));
     }
 
     #[cfg(test)]
@@ -116,7 +166,11 @@ impl Queue {
             .lock()
             .unwrap()
             .values()
-            .map(watch::Sender::receiver_count)
+            .map(|entry| entry.work.reply.receiver_count())
             .sum()
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../../../tests/plain-rs/unit/features/services/images/thumbnails/queue.rs"]
+mod tests;

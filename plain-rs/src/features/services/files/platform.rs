@@ -12,6 +12,7 @@ use std::{
 };
 
 pub struct FilePlatform {
+    pub(crate) thumbnail_warmup: crate::features::services::images::thumbnail_warmup::Schedule,
     pub(super) host: Arc<Host>,
     pub(super) db: Arc<Db>,
     pub recent_files: Arc<crate::features::recent_files::RecentFiles>,
@@ -41,6 +42,7 @@ impl FilePlatform {
             (|| -> std::io::Result<_> { Ok([directory.canonicalize()?, cache.canonicalize()?]) })()
                 .map_err(|error| error.to_string());
         Self {
+            thumbnail_warmup: Default::default(),
             recent_files: Arc::new(crate::features::recent_files::RecentFiles::new(
                 db.key_values(),
             )),
@@ -378,21 +380,22 @@ impl FilePlatform {
                 .collect::<rusqlite::Result<Vec<_>>>()
         })).await??)
     }
-    pub async fn scan(&self, paths: &[String]) -> Result<()> {
+    pub async fn scan(
+        &self,
+        paths: &[String],
+    ) -> Result<Vec<crate::infrastructure::db::MediaFileRow>> {
         if self.host.uses_system_media_catalog() {
             let paths = self.external_paths(paths, false).await?;
             if paths.is_empty() {
-                return Ok(());
+                return Ok(Vec::new());
             }
-            return self.receipt("fileTaskScan", json!({"paths":paths})).await;
+            self.receipt("fileTaskScan", json!({"paths":paths})).await?;
+            return Ok(Vec::new());
         }
         #[cfg(feature = "runtime-media")]
         {
-            let db = self.db.clone();
-            let scans = self.scans.clone();
-            let directory = self.directory.clone();
             let paths = paths.to_vec();
-            tokio::task::spawn_blocking(move || {
+            let existing = tokio::task::spawn_blocking(move || {
                 let mut existing = Vec::new();
                 for path in paths {
                     match std::fs::metadata(&path) {
@@ -404,21 +407,26 @@ impl FilePlatform {
                         Err(error) => return Err(error.to_string()),
                     }
                 }
-                crate::features::services::files::native_scan::completed(
-                    &db, &scans, &directory, existing,
-                )
+                Ok::<_, String>(existing)
             })
             .await?
             .map_err(anyhow::Error::msg)?;
+            crate::features::services::files::native_scan::completed(
+                &self.db,
+                &self.scans,
+                &self.directory,
+                existing,
+            )
+            .await
+            .map_err(anyhow::Error::msg)
         }
         #[cfg(not(feature = "runtime-media"))]
         {
             let db = self.db.clone();
             let directory = self.directory.clone();
             let cache = self.cache.clone();
-            let events = self.events.clone();
             let paths = paths.to_vec();
-            tokio::task::spawn_blocking(move || {
+            let (rows, generic_types) = tokio::task::spawn_blocking(move || {
                 let mut existing = Vec::new();
                 for path in paths {
                     match std::fs::metadata(&path) {
@@ -444,16 +452,16 @@ impl FilePlatform {
                 let rows = db
                     .record_media_file_reads(&reads.media)
                     .map_err(|error| error.to_string())?;
-                crate::features::services::files::catalog_events::publish(
-                    &events,
-                    rows.iter().map(|row| row.data_type).chain(generic_types),
-                );
-                Ok::<_, String>(())
+                Ok::<_, String>((rows, generic_types))
             })
             .await?
             .map_err(anyhow::Error::msg)?;
+            crate::features::services::files::catalog_events::publish(
+                &self.events,
+                rows.iter().map(|row| row.data_type).chain(generic_types),
+            );
+            Ok(rows)
         }
-        Ok(())
     }
     pub async fn forget_removed(&self, paths: Vec<String>) -> Result<()> {
         if self.host.uses_system_media_catalog() {

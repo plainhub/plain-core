@@ -31,6 +31,7 @@ pub struct Thumbnails {
     dispatcher: Mutex<Option<tokio::task::JoinHandle<()>>>,
     requests: Semaphore,
     idle: tokio::sync::Notify,
+    pub(super) cache_bytes_written: std::sync::atomic::AtomicU64,
     pub(super) warmer: Mutex<Option<tokio::task::JoinHandle<()>>>,
     #[cfg(feature = "media")]
     hot: plain_libs::media::thumbnails::lru::ThumbLru,
@@ -43,7 +44,7 @@ pub struct Thumbnails {
     pub decode_gate: Mutex<Option<std::sync::Arc<Semaphore>>>,
 }
 impl Thumbnails {
-    pub(crate) fn new() -> (Self, tokio::sync::mpsc::Receiver<Generation>) {
+    pub(crate) fn new() -> (Self, queue::Receivers) {
         #[cfg(feature = "media")]
         plain_libs::media::thumbnails::admission::initialize_with_memory(|| {
             #[cfg(not(target_os = "ios"))]
@@ -67,6 +68,7 @@ impl Thumbnails {
                 requests: Semaphore::new(320),
                 idle: tokio::sync::Notify::new(),
                 warmer: Mutex::new(None),
+                cache_bytes_written: std::sync::atomic::AtomicU64::new(0),
                 #[cfg(feature = "media")]
                 hot: plain_libs::media::thumbnails::lru::ThumbLru::new(128 * 1024 * 1024, 4096),
                 #[cfg(any(test, feature = "test-seams"))]
@@ -314,7 +316,9 @@ impl Thumbnails {
         if bytes.is_some() {
             return Ok(bytes);
         }
-        self.queue.submit(request, cache, key, cached).await
+        self.queue
+            .submit(request, cache, key, cached, background)
+            .await
     }
 
     async fn generate(state: &CoreRuntime, job: &Generation) -> Result<Option<Bytes>, String> {
@@ -376,6 +380,10 @@ impl Thumbnails {
         .await
         .map_err(|error| error.to_string())?
         .map_err(|error| error.to_string())?;
+        state
+            .thumbnails
+            .cache_bytes_written
+            .fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed);
         #[cfg(feature = "media")]
         state.thumbnails.hot.put(hot_key, bytes.clone());
         #[cfg(not(feature = "media"))]
@@ -405,7 +413,7 @@ impl Thumbnails {
         320 - self.requests.available_permits()
     }
 
-    pub(crate) fn start(state: CoreRuntime, receiver: tokio::sync::mpsc::Receiver<Generation>) {
+    pub(crate) fn start(state: CoreRuntime, receiver: queue::Receivers) {
         let service = state.thumbnails.clone();
         *service.dispatcher.lock().unwrap() = Some(tokio::spawn(Queue::run(state, receiver)));
     }

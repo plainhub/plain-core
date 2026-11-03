@@ -80,8 +80,9 @@ impl NativeMediaCatalog {
         reference: &str,
     ) -> Result<MediaFileRow, String> {
         let metadata = self.read_file(data_type, reference).await?;
-        self.record_file_reads(&[metadata])?
-            .into_iter()
+        let rows = self.record_file_reads(&[metadata])?;
+        self.enqueue_previews(&rows).await?;
+        rows.into_iter()
             .next()
             .ok_or_else(|| "Missing recorded media file".into())
     }
@@ -142,7 +143,8 @@ impl NativeMediaCatalog {
                     },
                     metadata = self.read_file(data_type, &reference) => metadata?,
                 };
-                session.record_when_running(1,|| self.persist_file_reads(&[metadata], policy.scope.as_ref())).await?;
+                let rows = session.record_when_running(1,|| self.persist_file_reads(&[metadata], policy.scope.as_ref())).await?;
+                self.enqueue_previews(&rows).await?;
             }
             Ok(())
         }.await;
@@ -150,16 +152,18 @@ impl NativeMediaCatalog {
     }
 
     #[cfg(feature = "runtime-media")]
-    pub fn scan_completed_files(&self, params: serde_json::Value) -> Result<bool, String> {
+    pub async fn scan_completed_files(&self, params: serde_json::Value) -> Result<bool, String> {
         self.state.native_client_id()?;
         let request: CompletedFilesRequest =
             serde_json::from_value(params).map_err(|error| error.to_string())?;
-        crate::features::services::files::native_scan::completed(
+        let rows = crate::features::services::files::native_scan::completed(
             &self.state.db,
             &self.state.media_scans,
             &self.state.directory,
             request.paths,
-        )?;
+        )
+        .await?;
+        self.enqueue_previews(&rows).await?;
         Ok(true)
     }
 
@@ -300,11 +304,13 @@ impl NativeMediaCatalog {
                 if destination.is_dir() {
                     self.scan_directory(&destination.to_string_lossy()).await?;
                 } else {
-                    self.state
+                    let rows = self
+                        .state
                         .file_platform
                         .scan(&[destination.to_string_lossy().into_owned()])
                         .await
                         .map_err(|error| error.to_string())?;
+                    self.enqueue_previews(&rows).await?;
                 }
                 return Ok(());
             }
@@ -330,11 +336,13 @@ impl NativeMediaCatalog {
             }
             match effect {
                 Effect::Index => {
-                    self.state
+                    let rows = self
+                        .state
                         .file_platform
                         .scan(&[path.to_string_lossy().into_owned()])
                         .await
                         .map_err(|error| error.to_string())?;
+                    self.enqueue_previews(&rows).await?;
                 }
                 Effect::Forget => {
                     if let Some(parent) = path.parent().filter(|parent| parent.is_dir()) {
@@ -685,11 +693,12 @@ impl NativeMediaCatalog {
                     .await
                 {
                     Ok(metadata) => {
-                        session
+                        let rows = session
                             .record_when_running(0, || {
                                 self.persist_file_reads(&[metadata], policy.scope.as_ref())
                             })
                             .await?;
+                        self.enqueue_previews(&rows).await?;
                     }
                     Err(error) => errors.push(format!("{}: {error}", path.display())),
                 }
@@ -826,6 +835,17 @@ impl NativeMediaCatalog {
             rows.iter().map(|row| row.data_type),
         );
         Ok(rows)
+    }
+
+    #[cfg(feature = "runtime-media")]
+    async fn enqueue_previews(&self, rows: &[MediaFileRow]) -> Result<(), String> {
+        let policy = self.state.media_scans.policy()?;
+        let scope = policy.scope.as_ref();
+        self.state
+            .file_platform
+            .thumbnail_warmup
+            .enqueue(rows, scope)
+            .await
     }
 
     fn persist_file_reads(

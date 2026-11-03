@@ -26,6 +26,15 @@ async fn index_updates_prewarm_the_same_cache_used_by_foreground_requests() {
         .unwrap();
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
+    let unrelated = directory.path().join("untouched.jpg");
+    std::fs::copy(&path, &unrelated).unwrap();
+    state
+        .db
+        .record_file_paths(
+            &[unrelated.to_string_lossy().into_owned()],
+            Some(FileKind::Image),
+        )
+        .unwrap();
     let catalog =
         crate::features::services::files::catalog_scan::NativeMediaCatalog::new(state.clone());
     catalog
@@ -59,6 +68,9 @@ async fn index_updates_prewarm_the_same_cache_used_by_foreground_requests() {
         .thumbnails
         .native_decodes
         .load(std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(before, 2, "Only the committed source should be decoded");
+    let written = state.thumbnails.cache_bytes_written.load(Ordering::Relaxed);
+    let mut output_bytes = 0;
     for size in [96, 256] {
         let bytes = state
             .thumbnails
@@ -73,6 +85,7 @@ async fn index_updates_prewarm_the_same_cache_used_by_foreground_requests() {
             .await
             .unwrap()
             .unwrap();
+        output_bytes += bytes.len() as u64;
         assert_eq!(image::load_from_memory(&bytes).unwrap().width(), size);
         assert_eq!(
             state
@@ -82,6 +95,11 @@ async fn index_updates_prewarm_the_same_cache_used_by_foreground_requests() {
             before
         );
     }
+    assert_eq!(written, output_bytes);
+    assert_eq!(
+        state.thumbnails.cache_bytes_written.load(Ordering::Relaxed),
+        written
+    );
     core.stop_core().await;
 }
 
@@ -104,140 +122,14 @@ fn cache_trimming_refuses_a_symlink_root_without_touching_its_target() {
     assert_eq!(std::fs::metadata(path).unwrap().len(), 257 * 1024 * 1024);
 }
 
-#[tokio::test]
-async fn warmup_queries_do_not_visit_unrelated_catalog_rows() {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
-    let directory = tempfile::tempdir().unwrap();
-    let core = crate::test_runtime::Core::open(directory.path()).unwrap();
-    let state = core.runtime_state();
-    let task = state.thumbnails.warmer.lock().unwrap().take().unwrap();
-    task.abort();
-    let _ = task.await;
-    state.db.with_conn(|connection| {
-        connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('warmup-test','warmup-test','/warmup-test',1)", []).unwrap();
-        let volume: String = connection.query_row("SELECT id FROM volumes ORDER BY rowid DESC LIMIT 1", [], |row| row.get(0)).unwrap();
-        connection.execute("WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<2000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) SELECT printf('file-%06d',n),?1,'other/'||n,'file-'||n,'FILE','2026-01-01' FROM numbers", [&volume]).unwrap();
-    });
-    let steps = Arc::new(AtomicUsize::new(0));
-    let observed = steps.clone();
-    state.db.with_conn(|connection| {
-        connection.progress_handler(
-            100,
-            Some(move || {
-                observed.fetch_add(100, Ordering::Relaxed);
-                false
-            }),
-        )
-    });
-    warm_catalog(&state).await.unwrap();
-    state
-        .db
-        .with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
-    assert!(
-        steps.load(Ordering::Relaxed) < 5000,
-        "background queries executed {} VM steps for an empty media catalog",
-        steps.load(Ordering::Relaxed)
-    );
-    core.stop_core().await;
-}
-
-#[test]
-fn indexed_cursor_pages_cover_tied_dates_and_exclude_unavailable_sources() {
-    let directory = tempfile::tempdir().unwrap();
-    let db = Db::open(&directory.path().join("plain.db")).unwrap();
-    db.with_conn(|connection| {
-        connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('page-live','page-live','/media',1)", []).unwrap();
-        let volume: String = connection.query_row("SELECT id FROM volumes ORDER BY rowid DESC LIMIT 1", [], |row| row.get(0)).unwrap();
-        connection.execute("WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<67) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) SELECT printf('file-%06d',n),?1,'photo-'||n,'photo-'||n,'IMAGE',CASE WHEN n<34 THEN '2026-01-02' ELSE '2026-01-01' END FROM numbers", [&volume]).unwrap();
-        for (name,kind,indexed,missing,trashed) in [("audio","AUDIO",1,0,false),("unindexed","IMAGE",0,0,false),("missing","IMAGE",1,1,false),("trash","IMAGE",1,0,true)] {
-            connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,indexed,missing,trashed_at,original_path) VALUES('file-'||?2,?1,?2,?2,?3,'2026-02-01',?4,?5,?6,?7)", rusqlite::params![&volume,name,kind,indexed,missing,trashed.then_some("2026-02-01"),trashed.then_some(name)]).unwrap();
-        }
-        connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('page-offline','page-offline','/offline',0)", []).unwrap();
-        connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) VALUES('file-'||'offline.jpg',?1,'offline.jpg','offline.jpg','IMAGE','2026-02-01')", ["page-offline"]).unwrap();
-    });
-    let mut cursor = None;
-    let mut actual = Vec::new();
-    loop {
-        let rows = page(&db, FileKind::Image, cursor.as_ref()).unwrap();
-        assert!(rows.len() <= 32);
-        if rows.is_empty() {
-            break;
-        }
-        for row in rows {
-            assert!(row.path.starts_with("/media/photo-"));
-            cursor = Some(Cursor {
-                updated_at: row.updated_at.clone(),
-                id: row.id.clone(),
-            });
-            actual.push((row.updated_at, row.id));
-        }
-    }
-    assert_eq!(actual.len(), 67);
-    assert!(actual.windows(2).all(|pair| pair[0] > pair[1]));
-    assert_eq!(
-        actual
-            .iter()
-            .map(|row| &row.1)
-            .collect::<std::collections::HashSet<_>>()
-            .len(),
-        67
-    );
-    assert_eq!(page(&db, FileKind::Audio, None).unwrap().len(), 1);
-    assert!(page(&db, FileKind::Video, None).unwrap().is_empty());
-}
-
-#[test]
-fn a_deep_cursor_seeks_directly_to_the_requested_index_range() {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
-    let directory = tempfile::tempdir().unwrap();
-    let db = Db::open(&directory.path().join("plain.db")).unwrap();
-    db.with_conn(|connection| {
-        connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('deep-page','deep-page','/deep-page',1)", []).unwrap();
-        let volume: String = connection.query_row("SELECT id FROM volumes ORDER BY rowid DESC LIMIT 1", [], |row| row.get(0)).unwrap();
-        connection.execute("WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<2000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) SELECT printf('file-%06d',n),?1,'photo-'||n,'photo-'||n,'IMAGE','2026-01-01' FROM numbers", [&volume]).unwrap();
-    });
-    let steps = Arc::new(AtomicUsize::new(0));
-    let observed = steps.clone();
-    db.with_conn(|connection| {
-        connection.progress_handler(
-            100,
-            Some(move || {
-                observed.fetch_add(100, Ordering::Relaxed);
-                false
-            }),
-        )
-    });
-    let rows = page(
-        &db,
-        FileKind::Image,
-        Some(&Cursor {
-            updated_at: "2026-01-01".into(),
-            id: "file-000100".into(),
-        }),
-    )
-    .unwrap();
-    db.with_conn(|connection| connection.progress_handler(0, None::<fn() -> bool>));
-    assert_eq!(rows.len(), 32);
-    assert_eq!(rows.first().unwrap().id, "file-000099");
-    assert_eq!(rows.last().unwrap().id, "file-000068");
-    assert!(
-        steps.load(Ordering::Relaxed) < 5000,
-        "cursor query executed {} VM steps",
-        steps.load(Ordering::Relaxed)
-    );
-}
-
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
 async fn foreground_decode_can_start_while_background_decoders_are_occupied() {
     use std::sync::{Arc, atomic::Ordering};
-    let dir = tempfile::tempdir().unwrap();
+    let dir = tempfile::Builder::new()
+        .prefix("thumbnail-priority-")
+        .tempdir_in(env!("CARGO_MANIFEST_DIR"))
+        .unwrap();
     let core = crate::test_runtime::Core::open(&dir.path().join("core")).unwrap();
     let state = core.runtime_state();
     let workers =
@@ -252,14 +144,23 @@ async fn foreground_decode_can_start_while_background_decoders_are_occupied() {
             .unwrap();
         paths.push(path.to_string_lossy().into_owned());
     }
+    let metadata = paths[..workers]
+        .iter()
+        .map(|path| {
+            crate::features::media::file_facts::read_file_metadata(
+                std::path::Path::new(path),
+                DataType::Image,
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let rows = state.db.record_media_files(&metadata).unwrap();
     state
-        .db
-        .record_file_paths(&paths[..workers], Some(FileKind::Image))
+        .file_platform
+        .thumbnail_warmup
+        .enqueue(&rows, None)
+        .await
         .unwrap();
-    let background = tokio::spawn({
-        let state = state.clone();
-        async move { warm_catalog(&state).await }
-    });
     let wait_for = |count| {
         let state = state.clone();
         async move {
@@ -273,6 +174,26 @@ async fn foreground_decode_can_start_while_background_decoders_are_occupied() {
         }
     };
     wait_for(workers).await;
+    let pending = (0..PENDING_LIMIT)
+        .map(|index| {
+            let mut row = source_row(&format!("pending-{index}"), "pending.jpg");
+            row.path = paths[0].clone();
+            row
+        })
+        .collect::<Vec<_>>();
+    state
+        .file_platform
+        .thumbnail_warmup
+        .enqueue(&pending, None)
+        .await
+        .unwrap();
+    let extra = [source_row("extra", "extra.jpg")];
+    let mut blocked = Box::pin(state.file_platform.thumbnail_warmup.enqueue(&extra, None));
+    assert!(futures_util::poll!(&mut blocked).is_pending());
+    let committed = state.file_platform.scan(&paths[..1]).await.unwrap();
+    assert_eq!(committed.len(), 1);
+    assert_eq!(state.file_platform.thumbnail_warmup.sender.capacity(), 0);
+    assert!(futures_util::poll!(&mut blocked).is_pending());
     let request = Request {
         path: paths.pop().unwrap(),
         width: 256,
@@ -288,6 +209,118 @@ async fn foreground_decode_can_start_while_background_decoders_are_occupied() {
     wait_for(workers + 1).await;
     gate.add_permits(2 * workers + 1);
     assert!(foreground.await.unwrap().unwrap().is_some());
-    background.await.unwrap().unwrap();
+    wait_for(2 * workers + 1).await;
+    blocked.await.unwrap();
     core.stop_core().await;
+}
+
+fn source_row(id: &str, path: &str) -> MediaFileRow {
+    MediaFileRow {
+        id: id.into(),
+        path: std::env::temp_dir()
+            .join(path)
+            .to_string_lossy()
+            .into_owned(),
+        data_type: DataType::Image.kind(),
+        album_id: String::new(),
+        title: String::new(),
+        artist: String::new(),
+        album: String::new(),
+        album_artist: String::new(),
+        bucket_id: String::new(),
+        size_bytes: 0,
+        duration_ms: 0,
+        cover_image_id: None,
+        width: 0,
+        height: 0,
+        rotation: 0,
+        taken_at: None,
+        created_at: String::new(),
+        updated_at: String::new(),
+        favorited: false,
+        trashed: false,
+        original_path: None,
+    }
+}
+
+#[tokio::test]
+async fn full_queue_applies_backpressure_without_losing_sources() {
+    let schedule = Schedule::default();
+    let mut receiver = schedule.receiver.lock().unwrap().take().unwrap();
+    let rows = (0..PENDING_LIMIT)
+        .map(|id| source_row(&id.to_string(), "image.jpg"))
+        .collect::<Vec<_>>();
+    schedule.enqueue(&rows, None).await.unwrap();
+    let extra = source_row("extra", "image.jpg");
+    let mut send = Box::pin(schedule.enqueue(std::slice::from_ref(&extra), None));
+    assert!(futures_util::poll!(send.as_mut()).is_pending());
+    assert_eq!(receiver.recv().await.unwrap().id, "0");
+    assert!(matches!(
+        futures_util::poll!(send.as_mut()),
+        std::task::Poll::Ready(Ok(()))
+    ));
+    for id in 1..PENDING_LIMIT {
+        assert_eq!(receiver.recv().await.unwrap().id, id.to_string());
+    }
+    assert_eq!(receiver.recv().await.unwrap().id, "extra");
+    assert!(receiver.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn non_preview_changes_do_not_enter_the_queue() {
+    let schedule = Schedule::default();
+    let mut row = source_row("changed", "image.jpg");
+    row.data_type = DataType::Doc.kind();
+    schedule
+        .enqueue(std::slice::from_ref(&row), None)
+        .await
+        .unwrap();
+    row.data_type = DataType::Image.kind();
+    row.trashed = true;
+    schedule
+        .enqueue(std::slice::from_ref(&row), None)
+        .await
+        .unwrap();
+    row.trashed = false;
+    row.path = "content://images/item".into();
+    schedule
+        .enqueue(std::slice::from_ref(&row), None)
+        .await
+        .unwrap();
+    assert_eq!(schedule.sender.capacity(), PENDING_LIMIT);
+}
+
+#[tokio::test]
+async fn changes_after_dispatch_remain_pending() {
+    let schedule = Schedule::default();
+    let mut receiver = schedule.receiver.lock().unwrap().take().unwrap();
+    schedule
+        .enqueue(&[source_row("changed", "old.jpg")], None)
+        .await
+        .unwrap();
+    let running = receiver.recv().await.unwrap();
+    schedule
+        .enqueue(&[source_row("changed", "new.jpg")], None)
+        .await
+        .unwrap();
+    assert!(std::path::Path::new(&running.path).ends_with("old.jpg"));
+    assert!(std::path::Path::new(&receiver.recv().await.unwrap().path).ends_with("new.jpg"));
+}
+
+#[tokio::test]
+async fn stopping_prewarm_releases_blocked_index_producers() {
+    let schedule = Schedule::default();
+    let receiver = schedule.receiver.lock().unwrap().take().unwrap();
+    let rows = (0..PENDING_LIMIT)
+        .map(|id| source_row(&id.to_string(), "image.jpg"))
+        .collect::<Vec<_>>();
+    schedule.enqueue(&rows, None).await.unwrap();
+    let extra = source_row("extra", "image.jpg");
+    let mut send = Box::pin(schedule.enqueue(std::slice::from_ref(&extra), None));
+    assert!(futures_util::poll!(send.as_mut()).is_pending());
+    drop(receiver);
+    assert!(matches!(
+        futures_util::poll!(send.as_mut()),
+        std::task::Poll::Ready(Err(_))
+    ));
 }
