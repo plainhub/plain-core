@@ -171,3 +171,60 @@ fn extend_categories() {
     assert_eq!(extend(0b00, 2), -3);
     assert_eq!(extend(0b11, 2), 3);
 }
+
+#[test]
+fn fast_dc_prefix_consumes_only_the_code_and_magnitude() {
+    let mut counts = [0; 16];
+    counts[1] = 3;
+    counts[8] = 1;
+    let t = HuffTable::build(&counts, &[0, 3, 10, 2]).unwrap();
+    for suffix in 0..8 {
+        let data = [0b0100_0000 | suffix << 3 | 5];
+        let mut bits = Bits::new(&data, 0);
+        assert_eq!(
+            t.difference(&mut bits).unwrap(),
+            extend(i32::from(suffix), 3)
+        );
+        assert_eq!(bits.receive(3), Some(5));
+    }
+    // Two-bit code 10 plus a ten-bit magnitude; nine-bit code 110000000 plus two magnitude bits.
+    let data = [0b1010_1010, 0b1010_1100, 0b0000_0101];
+    let mut bits = Bits::new(&data, 0);
+    assert_eq!(t.difference(&mut bits).unwrap(), 682);
+    assert_eq!(t.difference(&mut bits).unwrap(), 2);
+    assert_eq!(bits.receive(1), Some(1));
+}
+
+#[test]
+fn dc_bit_reader_unstuffs_bytes_and_rejects_a_truncated_magnitude() {
+    let bytes = [0xab, 0xff, 0, 0xcd, 0xff, 0xd0];
+    let mut bits = Bits::new(&bytes, 0);
+    assert_eq!(bits.receive(4), Some(0xa));
+    assert_eq!(bits.receive(16), Some(0xbffc));
+    assert_eq!(bits.receive(4), Some(0xd));
+    assert_eq!(bits.receive(1), None);
+    assert!(bits.consume_restart());
+    let mut counts = [0; 16];
+    counts[0] = 1;
+    let table = HuffTable::build(&counts, &[7]).unwrap();
+    let mut bits = Bits::new(&[0, 0xff, 0xd9], 0);
+    assert_eq!(bits.receive(1), Some(0));
+    assert!(table.difference(&mut bits).is_err());
+}
+
+#[test]
+fn skipped_ac_scan_stops_at_the_first_marker_at_every_word_offset() {
+    for pad in 0..24 {
+        for restart in [0x00, 0xd0, 0xd7] {
+            let mut bytes = vec![0xff, 0xd8];
+            bytes.resize(2 + pad, 0x11);
+            bytes.extend_from_slice(&[0xff, restart]);
+            bytes.extend_from_slice(&[0x44; 16]);
+            let end = bytes.len();
+            bytes.extend_from_slice(&[0xff, 0xda, 0, 8]);
+            let mut decoder = Decoder::new(&bytes).unwrap();
+            decoder.skip_scan_payload();
+            assert_eq!(decoder.pos, end);
+        }
+    }
+}

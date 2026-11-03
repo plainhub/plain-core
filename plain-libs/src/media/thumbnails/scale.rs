@@ -217,56 +217,71 @@ fn px_index(x: u32, y: u32, stride: u32, ch: usize) -> usize {
 /// pixels they actually cover, so the result is exactly a box filter.
 pub fn box_downscale(bm: &Bitmap, f: u32) -> Bitmap {
     let (src, w, h) = bm.raw();
-    let ch = bm.channels();
     debug_assert!(f >= 2);
     let (ow, oh) = (w.div_ceil(f), h.div_ceil(f));
+    match bm {
+        Bitmap::Rgb8 { .. } => Bitmap::new_rgb(box_rows::<3>(src, w, h, f), ow, oh),
+        Bitmap::Rgba8 { .. } => Bitmap::new_rgba(box_rows::<4>(src, w, h, f), ow, oh),
+    }
+}
 
-    // Pass 1 (vertical): accumulate `f` source rows per output row.
-    let vw = w as usize;
-    let mut vert = vec![0u32; vw * oh as usize * ch];
-    for oy in 0..oh as usize {
-        let row = &mut vert[oy * vw * ch..(oy + 1) * vw * ch];
-        let y0 = oy * f as usize;
-        let y1 = ((oy + 1) * f as usize).min(h as usize);
-        for y in y0..y1 {
-            let srow = &src[y * vw * ch..(y + 1) * vw * ch];
-            for (acc, v) in row.iter_mut().zip(srow) {
-                *acc += *v as u32;
-            }
-        }
-        let n = (y1 - y0) as u32;
-        for acc in row.iter_mut() {
-            // Scale to sum-per-single-row so pass 2 can divide once at the end.
-            *acc = (*acc + n / 2) / n;
+struct RoundedMean {
+    count: u32,
+    reciprocal: u64,
+}
+
+impl RoundedMean {
+    fn new(count: u32) -> Self {
+        Self {
+            count,
+            reciprocal: (1u64 << 32) / u64::from(count),
         }
     }
 
-    // Pass 2 (horizontal): accumulate `f` columns per output column.
-    let mut dst = vec![0u8; ow as usize * oh as usize * ch];
-    for oy in 0..oh as usize {
-        let vrow = &vert[oy * vw * ch..(oy + 1) * vw * ch];
-        let orow = &mut dst[oy * ow as usize * ch..(oy + 1) * ow as usize * ch];
-        let mut acc = vec![0u32; ch];
-        for ox in 0..ow as usize {
-            acc.iter_mut().for_each(|a| *a = 0);
-            let x0 = ox * f as usize;
-            let x1 = ((ox + 1) * f as usize).min(w as usize);
-            let n = (x1 - x0) as u32;
-            for x in x0..x1 {
-                for c in 0..ch {
-                    acc[c] += vrow[x * ch + c];
+    fn of(&self, sum: u32) -> u32 {
+        let value = sum + self.count / 2;
+        let quotient = (u64::from(value) * self.reciprocal >> 32) as u32;
+        // The floor reciprocal can underestimate the quotient by one.
+        quotient + u32::from(value - quotient * self.count >= self.count)
+    }
+}
+
+fn box_rows<const CHANNELS: usize>(src: &[u8], w: u32, h: u32, f: u32) -> Vec<u8> {
+    if src.is_empty() {
+        return Vec::new();
+    }
+    let stride = w as usize * CHANNELS;
+    let mut vertical = vec![0u32; stride];
+    let mut output = Vec::with_capacity(w.div_ceil(f) as usize * h.div_ceil(f) as usize * CHANNELS);
+    let full = RoundedMean::new(f);
+    let right = RoundedMean::new(if w % f == 0 { f } else { w % f });
+    for group in src.chunks(stride * f.min(h) as usize) {
+        vertical.fill(0);
+        for row in group.chunks_exact(stride) {
+            for (sum, &byte) in vertical.iter_mut().zip(row) {
+                *sum += u32::from(byte);
+            }
+        }
+        let mean = RoundedMean::new((group.len() / stride) as u32);
+        for sum in &mut vertical {
+            *sum = mean.of(*sum);
+        }
+        for block in vertical.chunks(f.min(w) as usize * CHANNELS) {
+            let mut sums = [0u32; CHANNELS];
+            for pixel in block.chunks_exact(CHANNELS) {
+                for c in 0..CHANNELS {
+                    sums[c] += pixel[c];
                 }
             }
-            for c in 0..ch {
-                orow[ox * ch + c] = ((acc[c] + n / 2) / n).min(255) as u8;
-            }
+            let mean = if block.len() / CHANNELS == f as usize {
+                &full
+            } else {
+                &right
+            };
+            output.extend(sums.map(|sum| mean.of(sum) as u8));
         }
     }
-
-    match bm {
-        Bitmap::Rgb8 { .. } => Bitmap::new_rgb(dst, ow, oh),
-        Bitmap::Rgba8 { .. } => Bitmap::new_rgba(dst, ow, oh),
-    }
+    output
 }
 
 /// Full resize strategy: optional single box pre-pass when the downscale

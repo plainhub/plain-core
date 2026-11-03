@@ -162,3 +162,54 @@ fn extreme_aspect_crop_resizes_only_the_center_pixel_region() {
             .all(|pixel| pixel == [7, 10, 20])
     );
 }
+
+#[test]
+fn rounded_reciprocal_matches_division_for_all_thumbnail_box_sums() {
+    for count in 1..=64 {
+        let mean = RoundedMean::new(count);
+        for sum in 0..=255 * count {
+            assert_eq!(mean.of(sum), (sum + count / 2) / count);
+        }
+    }
+}
+
+#[test]
+fn row_buffer_preserves_both_rounding_steps_at_every_edge() {
+    for channels in [3, 4] {
+        for (w, h, f) in [
+            (17u32, 13u32, 3u32),
+            (8, 9, 4),
+            (2, 1, 64),
+            (0, 2, 2),
+            (8, 0, 3),
+        ] {
+            let src = (0..w as usize * h as usize * channels)
+                .map(|n| (n * 73 + n / 3) as u8)
+                .collect::<Vec<_>>();
+            let mut expected = Vec::new();
+            for y in (0..h).step_by(f as usize) {
+                for x in (0..w).step_by(f as usize) {
+                    let ny = f.min(h - y);
+                    let nx = f.min(w - x);
+                    for c in 0..channels {
+                        let sum = (x..x + nx)
+                            .map(|sx| {
+                                let vertical: u32 = (y..y + ny)
+                                    .map(|sy| u32::from(src[(sy * w + sx) as usize * channels + c]))
+                                    .sum();
+                                (vertical + ny / 2) / ny
+                            })
+                            .sum::<u32>();
+                        expected.push(((sum + nx / 2) / nx) as u8);
+                    }
+                }
+            }
+            let img = if channels == 3 {
+                Bitmap::new_rgb(src, w, h)
+            } else {
+                Bitmap::new_rgba(src, w, h)
+            };
+            assert_eq!(box_downscale(&img, f).raw().0, expected);
+        }
+    }
+}

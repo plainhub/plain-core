@@ -317,7 +317,11 @@ impl<'a> Decoder<'a> {
             if class == 0 {
                 // Only DC tables are needed; AC tables parse+skip.
                 let vals = s[i + 17..i + 17 + total].to_vec();
-                self.dc_tables[id as usize] = Some(HuffTable::build(&counts, &vals)?);
+                let table = HuffTable::build(&counts, &vals)?;
+                *self
+                    .dc_tables
+                    .get_mut(usize::from(id))
+                    .ok_or_else(|| anyhow::anyhow!("invalid DC table id"))? = Some(table);
             }
             i += 17 + total;
         }
@@ -357,6 +361,9 @@ impl<'a> Decoder<'a> {
         let tail = &s[1 + ns * 2..];
         let (ss, se, ah, al) = (tail[0], tail[1], tail[2] >> 4, tail[2] & 0x0F);
         if ss == 0 && se == 0 {
+            if tables.iter().any(|&id| id >= self.dc_tables.len()) {
+                bail!("invalid DC table selector");
+            }
             if ah > 1 || al > 15 {
                 bail!("bad DC scan Ah/Al {ah}/{al}");
             }
@@ -381,6 +388,15 @@ impl<'a> Decoder<'a> {
         let d = self.data;
         let mut i = self.pos;
         while i + 1 < d.len() {
+            if let Some(word) = d.get(i..i + 8) {
+                let inverted = !u64::from_ne_bytes(word.try_into().unwrap());
+                if inverted.wrapping_sub(0x0101_0101_0101_0101) & !inverted & 0x8080_8080_8080_8080
+                    == 0
+                {
+                    i += 8;
+                    continue;
+                }
+            }
             if d[i] == 0xFF {
                 let m = d[i + 1];
                 if m != 0x00 && !(0xD0..=0xD7).contains(&m) {
@@ -404,12 +420,8 @@ impl<'a> Decoder<'a> {
             .clone()
             .ok_or_else(|| anyhow::anyhow!("no frame"))?;
         let mut reader = Bits::new(self.data, self.pos);
-        // Snapshot the huffman tables this scan needs (avoids &mut self
-        // inside the block loop).
-        let tables: Vec<Option<HuffTable>> = ctx
-            .tables
-            .iter()
-            .map(|&t| self.dc_tables[t].clone())
+        let dims: Vec<_> = (0..frame.comps.len())
+            .map(|c| frame.block_dims(c))
             .collect();
         let mut pred = vec![0i32; frame.comps.len()];
 
@@ -431,18 +443,20 @@ impl<'a> Decoder<'a> {
                     }
                     for (si, &c) in ctx.comps.iter().enumerate() {
                         let comp = &frame.comps[c];
-                        let (bw, bh) = frame.block_dims(c);
+                        let (bw, bh) = dims[c];
                         for by in 0..comp.sy as usize {
                             for bx in 0..comp.sx as usize {
                                 let (gx, gy) =
                                     (mx * comp.sx as usize + bx, my * comp.sy as usize + by);
+                                let v = read_dc_block(
+                                    &mut reader,
+                                    &self.dc_tables[ctx.tables[si]],
+                                    ctx,
+                                    &mut pred[c],
+                                )?;
                                 if gx >= bw || gy >= bh {
-                                    // Dummy block past the image edge: entropy
-                                    // coded (must consume) but discarded.
-                                    read_dc_block(&mut reader, &tables[si], ctx, &mut pred[c])?;
                                     continue;
                                 }
-                                let v = read_dc_block(&mut reader, &tables[si], ctx, &mut pred[c])?;
                                 let idx = gy * bw + gx;
                                 if ctx.ah > 0 {
                                     self.coefs[c][idx] |= v;
@@ -467,7 +481,12 @@ impl<'a> Decoder<'a> {
                         }
                         pred[c] = 0;
                     }
-                    let v = read_dc_block(&mut reader, &tables[si], ctx, &mut pred[c])?;
+                    let v = read_dc_block(
+                        &mut reader,
+                        &self.dc_tables[ctx.tables[si]],
+                        ctx,
+                        &mut pred[c],
+                    )?;
                     if ctx.ah > 0 {
                         self.coefs[c][i] |= v;
                     } else {
@@ -581,15 +600,10 @@ fn read_dc_block(
     pred: &mut i32,
 ) -> Result<i16> {
     if ctx.ah == 0 {
-        let t = huff_decode(reader, table)?;
-        let diff = if t > 0 {
-            let v = reader
-                .receive(u32::from(t))
-                .ok_or_else(|| anyhow::anyhow!("truncated DC diff"))? as i32;
-            extend(v, u32::from(t))
-        } else {
-            0
-        };
+        let table = table
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("missing DC huffman table"))?;
+        let diff = table.difference(reader)?;
         *pred += diff;
         let v = *pred << ctx.al;
         Ok(v.clamp(-32768, 32767) as i16)
@@ -713,25 +727,19 @@ fn h2v2_row(plane: &[u8], bw: usize, bh: usize, y: usize, out: &mut [u8]) {
 // Huffman + bit reader
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Copy, Default)]
+struct Prefix {
+    bits: u8,
+    remaining: u8,
+    difference: i16,
+}
+
 struct HuffTable {
-    /// 8-bit fast lookup: `(len << 4) | min(category, 15)`; 0 = slow path.
-    fast: [u8; 256],
+    fast: [Prefix; 256],
     mincode: [i32; 17],
     maxcode: [i32; 17],
     valptr: [i32; 17],
     vals: Vec<u8>,
-}
-
-impl Clone for HuffTable {
-    fn clone(&self) -> Self {
-        HuffTable {
-            fast: self.fast,
-            mincode: self.mincode,
-            maxcode: self.maxcode,
-            valptr: self.valptr,
-            vals: self.vals.clone(),
-        }
-    }
 }
 
 impl HuffTable {
@@ -739,7 +747,7 @@ impl HuffTable {
         let mut mincode = [0i32; 17];
         let mut maxcode = [-1i32; 17];
         let mut valptr = [0i32; 17];
-        let mut fast = [0u8; 256];
+        let mut fast = [Prefix::default(); 256];
         let mut code: i32 = 0;
         let mut k: i32 = 0;
         for len in 1..=16usize {
@@ -751,12 +759,27 @@ impl HuffTable {
                     let v = vals[(k + i) as usize];
                     let start = ((code + i) as u32) << (8 - len);
                     let span = 1u32 << (8 - len);
-                    for e in fast
+                    let category = usize::from(v);
+                    for (suffix, entry) in fast
                         .iter_mut()
-                        .take((start + span) as usize)
                         .skip(start as usize)
+                        .take(span as usize)
+                        .enumerate()
                     {
-                        *e = ((len as u8) << 4) | v.min(15);
+                        if category > 0 && len + category <= 8 {
+                            let magnitude = suffix >> (8 - len - category);
+                            *entry = Prefix {
+                                bits: (len + category) as u8,
+                                remaining: 0,
+                                difference: extend(magnitude as i32, u32::from(v)) as i16,
+                            };
+                        } else {
+                            *entry = Prefix {
+                                bits: len as u8,
+                                remaining: v,
+                                difference: 0,
+                            };
+                        }
                     }
                 }
             }
@@ -773,37 +796,48 @@ impl HuffTable {
             vals: vals.to_vec(),
         })
     }
-}
 
-fn huff_decode(bits: &mut Bits, table: &Option<HuffTable>) -> Result<u8> {
-    let Some(t) = table else {
-        bail!("missing DC huffman table");
-    };
-    // Fast path: peek 8 bits, commit only the code length.
-    let peek = bits
-        .peek8()
-        .ok_or_else(|| anyhow::anyhow!("truncated huffman stream"))?;
-    let entry = t.fast[peek as usize];
-    if entry != 0 {
-        bits.skip(u32::from(entry >> 4))?;
-        return Ok(entry & 0x0F);
-    }
-    // Slow path: canonical search for codes longer than 8 bits.
-    let mut code = 0i32;
-    for len in 1..=16usize {
-        code = (code << 1)
-            | bits
-                .bit()
-                .ok_or_else(|| anyhow::anyhow!("truncated huffman"))? as i32;
-        if t.maxcode[len] >= code && code >= t.mincode[len] {
-            let idx = (t.valptr[len] + code - t.mincode[len]) as usize;
-            return Ok(*t
-                .vals
-                .get(idx)
-                .ok_or_else(|| anyhow::anyhow!("huffman index out of range"))?);
+    fn difference(&self, bits: &mut Bits) -> Result<i32> {
+        let prefix = self.fast[bits.peek8() as usize];
+        let category = if prefix.bits == 0 {
+            self.long_category(bits)?
+        } else {
+            if bits.cnt < i32::from(prefix.bits) {
+                bail!("truncated DC code");
+            }
+            bits.consume(u32::from(prefix.bits));
+            if prefix.remaining == 0 {
+                return Ok(i32::from(prefix.difference));
+            }
+            prefix.remaining
+        };
+        if category == 0 {
+            return Ok(0);
         }
+        let magnitude = bits
+            .receive(u32::from(category))
+            .ok_or_else(|| anyhow::anyhow!("truncated DC diff"))?;
+        Ok(extend(magnitude as i32, u32::from(category)))
     }
-    bail!("invalid huffman code")
+
+    fn long_category(&self, bits: &mut Bits) -> Result<u8> {
+        // Slow path: canonical search for codes longer than 8 bits.
+        let mut code = 0i32;
+        for len in 1..=16usize {
+            code = (code << 1)
+                | bits
+                    .bit()
+                    .ok_or_else(|| anyhow::anyhow!("truncated huffman"))? as i32;
+            if self.maxcode[len] >= code && code >= self.mincode[len] {
+                let idx = (self.valptr[len] + code - self.mincode[len]) as usize;
+                return Ok(*self
+                    .vals
+                    .get(idx)
+                    .ok_or_else(|| anyhow::anyhow!("huffman index out of range"))?);
+            }
+        }
+        bail!("invalid huffman code")
+    }
 }
 
 /// JPEG entropy bit reader with 0xFF00 unstuffing and marker detection.
@@ -853,41 +887,37 @@ impl<'a> Bits<'a> {
     }
 
     fn receive(&mut self, n: u32) -> Option<u32> {
-        let mut v = 0u32;
-        for _ in 0..n {
-            v = (v << 1) | self.bit()?;
+        if n == 0 {
+            return Some(0);
         }
-        Some(v)
+        if n > 16 {
+            return None;
+        }
+        while self.cnt < n as i32 {
+            self.cur |= u32::from(self.fetch_byte()?) << (24 - self.cnt);
+            self.cnt += 8;
+        }
+        let value = self.cur >> (32 - n);
+        self.consume(n);
+        Some(value)
     }
 
-    fn peek8(&mut self) -> Option<u8> {
-        loop {
-            if self.cnt >= 8 {
-                return Some((self.cur >> 24) as u8);
-            }
-            match self.fetch_byte() {
-                Some(b) => {
-                    self.cur |= u32::from(b) << (24 - self.cnt);
-                    self.cnt += 8;
-                }
-                None => {
-                    // Stream/marker reached mid-peek: pad the missing low
-                    // bits with 1s (JPEG end-of-stream convention). A code
-                    // that actually needs those bits will fail in `skip`.
-                    let pad = 8 - self.cnt;
-                    let v = ((self.cur >> 24) as u8) | (((1u16 << pad) - 1) as u8);
-                    return Some(v);
-                }
-            }
-        }
+    fn consume(&mut self, n: u32) {
+        self.cur <<= n;
+        self.cnt -= n as i32;
     }
 
-    fn skip(&mut self, n: u32) -> Result<()> {
-        for _ in 0..n {
-            self.bit()
-                .ok_or_else(|| anyhow::anyhow!("truncated bits"))?;
+    fn peek8(&mut self) -> u8 {
+        if self.cnt < 8 {
+            if let Some(byte) = self.fetch_byte() {
+                self.cur |= u32::from(byte) << (24 - self.cnt);
+                self.cnt += 8;
+            } else {
+                let padding = (1u16 << (8 - self.cnt)) - 1;
+                return (self.cur >> 24) as u8 | padding as u8;
+            }
         }
-        Ok(())
+        (self.cur >> 24) as u8
     }
 
     /// Discard bits to the byte boundary and rewind whole unconsumed bytes
