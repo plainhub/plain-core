@@ -282,3 +282,62 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     server.shutdown().await;
     web.abort();
 }
+
+#[tokio::test]
+async fn delete_bookmark_group_emits_stored_rows_after_database_changes() {
+    let directory = tempfile::tempdir().unwrap();
+    let token = plain_libs::utils::base64::base64_encode(&[19; 32]);
+    let prefs = Arc::new(
+        plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
+    );
+    let server = ContentServer::start(directory.path(), &token, prefs).unwrap();
+    let db = Db::open(&directory.path().join("plain.db")).unwrap();
+    use plain_rs::infrastructure::db::bookmark as store;
+    let group = store::DBookmarkGroup::new("Owned group");
+    store::insert_bookmark_group(&db, &group).unwrap();
+    let mut selected = store::DBookmark::new("https://fixture.invalid/selected", &group.id);
+    selected.id = "owned".into();
+    let neighbor = store::DBookmark::new("https://fixture.invalid/neighbor", "");
+    store::insert_bookmark(&db, &selected).unwrap();
+    store::insert_bookmark(&db, &neighbor).unwrap();
+    db.with_conn(|conn| conn.execute_batch("CREATE TRIGGER observed_bookmark_change BEFORE UPDATE OF group_id ON bookmarks WHEN OLD.id='owned' BEGIN UPDATE bookmarks SET sort_order=42 WHERE id=OLD.id; END;")).unwrap();
+    let mut events = server.runtime_state().events.subscribe();
+    let response = call(
+        server.port,
+        &token,
+        &format!("mutation {{deleteBookmarkGroup(id:\"{}\")}}", group.id),
+    )
+    .await;
+    assert!(response.get("errors").is_none(), "{response}");
+    let event = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        for _ in 0..32 {
+            let event = events.recv().await.unwrap();
+            if event.event_type == plain_rs::infrastructure::events::WS_BOOKMARK_UPDATED {
+                return event;
+            }
+        }
+        panic!("Bookmark event missing");
+    })
+    .await
+    .unwrap();
+    let emitted: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+    let stored = store::get_bookmark_by_id(&db, &selected.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.group_id, None);
+    assert_eq!(stored.sort_order, 42);
+    assert_eq!(emitted.as_array().unwrap().len(), 1);
+    assert_eq!(emitted[0]["id"], selected.id);
+    assert_eq!(emitted[0]["sortOrder"], stored.sort_order);
+    assert_eq!(emitted[0]["updatedAt"], stored.updated_at);
+    assert_eq!(
+        serde_json::to_value(
+            store::get_bookmark_by_id(&db, &neighbor.id)
+                .unwrap()
+                .unwrap()
+        )
+        .unwrap(),
+        serde_json::to_value(neighbor).unwrap()
+    );
+    server.shutdown().await;
+}

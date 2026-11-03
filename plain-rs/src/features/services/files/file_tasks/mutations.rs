@@ -186,7 +186,7 @@ impl FileTasks {
                 .invalidate_paths(&removed_paths, &roots)?;
             let prefs = self.hooks.prefs.clone();
             let index = self.hooks.index.clone();
-            self.hooks
+            let changed_types = self.hooks
                 .audio
                 .run(move |db, engine| {
                     use crate::features::files::deletes as media_deletes;
@@ -219,10 +219,11 @@ impl FileTasks {
                             1.0,
                         )?;
                     }
-                    Ok(())
+                    Ok(items.into_iter().map(|item| item.media_type).collect::<Vec<_>>())
                 })
                 .await
                 .map_err(|e| anyhow!(e.to_string()))?;
+            crate::features::services::files::catalog_events::publish(&self.events, changed_types);
             let _ = self
                 .events
                 .send(WsEvent::broadcast("CONTENT_CHANGED", "{}".into()));

@@ -161,26 +161,20 @@ pub fn classify_mount_line(line: &str) -> Option<MountLine> {
     let fstype = cols[2];
     let opts = cols.get(3).copied().unwrap_or("");
 
-    if SKIP_FS_TYPES.contains(&fstype) {
-        return None;
-    }
-    if SKIP_MOUNT_POINTS.contains(&target) {
-        return None;
-    }
-    if !opts.is_empty() && opts.contains("bind") {
-        return None;
-    }
-
     let is_block = src.starts_with("/dev/");
     let is_remote = src.contains(':')
         || fstype.starts_with("nfs")
         || fstype.contains("cifs")
         || fstype.contains("smb")
         || fstype.contains("sshfs");
-    if !is_block && !is_remote {
-        return None;
-    }
-    if src.starts_with("/dev/zram") || src.starts_with("/dev/loop") {
+    if target != "/"
+        && (SKIP_FS_TYPES.contains(&fstype)
+            || SKIP_MOUNT_POINTS.contains(&target)
+            || opts.contains("bind")
+            || (!is_block && !is_remote)
+            || src.starts_with("/dev/zram")
+            || src.starts_with("/dev/loop"))
+    {
         return None;
     }
     Some(MountLine {

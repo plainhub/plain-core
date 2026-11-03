@@ -213,5 +213,23 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
         state.upload_chunks.list("fixture").await.unwrap(),
         vec![format!("0:{}", data.len())]
     );
+    let response = multipart_upload(
+        &core,
+        "/upload_chunk",
+        &client_id,
+        Some(&token),
+        &key,
+        serde_json::json!({"fileId":"empty","index":0,"size":0}),
+        b"",
+        false,
+    )
+    .await;
+    assert_eq!(response.status(), 201);
+    assert_eq!(response.text().await.unwrap(), "0:0");
+    assert_eq!(state.upload_chunks.list("empty").await.unwrap(), vec!["0:0"]);
+    assert_eq!(
+        state.upload_chunks.list("fixture").await.unwrap(),
+        vec![format!("0:{}", data.len())]
+    );
     core.shutdown().await;
 }

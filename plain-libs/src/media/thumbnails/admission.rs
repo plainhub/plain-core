@@ -1,15 +1,3 @@
-//! Two-tier admission control for thumbnail generation.
-//!
-//! The old pipeline capped concurrency at `min(cpus, 8)` permits to avoid
-//! OOM (8 × full-size decoded bitmaps). That conflated two resources:
-//!
-//! - **CPU**: decode is compute-bound; ~2 permits per core saturates the box
-//!   while leaving headroom for I/O waits.
-//! - **Decoded-pixel memory**: the real reason the old cap existed. Pricing
-//!   it per-request (from the sniffed header) lets hundreds of *small*
-//!   generations run concurrently while a handful of 50 MP decodes are held
-//!   back by a byte budget, not by a global counter.
-
 use std::sync::OnceLock;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
@@ -23,6 +11,7 @@ pub const MAX_SOURCE_PIXELS: u64 = 300_000_000;
 
 pub struct Admission {
     cpu: std::sync::Arc<Semaphore>,
+    workers: usize,
     mem: std::sync::Arc<Semaphore>,
     /// Total memory budget in permit units (the semaphore alone cannot tell
     /// "fully used" from "configured total").
@@ -34,9 +23,14 @@ impl Admission {
         let total_units = units_for(u64::from(mem_budget_mb.max(1)) * 1024 * 1024);
         Admission {
             cpu: std::sync::Arc::new(Semaphore::new(cpu_permits.max(1))),
+            workers: cpu_permits.max(1),
             mem: std::sync::Arc::new(Semaphore::new(total_units.min(u32::MAX as u64) as usize)),
             mem_total: total_units,
         }
+    }
+
+    pub fn workers(&self) -> usize {
+        self.workers
     }
 
     pub fn mem_budget_mb(&self) -> u32 {
@@ -80,10 +74,8 @@ impl Admission {
     }
 }
 
-/// Estimated byte cost → memory-permit units. Floors: jobs under one unit
-/// are free — that is the point of pricing instead of counting.
 fn units_for(est_bytes: u64) -> u64 {
-    est_bytes / MEM_UNIT
+    est_bytes.div_ceil(MEM_UNIT)
 }
 
 /// Per-job RAII permits.
@@ -97,19 +89,23 @@ static GLOBAL: OnceLock<Admission> = OnceLock::new();
 fn build(raw: i64) -> Admission {
     let cpus = std::thread::available_parallelism()
         .map(|n| n.get())
-        .unwrap_or(4);
-    let cpu_permits = (cpus * 2).clamp(4, 64);
+        .unwrap_or(1);
+    let cpu_permits = crate::media::thumbnail_limits::workers(cpus);
     // Missing/invalid key (get_int → 0) falls back to the 2 GB default.
-    let mb = if raw <= 0 {
-        2048
-    } else {
-        raw.clamp(128, 16_384)
-    } as u32;
+    let mb = if raw <= 0 { 2048 } else { raw.clamp(1, 16_384) } as u32;
     Admission::new(cpu_permits, mb)
 }
 
 pub fn initialize(mem_budget_mb: i64) {
     let _ = GLOBAL.set(build(mem_budget_mb));
+}
+
+pub fn initialize_with_memory(sample: impl FnOnce() -> u64) {
+    GLOBAL.get_or_init(|| {
+        build(i64::from(crate::media::thumbnail_limits::memory_budget_mb(
+            sample(),
+        )))
+    });
 }
 
 pub fn global() -> &'static Admission {

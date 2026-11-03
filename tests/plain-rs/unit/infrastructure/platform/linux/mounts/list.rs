@@ -197,3 +197,16 @@ fn unmounted_usb_partitions_inherit_the_parent_transport() {
     let mounts = partition_mounts(&[parent]);
     assert_eq!(mounts[0].drive_type.as_deref(), Some("USB_STORAGE"));
 }
+
+#[test]
+fn classify_keeps_root_filesystems_without_physical_block_devices() {
+    for line in [
+        "overlay / overlay rw,relatime 0 0",
+        "rootfs / rootfs rw 0 0",
+        "/dev/loop0 / squashfs ro 0 0",
+    ] {
+        let mount = classify_mount_line(line).unwrap();
+        assert_eq!(mount.target, "/");
+        assert!(!mount.is_remote);
+    }
+}

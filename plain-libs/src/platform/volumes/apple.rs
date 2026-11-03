@@ -50,7 +50,7 @@ fn string(value: Ref) -> Result<String> {
         .to_owned())
 }
 
-pub(super) fn containing(path: &Path) -> Result<Location> {
+fn resource_url(path: &Path) -> Result<Owned> {
     let bytes = path.as_os_str().as_bytes();
     let raw = unsafe {
         CFURLCreateFromFileSystemRepresentation(
@@ -61,7 +61,12 @@ pub(super) fn containing(path: &Path) -> Result<Location> {
         )
     };
     ensure!(!raw.is_null(), "Cannot create filesystem resource URL");
-    let url = Owned(raw);
+    Ok(Owned(raw))
+}
+
+pub(super) fn containing(path: &Path) -> Result<Location> {
+    let bytes = path.as_os_str().as_bytes();
+    let url = resource_url(path)?;
     let root =
         property(url.0, unsafe { kCFURLVolumeURLKey })?.context("Volume root is unavailable")?;
     let raw_path = unsafe { CFURLCopyFileSystemPath(root.0, 0) };
@@ -88,11 +93,39 @@ pub(super) fn containing(path: &Path) -> Result<Location> {
     };
     let canonical = property(url.0, unsafe { kCFURLCanonicalPathKey })?
         .context("Canonical filesystem path is unavailable")?;
+    let canonical = PathBuf::from(string(canonical.0)?);
+    let root_path = root_for_path(&canonical, root_path, &identity, |root| {
+        let url = resource_url(root)?;
+        let uuid = property(url.0, unsafe { kCFURLVolumeUUIDStringKey })?
+            .context("Namespace root volume identity is unavailable")?;
+        Ok(format!("UUID:{}", string(uuid.0)?.to_uppercase()))
+    })?;
     Ok(Location {
         volume: Volume {
             identity,
             path: root_path,
         },
-        path: PathBuf::from(string(canonical.0)?),
+        path: canonical,
     })
 }
+
+fn root_for_path(
+    path: &Path,
+    reported: PathBuf,
+    identity: &str,
+    read_identity: impl FnOnce(&Path) -> Result<String>,
+) -> Result<PathBuf> {
+    if path.starts_with(&reported) {
+        return Ok(reported);
+    }
+    let root = Path::new("/");
+    ensure!(
+        read_identity(root)? == identity,
+        "File is outside its volume root"
+    );
+    Ok(root.to_owned())
+}
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-libs/unit/platform/volumes/apple.rs"]
+mod tests;

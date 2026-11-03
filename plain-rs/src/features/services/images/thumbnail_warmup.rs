@@ -34,7 +34,8 @@ pub(crate) fn start(state: Runtime) {
 
 async fn warm_catalog(state: &Runtime) -> Result<(), String> {
     trim(state).await?;
-    let workers = background_workers(std::thread::available_parallelism().map_or(1, |n| n.get()));
+    let workers =
+        plain_libs::media::thumbnail_limits::background_workers(state.thumbnails.workers());
     let mut warmed_bytes = 0;
     let mut budget_available = true;
     for kind in [FileKind::Image, FileKind::Audio, FileKind::Video] {
@@ -77,10 +78,6 @@ async fn warm_catalog(state: &Runtime) -> Result<(), String> {
         }
     }
     trim(state).await
-}
-
-fn background_workers(cores: usize) -> usize {
-    cores.saturating_sub(1).clamp(1, 3)
 }
 
 async fn warm_source(state: &Runtime, row: Source, kind: FileKind) -> usize {

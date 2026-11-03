@@ -43,6 +43,21 @@ pub struct Thumbnails {
 }
 impl Thumbnails {
     pub(crate) fn new() -> (Self, tokio::sync::mpsc::Receiver<Generation>) {
+        #[cfg(feature = "media")]
+        plain_libs::media::thumbnails::admission::initialize_with_memory(|| {
+            #[cfg(not(target_os = "ios"))]
+            {
+                let mut system = sysinfo::System::new();
+                system.refresh_memory();
+                system.total_memory()
+            }
+            #[cfg(target_os = "ios")]
+            {
+                plain_libs::platform::apple_device::total_memory()
+                    .unwrap_or(0)
+                    .max(0) as u64
+            }
+        });
         let (queue, receiver) = Queue::new();
         (
             Self {
@@ -192,6 +207,19 @@ impl Drop for Output<'_> {
     }
 }
 impl Thumbnails {
+    pub(super) fn workers(&self) -> usize {
+        #[cfg(feature = "media")]
+        {
+            plain_libs::media::thumbnails::admission::global().workers()
+        }
+        #[cfg(not(feature = "media"))]
+        {
+            plain_libs::media::thumbnail_limits::workers(
+                std::thread::available_parallelism().map_or(1, |n| n.get()),
+            )
+        }
+    }
+
     pub fn submit(&self, token: &str, bytes: Vec<u8>) -> Result<(), String> {
         validate_output(&bytes)?;
         self.outputs

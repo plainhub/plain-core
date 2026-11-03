@@ -244,9 +244,11 @@ async fn cancelling_a_started_generation_keeps_its_slot_and_single_flight_until_
 }
 
 #[tokio::test]
-async fn cancelling_300_queued_requests_releases_admission_without_starting_a_decode() {
+async fn cancelling_queued_requests_releases_admission_without_starting_a_decode() {
     let (_directory, core, _cache) = server_with_cache();
     let state = core.runtime_state();
+    let workers = state.thumbnails.workers();
+    let queued = 300.min(320 - workers);
     let source = tempfile::tempdir().unwrap();
     let path = source.path().join("image.jpg");
     image::RgbImage::from_pixel(800, 400, image::Rgb([10, 200, 20]))
@@ -255,7 +257,7 @@ async fn cancelling_300_queued_requests_releases_admission_without_starting_a_de
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
     *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
     let mut active = tokio::task::JoinSet::new();
-    for width in 81..85 {
+    for width in 81..81 + workers as u32 {
         let state = state.clone();
         let request = Request {
             width,
@@ -268,7 +270,7 @@ async fn cancelling_300_queued_requests_releases_admission_without_starting_a_de
             .thumbnails
             .native_decodes
             .load(std::sync::atomic::Ordering::SeqCst)
-            != 4
+            != workers
         {
             tokio::task::yield_now().await;
         }
@@ -276,13 +278,13 @@ async fn cancelling_300_queued_requests_releases_admission_without_starting_a_de
     .await
     .unwrap();
     let mut requests = tokio::task::JoinSet::new();
-    for _ in 0..300 {
+    for _ in 0..queued {
         let state = state.clone();
         let request = request_for(&path);
         requests.spawn(async move { state.thumbnails.get(&state, request).await });
     }
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        while state.thumbnails.queue.waiting() != 304 {
+        while state.thumbnails.queue.waiting() != queued + workers {
             tokio::task::yield_now().await;
         }
     })
@@ -290,14 +292,14 @@ async fn cancelling_300_queued_requests_releases_admission_without_starting_a_de
     .unwrap();
     requests.abort_all();
     while requests.join_next().await.is_some() {}
-    assert_eq!(state.thumbnails.requests.available_permits(), 316);
-    gate.add_permits(4);
+    assert_eq!(state.thumbnails.requests.available_permits(), 320 - workers);
+    gate.add_permits(workers);
     while let Some(result) = active.join_next().await {
         assert!(result.unwrap().unwrap().is_some());
     }
     *state.thumbnails.decode_gate.lock().unwrap() = None;
     let next = Request {
-        width: 85,
+        width: 81 + workers as u32,
         ..request_for(&path)
     };
     assert!(state.thumbnails.get(&state, next).await.unwrap().is_some());
@@ -306,7 +308,7 @@ async fn cancelling_300_queued_requests_releases_admission_without_starting_a_de
             .thumbnails
             .native_decodes
             .load(std::sync::atomic::Ordering::SeqCst),
-        5
+        workers + 1
     );
     core.stop_core().await;
 }

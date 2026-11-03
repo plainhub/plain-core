@@ -70,12 +70,12 @@ impl Queue {
     }
 
     pub(super) async fn run(state: CoreRuntime, mut receiver: mpsc::Receiver<Generation>) {
-        const WORKERS: usize = 4;
+        let workers = state.thumbnails.workers();
         let mut stop = state.stop.clone();
         let mut running = FuturesUnordered::new();
-        let mut batch = Vec::with_capacity(WORKERS);
+        let mut batch = Vec::with_capacity(workers);
         loop {
-            let slots = WORKERS - running.len();
+            let slots = workers - running.len();
             tokio::select! {
                 _ = stop.wait_for(|value| *value) => break,
                 _ = running.next(), if !running.is_empty() => {},

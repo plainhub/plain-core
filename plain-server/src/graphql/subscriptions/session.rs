@@ -463,17 +463,20 @@ impl Session {
                             _ = task_scope.wait_closed() => break,
                             changed = readiness.changed(), if !ready_sent => {
                                 if changed.is_err() { ready_sent = true; }
-                                else if *readiness.borrow() {
-                                    ready_sent = true;
-                                    let response = async_graphql::Response::default().extension("subscriptionReady", async_graphql::Value::Boolean(true));
-                                    if session.queue_operation(ServerMessage::Next { id: task_id.clone(), payload: response }, spec, task_scope.clone()).await.is_err() { break; }
-                                }
-                                continue;
+                                None
                             },
-                            response = stream.next() => response,
+                            response = stream.next() => {
+                                let Some(response) = response else { break; };
+                                Some(response)
+                            },
                         };
+                        if !ready_sent && *readiness.borrow() {
+                            ready_sent = true;
+                            let response = async_graphql::Response::default().extension("subscriptionReady", async_graphql::Value::Boolean(true));
+                            if session.queue_operation(ServerMessage::Next { id: task_id.clone(), payload: response }, spec, task_scope.clone()).await.is_err() { break; }
+                        }
                         let Some(response) = response else {
-                            break;
+                            continue;
                         };
                         let terminal = response.data == async_graphql::Value::Null
                             && !response.errors.is_empty();

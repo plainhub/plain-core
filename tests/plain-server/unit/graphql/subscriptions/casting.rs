@@ -44,6 +44,13 @@ async fn query_and_subscription_share_sender_state_without_starting_scan_or_chan
     executor.subscription_session(handle).unwrap().send(&json!({
         "type":"subscribe", "id":"casting", "payload":{"query":format!("subscription {{ dlnaSenderChanged {{ {fields} }} }}")}
     }).to_string()).unwrap();
+    let ready: Value = serde_json::from_str(
+        &tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            executor.subscription_session(handle).unwrap().read(),
+        ).await.unwrap().unwrap(),
+    ).unwrap();
+    assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true, "{ready}");
     assert_eq!(snapshot(&executor, handle).await, queried);
     let changed = executor.execute(r#"mutation { addDlnaItem(item:{path:"owned.mp3",title:"owned"}) { version items {path} } }"#.into()).await;
     assert!(changed.errors.is_empty(), "{:?}", changed.errors);

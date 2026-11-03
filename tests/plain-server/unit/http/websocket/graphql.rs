@@ -136,6 +136,10 @@ async fn fs_burst_and_page_cancellation(
 ) {
     use std::sync::atomic::Ordering;
     let state = server.runtime_state();
+    let workers = plain_libs::media::thumbnail_limits::workers(
+        std::thread::available_parallelism().unwrap().get(),
+    )
+    .min(300);
     let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let pem = certificate.cert.pem();
     let (_, port) = server
@@ -188,7 +192,7 @@ async fn fs_burst_and_page_cancellation(
     }
     tokio::time::timeout(Duration::from_secs(10), async {
         while state.thumbnails.admitted_requests() != 300
-            || state.thumbnails.native_decodes.load(Ordering::SeqCst) != 4
+            || state.thumbnails.native_decodes.load(Ordering::SeqCst) != workers
         {
             tokio::task::yield_now().await;
         }
@@ -226,7 +230,10 @@ async fn fs_burst_and_page_cancellation(
     let response: Value = serde_json::from_slice(&decoded).unwrap();
     assert_eq!(response["data"]["noteCount"], 0);
     heartbeat(socket, cipher, key).await;
-    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 4);
+    assert_eq!(
+        state.thumbnails.native_decodes.load(Ordering::SeqCst),
+        workers
+    );
     pending.abort_all();
     while pending.join_next().await.is_some() {}
     tokio::time::timeout(Duration::from_secs(10), async {
@@ -236,9 +243,12 @@ async fn fs_burst_and_page_cancellation(
     })
     .await
     .unwrap();
-    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 4);
+    assert_eq!(
+        state.thumbnails.native_decodes.load(Ordering::SeqCst),
+        workers
+    );
     *state.thumbnails.decode_gate.lock().unwrap() = None;
-    gate.add_permits(4);
+    gate.add_permits(workers);
     let next = http
         .get(format!("{origin}/fs"))
         .query(&[("id", ids[300].as_str()), ("w", "512"), ("h", "512")])
@@ -248,7 +258,10 @@ async fn fs_burst_and_page_cancellation(
     assert_eq!(next.status(), StatusCode::OK);
     let image = image::load_from_memory(&next.bytes().await.unwrap()).unwrap();
     assert_eq!((image.width(), image.height()), (512, 512));
-    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 5);
+    assert_eq!(
+        state.thumbnails.native_decodes.load(Ordering::SeqCst),
+        workers + 1
+    );
     let mut complete = tokio::task::JoinSet::new();
     for id in &ids[..300] {
         let request = http.get(format!("{origin}/fs")).query(&[

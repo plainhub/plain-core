@@ -1,33 +1,64 @@
-//! Unit tests for `src/media/thumb_engine/admission.rs` — moved out-of-line; compiled
-//! as the `tests` child module via `#[cfg(test)] #[path]` there.
 use super::*;
 
 #[test]
-fn mem_units_floor_semantics() {
+fn memory_charges_round_up() {
     assert_eq!(units_for(0), 0);
-    assert_eq!(units_for(MEM_UNIT - 1), 0);
+    assert_eq!(units_for(MEM_UNIT - 1), 1);
     assert_eq!(units_for(MEM_UNIT), 1);
-    assert_eq!(units_for(MEM_UNIT * 2 + 1), 2);
+    assert_eq!(units_for(MEM_UNIT * 2 + 1), 3);
 }
 
 #[test]
 fn config_clamps_budget() {
-    assert_eq!(build(1).mem_budget_mb(), 128);
+    assert_eq!(build(1).mem_budget_mb(), 1);
     assert_eq!(build(999_999).mem_budget_mb(), 16_384);
     assert_eq!(build(2048).mem_budget_mb(), 2048);
     assert_eq!(build(0).mem_budget_mb(), 2048, "default budget");
 }
 
 #[tokio::test]
-async fn many_small_jobs_run_concurrently() {
-    // Tiny memory budget but ample CPU permits: sub-unit jobs must all
-    // be admissible simultaneously — memory pricing, not job counting.
+async fn small_jobs_consume_memory_and_release_it_on_drop() {
     let adm = Admission::new(64, 1);
     let mut held = Vec::new();
-    for _ in 0..64 {
-        held.push(adm.acquire(16 * 1024).await.unwrap()); // sub-unit → free
+    for _ in 0..16 {
+        held.push(adm.acquire(16 * 1024).await.unwrap());
     }
-    assert_eq!(held.len(), 64);
+    let mut waiter = Box::pin(adm.acquire(1));
+    assert!(poll_once(waiter.as_mut()).is_pending());
+    held.pop();
+    assert!(poll_once(waiter.as_mut()).is_ready());
+}
+
+fn poll_once<F: std::future::Future>(future: std::pin::Pin<&mut F>) -> std::task::Poll<F::Output> {
+    future.poll(&mut std::task::Context::from_waker(std::task::Waker::noop()))
+}
+
+#[tokio::test]
+async fn cpu_limit_applies_even_when_memory_is_free() {
+    let adm = Admission::new(3, 128);
+    let mut held = Vec::new();
+    for _ in 0..adm.workers() {
+        held.push(adm.acquire(0).await.unwrap());
+    }
+    let mut next = Box::pin(adm.acquire(0));
+    assert!(poll_once(next.as_mut()).is_pending());
+    held.pop();
+    assert!(poll_once(next.as_mut()).is_ready());
+}
+
+#[tokio::test]
+async fn cancelling_a_memory_waiter_releases_its_cpu_slot() {
+    let adm = Admission::new(2, 1);
+    let held = adm.acquire(1024 * 1024).await.unwrap();
+    let mut waiter = Box::pin(adm.acquire(1));
+    assert!(poll_once(waiter.as_mut()).is_pending());
+    assert_eq!(adm.cpu.available_permits(), 0);
+    drop(waiter);
+    assert_eq!(adm.cpu.available_permits(), 1);
+    drop(held);
+    assert_eq!(adm.cpu.available_permits(), 2);
+    assert_eq!(adm.mem.available_permits(), 16);
+    assert!(adm.acquire(1024 * 1024 + 1).await.is_err());
 }
 
 #[tokio::test]
@@ -47,17 +78,7 @@ async fn budget_blocks_until_released() {
     let held = adm.acquire(1024 * 1024).await.unwrap();
     let waiter = adm.acquire(1024 * 1024);
     tokio::pin!(waiter);
-    // Must be parked while the budget is exhausted...
-    assert!(
-        tokio::time::timeout(std::time::Duration::from_millis(50), &mut waiter)
-            .await
-            .is_err()
-    );
+    assert!(poll_once(waiter.as_mut()).is_pending());
     drop(held);
-    // ...and complete once released.
-    assert!(
-        tokio::time::timeout(std::time::Duration::from_secs(2), &mut waiter)
-            .await
-            .is_ok()
-    );
+    assert!(poll_once(waiter.as_mut()).is_ready());
 }

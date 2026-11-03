@@ -1,5 +1,55 @@
 use crate::test_runtime::Core as ContentServer;
 
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn deleting_an_indexed_image_publishes_its_library_type_and_preserves_its_neighbor() {
+    use crate::features::enums::DataType;
+    let directory = tempfile::tempdir().unwrap();
+    let core = ContentServer::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let catalog =
+        crate::features::services::files::catalog_scan::NativeMediaCatalog::new(state.clone());
+    let bytes = std::fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata/v-prog420.jpg"),
+    )
+    .unwrap();
+    let selected = directory.path().join("selected.jpg");
+    let neighbor = directory.path().join("neighbor.jpg");
+    for path in [&selected, &neighbor] {
+        std::fs::write(path, &bytes).unwrap();
+        catalog
+            .record_files(&[crate::features::media::file_facts::read_file_metadata(
+                path,
+                DataType::Image,
+            )
+            .unwrap()])
+            .unwrap();
+    }
+    let mut events = state.events.subscribe();
+    assert_eq!(
+        state
+            .files
+            .delete_many(vec![selected.to_string_lossy().into_owned()])
+            .await
+            .unwrap(),
+        1
+    );
+    let mut changes = Vec::new();
+    while let Ok(event) = events.try_recv() {
+        if event.event_type == crate::infrastructure::events::MEDIA_LIBRARY_UPDATED {
+            changes.push(serde_json::from_str::<serde_json::Value>(&event.payload).unwrap());
+        }
+    }
+    assert!(
+        changes.contains(&serde_json::json!({"types":[3]})),
+        "{changes:?}"
+    );
+    assert!(!selected.exists());
+    assert_eq!(std::fs::read(&neighbor).unwrap(), bytes);
+    assert_eq!(state.db.media_file_count(DataType::Image).unwrap(), 1);
+    core.stop_core().await;
+}
+
 #[tokio::test]
 async fn overwriting_move_ignores_retired_catalog_rows_when_deleting_the_current_file() {
     let directory = tempfile::tempdir().unwrap();

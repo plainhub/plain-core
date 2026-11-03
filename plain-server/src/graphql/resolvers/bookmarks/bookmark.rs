@@ -205,19 +205,8 @@ impl BookmarkMutation {
 
     fn delete_bookmark_group(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
         let db = ctx.data_unchecked::<Arc<Db>>();
-        let affected = bookmark_db::get_bookmarks_by_group_id(db, id.as_str());
-        bookmark_db::delete_bookmark_group(db, id.as_str())?;
-        if !affected.is_empty() {
-            let updated = affected
-                .into_iter()
-                .map(|mut b| {
-                    b.group_id = None;
-                    b.updated_at = now_iso();
-                    b
-                })
-                .collect::<Vec<_>>();
-            emit_bookmark_updated(ctx, &updated);
-        }
+        let updated = bookmark_db::delete_bookmark_group(db, id.as_str())?;
+        emit_bookmark_updated(ctx, &updated);
         Ok(true)
     }
 }

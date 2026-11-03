@@ -425,7 +425,7 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
         Err(_) => return plain(StatusCode::BAD_REQUEST, "invalid multipart request"),
     };
     let mut info: Option<ChunkInfo> = None;
-    let mut saved_size = 0i64;
+    let mut saved_size = None;
     let mut failure: Option<Response> = None;
     loop {
         let field = match multipart.next_field().await {
@@ -467,7 +467,7 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
                 }
                 if current.size > 0 {
                     match store_chunk(&state, &mut field, &current).await {
-                        Ok(saved) => saved_size = saved,
+                        Ok(saved) => saved_size = Some(saved),
                         Err(error) => {
                             failure = Some(plain(StatusCode::BAD_REQUEST, error));
                             break;
@@ -499,7 +499,7 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
                     .join(temp_name(&format!("tmp_chunk_{}", current.index)));
                 let _temporary = Temporary(temp.clone());
                 match stream_to_file(&mut field, &temp).await {
-                    Ok(_) => {
+                    Ok(written) => {
                         let _ = tokio::fs::remove_file(&chunk).await;
                         if tokio::fs::rename(&temp, &chunk).await.is_err() {
                             // Some Android filesystems report a failed rename
@@ -520,12 +520,9 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
                                 ));
                                 break;
                             }
-                            saved_size = final_size;
+                            saved_size = Some(final_size);
                         } else {
-                            saved_size = match tokio::fs::metadata(&chunk).await {
-                                Ok(meta) => meta.len() as i64,
-                                Err(_) => 0,
-                            };
+                            saved_size = Some(written as i64);
                         }
                     }
                     Err(error) => {
@@ -544,7 +541,7 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
         return response;
     }
     let index = info.map(|value| value.index).unwrap_or(0);
-    if saved_size > 0 {
+    if let Some(saved_size) = saved_size {
         plain(StatusCode::CREATED, format!("{index}:{saved_size}"))
     } else {
         plain(StatusCode::BAD_REQUEST, "chunk upload failed")
