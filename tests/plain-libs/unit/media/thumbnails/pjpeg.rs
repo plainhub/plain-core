@@ -240,7 +240,7 @@ fn complete_dc_header_serves_the_same_pixels_without_opening_the_source() {
     );
     let sos = data.windows(2).position(|b| b == [0xff, 0xda]).unwrap();
     let start = sos + 2 + usize::from(u16::from_be_bytes([data[sos + 2], data[sos + 3]]));
-    assert!(decode_dc_prefix(&data).is_err());
+    assert!(Decoder::new(&data).unwrap().decode(true, None).is_err());
     data[start - 1] = 0;
     let mut scan = Decoder::new(&data).unwrap();
     scan.pos = start;
@@ -249,12 +249,19 @@ fn complete_dc_header_serves_the_same_pixels_without_opening_the_source() {
     data.truncate(end);
     data.extend_from_slice(&[0xff, 0xd9]);
     let expected = reference_1_8(&data);
-    assert!(decode_dc_prefix(&data[..end - 1]).is_err());
+    assert!(
+        Decoder::new(&data[..end - 1])
+            .unwrap()
+            .decode(true, None)
+            .is_err()
+    );
     let header = super::super::sniff::sniff_header(&data).unwrap();
-    let decoded = super::super::decode_to_target("absent-source.jpg", &data, header, 8, 8).unwrap();
+    let decoded =
+        super::super::decode_to_target("absent-source.jpg", &data, header, 8, 8, None, None)
+            .unwrap();
     assert_same(&decoded, &expected, "DC header");
     data.drain(2..20);
-    assert!(decode_dc_prefix(&data).is_err());
+    assert!(Decoder::new(&data).unwrap().decode(true, None).is_err());
     assert_same(
         &decode_dc_only_bytes(&data).unwrap(),
         &expected,
@@ -289,5 +296,108 @@ fn invalid_quantization_ids_return_errors() {
             .unwrap();
         broken[i + field_offset] = 4;
         assert!(decode_dc_only_bytes(&broken).is_err());
+    }
+}
+
+fn reference_difference(table: &HuffTable, bits: &mut Bits) -> Option<i32> {
+    let category = u32::from(table.long_category(bits).ok()?);
+    if category == 0 {
+        return Some(0);
+    }
+    let magnitude = bits.receive(category)? as i32;
+    Some(extend(magnitude, category))
+}
+
+#[test]
+fn grouped_dc_codes_match_serial_decoding_at_every_bit_offset() {
+    let mut counts = [0; 16];
+    counts[0] = 1;
+    let y = HuffTable::build(&counts, &[3]).unwrap();
+    let cb = HuffTable::build(&counts, &[0]).unwrap();
+    let cr = HuffTable::build(&counts, &[11]).unwrap();
+    let bytes = [
+        0x12, 0x34, 0x08, 0x04, 0x24, 0x06, 0x14, 0x68, 0x12, 0x40, 0x24, 0x40, 0, 0, 0, 0,
+    ];
+    for offset in 0..8 {
+        let mut data = vec![0; 2];
+        let mut output_bit = offset;
+        // Emit four signed 3-bit luma deltas, zero Cb, and a partially tabled 11-bit Cr.
+        for (magnitude, width) in [(4u16, 3), (2, 3), (5, 3), (1, 3), (0, 0), (0x642, 11)] {
+            for bit in (0..=width).rev() {
+                if output_bit / 8 >= data.len() {
+                    data.push(0)
+                }
+                data[output_bit / 8] |= (((magnitude >> bit) & 1) as u8) << (7 - output_bit % 8);
+                output_bit += 1;
+            }
+        }
+        data.extend_from_slice(&bytes);
+        let mut grouped = Bits::new(&data, 0);
+        let mut serial = Bits::new(&data, 0);
+        for b in [&mut grouped, &mut serial] {
+            b.receive(offset as u32).unwrap();
+        }
+        let expected =
+            [&y, &y, &y, &y, &cb, &cr].map(|t| reference_difference(t, &mut serial).unwrap());
+        assert_eq!(expected, [4, -5, 5, -6, 0, 0x642]);
+        assert_eq!(grouped.try_420_window([&y, &cb, &cr]), Some(expected));
+        assert_eq!(grouped.pos_after(), serial.pos_after());
+        assert_eq!(grouped.receive(16), serial.receive(16));
+    }
+}
+
+#[test]
+fn grouped_dc_falls_back_without_consuming_long_codes_stuffing_or_markers() {
+    let mut counts = [0; 16];
+    counts[0] = 1;
+    counts[10] = 1;
+    let table = HuffTable::build(&counts, &[0, 10]).unwrap();
+    for data in [
+        &[0x80, 0, 0x40, 0, 0, 0, 0, 0, 0, 0][..],
+        &[0, 0xff, 0, 4, 5, 6, 7, 8, 9],
+        &[0, 0xff, 0xd0],
+        &[0x80, 0xff, 0xd9],
+    ] {
+        let mut grouped = Bits::new(data, 0);
+        assert!(grouped.try_420_window([&table; 3]).is_none());
+        assert_eq!((grouped.pos, grouped.cur, grouped.cnt), (0, 0, 0));
+        let mut serial = Bits::new(data, 0);
+        let expected = (0..6)
+            .map(|_| reference_difference(&table, &mut serial))
+            .collect::<Option<Vec<_>>>();
+        assert_eq!(
+            grouped.differences_420([&table; 3]).ok().map(Vec::from),
+            expected
+        );
+    }
+    let mut short = [0; 16];
+    short[0] = 1;
+    let wide = HuffTable::build(&short, &[11]).unwrap();
+    let data = [0; 16];
+    let mut bits = Bits::new(&data, 0);
+    assert!(bits.try_420_window([&wide; 3]).is_none());
+    assert_eq!(bits.pos_after(), 0);
+    assert_eq!(bits.differences_420([&wide; 3]).unwrap(), [-2047; 6]);
+    assert_eq!(bits.pos_after(), 9);
+}
+
+#[test]
+fn cropped_dc_reconstruction_matches_the_full_grid_with_chroma_neighbors() {
+    for file in ["v-photo-prog.jpg", "v-prog420.jpg", "v-prog-gray.jpg"] {
+        let data = fixture(file);
+        for (w, h) in [(1, 1), (3, 7), (9, 4), (1, 19), (20, 1)] {
+            let full = reference_1_8(&data);
+            let expected = super::super::scale::crop_for_fill(full, Some((w, h)));
+            PIXELS_RECONSTRUCTED.set(0);
+            let cropped = Decoder::new(&data)
+                .unwrap()
+                .decode(false, Some((w, h)))
+                .unwrap();
+            assert_same(&cropped, &expected, file);
+            assert_eq!(
+                PIXELS_RECONSTRUCTED.get(),
+                (expected.width() * expected.height()) as usize
+            );
+        }
     }
 }

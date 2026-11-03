@@ -372,19 +372,28 @@ pub fn center_crop(bitmap: Bitmap, width: u32, height: u32) -> Bitmap {
     }
 }
 
+pub(super) fn crop_size(sw: u32, sh: u32, target: Option<(u32, u32)>) -> (u32, u32) {
+    let Some((width, height)) = target else {
+        return (sw, sh);
+    };
+    if u64::from(sw) * u64::from(height) > u64::from(sh) * u64::from(width) {
+        (
+            (u64::from(sh) * u64::from(width) / u64::from(height)).max(1) as u32,
+            sh,
+        )
+    } else {
+        (
+            sw,
+            (u64::from(sw) * u64::from(height) / u64::from(width)).max(1) as u32,
+        )
+    }
+}
+
+pub(super) fn crop_for_fill(bitmap: Bitmap, target: Option<(u32, u32)>) -> Bitmap {
+    let (w, h) = crop_size(bitmap.width(), bitmap.height(), target);
+    center_crop(bitmap, w, h)
+}
+
 pub(super) fn resize_to_fill(bitmap: Bitmap, width: u32, height: u32) -> Bitmap {
-    let (sw, sh) = (bitmap.width(), bitmap.height());
-    let (crop_width, crop_height) =
-        if u64::from(sw) * u64::from(height) > u64::from(sh) * u64::from(width) {
-            (
-                (u64::from(sh) * u64::from(width) / u64::from(height)).max(1) as u32,
-                sh,
-            )
-        } else {
-            (
-                sw,
-                (u64::from(sw) * u64::from(height) / u64::from(width)).max(1) as u32,
-            )
-        };
-    resize_to(center_crop(bitmap, crop_width, crop_height), width, height)
+    resize_to(crop_for_fill(bitmap, Some((width, height))), width, height)
 }

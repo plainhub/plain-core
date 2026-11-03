@@ -27,7 +27,10 @@ use anyhow::{Result, bail};
 const MAX_SOURCE_PIXELS: u64 = 300_000_000;
 
 #[cfg(test)]
-thread_local! { static LAST_SKIP: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) }; }
+thread_local! {
+    static LAST_SKIP: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    static PIXELS_RECONSTRUCTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 pub fn decode_dc_only(path: &std::path::Path) -> Result<Bitmap> {
     let data = std::fs::read(path)?;
@@ -36,11 +39,20 @@ pub fn decode_dc_only(path: &std::path::Path) -> Result<Bitmap> {
 
 /// Decode a progressive JPEG to its 1/8-scale RGB bitmap from DC scans only.
 pub fn decode_dc_only_bytes(data: &[u8]) -> Result<Bitmap> {
-    Decoder::new(data)?.decode(false)
+    Decoder::new(data)?.decode(false, None)
 }
 
-pub(super) fn decode_dc_prefix(head: &[u8]) -> Result<Bitmap> {
-    Decoder::new(head)?.decode(true)
+pub(super) fn decode_thumbnail(
+    head: &[u8],
+    path: &std::path::Path,
+    crop: Option<(u32, u32)>,
+) -> Result<Bitmap> {
+    Decoder::new(head)
+        .and_then(|d| d.decode(true, crop))
+        .or_else(|_| {
+            let bytes = std::fs::read(path)?;
+            Decoder::new(&bytes)?.decode(false, crop)
+        })
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +135,7 @@ impl<'a> Decoder<'a> {
         })
     }
 
-    fn decode(mut self, prefix_only: bool) -> Result<Bitmap> {
+    fn decode(mut self, prefix_only: bool, crop: Option<(u32, u32)>) -> Result<Bitmap> {
         let mut saw_dc_scan = false;
         let mut color_declared = false;
         #[allow(clippy::while_let_loop)]
@@ -206,7 +218,7 @@ impl<'a> Decoder<'a> {
         if !saw_dc_scan {
             bail!("no DC scan decoded");
         }
-        let bitmap = self.reconstruct(&frame)?;
+        let bitmap = self.reconstruct(&frame, crop)?;
         #[cfg(test)]
         {
             LAST_SKIP.set((self.dc_bytes, self.skipped_bytes));
@@ -425,10 +437,7 @@ impl<'a> Decoder<'a> {
         let mut i = self.pos;
         while i + 1 < d.len() {
             if let Some(word) = d.get(i..i + 8) {
-                let inverted = !u64::from_ne_bytes(word.try_into().unwrap());
-                if inverted.wrapping_sub(0x0101_0101_0101_0101) & !inverted & 0x8080_8080_8080_8080
-                    == 0
-                {
+                if !has_ff_byte(u64::from_ne_bytes(word.try_into().unwrap())) {
                     i += 8;
                     continue;
                 }
@@ -570,7 +579,7 @@ impl<'a> Decoder<'a> {
     // Reconstruction: DC grids -> samples -> upsample -> color -> Bitmap
     // -----------------------------------------------------------------------
 
-    fn reconstruct(&self, frame: &Frame) -> Result<Bitmap> {
+    fn reconstruct(&self, frame: &Frame, crop: Option<(u32, u32)>) -> Result<Bitmap> {
         let n = frame.comps.len();
         let mut planes: Vec<Vec<u8>> = Vec::with_capacity(n);
         let mut dims: Vec<(usize, usize)> = Vec::with_capacity(n);
@@ -592,12 +601,18 @@ impl<'a> Decoder<'a> {
         }
 
         let (ow, oh) = dims[0];
-        let mut out = vec![0u8; ow * oh * 3];
+        let (w, h) = super::scale::crop_size(ow as u32, oh as u32, crop);
+        let (w, h) = (w as usize, h as usize);
+        let left = (ow - w) / 2;
+        let top = (oh - h) / 2;
+        let mut out = vec![0u8; w * h * 3];
         let mut yrow = vec![0u8; ow];
         let mut cbrow = vec![0u8; ow];
         let mut crrow = vec![0u8; ow];
 
-        for y in 0..oh {
+        for (y, row) in (top..top + h).zip(out.chunks_exact_mut(w * 3)) {
+            #[cfg(test)]
+            PIXELS_RECONSTRUCTED.set(PIXELS_RECONSTRUCTED.get() + row.len() / 3);
             upsample_row(
                 &planes[0],
                 dims[0].0,
@@ -607,7 +622,7 @@ impl<'a> Decoder<'a> {
                 frame,
                 &mut yrow,
             );
-            let row = &mut out[y * ow * 3..(y + 1) * ow * 3];
+
             if n == 3 {
                 upsample_row(
                     &planes[1],
@@ -627,29 +642,25 @@ impl<'a> Decoder<'a> {
                     frame,
                     &mut crrow,
                 );
-                if self.rgb_transform {
-                    for x in 0..ow {
-                        row[x * 3] = yrow[x];
-                        row[x * 3 + 1] = cbrow[x];
-                        row[x * 3 + 2] = crrow[x];
-                    }
-                } else {
-                    for x in 0..ow {
-                        let (r, g, b) = ycbcr_to_rgb(yrow[x], cbrow[x], crrow[x]);
-                        row[x * 3] = r;
-                        row[x * 3 + 1] = g;
-                        row[x * 3 + 2] = b;
-                    }
+                let samples = yrow[left..left + w]
+                    .iter()
+                    .zip(&cbrow[left..left + w])
+                    .zip(&crrow[left..left + w]);
+                for (((&y, &cb), &cr), pixel) in samples.zip(row.as_chunks_mut::<3>().0) {
+                    *pixel = if self.rgb_transform {
+                        [y, cb, cr]
+                    } else {
+                        let (r, g, b) = ycbcr_to_rgb(y, cb, cr);
+                        [r, g, b]
+                    };
                 }
             } else {
-                for x in 0..ow {
-                    row[x * 3] = yrow[x];
-                    row[x * 3 + 1] = yrow[x];
-                    row[x * 3 + 2] = yrow[x];
+                for (&y, pixel) in yrow[left..left + w].iter().zip(row.as_chunks_mut::<3>().0) {
+                    *pixel = [y; 3];
                 }
             }
         }
-        Ok(Bitmap::new_rgb(out, ow as u32, oh as u32))
+        Ok(Bitmap::new_rgb(out, w as u32, h as u32))
     }
 }
 
@@ -667,20 +678,26 @@ fn decode_420_initial(
     for band in luma.chunks_mut(2 * stride) {
         let (top, bottom) = band.split_at_mut(stride);
         for x in (0..stride).step_by(2) {
-            let mut sample = |channel: usize| -> Result<i16> {
-                predictors[channel] += tables[channel].difference(bits)?;
-                Ok((predictors[channel] << shift).clamp(-32768, 32767) as i16)
+            let [y0, y1, y2, y3, blue_delta, red_delta] = bits.differences_420(tables)?;
+            let mut sample = |channel: usize, difference: i32| {
+                predictors[channel] += difference;
+                (predictors[channel] << shift).clamp(-32768, 32767) as i16
             };
-            let upper = [sample(0)?, sample(0)?];
-            let lower = [sample(0)?, sample(0)?];
-            let count = 2.min(stride - x);
-            top[x..x + count].copy_from_slice(&upper[..count]);
+            let upper = [sample(0, y0), sample(0, y1)];
+            let lower = [sample(0, y2), sample(0, y3)];
+            top[x] = upper[0];
+            if x + 1 < stride {
+                top[x + 1] = upper[1];
+            }
             if !bottom.is_empty() {
-                bottom[x..x + count].copy_from_slice(&lower[..count]);
+                bottom[x] = lower[0];
+                if x + 1 < stride {
+                    bottom[x + 1] = lower[1];
+                }
             }
             let (blue, red) = chroma.next().unwrap();
-            *blue = sample(1)?;
-            *red = sample(2)?;
+            *blue = sample(1, blue_delta);
+            *red = sample(2, red_delta);
         }
     }
     Ok(())
@@ -822,13 +839,30 @@ fn h2v2_row(plane: &[u8], bw: usize, bh: usize, y: usize, out: &mut [u8]) {
 // Huffman + bit reader
 // ---------------------------------------------------------------------------
 
+fn has_ff_byte(word: u64) -> bool {
+    (!word).wrapping_sub(0x0101_0101_0101_0101) & word & 0x8080_8080_8080_8080 != 0
+}
+
 const PREFIX_BITS: usize = 10;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 struct Prefix {
     bits: u8,
-    remaining: u8,
+    suffix_mask: u16,
     difference: i16,
+}
+
+impl Prefix {
+    // An unresolved code makes the entire speculative group exceed its 64-bit window.
+    const LONG: Self = Self {
+        bits: 65,
+        suffix_mask: 0,
+        difference: 0,
+    };
+
+    fn difference(self, rotated: u64) -> i32 {
+        i32::from(self.difference) + i32::from(rotated as u16 & self.suffix_mask)
+    }
 }
 
 struct HuffTable {
@@ -844,7 +878,7 @@ impl HuffTable {
         let mut mincode = [0i32; 17];
         let mut maxcode = [-1i32; 17];
         let mut valptr = [0i32; 17];
-        let mut fast = [Prefix::default(); 1 << PREFIX_BITS];
+        let mut fast = [Prefix::LONG; 1 << PREFIX_BITS];
         let mut code: i32 = 0;
         let mut k: i32 = 0;
         for len in 1..=16usize {
@@ -863,18 +897,20 @@ impl HuffTable {
                         .take(span as usize)
                         .enumerate()
                     {
-                        if category > 0 && len + category <= PREFIX_BITS {
-                            let magnitude = suffix >> (PREFIX_BITS - len - category);
-                            *entry = Prefix {
-                                bits: (len + category) as u8,
-                                remaining: 0,
-                                difference: extend(magnitude as i32, u32::from(v)) as i16,
-                            };
-                        } else {
+                        if category == 0 {
                             *entry = Prefix {
                                 bits: len as u8,
-                                remaining: v,
+                                suffix_mask: 0,
                                 difference: 0,
+                            };
+                        } else if len < PREFIX_BITS && category <= 15 {
+                            let known = category.min(PREFIX_BITS - len);
+                            let missing = category - known;
+                            let magnitude = (suffix >> (PREFIX_BITS - len - known)) << missing;
+                            *entry = Prefix {
+                                bits: (len + category) as u8,
+                                suffix_mask: (1 << missing) - 1,
+                                difference: extend(magnitude as i32, category as u32) as i16,
                             };
                         }
                     }
@@ -897,18 +933,16 @@ impl HuffTable {
     #[inline]
     fn difference(&self, bits: &mut Bits) -> Result<i32> {
         let prefix = self.fast[bits.peek_prefix()];
-        let category = if prefix.bits == 0 {
-            self.long_category(bits)?
-        } else {
-            if bits.cnt < i32::from(prefix.bits) {
-                bail!("truncated DC code");
+        if prefix.bits != Prefix::LONG.bits {
+            while bits.cnt < i32::from(prefix.bits) {
+                bits.refill()
+                    .ok_or_else(|| anyhow::anyhow!("truncated DC difference"))?;
             }
+            let value = prefix.difference(bits.cur.rotate_left(u32::from(prefix.bits)));
             bits.consume(u32::from(prefix.bits));
-            if prefix.remaining == 0 {
-                return Ok(i32::from(prefix.difference));
-            }
-            prefix.remaining
-        };
+            return Ok(value);
+        }
+        let category = self.long_category(bits)?;
         if category == 0 {
             return Ok(0);
         }
@@ -955,6 +989,51 @@ impl<'a> Bits<'a> {
             cur: 0,
             cnt: 0,
         }
+    }
+
+    fn differences_420(&mut self, tables: [&HuffTable; 3]) -> Result<[i32; 6]> {
+        if let Some(values) = self.try_420_window(tables) {
+            return Ok(values);
+        }
+        let [y, cb, cr] = tables;
+        Ok([
+            y.difference(self)?,
+            y.difference(self)?,
+            y.difference(self)?,
+            y.difference(self)?,
+            cb.difference(self)?,
+            cr.difference(self)?,
+        ])
+    }
+
+    fn try_420_window(&mut self, [y, cb, cr]: [&HuffTable; 3]) -> Option<[i32; 6]> {
+        let bytes = self.data.get(self.pos..self.pos + 8)?;
+        let word = u64::from_be_bytes(bytes.try_into().unwrap());
+        if has_ff_byte(word) {
+            return None;
+        }
+        let mut window = self.cur | (word >> self.cnt);
+        let mut used = 0;
+        let mut read = |table: &HuffTable| {
+            let prefix = table.fast[(window >> (64 - PREFIX_BITS)) as usize];
+            used += i32::from(prefix.bits);
+            window = window.rotate_left(u32::from(prefix.bits));
+            prefix.difference(window)
+        };
+        let values = [read(y), read(y), read(y), read(y), read(cb), read(cr)];
+        if used > 64 {
+            return None;
+        }
+        if used <= self.cnt {
+            self.consume(used as u32);
+        } else {
+            let bytes_used = (used - self.cnt + 7) / 8;
+            self.pos += bytes_used as usize;
+            self.cnt += 8 * bytes_used - used;
+            // The final byte may extend past the speculative window.
+            self.cur = (u64::from(self.data[self.pos - 1]) << 56) << (8 - self.cnt);
+        }
+        Some(values)
     }
 
     fn fetch_byte(&mut self) -> Option<u8> {

@@ -323,17 +323,10 @@ async fn generate_and_cache(
     });
     let jpg = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
         let _permits = _permits;
-        let bm = if let Some((bytes, _)) = preview {
-            decode::jpeg_scaled_bytes(&bytes, rw, rh)
-                .or_else(|_| decode_to_target(&path, &head, s, rw, rh))?
-        } else {
-            decode_to_target(&path, &head, s, rw, rh)?
-        };
-        let bm = if let Some((w, h)) = crop {
-            scale::resize_to_fill(bm, w, h)
-        } else {
-            scale::resize_to(bm, rw, rh)
-        };
+        let preview = preview.as_ref().map(|(bytes, _)| bytes.as_slice());
+        let bm = decode_to_target(&path, &head, s, rw, rh, crop, preview)?;
+        let (w, h) = crop.unwrap_or((rw, rh));
+        let bm = scale::resize_to(bm, w, h);
         let bm = bm.apply_orientation(Orientation(orientation));
         let jpg = encode::encode_jpeg(bm, quality)?;
         let _ = write_thumb_cache(&cp, &jpg);
@@ -356,21 +349,33 @@ async fn generate_and_cache(
 ///    (`pjpeg`, AC scans skipped; ~5-8× less entropy work than libvips),
 /// 2. big-to-small JPEG → `jpeg-decoder` IDCT-scaled decode,
 /// 3. otherwise (or on a bail above) → `image` crate full decode.
-fn decode_to_target(path: &str, head: &[u8], s: Sniffed, rw: u32, rh: u32) -> Result<Bitmap> {
-    let p = std::path::Path::new(path);
-    if s.kind == ImageKind::Jpeg {
-        // Unsupported structure/strictness bails fall through to the
-        // generic scaled decoder below.
-        if dc_fast_eligible(s, rw, rh)
-            && let Ok(bm) = pjpeg::decode_dc_prefix(head).or_else(|_| pjpeg::decode_dc_only(p))
-        {
-            return Ok(bm);
-        }
-        if jpeg_use_scaled(s.width, s.height, rw, rh) {
-            return decode::jpeg_scaled(p, rw, rh).or_else(|_| decode::image_full(p));
-        }
+fn decode_to_target(
+    path: &str,
+    head: &[u8],
+    s: Sniffed,
+    rw: u32,
+    rh: u32,
+    crop: Option<(u32, u32)>,
+    preview: Option<&[u8]>,
+) -> Result<Bitmap> {
+    if let Some(bytes) = preview
+        && let Ok(bitmap) = decode::jpeg_scaled_bytes(bytes, rw, rh)
+    {
+        return Ok(scale::crop_for_fill(bitmap, crop));
     }
-    decode::image_full(p)
+    let p = std::path::Path::new(path);
+    if s.kind == ImageKind::Jpeg
+        && dc_fast_eligible(s, rw, rh)
+        && let Ok(bm) = pjpeg::decode_thumbnail(head, p, crop)
+    {
+        return Ok(bm);
+    }
+    let bm = if s.kind == ImageKind::Jpeg && jpeg_use_scaled(s.width, s.height, rw, rh) {
+        decode::jpeg_scaled(p, rw, rh).or_else(|_| decode::image_full(p))?
+    } else {
+        decode::image_full(p)?
+    };
+    Ok(scale::crop_for_fill(bm, crop))
 }
 
 #[allow(dead_code)] // parity with the server: kept for parity tests
