@@ -110,7 +110,11 @@ fn source_fingerprint(request: &Request) -> Result<Option<String>, String> {
         request.center_crop,
         if system { &request.file_id } else { "" },
         if system { &request.file_name } else { "" },
-        "thumbnail-v2"
+        if plain_libs::utils::mime::mime_from_ext(&request.path) == "image/png" {
+            "thumbnail-png-alpha-v1"
+        } else {
+            "thumbnail-v2"
+        }
     ])
     .to_string();
     Ok(Some(plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(

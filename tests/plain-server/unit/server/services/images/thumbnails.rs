@@ -123,7 +123,7 @@ async fn concurrent_requests_for_one_key_decode_once() {
         String::from_utf8_lossy(&first.2)
     );
     assert_eq!(first.0, 200);
-    assert_eq!(header(&first.1, "content-type"), "image/jpeg");
+    assert_eq!(header(&first.1, "content-type"), "image/png");
     assert!(host_requests.try_recv().is_err());
     assert_eq!(image::load_from_memory(&first.2).unwrap().width(), 256);
     assert_eq!(header(&first.1, "cache-control"), "private, no-cache");

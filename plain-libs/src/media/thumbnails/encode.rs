@@ -31,6 +31,23 @@ pub fn encode_jpeg(bm: Bitmap, quality: u8) -> Result<Vec<u8>> {
     Ok(bytes.into_boxed_slice().into_vec())
 }
 
+pub fn encode_png(bm: Bitmap) -> Result<Vec<u8>> {
+    use image::ImageEncoder;
+    let (pixels, w, h) = bm.raw();
+    let color = match &bm {
+        Bitmap::Rgb8 { .. } => image::ExtendedColorType::Rgb8,
+        Bitmap::Rgba8 { .. } => image::ExtendedColorType::Rgba8,
+    };
+    let mut bytes = Vec::new();
+    image::codecs::png::PngEncoder::new_with_quality(
+        &mut bytes,
+        image::codecs::png::CompressionType::Fast,
+        image::codecs::png::FilterType::Adaptive,
+    )
+    .write_image(pixels, w, h, color)?;
+    Ok(bytes.into_boxed_slice().into_vec())
+}
+
 #[cfg(test)]
 #[path = "../../../../tests/plain-libs/unit/media/thumbnails/encode.rs"]
 mod tests;

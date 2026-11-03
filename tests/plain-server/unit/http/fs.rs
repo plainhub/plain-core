@@ -715,3 +715,34 @@ async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_inval
     }
     core.stop_core().await;
 }
+
+#[tokio::test]
+async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
+    let (_root, core, state, key) = test_state();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("transparent.png");
+    image::RgbaImage::from_pixel(1200, 1200, image::Rgba([40, 90, 150, 128]))
+        .save(&path)
+        .unwrap();
+    let id = file_id(&key, path.to_str().unwrap());
+    for (size, pixels) in [("sm", 256), ("lg", 1024)] {
+        let query = format!("id={id}&s={size}");
+        let first = call_fs(&state, &query, &[]).await;
+        assert_eq!(first.status(), StatusCode::OK);
+        assert_eq!(first.headers()[header::CONTENT_TYPE], "image/png");
+        let etag = first.headers()[header::ETAG].to_str().unwrap().to_owned();
+        let bytes = body_bytes(first).await;
+        let decoded = image::load_from_memory(&bytes).unwrap().into_rgba8();
+        assert_eq!(decoded.dimensions(), (pixels, pixels));
+        let pixel = decoded.get_pixel(pixels / 2, pixels / 2);
+        assert_eq!(pixel[3], 128);
+        for (actual, expected) in pixel.0[..3].iter().zip([40u8, 90, 150]) {
+            assert!(actual.abs_diff(expected) <= 1);
+        }
+        let cached = call_fs(&state, &query, &[]).await;
+        assert_eq!(body_bytes(cached).await, bytes);
+        let conditional = call_fs(&state, &query, &[(&header::IF_NONE_MATCH, &etag)]).await;
+        assert_eq!(conditional.status(), StatusCode::NOT_MODIFIED);
+    }
+    core.stop_core().await;
+}

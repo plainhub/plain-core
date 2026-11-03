@@ -78,3 +78,28 @@ async fn core_only_thumbnail_applies_exif_orientation_before_sizing() {
             .unwrap();
     assert_eq!((image.width(), image.height()), (2, 3));
 }
+
+#[tokio::test]
+async fn native_png_thumbnail_retains_transparent_and_partial_alpha() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("transparent.png");
+    image::RgbaImage::from_fn(768, 768, |x, _| {
+        image::Rgba([40, 90, 150, if x < 384 { 0 } else { 128 }])
+    })
+    .save(&path)
+    .unwrap();
+    let request = Request {
+        path: path.to_string_lossy().into_owned(),
+        width: 256,
+        height: 256,
+        center_crop: true,
+        file_id: String::new(),
+        file_name: "transparent.png".into(),
+    };
+    let bytes = native(&request, directory.path()).await.unwrap().unwrap();
+    assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+    let decoded = image::load_from_memory(&bytes).unwrap().into_rgba8();
+    assert_eq!(decoded.dimensions(), (256, 256));
+    assert_eq!(decoded.get_pixel(32, 128)[3], 0);
+    assert_eq!(decoded.get_pixel(224, 128)[3], 128);
+}

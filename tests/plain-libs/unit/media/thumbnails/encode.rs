@@ -125,3 +125,18 @@ fn subsampled_noise_and_checkerboards_decode_at_all_low_qualities() {
         assert!(decoder.decode().is_ok());
     }
 }
+
+#[test]
+fn png_encoding_preserves_every_rgba_channel() {
+    let pixels = vec![12, 34, 56, 0, 78, 90, 123, 128, 45, 67, 89, 255];
+    let bytes = encode_png(Bitmap::new_rgba(pixels.clone(), 3, 1)).unwrap();
+    assert_eq!(bytes.capacity(), bytes.len());
+    assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+    assert_eq!(
+        image::load_from_memory(&bytes)
+            .unwrap()
+            .into_rgba8()
+            .into_raw(),
+        pixels
+    );
+}

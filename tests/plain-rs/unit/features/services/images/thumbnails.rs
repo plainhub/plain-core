@@ -693,3 +693,77 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
     assert!(state.thumbnails.get(&state, invalid).await.is_err());
     core.stop_core().await;
 }
+
+#[cfg(feature = "media")]
+#[tokio::test]
+async fn png_alpha_cache_version_skips_old_white_thumbnails_and_preserves_jpeg_keys() {
+    let (directory, core, _) = server_with_cache();
+    let state = core.runtime_state();
+    let source = directory.path().join("alpha.PNG");
+    image::RgbaImage::from_pixel(512, 512, image::Rgba([40, 90, 150, 0]))
+        .save(&source)
+        .unwrap();
+    let source = source.canonicalize().unwrap();
+    let request = Request {
+        width: 256,
+        height: 256,
+        ..request_for(&source)
+    };
+    let legacy_key = |request: &Request| {
+        let metadata = std::fs::metadata(&request.path).unwrap();
+        let input = serde_json::json!([
+            request.path,
+            metadata.len(),
+            format!("{:?}", metadata.modified().unwrap()),
+            request.width,
+            request.height,
+            request.center_crop,
+            "",
+            "",
+            "thumbnail-v2"
+        ])
+        .to_string();
+        plain_libs::utils::hex::bytes_to_hex(&sha2::Sha256::digest(input.as_bytes()))
+    };
+    let old_key = legacy_key(&request);
+    assert_ne!(
+        super::source_fingerprint(&request).unwrap().unwrap(),
+        old_key
+    );
+    let old = state
+        .file_platform
+        .thumbnail_cache(&request.path)
+        .unwrap()
+        .join("thumbs/rust")
+        .join(format!("{old_key}.thumb"));
+    std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+    std::fs::write(&old, b"legacy flattened thumbnail").unwrap();
+    let bytes = state
+        .thumbnails
+        .get(&state, request)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+    assert_eq!(
+        image::load_from_memory(&bytes)
+            .unwrap()
+            .into_rgba8()
+            .get_pixel(128, 128)[3],
+        0
+    );
+    let jpeg = directory.path().join("photo.jpg");
+    image::RgbImage::from_pixel(512, 512, image::Rgb([40, 90, 150]))
+        .save(&jpeg)
+        .unwrap();
+    let request = Request {
+        width: 256,
+        height: 256,
+        ..request_for(&jpeg.canonicalize().unwrap())
+    };
+    assert_eq!(
+        super::source_fingerprint(&request).unwrap().unwrap(),
+        legacy_key(&request)
+    );
+    core.stop_core().await;
+}

@@ -852,3 +852,46 @@ fn dc_input_memory_is_charged_only_for_the_full_jpeg_read_path() {
     );
     assert_eq!(dc_input_bytes(jpeg, 256, 256, -1), 0);
 }
+
+#[tokio::test]
+async fn png_thumbnails_keep_transparency_through_resize_crop_and_disk_cache() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("alpha.png");
+    image::RgbaImage::from_fn(768, 768, |x, _| {
+        image::Rgba([
+            40,
+            90,
+            150,
+            if x < 256 {
+                0
+            } else if x < 512 {
+                128
+            } else {
+                255
+            },
+        ])
+    })
+    .save(&path)
+    .unwrap();
+    for crop in [false, true] {
+        let mut spec = spec_for(&path, 256, 256);
+        spec.center_crop = crop;
+        let ThumbOutcome::Generated(first) =
+            get_thumbnail(spec.clone(), directory.path()).await.unwrap()
+        else {
+            panic!("expected resized PNG")
+        };
+        assert!(first.starts_with(b"\x89PNG\r\n\x1a\n"));
+        let decoded = image::load_from_memory(&first).unwrap().into_rgba8();
+        assert_eq!(decoded.dimensions(), (256, 256));
+        for (x, alpha) in [(32, 0), (128, 128), (224, 255)] {
+            assert_eq!(decoded.get_pixel(x, 128)[3], alpha);
+        }
+        lru::global().clear();
+        let ThumbOutcome::Generated(second) = get_thumbnail(spec, directory.path()).await.unwrap()
+        else {
+            panic!("expected cached PNG")
+        };
+        assert_eq!(first, second);
+    }
+}

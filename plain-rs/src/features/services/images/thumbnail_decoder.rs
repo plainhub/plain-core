@@ -20,6 +20,7 @@ pub async fn native(
             .map_err(|error| error.to_string())?
             .with_guessed_format()
             .map_err(|error| error.to_string())?;
+        let format = reader.format();
         let mut decoder = match reader.into_decoder() {
             Ok(decoder) => decoder,
             Err(image::ImageError::Unsupported(_)) => return Ok(None),
@@ -37,9 +38,18 @@ pub async fn native(
             image.thumbnail(width, height)
         };
         let mut bytes = Vec::new();
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85)
-            .encode_image(&image)
-            .map_err(|error| error.to_string())?;
+        if format == Some(image::ImageFormat::Png) {
+            image
+                .write_to(
+                    &mut std::io::Cursor::new(&mut bytes),
+                    image::ImageFormat::Png,
+                )
+                .map_err(|error| error.to_string())?;
+        } else {
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85)
+                .encode_image(&image)
+                .map_err(|error| error.to_string())?;
+        }
         Ok(Some(bytes))
     })
     .await

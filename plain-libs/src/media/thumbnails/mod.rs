@@ -6,11 +6,11 @@
 //! 2. small-image passthrough: an image that already fits the target box
 //!    (and is ≤1 MiB) is served byte-identical — zero decode, zero encode,
 //! 3. hot LRU, then the deterministic file cache
-//!    (`{cache_dir}/thumbs/XX/<sha512>.jpg`),
+//!    (`{cache_dir}/thumbs/XX/<sha512>.jpg|png`),
 //! 4. single-flight per cache key — concurrent duplicate requests coalesce,
 //! 5. two-tier admission (CPU permits + decoded-pixel byte budget),
 //! 6. decode (IDCT-scaled JPEG for big→small, `image` crate otherwise)
-//!    → box pre-scale → SIMD resample → EXIF orientation → JPEG encode,
+//!    → box pre-scale → SIMD resample → EXIF orientation → JPEG/PNG encode,
 //! 7. atomic cache write + LRU insert.
 //!
 //! Non-image files go through the cover-art path (sidecar/lofty); cover-less
@@ -64,7 +64,7 @@ fn dc_fast_eligible(s: Sniffed, tw: u32, th: u32) -> bool {
 /// Outcome of a thumbnail request.
 #[derive(Debug)]
 pub enum ThumbOutcome {
-    /// Generated (or cache-hit) JPEG bytes, `image/jpeg`.
+    /// Generated or cached image bytes; the signature identifies the format.
     Generated(Bytes),
     /// Source bytes served as-is with their natural MIME type.
     Original { data: Bytes, mime: String },
@@ -250,6 +250,11 @@ async fn get_image_thumbnail(
         spec.mod_unix,
         spec.file_size,
     );
+    let cache_path = if s.kind == ImageKind::Png {
+        cache_path.with_extension("png")
+    } else {
+        cache_path
+    };
     let key = cache_path.to_string_lossy().into_owned();
 
     // Hot LRU, then file cache.
@@ -327,7 +332,11 @@ async fn generate_and_cache(
             let (w, h) = crop.unwrap_or((rw, rh));
             let bm = scale::resize_to(bm, w, h);
             let bm = bm.apply_orientation(Orientation(orientation));
-            let jpg = encode::encode_jpeg(bm, quality)?;
+            let jpg = if s.kind == ImageKind::Png {
+                encode::encode_png(bm)?
+            } else {
+                encode::encode_jpeg(bm, quality)?
+            };
             let _ = write_thumb_cache(&cp, &jpg);
             Ok(jpg)
         })
@@ -582,10 +591,8 @@ pub fn thumb_cache_path(
 /// generation work, so conditional requests cost a stat only.
 pub fn cache_etag(cache_path: &std::path::Path) -> String {
     let hex = cache_path
-        .file_name()
+        .file_stem()
         .and_then(|n| n.to_str())
-        .unwrap_or_default()
-        .strip_suffix(".jpg")
         .unwrap_or_default();
     format!("\"t{hex}\"")
 }
