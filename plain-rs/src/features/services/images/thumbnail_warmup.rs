@@ -1,6 +1,6 @@
 use super::thumbnails::Request;
 use crate::features::enums::DataType;
-use crate::infrastructure::db::{FileKind, MediaFileRow};
+use crate::infrastructure::db::MediaFileRow;
 use crate::runtime::Runtime;
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use std::sync::{Mutex, atomic::Ordering};
@@ -48,21 +48,19 @@ impl Schedule {
 struct Source {
     id: String,
     path: String,
-    kind: FileKind,
 }
 
 impl Source {
     fn from_row(row: &MediaFileRow) -> Option<Self> {
-        let kind = match row.data_type {
-            value if value == DataType::Image.kind() => FileKind::Image,
-            value if value == DataType::Audio.kind() => FileKind::Audio,
-            value if value == DataType::Video.kind() => FileKind::Video,
-            _ => return None,
-        };
+        if ![DataType::Image, DataType::Audio, DataType::Video]
+            .iter()
+            .any(|kind| kind.kind() == row.data_type)
+        {
+            return None;
+        }
         (!row.trashed && std::path::Path::new(&row.path).is_absolute()).then(|| Self {
             id: row.id.clone(),
             path: row.path.clone(),
-            kind,
         })
     }
 }
@@ -118,26 +116,18 @@ pub(crate) fn start(state: Runtime) {
 }
 
 async fn warm_source(state: &Runtime, row: Source) {
-    let grid = if row.kind == FileKind::Image {
-        256
-    } else {
-        512
+    let request = Request {
+        file_name: plain_libs::utils::query::url_encode(
+            row.path.rsplit('/').next().unwrap_or_default(),
+        ),
+        path: row.path,
+        file_id: row.id,
+        width: super::thumbnails::THUMBNAIL_SIZE,
+        height: super::thumbnails::THUMBNAIL_SIZE,
+        center_crop: true,
     };
-    for size in [96, grid] {
-        let request = Request {
-            file_name: plain_libs::utils::query::url_encode(
-                row.path.rsplit('/').next().unwrap_or_default(),
-            ),
-            path: row.path.clone(),
-            file_id: row.id.clone(),
-            width: size,
-            height: size,
-            center_crop: true,
-        };
-        match state.thumbnails.get_inner(state, request, true).await {
-            Ok(_) => {}
-            Err(error) => log::warn!("Thumbnail prewarm generation: {error}"),
-        }
+    if let Err(error) = state.thumbnails.get_inner(state, request, true).await {
+        log::warn!("Thumbnail prewarm generation: {error}");
     }
 }
 

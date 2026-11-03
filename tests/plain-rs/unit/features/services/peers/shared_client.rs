@@ -236,7 +236,7 @@ async fn root_candidates_preserve_foreign_self_unbound_and_deduplicated_endpoint
 }
 
 #[tokio::test]
-async fn thumbnail_requests_keep_aspect_ratio_and_replace_cropped_cache_entries() {
+async fn thumbnail_requests_use_named_size_and_replace_previous_cache_entries() {
     let (directory, server, _) = root();
     let state = server.runtime_state();
     let (port, tls, _, _, _) = tls().await;
@@ -259,7 +259,7 @@ async fn thumbnail_requests_keep_aspect_ratio_and_replace_cropped_cache_entries(
     let cache = crate::features::services::files::remote_cache::RemoteCache::new(
         directory.path().join("cache"),
     );
-    let old_key = json!({"host":link.host,"port":link.port,"shareId":link.shared_id,"token":link.token,"urlToken":url_token,"path":entry.relative_path,"size":entry.size}).to_string();
+    let old_key = json!({"host":link.host,"port":link.port,"shareId":link.shared_id,"token":link.token,"urlToken":url_token,"path":entry.relative_path,"size":entry.size,"centerCrop":false}).to_string();
     let old_path = cache
         .download(
             &link
@@ -272,7 +272,7 @@ async fn thumbnail_requests_keep_aspect_ratio_and_replace_cropped_cache_entries(
         )
         .await
         .unwrap();
-    tokio::fs::write(&old_path, b"old cropped thumbnail")
+    tokio::fs::write(&old_path, b"old thumbnail size")
         .await
         .unwrap();
     let first = cache_file(
@@ -287,19 +287,16 @@ async fn thumbnail_requests_keep_aspect_ratio_and_replace_cropped_cache_entries(
     .unwrap();
     assert_ne!(
         first, old_path,
-        "Cropped cached thumbnails must not be reused"
+        "Previous thumbnail sizes must not be reused"
     );
     assert_eq!(tokio::fs::read(&first).await.unwrap(), b"download");
     let second = cache_file(&state, &cache, link, url_token, entry, true)
         .await
         .unwrap();
-    assert_eq!(
-        first, second,
-        "Proportional thumbnails keep a stable cache key"
-    );
+    assert_eq!(first, second, "Named thumbnails keep a stable cache key");
     assert_eq!(
         tokio::fs::read(&old_path).await.unwrap(),
-        b"old cropped thumbnail"
+        b"old thumbnail size"
     );
     server.shutdown().await;
     tls.abort();

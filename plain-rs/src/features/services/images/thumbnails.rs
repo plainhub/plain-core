@@ -26,6 +26,8 @@ pub struct Request {
     pub file_id: String,
     pub file_name: String,
 }
+pub(crate) const THUMBNAIL_SIZE: u32 = 256;
+
 pub struct Thumbnails {
     pub(super) queue: Queue,
     dispatcher: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -261,6 +263,10 @@ impl Thumbnails {
         }
         if request.width == 0 || request.height == 0 || !Path::new(&request.path).is_absolute() {
             return Err("positive thumbnail dimensions and absolute path required".into());
+        }
+        if request.width < 1024 && request.height < 1024 {
+            request.width = THUMBNAIL_SIZE;
+            request.height = THUMBNAIL_SIZE;
         }
         let state_for_io = state.clone();
         let Some((request, cache, key, cached, bytes)) = tokio::task::spawn_blocking(move || {

@@ -23,13 +23,17 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
         .get(header::RANGE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
+    let size = match query("s").as_deref() {
+        None => None,
+        Some("sm") => Some(content::Size::Small),
+        Some("lg") => Some(content::Size::Large),
+        Some(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
     let options = Options {
         download: query("dl").as_deref() == Some("1"),
         offset: query("offset").and_then(|v| v.parse().ok()),
         length: query("length").and_then(|v| v.parse().ok()),
-        width: query("w").and_then(|v| v.parse().ok()),
-        height: query("h").and_then(|v| v.parse().ok()),
-        center_crop: query("cc").as_deref() != Some("false"),
+        size,
         #[cfg(feature = "media")]
         pdf: query("preview").as_deref() == Some("pdf"),
         probe: query("probe").as_deref() == Some("1"),

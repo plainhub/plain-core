@@ -219,12 +219,15 @@ async fn fs_typed_image_reference_returns_decodable_thumbnail() {
     )
     .unwrap();
     let id = file_id(&key, &format!("fid:{}", imported.fid_suffix));
-    let response = call_fs(&state, &format!("id={id}&w=32&h=32"), &[]).await;
+    let response = call_fs(&state, &format!("id={id}&s=sm"), &[]).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_bytes(response).await;
     let thumbnail = image::load_from_memory(&body).unwrap();
-    assert!(thumbnail.width() > 0 && thumbnail.width() <= 32);
-    assert!(thumbnail.height() > 0 && thumbnail.height() <= 32);
+    assert!(thumbnail.width() > 0 && thumbnail.width() <= 256);
+    assert!(thumbnail.height() > 0 && thumbnail.height() <= 256);
+    let full_size = call_fs(&state, &format!("id={id}&s=sm"), &[]).await;
+    assert_eq!(full_size.status(), StatusCode::OK);
+    assert_eq!(body, body_bytes(full_size).await);
 }
 
 #[tokio::test]
@@ -326,7 +329,7 @@ async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
     image::RgbImage::new(64, 32).save(&path).unwrap();
     let original = std::fs::read(&path).unwrap();
     let id = file_id(&key, path.to_str().unwrap());
-    let query = format!("id={id}&w=16&h=16");
+    let query = format!("id={id}&s=sm");
     let response = call_fs(&state, &query, &[]).await;
     assert_eq!(response.status(), StatusCode::OK);
     let etag = response.headers()[header::ETAG]
@@ -523,7 +526,7 @@ async fn fs_thumbnail_latency_benchmark() {
             let started = std::time::Instant::now();
             let response = http
                 .get(format!("{origin}/fs"))
-                .query(&[("id", id.as_str()), ("w", "512"), ("h", "512")])
+                .query(&[("id", id.as_str()), ("s", "sm")])
                 .send()
                 .await
                 .unwrap();
@@ -535,7 +538,7 @@ async fn fs_thumbnail_latency_benchmark() {
             let started = std::time::Instant::now();
             let response = http
                 .get(format!("{origin}/fs"))
-                .query(&[("id", id.as_str()), ("w", "512"), ("h", "512")])
+                .query(&[("id", id.as_str()), ("s", "sm")])
                 .send()
                 .await
                 .unwrap();
@@ -569,7 +572,7 @@ async fn fs_300_cached_thumbnails_do_not_write_recent_files() {
     )
     .unwrap();
     let id = file_id(&key, path.to_str().unwrap());
-    let query = format!("id={id}&w=512&h=512");
+    let query = format!("id={id}&s=sm");
     let store = state.store.get().unwrap();
     let before = store.write_attempts_for_test();
     let response = call_fs(&state, &query, &[]).await;
@@ -594,10 +597,7 @@ async fn fs_300_cached_thumbnails_do_not_write_recent_files() {
             .unwrap()
             .is_empty()
     );
-    let below_view_size = call_fs(&state, &format!("id={id}&w=1023&h=1023"), &[]).await;
-    assert_eq!(below_view_size.status(), StatusCode::OK);
-    assert_eq!(store.write_attempts_for_test() - before, 0);
-    let view = call_fs(&state, &format!("id={id}&w=1024&h=1024"), &[]).await;
+    let view = call_fs(&state, &format!("id={id}&s=lg"), &[]).await;
     assert_eq!(view.status(), StatusCode::OK);
     assert_eq!(store.write_attempts_for_test() - before, 0);
     let original = call_fs(&state, &format!("id={id}"), &[]).await;
@@ -651,7 +651,7 @@ async fn fs_serves_300_authenticated_media_hits_with_the_sqlite_connection_held(
         },
     )
     .unwrap();
-    let query = format!("id={id}&w=256&h=256");
+    let query = format!("id={id}&s=sm");
     let first = call_fs(&state, &query, &[]).await;
     assert_eq!(first.status(), StatusCode::OK);
     let bytes = body_bytes(first).await;
@@ -684,6 +684,34 @@ async fn fs_serves_300_authenticated_media_hits_with_the_sqlite_connection_held(
     for response in responses.expect("media hits waited for SQLite") {
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(body_bytes(response).await, bytes);
+    }
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_invalid_values() {
+    let (_root, core, state, key) = test_state();
+    let files = tempfile::tempdir().unwrap();
+    let path = files.path().join("sizes.jpg");
+    image::RgbImage::from_fn(1600, 1200, |x, y| {
+        image::Rgb([(x % 251) as u8, (y % 239) as u8, 90])
+    })
+    .save(&path)
+    .unwrap();
+    let id = file_id(&key, path.to_str().unwrap());
+    for (size, dimensions) in [("sm", (256, 256)), ("lg", (1024, 768))] {
+        let response = call_fs(&state, &format!("id={id}&s={size}"), &[]).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = body_bytes(response).await;
+        let decoded = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), dimensions);
+    }
+    let original = call_fs(&state, &format!("id={id}"), &[]).await;
+    assert_eq!(original.status(), StatusCode::OK);
+    assert_eq!(body_bytes(original).await, std::fs::read(&path).unwrap());
+    for size in ["", "md", "SM", "256", "sm%7Clg"] {
+        let response = call_fs(&state, &format!("id={id}&s={size}"), &[]).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{size}");
     }
     core.stop_core().await;
 }

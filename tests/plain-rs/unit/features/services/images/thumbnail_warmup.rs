@@ -1,5 +1,6 @@
 use super::*;
 use crate::features::enums::DataType;
+use crate::infrastructure::db::FileKind;
 
 #[test]
 fn cache_trimming_preserves_non_thumbnail_entries() {
@@ -54,7 +55,7 @@ async fn index_updates_prewarm_the_same_cache_used_by_foreground_requests() {
             .thumbnails
             .native_decodes
             .load(std::sync::atomic::Ordering::SeqCst)
-            < 2
+            < 1
         {
             tokio::task::yield_now().await;
         }
@@ -68,10 +69,10 @@ async fn index_updates_prewarm_the_same_cache_used_by_foreground_requests() {
         .thumbnails
         .native_decodes
         .load(std::sync::atomic::Ordering::SeqCst);
-    assert_eq!(before, 2, "Only the committed source should be decoded");
+    assert_eq!(before, 1, "Only the committed source should be decoded");
     let written = state.thumbnails.cache_bytes_written.load(Ordering::Relaxed);
-    let mut output_bytes = 0;
-    for size in [96, 256] {
+    let mut output_bytes = None;
+    for size in [50, 96, 128, 256, 512] {
         let bytes = state
             .thumbnails
             .get(
@@ -85,8 +86,8 @@ async fn index_updates_prewarm_the_same_cache_used_by_foreground_requests() {
             .await
             .unwrap()
             .unwrap();
-        output_bytes += bytes.len() as u64;
-        assert_eq!(image::load_from_memory(&bytes).unwrap().width(), size);
+        assert_eq!(*output_bytes.get_or_insert(bytes.clone()), bytes);
+        assert_eq!(image::load_from_memory(&bytes).unwrap().width(), 256);
         assert_eq!(
             state
                 .thumbnails
@@ -95,7 +96,7 @@ async fn index_updates_prewarm_the_same_cache_used_by_foreground_requests() {
             before
         );
     }
-    assert_eq!(written, output_bytes);
+    assert_eq!(written, output_bytes.unwrap().len() as u64);
     assert_eq!(
         state.thumbnails.cache_bytes_written.load(Ordering::Relaxed),
         written
@@ -207,9 +208,8 @@ async fn foreground_decode_can_start_while_background_decoders_are_occupied() {
         async move { state.thumbnails.get(&state, request).await }
     });
     wait_for(workers + 1).await;
-    gate.add_permits(2 * workers + 1);
+    gate.add_permits(workers + 1);
     assert!(foreground.await.unwrap().unwrap().is_some());
-    wait_for(2 * workers + 1).await;
     blocked.await.unwrap();
     core.stop_core().await;
 }

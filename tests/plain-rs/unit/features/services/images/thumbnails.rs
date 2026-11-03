@@ -257,12 +257,11 @@ async fn cancelling_queued_requests_releases_admission_without_starting_a_decode
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
     *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
     let mut active = tokio::task::JoinSet::new();
-    for width in 81..81 + workers as u32 {
+    for index in 0..workers {
         let state = state.clone();
-        let request = Request {
-            width,
-            ..request_for(&path)
-        };
+        let active_path = source.path().join(format!("active-{index}.jpg"));
+        std::fs::copy(&path, &active_path).unwrap();
+        let request = request_for(&active_path);
         active.spawn(async move { state.thumbnails.get(&state, request).await });
     }
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
@@ -298,10 +297,7 @@ async fn cancelling_queued_requests_releases_admission_without_starting_a_decode
         assert!(result.unwrap().unwrap().is_some());
     }
     *state.thumbnails.decode_gate.lock().unwrap() = None;
-    let next = Request {
-        width: 81 + workers as u32,
-        ..request_for(&path)
-    };
+    let next = request_for(&path);
     assert!(state.thumbnails.get(&state, next).await.unwrap().is_some());
     assert_eq!(
         state
@@ -454,9 +450,14 @@ async fn hot_cache_serves_300_requests_without_disk_reads_and_rechecks_source() 
         .unwrap();
     let reads = state.thumbnails.cache_reads.load(Ordering::SeqCst);
     let mut requests = tokio::task::JoinSet::new();
-    for _ in 0..300 {
+    for index in 0..300 {
         let state = state.clone();
-        let request = request_for(&path);
+        let size = [50, 96, 128, 256, 512][index % 5];
+        let request = Request {
+            width: size,
+            height: size,
+            ..request_for(&path)
+        };
         requests.spawn(async move { state.thumbnails.get(&state, request).await });
     }
     while let Some(result) = requests.join_next().await {
@@ -626,5 +627,69 @@ async fn concurrent_generation_delivers_one_shared_allocation_to_300_readers() {
         .unwrap();
     assert_eq!(cached.as_ptr(), first.as_ptr());
     assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
+    core.stop_core().await;
+}
+
+#[cfg(feature = "media")]
+#[tokio::test]
+async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
+    use std::sync::atomic::Ordering;
+    let (directory, core, cache) = server_with_cache();
+    let state = core.runtime_state();
+    let path = directory.path().join("sizes.jpg");
+    image::RgbImage::from_fn(1600, 1200, |x, y| {
+        image::Rgb([(x % 251) as u8, (y % 239) as u8, 90])
+    })
+    .save(&path)
+    .unwrap();
+    let expected =
+        plain_libs::media::thumbnails::render(path.to_str().unwrap(), 256, 256, true, &cache)
+            .await
+            .unwrap()
+            .unwrap();
+    let mut requests = tokio::task::JoinSet::new();
+    for size in [50, 96, 128, 256, 512] {
+        let state = state.clone();
+        let request = Request {
+            width: size,
+            height: size,
+            ..request_for(&path)
+        };
+        requests.spawn(async move { state.thumbnails.get(&state, request).await });
+    }
+    while let Some(result) = requests.join_next().await {
+        assert_eq!(result.unwrap().unwrap().unwrap(), expected);
+    }
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        state.thumbnails.cache_bytes_written.load(Ordering::Relaxed),
+        expected.len() as u64
+    );
+    for (width, height, crop, dimensions) in [
+        (96, 96, false, (256, 192)),
+        (1024, 1024, false, (1024, 768)),
+        (512, 1024, false, (512, 384)),
+        (1024, 512, false, (682, 512)),
+    ] {
+        let request = Request {
+            width,
+            height,
+            center_crop: crop,
+            ..request_for(&path)
+        };
+        let bytes = state
+            .thumbnails
+            .get(&state, request)
+            .await
+            .unwrap()
+            .unwrap();
+        let image = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((image.width(), image.height()), dimensions);
+    }
+    let invalid = Request {
+        width: 0,
+        ..request_for(&path)
+    };
+    assert!(state.thumbnails.get(&state, invalid).await.is_err());
     core.stop_core().await;
 }

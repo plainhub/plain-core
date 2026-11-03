@@ -185,8 +185,7 @@ async fn fs_burst_and_page_cancellation(
     for id in &ids[..300] {
         let request = http.get(format!("{origin}/fs")).query(&[
             ("id", id.as_str()),
-            ("w", "512"),
-            ("h", "512"),
+            ("s", "sm"),
         ]);
         pending.spawn(async move { request.send().await.unwrap() });
     }
@@ -251,13 +250,13 @@ async fn fs_burst_and_page_cancellation(
     gate.add_permits(workers);
     let next = http
         .get(format!("{origin}/fs"))
-        .query(&[("id", ids[300].as_str()), ("w", "512"), ("h", "512")])
+        .query(&[("id", ids[300].as_str()), ("s", "sm")])
         .send()
         .await
         .unwrap();
     assert_eq!(next.status(), StatusCode::OK);
     let image = image::load_from_memory(&next.bytes().await.unwrap()).unwrap();
-    assert_eq!((image.width(), image.height()), (512, 512));
+    assert_eq!((image.width(), image.height()), (256, 256));
     assert_eq!(
         state.thumbnails.native_decodes.load(Ordering::SeqCst),
         workers + 1
@@ -266,8 +265,7 @@ async fn fs_burst_and_page_cancellation(
     for id in &ids[..300] {
         let request = http.get(format!("{origin}/fs")).query(&[
             ("id", id.as_str()),
-            ("w", "512"),
-            ("h", "512"),
+            ("s", "sm"),
         ]);
         complete.spawn(async move {
             let response = request.send().await.unwrap();
@@ -275,7 +273,7 @@ async fn fs_burst_and_page_cancellation(
             assert_eq!(response.version(), reqwest::Version::HTTP_11);
             let bytes = response.bytes().await.unwrap();
             let image = image::load_from_memory(&bytes).unwrap();
-            assert_eq!((image.width(), image.height()), (512, 512));
+            assert_eq!((image.width(), image.height()), (256, 256));
         });
     }
     while let Some(result) = complete.join_next().await {

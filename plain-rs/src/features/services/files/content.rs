@@ -6,13 +6,17 @@ use serde_json::json;
 use std::path::Path;
 use std::path::PathBuf;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Size {
+    Small,
+    Large,
+}
+
 pub struct Options {
     pub download: bool,
     pub offset: Option<i64>,
     pub length: Option<usize>,
-    pub width: Option<u32>,
-    pub height: Option<u32>,
-    pub center_crop: bool,
+    pub size: Option<Size>,
     #[cfg(feature = "runtime-media")]
     pub pdf: bool,
     pub probe: bool,
@@ -125,7 +129,7 @@ pub async fn read(
         return Ok(Content::Directory);
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if options.starts_view && options.width.is_none_or(|width| width >= 1024) {
+    if options.starts_view && options.size != Some(Size::Small) {
         state.file_platform.recent_files.add(&path);
     }
     #[cfg(feature = "runtime-media")]
@@ -187,16 +191,20 @@ pub async fn read(
             false
         };
         if !animated {
-            if let (Some(width), Some(height)) = (options.width, options.height) {
+            if let Some(size) = options.size {
+                let pixels = match size {
+                    Size::Small => crate::features::services::images::thumbnails::THUMBNAIL_SIZE,
+                    Size::Large => 1024,
+                };
                 let bytes = state
                     .thumbnails
                     .get(
                         state,
                         crate::features::services::images::thumbnails::Request {
                             path: path.clone(),
-                            width,
-                            height,
-                            center_crop: options.center_crop,
+                            width: pixels,
+                            height: pixels,
+                            center_crop: size == Size::Small,
                             file_id: media_id,
                             file_name: plain_libs::utils::query::url_encode(filename),
                         },

@@ -77,11 +77,12 @@ pub(super) async fn tls() -> (
         }
     })).route("/fs", get(|Query(params): Query<std::collections::HashMap<String, String>>| async move {
         assert!(!params.contains_key("sid"));
-        if params.contains_key("w") {
-            assert_eq!(params["w"], "200");
-            assert_eq!(params["h"], "200");
-            assert_eq!(params.get("cc").map(String::as_str), Some("false"));
+        if let Some(size) = params.get("s") {
+            assert_eq!(size, "sm");
         }
+        assert!(!params.contains_key("w"));
+        assert!(!params.contains_key("h"));
+        assert!(!params.contains_key("cc"));
         let (scope, payload) = crate::features::files::resource_link::parse(&params["id"]).unwrap();
         assert_eq!(scope, crate::features::files::resource_link::Scope::Share("fixture".into()));
         let decoded = crate::features::files::resource_link::open(&scope, &[8;32], payload).unwrap();
