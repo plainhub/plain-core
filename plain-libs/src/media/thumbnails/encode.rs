@@ -15,8 +15,8 @@ pub fn encode_jpeg(bm: Bitmap, quality: u8) -> Result<Vec<u8>> {
         unreachable!("flatten_to_rgb always yields Rgb8");
     };
 
-    if quality < 90 {
-        jpeg::encode(data, w as u16, h as u16, quality)
+    let bytes = if quality < 90 {
+        jpeg::encode(data, w as u16, h as u16, quality)?
     } else {
         let mut bytes = Vec::new();
         image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, quality).encode(
@@ -25,8 +25,10 @@ pub fn encode_jpeg(bm: Bitmap, quality: u8) -> Result<Vec<u8>> {
             h,
             image::ExtendedColorType::Rgb8,
         )?;
-        Ok(bytes)
-    }
+        bytes
+    };
+    // Release encoder growth capacity before the bytes enter long-lived shared caches.
+    Ok(bytes.into_boxed_slice().into_vec())
 }
 
 #[cfg(test)]

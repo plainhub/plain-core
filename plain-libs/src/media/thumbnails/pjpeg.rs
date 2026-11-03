@@ -757,6 +757,7 @@ fn decode_420_initial(
 
 /// Decode one DC block value: huffman category + diff (first pass) or one
 /// correction bit (refinement pass). Returns the coefficient value to store.
+#[inline(always)]
 fn read_dc_block(
     reader: &mut Bits,
     table: &Option<HuffTable>,
@@ -969,7 +970,7 @@ impl HuffTable {
         Ok(Self { fast, codes })
     }
 
-    #[inline]
+    #[inline(always)]
     fn difference(&self, bits: &mut Bits) -> Result<i32> {
         let prefix = self.fast[bits.peek_prefix()];
         if prefix.bits != Prefix::LONG.bits {

@@ -1,5 +1,32 @@
 use super::*;
 
+#[test]
+fn grouped_lookup_entry_uses_two_bytes() {
+    assert_eq!(std::mem::size_of::<AcGroup>(), 2);
+    for bits in 0..=16 {
+        for advance in 0..64 {
+            for end in [false, true] {
+                let entry = AcGroup::new(bits, advance, end);
+                assert_eq!(entry.bits(), bits);
+                assert_eq!(entry.advance(), advance);
+                assert_eq!(entry.end(), end);
+            }
+        }
+    }
+}
+
+#[test]
+fn grouped_lookup_uses_fixed_sixteen_kib_storage() {
+    let mut counts = [0; 16];
+    counts[1] = 2;
+    let table = AcTable::build(&counts, &[0, 1]).unwrap();
+    assert_eq!(
+        std::mem::size_of_val(&table.groups),
+        std::mem::size_of::<usize>()
+    );
+    assert_eq!(std::mem::size_of_val(&*table.groups), 16 * 1024);
+}
+
 fn encoded(counts: &[u8; 16], values: &[u8], symbols: &[(u8, u16)], offset: usize) -> Vec<u8> {
     let mut codes = [(0u16, 0u8); 256];
     let mut code = 0u16;

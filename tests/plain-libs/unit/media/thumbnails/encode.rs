@@ -2,6 +2,23 @@
 //! as the `tests` child module via `#[cfg(test)] #[path]` there.
 use super::*;
 
+#[test]
+fn encoded_output_retains_no_unused_growth_capacity() {
+    for (width, height) in [(1, 1), (31, 33), (256, 256)] {
+        for quality in [1, 85, 89, 90, 100] {
+            let pixels = (0..width * height * 3)
+                .map(|index| (index * 37 + index / 17) as u8)
+                .collect();
+            let encoded = encode_jpeg(Bitmap::new_rgb(pixels, width, height), quality).unwrap();
+            assert_eq!(
+                encoded.capacity(),
+                encoded.len(),
+                "{width}x{height} q{quality}"
+            );
+        }
+    }
+}
+
 fn gradient_rgb(w: u32, h: u32) -> Bitmap {
     let mut data = Vec::with_capacity(w as usize * h as usize * 3);
     for y in 0..h {

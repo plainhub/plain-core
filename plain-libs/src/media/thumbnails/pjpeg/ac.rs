@@ -1,6 +1,7 @@
 use super::{Bits, huffman::Codebook};
 use anyhow::{Result, bail};
 use std::sync::{Arc, Mutex};
+const GROUP_BITS: u8 = 13;
 #[cfg(test)]
 thread_local! { static GROUP_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
 
@@ -10,15 +11,25 @@ struct AcSkip {
     advance: u8,
 }
 #[derive(Clone, Copy, Default)]
-struct AcGroup {
-    bits: u8,
-    advance: u8,
-    end: bool,
+struct AcGroup(u16);
+impl AcGroup {
+    fn new(bits: u8, advance: u8, end: bool) -> Self {
+        Self(u16::from(bits) | (u16::from(advance) << 5) | (u16::from(end) << 11))
+    }
+    fn bits(self) -> u8 {
+        (self.0 & 31) as u8
+    }
+    fn advance(self) -> u8 {
+        ((self.0 >> 5) & 63) as u8
+    }
+    fn end(self) -> bool {
+        self.0 & 2048 != 0
+    }
 }
 pub(super) struct AcTable {
     codes: Codebook,
     fast: [AcSkip; 1024],
-    groups: Vec<AcGroup>,
+    groups: Box<[AcGroup; 1 << GROUP_BITS]>,
 }
 impl AcTable {
     pub(super) fn shared(counts: &[u8; 16], values: &[u8]) -> Result<Arc<Self>> {
@@ -47,34 +58,26 @@ impl AcTable {
                 });
             }
         }
-        let mut groups = vec![AcGroup::default(); 65536];
+        let mut groups = Box::new([AcGroup::default(); 1 << GROUP_BITS]);
         for (prefix, group) in groups.iter_mut().enumerate() {
             let mut bits = 0u8;
             let mut advance = 0u8;
-            while bits < 16 {
-                let window = ((prefix as u32) << bits) & 65535;
-                let entry = fast[(window >> 6) as usize];
-                if entry.bits == 0 || bits + entry.bits > 16 {
+            while bits < GROUP_BITS {
+                let window = ((prefix as u32) << bits) & ((1 << GROUP_BITS) - 1);
+                let entry = fast[(window >> (GROUP_BITS - 10)) as usize];
+                if entry.bits == 0 || bits + entry.bits > GROUP_BITS {
                     break;
                 }
                 bits += entry.bits;
                 if entry.advance == 64 {
-                    *group = AcGroup {
-                        bits,
-                        advance,
-                        end: true,
-                    };
+                    *group = AcGroup::new(bits, advance, true);
                     break;
                 }
                 if u16::from(advance) + u16::from(entry.advance) >= 64 {
                     break;
                 }
                 advance += entry.advance;
-                *group = AcGroup {
-                    bits,
-                    advance,
-                    end: false,
-                };
+                *group = AcGroup::new(bits, advance, false);
             }
         }
         Ok(Self {
@@ -86,23 +89,23 @@ impl AcTable {
     pub(super) fn skip(&self, reader: &mut Bits) -> Result<()> {
         let mut coefficient = 1usize;
         while coefficient < 64 {
-            while reader.cnt < 16 {
+            while reader.cnt < i32::from(GROUP_BITS) {
                 if reader.refill().is_none() {
                     break;
                 }
             }
-            let group = self.groups[(reader.cur >> 48) as usize];
-            if group.bits > 0
-                && i32::from(group.bits) <= reader.cnt
-                && usize::from(group.advance) < 64 - coefficient
+            let group = self.groups[(reader.cur >> (64 - GROUP_BITS)) as usize];
+            if group.bits() > 0
+                && i32::from(group.bits()) <= reader.cnt
+                && usize::from(group.advance()) < 64 - coefficient
             {
                 #[cfg(test)]
                 GROUP_HITS.set(GROUP_HITS.get() + 1);
-                reader.consume(u32::from(group.bits));
-                if group.end {
+                reader.consume(u32::from(group.bits()));
+                if group.end() {
                     return Ok(());
                 }
-                coefficient += usize::from(group.advance);
+                coefficient += usize::from(group.advance());
                 continue;
             }
             while reader.cnt < 10 {
@@ -157,7 +160,6 @@ impl AcTables {
             return Ok(table.clone());
         }
         let table = Arc::new(AcTable::build(counts, values)?);
-        // Bound shared expanded tables to approximately four MiB across unrelated image jobs.
         if self.tables.len() < 16 {
             self.tables.push(table.clone());
         }
