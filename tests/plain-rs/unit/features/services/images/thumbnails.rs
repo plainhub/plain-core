@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn native_thumbnail_output_is_one_shot_and_validates_before_consuming() {
-    let thumbnails = super::Thumbnails::default();
+    let (thumbnails, _receiver) = super::Thumbnails::new();
     let (sender, mut receiver) = tokio::sync::oneshot::channel();
     thumbnails
         .outputs
@@ -26,7 +26,7 @@ async fn native_thumbnail_output_is_one_shot_and_validates_before_consuming() {
 
 #[test]
 fn cancelled_thumbnail_output_discards_its_token() {
-    let thumbnails = super::Thumbnails::default();
+    let (thumbnails, _receiver) = super::Thumbnails::new();
     let (sender, receiver) = tokio::sync::oneshot::channel();
     thumbnails
         .outputs
@@ -220,7 +220,13 @@ async fn cancelling_a_started_generation_keeps_its_slot_and_single_flight_until_
     .unwrap();
     first.abort();
     assert!(first.await.unwrap_err().is_cancelled());
-    assert_eq!(state.thumbnails.capacity.available_permits(), 3);
+    assert_eq!(
+        state
+            .thumbnails
+            .native_decodes
+            .load(std::sync::atomic::Ordering::SeqCst),
+        1
+    );
     let next = state.thumbnails.get(&state, request);
     tokio::pin!(next);
     assert!(futures_util::poll!(next.as_mut()).is_pending());
@@ -233,7 +239,7 @@ async fn cancelling_a_started_generation_keeps_its_slot_and_single_flight_until_
             .load(std::sync::atomic::Ordering::SeqCst),
         1
     );
-    assert_eq!(state.thumbnails.capacity.available_permits(), 4);
+    assert_eq!(state.thumbnails.queue.waiting(), 0);
     core.stop_core().await;
 }
 
@@ -246,7 +252,29 @@ async fn cancelling_300_queued_requests_releases_admission_without_starting_a_de
     image::RgbImage::from_pixel(800, 400, image::Rgb([10, 200, 20]))
         .save(&path)
         .unwrap();
-    let held = state.thumbnails.capacity.acquire_many(4).await.unwrap();
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
+    let mut active = tokio::task::JoinSet::new();
+    for width in 81..85 {
+        let state = state.clone();
+        let request = Request {
+            width,
+            ..request_for(&path)
+        };
+        active.spawn(async move { state.thumbnails.get(&state, request).await });
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while state
+            .thumbnails
+            .native_decodes
+            .load(std::sync::atomic::Ordering::SeqCst)
+            != 4
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
     let mut requests = tokio::task::JoinSet::new();
     for _ in 0..300 {
         let state = state.clone();
@@ -254,7 +282,7 @@ async fn cancelling_300_queued_requests_releases_admission_without_starting_a_de
         requests.spawn(async move { state.thumbnails.get(&state, request).await });
     }
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        while state.thumbnails.requests.available_permits() != 20 {
+        while state.thumbnails.queue.waiting() != 304 {
             tokio::task::yield_now().await;
         }
     })
@@ -262,29 +290,23 @@ async fn cancelling_300_queued_requests_releases_admission_without_starting_a_de
     .unwrap();
     requests.abort_all();
     while requests.join_next().await.is_some() {}
-    assert_eq!(state.thumbnails.requests.available_permits(), 320);
+    assert_eq!(state.thumbnails.requests.available_permits(), 316);
+    gate.add_permits(4);
+    while let Some(result) = active.join_next().await {
+        assert!(result.unwrap().unwrap().is_some());
+    }
+    *state.thumbnails.decode_gate.lock().unwrap() = None;
+    let next = Request {
+        width: 85,
+        ..request_for(&path)
+    };
+    assert!(state.thumbnails.get(&state, next).await.unwrap().is_some());
     assert_eq!(
         state
             .thumbnails
             .native_decodes
             .load(std::sync::atomic::Ordering::SeqCst),
-        0
-    );
-    drop(held);
-    assert!(
-        state
-            .thumbnails
-            .get(&state, request_for(&path))
-            .await
-            .unwrap()
-            .is_some()
-    );
-    assert_eq!(
-        state
-            .thumbnails
-            .native_decodes
-            .load(std::sync::atomic::Ordering::SeqCst),
-        1
+        5
     );
     core.stop_core().await;
 }
@@ -507,5 +529,45 @@ async fn sufficient_originals_skip_generation_and_thumbnail_cache_files() {
         0
     );
     assert!(!cache.join("thumbs").exists());
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn concurrent_misses_share_one_failed_generation_and_a_later_request_can_retry() {
+    use std::sync::atomic::Ordering;
+    let (directory, core, _) = server_with_cache();
+    let state = core.runtime_state();
+    let path = directory.path().join("invalid.jpg");
+    std::fs::write(&path, b"invalid jpeg").unwrap();
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
+    let mut readers = tokio::task::JoinSet::new();
+    for _ in 0..300 {
+        let state = state.clone();
+        let request = request_for(&path);
+        readers.spawn(async move { state.thumbnails.get(&state, request).await });
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while state.thumbnails.queue.waiting() != 300 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    gate.add_permits(301);
+    let mut errors = std::collections::HashSet::new();
+    while let Some(result) = readers.join_next().await {
+        errors.insert(result.unwrap().unwrap_err().to_string());
+    }
+    assert_eq!(errors.len(), 1);
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
+    assert!(
+        state
+            .thumbnails
+            .get(&state, request_for(&path))
+            .await
+            .is_err()
+    );
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 2);
     core.stop_core().await;
 }

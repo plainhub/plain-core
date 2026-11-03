@@ -1,5 +1,8 @@
 use crate::runtime::Runtime as CoreRuntime;
-use plain_libs::utils::keyed_locks::KeyedLocks;
+mod queue;
+
+pub(crate) use queue::Generation;
+use queue::Queue;
 use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -23,8 +26,8 @@ pub struct Request {
     pub file_name: String,
 }
 pub struct Thumbnails {
-    locks: std::sync::Arc<KeyedLocks>,
-    pub(super) capacity: std::sync::Arc<Semaphore>,
+    pub(super) queue: Queue,
+    dispatcher: Mutex<Option<tokio::task::JoinHandle<()>>>,
     requests: Semaphore,
     idle: tokio::sync::Notify,
     pub(super) warmer: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -38,24 +41,28 @@ pub struct Thumbnails {
     #[cfg(any(test, feature = "test-seams"))]
     pub decode_gate: Mutex<Option<std::sync::Arc<Semaphore>>>,
 }
-impl Default for Thumbnails {
-    fn default() -> Self {
-        Self {
-            locks: std::sync::Arc::new(KeyedLocks::new()),
-            capacity: std::sync::Arc::new(Semaphore::new(4)),
-            requests: Semaphore::new(320),
-            idle: tokio::sync::Notify::new(),
-            warmer: Mutex::new(None),
-            #[cfg(feature = "media")]
-            hot: plain_libs::media::thumbnails::lru::ThumbLru::new(128 * 1024 * 1024, 4096),
-            #[cfg(any(test, feature = "test-seams"))]
-            cache_reads: std::sync::atomic::AtomicUsize::new(0),
-            outputs: Mutex::new(HashMap::new()),
-            #[cfg(any(test, feature = "test-seams"))]
-            native_decodes: std::sync::atomic::AtomicUsize::new(0),
-            #[cfg(any(test, feature = "test-seams"))]
-            decode_gate: Mutex::new(None),
-        }
+impl Thumbnails {
+    pub(crate) fn new() -> (Self, tokio::sync::mpsc::Receiver<Generation>) {
+        let (queue, receiver) = Queue::new();
+        (
+            Self {
+                queue,
+                dispatcher: Mutex::new(None),
+                requests: Semaphore::new(320),
+                idle: tokio::sync::Notify::new(),
+                warmer: Mutex::new(None),
+                #[cfg(feature = "media")]
+                hot: plain_libs::media::thumbnails::lru::ThumbLru::new(128 * 1024 * 1024, 4096),
+                #[cfg(any(test, feature = "test-seams"))]
+                cache_reads: std::sync::atomic::AtomicUsize::new(0),
+                outputs: Mutex::new(HashMap::new()),
+                #[cfg(any(test, feature = "test-seams"))]
+                native_decodes: std::sync::atomic::AtomicUsize::new(0),
+                #[cfg(any(test, feature = "test-seams"))]
+                decode_gate: Mutex::new(None),
+            },
+            receiver,
+        )
     }
 }
 async fn fingerprint(request: &Request) -> Result<Option<String>, String> {
@@ -278,77 +285,76 @@ impl Thumbnails {
         if bytes.is_some() {
             return Ok(bytes);
         }
-        let system =
-            crate::features::services::images::thumbnail_decoder::uses_system_thumbnail(&request);
-        let lock = self.locks.acquire(key.clone()).await;
-        let permit = self
-            .capacity
-            .clone()
-            .acquire_owned()
-            .await
-            .map_err(|error| error.to_string())?;
-        let state = state.clone();
-        tokio::spawn(async move {
-            let _lock = lock;
-            let _permit = permit;
-            if system {
-                if let Some(bytes) = decode(&state, &request, true, &cache).await? {
-                    return Ok(if fingerprint(&request).await?.as_deref() == Some(&key) {
+        self.queue.submit(request, cache, key, cached).await
+    }
+
+    async fn generate(state: &CoreRuntime, job: &Generation) -> Result<Option<Vec<u8>>, String> {
+        let Generation {
+            request,
+            cache,
+            key,
+            cached,
+        } = job;
+        let system = super::thumbnail_decoder::uses_system_thumbnail(request);
+        if system {
+            if let Some(bytes) = decode(state, request, true, cache).await? {
+                return Ok(
+                    if fingerprint(request).await?.as_deref() == Some(key.as_str()) {
                         Some(bytes)
                     } else {
                         None
-                    });
-                }
+                    },
+                );
             }
-            let cached_for_io = cached.clone();
-            let thumbnails = state.thumbnails.clone();
-            let bytes =
-                tokio::task::spawn_blocking(move || thumbnails.cached_bytes(&cached_for_io))
-                    .await
-                    .map_err(|error| error.to_string())??;
-            if let Some(bytes) = bytes {
-                return Ok(if fingerprint(&request).await?.as_deref() == Some(&key) {
+        }
+        let cached_for_io = cached.clone();
+        let thumbnails = state.thumbnails.clone();
+        let bytes = tokio::task::spawn_blocking(move || thumbnails.cached_bytes(&cached_for_io))
+            .await
+            .map_err(|error| error.to_string())??;
+        if let Some(bytes) = bytes {
+            return Ok(
+                if fingerprint(request).await?.as_deref() == Some(key.as_str()) {
                     Some(bytes)
                 } else {
                     None
-                });
-            }
-            let Some(bytes) = decode(&state, &request, false, &cache).await? else {
-                return Ok(None);
-            };
-            if fingerprint(&request).await?.as_deref() != Some(&key) {
-                return Ok(None);
-            }
-            let stored = bytes.clone();
-            let hot_key = cached.clone();
-            tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-                use std::io::Write;
-                std::fs::create_dir_all(cached.parent().unwrap())?;
-                let temporary = cached.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
-                let _cleanup = Temporary(temporary.clone());
-                let mut file = std::fs::OpenOptions::new()
-                    .create_new(true)
-                    .write(true)
-                    .open(&temporary)?;
-                file.write_all(&stored)?;
-                file.flush()?;
-                drop(file);
-                std::fs::rename(&temporary, &cached)
-            })
-            .await
-            .map_err(|error| error.to_string())?
-            .map_err(|error| error.to_string())?;
-            #[cfg(feature = "media")]
-            state
-                .thumbnails
-                .hot
-                .put(hot_key, std::sync::Arc::new(bytes.clone()));
-            #[cfg(not(feature = "media"))]
-            let _ = hot_key;
-            Ok(Some(bytes))
+                },
+            );
+        }
+        let Some(bytes) = decode(state, request, false, cache).await? else {
+            return Ok(None);
+        };
+        if fingerprint(request).await?.as_deref() != Some(key.as_str()) {
+            return Ok(None);
+        }
+        let stored = bytes.clone();
+        let cached = cached.clone();
+        let hot_key = cached.clone();
+        tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+            use std::io::Write;
+            std::fs::create_dir_all(cached.parent().unwrap())?;
+            let temporary = cached.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+            let _cleanup = Temporary(temporary.clone());
+            let mut file = std::fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&temporary)?;
+            file.write_all(&stored)?;
+            file.flush()?;
+            drop(file);
+            std::fs::rename(&temporary, &cached)
         })
         .await
         .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
+        #[cfg(feature = "media")]
+        state
+            .thumbnails
+            .hot
+            .put(hot_key, std::sync::Arc::new(bytes.clone()));
+        #[cfg(not(feature = "media"))]
+        let _ = hot_key;
+        Ok(Some(bytes))
     }
 
     pub(super) async fn wait_for_foreground(&self, state: &CoreRuntime) -> Result<(), String> {
@@ -373,13 +379,21 @@ impl Thumbnails {
         320 - self.requests.available_permits()
     }
 
+    pub(crate) fn start(state: CoreRuntime, receiver: tokio::sync::mpsc::Receiver<Generation>) {
+        let service = state.thumbnails.clone();
+        *service.dispatcher.lock().unwrap() = Some(tokio::spawn(Queue::run(state, receiver)));
+    }
+
     pub async fn shutdown(&self) {
         let task = self.warmer.lock().unwrap().take();
         if let Some(task) = task {
             task.abort();
             let _ = task.await;
         }
-        let _finished = self.capacity.acquire_many(4).await;
+        let task = self.dispatcher.lock().unwrap().take();
+        if let Some(task) = task {
+            task.await.expect("thumbnail dispatcher panicked");
+        }
     }
 }
 #[derive(Debug)]

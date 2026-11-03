@@ -49,7 +49,9 @@ async fn index_updates_prewarm_the_same_cache_used_by_foreground_requests() {
         {
             tokio::task::yield_now().await;
         }
-        let _finished = state.thumbnails.capacity.acquire_many(4).await.unwrap();
+        while state.thumbnails.queue.waiting() != 0 {
+            tokio::task::yield_now().await;
+        }
     })
     .await
     .unwrap();
