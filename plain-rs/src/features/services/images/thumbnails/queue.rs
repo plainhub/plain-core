@@ -1,11 +1,11 @@
 use super::{CoreRuntime, Request, Thumbnails};
 use futures_util::{StreamExt, stream::FuturesUnordered};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{Notify, watch};
 
 type Output = Result<Option<bytes::Bytes>, String>;
 type Reply = Option<Arc<Output>>;
@@ -17,134 +17,124 @@ pub(crate) struct Generation {
     pub(super) cached: PathBuf,
 }
 
-struct Work {
-    job: Mutex<Option<Generation>>,
-    reply: watch::Sender<Reply>,
-}
-
 struct Entry {
-    work: Arc<Work>,
-    foreground: bool,
+    reply: watch::Sender<Reply>,
+    queued_order: Option<u64>,
 }
 
-pub(crate) struct Receivers {
-    foreground: mpsc::Receiver<Arc<Work>>,
-    background: mpsc::Receiver<Arc<Work>>,
+#[derive(Default)]
+struct Pending {
+    jobs: BTreeMap<u64, Generation>,
+    replies: HashMap<String, Entry>,
 }
 
-impl Receivers {
-    async fn recv(&mut self) -> Option<Arc<Work>> {
-        tokio::select! {
-            biased;
-            work = self.foreground.recv() => work,
-            work = self.background.recv() => work,
+#[derive(Default)]
+pub(in crate::features::services::images) struct Queue {
+    pending: Mutex<Pending>,
+    ready: Notify,
+}
+
+struct Waiting<'a> {
+    queue: &'a Queue,
+    key: String,
+    receiver: Option<watch::Receiver<Reply>>,
+}
+
+impl Drop for Waiting<'_> {
+    fn drop(&mut self) {
+        let receiver = self.receiver.take().unwrap();
+        let mut pending = self.queue.pending.lock().unwrap();
+        let Some(entry) = pending.replies.get(&self.key) else {
+            return;
+        };
+        let same_channel = receiver.same_channel(&entry.reply.subscribe());
+        drop(receiver);
+        if same_channel && entry.reply.receiver_count() == 0 {
+            if let Some(order) = entry.queued_order {
+                pending.jobs.remove(&order);
+                pending.replies.remove(&self.key);
+            }
         }
     }
 }
 
-pub(in crate::features::services::images) struct Queue {
-    foreground: mpsc::Sender<Arc<Work>>,
-    background: mpsc::Sender<Arc<Work>>,
-    replies: Mutex<HashMap<String, Entry>>,
-}
-
 impl Queue {
-    pub(super) fn new() -> (Self, Receivers) {
-        let (foreground, foreground_receiver) = mpsc::channel(320);
-        let (background, background_receiver) = mpsc::channel(320);
-        (
-            Self {
-                foreground,
-                background,
-                replies: Mutex::new(HashMap::new()),
-            },
-            Receivers {
-                foreground: foreground_receiver,
-                background: background_receiver,
-            },
-        )
-    }
-
-    pub(super) async fn submit(
-        &self,
-        request: Request,
-        cache: PathBuf,
-        key: String,
-        cached: PathBuf,
-        background: bool,
-    ) -> Output {
-        let sender = if background {
-            &self.background
-        } else {
-            &self.foreground
-        };
-        let permit = sender.reserve().await.map_err(|_| "Rust core stopped")?;
-        let mut reply = {
-            let mut replies = self.replies.lock().unwrap();
+    pub(super) async fn submit(&self, job: Generation, access_order: u64) -> Output {
+        let key = job.key.clone();
+        let receiver = {
+            let mut pending = self.pending.lock().unwrap();
+            let Pending { jobs, replies } = &mut *pending;
             if let Some(entry) = replies.get_mut(&key) {
-                let reply = entry.work.reply.subscribe();
-                if !background && !entry.foreground {
-                    entry.foreground = true;
-                    permit.send(entry.work.clone());
-                } else {
-                    drop(permit);
+                if let Some(previous) = entry
+                    .queued_order
+                    .filter(|previous| *previous < access_order)
+                {
+                    let previous_job = jobs.remove(&previous).unwrap();
+                    jobs.insert(access_order, previous_job);
+                    entry.queued_order = Some(access_order);
                 }
-                reply
+                drop(job);
+                entry.reply.subscribe()
             } else {
-                let (tx, rx) = watch::channel(None);
-                let work = Arc::new(Work {
-                    job: Mutex::new(Some(Generation {
-                        request,
-                        cache,
-                        key: key.clone(),
-                        cached,
-                    })),
-                    reply: tx,
-                });
+                let (sender, receiver) = watch::channel(None);
                 replies.insert(
-                    key,
+                    key.clone(),
                     Entry {
-                        work: work.clone(),
-                        foreground: !background,
+                        reply: sender,
+                        queued_order: Some(access_order),
                     },
                 );
-                permit.send(work);
-                rx
+                jobs.insert(access_order, job);
+                receiver
             }
         };
+        let mut waiting = Waiting {
+            queue: self,
+            key,
+            receiver: Some(receiver),
+        };
+        self.ready.notify_one();
+        let reply = waiting.receiver.as_mut().unwrap();
         reply.changed().await.map_err(|_| "Rust core stopped")?;
         let result = reply.borrow_and_update().as_ref().unwrap().clone();
-        drop(reply);
+        drop(waiting);
         Arc::unwrap_or_clone(result)
     }
 
-    pub(super) async fn run(state: CoreRuntime, mut receivers: Receivers) {
+    pub(super) async fn run(state: CoreRuntime) {
         let workers = state.thumbnails.workers();
         let mut stop = state.stop.clone();
         let mut running = FuturesUnordered::new();
         loop {
-            let work = tokio::select! {
-                biased;
-                _ = stop.wait_for(|value| *value) => break,
-                _ = running.next(), if !running.is_empty() => continue,
-                work = receivers.recv(), if running.len() < workers => work,
-            };
-            let Some(work) = work else {
+            let ready = state.thumbnails.queue.ready.notified();
+            tokio::pin!(ready);
+            ready.as_mut().enable();
+            if *stop.borrow() {
                 break;
-            };
-            let mut replies = state.thumbnails.queue.replies.lock().unwrap();
-            let job = work.job.lock().unwrap().take();
-            if let Some(job) = job {
-                if work.reply.receiver_count() == 0 {
-                    replies.remove(&job.key);
-                } else {
-                    running.push(Self::complete(&state, job));
+            }
+            if running.len() < workers {
+                let mut pending = state.thumbnails.queue.pending.lock().unwrap();
+                if let Some((_, job)) = pending.jobs.pop_last() {
+                    let entry = pending.replies.get_mut(&job.key).unwrap();
+                    entry.queued_order = None;
+                    if entry.reply.receiver_count() == 0 {
+                        pending.replies.remove(&job.key);
+                    } else {
+                        running.push(Self::complete(&state, job));
+                    }
+                    continue;
                 }
             }
+            tokio::select! {
+                _ = stop.wait_for(|value| *value) => break,
+                _ = running.next(), if !running.is_empty() => {},
+                _ = ready => {},
+            }
         }
-        drop(receivers);
         while running.next().await.is_some() {}
-        state.thumbnails.queue.replies.lock().unwrap().clear();
+        let mut pending = state.thumbnails.queue.pending.lock().unwrap();
+        pending.jobs.clear();
+        pending.replies.clear();
     }
 
     async fn complete(state: &CoreRuntime, job: Generation) {
@@ -152,21 +142,23 @@ impl Queue {
         let reply = state
             .thumbnails
             .queue
-            .replies
+            .pending
             .lock()
             .unwrap()
+            .replies
             .remove(&job.key)
             .unwrap();
-        let _ = reply.work.reply.send(Some(Arc::new(result)));
+        let _ = reply.reply.send(Some(Arc::new(result)));
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-seams"))]
     pub(in crate::features::services::images) fn waiting(&self) -> usize {
-        self.replies
+        self.pending
             .lock()
             .unwrap()
+            .replies
             .values()
-            .map(|entry| entry.work.reply.receiver_count())
+            .map(|entry| entry.reply.receiver_count())
             .sum()
     }
 }

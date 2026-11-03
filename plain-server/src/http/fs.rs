@@ -11,6 +11,7 @@ use plain_rs::features::services::files::content::Options;
 use plain_rs::features::services::files::links;
 
 pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
+    let access_order = state.thumbnails.next_access_order();
     let request = request.into_parts().0;
     let query = |key| plain_libs::utils::query::query_get(&request.uri.to_string(), key);
     let id = query("id").unwrap_or_default();
@@ -30,6 +31,7 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
         Some(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
     let options = Options {
+        access_order,
         download: query("dl").as_deref() == Some("1"),
         offset: query("offset").and_then(|v| v.parse().ok()),
         length: query("length").and_then(|v| v.parse().ok()),

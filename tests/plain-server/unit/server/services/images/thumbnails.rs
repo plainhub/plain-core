@@ -4,22 +4,6 @@ use plain_rs::features::services::images::thumbnails::Request;
 use sha2::Digest;
 use std::sync::{Arc, atomic::Ordering};
 
-#[tokio::test]
-async fn thumbnail_overload_returns_an_explicit_retryable_status() {
-    let response = crate::http::file_response::thumbnail(
-        Err(plain_rs::features::services::images::thumbnails::Error::Busy),
-        None,
-    );
-    assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&body).unwrap()["error"],
-        "Thumbnail request capacity reached"
-    );
-}
-
 fn variant(base: &Request, center_crop: Option<bool>) -> Request {
     Request {
         center_crop: center_crop.unwrap_or(base.center_crop),
@@ -29,6 +13,7 @@ fn variant(base: &Request, center_crop: Option<bool>) -> Request {
             height: base.height,
             center_crop: base.center_crop,
             file_id: base.file_id.clone(),
+            access_order: None,
             file_name: base.file_name.clone(),
         }
     }
@@ -41,6 +26,7 @@ fn request_for(path: &std::path::Path) -> Request {
         height: 60,
         center_crop: true,
         file_id: String::new(),
+        access_order: None,
         file_name: String::new(),
     }
 }

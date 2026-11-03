@@ -81,7 +81,7 @@ impl NativeMediaCatalog {
     ) -> Result<MediaFileRow, String> {
         let metadata = self.read_file(data_type, reference).await?;
         let rows = self.record_file_reads(&[metadata])?;
-        self.enqueue_previews(&rows).await?;
+
         rows.into_iter()
             .next()
             .ok_or_else(|| "Missing recorded media file".into())
@@ -143,8 +143,8 @@ impl NativeMediaCatalog {
                     },
                     metadata = self.read_file(data_type, &reference) => metadata?,
                 };
-                let rows = session.record_when_running(1,|| self.persist_file_reads(&[metadata], policy.scope.as_ref())).await?;
-                self.enqueue_previews(&rows).await?;
+                session.record_when_running(1,|| self.persist_file_reads(&[metadata], policy.scope.as_ref())).await?;
+
             }
             Ok(())
         }.await;
@@ -156,14 +156,14 @@ impl NativeMediaCatalog {
         self.state.native_client_id()?;
         let request: CompletedFilesRequest =
             serde_json::from_value(params).map_err(|error| error.to_string())?;
-        let rows = crate::features::services::files::native_scan::completed(
+        crate::features::services::files::native_scan::completed(
             &self.state.db,
             &self.state.media_scans,
             &self.state.directory,
             request.paths,
         )
         .await?;
-        self.enqueue_previews(&rows).await?;
+
         Ok(true)
     }
 
@@ -304,13 +304,11 @@ impl NativeMediaCatalog {
                 if destination.is_dir() {
                     self.scan_directory(&destination.to_string_lossy()).await?;
                 } else {
-                    let rows = self
-                        .state
+                    self.state
                         .file_platform
                         .scan(&[destination.to_string_lossy().into_owned()])
                         .await
                         .map_err(|error| error.to_string())?;
-                    self.enqueue_previews(&rows).await?;
                 }
                 return Ok(());
             }
@@ -336,13 +334,11 @@ impl NativeMediaCatalog {
             }
             match effect {
                 Effect::Index => {
-                    let rows = self
-                        .state
+                    self.state
                         .file_platform
                         .scan(&[path.to_string_lossy().into_owned()])
                         .await
                         .map_err(|error| error.to_string())?;
-                    self.enqueue_previews(&rows).await?;
                 }
                 Effect::Forget => {
                     if let Some(parent) = path.parent().filter(|parent| parent.is_dir()) {
@@ -693,12 +689,11 @@ impl NativeMediaCatalog {
                     .await
                 {
                     Ok(metadata) => {
-                        let rows = session
+                        session
                             .record_when_running(0, || {
                                 self.persist_file_reads(&[metadata], policy.scope.as_ref())
                             })
                             .await?;
-                        self.enqueue_previews(&rows).await?;
                     }
                     Err(error) => errors.push(format!("{}: {error}", path.display())),
                 }
@@ -835,17 +830,6 @@ impl NativeMediaCatalog {
             rows.iter().map(|row| row.data_type),
         );
         Ok(rows)
-    }
-
-    #[cfg(feature = "runtime-media")]
-    async fn enqueue_previews(&self, rows: &[MediaFileRow]) -> Result<(), String> {
-        let policy = self.state.media_scans.policy()?;
-        let scope = policy.scope.as_ref();
-        self.state
-            .file_platform
-            .thumbnail_warmup
-            .enqueue(rows, scope)
-            .await
     }
 
     fn persist_file_reads(

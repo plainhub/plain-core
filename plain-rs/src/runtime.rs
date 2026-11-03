@@ -337,7 +337,7 @@ impl Runtime {
             crate::features::services::casting::receiver::receiver_engine::DlnaEngine::new(),
         );
         use crate::features::services::images::thumbnails::Thumbnails;
-        let (thumbnails, thumbnail_jobs) = Thumbnails::new();
+        let thumbnails = Thumbnails::new();
         let state = Self {
             ble_advertising: Arc::new(
                 crate::features::services::discovery::ble_advertising::Runtime::default(),
@@ -460,8 +460,7 @@ impl Runtime {
                 state.db.clone(),
                 receiver.clone(),
             ));
-        Thumbnails::start(state.clone(), thumbnail_jobs);
-        crate::features::services::images::thumbnail_warmup::start(state.clone());
+        Thumbnails::start(state.clone());
         crate::features::services::feeds::sync_service::schedule::start(state.clone());
         crate::features::services::chat::download_queue::start(state.clone());
         crate::features::services::peers::shared_batch::start(state.clone());

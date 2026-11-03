@@ -656,3 +656,66 @@ async fn scanning_skips_unreadable_directories_and_preserves_their_existing_rows
     );
     core.stop_core().await;
 }
+
+#[cfg(all(feature = "runtime-media", feature = "media"))]
+#[tokio::test]
+async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {
+    use std::sync::atomic::Ordering;
+    let sources = directory_scan_fixture();
+    let path = sources.path().join("photo.png");
+    image::RgbaImage::from_pixel(768, 768, image::Rgba([40, 90, 150, 128]))
+        .save(&path)
+        .unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(data.path()).unwrap();
+    let state = core.runtime_state();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    let cache = state.cache.root().join("thumbs");
+    std::fs::create_dir_all(&cache).unwrap();
+    let retained = cache.join("retained.jpg");
+    std::fs::File::create(&retained)
+        .unwrap()
+        .set_len(257 * 1024 * 1024)
+        .unwrap();
+    catalog
+        .scan_directory(sources.path().to_str().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(catalog.count(DataType::Image).unwrap(), 1);
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 0);
+    assert!(retained.exists());
+    let request = crate::features::services::images::thumbnails::Request {
+        path: path.to_string_lossy().into_owned(),
+        width: 256,
+        height: 256,
+        center_crop: true,
+        file_id: String::new(),
+        access_order: None,
+        file_name: "photo.png".into(),
+    };
+    let first = state
+        .thumbnails
+        .get(&state, request.clone())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(first.starts_with(b"\x89PNG\r\n\x1a\n"));
+    let second = state
+        .thumbnails
+        .get(&state, request)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(first, second);
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
+    catalog
+        .scan_directory(sources.path().to_str().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        std::fs::metadata(retained).unwrap().len(),
+        257 * 1024 * 1024
+    );
+    core.stop_core().await;
+}

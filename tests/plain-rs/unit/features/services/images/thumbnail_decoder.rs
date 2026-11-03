@@ -9,6 +9,7 @@ fn native_catalog_ids_do_not_select_the_sdk_thumbnail_route() {
         height: 60,
         center_crop: true,
         file_id: "catalog-id".into(),
+        access_order: None,
         file_name: "image.jpg".into(),
     };
     assert!(!uses_system_thumbnail(&request));
@@ -34,6 +35,7 @@ async fn core_only_thumbnail_crops_without_host_requests_or_output_tokens() {
         height: 2,
         center_crop: true,
         file_id: "catalog-id".into(),
+        access_order: None,
         file_name: "image.png".into(),
     };
     let bytes = state
@@ -71,6 +73,7 @@ async fn core_only_thumbnail_applies_exif_orientation_before_sizing() {
         height: 3,
         center_crop: false,
         file_id: String::new(),
+        access_order: None,
         file_name: "rotated.jpg".into(),
     };
     let image =
@@ -94,6 +97,7 @@ async fn native_png_thumbnail_retains_transparent_and_partial_alpha() {
         height: 256,
         center_crop: true,
         file_id: String::new(),
+        access_order: None,
         file_name: "transparent.png".into(),
     };
     let bytes = native(&request, directory.path()).await.unwrap().unwrap();

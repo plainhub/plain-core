@@ -13,6 +13,7 @@ pub enum Size {
 }
 
 pub struct Options {
+    pub access_order: u64,
     pub download: bool,
     pub offset: Option<i64>,
     pub length: Option<usize>,
@@ -201,6 +202,7 @@ pub async fn read(
                     .get(
                         state,
                         crate::features::services::images::thumbnails::Request {
+                            access_order: Some(options.access_order),
                             path: path.clone(),
                             width: pixels,
                             height: pixels,

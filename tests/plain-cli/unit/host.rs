@@ -297,18 +297,19 @@ async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
             state,
             plain_rs::features::services::images::thumbnails::Request {
                 path: image_path.to_string_lossy().into_owned(),
-                width: 4,
-                height: 4,
+                width: 256,
+                height: 256,
                 center_crop: true,
                 file_id: String::new(),
+                access_order: None,
                 file_name: "photo.png".into(),
             },
         )
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(image::load_from_memory(&bytes).unwrap().width(), 4);
-    assert_eq!(image::load_from_memory(&bytes).unwrap().height(), 4);
+    assert_eq!(image::load_from_memory(&bytes).unwrap().width(), 256);
+    assert_eq!(image::load_from_memory(&bytes).unwrap().height(), 256);
     assert!(!plain_libs::filesystem::image_format::is_animated_image_or_svg(&image_path));
     core.stop_core().await;
     runner.await.unwrap().unwrap();

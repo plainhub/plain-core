@@ -183,14 +183,13 @@ async fn fs_burst_and_page_cancellation(
     *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
     let mut pending = tokio::task::JoinSet::new();
     for id in &ids[..300] {
-        let request = http.get(format!("{origin}/fs")).query(&[
-            ("id", id.as_str()),
-            ("s", "sm"),
-        ]);
+        let request = http
+            .get(format!("{origin}/fs"))
+            .query(&[("id", id.as_str()), ("s", "sm")]);
         pending.spawn(async move { request.send().await.unwrap() });
     }
     tokio::time::timeout(Duration::from_secs(10), async {
-        while state.thumbnails.admitted_requests() != 300
+        while state.thumbnails.pending_requests() != 300
             || state.thumbnails.native_decodes.load(Ordering::SeqCst) != workers
         {
             tokio::task::yield_now().await;
@@ -236,7 +235,7 @@ async fn fs_burst_and_page_cancellation(
     pending.abort_all();
     while pending.join_next().await.is_some() {}
     tokio::time::timeout(Duration::from_secs(10), async {
-        while state.thumbnails.admitted_requests() != 0 {
+        while state.thumbnails.pending_requests() != 0 {
             tokio::task::yield_now().await;
         }
     })
@@ -263,10 +262,9 @@ async fn fs_burst_and_page_cancellation(
     );
     let mut complete = tokio::task::JoinSet::new();
     for id in &ids[..300] {
-        let request = http.get(format!("{origin}/fs")).query(&[
-            ("id", id.as_str()),
-            ("s", "sm"),
-        ]);
+        let request = http
+            .get(format!("{origin}/fs"))
+            .query(&[("id", id.as_str()), ("s", "sm")]);
         complete.spawn(async move {
             let response = request.send().await.unwrap();
             assert_eq!(response.status(), StatusCode::OK);

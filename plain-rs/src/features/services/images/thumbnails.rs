@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 use tokio::sync::{Semaphore, oneshot};
 
@@ -25,16 +25,19 @@ pub struct Request {
     #[serde(rename = "mediaId")]
     pub file_id: String,
     pub file_name: String,
+    #[serde(skip)]
+    pub access_order: Option<u64>,
 }
 pub(crate) const THUMBNAIL_SIZE: u32 = 256;
+const LOOKUP_LIMIT: usize = 320;
 
 pub struct Thumbnails {
     pub(super) queue: Queue,
     dispatcher: Mutex<Option<tokio::task::JoinHandle<()>>>,
-    requests: Semaphore,
-    idle: tokio::sync::Notify,
+    lookups: Arc<Semaphore>,
+    next_access: std::sync::atomic::AtomicU64,
+    #[cfg(any(test, feature = "test-seams"))]
     pub(super) cache_bytes_written: std::sync::atomic::AtomicU64,
-    pub(super) warmer: Mutex<Option<tokio::task::JoinHandle<()>>>,
     #[cfg(feature = "media")]
     hot: plain_libs::media::thumbnails::lru::ThumbLru,
     #[cfg(any(test, feature = "test-seams"))]
@@ -46,7 +49,7 @@ pub struct Thumbnails {
     pub decode_gate: Mutex<Option<std::sync::Arc<Semaphore>>>,
 }
 impl Thumbnails {
-    pub(crate) fn new() -> (Self, queue::Receivers) {
+    pub(crate) fn new() -> Self {
         #[cfg(feature = "media")]
         plain_libs::media::thumbnails::admission::initialize_with_memory(|| {
             #[cfg(not(target_os = "ios"))]
@@ -62,27 +65,23 @@ impl Thumbnails {
                     .max(0) as u64
             }
         });
-        let (queue, receiver) = Queue::new();
-        (
-            Self {
-                queue,
-                dispatcher: Mutex::new(None),
-                requests: Semaphore::new(320),
-                idle: tokio::sync::Notify::new(),
-                warmer: Mutex::new(None),
-                cache_bytes_written: std::sync::atomic::AtomicU64::new(0),
-                #[cfg(feature = "media")]
-                hot: plain_libs::media::thumbnails::lru::ThumbLru::new(128 * 1024 * 1024, 4096),
-                #[cfg(any(test, feature = "test-seams"))]
-                cache_reads: std::sync::atomic::AtomicUsize::new(0),
-                outputs: Mutex::new(HashMap::new()),
-                #[cfg(any(test, feature = "test-seams"))]
-                native_decodes: std::sync::atomic::AtomicUsize::new(0),
-                #[cfg(any(test, feature = "test-seams"))]
-                decode_gate: Mutex::new(None),
-            },
-            receiver,
-        )
+        Self {
+            queue: Queue::default(),
+            dispatcher: Mutex::new(None),
+            lookups: Arc::new(Semaphore::new(LOOKUP_LIMIT)),
+            next_access: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(any(test, feature = "test-seams"))]
+            cache_bytes_written: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(feature = "media")]
+            hot: plain_libs::media::thumbnails::lru::ThumbLru::new(128 * 1024 * 1024, 4096),
+            #[cfg(any(test, feature = "test-seams"))]
+            cache_reads: std::sync::atomic::AtomicUsize::new(0),
+            outputs: Mutex::new(HashMap::new()),
+            #[cfg(any(test, feature = "test-seams"))]
+            native_decodes: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(any(test, feature = "test-seams"))]
+            decode_gate: Mutex::new(None),
+        }
     }
 }
 async fn fingerprint(request: &Request) -> Result<Option<String>, String> {
@@ -110,11 +109,7 @@ fn source_fingerprint(request: &Request) -> Result<Option<String>, String> {
         request.center_crop,
         if system { &request.file_id } else { "" },
         if system { &request.file_name } else { "" },
-        if plain_libs::utils::mime::mime_from_ext(&request.path) == "image/png" {
-            "thumbnail-png-alpha-v1"
-        } else {
-            "thumbnail-v2"
-        }
+        "thumbnail-v2"
     ])
     .to_string();
     Ok(Some(plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(
@@ -243,28 +238,33 @@ impl Thumbnails {
             .map_err(|_| "thumbnail output cancelled".into())
     }
 
-    pub async fn get(&self, state: &CoreRuntime, request: Request) -> Result<Option<Bytes>, Error> {
-        let permit = self.requests.try_acquire().map_err(|_| Error::Busy)?;
-        let _foreground = Foreground {
-            permit: Some(permit),
-            idle: &self.idle,
-        };
-        let mut stop = state.stop.clone();
-        tokio::select! {
-            _ = stop.wait_for(|value| *value) => Err(Error::Failed("Rust core stopped".into())),
-            result = self.get_inner(state, request, false) => result.map_err(Error::Failed),
-        }
+    pub fn next_access_order(&self) -> u64 {
+        self.next_access
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub(super) async fn get_inner(
+    pub async fn get(
         &self,
         state: &CoreRuntime,
         mut request: Request,
-        background: bool,
-    ) -> Result<Option<Bytes>, String> {
-        if background {
-            self.wait_for_foreground(state).await?;
+    ) -> Result<Option<Bytes>, Error> {
+        let access_order = request
+            .access_order
+            .take()
+            .unwrap_or_else(|| self.next_access_order());
+        let mut stop = state.stop.clone();
+        tokio::select! {
+            _ = stop.wait_for(|value| *value) => Err(Error("Rust core stopped".into())),
+            result = self.get_inner(state, request, access_order) => result.map_err(Error),
         }
+    }
+
+    async fn get_inner(
+        &self,
+        state: &CoreRuntime,
+        mut request: Request,
+        access_order: u64,
+    ) -> Result<Option<Bytes>, String> {
         if request.width == 0 || request.height == 0 || !Path::new(&request.path).is_absolute() {
             return Err("positive thumbnail dimensions and absolute path required".into());
         }
@@ -272,8 +272,15 @@ impl Thumbnails {
             request.width = THUMBNAIL_SIZE;
             request.height = THUMBNAIL_SIZE;
         }
+        let lookup = self
+            .lookups
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|error| error.to_string())?;
         let state_for_io = state.clone();
         let Some((request, cache, key, cached, bytes)) = tokio::task::spawn_blocking(move || {
+            let _lookup = lookup;
             let canonical = match std::fs::canonicalize(&request.path) {
                 Ok(path) => path,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -287,10 +294,14 @@ impl Thumbnails {
             let Some(key) = source_fingerprint(&request)? else {
                 return Ok(None);
             };
-            let cached = cache
-                .join("thumbs")
-                .join("rust")
-                .join(format!("{key}.thumb"));
+            let cached = cache.join("thumbs").join("rust").join(format!(
+                "{key}.{}",
+                if plain_libs::utils::mime::mime_from_ext(&request.path) == "image/png" {
+                    "png"
+                } else {
+                    "jpg"
+                }
+            ));
             let system =
                 crate::features::services::images::thumbnail_decoder::uses_system_thumbnail(
                     &request,
@@ -327,7 +338,15 @@ impl Thumbnails {
             return Ok(bytes);
         }
         self.queue
-            .submit(request, cache, key, cached, background)
+            .submit(
+                Generation {
+                    request,
+                    cache,
+                    key,
+                    cached,
+                },
+                access_order,
+            )
             .await
     }
 
@@ -371,8 +390,12 @@ impl Thumbnails {
             return Ok(None);
         }
         let stored = bytes.clone();
-        let cached = cached.clone();
         let hot_key = cached.clone();
+        let cached = cached.with_extension(if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            "png"
+        } else {
+            "jpg"
+        });
         tokio::task::spawn_blocking(move || -> std::io::Result<()> {
             use std::io::Write;
             std::fs::create_dir_all(cached.parent().unwrap())?;
@@ -390,6 +413,7 @@ impl Thumbnails {
         .await
         .map_err(|error| error.to_string())?
         .map_err(|error| error.to_string())?;
+        #[cfg(any(test, feature = "test-seams"))]
         state
             .thumbnails
             .cache_bytes_written
@@ -401,39 +425,17 @@ impl Thumbnails {
         Ok(Some(bytes))
     }
 
-    pub(super) async fn wait_for_foreground(&self, state: &CoreRuntime) -> Result<(), String> {
-        while self.requests.available_permits() != 320 {
-            let idle = self.idle.notified();
-            tokio::pin!(idle);
-            idle.as_mut().enable();
-            if self.requests.available_permits() == 320 {
-                break;
-            }
-            let mut stop = state.stop.clone();
-            tokio::select! {
-                _ = stop.wait_for(|value| *value) => return Err("Rust core stopped".into()),
-                _ = idle => {},
-            }
-        }
-        Ok(())
-    }
-
     #[cfg(any(test, feature = "test-seams"))]
-    pub fn admitted_requests(&self) -> usize {
-        320 - self.requests.available_permits()
+    pub fn pending_requests(&self) -> usize {
+        self.queue.waiting()
     }
 
-    pub(crate) fn start(state: CoreRuntime, receiver: queue::Receivers) {
+    pub(crate) fn start(state: CoreRuntime) {
         let service = state.thumbnails.clone();
-        *service.dispatcher.lock().unwrap() = Some(tokio::spawn(Queue::run(state, receiver)));
+        *service.dispatcher.lock().unwrap() = Some(tokio::spawn(Queue::run(state)));
     }
 
     pub async fn shutdown(&self) {
-        let task = self.warmer.lock().unwrap().take();
-        if let Some(task) = task {
-            task.abort();
-            let _ = task.await;
-        }
         let task = self.dispatcher.lock().unwrap().take();
         if let Some(task) = task {
             task.await.expect("thumbnail dispatcher panicked");
@@ -441,49 +443,42 @@ impl Thumbnails {
     }
 }
 #[derive(Debug)]
-pub enum Error {
-    Busy,
-    Failed(String),
-}
+pub struct Error(String);
 impl std::fmt::Display for Error {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Busy => formatter.write_str("Thumbnail request capacity reached"),
-            Self::Failed(error) => formatter.write_str(error),
-        }
+        formatter.write_str(&self.0)
     }
 }
 impl std::error::Error for Error {}
-struct Foreground<'a> {
-    permit: Option<tokio::sync::SemaphorePermit<'a>>,
-    idle: &'a tokio::sync::Notify,
-}
-impl Drop for Foreground<'_> {
-    fn drop(&mut self) {
-        drop(self.permit.take());
-        self.idle.notify_waiters();
-    }
-}
 impl Thumbnails {
     fn cached_bytes(&self, path: &PathBuf) -> Result<Option<Bytes>, String> {
         #[cfg(feature = "media")]
         if let Some(bytes) = self.hot.get(path) {
             return Ok(Some(bytes));
         }
-        #[cfg(any(test, feature = "test-seams"))]
-        self.cache_reads
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        match std::fs::read(path) {
-            Ok(bytes) if !bytes.is_empty() => {
-                let bytes = Bytes::from(bytes);
-                #[cfg(feature = "media")]
-                self.hot.put(path.clone(), bytes.clone());
-                Ok(Some(bytes))
+        let alternate =
+            path.with_extension(if path.extension().is_some_and(|value| value == "png") {
+                "jpg"
+            } else {
+                "png"
+            });
+        for candidate in [path, &alternate] {
+            #[cfg(any(test, feature = "test-seams"))]
+            self.cache_reads
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            match std::fs::read(candidate) {
+                Ok(bytes) if !bytes.is_empty() => {
+                    let bytes = Bytes::from(bytes);
+                    #[cfg(feature = "media")]
+                    self.hot.put(path.clone(), bytes.clone());
+                    return Ok(Some(bytes));
+                }
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.to_string()),
             }
-            Ok(_) => Ok(None),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error.to_string()),
         }
+        Ok(None)
     }
 }
 struct Temporary(PathBuf);

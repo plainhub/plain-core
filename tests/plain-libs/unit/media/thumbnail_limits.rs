@@ -9,22 +9,6 @@ fn generation_reserves_a_quarter_of_cpu_capacity() {
 }
 
 #[test]
-fn background_producers_leave_room_for_foreground_work() {
-    for cpus in 1..=256 {
-        let total = workers(cpus);
-        let background = background_workers(total);
-        assert!(background >= 1 && background <= total);
-        if total > 1 {
-            assert!(background < total);
-        }
-    }
-    assert_eq!(
-        [3, 6, 12, 24, 96].map(background_workers),
-        [2, 3, 6, 12, 48]
-    );
-}
-
-#[test]
 fn memory_budget_preserves_capacity_for_other_services() {
     let gib = 1024 * 1024 * 1024;
     assert_eq!(memory_budget_mb(8 * gib), 1024);

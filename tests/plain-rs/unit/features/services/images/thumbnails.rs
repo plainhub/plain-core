@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn native_thumbnail_output_is_one_shot_and_validates_before_consuming() {
-    let (thumbnails, _receiver) = super::Thumbnails::new();
+    let thumbnails = super::Thumbnails::new();
     let (sender, mut receiver) = tokio::sync::oneshot::channel();
     thumbnails
         .outputs
@@ -26,7 +26,7 @@ async fn native_thumbnail_output_is_one_shot_and_validates_before_consuming() {
 
 #[test]
 fn cancelled_thumbnail_output_discards_its_token() {
-    let (thumbnails, _receiver) = super::Thumbnails::new();
+    let thumbnails = super::Thumbnails::new();
     let (sender, receiver) = tokio::sync::oneshot::channel();
     thumbnails
         .outputs
@@ -49,29 +49,9 @@ fn request_for(path: &std::path::Path) -> Request {
         height: 60,
         center_crop: true,
         file_id: String::new(),
+        access_order: None,
         file_name: String::new(),
     }
-}
-
-#[tokio::test]
-async fn overload_is_rejected_before_resolving_or_decoding_a_source() {
-    let (_directory, core, _cache) = server_with_cache();
-    let state = core.runtime_state();
-    let full = state.thumbnails.requests.acquire_many(320).await.unwrap();
-    let request = request_for(std::path::Path::new("/missing-thumbnail-fixture.png"));
-    assert!(matches!(
-        state.thumbnails.get(&state, request).await,
-        Err(super::Error::Busy)
-    ));
-    assert_eq!(
-        state
-            .thumbnails
-            .native_decodes
-            .load(std::sync::atomic::Ordering::SeqCst),
-        0
-    );
-    drop(full);
-    core.stop_core().await;
 }
 
 fn server_with_cache() -> (tempfile::TempDir, ContentServer, std::path::PathBuf) {
@@ -244,11 +224,11 @@ async fn cancelling_a_started_generation_keeps_its_slot_and_single_flight_until_
 }
 
 #[tokio::test]
-async fn cancelling_queued_requests_releases_admission_without_starting_a_decode() {
+async fn disconnected_queued_requests_are_removed_without_starting_a_decode() {
     let (_directory, core, _cache) = server_with_cache();
     let state = core.runtime_state();
     let workers = state.thumbnails.workers();
-    let queued = 300.min(320 - workers);
+    let queued = 300;
     let source = tempfile::tempdir().unwrap();
     let path = source.path().join("image.jpg");
     image::RgbImage::from_pixel(800, 400, image::Rgb([10, 200, 20]))
@@ -291,7 +271,7 @@ async fn cancelling_queued_requests_releases_admission_without_starting_a_decode
     .unwrap();
     requests.abort_all();
     while requests.join_next().await.is_some() {}
-    assert_eq!(state.thumbnails.requests.available_permits(), 320 - workers);
+    assert_eq!(state.thumbnails.queue.waiting(), workers);
     gate.add_permits(workers);
     while let Some(result) = active.join_next().await {
         assert!(result.unwrap().unwrap().is_some());
@@ -355,80 +335,6 @@ async fn changed_source_during_generation_cannot_publish_an_old_version() {
         .get_pixel(30, 30)
         .0;
     assert!(pixel[1] > pixel[0] + 100);
-    core.stop_core().await;
-}
-
-#[tokio::test]
-async fn background_generation_yields_to_a_foreground_request_for_the_same_image() {
-    let (_directory, core, _cache) = server_with_cache();
-    let state = core.runtime_state();
-    let source = tempfile::tempdir().unwrap();
-    let path = source.path().join("image.jpg");
-    image::RgbImage::from_pixel(800, 400, image::Rgb([30, 100, 200]))
-        .save(&path)
-        .unwrap();
-    let gate = Arc::new(tokio::sync::Semaphore::new(0));
-    *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
-    let foreground = tokio::spawn({
-        let state = state.clone();
-        let request = request_for(&path);
-        async move { state.thumbnails.get(&state, request).await }
-    });
-    tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        while state
-            .thumbnails
-            .native_decodes
-            .load(std::sync::atomic::Ordering::SeqCst)
-            == 0
-        {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap();
-    let background = state.thumbnails.get_inner(&state, request_for(&path), true);
-    tokio::pin!(background);
-    assert!(futures_util::poll!(background.as_mut()).is_pending());
-    gate.add_permits(1);
-    assert!(foreground.await.unwrap().unwrap().is_some());
-    assert!(
-        tokio::time::timeout(std::time::Duration::from_secs(5), background)
-            .await
-            .unwrap()
-            .unwrap()
-            .is_some()
-    );
-    assert_eq!(
-        state
-            .thumbnails
-            .native_decodes
-            .load(std::sync::atomic::Ordering::SeqCst),
-        1
-    );
-    core.stop_core().await;
-}
-
-#[tokio::test]
-async fn background_work_waits_for_foreground_and_wakes_when_the_last_request_leaves() {
-    use std::{future::Future, task::Poll};
-    let (_dir, core, _cache) = server_with_cache();
-    let state = core.runtime_state();
-    state.thumbnails.wait_for_foreground(&state).await.unwrap();
-    let first = super::Foreground {
-        permit: Some(state.thumbnails.requests.acquire().await.unwrap()),
-        idle: &state.thumbnails.idle,
-    };
-    let second = super::Foreground {
-        permit: Some(state.thumbnails.requests.acquire().await.unwrap()),
-        idle: &state.thumbnails.idle,
-    };
-    let waiting = state.thumbnails.wait_for_foreground(&state);
-    tokio::pin!(waiting);
-    assert!(std::future::poll_fn(|cx| Poll::Ready(waiting.as_mut().poll(cx).is_pending())).await);
-    drop(first);
-    assert!(std::future::poll_fn(|cx| Poll::Ready(waiting.as_mut().poll(cx).is_pending())).await);
-    drop(second);
-    waiting.await.unwrap();
     core.stop_core().await;
 }
 
@@ -696,7 +602,7 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
 
 #[cfg(feature = "media")]
 #[tokio::test]
-async fn png_alpha_cache_version_skips_old_white_thumbnails_and_preserves_jpeg_keys() {
+async fn real_image_extensions_skip_old_white_thumbnails_and_preserve_source_keys() {
     let (directory, core, _) = server_with_cache();
     let state = core.runtime_state();
     let source = directory.path().join("alpha.PNG");
@@ -726,7 +632,7 @@ async fn png_alpha_cache_version_skips_old_white_thumbnails_and_preserves_jpeg_k
         plain_libs::utils::hex::bytes_to_hex(&sha2::Sha256::digest(input.as_bytes()))
     };
     let old_key = legacy_key(&request);
-    assert_ne!(
+    assert_eq!(
         super::source_fingerprint(&request).unwrap().unwrap(),
         old_key
     );
@@ -744,6 +650,17 @@ async fn png_alpha_cache_version_skips_old_white_thumbnails_and_preserves_jpeg_k
         .await
         .unwrap()
         .unwrap();
+    let generated = old.with_file_name(format!(
+        "{}.png",
+        super::source_fingerprint(&Request {
+            width: 256,
+            height: 256,
+            ..request_for(&source)
+        })
+        .unwrap()
+        .unwrap()
+    ));
+    assert_eq!(std::fs::read(&generated).unwrap(), bytes);
     assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
     assert_eq!(
         image::load_from_memory(&bytes)
@@ -765,5 +682,66 @@ async fn png_alpha_cache_version_skips_old_white_thumbnails_and_preserves_jpeg_k
         super::source_fingerprint(&request).unwrap().unwrap(),
         legacy_key(&request)
     );
+    core.stop_core().await;
+}
+
+#[cfg(feature = "media")]
+#[test]
+fn cached_sdk_png_uses_its_real_extension_and_hot_hits_do_not_read_disk() {
+    use std::sync::atomic::Ordering;
+    let directory = tempfile::tempdir().unwrap();
+    let requested = directory.path().join("key.jpg");
+    let actual = requested.with_extension("png");
+    let bytes = b"\x89PNG\r\n\x1a\nencoded-sdk-output";
+    std::fs::write(&actual, bytes).unwrap();
+    let service = super::Thumbnails::new();
+    assert_eq!(
+        service.cached_bytes(&requested).unwrap().unwrap(),
+        bytes.as_slice()
+    );
+    let reads = service.cache_reads.load(Ordering::SeqCst);
+    assert_eq!(reads, 2);
+    assert_eq!(
+        service.cached_bytes(&requested).unwrap().unwrap(),
+        bytes.as_slice()
+    );
+    assert_eq!(service.cache_reads.load(Ordering::SeqCst), reads);
+    assert!(!requested.exists());
+    assert!(!requested.with_extension("thumb").exists());
+}
+
+#[tokio::test]
+async fn waiting_for_generation_does_not_hold_file_lookup_capacity() {
+    let (directory, core, _) = server_with_cache();
+    let state = core.runtime_state();
+    let path = directory.path().join("lookup-capacity.jpg");
+    image::RgbImage::from_pixel(640, 480, image::Rgb([40, 90, 150]))
+        .save(&path)
+        .unwrap();
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
+    let current = tokio::spawn({
+        let state = state.clone();
+        let request = request_for(&path);
+        async move { state.thumbnails.get(&state, request).await }
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while state
+            .thumbnails
+            .native_decodes
+            .load(std::sync::atomic::Ordering::SeqCst)
+            == 0
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        state.thumbnails.lookups.available_permits(),
+        super::LOOKUP_LIMIT
+    );
+    gate.add_permits(1);
+    assert!(current.await.unwrap().unwrap().is_some());
     core.stop_core().await;
 }

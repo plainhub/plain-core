@@ -4,10 +4,6 @@ pub fn workers(available_cpus: usize) -> usize {
         .max(1)
 }
 
-pub fn background_workers(workers: usize) -> usize {
-    workers.saturating_sub(1).min(workers.div_ceil(2)).max(1)
-}
-
 pub fn memory_budget_mb(total_bytes: u64) -> u32 {
     (total_bytes / 8).div_euclid(1024 * 1024).clamp(1, 16_384) as u32
 }

@@ -1,171 +1,183 @@
 use super::*;
 use futures_util::poll;
-use std::task::Poll;
 
-fn request() -> Request {
-    Request {
-        path: std::env::temp_dir()
-            .join("preview.jpg")
-            .to_string_lossy()
-            .into_owned(),
-        file_id: String::new(),
-        file_name: "preview.jpg".into(),
-        width: 256,
-        height: 256,
-        center_crop: true,
+fn job(key: impl Into<String>) -> Generation {
+    Generation {
+        request: Request {
+            path: "/photo.jpg".into(),
+            width: 256,
+            height: 256,
+            center_crop: true,
+            file_id: String::new(),
+            file_name: String::new(),
+            access_order: None,
+        },
+        key: key.into(),
+        cache: PathBuf::new(),
+        cached: PathBuf::new(),
     }
 }
 
 #[tokio::test]
-async fn foreground_is_dispatched_before_older_background_work() {
-    let (queue, mut receivers) = Queue::new();
-    let mut background = Box::pin(queue.submit(
-        request(),
-        PathBuf::new(),
-        "background".into(),
-        PathBuf::new(),
-        true,
-    ));
-    let mut foreground = Box::pin(queue.submit(
-        request(),
-        PathBuf::new(),
-        "foreground".into(),
-        PathBuf::new(),
-        false,
-    ));
-    assert!(poll!(&mut background).is_pending());
-    assert!(poll!(&mut foreground).is_pending());
-    assert!(queue.replies.lock().unwrap().contains_key("foreground"));
+async fn newest_requests_run_first_and_reaccess_promotes_one_shared_job() {
+    let queue = Queue::default();
+    let mut first = Box::pin(queue.submit(job("first"), 1));
+    let mut second = Box::pin(queue.submit(job("second"), 2));
+    let mut third = Box::pin(queue.submit(job("third"), 3));
+    assert!(poll!(&mut first).is_pending());
+    assert!(poll!(&mut second).is_pending());
+    assert!(poll!(&mut third).is_pending());
     assert_eq!(
-        receivers
-            .recv()
-            .await
-            .unwrap()
-            .job
+        queue
+            .pending
             .lock()
             .unwrap()
-            .take()
-            .unwrap()
-            .key,
-        "foreground"
+            .jobs
+            .values()
+            .rev()
+            .map(|job| job.key.as_str())
+            .collect::<Vec<_>>(),
+        ["third", "second", "first"]
     );
-    assert_eq!(
-        receivers
-            .recv()
-            .await
-            .unwrap()
-            .job
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap()
-            .key,
-        "background"
-    );
+    let mut reaccess = Box::pin(queue.submit(job("first"), 4));
+    assert!(poll!(&mut reaccess).is_pending());
+    let bytes = bytes::Bytes::from_static(b"shared image");
+    {
+        let mut pending = queue.pending.lock().unwrap();
+        assert_eq!(
+            pending
+                .jobs
+                .values()
+                .rev()
+                .map(|job| job.key.as_str())
+                .collect::<Vec<_>>(),
+            ["first", "third", "second"]
+        );
+        assert_eq!(pending.replies.len(), 3);
+        for (_, entry) in pending.replies.drain() {
+            entry
+                .reply
+                .send(Some(Arc::new(Ok(Some(bytes.clone())))))
+                .unwrap();
+        }
+    }
+    for result in [first.await, second.await, third.await, reaccess.await] {
+        assert_eq!(result.unwrap().unwrap().as_ptr(), bytes.as_ptr());
+    }
 }
 
 #[tokio::test]
-async fn foreground_promotes_the_same_job_and_shares_its_result() {
-    let (queue, mut receivers) = Queue::new();
-    let mut background = Box::pin(queue.submit(
-        request(),
-        PathBuf::new(),
-        "shared".into(),
-        PathBuf::new(),
-        true,
-    ));
-    let mut foreground = Box::pin(queue.submit(
-        request(),
-        PathBuf::new(),
-        "shared".into(),
-        PathBuf::new(),
-        false,
-    ));
-    assert!(poll!(&mut background).is_pending());
-    assert!(poll!(&mut foreground).is_pending());
-    assert_eq!(queue.waiting(), 2);
-    let promoted = receivers.recv().await.unwrap();
-    let original = receivers.recv().await.unwrap();
-    assert!(Arc::ptr_eq(&promoted, &original));
-    assert!(promoted.job.lock().unwrap().take().is_some());
-    assert!(original.job.lock().unwrap().take().is_none());
-    let bytes = bytes::Bytes::from_static(b"same output");
-    promoted
-        .reply
-        .send(Some(Arc::new(Ok(Some(bytes.clone())))))
-        .unwrap();
-    assert_eq!(background.await.unwrap().unwrap(), bytes);
-    assert_eq!(foreground.await.unwrap().unwrap(), bytes);
-}
-
-#[tokio::test]
-async fn full_background_lane_does_not_block_foreground_submission() {
-    let (queue, mut receivers) = Queue::new();
-    let mut background = Vec::new();
-    for index in 0..320 {
-        tokio::task::yield_now().await;
-        let mut job = Box::pin(queue.submit(
-            request(),
-            PathBuf::new(),
-            index.to_string(),
-            PathBuf::new(),
-            true,
-        ));
+async fn newest_access_keeps_all_2000_older_pending_requests() {
+    let queue = Queue::default();
+    let mut older = Vec::new();
+    for index in 0..2000 {
+        let mut job = Box::pin(queue.submit(job(format!("old-{index}")), index));
         assert!(poll!(&mut job).is_pending());
-        background.push(job);
+        older.push(job);
     }
-    assert_eq!(receivers.background.len(), 320);
-    tokio::task::yield_now().await;
-    let mut blocked = Box::pin(queue.submit(
-        request(),
-        PathBuf::new(),
-        "blocked".into(),
-        PathBuf::new(),
-        true,
-    ));
-    assert!(poll!(&mut blocked).is_pending());
-    assert!(!queue.replies.lock().unwrap().contains_key("blocked"));
-    let mut foreground = Box::pin(queue.submit(
-        request(),
-        PathBuf::new(),
-        "foreground".into(),
-        PathBuf::new(),
-        false,
-    ));
-    assert!(poll!(&mut foreground).is_pending());
-    assert!(queue.replies.lock().unwrap().contains_key("foreground"));
-    assert_eq!(
-        receivers
-            .recv()
-            .await
-            .unwrap()
-            .job
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap()
-            .key,
-        "foreground"
-    );
-    drop(blocked);
-    assert_eq!(queue.replies.lock().unwrap().len(), 321);
-    drop(receivers);
-    drop(background);
-    drop(foreground);
-    assert_eq!(queue.waiting(), 0);
+    let mut newest = Box::pin(queue.submit(job("current-page"), 2000));
+    assert!(poll!(&mut newest).is_pending());
+    let pending = queue.pending.lock().unwrap();
+    assert_eq!(pending.jobs.len(), 2001);
+    assert_eq!(pending.jobs.last_key_value().unwrap().1.key, "current-page");
+    assert_eq!(pending.replies.len(), 2001);
+    for index in 0..2000 {
+        assert!(pending.replies.contains_key(&format!("old-{index}")));
+    }
 }
 
 #[tokio::test]
-async fn closing_the_queue_releases_a_blocked_sender() {
-    let (queue, receivers) = Queue::new();
-    drop(receivers);
-    let mut send = Box::pin(queue.submit(
-        request(),
-        PathBuf::new(),
-        "closed".into(),
-        PathBuf::new(),
-        true,
-    ));
-    assert!(matches!(poll!(&mut send), Poll::Ready(Err(_))));
-    assert!(queue.replies.lock().unwrap().is_empty());
+async fn delayed_old_file_lookups_cannot_overtake_a_new_page_or_demote_a_reaccess() {
+    let queue = Queue::default();
+    let mut newer = Box::pin(queue.submit(job("new-page"), 2));
+    let mut delayed = Box::pin(queue.submit(job("old-page"), 1));
+    assert!(poll!(&mut newer).is_pending());
+    assert!(poll!(&mut delayed).is_pending());
+    assert_eq!(
+        queue
+            .pending
+            .lock()
+            .unwrap()
+            .jobs
+            .last_key_value()
+            .unwrap()
+            .1
+            .key,
+        "new-page"
+    );
+    let mut reaccess = Box::pin(queue.submit(job("old-page"), 4));
+    assert!(poll!(&mut reaccess).is_pending());
+    let mut older_duplicate = Box::pin(queue.submit(job("old-page"), 0));
+    assert!(poll!(&mut older_duplicate).is_pending());
+    let pending = queue.pending.lock().unwrap();
+    assert_eq!(pending.jobs.len(), 2);
+    assert_eq!(pending.jobs.last_key_value().unwrap().1.key, "old-page");
+    assert_eq!(*pending.jobs.last_key_value().unwrap().0, 4);
+}
+
+#[tokio::test]
+async fn only_the_last_disconnected_subscriber_removes_a_pending_job() {
+    let queue = Queue::default();
+    let mut first = Box::pin(queue.submit(job("photo"), 1));
+    let mut second = Box::pin(queue.submit(job("photo"), 2));
+    assert!(poll!(&mut first).is_pending());
+    assert!(poll!(&mut second).is_pending());
+    drop(first);
+    assert_eq!(queue.waiting(), 1);
+    assert_eq!(queue.pending.lock().unwrap().jobs.len(), 1);
+    drop(second);
+    let pending = queue.pending.lock().unwrap();
+    assert!(pending.jobs.is_empty());
+    assert!(pending.replies.is_empty());
+}
+
+#[tokio::test]
+async fn disconnecting_an_active_job_keeps_it_available_for_reaccess() {
+    let queue = Queue::default();
+    let mut first = Box::pin(queue.submit(job("photo"), 1));
+    assert!(poll!(&mut first).is_pending());
+    {
+        let mut pending = queue.pending.lock().unwrap();
+        pending.jobs.pop_last().unwrap();
+        pending.replies.get_mut("photo").unwrap().queued_order = None;
+    }
+    drop(first);
+    let mut reaccess = Box::pin(queue.submit(job("photo"), 2));
+    assert!(poll!(&mut reaccess).is_pending());
+    let mut pending = queue.pending.lock().unwrap();
+    assert!(pending.jobs.is_empty());
+    pending
+        .replies
+        .remove("photo")
+        .unwrap()
+        .reply
+        .send(Some(Arc::new(Ok(None))))
+        .unwrap();
+    drop(pending);
+    assert!(reaccess.await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn dropping_an_old_reply_does_not_remove_a_new_job_for_the_same_key() {
+    let queue = Queue::default();
+    let mut old = Box::pin(queue.submit(job("photo"), 1));
+    assert!(poll!(&mut old).is_pending());
+    {
+        let mut pending = queue.pending.lock().unwrap();
+        pending.jobs.pop_last().unwrap();
+        pending
+            .replies
+            .remove("photo")
+            .unwrap()
+            .reply
+            .send(Some(Arc::new(Ok(None))))
+            .unwrap();
+    }
+    let mut new = Box::pin(queue.submit(job("photo"), 2));
+    assert!(poll!(&mut new).is_pending());
+    drop(old);
+    assert_eq!(queue.waiting(), 1);
+    assert_eq!(queue.pending.lock().unwrap().jobs.len(), 1);
+    drop(new);
+    assert!(queue.pending.lock().unwrap().jobs.is_empty());
 }

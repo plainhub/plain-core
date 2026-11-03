@@ -12,7 +12,6 @@ use std::{
 };
 
 pub struct FilePlatform {
-    pub(crate) thumbnail_warmup: crate::features::services::images::thumbnail_warmup::Schedule,
     pub(super) host: Arc<Host>,
     pub(super) db: Arc<Db>,
     pub recent_files: Arc<crate::features::recent_files::RecentFiles>,
@@ -42,7 +41,6 @@ impl FilePlatform {
             (|| -> std::io::Result<_> { Ok([directory.canonicalize()?, cache.canonicalize()?]) })()
                 .map_err(|error| error.to_string());
         Self {
-            thumbnail_warmup: Default::default(),
             recent_files: Arc::new(crate::features::recent_files::RecentFiles::new(
                 db.key_values(),
             )),

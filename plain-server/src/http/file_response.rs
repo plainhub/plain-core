@@ -200,14 +200,7 @@ pub(crate) fn thumbnail(
         }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(error) => (
-            if matches!(
-                error,
-                plain_rs::features::services::images::thumbnails::Error::Busy
-            ) {
-                StatusCode::TOO_MANY_REQUESTS
-            } else {
-                StatusCode::BAD_REQUEST
-            },
+            StatusCode::BAD_REQUEST,
             axum::Json(serde_json::json!({"error":error.to_string()})),
         )
             .into_response(),
