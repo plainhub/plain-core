@@ -192,10 +192,12 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
     let state = local.runtime_state();
     let remote_state = remote.runtime_state();
     remote_state.prefs.set("password_type", "FIXED").unwrap();
-    remote_state
-        .prefs
-        .set("password", "fixture-password")
-        .unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &remote_state.prefs,
+        "password",
+        serde_json::json!("fixture-password"),
+    )
+    .unwrap();
     let mut events = ConfirmationCallbacks::new(&remote_state);
     let http_port = remote_state.public_ports().await.unwrap().0;
     let initial = pairing_attempts::start(
@@ -377,7 +379,12 @@ async fn wrong_password_never_creates_a_local_grant() {
     let state = local.runtime_state();
     let other = remote.runtime_state();
     other.prefs.set("password_type", "FIXED").unwrap();
-    other.prefs.set("password", "fixture-password").unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &other.prefs,
+        "password",
+        serde_json::json!("fixture-password"),
+    )
+    .unwrap();
     let first = pairing_attempts::start(
         &state,
         None,
@@ -489,7 +496,12 @@ async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
             .is_empty()
     );
     other.prefs.set("password_type", "FIXED").unwrap();
-    other.prefs.set("password", "fixture-password").unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &other.prefs,
+        "password",
+        serde_json::json!("fixture-password"),
+    )
+    .unwrap();
     let scope = plain_rs::infrastructure::host::request_scope::NativeRequestScope::default();
     let response = local.native_graphql().unwrap().execute_scoped(async_graphql::Request::new(format!("mutation {{ pairDevice(input: {{ host: \"127.0.0.1:{port}\", mode: MANAGE }}) {{ generation }} }}")), scope.clone()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -522,7 +534,12 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
     let state = local.runtime_state();
     let other = remote.runtime_state();
     other.prefs.set("password_type", "FIXED").unwrap();
-    other.prefs.set("password", "fixture-password").unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &other.prefs,
+        "password",
+        serde_json::json!("fixture-password"),
+    )
+    .unwrap();
     let remote_id = other.native_client_id().unwrap();
     let signing =
         plain_rs::features::services::peers::peer_wire::signing_keypair(&other.prefs).unwrap();

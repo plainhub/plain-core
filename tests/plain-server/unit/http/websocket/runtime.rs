@@ -84,7 +84,8 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     prefs.set("background_service_enabled", true).unwrap();
     prefs.set("desktop_access", true).unwrap();
     prefs.set("login_require_approval", true).unwrap();
-    prefs.set("password", "secret").unwrap();
+    plain_rs::features::prefs::security::set_entry(&prefs, "password", serde_json::json!("secret"))
+        .unwrap();
     prefs.set("password_type", "FIXED").unwrap();
     prefs.set("client_id", "phone").unwrap();
     let (private, _) = plain_libs::crypto::ed25519_generate();
@@ -137,11 +138,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             "isMobile":false, "ecdhPublicKey":plain_libs::utils::base64::base64_encode(&client.public_key_bytes),
             "peer":null,
         });
-        let inner = plain_libs::crypto::xchacha_encrypt_raw(
-            &digest.as_bytes()[..32],
-            &serde_json::to_vec(&request).unwrap(),
-        )
-        .unwrap();
+        let inner = serde_json::to_vec(&request).unwrap();
         let frame = keys
             .encrypt_request(&inner, chrono::Utc::now().timestamp_millis() as u64)
             .unwrap();
@@ -176,8 +173,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             let inner = keys
                 .decrypt_response(&frame, chrono::Utc::now().timestamp_millis() as u64)
                 .unwrap();
-            let decrypted =
-                plain_libs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &inner).unwrap();
+            let decrypted = inner;
             let result: Value = serde_json::from_slice(&decrypted).unwrap();
             assert_eq!(result["status"], "COMPLETED");
             let state = server.runtime_state();
@@ -246,7 +242,12 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
 
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
-    state.prefs.set("password", "secret").unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &state.prefs,
+        "password",
+        serde_json::json!("secret"),
+    )
+    .unwrap();
     state.prefs.set("password_type", "FIXED").unwrap();
     state.prefs.set("login_require_approval", false).unwrap();
     let digest = plain_libs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
@@ -277,11 +278,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                 "peer":null,
             });
             let inner = if attempt == 0 {
-                plain_libs::crypto::xchacha_encrypt_raw(
-                    &digest.as_bytes()[..32],
-                    &serde_json::to_vec(&request).unwrap(),
-                )
-                .unwrap()
+                serde_json::to_vec(&request).unwrap()
             } else {
                 b"invalid".to_vec()
             };
@@ -304,9 +301,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                 let inner = keys
                     .decrypt_response(&frame, chrono::Utc::now().timestamp_millis() as u64)
                     .unwrap();
-                let plaintext =
-                    plain_libs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &inner)
-                        .unwrap();
+                let plaintext = inner;
                 let result: Value = serde_json::from_slice(&plaintext).unwrap();
                 assert_eq!(result["status"], "COMPLETED");
                 assert_eq!(result["loginContext"], keys.context);

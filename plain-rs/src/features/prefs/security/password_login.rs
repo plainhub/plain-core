@@ -24,25 +24,46 @@ fn validate_password(password: &str) -> std::result::Result<(), PasswordSetupErr
     Ok(())
 }
 
+pub(super) fn write_password(map: &mut Map<String, Value>, password: &str) -> Result<()> {
+    put(
+        map,
+        PASSWORD,
+        plain_libs::crypto::password::PasswordHash::new(
+            plain_libs::crypto::sha512_hex(password).as_bytes(),
+        ),
+    )
+}
+
 fn write_password_login(map: &mut Map<String, Value>, password: &str) -> Result<()> {
-    put(map, PASSWORD, password)?;
+    write_password(map, password)?;
     put(map, PASSWORD_TYPE, PasswordType::Fixed)?;
     put(map, LOGIN_REQUIRE_APPROVAL, false)
 }
 
 pub fn configure_password_login(prefs: &Prefs) -> Result<()> {
     if password_type(prefs)? == PasswordType::None {
-        prefs.update(|map| write_password_login(map, ""))?;
+        prefs.update(|map| {
+            map.remove(PASSWORD);
+            put(map, PASSWORD_TYPE, PasswordType::Fixed)?;
+            put(map, LOGIN_REQUIRE_APPROVAL, false)
+        })?;
     }
     Ok(())
 }
 
 pub fn password_setup_required(prefs: &Prefs) -> Result<bool> {
-    Ok(password_type(prefs)? == PasswordType::Fixed
-        && prefs
-            .get::<String>(PASSWORD)?
-            .unwrap_or_default()
-            .is_empty())
+    Ok(password_type(prefs)? == PasswordType::Fixed && password_hash(prefs)?.is_none())
+}
+
+pub fn password_hash(prefs: &Prefs) -> Result<Option<plain_libs::crypto::password::PasswordHash>> {
+    prefs.get(PASSWORD)
+}
+
+pub fn valid_password_digest(digest: &str) -> bool {
+    digest.len() == 128
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 pub fn setup_password(
@@ -50,14 +71,29 @@ pub fn setup_password(
     password: &str,
 ) -> std::result::Result<bool, PasswordSetupError> {
     validate_password(password)?;
+    setup_password_hash(prefs, &plain_libs::crypto::sha512_hex(password))
+}
+
+pub fn setup_password_hash(
+    prefs: &Prefs,
+    digest: &str,
+) -> std::result::Result<bool, PasswordSetupError> {
+    if !valid_password_digest(digest) {
+        return Err(PasswordSetupError::InvalidPassword);
+    }
     prefs
         .update(|map| {
             if map.get(PASSWORD_TYPE) != Some(&json!(PasswordType::Fixed))
-                || !read::<String>(map, PASSWORD)?.is_empty()
+                || map.contains_key(PASSWORD)
             {
                 return Ok(false);
             }
-            write_password_login(map, password)?;
+            put(
+                map,
+                PASSWORD,
+                plain_libs::crypto::password::PasswordHash::new(digest.as_bytes()),
+            )?;
+            put(map, LOGIN_REQUIRE_APPROVAL, false)?;
             Ok(true)
         })
         .map_err(PasswordSetupError::Preferences)
@@ -74,5 +110,5 @@ pub fn set_password_login(
 }
 
 #[cfg(test)]
-#[path = "../../../../tests/unit/features/prefs/security/password_login.rs"]
+#[path = "../../../../../tests/plain-rs/unit/features/prefs/security/password_login.rs"]
 mod tests;

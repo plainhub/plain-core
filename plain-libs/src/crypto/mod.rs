@@ -2,6 +2,7 @@ use crate::utils::base64::base64_encode;
 mod ecdh;
 mod ed25519;
 pub mod hash;
+pub mod password;
 mod symmetric;
 pub use hash::sha512_hex;
 

@@ -68,27 +68,22 @@ fn assert_browser_vector(vector: serde_json::Value, mode: ConfirmationMode) {
     );
     let frame = base64_decode(vector["requestFrame"].as_str().unwrap());
     let decrypted = server.decrypt_request(&frame, 1000).unwrap();
-    let request = if mode == ConfirmationMode::Password {
+    if mode == ConfirmationMode::Password {
         let digest = vector["passwordHash"].as_str().unwrap();
         assert!(xchacha_decrypt_raw(&digest.as_bytes()[..32], &frame).is_none());
-        assert_eq!(
-            decrypted,
-            base64_decode(vector["passwordFrame"].as_str().unwrap())
-        );
         let response = channel
             .decrypt_response(
                 &base64_decode(vector["responseFrame"].as_str().unwrap()),
                 1000,
             )
             .unwrap();
+        assert_eq!(response, vector["response"].as_str().unwrap().as_bytes());
         assert_eq!(
-            xchacha_decrypt_raw(&digest.as_bytes()[..32], &response).unwrap(),
-            vector["response"].as_str().unwrap().as_bytes(),
+            serde_json::from_slice::<serde_json::Value>(&decrypted).unwrap()["password"],
+            digest
         );
-        xchacha_decrypt_raw(&digest.as_bytes()[..32], &decrypted).unwrap()
-    } else {
-        decrypted
-    };
+    }
+    let request = decrypted;
     assert_eq!(request, vector["request"].as_str().unwrap().as_bytes());
 }
 
@@ -98,7 +93,7 @@ fn browser_vector_binds_commitment_signature_transcript_keys_and_ciphertext_in_r
 }
 
 #[test]
-fn password_browser_vector_requires_both_encryption_layers_and_agrees_with_rust() {
+fn password_browser_vector_binds_the_digest_to_the_signed_temporary_channel() {
     let vector = serde_json::from_str(include_str!(
         "../../../../../plain-rs/testdata/crypto/web-password-login-vector.json"
     ))

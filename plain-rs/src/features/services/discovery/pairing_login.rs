@@ -199,17 +199,8 @@ pub(super) async fn run(
     }
 
     let request_bytes = serde_json::to_vec(&request)?;
-    let encrypted = if let Some(digest) = &digest {
-        let password_encrypted =
-            crypto::xchacha_encrypt_raw(&digest.as_bytes()[..32], &request_bytes)
-                .ok_or_else(|| anyhow::anyhow!("invalid_password"))?;
-        channel.encrypt_request(
-            &password_encrypted,
-            chrono::Utc::now().timestamp_millis() as u64,
-        )?
-    } else {
-        channel.encrypt_request(&request_bytes, chrono::Utc::now().timestamp_millis() as u64)?
-    };
+    let encrypted =
+        channel.encrypt_request(&request_bytes, chrono::Utc::now().timestamp_millis() as u64)?;
     socket
         .send(tokio_tungstenite::tungstenite::Message::Binary(
             encrypted.into(),
@@ -225,14 +216,8 @@ pub(super) async fn run(
         use tokio_tungstenite::tungstenite::Message;
         match frame {
             Message::Binary(data) => {
-                let decrypted = channel
+                let plain = channel
                     .decrypt_response(&data, chrono::Utc::now().timestamp_millis() as u64)?;
-                let plain = if let Some(digest) = &digest {
-                    crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &decrypted)
-                        .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))?
-                } else {
-                    decrypted
-                };
                 let response: Value = serde_json::from_slice(&plain)
                     .map_err(|_| anyhow::anyhow!("invalid_auth_response"))?;
                 if response["status"] == "PENDING" {

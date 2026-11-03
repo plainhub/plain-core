@@ -49,8 +49,12 @@ impl SecurityPreferences<'_> {
         Ok(changed)
     }
 
-    pub fn reset_password(&self) -> anyhow::Result<bool> {
-        self.apply(Command::ResetPassword)
+    pub fn reset_password(&self) -> anyhow::Result<String> {
+        let password = security::random_password(6);
+        self.apply(Command::SetPassword {
+            password: password.clone(),
+        })?;
+        Ok(password)
     }
     pub fn reset_url_token(&self) -> anyhow::Result<bool> {
         self.apply(Command::ResetUrlToken)

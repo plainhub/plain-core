@@ -102,11 +102,10 @@ impl NativeManagement {
         })
     }
 
-    pub fn reset_password(&self) -> Result<bool, String> {
+    pub fn reset_password(&self) -> Result<String, String> {
         self.security_preferences()?
             .reset_password()
-            .map_err(|error| error.to_string())?;
-        Ok(true)
+            .map_err(|error| error.to_string())
     }
 
     pub fn reset_url_token(&self) -> Result<bool, String> {

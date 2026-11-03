@@ -16,7 +16,6 @@ pub enum Command {
     SetRotateUrlToken {
         enabled: bool,
     },
-    ResetPassword,
     ResetUrlToken,
     ResetAdbToken,
     SetApiPermission {
@@ -40,6 +39,12 @@ impl Command {
             *hostname = hostname.trim().to_owned();
         }
         match self {
+            Self::SetPassword { ref password } => {
+                anyhow::ensure!(
+                    !password.trim().is_empty() && password.len() <= 1024,
+                    "Invalid password"
+                );
+            }
             Self::SetMdnsHostname { ref hostname } => validate_hostname(hostname)?,
             Self::SetApiPermission { ref permission, .. } => anyhow::ensure!(
                 PERMISSIONS.contains(&permission.as_str()),
@@ -63,7 +68,7 @@ impl Command {
         prefs.update(|map| {
             let before = map.clone();
             match self {
-                Self::SetPassword { password } => put(map, PASSWORD, password)?,
+                Self::SetPassword { password } => password_login::write_password(map, &password)?,
                 Self::SetPasswordType { value } => put(map, PASSWORD_TYPE, value)?,
                 Self::SetLoginRequireApproval { enabled } => {
                     put(map, LOGIN_REQUIRE_APPROVAL, enabled)?
@@ -71,7 +76,6 @@ impl Command {
                 Self::SetRotateUrlToken { enabled } => {
                     put(map, ROTATE_URL_TOKEN_ON_RESTART, enabled)?
                 }
-                Self::ResetPassword => put(map, PASSWORD, random_password(6))?,
                 Self::ResetUrlToken => put(map, URL_TOKEN, plain_libs::crypto::gen_token())?,
                 Self::ResetAdbToken => put(map, ADB_TOKEN, random_password(32))?,
                 Self::SetApiPermission {

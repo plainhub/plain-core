@@ -10,7 +10,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "volumes" = ["dep:anyhow"]
 "file-walk" = ["dep:anyhow"]
 "default" = ["crypto"]
-"crypto" = ["dep:chacha20poly1305", "dep:p256", "dep:ed25519-dalek"]
+"crypto" = ["dep:chacha20poly1305", "dep:p256", "dep:ed25519-dalek", "dep:pbkdf2"]
 "tls" = ["dep:rcgen", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:x509-parser", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
 "time" = ["dep:chrono"]
 "sqlite" = ["time", "dep:rusqlite"]
@@ -39,6 +39,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "rand" = "0.8"
 "serde" = { "version" = "1", "features" = ["derive"] }
 "sha2" = "0.10"
+"pbkdf2" = { version = "=0.13.0", default-features = false, features = ["sha2"], optional = true }
 "uuid" = { "version" = "1", "features" = ["v4", "serde"] }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }
 "anyhow" = { "version" = "1", "optional" = true }

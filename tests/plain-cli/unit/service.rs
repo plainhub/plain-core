@@ -21,7 +21,7 @@ async fn service_preserves_explicit_web_permissions_and_password_across_restart(
         prefs.set("api_permissions", &configured).unwrap();
         plain_rs::features::prefs::security::set_password_login(&prefs, "owned fixture password")
             .unwrap();
-        let password = prefs.get::<String>("password").unwrap();
+        let password = plain_rs::features::prefs::security::password_hash(&prefs).unwrap();
         let mut identity = None;
         for _ in 0..2 {
             let service = Service::start(
@@ -42,7 +42,10 @@ async fn service_preserves_explicit_web_permissions_and_password_across_restart(
                 prefs.get::<Vec<String>>("api_permissions").unwrap(),
                 Some(configured.clone())
             );
-            assert_eq!(prefs.get::<String>("password").unwrap(), password);
+            assert_eq!(
+                plain_rs::features::prefs::security::password_hash(&prefs).unwrap(),
+                password
+            );
             assert!(!plain_rs::features::services::device::access::is_enabled(
                 &prefs,
                 &["WRITE_EXTERNAL_STORAGE"]

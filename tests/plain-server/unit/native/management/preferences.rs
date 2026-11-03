@@ -38,16 +38,22 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
     let management = core.native_management().unwrap();
     let before = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
     let mut events = state.events.subscribe();
-    assert!(management.reset_password().unwrap());
+    let generated = management.reset_password().unwrap();
     assert!(management.reset_url_token().unwrap());
     assert!(management.reset_adb_token().unwrap());
     let after = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
-    assert_ne!(before.password, after.password);
+    assert!(before.password.is_empty() && after.password.is_empty());
+    assert!(
+        plain_rs::features::prefs::security::password_hash(&state.prefs)
+            .unwrap()
+            .unwrap()
+            .verify(plain_libs::crypto::sha512_hex(&generated).as_bytes())
+    );
     assert_ne!(before.url_token, after.url_token);
     assert_ne!(before.adb_token, after.adb_token);
     assert_eq!(before.client_id, after.client_id);
     assert_eq!(before.signature_public_key, after.signature_public_key);
-    assert_eq!(after.password.len(), 6);
+    assert_eq!(generated.len(), 6);
     assert_eq!(after.adb_token.len(), 32);
     assert_eq!(
         plain_libs::utils::base64::base64_decode_checked(&after.url_token)

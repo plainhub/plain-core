@@ -186,7 +186,6 @@ async fn core_startup_persists_complete_identity_and_only_rotates_url_token_on_r
         CLIENT_ID,
         SIGNATURE_KEY_PAIR,
         MASTER_SECRET,
-        PASSWORD,
         ADB_TOKEN,
         MDNS_HOSTNAME,
         URL_TOKEN,
@@ -214,7 +213,12 @@ async fn core_startup_persists_complete_identity_and_only_rotates_url_token_on_r
         .prefs
         .set(ROTATE_URL_TOKEN_ON_RESTART, true)
         .unwrap();
-    core.state.prefs.set(PASSWORD, "custom-password").unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &core.state.prefs,
+        PASSWORD,
+        serde_json::json!("custom-password"),
+    )
+    .unwrap();
     core.state.prefs.set(LOGIN_REQUIRE_APPROVAL, false).unwrap();
     let before: std::collections::BTreeMap<_, _> = core.state.prefs.entries().into_iter().collect();
     core.stop_core().await;

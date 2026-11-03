@@ -8,7 +8,7 @@ fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
         attempts.pending.insert(format!("{index:032x}"), Pending {
             client_id: "界".repeat(200), client_ip: "fixture".into(),
             request: json!({"browserName":"界".repeat(200), "password":"fixture-password-secret", "token":"fixture-token-secret", "ecdhPublicKey":"fixture-key-secret", "verificationCode":"forged-code"}),
-            at: Instant::now(), protection: password_protection("fixture-digest-secret"),
+            at: Instant::now(), protection: password_protection(None),
         });
     }
     attempts
@@ -44,20 +44,6 @@ fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
     assert_eq!(last.requests.len(), 1);
     assert_eq!(last.requests[0].request_id, format!("{:032x}", 64));
     assert!(last.next_after.is_none());
-}
-
-#[test]
-fn the_login_key_is_a_truncation_of_the_same_hex_the_client_sends() {
-    let digest = Sha512::digest(b"secret");
-    let hex = plain_libs::utils::hex::bytes_to_hex(&digest);
-    let key = hash_to_token(&hex);
-    assert_eq!(key.len(), 32);
-    // The comparison is against the FULL digest hex (SHA-512 = 128 chars); the
-    // key is the first 32 ASCII characters of it. Conflating the two silently
-    // rejects every login.
-    assert_eq!(key, hex.as_bytes()[..32].to_vec());
-    assert_eq!(hex.len(), 128);
-    assert_ne!(key, hex.as_bytes()[..128].to_vec());
 }
 
 #[test]
@@ -156,7 +142,12 @@ async fn passwordless_server() -> (tempfile::TempDir, crate::server::ContentServ
     let state = server.runtime_state();
     state.prefs.set("password_type", "NONE").unwrap();
     state.prefs.set("login_require_approval", true).unwrap();
-    state.prefs.set("password", "unexposed-password").unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &state.prefs,
+        "password",
+        json!("unexposed-password"),
+    )
+    .unwrap();
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let (port, _) = server
         .start_public(
@@ -237,11 +228,6 @@ async fn browser_login(
         request["password"] = json!(digest);
     }
     let bytes = serde_json::to_vec(&request).unwrap();
-    let bytes = if let Some(digest) = &digest {
-        plain_libs::crypto::xchacha_encrypt_raw(&digest.as_bytes()[..32], &bytes).unwrap()
-    } else {
-        bytes
-    };
     let encrypted = channel.encrypt_request(&bytes, now_ms()).unwrap();
     socket
         .send(Message::Binary(encrypted.clone().into()))
@@ -251,11 +237,6 @@ async fn browser_login(
         panic!("encrypted login response required")
     };
     let pending = channel.decrypt_response(&pending, now_ms()).unwrap();
-    let pending = if let Some(digest) = &digest {
-        plain_libs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &pending).unwrap()
-    } else {
-        pending
-    };
     let pending: Value = serde_json::from_slice(&pending).unwrap();
     assert_eq!(
         pending["status"],
@@ -629,7 +610,7 @@ fn recovery_requests_follow_creation_order_independent_of_hash_iteration() {
                 client_ip: String::new(),
                 request: json!({"browserName":id}),
                 at: now,
-                protection: password_protection(""),
+                protection: password_protection(None),
             },
         );
     }
@@ -732,7 +713,9 @@ async fn committed_login_rejects_missing_changed_and_repeated_reveals_before_any
     }
 }
 
-fn password_protection(digest: &str) -> LoginProtection {
+fn password_protection(
+    credential: Option<plain_libs::crypto::password::PasswordHash>,
+) -> LoginProtection {
     use plain_rs::features::services::confirmation_channel::{
         Client, ConfirmationMode, ServerHandshake,
     };
@@ -756,7 +739,13 @@ fn password_protection(digest: &str) -> LoginProtection {
         )
         .unwrap();
     LoginProtection::Password {
-        digest: digest.into(),
+        credential: credential.unwrap_or_else(|| {
+            static FIXTURE: std::sync::OnceLock<plain_libs::crypto::password::PasswordHash> =
+                std::sync::OnceLock::new();
+            FIXTURE
+                .get_or_init(|| plain_libs::crypto::password::PasswordHash::new(b"fixture-digest"))
+                .clone()
+        }),
         channel: server.finish(&reveal, now_ms()).unwrap(),
     }
 }
@@ -768,29 +757,30 @@ async fn password_login_requires_setup_and_the_configured_password() {
     let state = server.runtime_state();
     let security = &state.prefs;
     plain_rs::features::prefs::security::configure_password_login(security).unwrap();
-    let pending = password_protection(&password_digest(security));
-    let request = json!({
-        "loginContext": pending.channel().context,
-        "password": password_digest(security),
-    });
+    let pending = password_protection(None);
+    let request = json!({"loginContext": pending.channel().context});
     assert_eq!(
         pending.validate(&state, &request).unwrap_err().to_string(),
         "password_setup_required"
     );
     plain_rs::features::prefs::security::setup_password(security, "owned-password").unwrap();
-    let protection = password_protection(&password_digest(security));
-    let request = json!({
-        "loginContext": protection.channel().context,
-        "password": password_digest(security),
-    });
+    let protection =
+        password_protection(plain_rs::features::prefs::security::password_hash(security).unwrap());
+    let request = json!({"loginContext": protection.channel().context});
     protection.validate(&state, &request).unwrap();
-    let mut wrong = request;
-    wrong["password"] = json!("wrong-password");
     assert_eq!(
-        protection.validate(&state, &wrong).unwrap_err().to_string(),
+        pending.validate(&state, &request).unwrap_err().to_string(),
+        "invalid_login_request"
+    );
+    plain_rs::features::prefs::security::set_password_login(security, "replacement-password")
+        .unwrap();
+    assert_eq!(
+        protection
+            .validate(&state, &request)
+            .unwrap_err()
+            .to_string(),
         "invalid_password"
     );
-    assert!(pending.validate(&state, &wrong).is_err());
     server.stop_core().await;
 }
 
@@ -817,7 +807,7 @@ async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
     state.prefs.set("password_type", "FIXED").unwrap();
-    let digest = password_digest(&state.prefs);
+    let digest = plain_libs::crypto::sha512_hex("unexposed-password");
     for handshake in [false, true] {
         let client_id = if handshake {
             "inner-only"
@@ -895,7 +885,12 @@ async fn password_change_mode_change_expiry_disconnect_and_replay_prevent_late_a
         let id = event["requestId"].as_str().unwrap();
         match failure {
             "password" => {
-                state.prefs.set("password", "changed-password").unwrap();
+                plain_rs::features::prefs::security::set_entry(
+                    &state.prefs,
+                    "password",
+                    json!("changed-password"),
+                )
+                .unwrap();
             }
             "mode" => {
                 state.prefs.set("password_type", "NONE").unwrap();
@@ -1017,4 +1012,43 @@ async fn a_signed_hello_does_not_extend_the_initial_exchange_deadline() {
     assert!(matches!(response, Message::Close(Some(frame)) if frame.reason == "timeout"));
     assert!(server.runtime_state().db.session_list().unwrap().is_empty());
     server.shutdown().await;
+}
+
+#[tokio::test]
+async fn password_login_verifies_the_salted_record_and_rejects_reusable_stored_values() {
+    use plain_rs::features::prefs::security;
+    let directory = tempfile::tempdir().unwrap();
+    let server = crate::server::ContentServer::open(directory.path()).unwrap();
+    let state = server.runtime_state();
+    security::set_password_login(&state.prefs, "owned-password").unwrap();
+    let stored = security::password_hash(&state.prefs).unwrap().unwrap();
+    for secret in [
+        "owned-password".to_owned(),
+        plain_libs::crypto::sha512_hex("wrong-password"),
+        serde_json::to_string(&stored).unwrap(),
+    ] {
+        let protection = password_protection(Some(stored.clone()));
+        let LoginProtection::Password { channel, .. } = protection else {
+            unreachable!()
+        };
+        let session = plain_libs::crypto::EcdhSession::generate();
+        let request = json!({"password":secret,"loginContext":channel.context,"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes)});
+        let frame = channel
+            .encrypt_request(&serde_json::to_vec(&request).unwrap(), now_ms())
+            .unwrap();
+        let result = execute(
+            &state,
+            Request::Issue {
+                client_id: "rejected-browser".into(),
+                client_ip: "fixture".into(),
+                frame: plain_libs::utils::base64::base64_encode(&frame),
+                channel,
+            },
+        )
+        .await;
+        assert_eq!(result.unwrap_err().to_string(), "invalid_password");
+        assert!(state.db.session_get("rejected-browser").unwrap().is_none());
+        assert!(state.login_attempts.lock().unwrap().pending.is_empty());
+    }
+    server.stop_core().await;
 }

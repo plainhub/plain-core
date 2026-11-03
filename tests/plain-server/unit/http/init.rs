@@ -6,7 +6,7 @@ async fn fixed_password_without_a_secret_requires_initial_setup() {
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state.prefs.set("password_type", "FIXED").unwrap();
-    state.prefs.set("password", "").unwrap();
+    state.prefs.remove("password").unwrap();
     let mut headers = HeaderMap::new();
     headers.insert("c-id", "first-browser".parse().unwrap());
     let response = init(
@@ -58,7 +58,12 @@ async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_re
     let state = core.runtime_state();
     let id = state.native_client_id().unwrap();
     assert!(state.db.session_get(&id).unwrap().is_none());
-    state.prefs.set("password", "existing-password").unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &state.prefs,
+        "password",
+        serde_json::json!("existing-password"),
+    )
+    .unwrap();
     let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
     let mut headers = HeaderMap::new();
     headers.insert("c-id", id.parse().unwrap());
@@ -81,9 +86,11 @@ async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_re
     assert_eq!(payload["passwordRequired"], false);
     assert!(!payload["signaturePublicKey"].as_str().unwrap().is_empty());
     assert!(payload.get("needsSetup").is_none());
-    assert_eq!(
-        state.prefs.get::<String>("password").unwrap().as_deref(),
-        Some("existing-password")
+    assert!(
+        plain_rs::features::prefs::security::password_hash(&state.prefs)
+            .unwrap()
+            .unwrap()
+            .verify(plain_libs::crypto::sha512_hex("existing-password").as_bytes())
     );
     assert!(state.db.session_get(&id).unwrap().is_none());
     core.stop_core().await;
@@ -94,7 +101,12 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
-    state.prefs.set("password", "preserved-password").unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &state.prefs,
+        "password",
+        serde_json::json!("preserved-password"),
+    )
+    .unwrap();
     plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     for mode in ["FIXED", "NONE"] {
         state.prefs.set("password_type", mode).unwrap();

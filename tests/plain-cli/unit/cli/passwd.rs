@@ -13,13 +13,15 @@ fn password_command_writes_shared_system_credentials() {
         directory.path(),
     ))
     .unwrap();
-    assert_eq!(
-        prefs
-            .get::<String>(plain_rs::features::prefs::pref_keys::PASSWORD)
+    assert!(
+        plain_rs::features::prefs::security::password_hash(&prefs)
             .unwrap()
-            .as_deref(),
-        Some("example-password")
+            .unwrap()
+            .verify(plain_libs::crypto::sha512_hex("example-password").as_bytes())
     );
+    let stored =
+        std::fs::read_to_string(plain_rs::features::prefs::default_path(directory.path())).unwrap();
+    assert!(!stored.contains("example-password"));
     assert_eq!(
         plain_rs::features::prefs::security::password_type(&prefs).unwrap(),
         plain_rs::features::prefs::security::PasswordType::Fixed

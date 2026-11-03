@@ -4,8 +4,8 @@ mod password_login;
 mod update;
 pub use command::Command;
 pub use password_login::{
-    PasswordSetupError, configure_password_login, password_setup_required, set_password_login,
-    setup_password,
+    PasswordSetupError, configure_password_login, password_hash, password_setup_required,
+    set_password_login, setup_password, setup_password_hash, valid_password_digest,
 };
 pub use update::{ReleaseInfo, UpdateInfo, UpdatePatch};
 
@@ -70,15 +70,20 @@ pub fn random_password(length: usize) -> String {
 }
 
 pub fn bootstrap(prefs: &Prefs) -> Result<()> {
-    let password_type = password_type(prefs)?;
+    password_type(prefs)?;
     prefs.update(|map| {
         ensure(map, CLIENT_ID, plain_libs::utils::short_uuid::short_uuid)?;
         ensure(map, SIGNATURE_KEY_PAIR, || {
             plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
         })?;
         ensure(map, MASTER_SECRET, plain_libs::crypto::gen_token)?;
-        if password_type != PasswordType::Fixed {
-            ensure(map, PASSWORD, || random_password(6))?;
+        if let Some(Value::String(password)) = map.get(PASSWORD) {
+            let password = password.clone();
+            if password.is_empty() {
+                map.remove(PASSWORD);
+            } else {
+                password_login::write_password(map, &password)?;
+            }
         }
         ensure(map, ADB_TOKEN, || random_password(32))?;
         ensure(map, MDNS_HOSTNAME, generate_mdns_hostname)?;
@@ -229,7 +234,8 @@ fn signature_public_key(prefs: &Prefs) -> anyhow::Result<String> {
 
 pub fn get_entry(prefs: &Prefs, key: &str) -> anyhow::Result<Option<Value>> {
     let value = match key {
-        PASSWORD | ADB_TOKEN | URL_TOKEN | CLIENT_ID | MDNS_HOSTNAME | SKIP_VERSION => {
+        PASSWORD => json!(""),
+        ADB_TOKEN | URL_TOKEN | CLIENT_ID | MDNS_HOSTNAME | SKIP_VERSION => {
             json!(prefs.get::<String>(key)?.unwrap_or_default())
         }
         PASSWORD_TYPE => json!(password_type(prefs)?),
@@ -250,7 +256,7 @@ pub fn get_entry(prefs: &Prefs, key: &str) -> anyhow::Result<Option<Value>> {
 pub fn snapshot(prefs: &Prefs) -> anyhow::Result<SecurityState> {
     let map: Map<String, Value> = prefs.entries().into_iter().collect();
     Ok(SecurityState {
-        password: read(&map, PASSWORD)?,
+        password: String::new(),
         password_type: map
             .get(PASSWORD_TYPE)
             .map(|v| serde_json::from_value(v.clone()))

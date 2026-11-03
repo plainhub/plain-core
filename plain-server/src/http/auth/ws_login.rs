@@ -2,7 +2,7 @@ use crate::server::ServerState;
 use plain_rs::features::prefs::security::PasswordType;
 use plain_rs::infrastructure::db::SessionRow;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -11,18 +11,6 @@ use std::{
 const LOGIN_ATTEMPT_LIMIT: usize = 5;
 const LOGIN_ATTEMPT_WINDOW: Duration = Duration::from_secs(60);
 const MAX_TRACKED_CLIENTS: usize = 256;
-
-fn hash_to_token(hash: &str) -> Vec<u8> {
-    hash.as_bytes().iter().copied().take(32).collect()
-}
-
-fn password_digest(prefs: &plain_rs::features::prefs::Prefs) -> String {
-    let password = prefs
-        .get::<String>(plain_rs::features::prefs::pref_keys::PASSWORD)
-        .unwrap_or_default()
-        .unwrap_or_default();
-    plain_libs::utils::hex::bytes_to_hex(&Sha512::digest(password.as_bytes()))
-}
 
 pub(crate) fn admit_attempt(
     state: &ServerState,
@@ -143,7 +131,7 @@ struct Pending {
 
 enum LoginProtection {
     Password {
-        digest: String,
+        credential: plain_libs::crypto::password::PasswordHash,
         channel: plain_rs::features::services::confirmation_channel::Channel,
     },
     DeviceConfirmation(plain_rs::features::services::confirmation_channel::Channel),
@@ -170,10 +158,11 @@ impl LoginProtection {
 
         let password_type = plain_rs::features::prefs::security::password_type(&state.prefs)?;
         match self {
-            Self::Password { digest, .. } => anyhow::ensure!(
+            Self::Password { credential, .. } => anyhow::ensure!(
                 password_type == PasswordType::Fixed
-                    && *digest == password_digest(&state.prefs)
-                    && text(request, "password") == *digest,
+                    && Some(credential)
+                        == plain_rs::features::prefs::security::password_hash(&state.prefs)?
+                            .as_ref(),
                 "invalid_password"
             ),
             Self::DeviceConfirmation(_) => anyhow::ensure!(
@@ -184,27 +173,8 @@ impl LoginProtection {
         Ok(())
     }
 
-    fn decrypt_request(&self, frame: &[u8]) -> anyhow::Result<Vec<u8>> {
-        let bytes = self.channel().decrypt_request(frame, now_ms())?;
-        match self {
-            Self::Password { digest, .. } => {
-                plain_libs::crypto::xchacha_decrypt_raw(&hash_to_token(digest), &bytes)
-                    .ok_or_else(|| anyhow::anyhow!("invalid_password"))
-            }
-            Self::DeviceConfirmation(_) => Ok(bytes),
-        }
-    }
-
     fn encrypt_response(&self, bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
-        match self {
-            Self::Password { digest, channel } => {
-                let encrypted =
-                    plain_libs::crypto::xchacha_encrypt_raw(&hash_to_token(digest), bytes)
-                        .ok_or_else(|| anyhow::anyhow!("Response encryption failed"))?;
-                channel.encrypt_response(&encrypted, now_ms())
-            }
-            Self::DeviceConfirmation(channel) => channel.encrypt_response(bytes, now_ms()),
-        }
+        self.channel().encrypt_response(bytes, now_ms())
     }
 }
 
@@ -537,10 +507,22 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             frame,
             channel,
         } => {
+            let frame = plain_libs::utils::base64::base64_decode_checked(&frame)?;
+            let bytes = channel.decrypt_request(&frame, now_ms())?;
+            let mut request: Value = serde_json::from_slice(&bytes)?;
             let protection = match channel.mode {
                 plain_rs::features::services::confirmation_channel::ConfirmationMode::Password => {
+                    use plain_rs::features::prefs::security;
+                    anyhow::ensure!(!security::password_setup_required(&state.prefs)?, "password_setup_required");
+                    let credential = security::password_hash(&state.prefs)?
+                        .ok_or_else(|| anyhow::anyhow!("invalid_password"))?;
+                    let digest = text(&request, "password");
+                    anyhow::ensure!(security::valid_password_digest(&digest), "invalid_password");
+                    let verifier = credential.clone();
+                    anyhow::ensure!(tokio::task::spawn_blocking(move || verifier.verify(digest.as_bytes())).await?, "invalid_password");
+                    request.as_object_mut().ok_or_else(|| anyhow::anyhow!("invalid_login_request"))?.remove("password");
                     LoginProtection::Password {
-                        digest: password_digest(&state.prefs),
+                        credential,
                         channel,
                     }
                 }
@@ -551,9 +533,6 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                     LoginProtection::DeviceConfirmation(channel)
                 }
             };
-            let frame = plain_libs::utils::base64::base64_decode(&frame);
-            let bytes = protection.decrypt_request(&frame)?;
-            let request: Value = serde_json::from_slice(&bytes)?;
             for field in ["browserName", "browserVersion", "osName", "osVersion"] {
                 anyhow::ensure!(
                     request[field].is_string(),

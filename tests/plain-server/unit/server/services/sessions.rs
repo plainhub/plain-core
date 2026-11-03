@@ -17,7 +17,8 @@ fn fixture() -> (tempfile::TempDir, ContentServer) {
     prefs.set("background_service_enabled", true).unwrap();
     prefs.set("desktop_access", true).unwrap();
     prefs.set("login_require_approval", false).unwrap();
-    prefs.set("password", "secret").unwrap();
+    plain_rs::features::prefs::security::set_entry(&prefs, "password", serde_json::json!("secret"))
+        .unwrap();
     prefs.set("password_type", "FIXED").unwrap();
     prefs.set("client_id", "phone").unwrap();
     let (private, _public) = plain_libs::crypto::ed25519_generate();
@@ -73,11 +74,7 @@ fn offer(
         .unwrap();
     let channel = server.finish(&reveal, now).unwrap();
     let request = json!({"password":digest,"loginContext":keys.context,"browserName":"Test","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&client.public_key_bytes),"peer":peer});
-    let frame = plain_libs::crypto::xchacha_encrypt_raw(
-        &digest.as_bytes()[..32],
-        &serde_json::to_vec(&request).unwrap(),
-    )
-    .unwrap();
+    let frame = serde_json::to_vec(&request).unwrap();
     let frame = keys.encrypt_request(&frame, now).unwrap();
     (
         ws_login::Request::Issue {
@@ -120,16 +117,13 @@ async fn web_login_ecdh_encrypted_response_signature_and_token_auth_survive_rest
         .token,
         row.token
     );
-    use sha2::Digest;
-    let digest = plain_libs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
     let encrypted = keys
         .decrypt_response(
             &plain_libs::utils::base64::base64_decode(issued["frame"].as_str().unwrap()),
             chrono::Utc::now().timestamp_millis() as u64,
         )
         .unwrap();
-    let decrypted =
-        plain_libs::crypto::xchacha_decrypt_raw(&digest.as_bytes()[..32], &encrypted).unwrap();
+    let decrypted = encrypted;
     assert_eq!(
         serde_json::from_slice::<Value>(&decrypted).unwrap(),
         issued["response"]
@@ -360,7 +354,12 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
     assert!(response.get("password").is_none());
     assert_eq!(response["authenticated"], false);
     assert_eq!(response["passwordRequired"], false);
-    assert_eq!(state.prefs.get_or("password", String::new()), "secret");
+    assert!(
+        plain_rs::features::prefs::security::password_hash(&state.prefs)
+            .unwrap()
+            .unwrap()
+            .verify(plain_libs::crypto::sha512_hex("secret").as_bytes())
+    );
 }
 
 #[cfg(feature = "http_transport")]
@@ -393,7 +392,7 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     assert!(local.errors.is_empty(), "{:?}", local.errors);
     let local = local.data.into_json().unwrap();
     let settings = server.native_management().unwrap().preferences().unwrap();
-    assert_eq!(settings["password"], "secret");
+    assert_eq!(settings["password"], "");
     assert_eq!(settings["url_token"], "resource-token");
     assert_eq!(local["peers"][0]["key"], "peer-secret");
     assert_eq!(local["chatChannels"][0]["key"], "channel-secret");

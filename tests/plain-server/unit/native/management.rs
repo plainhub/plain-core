@@ -263,13 +263,18 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
     .unwrap();
     let state = core.runtime_state();
     let management = core.native_management().unwrap();
-    state.prefs.set("password", "fixture-password").unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &state.prefs,
+        "password",
+        serde_json::json!("fixture-password"),
+    )
+    .unwrap();
     state
         .prefs
         .set("url_token", "fixture-resource-token")
         .unwrap();
     let system = management.preferences().unwrap();
-    assert_eq!(system["password"], "fixture-password");
+    assert_eq!(system["password"], "");
     assert_eq!(system["url_token"], "fixture-resource-token");
     for key in system.keys() {
         assert!(
