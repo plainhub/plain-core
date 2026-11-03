@@ -169,3 +169,47 @@ async fn occupied_ports_fall_back_for_both_listeners() {
     listeners.check_health().await.unwrap();
     listeners.shutdown().await;
 }
+
+#[tokio::test]
+async fn https_connections_disable_nagle_before_application_data() {
+    use axum_server::accept::Accept;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let (certificate, key) = certificate();
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let address = listener.local_addr().unwrap();
+    let incoming = tokio::net::TcpListener::from_std(listener.try_clone().unwrap()).unwrap();
+    let server = https_server(listener, tls_config(&certificate, &key).unwrap());
+    let client = tokio::spawn(async move {
+        reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .http1_only()
+            .build()
+            .unwrap()
+            .get(format!("https://{address}/"))
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap()
+    });
+    let (stream, _) = incoming.accept().await.unwrap();
+    assert!(!stream.nodelay().unwrap());
+    let (mut stream, ()) = server.get_ref().accept(stream, ()).await.unwrap();
+    assert!(stream.get_ref().0.nodelay().unwrap());
+    let mut request = Vec::new();
+    let mut buffer = [0; 1024];
+    while !request.ends_with(b"\r\n\r\n") {
+        let read = stream.read(&mut buffer).await.unwrap();
+        assert_ne!(read, 0);
+        request.extend_from_slice(&buffer[..read]);
+    }
+    stream
+        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+        .await
+        .unwrap();
+    stream.shutdown().await.unwrap();
+    assert_eq!(client.await.unwrap(), "ok");
+}

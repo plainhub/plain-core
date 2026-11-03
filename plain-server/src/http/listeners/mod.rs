@@ -9,7 +9,11 @@ mod public_server;
 use axum::{Extension, Router};
 
 use crate::http::ConnectionScheme;
-use axum_server::{Handle, tls_rustls::RustlsConfig};
+use axum_server::{
+    Handle,
+    accept::NoDelayAcceptor,
+    tls_rustls::{RustlsAcceptor, RustlsConfig},
+};
 use std::{net::SocketAddr, time::Duration};
 use tokio::{sync::watch, task::JoinHandle};
 
@@ -73,7 +77,7 @@ impl HttpListeners {
         let handle = tls_handle.clone();
         let tls_task = tokio::spawn(async move {
             let mut task_guard = ListenerTaskGuard::new("HTTPS", failure_sender.clone());
-            if let Err(error) = axum_server::from_tcp_rustls(https, tls)
+            if let Err(error) = https_server(https, tls)
                 .handle(handle)
                 .serve(
                     router
@@ -190,6 +194,14 @@ impl Drop for ListenerTaskGuard {
             )));
         }
     }
+}
+
+fn https_server(
+    listener: std::net::TcpListener,
+    tls: RustlsConfig,
+) -> axum_server::Server<RustlsAcceptor<NoDelayAcceptor>> {
+    axum_server::from_tcp(listener)
+        .acceptor(RustlsAcceptor::new(tls).acceptor(NoDelayAcceptor::new()))
 }
 
 pub fn tls_config(certificate_pem: &[u8], private_key_pem: &[u8]) -> Result<RustlsConfig, String> {
