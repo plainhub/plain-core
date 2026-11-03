@@ -1,11 +1,29 @@
 use super::*;
+use std::sync::Arc;
 
 fn key(n: u32) -> PathBuf {
     PathBuf::from(format!("/cache/thumbs/ab/{n:04}.jpg"))
 }
 
-fn data(n: usize) -> Arc<Vec<u8>> {
-    Arc::new(vec![7u8; n])
+fn data(n: usize) -> Bytes {
+    Bytes::from(vec![7u8; n])
+}
+
+#[test]
+fn eviction_keeps_readers_alive_without_copying_and_last_reader_releases_storage() {
+    let lru = ThumbLru::new(128, 1);
+    let storage: Arc<[u8]> = vec![9; 64].into();
+    let pointer = storage.as_ptr();
+    let owner = Arc::downgrade(&storage);
+    lru.put(key(0), Bytes::from_owner(storage));
+    let readers: Vec<_> = (0..300).map(|_| lru.get(&key(0)).unwrap()).collect();
+    assert!(readers.iter().all(|bytes| bytes.as_ptr() == pointer));
+    lru.put(key(1), data(64));
+    lru.clear();
+    assert_eq!(owner.strong_count(), 1);
+    assert!(readers.iter().all(|bytes| bytes.as_ref() == &[9; 64]));
+    drop(readers);
+    assert!(owner.upgrade().is_none());
 }
 
 #[test]
@@ -72,7 +90,7 @@ fn a_full_cache_evicts_without_rescanning_resident_images() {
 #[test]
 fn replacement_clear_and_slot_reuse_match_a_recency_model() {
     let lru = ThumbLru::new(160, 8);
-    let mut model = std::collections::VecDeque::<(PathBuf, Arc<Vec<u8>>)>::new();
+    let mut model = std::collections::VecDeque::<(PathBuf, Bytes)>::new();
     let mut random = 7u64;
     for i in 0..5000 {
         random = random.wrapping_mul(6364136223846793005).wrapping_add(1);
@@ -137,13 +155,13 @@ fn parallel_access_preserves_capacity_and_retained_bytes() {
                     let path = key(1 + worker * 300 + i);
                     lru.put(path.clone(), data(64));
                     if let Some(bytes) = lru.get(&path) {
-                        assert_eq!(bytes.as_slice(), &[7; 64]);
+                        assert_eq!(bytes.as_ref(), &[7; 64]);
                     }
                 }
             });
         }
     });
     assert_eq!(lru.stats(), (16, 1024));
-    assert_eq!(retained.as_slice(), &[7; 64]);
+    assert_eq!(retained.as_ref(), &[7; 64]);
     assert!(lru.get(&key(0)).is_none());
 }

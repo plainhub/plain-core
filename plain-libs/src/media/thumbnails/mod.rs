@@ -28,7 +28,8 @@ pub mod sniff;
 pub mod video;
 
 use anyhow::{Result, bail};
-use std::sync::{Arc, LazyLock};
+use bytes::Bytes;
+use std::sync::LazyLock;
 use tokio::io::AsyncReadExt;
 
 use exif::Orientation;
@@ -63,9 +64,9 @@ fn dc_fast_eligible(s: Sniffed, tw: u32, th: u32) -> bool {
 #[derive(Debug)]
 pub enum ThumbOutcome {
     /// Generated (or cache-hit) JPEG bytes, `image/jpeg`.
-    Generated(Arc<Vec<u8>>),
+    Generated(Bytes),
     /// Source bytes served as-is with their natural MIME type.
-    Original { data: Arc<Vec<u8>>, mime: String },
+    Original { data: Bytes, mime: String },
 }
 
 /// Everything the engine needs about one request. `mod_unix`/`file_size`
@@ -234,7 +235,7 @@ async fn get_image_thumbnail(
     if original_fits(uw, uh, spec.w, spec.h, spec.center_crop, spec.file_size) {
         let data = tokio::fs::read(&spec.path).await?;
         return Ok(ThumbOutcome::Original {
-            data: Arc::new(data),
+            data: Bytes::from(data),
             mime: s.kind.mime().to_string(),
         });
     }
@@ -337,7 +338,7 @@ async fn generate_and_cache(
         let key = cache_path.to_string_lossy().into_owned();
         bump_generations(&key);
     }
-    let data = Arc::new(jpg);
+    let data = Bytes::from(jpg);
     lru::global().put(cache_path, data.clone());
     Ok(ThumbOutcome::Generated(data))
 }
@@ -505,7 +506,7 @@ async fn generate_non_image(
 
 /// Cache + return a generated non-image thumbnail (cover art / video frame).
 fn finish_generated(cache_path: &std::path::Path, jpg: Vec<u8>) -> Result<ThumbOutcome> {
-    let data = Arc::new(jpg);
+    let data = Bytes::from(jpg);
     let _ = write_thumb_cache(cache_path, &data);
     lru::global().put(cache_path.to_path_buf(), data.clone());
     #[cfg(test)]
@@ -612,9 +613,9 @@ pub fn write_thumb_cache(cache_path: &std::path::Path, data: &[u8]) -> std::io::
     Ok(())
 }
 
-async fn read_cache_file(cache_path: &std::path::Path) -> Option<Arc<Vec<u8>>> {
+async fn read_cache_file(cache_path: &std::path::Path) -> Option<Bytes> {
     match tokio::fs::read(cache_path).await {
-        Ok(d) if !d.is_empty() => Some(Arc::new(d)),
+        Ok(d) if !d.is_empty() => Some(Bytes::from(d)),
         _ => None,
     }
 }
@@ -681,7 +682,7 @@ pub async fn render(
     height: u32,
     center_crop: bool,
     cache: &std::path::Path,
-) -> Result<Option<Vec<u8>>, String> {
+) -> Result<Option<Bytes>, String> {
     let meta = tokio::fs::metadata(path)
         .await
         .map_err(|error| error.to_string())?;
@@ -713,5 +714,5 @@ pub async fn render(
         ThumbOutcome::Generated(bytes) => bytes,
         ThumbOutcome::Original { data, .. } => data,
     };
-    Ok(Some((*bytes).clone()))
+    Ok(Some(bytes))
 }

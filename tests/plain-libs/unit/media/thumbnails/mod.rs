@@ -18,6 +18,23 @@ async fn thumbnail(spec: ThumbSpec) -> Result<ThumbOutcome> {
     super::get_thumbnail(spec, &cache_dir()).await
 }
 
+#[tokio::test]
+async fn render_keeps_the_encoded_cache_allocation() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("shared.jpg");
+    write_jpeg(&path, 640, 480);
+    let first = render(path.to_str().unwrap(), 128, 128, true, dir.path())
+        .await
+        .unwrap()
+        .unwrap();
+    let second = render(path.to_str().unwrap(), 128, 128, true, dir.path())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(first, second);
+    assert_eq!(first.as_ptr(), second.as_ptr());
+}
+
 fn write_jpeg(path: &std::path::Path, w: u32, h: u32) {
     let img = image::RgbImage::from_fn(w, h, |x, y| {
         image::Rgb([(x % 200) as u8, (y % 200) as u8, 90])
@@ -168,7 +185,7 @@ async fn end_to_end_generate_then_cache_hit() {
         spec.file_size,
     );
     assert!(cp.exists());
-    assert_eq!(std::fs::read(&cp).unwrap(), d1.as_slice());
+    assert_eq!(std::fs::read(&cp).unwrap(), d1.as_ref());
 
     // Second call: served from cache, byte-identical, no new generation.
     let key = cp.to_string_lossy().into_owned();
@@ -184,7 +201,6 @@ async fn end_to_end_generate_then_cache_hit() {
         "cache hit must not regenerate"
     );
     std::fs::remove_file(&cp).ok();
-    lru::debug_clear();
 }
 
 #[tokio::test]
@@ -234,7 +250,6 @@ async fn concurrent_identical_requests_coalesce() {
         spec.file_size,
     );
     std::fs::remove_file(&cp).ok();
-    lru::debug_clear();
 }
 
 #[tokio::test]
@@ -247,7 +262,7 @@ async fn passthrough_small_images() {
     match out {
         ThumbOutcome::Original { data, mime } => {
             assert_eq!(mime, "image/jpeg");
-            assert_eq!(data.as_slice(), std::fs::read(&img).unwrap());
+            assert_eq!(data.as_ref(), std::fs::read(&img).unwrap());
         }
         _ => panic!("small jpeg must pass through"),
     }
@@ -260,7 +275,7 @@ async fn passthrough_small_images() {
     match thumbnail(spec_for(&png, 64, 64)).await.unwrap() {
         ThumbOutcome::Original { data, mime } => {
             assert_eq!(mime, "image/png");
-            assert_eq!(data.as_slice(), std::fs::read(&png).unwrap());
+            assert_eq!(data.as_ref(), std::fs::read(&png).unwrap());
         }
         _ => panic!("small png must pass through"),
     }
@@ -308,7 +323,6 @@ async fn exif_oriented_thumbnail_dimensions() {
         spec.file_size,
     );
     std::fs::remove_file(&cp).ok();
-    lru::debug_clear();
 }
 
 #[tokio::test]
@@ -340,7 +354,6 @@ async fn unicode_and_spaced_paths() {
         );
         std::fs::remove_file(&cp).ok();
     }
-    lru::debug_clear();
 }
 
 #[tokio::test]
@@ -427,7 +440,6 @@ async fn cover_sidecar_thumbnail() {
     );
     assert!(cp.exists(), "cover thumb must be cached");
     std::fs::remove_file(&cp).ok();
-    lru::debug_clear();
 }
 
 #[tokio::test]
@@ -455,7 +467,6 @@ async fn progressive_photo_dc_fast_path_end_to_end() {
         spec.file_size,
     );
     std::fs::remove_file(&cp).ok();
-    lru::debug_clear();
 }
 
 #[tokio::test]
@@ -499,7 +510,6 @@ async fn video_thumbnail_end_to_end_and_cache_hit() {
     assert!(thumbnail(spec_for(&mkv, 128, 128)).await.is_err());
 
     std::fs::remove_file(&cp).ok();
-    lru::debug_clear();
 }
 
 #[tokio::test]
@@ -556,7 +566,6 @@ async fn real_photos_end_to_end() {
             std::fs::remove_file(&cp).ok();
         }
     }
-    lru::debug_clear();
 }
 
 #[tokio::test]

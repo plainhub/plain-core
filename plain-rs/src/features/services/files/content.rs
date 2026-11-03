@@ -41,7 +41,7 @@ pub enum Content {
     Bytes(Vec<u8>),
     Codec(String),
     Thumbnail {
-        bytes: Result<Option<Vec<u8>>, crate::features::services::images::thumbnails::Error>,
+        bytes: Result<Option<bytes::Bytes>, crate::features::services::images::thumbnails::Error>,
         name: String,
     },
     NotFound,

@@ -1,10 +1,11 @@
+use bytes::Bytes;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 struct Entry {
     key: PathBuf,
-    data: Arc<Vec<u8>>,
+    data: Bytes,
     previous: Option<usize>,
     next: Option<usize>,
 }
@@ -80,14 +81,14 @@ impl ThumbLru {
         }
     }
 
-    pub fn get(&self, key: &PathBuf) -> Option<Arc<Vec<u8>>> {
+    pub fn get(&self, key: &PathBuf) -> Option<Bytes> {
         let mut inner = self.inner.lock().unwrap();
         let index = *inner.map.get(key)?;
         inner.touch(index);
         Some(inner.entries[index].as_ref().unwrap().data.clone())
     }
 
-    pub fn put(&self, key: PathBuf, data: Arc<Vec<u8>>) {
+    pub fn put(&self, key: PathBuf, data: Bytes) {
         let mut inner = self.inner.lock().unwrap();
         let size = data.len();
         let keep = if let Some(&index) = inner.map.get(&key) {

@@ -460,7 +460,13 @@ async fn hot_cache_serves_300_requests_without_disk_reads_and_rechecks_source() 
         requests.spawn(async move { state.thumbnails.get(&state, request).await });
     }
     while let Some(result) = requests.join_next().await {
-        assert_eq!(result.unwrap().unwrap().unwrap(), first);
+        let bytes = result.unwrap().unwrap().unwrap();
+        assert_eq!(bytes, first);
+        assert_eq!(
+            bytes.as_ptr(),
+            first.as_ptr(),
+            "cache hits must share encoded storage"
+        );
     }
     assert_eq!(state.thumbnails.cache_reads.load(Ordering::SeqCst), reads);
     assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
@@ -571,5 +577,54 @@ async fn concurrent_misses_share_one_failed_generation_and_a_later_request_can_r
             .is_err()
     );
     assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 2);
+    core.stop_core().await;
+}
+
+#[cfg(feature = "media")]
+#[tokio::test]
+async fn concurrent_generation_delivers_one_shared_allocation_to_300_readers() {
+    use std::sync::atomic::Ordering;
+    let (directory, core, _) = server_with_cache();
+    let state = core.runtime_state();
+    let path = directory.path().join("shared.jpg");
+    image::RgbImage::from_pixel(800, 400, image::Rgb([200, 40, 50]))
+        .save(&path)
+        .unwrap();
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
+    let mut readers = tokio::task::JoinSet::new();
+    for _ in 0..300 {
+        let state = state.clone();
+        let request = request_for(&path);
+        readers.spawn(async move { state.thumbnails.get(&state, request).await });
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while state.thumbnails.queue.waiting() != 300 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    gate.add_permits(300);
+    let first = readers
+        .join_next()
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    while let Some(result) = readers.join_next().await {
+        let bytes = result.unwrap().unwrap().unwrap();
+        assert_eq!(bytes, first);
+        assert_eq!(bytes.as_ptr(), first.as_ptr());
+    }
+    let cached = state
+        .thumbnails
+        .get(&state, request_for(&path))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(cached.as_ptr(), first.as_ptr());
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
     core.stop_core().await;
 }

@@ -1,6 +1,7 @@
 use crate::runtime::Runtime as CoreRuntime;
 mod queue;
 
+use bytes::Bytes;
 pub(crate) use queue::Generation;
 use queue::Queue;
 use serde::Deserialize;
@@ -124,7 +125,7 @@ async fn decode(
     request: &Request,
     system: bool,
     cache: &Path,
-) -> Result<Option<Vec<u8>>, String> {
+) -> Result<Option<Bytes>, String> {
     if !cfg!(any(target_os = "android", target_os = "ios")) {
         #[cfg(any(test, feature = "test-seams"))]
         state
@@ -151,14 +152,17 @@ async fn decode(
         )
         .await?;
         #[cfg(not(feature = "media"))]
-        let bytes =
-            crate::features::services::images::thumbnail_decoder::native(request, cache).await?;
+        let bytes = crate::features::services::images::thumbnail_decoder::native(request, cache)
+            .await?
+            .map(Bytes::from);
         if let Some(bytes) = bytes.as_ref() {
             validate_output(bytes)?;
         }
         return Ok(bytes);
     }
-    decode_sdk(state, request, system).await
+    decode_sdk(state, request, system)
+        .await
+        .map(|bytes| bytes.map(Bytes::from))
 }
 
 async fn decode_sdk(
@@ -231,11 +235,7 @@ impl Thumbnails {
             .map_err(|_| "thumbnail output cancelled".into())
     }
 
-    pub async fn get(
-        &self,
-        state: &CoreRuntime,
-        request: Request,
-    ) -> Result<Option<Vec<u8>>, Error> {
+    pub async fn get(&self, state: &CoreRuntime, request: Request) -> Result<Option<Bytes>, Error> {
         let permit = self.requests.try_acquire().map_err(|_| Error::Busy)?;
         let _foreground = Foreground {
             permit: Some(permit),
@@ -253,7 +253,7 @@ impl Thumbnails {
         state: &CoreRuntime,
         mut request: Request,
         background: bool,
-    ) -> Result<Option<Vec<u8>>, String> {
+    ) -> Result<Option<Bytes>, String> {
         if background {
             self.wait_for_foreground(state).await?;
         }
@@ -297,6 +297,7 @@ impl Thumbnails {
                     request.center_crop,
                 )
                 .map_err(|error| error.to_string())?
+                .map(Bytes::from)
             } else {
                 bytes
             };
@@ -316,7 +317,7 @@ impl Thumbnails {
         self.queue.submit(request, cache, key, cached).await
     }
 
-    async fn generate(state: &CoreRuntime, job: &Generation) -> Result<Option<Vec<u8>>, String> {
+    async fn generate(state: &CoreRuntime, job: &Generation) -> Result<Option<Bytes>, String> {
         let Generation {
             request,
             cache,
@@ -376,10 +377,7 @@ impl Thumbnails {
         .map_err(|error| error.to_string())?
         .map_err(|error| error.to_string())?;
         #[cfg(feature = "media")]
-        state
-            .thumbnails
-            .hot
-            .put(hot_key, std::sync::Arc::new(bytes.clone()));
+        state.thumbnails.hot.put(hot_key, bytes.clone());
         #[cfg(not(feature = "media"))]
         let _ = hot_key;
         Ok(Some(bytes))
@@ -449,19 +447,19 @@ impl Drop for Foreground<'_> {
     }
 }
 impl Thumbnails {
-    fn cached_bytes(&self, path: &PathBuf) -> Result<Option<Vec<u8>>, String> {
+    fn cached_bytes(&self, path: &PathBuf) -> Result<Option<Bytes>, String> {
         #[cfg(feature = "media")]
         if let Some(bytes) = self.hot.get(path) {
-            return Ok(Some(bytes.as_ref().clone()));
+            return Ok(Some(bytes));
         }
         #[cfg(any(test, feature = "test-seams"))]
         self.cache_reads
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         match std::fs::read(path) {
             Ok(bytes) if !bytes.is_empty() => {
+                let bytes = Bytes::from(bytes);
                 #[cfg(feature = "media")]
-                self.hot
-                    .put(path.clone(), std::sync::Arc::new(bytes.clone()));
+                self.hot.put(path.clone(), bytes.clone());
                 Ok(Some(bytes))
             }
             Ok(_) => Ok(None),

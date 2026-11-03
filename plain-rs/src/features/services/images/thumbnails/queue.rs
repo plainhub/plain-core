@@ -7,7 +7,7 @@ use std::{
 };
 use tokio::sync::{mpsc, watch};
 
-type Output = Result<Option<Vec<u8>>, String>;
+type Output = Result<Option<bytes::Bytes>, String>;
 type Reply = Option<Arc<Output>>;
 
 pub(crate) struct Generation {

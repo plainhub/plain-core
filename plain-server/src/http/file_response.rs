@@ -151,7 +151,10 @@ pub(crate) async fn stream_temporary(
 }
 
 pub(crate) fn thumbnail(
-    bytes: Result<Option<Vec<u8>>, plain_rs::features::services::images::thumbnails::Error>,
+    bytes: Result<
+        Option<axum::body::Bytes>,
+        plain_rs::features::services::images::thumbnails::Error,
+    >,
     conditional: Option<&str>,
 ) -> Response {
     use sha2::{Digest, Sha256};
