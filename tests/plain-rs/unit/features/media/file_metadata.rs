@@ -136,6 +136,24 @@ fn audio_row_carries_probe_tags_and_real_stat_facts() {
 }
 
 #[test]
+fn audio_row_uses_filename_confirmed_gbk_id3v1_tags() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("歌手-歌曲.mp3");
+    let mut audio = std::fs::read(fixture("audio-untagged.mp3")).unwrap();
+    let mut tag = [0u8; 128];
+    tag[..3].copy_from_slice(b"TAG");
+    tag[3..7].copy_from_slice(b"\xb8\xe8\xc7\xfa");
+    tag[33..37].copy_from_slice(b"\xb8\xe8\xca\xd6");
+    audio.extend_from_slice(&tag);
+    std::fs::write(&path, audio).unwrap();
+    let metadata = read_file_metadata(&path, DataType::Audio).unwrap();
+    assert_eq!(
+        (metadata.title.as_str(), metadata.artist.as_str()),
+        ("歌曲", "歌手")
+    );
+}
+
+#[test]
 fn timestamps_use_the_dbtime_row_format() {
     let path = fixture("v-prog-gray.jpg");
     let meta = std::fs::metadata(&path).unwrap();

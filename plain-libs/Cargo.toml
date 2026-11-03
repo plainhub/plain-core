@@ -17,7 +17,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "html" = ["dep:regex"]
 "phone" = ["dep:regex", "dep:flate2", "dep:serde_json"]
 "phone-batch" = ["phone", "tokio/rt"]
-"media" = ["time", "dep:lofty", "dep:anyhow"]
+"media" = ["time", "dep:lofty", "dep:anyhow", "dep:encoding_rs"]
 "thumbnails" = ["media", "crypto", "dep:image", "dep:tempfile", "dep:fast_image_resize", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util"]
 "filesystem" = ["time", "tokio/fs", "tokio/rt", "tokio/time", "tokio/sync"]
 "watch" = ["filesystem", "tokio/net"]
@@ -49,6 +49,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "flate2" = { version = "1", optional = true }
 "serde_json" = { "version" = "1", "optional" = true }
 "lofty" = { "version" = "0.22", "optional" = true }
+"encoding_rs" = { "version" = "=0.8.42", "optional" = true }
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"], "optional" = true }
 "tempfile" = { "version" = "3", "optional" = true }
 "fast_image_resize" = { version = "5", features = ["rayon"], optional = true }

@@ -2727,6 +2727,7 @@ dependencies = [
  "der 0.8.2",
  "des",
  "ed25519-dalek",
+ "encoding_rs",
  "fast_image_resize",
  "flate2",
  "futures-core",

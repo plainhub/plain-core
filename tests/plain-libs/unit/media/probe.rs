@@ -124,6 +124,81 @@ fn probe_media_audio_gets_duration_and_tags() {
 }
 
 #[test]
+fn id3v1_gbk_requires_filename_confirmation_and_preserves_western_tags() {
+    let directory = tempfile::tempdir().unwrap();
+    let audio = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-untagged.mp3"),
+    )
+    .unwrap();
+    for (name, title, artist, expected_title, expected_artist) in [
+        (
+            "歌手-歌曲.mp3",
+            &b"\xb8\xe8\xc7\xfa"[..],
+            &b"\xb8\xe8\xca\xd6"[..],
+            "歌曲",
+            "歌手",
+        ),
+        (
+            "western.mp3",
+            &b"Caf\xe9"[..],
+            &b"Andr\xe9"[..],
+            "Café",
+            "André",
+        ),
+        (
+            "unrelated.mp3",
+            &b"\xb8\xe8\xc7\xfa"[..],
+            &b"\xb8\xe8\xca\xd6"[..],
+            "¸èÇú",
+            "¸èÊÖ",
+        ),
+        (
+            "歌手-其他.mp3",
+            &b"\xb8\xe8\xc7\xfa"[..],
+            &b"\xb8\xe8\xca\xd6"[..],
+            "¸èÇú",
+            "¸èÊÖ",
+        ),
+    ] {
+        let mut tag = [0u8; 128];
+        tag[..3].copy_from_slice(b"TAG");
+        tag[3..3 + title.len()].copy_from_slice(title);
+        tag[33..33 + artist.len()].copy_from_slice(artist);
+        let path = directory.path().join(name);
+        let mut bytes = audio.clone();
+        bytes.extend_from_slice(&tag);
+        std::fs::write(&path, bytes).unwrap();
+        let result = probe_media(path.to_str().unwrap(), "audio");
+        assert_eq!(
+            (result.title.as_str(), result.artist.as_str()),
+            (expected_title, expected_artist),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn id3v2_tags_keep_priority_over_filename_confirmed_id3v1() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("歌手-歌曲.mp3");
+    let mut audio = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-tagged.mp3"),
+    )
+    .unwrap();
+    let mut tag = [0u8; 128];
+    tag[..3].copy_from_slice(b"TAG");
+    tag[3..7].copy_from_slice(b"\xb8\xe8\xc7\xfa");
+    tag[33..37].copy_from_slice(b"\xb8\xe8\xca\xd6");
+    audio.extend_from_slice(&tag);
+    std::fs::write(&path, audio).unwrap();
+    let result = probe_media(path.to_str().unwrap(), "audio");
+    assert_eq!(
+        (result.title.as_str(), result.artist.as_str()),
+        ("Hydrate Title", "Hydrate Artist")
+    );
+}
+
+#[test]
 fn probe_media_tagless_audio_is_duration_only() {
     let path = format!(
         "{}/../plain-rs/testdata/audio-untagged.mp3",

@@ -42,10 +42,18 @@ pub fn probe_media(path: &str, kind: &str) -> ProbedMeta {
     let Ok(mut reader) = File::open(path) else {
         return ProbedMeta::default();
     };
-    probe_audio_reader(&mut reader)
+    probe_audio_reader_named(&mut reader, path)
 }
 
 pub fn probe_audio_reader(reader: &mut (impl Read + Seek)) -> ProbedMeta {
+    probe_audio(reader, None)
+}
+
+pub fn probe_audio_reader_named(reader: &mut (impl Read + Seek), path: &str) -> ProbedMeta {
+    probe_audio(reader, Some(path))
+}
+
+fn probe_audio(reader: &mut (impl Read + Seek), path: Option<&str>) -> ProbedMeta {
     if reader.seek(SeekFrom::Start(0)).is_err() {
         return ProbedMeta::default();
     }
@@ -79,7 +87,7 @@ pub fn probe_audio_reader(reader: &mut (impl Read + Seek)) -> ProbedMeta {
     let (mut duration, tags, parsed) = match result {
         Some(file) => (
             i64::try_from(file.properties().duration().as_millis()).ok(),
-            tag_strings(&file),
+            tag_strings(&file, path),
             true,
         ),
         None => (None, TagStrings::default(), false),
@@ -156,7 +164,7 @@ struct TagStrings {
     album_artist: String,
 }
 
-fn tag_strings(tagged_file: &lofty::file::TaggedFile) -> TagStrings {
+fn tag_strings(tagged_file: &lofty::file::TaggedFile, path: Option<&str>) -> TagStrings {
     let mut fields = TagStrings::default();
     let tags = [
         TagType::Id3v2,
@@ -173,9 +181,31 @@ fn tag_strings(tagged_file: &lofty::file::TaggedFile) -> TagStrings {
             .or_else(|| tagged_file.first_tag()),
     );
     for tag in tags {
+        let decoded = (tag.tag_type() == TagType::Id3v1)
+            .then(|| {
+                let title = decode_gbk(tag.title()?.as_ref())?;
+                let artist = decode_gbk(tag.artist()?.as_ref())?;
+                let stem = std::path::Path::new(path?).file_stem()?.to_str()?;
+                let (file_artist, file_title) = stem.split_once('-')?;
+                (file_artist.trim() == artist && file_title.trim() == title)
+                    .then_some((title, artist))
+            })
+            .flatten();
         for (target, value) in [
-            (&mut fields.artist, tag.artist()),
-            (&mut fields.title, tag.title()),
+            (
+                &mut fields.artist,
+                decoded
+                    .as_ref()
+                    .map(|(_, artist)| std::borrow::Cow::Borrowed(artist.as_str()))
+                    .or_else(|| tag.artist()),
+            ),
+            (
+                &mut fields.title,
+                decoded
+                    .as_ref()
+                    .map(|(title, _)| std::borrow::Cow::Borrowed(title.as_str()))
+                    .or_else(|| tag.title()),
+            ),
             (&mut fields.album, tag.album()),
             (
                 &mut fields.album_artist,
@@ -191,6 +221,17 @@ fn tag_strings(tagged_file: &lofty::file::TaggedFile) -> TagStrings {
         }
     }
     fields
+}
+
+fn decode_gbk(text: &str) -> Option<String> {
+    let bytes = text
+        .chars()
+        .map(|c| u8::try_from(c as u32))
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    encoding_rs::GBK
+        .decode_without_bom_handling_and_without_replacement(&bytes)
+        .map(|s| s.trim().to_owned())
 }
 
 #[cfg(test)]
