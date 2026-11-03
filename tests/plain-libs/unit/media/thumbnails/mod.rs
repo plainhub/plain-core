@@ -93,8 +93,7 @@ fn jpeg_decode_strategy_matrix() {
     assert!(!dc_fast_eligible(prog, 512, 512));
     // 1024px needs more than the 1/8 grid → scaled decoder.
     assert!(!dc_fast_eligible(prog, 1024, 1024));
-    // Baseline never takes the DC path.
-    assert!(!dc_fast_eligible(base, 128, 128));
+    assert!(dc_fast_eligible(base, 128, 128));
     // Small progressive files (1/8 grid below target) neither.
     let small_prog = Sniffed {
         kind: ImageKind::Jpeg,
@@ -818,4 +817,29 @@ fn original_thumbnail_selection_preserves_crop_bounds_and_transfer_budget() {
         super::PASSTHROUGH_MAX_BYTES as i64 + 1
     ));
     assert!(!super::original_fits(80, 80, 96, 96, true, -1));
+}
+
+#[test]
+fn dc_input_memory_is_charged_only_for_the_full_jpeg_read_path() {
+    let jpeg = Sniffed {
+        kind: ImageKind::Jpeg,
+        width: 4096,
+        height: 3072,
+        progressive: false,
+    };
+    assert_eq!(dc_input_bytes(jpeg, 256, 256, 12_000_000), 12_000_000);
+    assert_eq!(dc_input_bytes(jpeg, 1024, 1024, 12_000_000), 0);
+    assert_eq!(
+        dc_input_bytes(
+            Sniffed {
+                kind: ImageKind::Png,
+                ..jpeg
+            },
+            256,
+            256,
+            12_000_000
+        ),
+        0
+    );
+    assert_eq!(dc_input_bytes(jpeg, 256, 256, -1), 0);
 }

@@ -1,24 +1,10 @@
-//! Progressive-JPEG DC-only fast decoder for thumbnails.
-//!
-//! The math that makes this worth a dedicated decoder: every non-DC DCT
-//! basis function has zero mean over its 8x8 block, so a 1/8-scale decode
-//! (one pixel per block = the block average) depends ONLY on the DC
-//! coefficient. A progressive JPEG codes DC in dedicated scans (Ss=Se=0)
-//! that typically carry ~10-20% of the entropy bytes; every AC scan
-//! (Ss>=1) can be skipped byte-wise without changing the 1/8 output at
-//! all. libjpeg-turbo's scaled IDCT (and therefore libvips/ffmpeg
-//! shrink-on-load at 1/8) computes exactly this DC-only image, but still
-//! pays full entropy decoding for the AC scans — this path skips them.
-//!
-//! Sample reconstruction, chroma upsampling (fir for 2x factors) and the
-//! YCbCr→RGB fixed-point constants mirror `jpeg-decoder` 0.3's scalar
-//! implementation. Tests pin byte-identical 1/8 output against its
-//! platform-independent mode; SIMD paths can round individual channels differently.
-//!
-//! Strictness: anything unusual (arithmetic coding, 12-bit,
-//! 4-component CMYK/YCCK, 16-bit quant tables, malformed/truncated
-//! streams) bails with `Err`; the caller falls back to the
-//! `jpeg-decoder` scaled path.
+//! One-eighth JPEG decoding: skip progressive AC scans or consume sequential AC symbols without materializing their values.
+
+mod ac;
+mod color;
+mod huffman;
+use ac::AcTable;
+use huffman::Codebook;
 
 use crate::media::thumbnails::scale::Bitmap;
 use anyhow::{Result, bail};
@@ -37,7 +23,7 @@ pub fn decode_dc_only(path: &std::path::Path) -> Result<Bitmap> {
     decode_dc_only_bytes(&data)
 }
 
-/// Decode a progressive JPEG to its 1/8-scale RGB bitmap from DC scans only.
+/// Decode a JPEG to its 1/8-scale RGB bitmap using only DC coefficient values.
 pub fn decode_dc_only_bytes(data: &[u8]) -> Result<Bitmap> {
     Decoder::new(data)?.decode(false, None)
 }
@@ -93,12 +79,16 @@ struct ScanCtx {
     comps: Vec<usize>,
     /// DC huffman table id per participating component (parallel to comps).
     tables: Vec<usize>,
+    ac_tables: Vec<usize>,
     ah: u8,
     al: u8,
     interleaved: bool,
 }
 
 struct Decoder<'a> {
+    sequential: bool,
+    six_bit_color: bool,
+    ac_tables: [Option<std::sync::Arc<AcTable>>; 4],
     data: &'a [u8],
     pos: usize,
     frame: Option<Frame>,
@@ -120,6 +110,9 @@ impl<'a> Decoder<'a> {
             bail!("not a JPEG stream");
         }
         Ok(Decoder {
+            sequential: false,
+            six_bit_color: color::native_six_bit_color(),
+            ac_tables: [None, None, None, None],
             data,
             pos: 2,
             frame: None,
@@ -137,6 +130,7 @@ impl<'a> Decoder<'a> {
 
     fn decode(mut self, prefix_only: bool, crop: Option<(u32, u32)>) -> Result<Bitmap> {
         let mut saw_dc_scan = false;
+        let mut decoded_components = [false; 3];
         let mut color_declared = false;
         #[allow(clippy::while_let_loop)]
         loop {
@@ -146,6 +140,13 @@ impl<'a> Decoder<'a> {
             self.pos = seg_start + seg_len;
             match m {
                 0xD9 => break, // EOI
+                0xC0 => {
+                    if prefix_only {
+                        bail!("sequential scan requires the full file");
+                    }
+                    self.sequential = true;
+                    self.parse_sof(seg_start, seg_len)?;
+                }
                 0xC2 => self.parse_sof(seg_start, seg_len)?,
                 0xC4 => self.parse_dht(seg_start, seg_len)?,
                 0xDB => self.parse_dqt(seg_start, seg_len)?,
@@ -186,6 +187,14 @@ impl<'a> Decoder<'a> {
                             }
                             self.pos = start;
                         }
+                        if self.sequential {
+                            for &component in &ctx.comps {
+                                if decoded_components[component] {
+                                    bail!("duplicate sequential component scan");
+                                }
+                                decoded_components[component] = true;
+                            }
+                        }
                         self.decode_dc_scan(&ctx)?;
                         saw_dc_scan = true;
                         if prefix_only {
@@ -204,8 +213,8 @@ impl<'a> Decoder<'a> {
                         }
                     }
                 },
-                0xC0 | 0xC1 | 0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF => {
-                    bail!("unsupported SOF marker 0x{m:02X} (only progressive SOF2)")
+                0xC1 | 0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF => {
+                    bail!("unsupported JPEG frame marker 0x{m:02X}")
                 }
                 0xCC => bail!("arithmetic coding (DAC) not supported"),
                 _ => {} // APPn/COM/DNL/standalone: skipped by length
@@ -214,9 +223,12 @@ impl<'a> Decoder<'a> {
         let frame = self
             .frame
             .clone()
-            .ok_or_else(|| anyhow::anyhow!("no SOF2 frame found"))?;
+            .ok_or_else(|| anyhow::anyhow!("no JPEG frame found"))?;
         if !saw_dc_scan {
             bail!("no DC scan decoded");
+        }
+        if self.sequential && !decoded_components[..frame.comps.len()].iter().all(|v| *v) {
+            bail!("missing sequential component scan");
         }
         let bitmap = self.reconstruct(&frame, crop)?;
         #[cfg(test)]
@@ -371,6 +383,13 @@ impl<'a> Decoder<'a> {
                     .get_mut(usize::from(id))
                     .ok_or_else(|| anyhow::anyhow!("invalid DC table id"))? = Some(table);
             }
+            if class == 1 && self.sequential {
+                let table = AcTable::shared(&counts, &s[i + 17..i + 17 + total])?;
+                *self
+                    .ac_tables
+                    .get_mut(usize::from(id))
+                    .ok_or_else(|| anyhow::anyhow!("invalid AC table id"))? = Some(table);
+            }
             i += 17 + total;
         }
         Ok(())
@@ -381,7 +400,7 @@ impl<'a> Decoder<'a> {
     /// the first entropy byte.
     fn parse_sos(&mut self, start: usize, len: usize) -> Result<Option<ScanCtx>> {
         let Some(frame) = &self.frame else {
-            bail!("SOS before SOF2");
+            bail!("SOS before JPEG frame");
         };
         let s = self.seg(start, len)?;
         if s.is_empty() {
@@ -393,6 +412,7 @@ impl<'a> Decoder<'a> {
         }
         let mut comps = Vec::with_capacity(ns);
         let mut tables = Vec::with_capacity(ns);
+        let mut ac_tables = Vec::with_capacity(ns);
         for c in 0..ns {
             let cid = s[1 + c * 2];
             let idx = frame
@@ -404,11 +424,20 @@ impl<'a> Decoder<'a> {
                 bail!("duplicate component in scan");
             }
             comps.push(idx);
+            ac_tables.push(usize::from(s[2 + c * 2] & 15));
             tables.push(usize::from(s[2 + c * 2] >> 4)); // DC table selector
         }
         let tail = &s[1 + ns * 2..];
         let (ss, se, ah, al) = (tail[0], tail[1], tail[2] >> 4, tail[2] & 0x0F);
-        if ss == 0 && se == 0 {
+        if ss == 0 && (se == 0 || (self.sequential && se == 63 && ah == 0 && al == 0)) {
+            if self.sequential
+                && (se != 63
+                    || ac_tables
+                        .iter()
+                        .any(|&id| id >= 4 || self.ac_tables[id].is_none()))
+            {
+                bail!("invalid sequential AC table");
+            }
             if tables.iter().any(|&id| id >= self.dc_tables.len()) {
                 bail!("invalid DC table selector");
             }
@@ -418,6 +447,7 @@ impl<'a> Decoder<'a> {
             Ok(Some(ScanCtx {
                 comps,
                 tables,
+                ac_tables,
                 ah,
                 al,
                 interleaved: ns > 1,
@@ -470,7 +500,8 @@ impl<'a> Decoder<'a> {
             .collect();
         let mut pred = [0i32; 3];
 
-        if self.restart_interval == 0
+        if !self.sequential
+            && self.restart_interval == 0
             && ctx.ah == 0
             && ctx.comps == [0, 1, 2]
             && frame
@@ -525,6 +556,12 @@ impl<'a> Decoder<'a> {
                                     ctx,
                                     &mut pred[c],
                                 )?;
+                                if self.sequential {
+                                    self.ac_tables[ctx.ac_tables[si]]
+                                        .as_ref()
+                                        .unwrap()
+                                        .skip(&mut reader)?;
+                                }
                                 if gx >= bw || gy >= bh {
                                     continue;
                                 }
@@ -558,6 +595,12 @@ impl<'a> Decoder<'a> {
                         ctx,
                         &mut pred[c],
                     )?;
+                    if self.sequential {
+                        self.ac_tables[ctx.ac_tables[si]]
+                            .as_ref()
+                            .unwrap()
+                            .skip(&mut reader)?;
+                    }
                     if ctx.ah > 0 {
                         self.coefs[c][i] |= v;
                     } else {
@@ -604,6 +647,11 @@ impl<'a> Decoder<'a> {
         let (w, h) = super::scale::crop_size(ow as u32, oh as u32, crop);
         let (w, h) = (w as usize, h as usize);
         let left = (ow - w) / 2;
+        let rounded_columns = if self.sequential && self.six_bit_color {
+            (ow / 8).saturating_sub(1) * 8
+        } else {
+            0
+        };
         let top = (oh - h) / 2;
         let mut out = vec![0u8; w * h * 3];
         let mut yrow = vec![0u8; ow];
@@ -646,9 +694,13 @@ impl<'a> Decoder<'a> {
                     .iter()
                     .zip(&cbrow[left..left + w])
                     .zip(&crrow[left..left + w]);
-                for (((&y, &cb), &cr), pixel) in samples.zip(row.as_chunks_mut::<3>().0) {
+                for (column, (((&y, &cb), &cr), pixel)) in
+                    samples.zip(row.as_chunks_mut::<3>().0).enumerate()
+                {
                     *pixel = if self.rgb_transform {
                         [y, cb, cr]
+                    } else if left + column < rounded_columns {
+                        color::ycbcr_to_rgb_six_bit(y, cb, cr)
                     } else {
                         let (r, g, b) = ycbcr_to_rgb(y, cb, cr);
                         [r, g, b]
@@ -748,6 +800,19 @@ fn upsample_row(
             let src = &plane[y.min(bh - 1) * bw..];
             let n = ow.min(bw);
             out[..n].copy_from_slice(&src[..n]);
+        }
+        (1, 2) => {
+            let center = (y / 2).min(bh - 1);
+            let neighbor = if y % 2 == 0 {
+                center.saturating_sub(1)
+            } else {
+                (center + 1).min(bh - 1)
+            };
+            let center_row = &plane[center * bw..center * bw + ow];
+            let neighbor_row = &plane[neighbor * bw..neighbor * bw + ow];
+            for ((value, &center), &neighbor) in out.iter_mut().zip(center_row).zip(neighbor_row) {
+                *value = ((u16::from(center) * 3 + u16::from(neighbor) + 2) / 4) as u8;
+            }
         }
         (2, 1) => h2v1_row(plane, bw, bh, y, out),
         (2, 2) => h2v2_row(plane, bw, bh, y, out),
@@ -867,67 +932,41 @@ impl Prefix {
 
 struct HuffTable {
     fast: [Prefix; 1 << PREFIX_BITS],
-    mincode: [i32; 17],
-    maxcode: [i32; 17],
-    valptr: [i32; 17],
-    vals: Vec<u8>,
+    codes: Codebook,
 }
 
 impl HuffTable {
-    fn build(counts: &[u8; 16], vals: &[u8]) -> Result<Self> {
-        let mut mincode = [0i32; 17];
-        let mut maxcode = [-1i32; 17];
-        let mut valptr = [0i32; 17];
+    fn build(counts: &[u8; 16], values: &[u8]) -> Result<Self> {
+        let codes = Codebook::new(counts, values)?;
         let mut fast = [Prefix::LONG; 1 << PREFIX_BITS];
-        let mut code: i32 = 0;
-        let mut k: i32 = 0;
-        for len in 1..=16usize {
-            valptr[len] = k;
-            mincode[len] = code;
-            let cnt = i32::from(counts[len - 1]);
-            if len <= PREFIX_BITS {
-                for i in 0..cnt {
-                    let v = vals[(k + i) as usize];
-                    let start = ((code + i) as u32) << (PREFIX_BITS - len);
-                    let span = 1u32 << (PREFIX_BITS - len);
-                    let category = usize::from(v);
-                    for (suffix, entry) in fast
-                        .iter_mut()
-                        .skip(start as usize)
-                        .take(span as usize)
-                        .enumerate()
-                    {
-                        if category == 0 {
-                            *entry = Prefix {
-                                bits: len as u8,
-                                suffix_mask: 0,
-                                difference: 0,
-                            };
-                        } else if len < PREFIX_BITS && category <= 15 {
-                            let known = category.min(PREFIX_BITS - len);
-                            let missing = category - known;
-                            let magnitude = (suffix >> (PREFIX_BITS - len - known)) << missing;
-                            *entry = Prefix {
-                                bits: (len + category) as u8,
-                                suffix_mask: (1 << missing) - 1,
-                                difference: extend(magnitude as i32, category as u32) as i16,
-                            };
-                        }
-                    }
+        for (code, len, category) in codes.entries() {
+            let len = usize::from(len);
+            if len > PREFIX_BITS {
+                continue;
+            }
+            let category = usize::from(category);
+            let start = usize::from(code) << (PREFIX_BITS - len);
+            let span = 1usize << (PREFIX_BITS - len);
+            for (suffix, entry) in fast[start..start + span].iter_mut().enumerate() {
+                if category == 0 {
+                    *entry = Prefix {
+                        bits: len as u8,
+                        suffix_mask: 0,
+                        difference: 0,
+                    };
+                } else if len < PREFIX_BITS && category <= 15 {
+                    let known = category.min(PREFIX_BITS - len);
+                    let missing = category - known;
+                    let magnitude = (suffix >> (PREFIX_BITS - len - known)) << missing;
+                    *entry = Prefix {
+                        bits: (len + category) as u8,
+                        suffix_mask: (1 << missing) - 1,
+                        difference: extend(magnitude as i32, category as u32) as i16,
+                    };
                 }
             }
-            code += cnt;
-            k += cnt;
-            maxcode[len] = code - 1;
-            code <<= 1;
         }
-        Ok(HuffTable {
-            fast,
-            mincode,
-            maxcode,
-            valptr,
-            vals: vals.to_vec(),
-        })
+        Ok(Self { fast, codes })
     }
 
     #[inline]
@@ -942,7 +981,7 @@ impl HuffTable {
             bits.consume(u32::from(prefix.bits));
             return Ok(value);
         }
-        let category = self.long_category(bits)?;
+        let category = self.codes.symbol(bits)?;
         if category == 0 {
             return Ok(0);
         }
@@ -950,25 +989,6 @@ impl HuffTable {
             .receive(u32::from(category))
             .ok_or_else(|| anyhow::anyhow!("truncated DC diff"))?;
         Ok(extend(magnitude as i32, u32::from(category)))
-    }
-
-    fn long_category(&self, bits: &mut Bits) -> Result<u8> {
-        // Slow path: canonical search for codes longer than the prefix table.
-        let mut code = 0i32;
-        for len in 1..=16usize {
-            code = (code << 1)
-                | bits
-                    .bit()
-                    .ok_or_else(|| anyhow::anyhow!("truncated huffman"))? as i32;
-            if self.maxcode[len] >= code && code >= self.mincode[len] {
-                let idx = (self.valptr[len] + code - self.mincode[len]) as usize;
-                return Ok(*self
-                    .vals
-                    .get(idx)
-                    .ok_or_else(|| anyhow::anyhow!("huffman index out of range"))?);
-            }
-        }
-        bail!("invalid huffman code")
     }
 }
 

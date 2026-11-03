@@ -96,14 +96,69 @@ fn dc_refinement_scan_is_decoded() {
 }
 
 #[test]
-fn rejects_baseline_sof0() {
-    // A baseline JPEG must not decode through the progressive path.
-    let img = image::RgbImage::from_fn(64, 48, |x, y| image::Rgb([x as u8, y as u8, 5]));
-    let mut v = Vec::new();
-    let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut v, 80);
-    enc.encode(img.as_raw(), 64, 48, image::ExtendedColorType::Rgb8)
-        .unwrap();
-    assert!(decode_dc_only_bytes(&v).is_err());
+fn sequential_dc_matches_scalar_decoder_with_nonzero_ac_coefficients() {
+    for (w, h) in [(64, 48), (127, 93), (319, 257)] {
+        let image = image::RgbImage::from_fn(w, h, |x, y| {
+            image::Rgb([
+                (x * 13 + y * 7) as u8,
+                (x * 3 + y * 19) as u8,
+                (x * 23 + y * 11) as u8,
+            ])
+        });
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85)
+            .encode(image.as_raw(), w, h, image::ExtendedColorType::Rgb8)
+            .unwrap();
+        let mut decoder = Decoder::new(&bytes).unwrap();
+        decoder.six_bit_color = false;
+        let decoded = decoder.decode(false, None).unwrap();
+        assert_same(&decoded, &reference_1_8(&bytes), "sequential AC skipping");
+        let mut decoder = Decoder::new(&bytes).unwrap();
+        decoder.six_bit_color = true;
+        let full = decoder.decode(false, None).unwrap();
+        for crop in [(1, 1), (7, 3), (3, 19)] {
+            let mut decoder = Decoder::new(&bytes).unwrap();
+            decoder.six_bit_color = true;
+            let cropped = decoder.decode(false, Some(crop)).unwrap();
+            let (raw, w, h) = full.raw();
+            let expected =
+                super::super::scale::crop_for_fill(Bitmap::new_rgb(raw.to_vec(), w, h), Some(crop));
+            assert_same(&cropped, &expected, "vector color crop phase");
+        }
+    }
+}
+
+#[test]
+fn vertical_chroma_filter_preserves_phase_and_edges() {
+    let frame = Frame {
+        width: 16,
+        height: 32,
+        comps: vec![
+            ComponentSpec {
+                id: 1,
+                sx: 1,
+                sy: 2,
+                quant_id: 0,
+            },
+            ComponentSpec {
+                id: 2,
+                sx: 1,
+                sy: 1,
+                quant_id: 0,
+            },
+        ],
+        hmax: 1,
+        vmax: 2,
+    };
+    let plane = [10, 30, 90, 170];
+    for (row, expected) in [[10, 30], [30, 65], [70, 135], [90, 170]]
+        .into_iter()
+        .enumerate()
+    {
+        let mut out = [0; 2];
+        upsample_row(&plane, 2, 2, row, &frame.comps[1], &frame, &mut out);
+        assert_eq!(out, expected);
+    }
 }
 
 #[test]
@@ -300,7 +355,7 @@ fn invalid_quantization_ids_return_errors() {
 }
 
 fn reference_difference(table: &HuffTable, bits: &mut Bits) -> Option<i32> {
-    let category = u32::from(table.long_category(bits).ok()?);
+    let category = u32::from(table.codes.symbol(bits).ok()?);
     if category == 0 {
         return Some(0);
     }

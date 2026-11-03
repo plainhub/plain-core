@@ -54,12 +54,9 @@ fn jpeg_use_scaled(w: u32, h: u32, tw: u32, th: u32) -> bool {
     (tw > 0 && w >= tw * 2) || (th > 0 && h >= th * 2)
 }
 
-/// Progressive JPEGs whose 1/8 DC grid covers the target box take the
-/// DC-only fast path (`pjpeg`): every non-DC DCT basis function has zero
-/// mean over its block, so the 1/8 image depends only on the DC scans —
-/// the AC scans (~80-90% of the entropy bytes) are skipped byte-wise.
+// The DC grid must cover both target axes before discarding AC coefficient values.
 fn dc_fast_eligible(s: Sniffed, tw: u32, th: u32) -> bool {
-    s.progressive && tw > 0 && th > 0 && tw <= s.width.div_ceil(8) && th <= s.height.div_ceil(8)
+    tw > 0 && th > 0 && tw <= s.width.div_ceil(8) && th <= s.height.div_ceil(8)
 }
 
 /// Outcome of a thumbnail request.
@@ -311,6 +308,7 @@ async fn generate_and_cache(
     let est = est
         .saturating_mul(2)
         .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4);
+    let est = est.saturating_add(dc_input_bytes(s, rw, rh, spec.file_size));
     let _permits = admission::global().acquire(est).await?;
 
     let path = spec.path.clone();
@@ -344,11 +342,6 @@ async fn generate_and_cache(
     Ok(ThumbOutcome::Generated(data))
 }
 
-/// Sync decode for files. JPEG ladder (fastest first):
-/// 1. progressive + 1/8 covers the target → in-tree DC-only decode
-///    (`pjpeg`, AC scans skipped; ~5-8× less entropy work than libvips),
-/// 2. big-to-small JPEG → `jpeg-decoder` IDCT-scaled decode,
-/// 3. otherwise (or on a bail above) → `image` crate full decode.
 fn decode_to_target(
     path: &str,
     head: &[u8],
@@ -393,9 +386,14 @@ fn downscale_ratio(w: u32, h: u32, tw: u32, th: u32) -> f64 {
     rw.max(rh)
 }
 
-/// Estimate the decoded bitmap bytes the request will materialize — this is
-/// what admission control prices. The DC-only and scaled JPEG paths are
-/// priced by their reduced outputs; everything else by the full bitmap.
+fn dc_input_bytes(s: Sniffed, rw: u32, rh: u32, file_size: i64) -> u64 {
+    if s.kind == ImageKind::Jpeg && dc_fast_eligible(s, rw, rh) {
+        file_size.max(0) as u64
+    } else {
+        0
+    }
+}
+
 fn estimated_decoded_bytes(s: Sniffed, rw: u32, rh: u32) -> u64 {
     let px: u64 = if s.kind == ImageKind::Jpeg && dc_fast_eligible(s, rw, rh) {
         u64::from(s.width.div_ceil(8)) * u64::from(s.height.div_ceil(8))
@@ -413,9 +411,6 @@ fn estimated_decoded_bytes(s: Sniffed, rw: u32, rh: u32) -> u64 {
 // ---------------------------------------------------------------------------
 
 async fn dispatch_non_image(spec: &ThumbSpec, cache: &std::path::Path) -> Result<ThumbOutcome> {
-    // Covers and video frames cache under the same deterministic key scheme
-    // as images — the old path wrote this cache but never read it, so every
-    // request regenerated (a fresh ffmpeg spawn / cover decode per GET).
     let cache_path = thumb_cache_path(
         cache,
         &spec.path,
