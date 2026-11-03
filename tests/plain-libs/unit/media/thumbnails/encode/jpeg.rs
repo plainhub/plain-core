@@ -6,11 +6,11 @@ fn zigzag_and_transform_follow_frequency_order() {
     sorted.sort_unstable();
     assert_eq!(sorted, std::array::from_fn(|i| i));
     assert_eq!(&ZIGZAG[..10], &[0, 1, 8, 16, 9, 2, 3, 10, 17, 24]);
-    let dc = transform(&[160.0; 64], &[1; 64]);
+    let dc = transform(&[160.0; 64], &Quantizer::new([1; 64]).unwrap());
     assert_eq!(dc[0], 256);
     assert_eq!(dc[1..], [0; 63]);
     let horizontal = std::array::from_fn(|i| 128.0 + 50.0 * BASIS[1][i % 8]);
-    let coefficients = transform(&horizontal, &[1; 64]);
+    let coefficients = transform(&horizontal, &Quantizer::new([1; 64]).unwrap());
     assert!(coefficients[1] > 100);
     assert_eq!(coefficients[2], 0);
 }
@@ -191,7 +191,7 @@ fn factored_dct_matches_the_definition_at_every_frequency() {
     for seed in 1..=64 {
         let block = std::array::from_fn(|i| ((i * i * 3 + i * seed * 7 + seed * 11) % 256) as f64);
         let quant = std::array::from_fn(|i| (1 + (seed + i) % 23) as u8);
-        let encoded = transform(&block, &quant);
+        let encoded = transform(&block, &Quantizer::new(quant).unwrap());
         for i in 0..64 {
             let k = ZIGZAG[i];
             let expected = (0..64)
@@ -232,12 +232,13 @@ fn compare_quantized_dct_cost() {
         .collect();
     let q = &profile(85).unwrap().quant[0];
     for block in &blocks {
-        assert_eq!(transform(block, q), reference_transform(block, q));
+        assert_eq!(transform(block, q), reference_transform(block, &q.divisors));
     }
     for (label, function) in [
         (
             "matrix",
-            reference_transform as fn(&[f64; 64], &[u8; 64]) -> [i16; 64],
+            (|b, q: &Quantizer| reference_transform(b, &q.divisors))
+                as fn(&[f64; 64], &Quantizer) -> [i16; 64],
         ),
         ("factored", transform),
     ] {
@@ -248,5 +249,73 @@ fn compare_quantized_dct_cost() {
             }
         }
         println!("{label} 65536 blocks {:?}", start.elapsed());
+    }
+}
+
+#[test]
+fn sampling_blocks_match_separate_channel_sampling_on_padded_edges() {
+    let (w, h) = (19, 17);
+    let rgb: Vec<u8> = (0..w * h * 3)
+        .map(|i| (i * i + 123 * i + 7) as u8)
+        .collect();
+    for (left, top) in [(0, 0), (16, 0), (0, 16), (16, 16)] {
+        let blocks = sampling_blocks(&rgb, w, h, left, top);
+        for (block, actual) in blocks.iter().enumerate() {
+            let step = if block < 4 { 1 } else { 2 };
+            for (i, &sample) in actual.iter().enumerate() {
+                let x = left + i % 8 * step + if block < 4 { block % 2 * 8 } else { 0 };
+                let y = top + i / 8 * step + if block < 4 { block / 2 * 8 } else { 0 };
+                let mut sum = 0.0;
+                for dy in 0..step {
+                    for dx in 0..step {
+                        let off = 3 * ((y + dy).min(h - 1) * w + (x + dx).min(w - 1));
+                        let [r, g, b] = [rgb[off], rgb[off + 1], rgb[off + 2]].map(f64::from);
+                        sum += match block {
+                            4 => 128.0 - 0.168736 * r - 0.331264 * g + 0.5 * b,
+                            5 => 128.0 + 0.5 * r - 0.418688 * g - 0.081312 * b,
+                            _ => 0.299 * r + 0.587 * g + 0.114 * b,
+                        }
+                        .round()
+                        .clamp(0.0, 255.0);
+                    }
+                }
+                assert_eq!(sample, (sum / (step * step) as f64).round());
+            }
+        }
+    }
+}
+
+#[test]
+fn quantizer_matches_reference_including_rounding_ties() {
+    for quality in [1, 50, 85, 89] {
+        for q in &profile(quality).unwrap().quant {
+            for seed in 0..64 {
+                let block =
+                    std::array::from_fn(|i| ((i * i * 3 + i * seed * 7 + seed * 11) % 256) as f64);
+                assert_eq!(
+                    transform(&block, q),
+                    reference_transform(&block, &q.divisors)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn color_conversion_preserves_rounding_for_every_rgb_triplet() {
+    for r in 0..=255u8 {
+        for g in 0..=255u8 {
+            for b in 0..=255u8 {
+                let rgb = [r, g, b];
+                let [r, g, b] = rgb.map(f64::from);
+                let expected = [
+                    0.299 * r + 0.587 * g + 0.114 * b,
+                    128.0 - 0.168736 * r - 0.331264 * g + 0.5 * b,
+                    128.0 + 0.5 * r - 0.418688 * g - 0.081312 * b,
+                ]
+                .map(|v| v.round().clamp(0.0, 255.0) as u16);
+                assert_eq!(ycbcr(&rgb), expected);
+            }
+        }
     }
 }

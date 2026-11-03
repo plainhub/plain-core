@@ -26,9 +26,8 @@ use anyhow::{Result, bail};
 /// Matches the engine-wide decompression-bomb guard.
 const MAX_SOURCE_PIXELS: u64 = 300_000_000;
 
-/// (dc bytes decoded, AC bytes skipped) of the last decode (test hook).
 #[cfg(test)]
-static LAST_SKIP: std::sync::Mutex<Option<(usize, usize)>> = std::sync::Mutex::new(None);
+thread_local! { static LAST_SKIP: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) }; }
 
 pub fn decode_dc_only(path: &std::path::Path) -> Result<Bitmap> {
     let data = std::fs::read(path)?;
@@ -37,7 +36,11 @@ pub fn decode_dc_only(path: &std::path::Path) -> Result<Bitmap> {
 
 /// Decode a progressive JPEG to its 1/8-scale RGB bitmap from DC scans only.
 pub fn decode_dc_only_bytes(data: &[u8]) -> Result<Bitmap> {
-    Decoder::new(data)?.decode()
+    Decoder::new(data)?.decode(false)
+}
+
+pub(super) fn decode_dc_prefix(head: &[u8]) -> Result<Bitmap> {
+    Decoder::new(head)?.decode(true)
 }
 
 // ---------------------------------------------------------------------------
@@ -120,8 +123,9 @@ impl<'a> Decoder<'a> {
         })
     }
 
-    fn decode(mut self) -> Result<Bitmap> {
+    fn decode(mut self, prefix_only: bool) -> Result<Bitmap> {
         let mut saw_dc_scan = false;
+        let mut color_declared = false;
         #[allow(clippy::while_let_loop)]
         loop {
             let Some((m, seg_start, seg_len)) = self.next_marker() else {
@@ -140,18 +144,43 @@ impl<'a> Decoder<'a> {
                     }
                     self.restart_interval = usize::from(u16::from_be_bytes([s[0], s[1]]));
                 }
+                0xe0 if self.seg(seg_start, seg_len)?.starts_with(b"JFIF\0") => {
+                    color_declared = true;
+                }
                 0xEE => {
                     // APP14 Adobe: transform flag at payload offset 11.
                     let s = self.seg(seg_start, seg_len)?;
-                    if s.len() >= 12 && &s[..5] == b"Adobe" && s[11] == 0 {
-                        self.rgb_transform = true;
+                    if s.len() >= 12 && &s[..5] == b"Adobe" && s[11] <= 1 {
+                        color_declared = true;
+                        self.rgb_transform |= s[11] == 0;
                     }
                 }
                 0xDA => match self.parse_sos(seg_start, seg_len)? {
                     Some(ctx) => {
+                        if prefix_only {
+                            let frame = self.frame.as_ref().unwrap();
+                            if ctx.ah != 0
+                                || ctx.al != 0
+                                || ctx.comps.len() != frame.comps.len()
+                                || (frame.comps.len() == 3 && !color_declared)
+                            {
+                                bail!("incomplete DC or color information in the file header");
+                            }
+                            // Check the scan boundary before spending CPU on a partial prefix.
+                            let start = self.pos;
+                            self.skip_scan_payload();
+                            if self.data.get(self.pos..self.pos + 2).is_none() {
+                                bail!("DC scan extends beyond the file header");
+                            }
+                            self.pos = start;
+                        }
                         self.decode_dc_scan(&ctx)?;
                         saw_dc_scan = true;
+                        if prefix_only {
+                            break;
+                        }
                     }
+                    None if prefix_only => bail!("expected an initial complete DC scan"),
                     None => {
                         // AC scan: skip its entropy payload byte-wise.
                         #[allow(unused_variables)]
@@ -180,7 +209,7 @@ impl<'a> Decoder<'a> {
         let bitmap = self.reconstruct(&frame)?;
         #[cfg(test)]
         {
-            *LAST_SKIP.lock().unwrap() = Some((self.dc_bytes, self.skipped_bytes));
+            LAST_SKIP.set((self.dc_bytes, self.skipped_bytes));
         }
         Ok(bitmap)
     }
@@ -255,6 +284,9 @@ impl<'a> Decoder<'a> {
             if sx == 0 || sy == 0 || sx > 4 || sy > 4 {
                 bail!("bad sampling factors {sx}x{sy}");
             }
+            if b[2] >= 4 {
+                bail!("invalid quantization table selector");
+            }
             comps.push(ComponentSpec {
                 id: b[0],
                 sx,
@@ -295,7 +327,11 @@ impl<'a> Decoder<'a> {
             let Some(t) = s.get(i + 1..i + 65) else {
                 bail!("short DQT");
             };
-            self.quant[tq as usize] = t.iter().map(|&v| u16::from(v)).collect();
+            *self
+                .quant
+                .get_mut(usize::from(tq))
+                .ok_or_else(|| anyhow::anyhow!("invalid quantization table id"))? =
+                t.iter().map(|&v| u16::from(v)).collect();
             i += 65;
         }
         Ok(())
@@ -417,18 +453,44 @@ impl<'a> Decoder<'a> {
     fn decode_dc_scan(&mut self, ctx: &ScanCtx) -> Result<()> {
         let frame = self
             .frame
-            .clone()
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("no frame"))?;
         let mut reader = Bits::new(self.data, self.pos);
         let dims: Vec<_> = (0..frame.comps.len())
             .map(|c| frame.block_dims(c))
             .collect();
-        let mut pred = vec![0i32; frame.comps.len()];
+        let mut pred = [0i32; 3];
 
-        if ctx.interleaved {
+        if self.restart_interval == 0
+            && ctx.ah == 0
+            && ctx.comps == [0, 1, 2]
+            && frame
+                .comps
+                .iter()
+                .map(|c| (c.sx, c.sy))
+                .eq([(2, 2), (1, 1), (1, 1)])
+            && let [luma, cb, cr] = self.coefs.as_mut_slice()
+        {
+            let tables = &self.dc_tables;
+            let table = |i: usize| {
+                tables[ctx.tables[i]]
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("missing DC huffman table"))
+            };
+
+            decode_420_initial(
+                &mut reader,
+                [table(0)?, table(1)?, table(2)?],
+                ctx.al,
+                dims[0].0,
+                luma,
+                cb,
+                cr,
+            )?;
+        } else if ctx.interleaved {
             let mcus_x = (u64::from(frame.width).div_ceil(u64::from(frame.hmax) * 8)) as usize;
             let mcus_y = (u64::from(frame.height).div_ceil(u64::from(frame.vmax) * 8)) as usize;
-            'mcu: for my in 0..mcus_y {
+            for my in 0..mcus_y {
                 for mx in 0..mcus_x {
                     let mcu = my * mcus_x + mx;
                     if self.restart_interval > 0
@@ -437,7 +499,7 @@ impl<'a> Decoder<'a> {
                     {
                         reader.align_to_byte();
                         if !reader.consume_restart() {
-                            break 'mcu; // truncated: keep what we have
+                            bail!("missing DC restart marker");
                         }
                         pred.iter_mut().for_each(|p| *p = 0);
                     }
@@ -477,7 +539,7 @@ impl<'a> Decoder<'a> {
                     {
                         reader.align_to_byte();
                         if !reader.consume_restart() {
-                            break;
+                            bail!("missing DC restart marker");
                         }
                         pred[c] = 0;
                     }
@@ -589,6 +651,39 @@ impl<'a> Decoder<'a> {
         }
         Ok(Bitmap::new_rgb(out, ow as u32, oh as u32))
     }
+}
+
+fn decode_420_initial(
+    bits: &mut Bits,
+    tables: [&HuffTable; 3],
+    shift: u8,
+    stride: usize,
+    luma: &mut [i16],
+    cb: &mut [i16],
+    cr: &mut [i16],
+) -> Result<()> {
+    let mut predictors = [0i32; 3];
+    let mut chroma = cb.iter_mut().zip(cr);
+    for band in luma.chunks_mut(2 * stride) {
+        let (top, bottom) = band.split_at_mut(stride);
+        for x in (0..stride).step_by(2) {
+            let mut sample = |channel: usize| -> Result<i16> {
+                predictors[channel] += tables[channel].difference(bits)?;
+                Ok((predictors[channel] << shift).clamp(-32768, 32767) as i16)
+            };
+            let upper = [sample(0)?, sample(0)?];
+            let lower = [sample(0)?, sample(0)?];
+            let count = 2.min(stride - x);
+            top[x..x + count].copy_from_slice(&upper[..count]);
+            if !bottom.is_empty() {
+                bottom[x..x + count].copy_from_slice(&lower[..count]);
+            }
+            let (blue, red) = chroma.next().unwrap();
+            *blue = sample(1)?;
+            *red = sample(2)?;
+        }
+    }
+    Ok(())
 }
 
 /// Decode one DC block value: huffman category + diff (first pass) or one
@@ -727,6 +822,8 @@ fn h2v2_row(plane: &[u8], bw: usize, bh: usize, y: usize, out: &mut [u8]) {
 // Huffman + bit reader
 // ---------------------------------------------------------------------------
 
+const PREFIX_BITS: usize = 10;
+
 #[derive(Clone, Copy, Default)]
 struct Prefix {
     bits: u8,
@@ -735,7 +832,7 @@ struct Prefix {
 }
 
 struct HuffTable {
-    fast: [Prefix; 256],
+    fast: [Prefix; 1 << PREFIX_BITS],
     mincode: [i32; 17],
     maxcode: [i32; 17],
     valptr: [i32; 17],
@@ -747,18 +844,18 @@ impl HuffTable {
         let mut mincode = [0i32; 17];
         let mut maxcode = [-1i32; 17];
         let mut valptr = [0i32; 17];
-        let mut fast = [Prefix::default(); 256];
+        let mut fast = [Prefix::default(); 1 << PREFIX_BITS];
         let mut code: i32 = 0;
         let mut k: i32 = 0;
         for len in 1..=16usize {
             valptr[len] = k;
             mincode[len] = code;
             let cnt = i32::from(counts[len - 1]);
-            if len <= 8 {
+            if len <= PREFIX_BITS {
                 for i in 0..cnt {
                     let v = vals[(k + i) as usize];
-                    let start = ((code + i) as u32) << (8 - len);
-                    let span = 1u32 << (8 - len);
+                    let start = ((code + i) as u32) << (PREFIX_BITS - len);
+                    let span = 1u32 << (PREFIX_BITS - len);
                     let category = usize::from(v);
                     for (suffix, entry) in fast
                         .iter_mut()
@@ -766,8 +863,8 @@ impl HuffTable {
                         .take(span as usize)
                         .enumerate()
                     {
-                        if category > 0 && len + category <= 8 {
-                            let magnitude = suffix >> (8 - len - category);
+                        if category > 0 && len + category <= PREFIX_BITS {
+                            let magnitude = suffix >> (PREFIX_BITS - len - category);
                             *entry = Prefix {
                                 bits: (len + category) as u8,
                                 remaining: 0,
@@ -797,8 +894,9 @@ impl HuffTable {
         })
     }
 
+    #[inline]
     fn difference(&self, bits: &mut Bits) -> Result<i32> {
-        let prefix = self.fast[bits.peek8() as usize];
+        let prefix = self.fast[bits.peek_prefix()];
         let category = if prefix.bits == 0 {
             self.long_category(bits)?
         } else {
@@ -821,7 +919,7 @@ impl HuffTable {
     }
 
     fn long_category(&self, bits: &mut Bits) -> Result<u8> {
-        // Slow path: canonical search for codes longer than 8 bits.
+        // Slow path: canonical search for codes longer than the prefix table.
         let mut code = 0i32;
         for len in 1..=16usize {
             code = (code << 1)
@@ -845,7 +943,7 @@ struct Bits<'a> {
     data: &'a [u8],
     pos: usize,
     /// Bits left-aligned at the top of `cur`.
-    cur: u32,
+    cur: u64,
     cnt: i32,
 }
 
@@ -877,10 +975,10 @@ impl<'a> Bits<'a> {
 
     fn bit(&mut self) -> Option<u32> {
         if self.cnt == 0 {
-            self.cur = u32::from(self.fetch_byte()?) << 24;
+            self.cur = u64::from(self.fetch_byte()?) << 56;
             self.cnt = 8;
         }
-        let b = (self.cur >> 31) & 1;
+        let b = (self.cur >> 63) as u32;
         self.cur <<= 1;
         self.cnt -= 1;
         Some(b)
@@ -894,10 +992,9 @@ impl<'a> Bits<'a> {
             return None;
         }
         while self.cnt < n as i32 {
-            self.cur |= u32::from(self.fetch_byte()?) << (24 - self.cnt);
-            self.cnt += 8;
+            self.refill()?;
         }
-        let value = self.cur >> (32 - n);
+        let value = (self.cur >> (64 - n)) as u32;
         self.consume(n);
         Some(value)
     }
@@ -907,23 +1004,36 @@ impl<'a> Bits<'a> {
         self.cnt -= n as i32;
     }
 
-    fn peek8(&mut self) -> u8 {
-        if self.cnt < 8 {
-            if let Some(byte) = self.fetch_byte() {
-                self.cur |= u32::from(byte) << (24 - self.cnt);
-                self.cnt += 8;
-            } else {
-                let padding = (1u16 << (8 - self.cnt)) - 1;
-                return (self.cur >> 24) as u8 | padding as u8;
+    fn refill(&mut self) -> Option<()> {
+        if let Some(bytes) = self.data.get(self.pos..self.pos + 4) {
+            let word = u32::from_be_bytes(bytes.try_into().unwrap());
+            let inverted = !word;
+            if inverted.wrapping_sub(0x0101_0101) & word & 0x8080_8080 == 0 {
+                self.cur |= u64::from(word) << (32 - self.cnt);
+                self.cnt += 32;
+                self.pos += 4;
+                return Some(());
             }
         }
-        (self.cur >> 24) as u8
+        self.cur |= u64::from(self.fetch_byte()?) << (56 - self.cnt);
+        self.cnt += 8;
+        Some(())
+    }
+
+    fn peek_prefix(&mut self) -> usize {
+        while self.cnt < PREFIX_BITS as i32 {
+            if self.refill().is_none() {
+                let padding = (1 << (PREFIX_BITS as i32 - self.cnt)) - 1;
+                return (self.cur >> (64 - PREFIX_BITS)) as usize | padding;
+            }
+        }
+        (self.cur >> (64 - PREFIX_BITS)) as usize
     }
 
     /// Discard bits to the byte boundary and rewind whole unconsumed bytes
     /// (used at restart markers).
     fn align_to_byte(&mut self) {
-        self.pos -= (self.cnt / 8) as usize;
+        self.pos = self.pos_after();
         self.cur = 0;
         self.cnt = 0;
     }
@@ -948,7 +1058,14 @@ impl<'a> Bits<'a> {
     /// Stream position after the last consumed bit (whole unconsumed bytes
     /// held in `cur` are rewound).
     fn pos_after(&self) -> usize {
-        self.pos.saturating_sub((self.cnt / 8) as usize)
+        let mut pos = self.pos;
+        for _ in 0..self.cnt / 8 {
+            pos -= 1;
+            if self.data[pos] == 0 && pos > 0 && self.data[pos - 1] == 0xff {
+                pos -= 1;
+            }
+        }
+        pos
     }
 }
 

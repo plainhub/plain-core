@@ -77,7 +77,7 @@ fn parity_real_photo_fixture_and_skip_stats() {
 
     // The AC scans must be accounted as skipped: most of the entropy
     // payload never gets parsed.
-    let (dc_bytes, skipped_bytes) = LAST_SKIP.lock().unwrap().unwrap_or((0, 0));
+    let (dc_bytes, skipped_bytes) = LAST_SKIP.get();
     assert!(
         skipped_bytes > dc_bytes * 2,
         "expected AC skip to dominate: dc={dc_bytes} skipped={skipped_bytes}"
@@ -226,5 +226,68 @@ fn skipped_ac_scan_stops_at_the_first_marker_at_every_word_offset() {
             decoder.skip_scan_payload();
             assert_eq!(decoder.pos, end);
         }
+    }
+}
+
+#[test]
+fn complete_dc_header_serves_the_same_pixels_without_opening_the_source() {
+    let mut data = fixture("v-prog420.jpg");
+    data.splice(
+        2..2,
+        [
+            0xff, 0xe0, 0, 16, b'J', b'F', b'I', b'F', 0, 1, 1, 0, 0, 1, 0, 1, 0, 0,
+        ],
+    );
+    let sos = data.windows(2).position(|b| b == [0xff, 0xda]).unwrap();
+    let start = sos + 2 + usize::from(u16::from_be_bytes([data[sos + 2], data[sos + 3]]));
+    assert!(decode_dc_prefix(&data).is_err());
+    data[start - 1] = 0;
+    let mut scan = Decoder::new(&data).unwrap();
+    scan.pos = start;
+    scan.skip_scan_payload();
+    let end = scan.pos;
+    data.truncate(end);
+    data.extend_from_slice(&[0xff, 0xd9]);
+    let expected = reference_1_8(&data);
+    assert!(decode_dc_prefix(&data[..end - 1]).is_err());
+    let header = super::super::sniff::sniff_header(&data).unwrap();
+    let decoded = super::super::decode_to_target("absent-source.jpg", &data, header, 8, 8).unwrap();
+    assert_same(&decoded, &expected, "DC header");
+    data.drain(2..20);
+    assert!(decode_dc_prefix(&data).is_err());
+    assert_same(
+        &decode_dc_only_bytes(&data).unwrap(),
+        &expected,
+        "undeclared color",
+    );
+}
+
+#[test]
+fn prefix_lookahead_rewinds_exact_encoded_bytes_including_stuffing() {
+    let data = [0x12, 0x34, 0x56, 0x78, 0xff, 0, 0xab, 0xff, 0xd4];
+    let mut bits = Bits::new(&data, 0);
+    assert_eq!(bits.peek_prefix(), 0x48);
+    assert_eq!(bits.pos_after(), 0);
+    for value in [0x12, 0x34, 0x56, 0x78] {
+        assert_eq!(bits.receive(8), Some(value));
+    }
+    assert_eq!(bits.peek_prefix(), 0x3fe);
+    assert_eq!(bits.pos_after(), 4);
+    bits.align_to_byte();
+    assert_eq!(bits.receive(16), Some(0xffab));
+    assert!(bits.consume_restart());
+}
+
+#[test]
+fn invalid_quantization_ids_return_errors() {
+    let data = fixture("v-prog420.jpg");
+    for (marker, field_offset) in [(0xdb, 4), (0xc2, 12)] {
+        let mut broken = data.clone();
+        let i = broken
+            .windows(2)
+            .position(|bytes| bytes == [0xff, marker])
+            .unwrap();
+        broken[i + field_offset] = 4;
+        assert!(decode_dc_only_bytes(&broken).is_err());
     }
 }

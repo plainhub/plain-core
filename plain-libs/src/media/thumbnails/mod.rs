@@ -208,21 +208,21 @@ pub async fn get_thumbnail(spec: ThumbSpec, cache: &std::path::Path) -> Result<T
         .filter(|s| s.kind.decodable());
 
     match sniffed {
-        Some(s) => get_image_thumbnail(&spec, &head, s, cache).await,
+        Some(s) => get_image_thumbnail(&spec, head, s, cache).await,
         None => dispatch_non_image(&spec, cache).await,
     }
 }
 
 async fn get_image_thumbnail(
     spec: &ThumbSpec,
-    head: &[u8],
+    head: Vec<u8>,
     s: Sniffed,
     cache: &std::path::Path,
 ) -> Result<ThumbOutcome> {
     // EXIF orientation first: the *upright* dimensions decide the target box
     // so rotated photos produce correctly-proportioned thumbnails.
     let orientation = if s.kind == ImageKind::Jpeg {
-        exif::orientation(head).unwrap_or(1)
+        exif::orientation(&head).unwrap_or(1)
     } else {
         1
     };
@@ -272,16 +272,7 @@ async fn get_image_thumbnail(
                 lru::global().put(cache_path.clone(), d.clone());
                 return Ok(ThumbOutcome::Generated(d));
             }
-            generate_and_cache(
-                spec,
-                s,
-                orientation,
-                tw,
-                th,
-                cache_path,
-                crate::utils::image_metadata::thumbnail(head),
-            )
-            .await
+            generate_and_cache(spec, s, orientation, tw, th, cache_path, head).await
         })
         .await
 }
@@ -293,7 +284,7 @@ async fn generate_and_cache(
     tw: u32,
     th: u32,
     cache_path: std::path::PathBuf,
-    preview: Option<&[u8]>,
+    head: Vec<u8>,
 ) -> Result<ThumbOutcome> {
     let swaps = Orientation(orientation).swaps_axes();
     // The stored bitmap must be resized to the swapped target so the
@@ -307,7 +298,7 @@ async fn generate_and_cache(
     if !scaled_jpeg && u64::from(s.width) * u64::from(s.height) > admission::MAX_SOURCE_PIXELS {
         bail!("source {}x{} exceeds pixel guard", s.width, s.height);
     }
-    let preview = preview.and_then(|bytes| {
+    let preview = crate::utils::image_metadata::thumbnail(&head).and_then(|bytes| {
         let dimensions = sniff::sniff_header(bytes).ok()?;
         (dimensions.kind == ImageKind::Jpeg && dimensions.width >= rw && dimensions.height >= rh)
             .then(|| (bytes.to_vec(), dimensions))
@@ -334,9 +325,9 @@ async fn generate_and_cache(
         let _permits = _permits;
         let bm = if let Some((bytes, _)) = preview {
             decode::jpeg_scaled_bytes(&bytes, rw, rh)
-                .or_else(|_| decode_to_target(&path, s, rw, rh))?
+                .or_else(|_| decode_to_target(&path, &head, s, rw, rh))?
         } else {
-            decode_to_target(&path, s, rw, rh)?
+            decode_to_target(&path, &head, s, rw, rh)?
         };
         let bm = if let Some((w, h)) = crop {
             scale::resize_to_fill(bm, w, h)
@@ -365,13 +356,13 @@ async fn generate_and_cache(
 ///    (`pjpeg`, AC scans skipped; ~5-8× less entropy work than libvips),
 /// 2. big-to-small JPEG → `jpeg-decoder` IDCT-scaled decode,
 /// 3. otherwise (or on a bail above) → `image` crate full decode.
-fn decode_to_target(path: &str, s: Sniffed, rw: u32, rh: u32) -> Result<Bitmap> {
+fn decode_to_target(path: &str, head: &[u8], s: Sniffed, rw: u32, rh: u32) -> Result<Bitmap> {
     let p = std::path::Path::new(path);
     if s.kind == ImageKind::Jpeg {
         // Unsupported structure/strictness bails fall through to the
         // generic scaled decoder below.
         if dc_fast_eligible(s, rw, rh)
-            && let Ok(bm) = pjpeg::decode_dc_only(p)
+            && let Ok(bm) = pjpeg::decode_dc_prefix(head).or_else(|_| pjpeg::decode_dc_only(p))
         {
             return Ok(bm);
         }

@@ -9,7 +9,7 @@ struct Code {
 
 struct Profile {
     header: Vec<u8>,
-    quant: [[u8; 64]; 2],
+    quant: [Quantizer; 2],
     codes: [[Code; 256]; 4],
 }
 
@@ -63,11 +63,9 @@ fn profile(quality: u8) -> Result<&'static Profile> {
 
 impl Profile {
     fn from_template(template: &[u8]) -> Result<Self> {
-        let mut profile = Self {
-            header: vec![0xff, 0xd8],
-            quant: [[0; 64]; 2],
-            codes: [[Code::default(); 256]; 4],
-        };
+        let mut header = vec![0xff, 0xd8];
+        let mut divisors = [[0; 64]; 2];
+        let mut codes = [[Code::default(); 256]; 4];
         let mut seen_quant = [false; 2];
         let mut seen_codes = [false; 4];
         let mut pos = 2;
@@ -90,7 +88,7 @@ impl Profile {
                             id < 2 && rest.len() >= 65,
                             "Unsupported JPEG quantization table"
                         );
-                        profile.quant[id].copy_from_slice(&rest[1..65]);
+                        divisors[id].copy_from_slice(&rest[1..65]);
                         seen_quant[id] = true;
                         rest = &rest[65..];
                     }
@@ -111,7 +109,7 @@ impl Profile {
                         for (bits, &n) in counts.iter().enumerate() {
                             for _ in 0..n {
                                 ensure!(code < (1 << (bits + 1)), "Invalid JPEG Huffman code");
-                                profile.codes[index][usize::from(rest[offset])] = Code {
+                                codes[index][usize::from(rest[offset])] = Code {
                                     bits: code as u16,
                                     len: (bits + 1) as u8,
                                 };
@@ -127,9 +125,7 @@ impl Profile {
                 _ => {}
             }
             if marker == 0xdb || marker == 0xc4 || (0xe0..=0xef).contains(&marker) {
-                profile
-                    .header
-                    .extend_from_slice(&template[pos..pos + 2 + size]);
+                header.extend_from_slice(&template[pos..pos + 2 + size]);
             }
             pos += 2 + size;
         }
@@ -137,11 +133,11 @@ impl Profile {
             seen_quant.into_iter().all(|v| v) && seen_codes.into_iter().all(|v| v),
             "Missing JPEG encoding tables"
         );
-        ensure!(
-            profile.quant.iter().flatten().all(|&v| v != 0),
-            "Invalid JPEG quantization divisor"
-        );
-        Ok(profile)
+        Ok(Self {
+            header,
+            quant: [Quantizer::new(divisors[0])?, Quantizer::new(divisors[1])?],
+            codes,
+        })
     }
 }
 
@@ -261,23 +257,45 @@ fn dct8(x: [f64; 8]) -> [f64; 8] {
     ]
 }
 
-fn transform(block: &[f64; 64], quant: &[u8; 64]) -> [i16; 64] {
+#[derive(Clone, Copy)]
+struct Quantizer {
+    divisors: [u8; 64],
+    multipliers: [f64; 64],
+}
+
+impl Quantizer {
+    fn new(divisors: [u8; 64]) -> Result<Self> {
+        ensure!(!divisors.contains(&0), "Invalid JPEG quantization divisor");
+        let zigzag = &*ZIGZAG;
+        let multipliers = std::array::from_fn(|i| {
+            let pos = zigzag[i];
+            let scale = match (pos % 8 == 0, pos / 8 == 0) {
+                (true, true) => 0.125,
+                (false, false) => 0.25,
+                _ => 0.25 * std::f64::consts::FRAC_1_SQRT_2,
+            };
+            scale / f64::from(divisors[i])
+        });
+        Ok(Self {
+            divisors,
+            multipliers,
+        })
+    }
+}
+
+fn transform(block: &[f64; 64], quant: &Quantizer) -> [i16; 64] {
     let rows: [[f64; 8]; 8] =
         std::array::from_fn(|y| dct8(std::array::from_fn(|x| block[y * 8 + x] - 128.0)));
     let columns: [[f64; 8]; 8] = std::array::from_fn(|x| dct8(std::array::from_fn(|y| rows[y][x])));
+    let zigzag = &*ZIGZAG;
     std::array::from_fn(|i| {
-        let pos = ZIGZAG[i];
+        let pos = zigzag[i];
         let (x, y) = (pos % 8, pos / 8);
-        let scale = match (x == 0, y == 0) {
-            (true, true) => 0.125,
-            (false, false) => 0.25,
-            _ => 0.25 * std::f64::consts::FRAC_1_SQRT_2,
-        };
-        let divisor = f64::from(quant[i]);
-        let value = columns[x][y] * scale / divisor;
-        let rounded = value.round();
+        let value = columns[x][y] * quant.multipliers[i];
+        let magnitude = value.abs();
+        let rounded = (magnitude + 0.5) as i16;
         // Retain the reference rounding at half-integers; reassociation changes the last few bits.
-        if (value - rounded).abs() >= 0.5 - 1e-10 {
+        if (magnitude - f64::from(rounded)).abs() >= 0.5 - 1e-10 {
             let basis = &*BASIS;
             let exact: f64 = (0..8)
                 .map(|row| {
@@ -287,32 +305,56 @@ fn transform(block: &[f64; 64], quant: &[u8; 64]) -> [i16; 64] {
                     horizontal * basis[y][row]
                 })
                 .sum();
-            (exact / divisor).round() as i16
+            (exact / f64::from(quant.divisors[i])).round() as i16
+        } else if value < 0.0 {
+            -rounded
         } else {
-            rounded as i16
+            rounded
         }
     })
 }
 
-fn pixel(rgb: &[u8], width: usize, height: usize, x: usize, y: usize, component: usize) -> f64 {
-    let offset = (y.min(height - 1) * width + x.min(width - 1)) * 3;
-    let r = f64::from(rgb[offset]);
-    let g = f64::from(rgb[offset + 1]);
-    let b = f64::from(rgb[offset + 2]);
-    match component {
-        0 => 0.299 * r + 0.587 * g + 0.114 * b,
-        1 => 128.0 - 0.168736 * r - 0.331264 * g + 0.5 * b,
-        _ => 128.0 + 0.5 * r - 0.418688 * g - 0.081312 * b,
+fn ycbcr(pixel: &[u8]) -> [u16; 3] {
+    let r = f64::from(pixel[0]);
+    let g = f64::from(pixel[1]);
+    let b = f64::from(pixel[2]);
+    [
+        0.299 * r + 0.587 * g + 0.114 * b,
+        128.0 - 0.168736 * r - 0.331264 * g + 0.5 * b,
+        128.0 + 0.5 * r - 0.418688 * g - 0.081312 * b,
+    ]
+    .map(|v| ((v + 0.5) as u16).min(255))
+}
+
+fn sampling_blocks(rgb: &[u8], w: usize, h: usize, left: usize, top: usize) -> [[f64; 64]; 6] {
+    let mut blocks = [[0.0; 64]; 6];
+    for y in 0..8 {
+        for x in 0..8 {
+            let mut cb_sum = 0;
+            let mut cr_sum = 0;
+            for dy in 0..2 {
+                let row = (top + 2 * y + dy).min(h - 1) * w;
+                for dx in 0..2 {
+                    let offset = 3 * (row + (left + 2 * x + dx).min(w - 1));
+                    let [luma, cb, cr] = ycbcr(&rgb[offset..offset + 3]);
+                    let block = (y / 4) * 2 + x / 4;
+                    let index = ((2 * y + dy) % 8) * 8 + (2 * x + dx) % 8;
+                    blocks[block][index] = f64::from(luma);
+                    cb_sum += cb;
+                    cr_sum += cr;
+                }
+            }
+            blocks[4][8 * y + x] = f64::from((cb_sum + 2) / 4);
+            blocks[5][8 * y + x] = f64::from((cr_sum + 2) / 4);
+        }
     }
-    .round()
-    .clamp(0.0, 255.0)
+    blocks
 }
 
 pub(super) fn encode(rgb: &[u8], width: u16, height: u16, quality: u8) -> Result<Vec<u8>> {
     let (w, h) = (usize::from(width), usize::from(height));
     ensure!(rgb.len() == w * h * 3, "Invalid JPEG pixel buffer length");
     let profile = profile(quality)?;
-    let sampling = 2;
     let mut scan = Scan {
         bytes: profile.header.clone(),
         pending: 0,
@@ -326,27 +368,11 @@ pub(super) fn encode(rgb: &[u8], width: u16, height: u16, quality: u8) -> Result
     scan.bytes
         .extend_from_slice(&[0xff, 0xda, 0, 12, 3, 1, 0, 2, 0x11, 3, 0x11, 0, 63, 0]);
     let mut previous = [0; 3];
-    for top in (0..h).step_by(8 * sampling) {
-        for left in (0..w).step_by(8 * sampling) {
-            for (component, previous) in previous.iter_mut().enumerate() {
-                let blocks = if component == 0 { sampling } else { 1 };
-                let step = if component == 0 { 1 } else { sampling };
-                for by in 0..blocks {
-                    for bx in 0..blocks {
-                        let block = std::array::from_fn(|i| {
-                            let x = left + bx * 8 + (i % 8) * step;
-                            let y = top + by * 8 + (i / 8) * step;
-                            let mut sum = 0.0;
-                            for dy in 0..step {
-                                for dx in 0..step {
-                                    sum += pixel(rgb, w, h, x + dx, y + dy, component);
-                                }
-                            }
-                            (sum / (step * step) as f64).round()
-                        });
-                        scan.block(&block, component, previous, profile)?;
-                    }
-                }
+    for top in (0..h).step_by(16) {
+        for left in (0..w).step_by(16) {
+            let blocks = sampling_blocks(rgb, w, h, left, top);
+            for (block, component) in blocks.iter().zip([0, 0, 0, 0, 1, 2]) {
+                scan.block(block, component, &mut previous[component], profile)?;
             }
         }
     }
