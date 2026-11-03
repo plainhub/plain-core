@@ -8,6 +8,7 @@
 
 use crate::media::thumbnails::scale::Bitmap;
 use anyhow::{Result, bail};
+use std::io::{self, BufRead, BufReader, Read};
 
 /// Largest JPEG dimension accepted by `Decoder::scale` (u16 API).
 const SCALE_DIM_MAX: u32 = 65_535;
@@ -30,12 +31,33 @@ pub fn predict_scaled(w: u32, h: u32, tw: u32, th: u32) -> (u32, u32) {
     (w, h)
 }
 
+struct JpegInput<R>(BufReader<R>);
+
+impl<R: Read> Read for JpegInput<R> {
+    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        self.0.read(out)
+    }
+
+    #[inline]
+    fn read_exact(&mut self, out: &mut [u8]) -> io::Result<()> {
+        // JPEG entropy decoding asks for one byte at a time; refill only at window boundaries.
+        if let [byte] = out
+            && let Some(&next) = self.0.buffer().first()
+        {
+            *byte = next;
+            self.0.consume(1);
+            return Ok(());
+        }
+        self.0.read_exact(out)
+    }
+}
+
 /// Decode a JPEG file directly at reduced resolution (IDCT scaling).
 /// `tw`/`th` describe the *final* thumbnail box; the decoder returns the
 /// nearest supported scale ≥ that box.
 pub fn jpeg_scaled(path: &std::path::Path, tw: u32, th: u32) -> Result<Bitmap> {
     let file = std::fs::File::open(path)?;
-    jpeg_scaled_reader(std::io::BufReader::new(file), tw, th)
+    jpeg_scaled_reader(JpegInput(BufReader::new(file)), tw, th)
 }
 
 /// Same as [`jpeg_scaled`] for in-memory JPEG bytes (embedded covers).

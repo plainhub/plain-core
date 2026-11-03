@@ -153,3 +153,56 @@ fn corrupt_file_on_disk_errors_cleanly() {
     let _ = jpeg_scaled(&p, 64, 64);
     let _ = image_full(&p);
 }
+
+#[test]
+fn jpeg_entropy_reads_consume_the_buffer_before_refilling() {
+    struct CountReads<'a> {
+        bytes: &'a [u8],
+        calls: usize,
+    }
+    impl Read for CountReads<'_> {
+        fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+            self.calls += 1;
+            self.bytes.read(out)
+        }
+    }
+    let source = CountReads {
+        bytes: b"abcdefghijk",
+        calls: 0,
+    };
+    let mut input = JpegInput(BufReader::with_capacity(4, source));
+    for (i, expected) in b"abcde".iter().enumerate() {
+        let mut byte = [0];
+        input.read_exact(&mut byte).unwrap();
+        assert_eq!(byte[0], *expected);
+        assert_eq!(input.0.get_ref().calls, i / 4 + 1);
+    }
+    let mut segment = [0; 5];
+    input.read_exact(&mut segment).unwrap();
+    assert_eq!(&segment, b"fghij");
+    let mut last = [0];
+    input.read_exact(&mut last).unwrap();
+    assert_eq!(&last, b"k");
+    assert_eq!(
+        input.read_exact(&mut last).unwrap_err().kind(),
+        io::ErrorKind::UnexpectedEof
+    );
+}
+
+#[test]
+fn file_entropy_reader_preserves_scaled_pixels_across_refills() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("original.jpg");
+    write_test_jpeg(&path, 1024, 768);
+    let data = std::fs::read(&path).unwrap();
+    for target in [64, 256, 512] {
+        let buffered = jpeg_scaled_reader(
+            JpegInput(BufReader::with_capacity(7, data.as_slice())),
+            target,
+            target,
+        )
+        .unwrap();
+        let reference = jpeg_scaled_bytes(&data, target, target).unwrap();
+        assert_eq!(buffered.raw(), reference.raw());
+    }
+}
