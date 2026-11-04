@@ -44,7 +44,6 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
     let responder = tokio::spawn(async move {
         while let Some(request) = rx.recv().await {
             let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => json!(["PEER_DISCOVERY"]),
                 "mdnsMulticast" => {
                     let acquire = request["params"]["acquire"].as_bool().unwrap();
                     let ok = !acquire || permission.load(Ordering::SeqCst);
@@ -256,14 +255,6 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
     let lease = acquired.clone();
     let responder = tokio::spawn(async move {
         while let Some(request) = rx.recv().await {
-            if request["method"] == "systemCapabilities" {
-                host.reply(
-                    generation,
-                    json!({"id":request["id"],"result":["PEER_DISCOVERY"]}),
-                )
-                .unwrap();
-                continue;
-            }
             assert_eq!(request["method"], "mdnsMulticast");
             lease.store(
                 request["params"]["acquire"].as_bool().unwrap(),

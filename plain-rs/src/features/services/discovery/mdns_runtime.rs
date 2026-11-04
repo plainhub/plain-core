@@ -394,15 +394,6 @@ impl Runtime {
                 | Request::Unpublish {}
                 | Request::DebugStop { .. }
         ) {
-            crate::features::services::capabilities::require(&state.host, "PEER_DISCOVERY").await?;
-        }
-        if !matches!(
-            request,
-            Request::Stop {}
-                | Request::Release { .. }
-                | Request::Unpublish {}
-                | Request::DebugStop { .. }
-        ) {
             self.initialize(state).await?;
         }
         let service = if matches!(request, Request::Publish {} | Request::Update {}) {

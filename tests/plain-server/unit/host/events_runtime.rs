@@ -72,7 +72,7 @@ async fn connecting_a_filesystem_media_host_indexes_configured_sources_without_h
     let session = Arc::new(core.host_events().unwrap());
     let runner = tokio::spawn(session.serve(|method, _params| async move {
         match method.as_str() {
-            "systemCapabilities" => Ok(json!(["MEDIA_SCAN", "PEER_DISCOVERY"])),
+            "systemCapabilities" => Ok(json!(["MEDIA_SCAN"])),
             _ => Ok(json!(true)),
         }
     }));
@@ -105,7 +105,7 @@ async fn connecting_a_filesystem_media_host_indexes_configured_sources_without_h
     runner.await.unwrap().unwrap();
     let runner = tokio::spawn(replacement.serve(|method, _params| async move {
         match method.as_str() {
-            "systemCapabilities" => Ok(json!(["MEDIA_SCAN", "PEER_DISCOVERY"])),
+            "systemCapabilities" => Ok(json!(["MEDIA_SCAN"])),
             _ => Ok(json!(true)),
         }
     }));

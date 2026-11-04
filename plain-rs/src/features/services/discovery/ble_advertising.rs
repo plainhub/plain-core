@@ -102,7 +102,7 @@ impl Runtime {
             crate::features::services::capabilities::snapshot(&state.host)
                 .await?
                 .iter()
-                .any(|value| value == "BLE_DISCOVERY")
+                .any(|value| value == "BLE")
         } else {
             false
         };

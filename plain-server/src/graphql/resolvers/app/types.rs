@@ -2,8 +2,7 @@ use async_graphql::Enum;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Capability {
-    PeerDiscovery,
-    BleDiscovery,
+    Ble,
     WifiAware,
     BackgroundService,
     LauncherShortcuts,
@@ -54,8 +53,7 @@ pub enum Capability {
 impl Capability {
     pub fn parse(value: &str) -> Option<Self> {
         Some(match value {
-            "PEER_DISCOVERY" => Self::PeerDiscovery,
-            "BLE_DISCOVERY" => Self::BleDiscovery,
+            "BLE" => Self::Ble,
             "WIFI_AWARE" => Self::WifiAware,
             "BACKGROUND_SERVICE" => Self::BackgroundService,
             "LAUNCHER_SHORTCUTS" => Self::LauncherShortcuts,

@@ -52,7 +52,7 @@ async fn drive(
             call = requests.recv() => {
                 let call = call.unwrap();
                 let result = match call["method"].as_str().unwrap() {
-                    "systemCapabilities" => if supported { json!(["BLE_DISCOVERY"]) } else { json!([]) },
+                    "systemCapabilities" => if supported { json!(["BLE"]) } else { json!([]) },
                     "bleAdvertising" => json!(accepted),
                     other => panic!("Unexpected host method: {other}"),
                 };
@@ -275,7 +275,7 @@ async fn host_replacement_rejects_pending_results_and_old_cleanup_cannot_clear_n
         .host
         .reply(
             generation,
-            json!({"id":capabilities["id"],"result":["BLE_DISCOVERY"]}),
+            json!({"id":capabilities["id"],"result":["BLE"]}),
         )
         .unwrap();
     let old_command = requests.recv().await.unwrap();
@@ -352,7 +352,7 @@ async fn queued_unavailability_prevents_a_stale_start_after_capability_sampling(
         .host
         .reply(
             generation,
-            json!({"id":capabilities["id"],"result":["BLE_DISCOVERY"]}),
+            json!({"id":capabilities["id"],"result":["BLE"]}),
         )
         .unwrap();
     old.await.unwrap().unwrap();

@@ -162,7 +162,6 @@ impl Service {
 
 fn capabilities() -> Vec<String> {
     let mut capabilities = vec![
-        "PEER_DISCOVERY".into(),
         "FILE_BROWSER".into(),
         "IMAGE_LIBRARY".into(),
         "AUDIO_LIBRARY".into(),

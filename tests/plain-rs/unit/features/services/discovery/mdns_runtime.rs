@@ -105,27 +105,20 @@ async fn receiver_starts_without_http_and_retries_when_platform_permissions_chan
     .unwrap();
     let state = server.runtime_state();
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
-    let supported = Arc::new(AtomicBool::new(false));
     let granted = Arc::new(AtomicBool::new(false));
     let calls = Arc::new(AtomicUsize::new(0));
     let host = state.host.clone();
-    let capabilities = supported.clone();
     let permission = granted.clone();
     let sampled = calls.clone();
     let responder = tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
             let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => {
-                    sampled.fetch_add(1, Ordering::SeqCst);
-                    if capabilities.load(Ordering::SeqCst) {
-                        json!(["PEER_DISCOVERY"])
-                    } else {
-                        json!([])
+                "mdnsMulticast" => {
+                    if request["params"]["acquire"] == true {
+                        sampled.fetch_add(1, Ordering::SeqCst);
                     }
+                    json!(request["params"]["acquire"] == false || permission.load(Ordering::SeqCst))
                 }
-                "mdnsMulticast" => json!(
-                    request["params"]["acquire"] == false || permission.load(Ordering::SeqCst)
-                ),
                 method => panic!("unexpected host method {method}"),
             };
             host.reply(generation, json!({"id":request["id"],"result":result}))
@@ -134,9 +127,6 @@ async fn receiver_starts_without_http_and_retries_when_platform_permissions_chan
     });
     Runtime::host_connected(state.clone(), generation.wrapping_sub(1)).await;
     assert_eq!(calls.load(Ordering::SeqCst), 0);
-    Runtime::host_connected(state.clone(), generation).await;
-    assert_eq!(state.mdns.snapshot()["receiver"], false);
-    supported.store(true, Ordering::SeqCst);
     Runtime::host_connected(state.clone(), generation).await;
     assert_eq!(state.mdns.snapshot()["receiver"], false);
     granted.store(true, Ordering::SeqCst);
@@ -153,22 +143,29 @@ async fn receiver_starts_without_http_and_retries_when_platform_permissions_chan
     assert_eq!(snapshot["receiver"], true);
     assert_eq!(snapshot["published"], false);
     assert_eq!(snapshot["scanning"], false);
-    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
     state.mdns.permissions_changed(state.clone());
     tokio::time::advance(std::time::Duration::from_secs(1)).await;
-    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
     server.shutdown().await;
     assert!(OWNER.lock().await.is_none());
     responder.abort();
 }
 
 #[tokio::test]
-async fn file_sharing_capability_does_not_authorize_peer_discovery_or_acquire_multicast() {
+async fn discovery_requests_multicast_permission_without_querying_capabilities() {
+    let _runtime = TEST_LOCK.lock().await;
     let directory = tempfile::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[17; 32]);
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
+    prefs
+        .set("client_id", "fixture-discovery-permission")
+        .unwrap();
+    prefs
+        .set("mdns_hostname", "fixture-discovery-permission.local")
+        .unwrap();
     let server = crate::test_runtime::Core::start(directory.path(), &token, prefs).unwrap();
     let state = server.runtime_state();
     let (generation, mut incoming) = crate::test_support::HostRequests::connect(&state.host);
@@ -177,22 +174,15 @@ async fn file_sharing_capability_does_not_authorize_peer_discovery_or_acquire_mu
         async move { control(&state, Request::Publish {}).await }
     });
     let request = incoming.recv().await.unwrap();
-    assert_eq!(request["method"], "systemCapabilities");
+    assert_eq!(request["method"], "mdnsMulticast");
     state
         .host
         .reply(
             generation,
-            json!({"id":request["id"],"result":["LAN_SHARE"]}),
+            json!({"id":request["id"],"result":false}),
         )
         .unwrap();
-    assert!(
-        worker
-            .await
-            .unwrap()
-            .unwrap_err()
-            .to_string()
-            .contains("PEER_DISCOVERY")
-    );
+    assert!(worker.await.unwrap().is_err());
     assert!(incoming.try_recv().is_err());
     assert_eq!(state.mdns.snapshot()["receiver"], false);
     state.host.disconnect(generation);
