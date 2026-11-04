@@ -70,7 +70,7 @@ impl Service {
         validate_expiry(expires.as_deref())?;
         let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
         let row = ShareRow {
-            id: plain_libs::utils::short_uuid::short_uuid(),
+            id: String::new(),
             name,
             password: String::new(),
             url_token: plain_libs::crypto::gen_token(),
@@ -80,8 +80,20 @@ impl Service {
             created_at: now.clone(),
             updated_at: now,
         };
-        self.db.share_save(&row)?;
-        Ok(row)
+        self.insert_new(row, plain_libs::utils::short_uuid::short_uuid)
+    }
+    fn insert_new(
+        &self,
+        mut row: ShareRow,
+        mut new_id: impl FnMut() -> String,
+    ) -> anyhow::Result<ShareRow> {
+        for _ in 0..8 {
+            row.id = new_id();
+            if self.db.share_insert(&row)? {
+                return Ok(row);
+            }
+        }
+        anyhow::bail!("Unable to allocate a unique share ID")
     }
     pub fn update(
         &self,

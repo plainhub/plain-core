@@ -274,7 +274,13 @@ impl HostEvents {
         }
 
         serde_json::from_str::<()>(&payload).map_err(|error| error.to_string())?;
+        #[cfg(not(target_os = "ios"))]
         self.state.image_models.catalog_changed();
+        #[cfg(target_os = "ios")]
+        plain_rs::features::services::files::catalog_events::publish(
+            &self.state.events,
+            [plain_rs::features::enums::DataType::Image.kind()],
+        );
         return Ok(());
     }
 

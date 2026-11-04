@@ -393,12 +393,13 @@ impl Db {
         })
     }
 
-    pub fn share_save(&self, row: &ShareRow) -> rusqlite::Result<()> {
+    pub fn share_insert(&self, row: &ShareRow) -> rusqlite::Result<bool> {
         self.with_conn(|c| {
-            c.execute(
-                "INSERT OR REPLACE INTO shares (id, name, password, url_token, expires_at,
+            let inserted = c.execute(
+                "INSERT INTO shares (id, name, password, url_token, expires_at,
                      read_only, data, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(id) DO NOTHING",
                 params![
                     row.id,
                     row.name,
@@ -414,7 +415,7 @@ impl Db {
                     plain_libs::utils::dbtime::normalize(&row.updated_at)?
                 ],
             )?;
-            Ok(())
+            Ok(inserted != 0)
         })
     }
 

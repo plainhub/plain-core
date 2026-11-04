@@ -556,3 +556,48 @@ async fn media_resource_lookup_uses_zero_sql_and_tracks_committed_changes() {
     );
     core.stop_core().await;
 }
+
+#[tokio::test]
+async fn identity_receipts_exclude_unavailable_volume_aliases() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    state.db.with_conn(|connection| connection.execute_batch(
+        "INSERT INTO volumes(id,identity,path,is_available) VALUES('old-volume','old-volume','/media-receipt',0),('current-volume','current-volume','/media-receipt',1);
+         INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) VALUES('old-file','old-volume','photo.jpg','photo.jpg','IMAGE','2026'),('current-file','current-volume','photo.jpg','photo.jpg','IMAGE','2026');"
+    )).unwrap();
+    let paths = vec!["/media-receipt/photo.jpg".to_owned()];
+    let rows = state.file_platform.identities(&paths).await.unwrap();
+    crate::features::services::files::file_task_media::validate(&rows, &paths).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].file_id, "current-file");
+    state
+        .db
+        .with_conn(|connection| {
+            connection.execute(
+                "UPDATE volumes SET is_available=0 WHERE id='current-volume'",
+                [],
+            )
+        })
+        .unwrap();
+    assert!(
+        state
+            .file_platform
+            .identities(&paths)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        state
+            .db
+            .with_conn(|connection| connection.query_row(
+                "SELECT count(*) FROM files WHERE volume_id IN ('old-volume','current-volume')",
+                [],
+                |row| row.get::<_, i64>(0)
+            ))
+            .unwrap(),
+        2
+    );
+    core.stop_core().await;
+}

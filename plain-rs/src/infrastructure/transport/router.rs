@@ -113,6 +113,9 @@ impl Router {
             attempt,
         };
         let id = plain_libs::utils::short_uuid::short_uuid();
+        if state.routes.contains_key(&id) {
+            bail!("Transport route ID collision");
+        }
         let step = next(&mut state, &mut route, &id, now)?;
         if step.ticket.is_some() {
             state.routes.insert(id, route);

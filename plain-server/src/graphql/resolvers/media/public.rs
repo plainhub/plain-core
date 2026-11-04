@@ -56,7 +56,8 @@ impl MediaQuery {
             return Ok(Vec::new());
         }
         let data_type = data_type_of(r#type.as_str())?;
-        let facts = catalog(ctx)
+        let facts = catalog(ctx, data_type)
+            .await?
             .buckets(data_type)
             .await
             .map_err(async_graphql::Error::new)?;
@@ -113,7 +114,8 @@ pub(crate) async fn media_count(
     data_type: &str,
     query: String,
 ) -> async_graphql::Result<i32> {
-    let count = catalog(ctx)
+    let count = catalog(ctx, data_type_of(data_type)?)
+        .await?
         .count(data_type_of(data_type)?, &query)
         .await
         .map_err(async_graphql::Error::new)?;
@@ -144,15 +146,33 @@ fn data_type_of(value: &str) -> async_graphql::Result<DataType> {
     })
 }
 
-pub(crate) fn catalog(
+pub(crate) async fn catalog(
     ctx: &Context<'_>,
-) -> plain_rs::features::services::files::catalog::MediaCatalog {
-    plain_rs::features::services::files::catalog::MediaCatalog::new(
-        ctx.data_unchecked::<Arc<plain_rs::infrastructure::db::Db>>()
-            .clone(),
-        ctx.data_unchecked::<Arc<Host>>().clone(),
-        ctx.data_unchecked::<Arc<plain_rs::features::prefs::Prefs>>()
-            .clone(),
+    data_type: DataType,
+) -> async_graphql::Result<plain_rs::features::services::files::catalog::MediaCatalog> {
+    #[cfg(target_os = "ios")]
+    if data_type == DataType::Image {
+        let platform = ctx
+            .data_unchecked::<Arc<plain_rs::features::services::files::platform::FilePlatform>>();
+        platform
+            .photos
+            .sync(
+                ctx.data_unchecked::<Arc<plain_rs::infrastructure::db::Db>>(),
+                ctx.data_unchecked::<Arc<Host>>(),
+            )
+            .await
+            .map_err(async_graphql::Error::new)?;
+    }
+    #[cfg(not(target_os = "ios"))]
+    let _ = data_type;
+    Ok(
+        plain_rs::features::services::files::catalog::MediaCatalog::new(
+            ctx.data_unchecked::<Arc<plain_rs::infrastructure::db::Db>>()
+                .clone(),
+            ctx.data_unchecked::<Arc<Host>>().clone(),
+            ctx.data_unchecked::<Arc<plain_rs::features::prefs::Prefs>>()
+                .clone(),
+        ),
     )
 }
 
@@ -164,7 +184,8 @@ pub(crate) async fn library_rows(
     offset: u32,
     limit: u32,
 ) -> async_graphql::Result<Vec<Value>> {
-    let mut rows = catalog(ctx)
+    let mut rows = catalog(ctx, data_type)
+        .await?
         .rows(data_type, &query, sort_by, limit, offset)
         .await
         .map_err(async_graphql::Error::new)?;
@@ -180,7 +201,8 @@ pub(crate) async fn library_keys(
     data_type: DataType,
     query: String,
 ) -> async_graphql::Result<Vec<String>> {
-    catalog(ctx)
+    catalog(ctx, data_type)
+        .await?
         .ids(data_type, &query, false)
         .await
         .map_err(async_graphql::Error::new)

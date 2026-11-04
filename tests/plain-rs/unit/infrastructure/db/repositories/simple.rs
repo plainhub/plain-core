@@ -166,11 +166,19 @@ fn share_round_trip() {
         created_at: "2026-01-01T00:00:00.000Z".into(),
         updated_at: "2026-01-01T00:00:00.000Z".into(),
     };
-    db.share_save(&row).unwrap();
+    assert!(db.share_insert(&row).unwrap());
     let got = db.share_get("share-1").unwrap().expect("share");
     assert!(got.read_only);
     assert_eq!(got.url_token, "url-token");
     assert_eq!(got.expires_at.as_deref(), Some("2027-01-01T00:00:00.000Z"));
+    assert_eq!(db.share_list().unwrap().len(), 1);
+    let mut collision = row.clone();
+    collision.name = "Replacement".into();
+    collision.url_token = "replacement-token".into();
+    assert!(!db.share_insert(&collision).unwrap());
+    let preserved = db.share_get(&row.id).unwrap().unwrap();
+    assert_eq!(preserved.name, row.name);
+    assert_eq!(preserved.url_token, row.url_token);
     assert_eq!(db.share_list().unwrap().len(), 1);
     assert_eq!(db.share_delete("share-1").unwrap(), 1);
 }

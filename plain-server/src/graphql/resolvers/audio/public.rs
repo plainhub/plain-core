@@ -159,7 +159,11 @@ impl AudioQuery {
         .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         let mut summary = plain_rs::features::services::audio::overview::read(
             ctx.data::<Arc<plain_rs::infrastructure::db::Db>>()?.clone(),
-            crate::graphql::resolvers::media::public::catalog(ctx),
+            crate::graphql::resolvers::media::public::catalog(
+                ctx,
+                plain_rs::features::enums::DataType::Audio,
+            )
+            .await?,
         )
         .await
         .map_err(async_graphql::Error::new)?;

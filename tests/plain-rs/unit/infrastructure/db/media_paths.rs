@@ -13,7 +13,8 @@ fn changed_locations_seek_each_file_by_its_unique_id() {
             .collect::<Result<Vec<_>>>()
             .unwrap();
         assert!(
-            plan.iter().any(|line| line.contains("SEARCH f ") && line.contains("(id=?)")),
+            plan.iter()
+                .any(|line| line.contains("SEARCH f ") && line.contains("(id=?)")),
             "{plan:?}"
         );
     });

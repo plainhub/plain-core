@@ -12,6 +12,7 @@ use std::{
 };
 
 pub struct FilePlatform {
+    pub photos: super::photo_catalog::PhotoCatalog,
     pub(super) host: Arc<Host>,
     pub(super) db: Arc<Db>,
     pub recent_files: Arc<crate::features::recent_files::RecentFiles>,
@@ -41,6 +42,7 @@ impl FilePlatform {
             (|| -> std::io::Result<_> { Ok([directory.canonicalize()?, cache.canonicalize()?]) })()
                 .map_err(|error| error.to_string());
         Self {
+            photos: super::photo_catalog::PhotoCatalog::default(),
             recent_files: Arc::new(crate::features::recent_files::RecentFiles::new(
                 db.key_values(),
             )),
@@ -373,7 +375,7 @@ impl FilePlatform {
         let db = self.db.clone();
         let paths = serde_json::to_string(paths)?;
         Ok(tokio::task::spawn_blocking(move || db.with_conn(|connection| {
-            connection.prepare("SELECT data_type,id,path FROM file_catalog WHERE missing=0 AND data_type IN (1,2,3,22,24) AND path IN (SELECT value FROM json_each(?1))")?
+            connection.prepare("SELECT data_type,id,path FROM file_catalog WHERE missing=0 AND is_available=1 AND data_type IN (1,2,3,22,24) AND path IN (SELECT value FROM json_each(?1))")?
                 .query_map([paths], |row| Ok(crate::features::services::files::file_task_media::Identity { media_type: row.get(0)?, file_id: row.get(1)?, path: row.get(2)? }))?
                 .collect::<rusqlite::Result<Vec<_>>>()
         })).await??)

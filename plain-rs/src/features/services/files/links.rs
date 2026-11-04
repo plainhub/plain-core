@@ -128,7 +128,7 @@ pub async fn resolve(state: &CoreRuntime, id: &str) -> anyhow::Result<File> {
 }
 
 pub fn authorize_path(state: &CoreRuntime, reference: &str) -> anyhow::Result<()> {
-    if reference.starts_with("content://") {
+    if reference.starts_with("content://") || reference.starts_with("ph://") {
         return Ok(());
     }
     let path = reference

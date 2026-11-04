@@ -1,5 +1,37 @@
 use super::*;
 
+#[test]
+fn import_reserves_temporary_file_before_writing_and_cleans_up_on_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = Db::open(&dir.path().join("plain.db")).unwrap();
+    let data = b"exclusive temporary import";
+    let strong = bytes_to_hex(&Sha256::digest(data));
+    let (weak, size) = make_weak_hash_for(data);
+    let mut temporary = None;
+    let error = store(
+        &db,
+        dir.path(),
+        &strong,
+        &weak,
+        size as u64,
+        "test.txt",
+        "text/plain",
+        None,
+        |path| {
+            assert!(path.is_file());
+            assert_eq!(fs::metadata(path)?.len(), 0);
+            temporary = Some(path.to_path_buf());
+            fs::write(path, data)?;
+            Err(std::io::Error::other("import write failed"))
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.to_string(), "import write failed");
+    assert!(!temporary.unwrap().exists());
+    assert!(!dest_path(dir.path(), &strong, "txt").exists());
+    assert_eq!(db.app_file_count("").unwrap(), 0);
+}
+
 fn make_weak_hash_for(data: &[u8]) -> (String, i64) {
     let mut hasher = Sha256::new();
     if data.len() <= WEAK_HEAD + WEAK_TAIL {

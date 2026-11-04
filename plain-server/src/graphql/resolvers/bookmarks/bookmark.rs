@@ -89,6 +89,19 @@ pub struct BookmarkMutation;
 
 #[Object]
 impl BookmarkMutation {
+    fn import_bookmarks(
+        &self,
+        ctx: &Context<'_>,
+        content: String,
+    ) -> async_graphql::Result<ActionResult> {
+        let db = ctx.data_unchecked::<Arc<Db>>();
+        Ok(ActionResult {
+            affected_count: plain_rs::features::services::bookmarks::import_bookmarks(
+                db, &content,
+            )?,
+        })
+    }
+
     fn add_bookmarks(
         &self,
         ctx: &Context<'_>,
@@ -96,16 +109,8 @@ impl BookmarkMutation {
         group_id: ID,
     ) -> async_graphql::Result<Vec<Bookmark>> {
         let db = ctx.data_unchecked::<Arc<Db>>();
-        let created = urls
-            .into_iter()
-            .map(|url| url.trim().to_string())
-            .filter(|url| !url.is_empty())
-            .map(|url| {
-                let bookmark = DBookmark::new(&url, group_id.as_str());
-                bookmark_db::insert_bookmark(db, &bookmark)?;
-                Ok(bookmark)
-            })
-            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let created =
+            plain_rs::features::services::bookmarks::add_bookmarks(db, urls, group_id.as_str())?;
         Ok(created.into_iter().map(Bookmark::from).collect())
     }
 
@@ -116,6 +121,7 @@ impl BookmarkMutation {
         input: BookmarkInput,
     ) -> Result<Bookmark, async_graphql::Error> {
         let db = ctx.data_unchecked::<Arc<Db>>();
+        plain_rs::features::services::bookmarks::parse_bookmark_url(&input.url)?;
         let mut bookmark = bookmark_db::get_bookmark_by_id(db, id.as_str())?
             .ok_or_else(|| async_graphql::Error::new("bookmark not found"))?;
         bookmark.url = input.url;

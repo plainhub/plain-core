@@ -79,8 +79,14 @@ pub fn get_bookmarks_by_group_id(db: &Db, group_id: &str) -> Vec<DBookmark> {
 }
 
 pub fn insert_bookmark(db: &Db, bookmark: &DBookmark) -> rusqlite::Result<usize> {
-    db.with_conn(|conn| {
-        conn.execute(
+    db.with_conn(|conn| insert_bookmark_with_conn(conn, bookmark))
+}
+
+pub(crate) fn insert_bookmark_with_conn(
+    conn: &rusqlite::Connection,
+    bookmark: &DBookmark,
+) -> rusqlite::Result<usize> {
+    conn.execute(
             "INSERT INTO bookmarks (id,url,title,favicon_path,group_id,pinned,click_count,last_clicked_at,sort_order,created_at,updated_at) \
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
             params![
@@ -97,7 +103,6 @@ pub fn insert_bookmark(db: &Db, bookmark: &DBookmark) -> rusqlite::Result<usize>
                 plain_libs::utils::dbtime::normalize(&bookmark.updated_at)?
             ],
         )
-    })
 }
 
 pub fn update_bookmark(db: &Db, bookmark: &DBookmark) -> rusqlite::Result<usize> {
@@ -177,8 +182,14 @@ pub fn get_bookmark_group_by_id(db: &Db, id: &str) -> Option<DBookmarkGroup> {
 }
 
 pub fn insert_bookmark_group(db: &Db, group: &DBookmarkGroup) -> rusqlite::Result<usize> {
-    db.with_conn(|conn| {
-        conn.execute(
+    db.with_conn(|conn| insert_bookmark_group_with_conn(conn, group))
+}
+
+pub(crate) fn insert_bookmark_group_with_conn(
+    conn: &rusqlite::Connection,
+    group: &DBookmarkGroup,
+) -> rusqlite::Result<usize> {
+    conn.execute(
             "INSERT INTO bookmark_groups (id,name,collapsed,sort_order,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6)",
             params![
                 group.id,
@@ -189,7 +200,6 @@ pub fn insert_bookmark_group(db: &Db, group: &DBookmarkGroup) -> rusqlite::Resul
                 group.updated_at
             ],
         )
-    })
 }
 
 pub fn update_bookmark_group(db: &Db, group: &DBookmarkGroup) -> rusqlite::Result<usize> {

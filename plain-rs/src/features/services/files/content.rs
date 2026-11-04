@@ -92,12 +92,19 @@ pub async fn read(
         });
     }
     if let (Some(offset), Some(length)) = (options.offset, options.length) {
-        if length > 0 && !path.starts_with("content://") && !path.starts_with("pkgicon://") {
+        if length > 0
+            && !path.starts_with("content://")
+            && !path.starts_with("ph://")
+            && !path.starts_with("pkgicon://")
+        {
             return read_slice(&path, offset, length).await;
         }
     }
-    if path.starts_with("content://") {
-        if let Some(file) = previews::convert(state, previews::Conversion::Video3gp, &path).await? {
+    if path.starts_with("content://") || path.starts_with("ph://") {
+        if path.starts_with("content://")
+            && let Some(file) =
+                previews::convert(state, previews::Conversion::Video3gp, &path).await?
+        {
             return Ok(Content::Temporary {
                 file,
                 mime: "video/mp4",

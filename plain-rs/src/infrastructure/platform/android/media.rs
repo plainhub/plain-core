@@ -403,20 +403,21 @@ pub fn capabilities() -> Vec<&'static str> {
     static HEVC: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
         Codec::create(c"video/avc", true).is_ok() && Codec::create(c"video/hevc", false).is_ok()
     });
+    let mut values = vec!["VIDEO_REMUX"];
+    if *HEVC {
+        values.push("VIDEO_TRANSCODE");
+    }
+    values
+}
+
+pub(crate) fn supports_3gp_conversion() -> bool {
     static THREE_GP: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
         Codec::create(c"video/avc", true).is_ok()
             && Codec::create(c"video/3gpp", false).is_ok()
             && Codec::create(c"audio/mp4a-latm", true).is_ok()
             && Codec::create(c"audio/3gpp", false).is_ok()
     });
-    let mut values = vec!["VIDEO_REMUX"];
-    if *THREE_GP {
-        values.push("VIDEO_3GP_CONVERT");
-    }
-    if *HEVC {
-        values.push("VIDEO_TRANSCODE");
-    }
-    values
+    *THREE_GP
 }
 
 #[derive(Clone, Copy)]

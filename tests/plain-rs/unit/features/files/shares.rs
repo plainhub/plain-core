@@ -36,6 +36,76 @@ fn generated_url_token_is_unique_and_32_bytes() {
     );
     assert_ne!(a.url_token, b.url_token);
 }
+
+#[test]
+fn new_share_retries_collisions_without_replacing_existing_records() {
+    let (dir, service) = fixture();
+    let root = dir.path().join("root");
+    std::fs::create_dir(&root).unwrap();
+    let original = create(&service, vec![root]);
+    let mut row = original.clone();
+    row.name = "New share".into();
+    let mut attempts = 0;
+    let created = service
+        .insert_new(row, || {
+            attempts += 1;
+            if attempts == 1 {
+                original.id.clone()
+            } else {
+                "new-share-id".into()
+            }
+        })
+        .unwrap();
+    assert_eq!(attempts, 2);
+    assert_eq!(created.id, "new-share-id");
+    assert_eq!(
+        service.db.share_get(&original.id).unwrap().unwrap().name,
+        original.name
+    );
+    assert_eq!(service.db.share_list().unwrap().len(), 2);
+}
+
+#[test]
+fn new_share_collision_retries_are_bounded() {
+    let (dir, service) = fixture();
+    let root = dir.path().join("root");
+    std::fs::create_dir(&root).unwrap();
+    let original = create(&service, vec![root]);
+    let mut attempts = 0;
+    let error = service
+        .insert_new(original.clone(), || {
+            attempts += 1;
+            original.id.clone()
+        })
+        .unwrap_err();
+    assert_eq!(attempts, 8);
+    assert!(error.to_string().contains("unique share ID"));
+    assert_eq!(
+        service.db.share_get(&original.id).unwrap().unwrap().name,
+        original.name
+    );
+    assert_eq!(service.db.share_list().unwrap().len(), 1);
+}
+
+#[test]
+fn new_share_does_not_retry_storage_errors() {
+    let (dir, service) = fixture();
+    let root = dir.path().join("root");
+    std::fs::create_dir(&root).unwrap();
+    let mut row = create(&service, vec![root]);
+    row.updated_at = "invalid timestamp".into();
+    let mut attempts = 0;
+    assert!(
+        service
+            .insert_new(row, || {
+                attempts += 1;
+                "new-share-id".into()
+            })
+            .is_err()
+    );
+    assert_eq!(attempts, 1);
+    assert_eq!(service.db.share_list().unwrap().len(), 1);
+}
 #[test]
 fn roots_traversal_and_files() {
     let (dir, s) = fixture();
@@ -264,7 +334,7 @@ fn token_matches_standard_hmac_vector() {
     std::fs::create_dir(&root).unwrap();
     let mut row = create(&s, vec![root]);
     row.id = "Hi There".into();
-    s.db.share_save(&row).unwrap();
+    assert!(s.db.share_insert(&row).unwrap());
     s.prefs
         .set(
             "master_secret",

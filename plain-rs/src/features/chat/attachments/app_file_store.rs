@@ -268,6 +268,10 @@ fn store(
             ".import-{}",
             plain_libs::utils::short_uuid::short_uuid()
         ));
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
         let result = write(&temporary).and_then(|_| {
             fs::File::open(&temporary)?.sync_all()?;
             fs::rename(&temporary, &path)

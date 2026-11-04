@@ -1,6 +1,23 @@
 use super::*;
 
 #[test]
+fn encoding_preserves_every_bit_of_the_random_input() {
+    let decode = |id: &str| {
+        id.bytes().fold(0u128, |value, byte| {
+            value * 57 + ALPHABET.iter().position(|&digit| digit == byte).unwrap() as u128
+        })
+    };
+    for value in std::iter::once(0)
+        .chain((0..128).map(|bit| 1u128 << bit))
+        .chain(std::iter::once(u128::MAX))
+    {
+        let id = encode(&value.to_be_bytes());
+        assert_eq!(id.len(), 22);
+        assert_eq!(decode(&id), value);
+    }
+}
+
+#[test]
 fn length_is_22() {
     assert_eq!(new_id().len(), 22);
 }

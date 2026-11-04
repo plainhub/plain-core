@@ -58,7 +58,11 @@ impl ImagesQuery {
             return Ok(0);
         }
         plain_rs::features::services::images::search::count(
-            &crate::graphql::resolvers::media::public::catalog(ctx),
+            &crate::graphql::resolvers::media::public::catalog(
+                ctx,
+                plain_rs::features::enums::DataType::Image,
+            )
+            .await?,
             ctx.data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>(),
             &text_field(&query),
             &query,
@@ -78,7 +82,11 @@ impl ImagesQuery {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let items = Value::Array(
             plain_rs::features::services::images::search::rows(
-                &crate::graphql::resolvers::media::public::catalog(ctx),
+                &crate::graphql::resolvers::media::public::catalog(
+                    ctx,
+                    plain_rs::features::enums::DataType::Image,
+                )
+                .await?,
                 ctx.data_unchecked::<Arc<plain_rs::features::services::images::models::Runtime>>(),
                 &text_field(&query),
                 &query,

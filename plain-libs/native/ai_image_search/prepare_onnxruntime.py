@@ -60,6 +60,8 @@ def prepare_runtime(target, output, cache):
     destination = output / name
     stamp = output / "runtime.json"
     identity = {"version": VERSION, "target": target, "source": True, "recipe": file_hash(Path(__file__))}
+    if "apple-ios" in target:
+        identity["apple_sdk_headers"] = file_hash(Path(__file__).with_name("apple_sdk_headers.cmake"))
     if destination.is_file() and stamp.is_file():
         recorded = json.loads(stamp.read_text())
         if recorded.get("identity") == identity and recorded.get("sha256") == file_hash(destination) and all((output / name).is_file() for name in ("LICENSE", "ThirdPartyNotices.txt")):
@@ -72,9 +74,16 @@ def prepare_runtime(target, output, cache):
                  "--recurse-submodules", "--shallow-submodules", "https://github.com/microsoft/onnxruntime.git", checkout])
     finally:
         checkout_lock.close()
-    commit = subprocess.check_output(["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True).strip()
+    git = ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=" + os.devnull, "--no-optional-locks", "-C", str(checkout)]
+    commit = subprocess.check_output([*git, "rev-parse", "HEAD"], text=True).strip()
     if commit != SOURCE_COMMIT:
         raise RuntimeError("ONNX Runtime source revision mismatch")
+    changes = subprocess.check_output([*git, "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none"], text=True)
+    if changes:
+        raise RuntimeError("ONNX Runtime source checkout is modified")
+    submodules = subprocess.check_output([*git, "submodule", "status", "--recursive"], text=True)
+    if any(not line.startswith(" ") for line in submodules.splitlines()):
+        raise RuntimeError("ONNX Runtime submodule revision is missing or changed")
     for legal_name in ("LICENSE", "ThirdPartyNotices.txt"):
         shutil.copy2(checkout / legal_name, output / legal_name)
     build = cache / target
@@ -93,6 +102,7 @@ def prepare_runtime(target, output, cache):
                 "--android_abi", abi, "--android_api", "26", "--build_shared_lib", "--android_cpp_shared", "--use_xnnpack"]
     elif "apple-ios" in target:
         sdk = "iphonesimulator" if target.endswith("-sim") or target.startswith("x86_64") else "iphoneos"
+        cmd += ["CMAKE_PROJECT_TOP_LEVEL_INCLUDES=" + str(Path(__file__).with_name("apple_sdk_headers.cmake").resolve())]
         cmd += ["--ios", "--cmake_generator", "Xcode", "--apple_sysroot", sdk, "--osx_arch", "x86_64" if target.startswith("x86_64") else "arm64",
                 "--apple_deploy_target", "15.0", "--build_apple_framework", "--use_coreml", "--use_xnnpack"]
     else:

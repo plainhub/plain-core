@@ -237,9 +237,8 @@ pub fn bucket_item_facts(db: &Db, data_type: DataType) -> Result<Vec<serde_json:
     Ok(items
         .into_iter()
         .map(|(id, path, size)| {
-            let name = std::path::Path::new(&path)
-                .parent()
-                .and_then(|parent| parent.file_name())
+            let name = std::path::Path::new(&id)
+                .file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or(&id);
             serde_json::json!({"id":id,"name":name,"size":size,"path":path})

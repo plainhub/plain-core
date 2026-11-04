@@ -106,12 +106,16 @@ impl DocsQuery {
         if !public_gate::require_granted(ctx, &[STORAGE]).await? {
             return Ok(Vec::new());
         }
-        Ok(crate::graphql::resolvers::media::public::catalog(ctx)
-            .document_extensions(&query)
-            .await
-            .map_err(async_graphql::Error::new)?
-            .into_iter()
-            .map(|(ext, count)| DocExtGroup { ext, count })
-            .collect())
+        Ok(crate::graphql::resolvers::media::public::catalog(
+            ctx,
+            plain_rs::features::enums::DataType::Doc,
+        )
+        .await?
+        .document_extensions(&query)
+        .await
+        .map_err(async_graphql::Error::new)?
+        .into_iter()
+        .map(|(ext, count)| DocExtGroup { ext, count })
+        .collect())
     }
 }

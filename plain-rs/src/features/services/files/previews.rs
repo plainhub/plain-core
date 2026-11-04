@@ -53,7 +53,13 @@ async fn convert_3gp(
     path: &str,
     output: &std::path::Path,
 ) -> anyhow::Result<bool> {
-    if !crate::features::services::files::browser::capabilities().contains(&"VIDEO_3GP_CONVERT") {
+    #[cfg(target_os = "android")]
+    let available = crate::infrastructure::platform::android::media::supports_3gp_conversion();
+    #[cfg(target_os = "ios")]
+    let available = false;
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let available = crate::features::services::files::browser::ffmpeg_available();
+    if !available {
         return Ok(false);
     }
     let mime =

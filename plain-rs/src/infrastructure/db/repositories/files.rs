@@ -426,7 +426,7 @@ impl Db {
     pub fn refresh_volume_availability(&self) -> rusqlite::Result<()> {
         self.with_conn(|conn| {
             let volumes = conn
-                .prepare("SELECT id,identity,path FROM volumes")?
+                .prepare("SELECT id,identity,path FROM volumes WHERE instr(path,'://')=0")?
                 .query_map([], |row| {
                     Ok((
                         row.get::<_, String>(0)?,

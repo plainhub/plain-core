@@ -44,6 +44,7 @@ extend type Mutation {
 	createBookmarkGroup(name: String!): BookmarkGroup!
 	deleteBookmarkGroup(id: ID!): Boolean!
 	deleteBookmarks(ids: [ID!]!): ActionResult!
+	importBookmarks(content: String!): ActionResult!
 	recordBookmarkClick(id: ID!): Boolean!
 	updateBookmark(id: ID!, input: BookmarkInput!): Bookmark!
 	updateBookmarkGroup(id: ID!, name: String!, collapsed: Boolean!, sortOrder: Int!): BookmarkGroup!

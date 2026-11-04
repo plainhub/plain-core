@@ -1,13 +1,4 @@
-//! Short ID generator. Port of the Go implementation `internal/pkg/shortid`.
-//!
-//! 16 bytes from `rand::thread_rng` (CSPRNG) → bigint → base57 → padded to 22
-//! chars. Removes ambiguous chars (0/O/1/I/l) so it can be used in URLs
-//! safely. Identical distribution to a UUID v4 (we set the v4 bits so
-//! legacy consumers can still detect the format if they care).
-//!
-//! Distinct from [`crate::utils::short_uuid`] (base36, Kotlin-derived): this one
-//! is the 22-char URL-safe format used by the server API (trash item
-//! ids, task ids, tag ids).
+// Port of the Go implementation `internal/pkg/shortid`.
 
 use rand::RngCore;
 
@@ -15,10 +6,8 @@ const ALPHABET: &[u8] = b"23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvw
 
 pub fn new_id() -> String {
     let mut bytes = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut bytes);
-    // Tag bytes 6/8 with the UUID v4 markers so any external consumer that
-    // ever tries to parse these as UUIDs still sees a valid shape. This
-    // costs nothing and avoids surprise on interop.
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    // UUID v4 marker bits preserve the existing format and leave 122 random bits.
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     encode(&bytes)

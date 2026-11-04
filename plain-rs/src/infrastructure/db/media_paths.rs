@@ -27,7 +27,9 @@ const VISIBLE: &str =
 
 // Project visibility after the primary-key seek so SQLite cannot select the broad kind index.
 static CHANGED_LOCATIONS: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-    format!("SELECT d.id,CASE WHEN {VISIBLE} THEN f.volume_id END,f.path FROM temp.media_path_changes d LEFT JOIN files f ON f.id=d.id")
+    format!(
+        "SELECT d.id,CASE WHEN {VISIBLE} THEN f.volume_id END,f.path FROM temp.media_path_changes d LEFT JOIN files f ON f.id=d.id"
+    )
 });
 
 impl MediaPaths {
@@ -71,7 +73,7 @@ impl MediaPaths {
     }
 
     fn volumes(conn: &Connection) -> Result<Volumes> {
-        conn.prepare("SELECT id,rtrim(path,'/') FROM volumes WHERE is_available=1")?
+        conn.prepare("SELECT id,path FROM volumes WHERE is_available=1")?
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
             .collect()
     }
@@ -144,7 +146,11 @@ impl MediaPaths {
             .volumes
             .get(volume)
             .ok_or_else(|| anyhow::anyhow!("Media unavailable"))?;
-        Ok(format!("{root}/{path}"))
+        Ok(if root.ends_with('/') {
+            format!("{root}{path}")
+        } else {
+            format!("{root}/{path}")
+        })
     }
 }
 

@@ -25,8 +25,6 @@ pub enum Capability {
     MediaFavorite,
     VideoRemux,
     VideoTranscode,
-    #[graphql(name = "VIDEO_3GP_CONVERT")]
-    Video3gpConvert,
     AppUpdates,
 
     MirrorAudio,
@@ -69,7 +67,6 @@ impl Capability {
             "MEDIA_FAVORITE" => Self::MediaFavorite,
             "VIDEO_REMUX" => Self::VideoRemux,
             "VIDEO_TRANSCODE" => Self::VideoTranscode,
-            "VIDEO_3GP_CONVERT" => Self::Video3gpConvert,
             "APP_UPDATES" => Self::AppUpdates,
 
             "MIRROR_AUDIO" => Self::MirrorAudio,
