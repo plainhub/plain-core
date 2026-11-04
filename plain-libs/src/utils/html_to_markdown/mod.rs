@@ -3,8 +3,6 @@ mod entities;
 mod table;
 
 use dom::Dom;
-use regex::Regex;
-use std::sync::LazyLock;
 
 pub fn html_to_markdown(html: &str) -> String {
     let mut dom = Dom::parse(&format!(
@@ -31,34 +29,37 @@ fn join(left: &mut String, right: &str) {
 }
 
 fn escape(text: &str) -> String {
-    static ESCAPES: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
-        [
-            (r"\\", r"\\"),
-            (r"\*", r"\*"),
-            (r"^-", r"\-"),
-            (r"^\+ ", r"\+ "),
-            (r"^(=+)", r"\$1"),
-            (r"^(#{1,6}) ", r"\$1 "),
-            (r"`", r"\`"),
-            (r"^~~~", r"\~~~"),
-            (r"\[", r"\["),
-            (r"\]", r"\]"),
-            (r"^>", r"\>"),
-            (r"_", r"\_"),
-            (r"^([0-9]+)\. ", r"$1\. "),
-        ]
-        .into_iter()
-        .map(|(p, r)| (Regex::new(p).unwrap(), r))
-        .collect()
-    });
-    ESCAPES.iter().fold(text.to_string(), |s, (p, r)| {
-        p.replace_all(&s, *r).into_owned()
-    })
+    let hashes = text.bytes().take_while(|&c| c == b'#').count();
+    let digits = text.bytes().take_while(u8::is_ascii_digit).count();
+    let prefix = text.starts_with(['-', '=', '>'])
+        || text.starts_with("+ ")
+        || text.starts_with("~~~")
+        || ((1..=6).contains(&hashes) && text.as_bytes().get(hashes) == Some(&b' '));
+    let numbered = digits > 0 && text[digits..].starts_with(". ");
+    let mut output = String::with_capacity(text.len());
+    for (index, c) in text.char_indices() {
+        if (index == 0 && prefix)
+            || (index == digits && numbered)
+            || matches!(c, '\\' | '*' | '`' | '[' | ']' | '_')
+        {
+            output.push('\\');
+        }
+        output.push(c);
+    }
+    output
 }
 
 fn clean_attribute(value: &str) -> String {
-    static NEWLINES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\n+(?-u:\s)*)+").unwrap());
-    NEWLINES.replace_all(value, "\n").into_owned()
+    let mut output = String::with_capacity(value.len());
+    let mut after_newline = false;
+    for c in value.chars() {
+        if after_newline && markdown_whitespace(c) {
+            continue;
+        }
+        output.push(c);
+        after_newline = c == '\n';
+    }
+    output
 }
 
 fn title(value: &str) -> String {

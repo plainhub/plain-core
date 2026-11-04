@@ -14,7 +14,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "tls" = ["dep:rcgen", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:x509-parser", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
 "time" = ["dep:chrono"]
 "sqlite" = ["time", "dep:rusqlite"]
-"html" = ["dep:regex"]
+"html" = []
 "phone" = ["dep:regex", "dep:flate2", "dep:serde_json"]
 "phone-batch" = ["phone", "tokio/rt"]
 "media" = ["time", "dep:lofty", "dep:anyhow", "dep:encoding_rs"]
@@ -24,14 +24,12 @@ description = "Reusable cryptography, media, file, format and native components"
 "apk" = ["dep:anyhow", "dep:zip"]
 "dlna" = ["dep:reqwest", "reqwest/rustls-tls"]
 "unix-platform" = ["dep:anyhow"]
-"storage-platform" = ["dep:anyhow", "dep:serde_json", "dep:sysinfo"]
-"linux-platform" = ["storage-platform"]
+"storage-platform" = ["volumes"]
+"linux-platform" = ["storage-platform", "dep:serde_json"]
 "ai-image-search" = ["dep:tokenizers", "dep:image", "dep:serde_json", "dep:cc"]
 "test-seams" = ["dep:tempfile"]
 
 [dependencies]
-"sysinfo" = { version = "0.32", default-features = false, features = ["disk"], optional = true }
-"kamadak-exif" = "=0.6.1"
 "bytes" = "1"
 "futures-core" = "0.3"
 "libc" = "0.2"

@@ -17,20 +17,7 @@ pub fn read_mountinfo() -> anyhow::Result<Vec<MountInfoEntry>> {
         .collect())
 }
 
-#[cfg(not(target_os = "linux"))]
-pub fn read_mountinfo() -> anyhow::Result<Vec<MountInfoEntry>> {
-    let entries: Vec<_> = sysinfo::Disks::new_with_refreshed_list()
-        .iter()
-        .map(|disk| MountInfoEntry {
-            mount_point: disk.mount_point().to_string_lossy().into_owned(),
-        })
-        .collect();
-    if entries.is_empty() {
-        anyhow::bail!("no mounted volumes");
-    }
-    Ok(entries)
-}
-
+#[cfg(any(target_os = "linux", test))]
 fn find_best_mount_point(entries: &[MountInfoEntry], abs_path: &str) -> Option<String> {
     let mut best: Option<String> = None;
     for e in entries {
@@ -56,24 +43,34 @@ pub fn resolve_mount_point<P: AsRef<Path>>(abs_path: P) -> anyhow::Result<String
         anyhow::bail!("invalid path");
     }
     let abs_str = match abs.to_str() {
-        Some(s) => s.to_string(),
+        Some(s) => s,
         None => anyhow::bail!("invalid utf-8 path"),
     };
 
-    let entries = read_mountinfo()?;
-    if let Some(best) = find_best_mount_point(&entries, &abs_str) {
-        return Ok(best);
+    #[cfg(not(target_os = "linux"))]
+    {
+        Ok(super::volumes::locate(Path::new(abs_str))?
+            .volume
+            .path
+            .to_string_lossy()
+            .into_owned())
     }
-
-    if let Ok(real) = std::fs::canonicalize(&abs) {
-        let real_str = real.to_string_lossy().to_string();
-        if real_str != abs_str {
-            if let Some(best) = find_best_mount_point(&entries, &real_str) {
-                return Ok(best);
+    #[cfg(target_os = "linux")]
+    {
+        let entries = read_mountinfo()?;
+        if let Some(best) = find_best_mount_point(&entries, abs_str) {
+            return Ok(best);
+        }
+        if let Ok(real) = std::fs::canonicalize(&abs) {
+            let real_str = real.to_string_lossy().to_string();
+            if real_str != abs_str {
+                if let Some(best) = find_best_mount_point(&entries, &real_str) {
+                    return Ok(best);
+                }
             }
         }
+        anyhow::bail!("unable to resolve mountpoint")
     }
-    anyhow::bail!("unable to resolve mountpoint")
 }
 
 pub trait CleanPath {

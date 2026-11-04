@@ -1,3 +1,5 @@
+mod container;
+
 use super::image_dimensions::{parse_tiff_header, tiff_read_u16, tiff_read_u32};
 use std::{
     collections::HashSet,
@@ -29,9 +31,9 @@ pub fn read(reader: &mut (impl Read + Seek)) -> io::Result<Option<Vec<u8>>> {
         return Ok(Some(output));
     }
     reader.seek(SeekFrom::Start(0))?;
-    match exif::Reader::new().read_from_container(&mut BufReader::new(reader)) {
-        Ok(exif) => Ok(Some(exif.buf().to_vec())),
-        Err(exif::Error::NotFound(_)) => Ok(None),
+    match container::read(&mut BufReader::new(reader)) {
+        Ok(exif) => Ok(Some(exif)),
+        Err(container::Error::NotFound(_)) => Ok(None),
         Err(error) => Err(io::Error::new(
             io::ErrorKind::InvalidData,
             error.to_string(),

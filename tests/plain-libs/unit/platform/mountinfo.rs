@@ -34,3 +34,33 @@ fn resolve_root() {
     let mp = resolve_mount_point("/").unwrap();
     assert!(!mp.is_empty());
 }
+
+#[test]
+fn invalid_paths_are_rejected() {
+    for path in ["", ".", "relative/file"] {
+        assert!(resolve_mount_point(path).is_err(), "{path:?}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn non_unicode_paths_are_rejected() {
+    use std::os::unix::ffi::OsStrExt;
+    assert!(resolve_mount_point(Path::new(std::ffi::OsStr::from_bytes(b"/tmp/\xff"))).is_err());
+}
+
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn native_volume_resolution_preserves_missing_descendants_and_symlinks() {
+    let directory = tempfile::tempdir().unwrap();
+    let missing = directory.path().join("missing").join("file");
+    let root = resolve_mount_point(directory.path()).unwrap();
+    assert_eq!(resolve_mount_point(&missing).unwrap(), root);
+    assert!(directory.path().canonicalize().unwrap().starts_with(&root));
+    #[cfg(unix)]
+    {
+        let link = directory.path().join("alias");
+        std::os::unix::fs::symlink(directory.path(), &link).unwrap();
+        assert_eq!(resolve_mount_point(link.join("missing")).unwrap(), root);
+    }
+}

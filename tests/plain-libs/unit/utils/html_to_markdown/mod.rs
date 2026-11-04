@@ -55,3 +55,51 @@ fn conversions_have_no_shared_mutable_state() {
         worker.join().unwrap();
     }
 }
+
+#[test]
+fn fixed_markdown_escapes_preserve_prefix_rules() {
+    for (input, expected) in [
+        ("-x", "\\-x"),
+        ("+ x", "\\+ x"),
+        ("+x", "+x"),
+        ("===", "\\==="),
+        ("###### x", "\\###### x"),
+        ("####### x", "####### x"),
+        ("#x", "#x"),
+        ("~~~x", "\\~~~x"),
+        ("~~x", "~~x"),
+        ("123. x", "123\\. x"),
+        ("123.x", "123.x"),
+        ("١. x", "١. x"),
+        ("\\*_[]`中", "\\\\\\*\\_\\[\\]\\`中"),
+    ] {
+        assert_eq!(escape(input), expected, "{input:?}");
+    }
+}
+
+#[test]
+fn attribute_newlines_only_consume_following_ascii_whitespace() {
+    assert_eq!(clean_attribute(" a\n \t\r\n\u{b}\u{c}b "), " a\nb ");
+    assert_eq!(
+        clean_attribute("a\n\u{a0}\u{2003} b"),
+        "a\n\u{a0}\u{2003} b"
+    );
+    assert_eq!(clean_attribute("a \t\rb"), "a \t\rb");
+}
+
+#[test]
+fn malformed_and_nested_entities_preserve_the_original_text() {
+    for (input, expected) in [
+        ("&amp;amp;", "&amp;"),
+        ("&&amp;", "&&"),
+        ("&#x41;&#65;", "AA"),
+        ("&#X41;", "&#X41;"),
+        ("&#xD800; &#1114112;", "&#xD800; &#1114112;"),
+        ("&#999999999999999999999999;", "&#999999999999999999999999;"),
+        ("&unknown; &AMP; &amp", "&unknown; &AMP; &amp"),
+        ("&中&amp;", "&中&"),
+        ("&#0;", "\0"),
+    ] {
+        assert_eq!(entities::decode(input), expected, "{input:?}");
+    }
+}
