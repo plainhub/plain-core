@@ -2733,7 +2733,6 @@ dependencies = [
  "tempfile",
  "tokenizers",
  "tokio",
- "uuid",
  "x509-parser",
  "zip",
 ]

@@ -1,20 +1,29 @@
-/// Generate a short, human-friendly unique ID derived from a UUID v4 string.
-///
-/// Mirrors the Kotlin `StringHelper.shortUUID()` used in `plain-app`:
-/// take a fresh UUID v4, read the first 8 bytes of its string form as a
-/// big-endian `u64`, and render it as a base-36 (`Character.MAX_RADIX`)
-/// number.
+use rand::RngCore;
+
+// Preserves the existing 32-bit UUID text prefix contract; not a secret token.
 pub fn short_uuid() -> String {
-    let id = uuid::Uuid::new_v4().to_string();
-    let bytes = id.as_bytes();
-    let mut buf = [0u8; 8];
-    buf.copy_from_slice(&bytes[..8]);
-    let n = u64::from_be_bytes(buf);
-    encode_base36(n)
+    let mut bytes = [0; 4];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    encode_base36(u64::from_be_bytes(format_prefix(&bytes)))
 }
 
-/// Render a `u64` as an unsigned base-36 string (digits `0-9`, `a-z`).
-/// Matches Java's `Long.toString(Character.MAX_RADIX)`.
+// Adapted from uuid 1.26.1 src/fmt.rs; MIT license in licenses/uuid-MIT.txt.
+const fn format_prefix(src: &[u8; 4]) -> [u8; 8] {
+    let mut dst = [0; 8];
+    let mut i = 0;
+    while i < 4 {
+        let x = src[i];
+        dst[i * 2] = nibble_to_hex(x >> 4);
+        dst[i * 2 + 1] = nibble_to_hex(x & 0x0f);
+        i += 1;
+    }
+    dst
+}
+
+const fn nibble_to_hex(nibble: u8) -> u8 {
+    nibble + b'0' + if nibble > 9 { 0x27 } else { 0 }
+}
+
 fn encode_base36(mut n: u64) -> String {
     if n == 0 {
         return "0".to_string();
