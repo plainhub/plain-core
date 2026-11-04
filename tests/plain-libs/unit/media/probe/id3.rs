@@ -29,6 +29,52 @@ fn tag(version: u8, frames: &[u8], flags: u8) -> Vec<u8> {
     result
 }
 
+#[test]
+fn latin1_title_artist_requires_unique_unflagged_single_byte_frames() {
+    for version in [2, 3, 4] {
+        let title = if version == 2 {
+            b"TT2".as_slice()
+        } else {
+            b"TIT2".as_slice()
+        };
+        let artist = if version == 2 {
+            b"TP1".as_slice()
+        } else {
+            b"TPE1".as_slice()
+        };
+        let title_frame = frame(version, title, b"\0Title");
+        let artist_frame = frame(version, artist, b"\0Artist");
+        let both = [title_frame.clone(), artist_frame.clone()].concat();
+        assert!(
+            reader(Cursor::new(tag(version, &both, 0)), true)
+                .unwrap()
+                .latin1_title_artist
+        );
+        let duplicate = [both, title_frame.clone()].concat();
+        assert!(
+            !reader(Cursor::new(tag(version, &duplicate, 0)), true)
+                .unwrap()
+                .latin1_title_artist
+        );
+        let unicode = [title_frame.clone(), frame(version, artist, b"\x03Artist")].concat();
+        assert!(
+            !reader(Cursor::new(tag(version, &unicode, 0)), true)
+                .unwrap()
+                .latin1_title_artist
+        );
+        if version != 2 {
+            let mut flagged = title_frame;
+            flagged[9] = 1;
+            flagged.extend(artist_frame);
+            assert!(
+                !reader(Cursor::new(tag(version, &flagged, 0)), true)
+                    .unwrap()
+                    .latin1_title_artist
+            );
+        }
+    }
+}
+
 struct Counted {
     cursor: Cursor<Vec<u8>>,
     reads: Vec<std::ops::Range<u64>>,

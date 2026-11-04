@@ -199,6 +199,95 @@ fn id3v2_tags_keep_priority_over_filename_confirmed_id3v1() {
 }
 
 #[test]
+fn id3v2_gbk_requires_single_byte_frames_and_filename_confirmation() {
+    let directory = tempfile::tempdir().unwrap();
+    let audio = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-untagged.mp3"),
+    )
+    .unwrap();
+    let frame = |id: &[u8; 4], encoding: u8, text: &[u8]| {
+        let mut frame = id.to_vec();
+        frame.extend_from_slice(&((text.len() + 1) as u32).to_be_bytes());
+        frame.extend_from_slice(&[0, 0, encoding]);
+        frame.extend_from_slice(text);
+        frame
+    };
+    let title = b"\xb8\xe8\xc7\xfa";
+    let artist = b"\xb8\xe8\xca\xd6";
+    for (name, encoding, title_bytes, artist_bytes, expected_title, expected_artist) in [
+        (
+            "歌手 - 歌曲.mp3",
+            0,
+            title.as_slice(),
+            artist.as_slice(),
+            "歌曲",
+            "歌手",
+        ),
+        (
+            "unrelated.mp3",
+            0,
+            title.as_slice(),
+            artist.as_slice(),
+            "¸èÇú",
+            "¸èÊÖ",
+        ),
+        (
+            "western.mp3",
+            0,
+            b"Caf\xe9".as_slice(),
+            b"Andr\xe9".as_slice(),
+            "Café",
+            "André",
+        ),
+        (
+            "歌手 - 歌曲.mp3",
+            3,
+            "¸èÇú".as_bytes(),
+            "¸èÊÖ".as_bytes(),
+            "¸èÇú",
+            "¸èÊÖ",
+        ),
+        (
+            "歌手 - 歌曲.mp3",
+            1,
+            b"\xff\xfe\xb8\x00\xe8\x00\xc7\x00\xfa\x00".as_slice(),
+            b"\xff\xfe\xb8\x00\xe8\x00\xca\x00\xd6\x00".as_slice(),
+            "¸èÇú",
+            "¸èÊÖ",
+        ),
+    ] {
+        let frames = [
+            frame(b"TIT2", encoding, title_bytes),
+            frame(b"TPE1", encoding, artist_bytes),
+        ]
+        .concat();
+        let size = frames.len();
+        let mut bytes = vec![b'I', b'D', b'3', 3, 0, 0];
+        bytes.extend([
+            ((size >> 21) & 127) as u8,
+            ((size >> 14) & 127) as u8,
+            ((size >> 7) & 127) as u8,
+            (size & 127) as u8,
+        ]);
+        bytes.extend(frames);
+        bytes.extend(&audio);
+        let mut legacy_tag = [0u8; 128];
+        legacy_tag[..3].copy_from_slice(b"TAG");
+        legacy_tag[3..7].copy_from_slice(title);
+        legacy_tag[33..37].copy_from_slice(artist);
+        bytes.extend(legacy_tag);
+        let path = directory.path().join(name);
+        std::fs::write(&path, bytes).unwrap();
+        let result = probe_media(path.to_str().unwrap(), "audio");
+        assert_eq!(
+            (result.title.as_str(), result.artist.as_str()),
+            (expected_title, expected_artist),
+            "{name}, encoding {encoding}"
+        );
+    }
+}
+
+#[test]
 fn probe_media_tagless_audio_is_duration_only() {
     let path = format!(
         "{}/../plain-rs/testdata/audio-untagged.mp3",

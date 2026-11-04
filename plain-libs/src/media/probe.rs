@@ -79,6 +79,7 @@ fn probe_audio(reader: &mut (impl Read + Seek), path: Option<&str>) -> ProbedMet
         return ProbedMeta::default();
     };
     let tags_complete = projected.tags_complete;
+    let latin1_title_artist = projected.latin1_title_artist;
     let result = Probe::new(BufReader::new(projected))
         .options(ParseOptions::new().read_cover_art(false))
         .guess_file_type()
@@ -87,7 +88,7 @@ fn probe_audio(reader: &mut (impl Read + Seek), path: Option<&str>) -> ProbedMet
     let (mut duration, tags, parsed) = match result {
         Some(file) => (
             i64::try_from(file.properties().duration().as_millis()).ok(),
-            tag_strings(&file, path),
+            tag_strings(&file, path, latin1_title_artist),
             true,
         ),
         None => (None, TagStrings::default(), false),
@@ -164,7 +165,11 @@ struct TagStrings {
     album_artist: String,
 }
 
-fn tag_strings(tagged_file: &lofty::file::TaggedFile, path: Option<&str>) -> TagStrings {
+fn tag_strings(
+    tagged_file: &lofty::file::TaggedFile,
+    path: Option<&str>,
+    latin1_title_artist: bool,
+) -> TagStrings {
     let mut fields = TagStrings::default();
     let tags = [
         TagType::Id3v2,
@@ -181,7 +186,8 @@ fn tag_strings(tagged_file: &lofty::file::TaggedFile, path: Option<&str>) -> Tag
             .or_else(|| tagged_file.first_tag()),
     );
     for tag in tags {
-        let decoded = (tag.tag_type() == TagType::Id3v1)
+        let decoded = (tag.tag_type() == TagType::Id3v1
+            || (tag.tag_type() == TagType::Id3v2 && latin1_title_artist))
             .then(|| {
                 let title = decode_gbk(tag.title()?.as_ref())?;
                 let artist = decode_gbk(tag.artist()?.as_ref())?;

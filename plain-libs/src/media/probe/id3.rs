@@ -7,6 +7,7 @@ const MAX_FRAMES: usize = 100_000;
 pub(super) struct View<R> {
     prefix: Vec<u8>,
     pub(super) tags_complete: bool,
+    pub(super) latin1_title_artist: bool,
     tail: RangeReader<R>,
     position: u64,
     length: u64,
@@ -14,13 +15,14 @@ pub(super) struct View<R> {
 
 pub(super) fn reader<R: Read + Seek>(mut source: R, text: bool) -> io::Result<View<R>> {
     let length = source.seek(SeekFrom::End(0))?;
-    let (prefix, offset, tags_complete) =
-        project(&mut source, length, text)?.unwrap_or_else(|| (Vec::new(), 0, true));
+    let (prefix, offset, tags_complete, latin1_title_artist) =
+        project(&mut source, length, text)?.unwrap_or_else(|| (Vec::new(), 0, true, false));
     let tail = RangeReader::new(source, offset, length - offset)?;
     Ok(View {
         length: prefix.len() as u64 + length - offset,
         prefix,
         tags_complete,
+        latin1_title_artist,
         tail,
         position: 0,
     })
@@ -36,10 +38,12 @@ fn project(
     reader: &mut (impl Read + Seek),
     length: u64,
     text: bool,
-) -> io::Result<Option<(Vec<u8>, u64, bool)>> {
+) -> io::Result<Option<(Vec<u8>, u64, bool, bool)>> {
     let mut prefix = Vec::new();
     let mut tags_complete = true;
     let mut offset = 0u64;
+    let mut title_encoding = None;
+    let mut artist_encoding = None;
     for _ in 0..32 {
         if length - offset < 10 {
             break;
@@ -77,6 +81,8 @@ fn project(
                 end,
                 header[3],
                 MAX_TEXT_BYTES.saturating_sub(prefix.len() + 10),
+                &mut title_encoding,
+                &mut artist_encoding,
             )?
             else {
                 return Ok(None);
@@ -95,7 +101,12 @@ fn project(
         }
         offset = end + footer;
     }
-    Ok(Some((prefix, offset, tags_complete)))
+    Ok(Some((
+        prefix,
+        offset,
+        tags_complete,
+        tags_complete && title_encoding == Some(true) && artist_encoding == Some(true),
+    )))
 }
 
 fn text_frames(
@@ -104,6 +115,8 @@ fn text_frames(
     end: u64,
     version: u8,
     budget: usize,
+    title_encoding: &mut Option<bool>,
+    artist_encoding: &mut Option<bool>,
 ) -> io::Result<Option<(Vec<u8>, bool)>> {
     let mut selected = Vec::new();
     let mut complete = true;
@@ -159,6 +172,16 @@ fn text_frames(
             let start = selected.len();
             selected.resize(start + size as usize, 0);
             reader.read_exact(&mut selected[start..])?;
+            let encoding = match id {
+                b"TIT2" | b"TT2" => Some(&mut *title_encoding),
+                b"TPE1" | b"TP1" => Some(&mut *artist_encoding),
+                _ => None,
+            };
+            if let Some(encoding) = encoding {
+                let plain_latin1 =
+                    selected.get(start) == Some(&0) && (version == 2 || header[8..10] == [0, 0]);
+                *encoding = Some(encoding.is_none() && plain_latin1);
+            }
         }
         offset = next;
     }
