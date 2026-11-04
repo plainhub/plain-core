@@ -178,6 +178,94 @@ fn id3v1_gbk_requires_filename_confirmation_and_preserves_western_tags() {
 }
 
 #[test]
+fn legacy_id3v1_encodings_require_matching_filename() {
+    let directory = tempfile::tempdir().unwrap();
+    let audio = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-untagged.mp3"),
+    )
+    .unwrap();
+    for (encoding, artist, title) in [
+        (encoding_rs::SHIFT_JIS, "歌手", "日本の歌"),
+        (encoding_rs::EUC_KR, "가수", "노래"),
+        (encoding_rs::BIG5, "歌手", "繁體歌曲"),
+        (encoding_rs::UTF_8, "Björk", "é"),
+    ] {
+        let (artist_bytes, _, artist_errors) = encoding.encode(artist);
+        let (title_bytes, _, title_errors) = encoding.encode(title);
+        assert!(!artist_errors && !title_errors);
+        let mut tag = [0u8; 128];
+        tag[..3].copy_from_slice(b"TAG");
+        tag[3..3 + title_bytes.len()].copy_from_slice(&title_bytes);
+        tag[33..33 + artist_bytes.len()].copy_from_slice(&artist_bytes);
+        let mut bytes = audio.clone();
+        bytes.extend_from_slice(&tag);
+        let path = directory.path().join(format!("{artist}-{title}.mp3"));
+        std::fs::write(&path, &bytes).unwrap();
+        let result = probe_media(path.to_str().unwrap(), "audio");
+        assert_eq!(
+            (result.artist.as_str(), result.title.as_str()),
+            (artist, title)
+        );
+        let path = directory.path().join("unrelated.mp3");
+        std::fs::write(&path, &bytes).unwrap();
+        let result = probe_media(path.to_str().unwrap(), "audio");
+        if encoding != encoding_rs::UTF_8 {
+            assert_ne!(
+                (result.artist.as_str(), result.title.as_str()),
+                (artist, title)
+            );
+        }
+    }
+}
+
+#[test]
+fn id3v1_utf8_recovers_non_latin_text_without_reinterpreting_western_or_invalid_bytes() {
+    let audio = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-untagged.mp3"),
+    )
+    .unwrap();
+    for (title, artist, expected_title, expected_artist) in [
+        (
+            "サンプルのタイトル".as_bytes(),
+            "サンプルのアーティス".as_bytes(),
+            "サンプルのタイトル",
+            "サンプルのアーティス",
+        ),
+        (
+            "サンプルのタイトル".as_bytes(),
+            &b"Andr\xe9"[..],
+            "サンプルのタイトル",
+            "André",
+        ),
+        (&b"Caf\xe9"[..], &b"Andr\xe9"[..], "Café", "André"),
+        (&b"\xc3\xa9"[..], &b"\xc3\xb1"[..], "Ã©", "Ã±"),
+        (
+            &b"\xe3\x82"[..],
+            &b"\xe3\x82\xff"[..],
+            "ã\u{82}",
+            "ã\u{82}ÿ",
+        ),
+    ] {
+        let mut tag = [0u8; 128];
+        tag[..3].copy_from_slice(b"TAG");
+        tag[3..3 + title.len()].copy_from_slice(title);
+        tag[33..33 + artist.len()].copy_from_slice(artist);
+        tag[63..63 + title.len()].copy_from_slice(title);
+        let mut bytes = audio.clone();
+        bytes.extend_from_slice(&tag);
+        let result = probe_audio_reader(&mut std::io::Cursor::new(bytes));
+        assert_eq!(
+            (
+                result.title.as_str(),
+                result.artist.as_str(),
+                result.album.as_str()
+            ),
+            (expected_title, expected_artist, expected_title)
+        );
+    }
+}
+
+#[test]
 fn id3v2_tags_keep_priority_over_filename_confirmed_id3v1() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("歌手-歌曲.mp3");

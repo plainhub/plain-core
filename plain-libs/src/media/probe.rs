@@ -189,12 +189,24 @@ fn tag_strings(
         let decoded = (tag.tag_type() == TagType::Id3v1
             || (tag.tag_type() == TagType::Id3v2 && latin1_title_artist))
             .then(|| {
-                let title = decode_gbk(tag.title()?.as_ref())?;
-                let artist = decode_gbk(tag.artist()?.as_ref())?;
                 let stem = std::path::Path::new(path?).file_stem()?.to_str()?;
                 let (file_artist, file_title) = stem.split_once('-')?;
-                (file_artist.trim() == artist && file_title.trim() == title)
-                    .then_some((title, artist))
+                let title = tag.title()?;
+                let artist = tag.artist()?;
+                [
+                    encoding_rs::UTF_8,
+                    encoding_rs::GBK,
+                    encoding_rs::BIG5,
+                    encoding_rs::SHIFT_JIS,
+                    encoding_rs::EUC_KR,
+                ]
+                .into_iter()
+                .find_map(|encoding| {
+                    let title = decode_legacy(&title, encoding)?;
+                    let artist = decode_legacy(&artist, encoding)?;
+                    (file_artist.trim() == artist && file_title.trim() == title)
+                        .then_some((title, artist))
+                })
             })
             .flatten();
         for (target, value) in [
@@ -220,6 +232,14 @@ fn tag_strings(
             ),
         ] {
             if target.is_empty() {
+                let value = value.map(|value| {
+                    if tag.tag_type() == TagType::Id3v1
+                        && let Some(decoded) = decode_utf8(&value)
+                    {
+                        return std::borrow::Cow::Owned(decoded);
+                    }
+                    value
+                });
                 if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
                     *target = value.trim().to_owned();
                 }
@@ -229,13 +249,25 @@ fn tag_strings(
     fields
 }
 
-fn decode_gbk(text: &str) -> Option<String> {
+fn decode_utf8(text: &str) -> Option<String> {
+    if !text.chars().any(|c| ('\u{80}'..='\u{9f}').contains(&c)) {
+        return None;
+    }
     let bytes = text
         .chars()
         .map(|c| u8::try_from(c as u32))
         .collect::<Result<Vec<_>, _>>()
         .ok()?;
-    encoding_rs::GBK
+    String::from_utf8(bytes).ok()
+}
+
+fn decode_legacy(text: &str, encoding: &'static encoding_rs::Encoding) -> Option<String> {
+    let bytes = text
+        .chars()
+        .map(|c| u8::try_from(c as u32))
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    encoding
         .decode_without_bom_handling_and_without_replacement(&bytes)
         .map(|s| s.trim().to_owned())
 }
