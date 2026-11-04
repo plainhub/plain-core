@@ -2,11 +2,12 @@ use super::events;
 use crate::graphql::executor::RequestOrigin;
 use crate::graphql::resolvers::files::types::File;
 use crate::server::ServerState;
-use async_graphql::{Context, Result, SimpleObject, Subscription};
+use async_graphql::{Context, Result, Subscription};
 use futures_util::{
     StreamExt,
     stream::{self, BoxStream},
 };
+use plain_graphql_macros::SimpleObject;
 use plain_libs::filesystem::browse::Request;
 use plain_rs::features::prefs::settings::FileSortBy;
 use plain_rs::infrastructure::protocols::graphql::events::EventSpec;
@@ -24,6 +25,7 @@ pub(super) const SPEC: EventSpec = EventSpec {
 };
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 pub struct FileSearchResults {
     items: Vec<File>,
     offset: Long,

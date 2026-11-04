@@ -3,7 +3,8 @@ use crate::graphql::resolvers::app::capability_types::{
     SambaSettings, SambaSettingsInput, SambaShare, SambaShareAuth,
 };
 use crate::server::ServerState;
-use async_graphql::{Context, Object, Result};
+use async_graphql::{Context, Result};
+use plain_graphql_macros::object as Object;
 use plain_rs::features::services::settings::types::AppUpdate;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_APPLY;

@@ -1,6 +1,6 @@
 use async_graphql::Enum;
 use async_graphql::ID;
-use async_graphql::SimpleObject;
+use plain_graphql_macros::SimpleObject;
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
@@ -14,6 +14,7 @@ pub enum PackageType {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct Certificate {
     pub issuer: String,
     pub subject: String,
@@ -26,6 +27,7 @@ pub struct Certificate {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct Package {
     pub id: ID,
     pub name: String,
@@ -41,6 +43,7 @@ pub struct Package {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct PackageStatus {
     pub id: ID,
     pub exists: bool,
@@ -49,6 +52,7 @@ pub struct PackageStatus {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct PackageInstallPending {
     pub id: ID,
     #[graphql(name = "updatedAt")]

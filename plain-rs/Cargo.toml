@@ -21,7 +21,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "filesystem" = ["library", "dep:anyhow", "tokio/fs", "tokio/rt", "tokio/time", "tokio/sync", "plain-libs/filesystem", "plain-libs/file-walk"]
 "events" = ["tokio/sync"]
 "services" = ["link-preview", "http-client", "chat", "library", "events", "dep:hmac", "dep:sha2_mac"]
-"graphql" = ["dep:async-graphql"]
+"graphql" = ["dep:plain-graphql-macros", "dep:async-graphql"]
 "html" = ["dep:regex", "plain-libs/html"]
 "phone" = ["dep:regex", "dep:serde_json", "plain-libs/phone"]
 "link-preview" = ["chat", "dep:regex"]
@@ -46,6 +46,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "media" = ["image-metadata", "dep:tempfile", "plain-libs/thumbnails"]
 
 [dependencies]
+plain-graphql-macros = { path = "../plain-graphql-macros", optional = true }
 plain-libs = { path = "../plain-libs", default-features = false }
 "sysinfo" = { version = "0.32", default-features = false, features = ["disk"], optional = true }
 "tempfile" = { "version" = "3", "optional" = true }

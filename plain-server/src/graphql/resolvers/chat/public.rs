@@ -1,5 +1,6 @@
 use crate::graphql::types::ActionResult;
-use async_graphql::{Context, Enum, Object, SimpleObject};
+use async_graphql::{Context, Enum};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::infrastructure::db::DChat;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Instant;
@@ -23,6 +24,7 @@ pub enum ChannelMemberStatus {
 }
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatChannelMember {
     #[graphql(name = "peerId")]
@@ -31,6 +33,7 @@ pub struct ChatChannelMember {
 }
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatChannelActions {
     pub is_owner: bool,
@@ -41,6 +44,7 @@ pub struct ChatChannelActions {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct ChatChannel {
     pub actions: ChatChannelActions,
@@ -76,6 +80,7 @@ impl ChatChannel {
 }
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatItem {
     /// `me` when this device created the item, otherwise the client id of

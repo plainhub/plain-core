@@ -1,4 +1,5 @@
-use async_graphql::{Context, ID, Object};
+use async_graphql::{Context, ID};
+use plain_graphql_macros::object as Object;
 use serde_json::json;
 use std::sync::Arc;
 

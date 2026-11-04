@@ -40,7 +40,8 @@ use crate::graphql::resolvers::settings::public::PrefsQuery;
 use crate::graphql::resolvers::tags::public::TagsMutation;
 use crate::graphql::resolvers::tags::public::TagsQuery;
 use crate::graphql::subscriptions::Subscription;
-use async_graphql::{MergedObject, Schema};
+use async_graphql::Schema;
+use plain_graphql_macros::MergedObject;
 use std::sync::Arc;
 
 #[derive(MergedObject, Default)]

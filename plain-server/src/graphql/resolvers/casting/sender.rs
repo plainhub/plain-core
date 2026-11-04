@@ -1,12 +1,14 @@
 use crate::graphql::resolvers::app::capability_types::DlnaRenderer;
 use crate::graphql::resolvers::media::types::MediaDataType;
 use crate::server::ServerState;
-use async_graphql::{Context, InputObject, Object, Result, SimpleObject};
+use async_graphql::{Context, InputObject, Result};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::services::casting::dlna_sender_runtime as sender;
 use plain_rs::features::services::casting::dlna_sender_runtime::Command;
 use plain_rs::infrastructure::types::Long;
 
 #[derive(SimpleObject, serde::Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DlnaSenderDevice {
     id: async_graphql::ID,
@@ -25,6 +27,7 @@ impl From<sender::Device> for DlnaSenderDevice {
     }
 }
 #[derive(SimpleObject, serde::Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DlnaSenderMedia {
     path: String,
@@ -72,6 +75,7 @@ impl From<DlnaMediaInput> for sender::Item {
     }
 }
 #[derive(SimpleObject, serde::Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DlnaSenderState {
     version: Long,

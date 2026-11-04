@@ -1,7 +1,8 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::facts::rows;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Object, SimpleObject};
+use async_graphql::Context;
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 use serde_json::json;
@@ -14,19 +15,27 @@ use crate::graphql::resolvers::media::public::prefs;
 use crate::graphql::resolvers::media::public::row;
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct Doc {
     pub duration_ms: Long,
+    #[graphql(getter = true)]
     pub id: async_graphql::ID,
+    #[graphql(getter = true)]
     pub title: String,
+    #[graphql(getter = true)]
     pub path: String,
     pub extension: String,
+    #[graphql(getter = true)]
     pub size: Long,
     #[graphql(name = "bucketId")]
+    #[graphql(getter = true)]
     pub bucket_id: async_graphql::ID,
     #[graphql(name = "createdAt")]
+    #[graphql(getter = true)]
     pub created_at: Instant,
     #[graphql(name = "updatedAt")]
+    #[graphql(getter = true)]
     pub updated_at: Instant,
 }
 
@@ -43,6 +52,7 @@ impl Doc {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct DocExtGroup {
     pub ext: String,
     pub count: i32,

@@ -1,7 +1,8 @@
 use super::client_inputs::{SharedEntryInput, SharedLinkInput, SharedMessageCardInput};
 use super::client_models::{SharedBrowseResult, SharedLink};
 use crate::server::ServerState;
-use async_graphql::{Context, Object};
+use async_graphql::Context;
+use plain_graphql_macros::object as Object;
 use plain_rs::features::chat::messages::share_card;
 use plain_rs::features::services::peers::shared_client;
 

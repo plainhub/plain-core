@@ -1,4 +1,5 @@
-use async_graphql::{Context, ID, InputObject, Object, Result, SimpleObject};
+use async_graphql::{Context, ID, InputObject, Result};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::files::tasks::CompletedOp;
 use plain_rs::features::files::tasks::FileTask;
 use plain_rs::features::files::tasks::FileTaskOp;
@@ -15,6 +16,7 @@ struct FileTaskOpInput {
     overwrite: bool,
 }
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct FileTaskCompletedOp {
     src: String,
     dst: String,
@@ -28,6 +30,7 @@ impl From<CompletedOp> for FileTaskCompletedOp {
     }
 }
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 #[graphql(name = "FileTask")]
 struct FileTaskResult {
     id: ID,

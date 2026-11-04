@@ -2,18 +2,21 @@
 //! view over the app's SQLite file.
 //!
 
-use async_graphql::{Context, Enum, Object, SimpleObject};
+use async_graphql::{Context, Enum};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::infrastructure::db::devtools::SqliteFile;
 use plain_rs::infrastructure::types::Long;
 use std::sync::Arc;
 
 #[derive(SimpleObject, Clone, Debug, Default)]
+#[graphql(getters = false)]
 pub struct DbTableInfo {
     #[graphql(name = "idKey")]
     pub id_key: String,
 }
 
 #[derive(SimpleObject, Clone, Debug, Default)]
+#[graphql(getters = false)]
 pub struct DbTableColumn {
     pub name: String,
     #[graphql(name = "dataType")]

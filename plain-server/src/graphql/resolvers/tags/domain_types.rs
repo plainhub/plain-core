@@ -1,7 +1,8 @@
 use async_graphql::ID;
-use async_graphql::SimpleObject;
+use plain_graphql_macros::SimpleObject;
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct Tag {
     pub id: ID,
     pub name: String,
@@ -10,6 +11,7 @@ pub struct Tag {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct TagRelation {
     #[graphql(name = "tagId")]
     pub tag_id: ID,

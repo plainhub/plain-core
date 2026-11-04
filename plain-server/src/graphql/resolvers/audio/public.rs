@@ -1,6 +1,7 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Object, SimpleObject};
+use async_graphql::Context;
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::enums::DataType;
 use plain_rs::features::media::audio::queue as domain;
 use plain_rs::features::media::audio::queue::AudioTrack;
@@ -19,6 +20,7 @@ const STORAGE: &str = "WRITE_EXTERNAL_STORAGE";
 pub use plain_rs::features::media::audio::play_mode::MediaPlayMode;
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct AudioItem {
     #[graphql(name = "mediaId")]
     pub file_id: Option<async_graphql::ID>,
@@ -36,25 +38,33 @@ impl From<AudioTrack> for AudioItem {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct Audio {
     pub album_id: async_graphql::ID,
+    #[graphql(getter = true)]
     pub id: async_graphql::ID,
+    #[graphql(getter = true)]
     pub title: String,
     pub artist: String,
+    #[graphql(getter = true)]
     pub path: String,
     #[graphql(name = "durationMs")]
     pub duration_ms: Long,
+    #[graphql(getter = true)]
     pub size: Long,
     #[graphql(name = "bucketId")]
+    #[graphql(getter = true)]
     pub bucket_id: async_graphql::ID,
     #[graphql(skip)]
     pub album_art_uri: String,
     #[graphql(skip)]
     pub cover_image_id: String,
     #[graphql(name = "createdAt")]
+    #[graphql(getter = true)]
     pub created_at: Instant,
     #[graphql(name = "updatedAt")]
+    #[graphql(getter = true)]
     pub updated_at: Instant,
     #[graphql(name = "isFavorite")]
     pub is_favorite: bool,
@@ -93,6 +103,7 @@ impl Audio {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct AudioPlaylist {
     pub id: async_graphql::ID,
     pub name: String,
@@ -105,6 +116,7 @@ pub struct AudioPlaylist {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct AudioAlbumCover {
     pub album_id: async_graphql::ID,
     pub track_count: i32,
@@ -112,12 +124,14 @@ pub struct AudioAlbumCover {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct AudioPlaylistCovers {
     pub id: async_graphql::ID,
     pub albums: Vec<AudioAlbumCover>,
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct AudioPlayback {
     pub revision: Long,
     #[graphql(name = "mediaId")]
@@ -131,6 +145,7 @@ pub struct AudioPlayback {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct AudioArtist {
     pub name: String,
     pub item_count: i32,
@@ -139,6 +154,7 @@ pub struct AudioArtist {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct AudioOverview {
     pub artists: Vec<AudioArtist>,
     pub recent_items: Vec<Audio>,

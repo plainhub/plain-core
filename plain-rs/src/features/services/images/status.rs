@@ -12,7 +12,7 @@ pub enum ImageSearchStatusType {
 }
 
 #[derive(Clone, Debug, Serialize)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql_macros::SimpleObject))]
 #[serde(rename_all = "camelCase")]
 pub struct ImageSearchStatus {
     pub status: ImageSearchStatusType,

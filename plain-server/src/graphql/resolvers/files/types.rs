@@ -1,6 +1,6 @@
 use async_graphql::Enum;
 use async_graphql::ID;
-use async_graphql::SimpleObject;
+use plain_graphql_macros::SimpleObject;
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
@@ -25,6 +25,7 @@ impl DriveType {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct Mount {
     pub id: ID,
     pub name: String,
@@ -51,6 +52,7 @@ pub struct Mount {
 
 /// One entry of a directory listing or a search page.
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct File {
     pub permission: String,
@@ -79,12 +81,14 @@ impl File {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct Location {
     pub latitude: f64,
     pub longitude: f64,
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ImageFileInfo {
     pub make: String,
     pub model: String,
@@ -111,6 +115,7 @@ pub struct ImageFileInfo {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct AudioFileInfo {
     #[graphql(name = "durationMs")]
     pub duration_ms: Long,
@@ -118,6 +123,7 @@ pub struct AudioFileInfo {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct VideoFileInfo {
     pub width: i32,
     pub height: i32,
@@ -149,6 +155,7 @@ pub enum MediaFileInfo {
 /// is not a media extension, which is why it is a union and not a
 /// single struct.
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct FileInfo {
     pub path: String,
     #[graphql(name = "updatedAt")]

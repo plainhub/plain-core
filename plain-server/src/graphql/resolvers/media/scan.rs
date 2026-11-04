@@ -1,6 +1,7 @@
 use super::types::ScanProgress;
 use crate::server::ServerState;
-use async_graphql::{Context, Object, Result};
+use async_graphql::{Context, Result};
+use plain_graphql_macros::object as Object;
 use plain_rs::features::services::files::scanning;
 use plain_rs::features::services::files::scanning::Command;
 

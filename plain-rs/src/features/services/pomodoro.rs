@@ -3,15 +3,17 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::events::WS_POMODORO_ACTION;
 use crate::infrastructure::events::WsEvent;
 use crate::infrastructure::types::Instant;
-use async_graphql::{Enum, SimpleObject};
+use async_graphql::Enum;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
+use plain_graphql_macros::SimpleObject;
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{broadcast, watch};
 
 #[derive(Clone, Deserialize, Serialize, SimpleObject)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct PomodoroSettings {
     pub work_duration_min: i32,
@@ -40,6 +42,7 @@ pub enum PomodoroState {
     LongBreak,
 }
 #[derive(Clone, Serialize, Deserialize, SimpleObject)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct PomodoroToday {
     pub date: Instant,

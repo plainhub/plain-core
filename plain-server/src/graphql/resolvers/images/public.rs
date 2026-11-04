@@ -3,7 +3,8 @@ use crate::graphql::types::facts::flag;
 use crate::graphql::types::facts::optional_instant;
 use crate::graphql::types::facts::rows;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Object, SimpleObject};
+use async_graphql::Context;
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 use serde_json::Value;
@@ -15,20 +16,28 @@ use crate::graphql::resolvers::media::public::row;
 use crate::graphql::resolvers::media::public::text_field;
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct Image {
+    #[graphql(getter = true)]
     pub id: async_graphql::ID,
+    #[graphql(getter = true)]
     pub title: String,
+    #[graphql(getter = true)]
     pub path: String,
+    #[graphql(getter = true)]
     pub size: Long,
     pub width: i32,
     pub height: i32,
     pub rotation: i32,
     #[graphql(name = "bucketId")]
+    #[graphql(getter = true)]
     pub bucket_id: async_graphql::ID,
     #[graphql(name = "createdAt")]
+    #[graphql(getter = true)]
     pub created_at: Instant,
     #[graphql(name = "updatedAt")]
+    #[graphql(getter = true)]
     pub updated_at: Instant,
     #[graphql(name = "takenAt")]
     pub taken_at: Option<Instant>,

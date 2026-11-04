@@ -1,4 +1,5 @@
-use async_graphql::{Context, ID, InputObject, Object, SimpleObject};
+use async_graphql::{Context, ID, InputObject};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 
@@ -7,6 +8,7 @@ use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::db::image_editor_project as store;
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 pub struct ImageEditorProject {
     pub id: ID,
     pub state_b64: String,
@@ -19,6 +21,7 @@ pub struct ImageEditorProject {
 }
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 pub struct ImageEditorProjectSummary {
     pub id: ID,
     pub thumbnail: Option<String>,

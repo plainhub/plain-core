@@ -2,7 +2,8 @@
 
 use crate::graphql::resolvers::device::public::device_type as parse_device_type;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Enum, InputObject, Object, SimpleObject};
+use async_graphql::{Context, Enum, InputObject};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::device::types::DeviceType;
 use plain_rs::infrastructure::host::bridge::Host;
@@ -19,6 +20,7 @@ pub enum DiscoveryMethod {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct Peer {
     pub id: async_graphql::ID,
     pub name: String,
@@ -74,6 +76,7 @@ impl Peer {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct Sim {
     pub id: async_graphql::ID,
     pub label: String,
@@ -128,6 +131,7 @@ impl From<PairingMode> for plain_rs::features::services::discovery::pairing_atte
     }
 }
 #[derive(SimpleObject, serde::Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 struct PairingState {
     device_id: Option<async_graphql::ID>,

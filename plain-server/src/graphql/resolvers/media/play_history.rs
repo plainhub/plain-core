@@ -7,7 +7,8 @@ use crate::graphql::resolvers::audio::public::audio_from_facts;
 use crate::graphql::resolvers::common::content_common::instant;
 use crate::graphql::resolvers::videos::public::video_from_facts;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, ID, Object, Result, SimpleObject};
+use async_graphql::{Context, ID, Result};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_libs::utils::search_dsl;
 use plain_rs::features::media::play_history;
 use plain_rs::features::prefs::settings::FileSortBy;
@@ -17,6 +18,7 @@ use plain_rs::infrastructure::types::Long;
 use std::{collections::HashMap, sync::Arc};
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 pub struct MediaPlayHistory {
     #[graphql(name = "mediaId")]
     file_id: ID,

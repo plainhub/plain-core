@@ -1,9 +1,11 @@
 use super::public::{ChatItem, item};
 use crate::server::ServerState;
-use async_graphql::{Context, ID, Object, SimpleObject};
+use async_graphql::{Context, ID};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::services::chat::chat_actions;
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 pub struct ChatConversation {
     pub id: ID,
     pub chat: ChatItem,
@@ -50,6 +52,7 @@ impl ChatHostQuery {
     }
 }
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 pub struct ChatTextEdit {
     pub changed: bool,
     pub chat: ChatItem,

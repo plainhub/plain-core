@@ -1,6 +1,7 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::resolvers::tags::domain_types::TagRelation;
-use async_graphql::{Context, Object};
+use async_graphql::Context;
+use plain_graphql_macros::object as Object;
 pub use plain_rs::features::enums::DataType;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::tags;

@@ -1,6 +1,7 @@
 use anyhow::{Result, ensure};
 
-#[derive(async_graphql::SimpleObject)]
+#[derive(plain_graphql_macros::SimpleObject)]
+#[graphql(getters = false)]
 pub struct PageMetadata {
     pub title: Option<String>,
     pub favicon_url: Option<String>,

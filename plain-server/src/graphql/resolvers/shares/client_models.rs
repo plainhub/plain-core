@@ -1,11 +1,12 @@
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
-use async_graphql::SimpleObject;
+use plain_graphql_macros::SimpleObject;
 use plain_rs::features::{chat::messages::share_card, files::shares::client};
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct SharedLink {
     host: String,
@@ -16,6 +17,7 @@ pub(super) struct SharedLink {
 }
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct SharedPeerAddress {
     id: async_graphql::ID,
     ip: String,
@@ -23,6 +25,7 @@ struct SharedPeerAddress {
 }
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct SharedMessageCard {
     share_id: async_graphql::ID,
     url_token: String,
@@ -34,6 +37,7 @@ struct SharedMessageCard {
 }
 
 #[derive(SimpleObject, Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct SharedEntry {
     name: String,
@@ -45,6 +49,7 @@ pub(super) struct SharedEntry {
 }
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 pub(super) struct SharedLinkInfo {
     name: String,
     read_only: bool,
@@ -55,6 +60,7 @@ pub(super) struct SharedLinkInfo {
 }
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 pub(super) struct SharedBrowseResult {
     info: SharedLinkInfo,
     link: SharedLink,

@@ -1,6 +1,7 @@
 use crate::graphql::resolvers::peers::query::Query;
 use crate::server::ServerState;
-use async_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
+use async_graphql::{Context, EmptySubscription, ID, Schema};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::chat::enums::ChannelSystemMessageType;
 use plain_rs::features::chat::enums::ChatStatus;
 use plain_rs::infrastructure::db::DChat;
@@ -9,6 +10,7 @@ use plain_rs::infrastructure::types::Instant;
 use serde_json::{Value, json};
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct ChatItem {
     from_id: ID,
     to_id: ID,

@@ -1,11 +1,13 @@
 use crate::graphql::resolvers::peers::public::Peer;
 use crate::server::ServerState;
-use async_graphql::{Context, Object, SimpleObject};
+use async_graphql::Context;
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::chat::attachments::download_status::DownloadStatus;
 use plain_rs::infrastructure::types::Long;
 use serde::Deserialize;
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct ChatDownloadFile {
     file_id: String,
     uri: String,
@@ -78,6 +80,7 @@ struct QueueReceipt {
     tasks: Vec<TaskReceipt>,
 }
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct ChatDownloadTask {
     id: async_graphql::ID,
     message_id: async_graphql::ID,
@@ -90,6 +93,7 @@ struct ChatDownloadTask {
     speed: Long,
 }
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct ChatDownloadQueue {
     runtime_id: String,
     revision: Long,

@@ -7,7 +7,8 @@
 //! convention.
 use crate::graphql::resolvers::tags::domain_types::Tag;
 
-use async_graphql::{Enum, ID, InputObject, SimpleObject};
+use async_graphql::{Enum, ID, InputObject};
+use plain_graphql_macros::SimpleObject;
 use plain_rs::infrastructure::types::Instant;
 
 /// The GraphQL enum name, which is also what the platform's kotlinx enum
@@ -120,6 +121,7 @@ data_kind!(ImProtocol {
 });
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ContactPhoneNumber {
     pub type_code: i32,
     pub value: String,
@@ -130,6 +132,7 @@ pub struct ContactPhoneNumber {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ContactEmail {
     pub type_code: i32,
     pub value: String,
@@ -138,6 +141,7 @@ pub struct ContactEmail {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ContactAddress {
     pub type_code: i32,
     pub value: String,
@@ -146,6 +150,7 @@ pub struct ContactAddress {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ContactEvent {
     pub type_code: i32,
     pub value: String,
@@ -154,6 +159,7 @@ pub struct ContactEvent {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ContactWebsite {
     pub type_code: i32,
     pub value: String,
@@ -162,6 +168,7 @@ pub struct ContactWebsite {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ContactIm {
     pub type_code: i32,
     pub value: String,
@@ -171,12 +178,14 @@ pub struct ContactIm {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct Organization {
     pub company: String,
     pub title: String,
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ContactGroup {
     pub id: ID,
     pub name: String,
@@ -185,6 +194,7 @@ pub struct ContactGroup {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ContactSource {
     pub name: String,
     pub r#type: String,
@@ -194,6 +204,7 @@ pub struct ContactSource {
 /// `tags(type:)` filter instead — so it is not `content_types::Tag`.
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct Contact {
     pub id: ID,

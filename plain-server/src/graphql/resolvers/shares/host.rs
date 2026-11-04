@@ -1,5 +1,6 @@
 use crate::graphql::types::parse_instant;
-use async_graphql::{Context, ID, Object, SimpleObject};
+use async_graphql::{Context, ID};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::files::shares::Root;
 use plain_rs::features::files::shares::Service;
 use plain_rs::infrastructure::db::Db;
@@ -8,6 +9,7 @@ use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct ShareRecord {
     id: ID,
     name: String,

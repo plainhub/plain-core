@@ -6,7 +6,8 @@
 
 use plain_rs::features::services::images::status::ImageSearchStatus;
 
-use async_graphql::{Context, Object};
+use async_graphql::Context;
+use plain_graphql_macros::object as Object;
 use std::sync::Arc;
 
 #[derive(Default)]

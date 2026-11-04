@@ -2688,6 +2688,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
+name = "plain-graphql-macros"
+version = "0.1.0"
+dependencies = [
+ "darling 0.23.0",
+ "heck",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "plain-libs"
 version = "0.1.0"
 dependencies = [
@@ -2760,6 +2773,7 @@ dependencies = [
  "log",
  "notify",
  "parking_lot",
+ "plain-graphql-macros",
  "plain-libs",
  "rand 0.8.8",
  "rcgen",
@@ -2794,6 +2808,7 @@ dependencies = [
  "hyper",
  "image",
  "log",
+ "plain-graphql-macros",
  "plain-libs",
  "plain-rs",
  "rcgen",

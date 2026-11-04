@@ -1,7 +1,8 @@
 use crate::graphql::resolvers::clipboard::models::ClipboardItem;
 use crate::graphql::types::ActionResult;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Object};
+use async_graphql::Context;
+use plain_graphql_macros::object as Object;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;

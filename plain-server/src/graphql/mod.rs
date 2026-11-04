@@ -18,3 +18,7 @@ pub mod subscriptions;
 
 #[cfg(feature = "core")]
 pub mod enums;
+
+#[cfg(all(test, feature = "core"))]
+#[path = "../../../tests/plain-server/unit/graphql/mod.rs"]
+mod macro_generation_tests;

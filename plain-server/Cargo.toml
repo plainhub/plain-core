@@ -9,10 +9,11 @@ description = "Shared Plain GraphQL, HTTP and native transport adapters"
 "default" = ["core", "http_transport", "media"]
 "media" = ["plain-rs/runtime-media"]
 "http_transport" = ["dep:serde_json", "dep:reqwest", "reqwest/rustls-tls", "dep:axum", "dep:axum-server", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
-"core" = ["dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:anyhow", "dep:async-graphql", "dep:axum", "dep:reqwest", "reqwest/rustls-tls", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
+"core" = ["dep:plain-graphql-macros", "dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:anyhow", "dep:async-graphql", "dep:axum", "dep:reqwest", "reqwest/rustls-tls", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
 
 
 [dependencies]
+plain-graphql-macros = { path = "../plain-graphql-macros", optional = true }
 plain-libs = { path = "../plain-libs", default-features = false }
 "subtle" = { "version" = "2", "optional" = true }
 "futures-util" = { "version" = "0.3", "default-features" = false, "features" = ["sink", "std"], "optional" = true }

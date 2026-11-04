@@ -2,7 +2,8 @@
 //!
 use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::text;
-use async_graphql::{Context, Enum, Object, SimpleObject};
+use async_graphql::{Context, Enum};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::Value;
 use std::sync::Arc;
@@ -30,12 +31,14 @@ impl ScreenMirrorMode {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ScreenMirrorQuality {
     pub mode: ScreenMirrorMode,
     pub resolution: i32,
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct ScreenMirrorVideoCodec {
     /// H.264 Annex-B codec configuration (SPS/PPS), base64-encoded.
     #[graphql(name = "annexB")]

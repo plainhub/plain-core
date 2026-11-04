@@ -1,5 +1,6 @@
 use crate::graphql::resolvers::files::app_file::AppFile;
-use async_graphql::{Context, Object};
+use async_graphql::Context;
+use plain_graphql_macros::object as Object;
 use plain_rs::features::files::app_files::FileStore;
 use std::sync::Arc;
 

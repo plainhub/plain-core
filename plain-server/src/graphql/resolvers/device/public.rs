@@ -1,7 +1,8 @@
 use crate::graphql::resolvers::app::types::Capability;
 use crate::graphql::types::KeyValuePair;
 use crate::graphql::types::facts::flag;
-use async_graphql::{ComplexObject, Context, Object, SimpleObject};
+use async_graphql::{ComplexObject, Context};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::services::device::permission::Permission;
 use plain_rs::features::services::device::types::*;
 use plain_rs::infrastructure::host::bridge::Host;
@@ -10,6 +11,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 #[derive(SimpleObject, Clone)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct App {
     pub client_id: String,

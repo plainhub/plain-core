@@ -10,7 +10,8 @@ use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::text;
 use crate::graphql::types::facts::{host_json, provider_params};
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Enum, ID, Object, SimpleObject};
+use async_graphql::{Context, Enum, ID};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::services::files::provider_query::Provider;
@@ -51,6 +52,7 @@ impl CallType {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct PhoneGeo {
     pub country: String,
     #[graphql(name = "numberType")]
@@ -60,6 +62,7 @@ pub struct PhoneGeo {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct Call {
     pub type_code: i32,

@@ -1,0 +1,23 @@
+[package]
+name = "plain-graphql-macros"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+description = "GraphQL object macros for Plain"
+license = "MIT OR Apache-2.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+darling = "=0.23.0"
+heck = "=0.5.0"
+proc-macro-crate = "=3.5.0"
+proc-macro2 = "=1.0.107"
+quote = "=1.0.47"
+syn = { version = "=2.0.119", features = ["extra-traits", "visit"] }
+thiserror = "=2.0.21"
+
+[package.metadata.upstream]
+repository = "https://github.com/async-graphql/async-graphql"
+revision = "73de5f9032a5ef7bacc181e97d54be763c5e7374"

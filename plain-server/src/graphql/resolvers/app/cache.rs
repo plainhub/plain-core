@@ -1,5 +1,6 @@
 use crate::server::ServerState;
-use async_graphql::{Context, Object};
+use async_graphql::Context;
+use plain_graphql_macros::object as Object;
 use plain_rs::infrastructure::types::Long;
 
 #[derive(Default)]

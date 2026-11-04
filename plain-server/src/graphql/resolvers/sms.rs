@@ -7,7 +7,8 @@ use crate::graphql::types::facts::list;
 use crate::graphql::types::facts::strings;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Enum, ID, Object, SimpleObject};
+use async_graphql::{Context, Enum, ID};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::sms::query as sms_query;
 use plain_rs::features::services::sms::send as sms_send;
@@ -46,6 +47,7 @@ impl SmsType {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct SmsAttachment {
     pub path: String,
     #[graphql(name = "contentType")]
@@ -54,6 +56,7 @@ pub struct SmsAttachment {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct Sms {
     pub id: ID,
@@ -88,6 +91,7 @@ impl Sms {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(getters = false)]
 pub struct SmsConversation {
     pub id: ID,
     pub address: String,
@@ -101,6 +105,7 @@ pub struct SmsConversation {
 }
 
 #[derive(SimpleObject, Clone, Debug, Default)]
+#[graphql(getters = false)]
 pub struct SmsCounts {
     pub total: i32,
     pub inbox: i32,

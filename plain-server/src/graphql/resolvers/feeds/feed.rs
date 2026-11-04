@@ -1,7 +1,8 @@
 use crate::graphql::resolvers::common::content_common;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::ActionResult;
-use async_graphql::{ComplexObject, Context, ID, Object, SimpleObject};
+use async_graphql::{ComplexObject, Context, ID};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 
@@ -14,17 +15,20 @@ use plain_rs::infrastructure::db::notes_feeds::FeedRow;
 type GqlResult<T> = async_graphql::Result<T>;
 
 #[derive(SimpleObject, Clone)]
+#[graphql(getters = false)]
 pub struct FeedPreview {
     pub title: String,
 }
 
 #[derive(SimpleObject, Clone)]
+#[graphql(getters = false)]
 pub struct FeedError {
     pub code: String,
     pub detail: String,
 }
 
 #[derive(SimpleObject, Clone)]
+#[graphql(getters = false)]
 pub struct Feed {
     pub id: ID,
     pub name: String,
@@ -38,6 +42,7 @@ pub struct Feed {
 }
 
 #[derive(SimpleObject, Clone)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct FeedEntry {
     pub id: ID,
@@ -82,6 +87,7 @@ impl FeedEntry {
 }
 
 #[derive(SimpleObject, Clone)]
+#[graphql(getters = false)]
 pub struct FeedEntryCount {
     pub id: ID,
     pub count: i32,

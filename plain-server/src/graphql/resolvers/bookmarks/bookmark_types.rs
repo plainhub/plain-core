@@ -1,10 +1,12 @@
 use crate::graphql::resolvers::common::content_common::instant as parse_instant;
-use async_graphql::{ComplexObject, ID, InputObject, SimpleObject};
+use async_graphql::{ComplexObject, ID, InputObject};
+use plain_graphql_macros::SimpleObject;
 use plain_rs::infrastructure::db::bookmark::DBookmark;
 use plain_rs::infrastructure::db::bookmark::DBookmarkGroup;
 use plain_rs::infrastructure::types::Instant;
 
 #[derive(SimpleObject, serde::Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 #[graphql(complex)]
 #[graphql(name = "Bookmark")]
@@ -44,6 +46,7 @@ impl From<DBookmark> for Bookmark {
 }
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 #[graphql(name = "BookmarkGroup")]
 pub struct BookmarkGroup {

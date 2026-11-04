@@ -1,6 +1,7 @@
 use super::types::NearbyDevice;
 use crate::server::ServerState;
-use async_graphql::{Context, Object};
+use async_graphql::Context;
+use plain_graphql_macros::object as Object;
 use std::collections::HashSet;
 
 #[derive(Default)]

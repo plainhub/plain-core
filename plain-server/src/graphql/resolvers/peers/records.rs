@@ -1,8 +1,9 @@
-use async_graphql::SimpleObject;
+use plain_graphql_macros::SimpleObject;
 use plain_rs::infrastructure::types::Instant;
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize, Clone, Debug)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct PeerAddress {
     best_ip: String,
@@ -38,7 +39,7 @@ struct PeerRecordInput {
 }
 #[derive(Default)]
 pub struct PeerRecordQuery;
-#[async_graphql::Object]
+#[plain_graphql_macros::object]
 impl PeerRecordQuery {
     async fn peer_file_url(
         &self,

@@ -1,6 +1,7 @@
 //! Public preference roots share the local Rust store and notify UI projections.
 
-use async_graphql::{Context, Json, Object};
+use async_graphql::{Context, Json};
+use plain_graphql_macros::object as Object;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::prefs::pref_keys::{APP_HOME_FEATURES, AUTO_CHECK_UPDATE, SKIP_VERSION};
 use serde_json::Value;

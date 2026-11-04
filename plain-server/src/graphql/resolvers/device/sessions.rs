@@ -1,11 +1,13 @@
 use crate::server::ServerState;
-use async_graphql::{Context, Object, Result, SimpleObject};
+use async_graphql::{Context, Result};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::sessions::SessionInfo;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct Session {
     client_id: String,
     client_name: String,

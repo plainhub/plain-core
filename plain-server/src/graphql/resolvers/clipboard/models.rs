@@ -1,8 +1,10 @@
-use async_graphql::{ID, Result, SimpleObject};
+use async_graphql::{ID, Result};
+use plain_graphql_macros::SimpleObject;
 use plain_rs::infrastructure::db::ClipboardRow;
 use plain_rs::infrastructure::types::Instant;
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 pub struct ClipboardItem {
     id: ID,
     text: String,

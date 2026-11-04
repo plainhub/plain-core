@@ -6,7 +6,8 @@ use crate::graphql::resolvers::media::public::MediaDataType;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Enum, Object, SimpleObject};
+use async_graphql::{Context, Enum};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::services::files::provider_query as provider_plan;
 use plain_rs::features::services::files::provider_query::Provider;
 use plain_rs::infrastructure::db::Db;
@@ -39,6 +40,7 @@ impl MergeTaskStatus {
 }
 
 #[derive(SimpleObject, Clone, Debug, Default)]
+#[graphql(getters = false)]
 pub struct MergeTask {
     pub status: MergeTaskStatus,
     pub value: Option<String>,

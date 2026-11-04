@@ -10,7 +10,7 @@ use crate::graphql::resolvers::packages::public::PackagesMutation;
 use crate::graphql::resolvers::packages::public::PackagesQuery;
 use crate::graphql::resolvers::sms::SmsMutation;
 use crate::graphql::resolvers::sms::SmsQuery;
-use async_graphql::MergedObject;
+use plain_graphql_macros::MergedObject;
 // Not named `Query`: async-graphql derives a merged object's GraphQL name
 // from its Rust type name, and this one is merged into `public::Query`.
 #[derive(MergedObject, Default)]

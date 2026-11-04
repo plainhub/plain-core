@@ -1,4 +1,4 @@
-use async_graphql::Object;
+use plain_graphql_macros::object as Object;
 use plain_rs::features::services::bookmarks::PageMetadata;
 use plain_rs::features::services::bookmarks::fetch_page_metadata;
 

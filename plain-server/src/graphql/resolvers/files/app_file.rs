@@ -1,4 +1,5 @@
-use async_graphql::{ComplexObject, Context, Object, SimpleObject};
+use async_graphql::{ComplexObject, Context};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use std::sync::Arc;
 
 use crate::graphql::types::parse_instant;
@@ -10,6 +11,7 @@ use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 #[graphql(name = "AppFile")]
 #[graphql(complex)]
 pub struct AppFile {

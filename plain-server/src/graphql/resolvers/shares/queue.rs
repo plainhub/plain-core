@@ -1,7 +1,8 @@
 use super::client_inputs::{SharedEntryInput, SharedLinkInput};
 use super::client_models::{SharedEntry, SharedLink};
 use crate::server::ServerState;
-use async_graphql::{Context, Enum, InputObject, Object, SimpleObject};
+use async_graphql::{Context, Enum, InputObject};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::infrastructure::types::Long;
 use serde::Deserialize;
 
@@ -46,11 +47,13 @@ enum SharedBatchStatus {
     Canceled,
 }
 #[derive(SimpleObject, Deserialize)]
+#[graphql(getters = false)]
 struct SharedDownloadFailure {
     path: String,
     error: String,
 }
 #[derive(SimpleObject, Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 struct SharedDownloadTask {
     id: async_graphql::ID,
@@ -76,6 +79,7 @@ struct SharedDownloadTask {
     failures: Vec<SharedDownloadFailure>,
 }
 #[derive(SimpleObject, Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 struct SharedDownloadQueue {
     runtime_id: String,

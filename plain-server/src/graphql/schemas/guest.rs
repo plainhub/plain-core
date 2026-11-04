@@ -1,9 +1,11 @@
 use crate::server::ServerState;
-use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject};
+use async_graphql::{Context, EmptyMutation, EmptySubscription, Schema};
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::files::shares::Service;
 use plain_rs::infrastructure::types::Long;
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct SharedFile {
     name: String,
     relative_path: String,
@@ -13,6 +15,7 @@ struct SharedFile {
     has_thumb: bool,
 }
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct SharedInfo {
     name: String,
     read_only: bool,

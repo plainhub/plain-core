@@ -29,7 +29,8 @@ pub enum AppUpdateDownloadStatus {
     Cancelled,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, async_graphql::SimpleObject)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, plain_graphql_macros::SimpleObject)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct AppUpdateDownload {
     pub core_id: async_graphql::ID,

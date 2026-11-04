@@ -1,11 +1,13 @@
 use crate::server::ServerState;
-use async_graphql::{Context, Object, SimpleObject};
+use async_graphql::Context;
+use plain_graphql_macros::{SimpleObject, object as Object};
 use plain_rs::features::services::discovery::mdns_runtime;
 use plain_rs::features::services::discovery::mdns_runtime::Request;
 use plain_rs::infrastructure::types::Long;
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 struct MdnsPacket {
     time: Long,
@@ -20,6 +22,7 @@ struct MdnsPacket {
 }
 
 #[derive(SimpleObject, Deserialize)]
+#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 struct MdnsService {
     service_type: String,
@@ -34,6 +37,7 @@ struct MdnsService {
 }
 
 #[derive(SimpleObject, Deserialize)]
+#[graphql(getters = false)]
 #[graphql(complex)]
 #[serde(rename_all = "camelCase")]
 struct MdnsState {
@@ -47,6 +51,7 @@ struct MdnsState {
 }
 
 #[derive(SimpleObject)]
+#[graphql(getters = false)]
 struct MdnsActivity {
     time: Long,
     event: String,

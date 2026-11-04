@@ -1,4 +1,5 @@
-use async_graphql::{Context, Object};
+use async_graphql::Context;
+use plain_graphql_macros::object as Object;
 pub use plain_rs::features::services::pomodoro::PomodoroSettings;
 pub use plain_rs::features::services::pomodoro::PomodoroToday;
 use plain_rs::features::services::pomodoro::Service;
