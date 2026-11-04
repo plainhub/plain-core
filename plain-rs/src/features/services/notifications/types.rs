@@ -1,6 +1,5 @@
 use crate::infrastructure::types::Instant;
-use async_graphql::ID;
-use async_graphql::SimpleObject;
+use plain_graphql::{ID, SimpleObject};
 
 #[derive(SimpleObject, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

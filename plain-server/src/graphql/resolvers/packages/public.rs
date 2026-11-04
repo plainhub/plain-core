@@ -10,7 +10,8 @@ use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::optional_instant;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Object};
+use plain_graphql::{Context, Object};
+
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::prefs::settings::FileSortBy;
 use plain_rs::infrastructure::db::Db;
@@ -29,15 +30,15 @@ impl PackagesQuery {
     async fn package_manifest(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<String> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<String> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "PACKAGES",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let statuses = ctx
             .data::<Arc<Host>>()?
             .call(
@@ -45,19 +46,19 @@ impl PackagesQuery {
                 serde_json::json!({"ids":[id.as_str()]}),
             )
             .await
-            .map_err(async_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::new)?;
         let path = statuses
             .get(id.as_str())
             .and_then(|item| item.get("path"))
             .and_then(Value::as_str)
             .filter(|path| !path.is_empty())
-            .ok_or_else(|| async_graphql::Error::new("Package not found"))?;
+            .ok_or_else(|| plain_graphql::Error::new("Package not found"))?;
         plain_rs::features::services::packages::read_manifest(
             ctx.data::<plain_rs::runtime::Runtime>()?,
             path,
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
 
     async fn packages(
@@ -67,14 +68,14 @@ impl PackagesQuery {
         offset: i32,
         limit: i32,
         sort_by: FileSortBy,
-    ) -> async_graphql::Result<Vec<Package>> {
+    ) -> plain_graphql::Result<Vec<Package>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "PACKAGES",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let items = package_items(ctx, &query, sort_by).await?;
         Ok(items
             .into_iter()
@@ -84,7 +85,7 @@ impl PackagesQuery {
             .collect())
     }
 
-    async fn package_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
+    async fn package_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
         if !public_gate::require_granted(ctx, &[PERMISSION]).await? {
             return Ok(0);
         }
@@ -93,28 +94,28 @@ impl PackagesQuery {
             "PACKAGES",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(package_items(ctx, &query, FileSortBy::NameAsc).await?.len() as i32)
     }
 
     async fn package_statuses(
         &self,
         ctx: &Context<'_>,
-        ids: Vec<async_graphql::ID>,
-    ) -> async_graphql::Result<Vec<PackageStatus>> {
+        ids: Vec<plain_graphql::ID>,
+    ) -> plain_graphql::Result<Vec<PackageStatus>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "PACKAGES",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let ids: Vec<String> = ids.iter().map(|id| id.0.clone()).collect();
         let facts = ctx
             .data_unchecked::<Arc<Host>>()
             .call("systemPackageStatuses", serde_json::json!({ "ids": ids }))
             .await
-            .map_err(|error| async_graphql::Error::new(error))?;
+            .map_err(|error| plain_graphql::Error::new(error))?;
         Ok(package_statuses(&ids, &facts))
     }
 }
@@ -127,20 +128,20 @@ impl PackagesMutation {
     async fn uninstall_packages(
         &self,
         ctx: &Context<'_>,
-        ids: Vec<async_graphql::ID>,
-    ) -> async_graphql::Result<bool> {
+        ids: Vec<plain_graphql::ID>,
+    ) -> plain_graphql::Result<bool> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "PACKAGES",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let ids: Vec<String> = ids.iter().map(|id| id.0.clone()).collect();
         ctx.data_unchecked::<Arc<Host>>()
             .call("systemUninstallPackages", serde_json::json!({ "ids": ids }))
             .await
-            .map_err(|error| async_graphql::Error::new(error))?;
+            .map_err(|error| plain_graphql::Error::new(error))?;
         Ok(true)
     }
 
@@ -148,23 +149,23 @@ impl PackagesMutation {
         &self,
         ctx: &Context<'_>,
         path: String,
-    ) -> async_graphql::Result<PackageInstallPending> {
+    ) -> plain_graphql::Result<PackageInstallPending> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "PACKAGES",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let receipt = plain_rs::features::services::packages::install::execute(
             ctx.data::<plain_rs::runtime::Runtime>()?,
             ctx.data::<Arc<Host>>()?.clone(),
             &path,
         )
         .await
-        .map_err(|error| async_graphql::Error::new(format!("Installation failed: {error}")))?;
+        .map_err(|error| plain_graphql::Error::new(format!("Installation failed: {error}")))?;
         Ok(PackageInstallPending {
-            id: async_graphql::ID::from(text(&receipt, "packageName")),
+            id: plain_graphql::ID::from(text(&receipt, "packageName")),
             updated_at: optional_instant(&receipt, "lastUpdateTime"),
             is_new: flag(&receipt, "isNew"),
         })
@@ -175,21 +176,21 @@ async fn package_items(
     ctx: &Context<'_>,
     query: &str,
     sort_by: FileSortBy,
-) -> async_graphql::Result<Vec<Value>> {
+) -> plain_graphql::Result<Vec<Value>> {
     let facts = ctx
         .data_unchecked::<Arc<Host>>()
         .call("systemPackageFacts", serde_json::json!({}))
         .await
-        .map_err(|error| async_graphql::Error::new(error))?;
+        .map_err(|error| plain_graphql::Error::new(error))?;
     let facts: Vec<Value> = serde_json::from_value(facts)
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     plain_rs::features::services::packages::query::packages(
         ctx.data_unchecked::<Arc<Db>>(),
         facts,
         query,
         sort_by.as_str(),
     )
-    .map_err(|error| async_graphql::Error::new(error.to_string()))
+    .map_err(|error| plain_graphql::Error::new(error.to_string()))
 }
 
 fn package(value: &Value) -> Package {

@@ -1,7 +1,8 @@
 use super::client_inputs::{SharedEntryInput, SharedLinkInput};
 use super::client_models::{SharedEntry, SharedLink};
 use crate::server::ServerState;
-use async_graphql::{Context, Enum, InputObject, Object, SimpleObject};
+use plain_graphql::{Context, Enum, InputObject, Object, SimpleObject};
+
 use plain_rs::infrastructure::types::Long;
 use serde::Deserialize;
 
@@ -26,7 +27,7 @@ impl From<SharedDownloadKind> for plain_rs::features::files::shares::batch_plan:
 
 #[derive(InputObject)]
 struct SharedDownloadInput {
-    message_id: async_graphql::ID,
+    message_id: plain_graphql::ID,
     kind: SharedDownloadKind,
     link: SharedLinkInput,
     url_token: String,
@@ -53,8 +54,8 @@ struct SharedDownloadFailure {
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SharedDownloadTask {
-    id: async_graphql::ID,
-    message_id: async_graphql::ID,
+    id: plain_graphql::ID,
+    message_id: plain_graphql::ID,
     r#type: SharedDownloadKind,
     title: String,
     target_dir: String,
@@ -89,7 +90,7 @@ impl SharedDownloadQuery {
     async fn shared_download_queue(
         &self,
         ctx: &Context<'_>,
-    ) -> async_graphql::Result<SharedDownloadQueue> {
+    ) -> plain_graphql::Result<SharedDownloadQueue> {
         let runtime = ctx.data::<ServerState>()?.shared_batches.clone();
         Ok(serde_json::from_value(
             tokio::task::spawn_blocking(move || runtime.queue.snapshot()).await?,
@@ -104,7 +105,7 @@ impl SharedDownloadMutation {
         &self,
         ctx: &Context<'_>,
         input: SharedDownloadInput,
-    ) -> async_graphql::Result<async_graphql::ID> {
+    ) -> plain_graphql::Result<plain_graphql::ID> {
         let state = ctx.data::<ServerState>()?;
         let runtime = state.shared_batches.clone();
         let downloads_base =
@@ -124,46 +125,46 @@ impl SharedDownloadMutation {
         };
         tokio::task::spawn_blocking(move || runtime.queue.enqueue(intent))
             .await?
-            .map(async_graphql::ID)
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+            .map(plain_graphql::ID)
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
     async fn retry_shared_download(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         plain_rs::features::services::peers::shared_batch::control(
             ctx.data::<ServerState>()?,
             &id,
             "retry",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
     async fn cancel_shared_download(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         plain_rs::features::services::peers::shared_batch::control(
             ctx.data::<ServerState>()?,
             &id,
             "cancel",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
     async fn remove_shared_download(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         plain_rs::features::services::peers::shared_batch::control(
             ctx.data::<ServerState>()?,
             &id,
             "remove",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
 }

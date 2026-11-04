@@ -50,8 +50,8 @@ async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
         .unwrap();
     let ids = rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>();
     let native = core.native_graphql().unwrap();
-    let response = native.execute(async_graphql::Request::new("mutation Delete($query: String!) { deleteMediaItems(type: DOC, query: $query) { affectedCount } }")
-        .variables(async_graphql::Variables::from_json(serde_json::json!({"query":format!("ids:{} trash:false",ids.join(","))})))).await;
+    let response = native.execute(plain_graphql::Request::new("mutation Delete($query: String!) { deleteMediaItems(type: DOC, query: $query) { affectedCount } }")
+        .variables(plain_graphql::Variables::from_json(serde_json::json!({"query":format!("ids:{} trash:false",ids.join(","))})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["deleteMediaItems"]["affectedCount"], 1);
@@ -77,7 +77,7 @@ async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
     );
     core.stop_core().await;
     let response = native
-        .execute(async_graphql::Request::new("{ __typename }"))
+        .execute(plain_graphql::Request::new("{ __typename }"))
         .await;
     assert!(
         !response.errors.is_empty(),
@@ -116,8 +116,8 @@ async fn image_delete_updates_index_before_any_parent_consumes_the_receipt() {
         .unwrap();
     let index = core.runtime_state().core.index.clone();
     let version = index.status().version;
-    let response = core.native_graphql().unwrap().execute(async_graphql::Request::new("mutation Delete($query: String!) { deleteMediaItems(type: IMAGE, query: $query) { affectedCount } }")
-        .variables(async_graphql::Variables::from_json(serde_json::json!({"query":format!("ids:{} trash:false",rows[0].id)})))).await;
+    let response = core.native_graphql().unwrap().execute(plain_graphql::Request::new("mutation Delete($query: String!) { deleteMediaItems(type: IMAGE, query: $query) { affectedCount } }")
+        .variables(plain_graphql::Variables::from_json(serde_json::json!({"query":format!("ids:{} trash:false",rows[0].id)})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["deleteMediaItems"]["affectedCount"],
@@ -179,7 +179,7 @@ async fn native_main_delete_has_no_host_exchange_and_publishes_each_event_once()
     let id = seed(&state.db, &source);
     let (_generation, mut requests) = state.host.connect();
     let mut events = state.events.subscribe();
-    let response = core.native_graphql().unwrap().execute(async_graphql::Request::new("mutation Delete($query: String!) { deleteMediaItems(type: DOC, query: $query) { affectedCount } }").variables(async_graphql::Variables::from_json(serde_json::json!({"query":format!("ids:{id} trash:false")})))).await;
+    let response = core.native_graphql().unwrap().execute(plain_graphql::Request::new("mutation Delete($query: String!) { deleteMediaItems(type: DOC, query: $query) { affectedCount } }").variables(plain_graphql::Variables::from_json(serde_json::json!({"query":format!("ids:{id} trash:false")})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert!(requests.try_recv().is_err());
     let mut content = 0;
@@ -233,9 +233,9 @@ async fn partial_main_media_actions_invalidate_only_completed_duration_entries()
             .save(duration(&bad, &bad_path))
             .unwrap();
         let revision = state.duration_cache.revision();
-        let response = core.native_graphql().unwrap().execute(async_graphql::Request::new(format!(
+        let response = core.native_graphql().unwrap().execute(plain_graphql::Request::new(format!(
             "mutation Delete($query: String!) {{ deleteMediaItems(type: {name}, query: $query) {{ affectedCount }} }}"
-        )).variables(async_graphql::Variables::from_json(serde_json::json!({"query":format!("ids:{good},{bad} trash:false")})))).await;
+        )).variables(plain_graphql::Variables::from_json(serde_json::json!({"query":format!("ids:{good},{bad} trash:false")})))).await;
         assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
         assert!(
             response.errors[0]

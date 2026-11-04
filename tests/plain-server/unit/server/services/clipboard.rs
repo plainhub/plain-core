@@ -51,7 +51,7 @@ async fn platform_callbacks_before_write_reply_do_not_republish_received_text() 
     let mut events = state.events.subscribe();
     let response = server
         .graphql_executor()
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"mutation { setClipboard(text: "remote callback fixture") }"#,
         ))
         .await;

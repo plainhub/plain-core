@@ -1,4 +1,4 @@
-use async_graphql::SimpleObject;
+use plain_graphql::SimpleObject;
 use plain_rs::infrastructure::types::Instant;
 
 #[derive(SimpleObject, Clone, Debug)]
@@ -7,10 +7,10 @@ pub struct ActionResult {
     pub affected_count: i32,
 }
 
-pub(crate) fn parse_instant(value: &str) -> async_graphql::Result<Instant> {
+pub(crate) fn parse_instant(value: &str) -> plain_graphql::Result<Instant> {
     chrono::DateTime::parse_from_rfc3339(value)
         .map(|dt| Instant(dt.with_timezone(&chrono::Utc)))
-        .map_err(|e| async_graphql::Error::new(format!("invalid stored timestamp: {e}")))
+        .map_err(|e| plain_graphql::Error::new(format!("invalid stored timestamp: {e}")))
 }
 
 /// The `app` root echoes a write back rather than reading the store again,

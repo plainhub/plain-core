@@ -56,7 +56,7 @@ async fn aware_config_uses_current_pairing_identity_and_rejects_corrupt_keys() {
     let native = server.native_graphql().unwrap();
     assert_eq!(snapshot(&state)["active"], json!([]));
     let removed = native
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "{ __type(name: \"PeerAwareConfig\") { name } }",
         ))
         .await;

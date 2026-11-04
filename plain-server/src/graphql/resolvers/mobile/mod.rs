@@ -10,8 +10,8 @@ use crate::graphql::resolvers::packages::public::PackagesMutation;
 use crate::graphql::resolvers::packages::public::PackagesQuery;
 use crate::graphql::resolvers::sms::SmsMutation;
 use crate::graphql::resolvers::sms::SmsQuery;
-use async_graphql::MergedObject;
-// Not named `Query`: async-graphql derives a merged object's GraphQL name
+use plain_graphql::MergedObject;
+// Not named `Query`: plain-graphql derives a merged object's GraphQL name
 // from its Rust type name, and this one is merged into `public::Query`.
 #[derive(MergedObject, Default)]
 pub struct MobileQuery(PackagesQuery, ContactsQuery, SmsQuery, CallsQuery);

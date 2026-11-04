@@ -1,7 +1,7 @@
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
-use async_graphql::SimpleObject;
+use plain_graphql::SimpleObject;
 use plain_rs::features::{chat::messages::share_card, files::shares::client};
 use serde::Deserialize;
 
@@ -10,21 +10,21 @@ use serde::Deserialize;
 pub(super) struct SharedLink {
     host: String,
     port: i32,
-    shared_id: async_graphql::ID,
+    shared_id: plain_graphql::ID,
     token: String,
     page_url: String,
 }
 
 #[derive(SimpleObject)]
 struct SharedPeerAddress {
-    id: async_graphql::ID,
+    id: plain_graphql::ID,
     ip: String,
     port: i32,
 }
 
 #[derive(SimpleObject)]
 struct SharedMessageCard {
-    share_id: async_graphql::ID,
+    share_id: plain_graphql::ID,
     url_token: String,
     peer_info: SharedPeerAddress,
     name: String,
@@ -111,8 +111,8 @@ impl From<client::File> for SharedEntry {
 }
 
 impl TryFrom<client::Info> for SharedLinkInfo {
-    type Error = async_graphql::Error;
-    fn try_from(row: client::Info) -> async_graphql::Result<Self> {
+    type Error = plain_graphql::Error;
+    fn try_from(row: client::Info) -> plain_graphql::Result<Self> {
         Ok(Self {
             name: row.name,
             read_only: row.read_only,
@@ -122,7 +122,7 @@ impl TryFrom<client::Info> for SharedLinkInfo {
                 .map(|value| {
                     chrono::DateTime::from_timestamp_millis(value)
                         .map(Instant)
-                        .ok_or_else(|| async_graphql::Error::new("Invalid share expiry"))
+                        .ok_or_else(|| plain_graphql::Error::new("Invalid share expiry"))
                 })
                 .transpose()?,
             url_token: row.url_token,
@@ -134,7 +134,7 @@ impl TryFrom<client::Info> for SharedLinkInfo {
 impl TryFrom<plain_rs::features::services::peers::shared_client::BrowseResult>
     for SharedBrowseResult
 {
-    type Error = async_graphql::Error;
+    type Error = plain_graphql::Error;
     fn try_from(
         value: plain_rs::features::services::peers::shared_client::BrowseResult,
     ) -> Result<Self, Self::Error> {

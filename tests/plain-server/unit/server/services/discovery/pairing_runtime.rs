@@ -186,7 +186,7 @@ async fn native_main_pairing_queries_are_read_only_and_reject_stale_request_iden
     let (_dir, server) = fixture("fixture");
     let native = server.native_graphql().unwrap();
     let response = native
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"{ pairingStates { deviceId generation phase } }"#,
         ))
         .await;
@@ -201,7 +201,7 @@ async fn native_main_pairing_queries_are_read_only_and_reject_stale_request_iden
             .unwrap()
     );
     let response = native
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"mutation { cancelPairing(generation:"absent") }"#,
         ))
         .await;

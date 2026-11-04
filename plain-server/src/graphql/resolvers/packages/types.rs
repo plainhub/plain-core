@@ -1,6 +1,5 @@
-use async_graphql::Enum;
-use async_graphql::ID;
-use async_graphql::SimpleObject;
+use plain_graphql::{Enum, ID, SimpleObject};
+
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 

@@ -1,6 +1,6 @@
 use super::events;
-use async_graphql::{Context, Result, Subscription};
 use futures_util::stream::BoxStream;
+use plain_graphql::{Context, Result, Subscription};
 use plain_rs::features::services::notifications::types::Notification;
 
 #[derive(Default)]

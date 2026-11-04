@@ -2,7 +2,8 @@
 //! library core (`the shared SQLite database`), same behavior as the server.
 //! The mutations return the whole updated list (phone contract).
 
-use async_graphql::{Context, Object, Result};
+use plain_graphql::{Context, Object, Result};
+
 use plain_rs::features::favorites as favorite_folders;
 use std::sync::Arc;
 

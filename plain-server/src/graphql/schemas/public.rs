@@ -40,7 +40,8 @@ use crate::graphql::resolvers::settings::public::PrefsQuery;
 use crate::graphql::resolvers::tags::public::TagsMutation;
 use crate::graphql::resolvers::tags::public::TagsQuery;
 use crate::graphql::subscriptions::Subscription;
-use async_graphql::{MergedObject, Schema};
+use plain_graphql::{MergedObject, Schema};
+
 use std::sync::Arc;
 
 #[derive(MergedObject, Default)]
@@ -140,7 +141,6 @@ pub(crate) fn build_with_runtime(runtime: plain_rs::runtime::Runtime) -> PublicS
         Mutation::default(),
         Subscription::default(),
     )
-    .extension(crate::graphql::enum_literals::EnumLiteralValidation)
     .register_output_type::<crate::graphql::resolvers::media::item::MediaItem>()
     .data(runtime.clone())
     .data(crate::graphql::resolvers::tags::loader::new(

@@ -1,6 +1,7 @@
 use crate::graphql::resolvers::peers::query::Query;
 use crate::server::ServerState;
-use async_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
+use plain_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
+
 use plain_rs::features::chat::enums::ChannelSystemMessageType;
 use plain_rs::features::chat::enums::ChatStatus;
 use plain_rs::infrastructure::db::DChat;
@@ -48,7 +49,7 @@ impl Mutation {
         &self,
         ctx: &Context<'_>,
         content: String,
-    ) -> async_graphql::Result<Vec<ChatItem>> {
+    ) -> plain_graphql::Result<Vec<ChatItem>> {
         let c = ctx.data_unchecked::<PeerContext>();
         let Some(received) = plain_rs::features::chat::messages::message_lifecycle::receive(
             &c.state.db,
@@ -97,7 +98,7 @@ impl Mutation {
         ctx: &Context<'_>,
         r#type: ChannelSystemMessageType,
         payload: String,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         let c = ctx.data_unchecked::<PeerContext>();
         match plain_rs::features::services::chat::channel_runtime::receive(
             &c.state,
@@ -114,7 +115,7 @@ impl Mutation {
             }
         }
     }
-    async fn start_aware(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+    async fn start_aware(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
         let c = ctx.data_unchecked::<PeerContext>();
         Ok(c.state
             .aware
@@ -125,7 +126,6 @@ impl Mutation {
 pub(crate) type PeerSchema = Schema<Query, Mutation, EmptySubscription>;
 pub(crate) fn schema() -> PeerSchema {
     Schema::build(Query, Mutation, EmptySubscription)
-        .extension(crate::graphql::enum_literals::EnumLiteralValidation)
         .register_output_type::<plain_rs::infrastructure::types::Long>()
         .register_output_type::<plain_rs::features::chat::enums::PeerStatus>()
         .limit_depth(16)
@@ -144,7 +144,7 @@ pub(crate) async fn execute(
         Ok(authenticated) => authenticated,
         Err(error) => return (error.http_status(), vec![]),
     };
-    let request = match serde_json::from_str::<async_graphql::Request>(&authenticated.graphql_json)
+    let request = match serde_json::from_str::<plain_graphql::Request>(&authenticated.graphql_json)
     {
         Ok(request) => request,
         Err(_) => return (400, vec![]),

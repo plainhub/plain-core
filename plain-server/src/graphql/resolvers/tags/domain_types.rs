@@ -1,5 +1,4 @@
-use async_graphql::ID;
-use async_graphql::SimpleObject;
+use plain_graphql::{ID, SimpleObject};
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct Tag {

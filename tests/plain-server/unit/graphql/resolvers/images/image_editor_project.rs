@@ -110,7 +110,7 @@ async fn binary_delta_does_not_invalidate_content() {
         server
             .native_graphql()
             .unwrap()
-            .execute(async_graphql::Request::new(
+            .execute(plain_graphql::Request::new(
                 r#"mutation {broadcastImageEditorUpdate(id:"p",update:"AQID")}"#,
             ))
             .await,

@@ -1,7 +1,7 @@
 use crate::infrastructure::types::Instant;
 use crate::infrastructure::types::Long;
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 pub enum DeviceType {
     #[default]
     Computer,
@@ -13,7 +13,7 @@ pub enum DeviceType {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 pub enum DevicePlatform {
     #[default]
     Android,
@@ -24,7 +24,7 @@ pub enum DevicePlatform {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 pub enum AppChannelType {
     #[default]
     Github,
@@ -33,7 +33,7 @@ pub enum AppChannelType {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 pub struct DisplayInfo {
     pub width: i32,
     pub height: i32,
@@ -41,7 +41,7 @@ pub struct DisplayInfo {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 pub struct AndroidExtras {
     #[cfg_attr(feature = "graphql", graphql(name = "sdkVersion"))]
     pub sdk_version: i32,
@@ -69,7 +69,7 @@ pub struct AndroidExtras {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 pub struct DeviceInfo {
     pub name: String,
     pub platform: DevicePlatform,
@@ -99,14 +99,14 @@ pub struct DeviceInfo {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 pub struct Temperature {
     pub label: String,
     pub celsius: f64,
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 pub struct DeviceStatus {
     #[cfg_attr(feature = "graphql", graphql(name = "uptimeSec"))]
     pub uptime_sec: Long,

@@ -79,7 +79,7 @@ pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut graphql::Stream) -> R
                 payload.errors
             );
             if payload.extensions.get("subscriptionReady")
-                == Some(&async_graphql::Value::Boolean(true))
+                == Some(&plain_graphql::Value::Boolean(true))
             {
                 return Ok(Incoming::Ready);
             }

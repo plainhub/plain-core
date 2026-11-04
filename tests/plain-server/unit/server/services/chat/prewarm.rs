@@ -34,7 +34,7 @@ async fn conversation_reads_prepare_once_in_background_and_skip_searches_and_pag
         ("peer:unknown", 0, 20),
     ] {
         let response = executor
-            .execute(async_graphql::Request::new(format!(
+            .execute(plain_graphql::Request::new(format!(
                 "{{chatRecords(query:{},offset:{offset},limit:{limit}){{id}}}}",
                 json!(query),
             )))
@@ -44,7 +44,7 @@ async fn conversation_reads_prepare_once_in_background_and_skip_searches_and_pag
     tokio::task::yield_now().await;
     assert!(requests.try_recv().is_err());
     let response = executor
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"{chatCount(query:"peer:peer") chatConversations{id}}"#,
         ))
         .await;
@@ -58,7 +58,7 @@ async fn conversation_reads_prepare_once_in_background_and_skip_searches_and_pag
         };
         let response = tokio::time::timeout(
             std::time::Duration::from_secs(1),
-            executor.execute(async_graphql::Request::new(document)),
+            executor.execute(plain_graphql::Request::new(document)),
         )
         .await
         .unwrap();

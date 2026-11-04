@@ -1,5 +1,5 @@
 use crate::server::ContentServer;
-use async_graphql::Request;
+use plain_graphql::Request;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -78,13 +78,13 @@ async fn main_folder_share_and_batch_chat_use_shared_services_without_host_calls
     let state = server.runtime_state();
     let (_generation, mut requests) = state.host.connect();
     let result = server.graphql_executor().execute(Request::new(r#"mutation($path:String!){sendFolderShare(targets:["local"],path:$path,name:"Folder"){id content status}}"#)
-        .variables(async_graphql::Variables::from_json(json!({"path":shared})))).await;
+        .variables(plain_graphql::Variables::from_json(json!({"path":shared})))).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
     assert_eq!(data["sendFolderShare"][0]["status"], "SENT");
     let share = state.db.share_list().unwrap().pop().unwrap();
     let result = server.graphql_executor().execute(Request::new(r#"mutation($id:ID!){sendShare(targets:["local","peer:local"],shareId:$id){id content status}}"#)
-        .variables(async_graphql::Variables::from_json(json!({"id":share.id})))).await;
+        .variables(plain_graphql::Variables::from_json(json!({"id":share.id})))).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert_eq!(
         result.data.into_json().unwrap()["sendShare"]
@@ -94,7 +94,7 @@ async fn main_folder_share_and_batch_chat_use_shared_services_without_host_calls
         2
     );
     let result = server.graphql_executor().execute(Request::new(r#"mutation($content:String!){sendChatItems(targets:["local","peer:local"],content:$content){id status}}"#)
-        .variables(async_graphql::Variables::from_json(json!({"content":json!({"type":"TEXT","value":{"text":"Hello"}}).to_string()})))).await;
+        .variables(plain_graphql::Variables::from_json(json!({"content":json!({"type":"TEXT","value":{"text":"Hello"}}).to_string()})))).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert_eq!(
         result.data.into_json().unwrap()["sendChatItems"]

@@ -1,5 +1,5 @@
 #[derive(Copy, Clone, Eq, PartialEq, Debug, serde::Serialize)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum FileSortBy {
     DateAsc,

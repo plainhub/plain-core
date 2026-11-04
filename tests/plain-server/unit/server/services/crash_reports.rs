@@ -1,9 +1,9 @@
 use crate::server::ContentServer;
 use serde_json::json;
 
-fn request(report: &str) -> async_graphql::Request {
-    async_graphql::Request::new("mutation($report:String!){createCrashReport(report:$report)}")
-        .variables(async_graphql::Variables::from_json(
+fn request(report: &str) -> plain_graphql::Request {
+    plain_graphql::Request::new("mutation($report:String!){createCrashReport(report:$report)}")
+        .variables(plain_graphql::Variables::from_json(
             json!({"report":report}),
         ))
 }

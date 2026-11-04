@@ -6,7 +6,8 @@ use crate::graphql::resolvers::media::public::MediaDataType;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Enum, Object, SimpleObject};
+use plain_graphql::{Context, Enum, Object, SimpleObject};
+
 use plain_rs::features::services::files::provider_query as provider_plan;
 use plain_rs::features::services::files::provider_query::Provider;
 use plain_rs::infrastructure::db::Db;
@@ -59,16 +60,16 @@ impl UploadQuery {
         &self,
         ctx: &Context<'_>,
         file_id: String,
-    ) -> async_graphql::Result<Vec<String>> {
+    ) -> plain_graphql::Result<Vec<String>> {
         ctx.data::<Arc<plain_rs::features::services::files::upload_chunks::UploadChunks>>()?
             .list(&file_id)
             .await
-            .map_err(async_graphql::Error::new)
+            .map_err(plain_graphql::Error::new)
     }
 
     /// `NONE` when no merge was ever started for this id, which is what a
     /// client sees before it calls `mergeChunks`.
-    fn merge_status(&self, ctx: &Context<'_>, file_id: String) -> async_graphql::Result<MergeTask> {
+    fn merge_status(&self, ctx: &Context<'_>, file_id: String) -> plain_graphql::Result<MergeTask> {
         Ok(merge_task(
             &ctx.data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
                 .status(&file_id),
@@ -81,21 +82,21 @@ pub struct FileOpsMutation;
 
 #[Object]
 impl FileOpsMutation {
-    async fn create_file(&self, ctx: &Context<'_>, path: String) -> async_graphql::Result<File> {
+    async fn create_file(&self, ctx: &Context<'_>, path: String) -> plain_graphql::Result<File> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let record = plain_rs::features::services::files::writes::execute(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
             plain_libs::filesystem::writes::Operation::CreateFile { path },
         )
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
         Ok(written_file(record))
     }
     async fn delete_files(
         &self,
         ctx: &Context<'_>,
         paths: Vec<String>,
-    ) -> async_graphql::Result<ActionResult> {
+    ) -> plain_graphql::Result<ActionResult> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let tasks =
             ctx.data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?;
@@ -109,7 +110,7 @@ impl FileOpsMutation {
         ctx: &Context<'_>,
         paths: Vec<String>,
         target: String,
-    ) -> async_graphql::Result<String> {
+    ) -> plain_graphql::Result<String> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let state = ctx.data::<crate::server::ServerState>()?;
         plain_rs::features::services::files::archive_operations::pack(
@@ -119,7 +120,7 @@ impl FileOpsMutation {
             state.stop.clone(),
         )
         .await
-        .map_err(async_graphql::Error::new)
+        .map_err(plain_graphql::Error::new)
     }
 
     async fn extract_zip_archive(
@@ -127,7 +128,7 @@ impl FileOpsMutation {
         ctx: &Context<'_>,
         path: String,
         target: String,
-    ) -> async_graphql::Result<String> {
+    ) -> plain_graphql::Result<String> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let state = ctx.data::<crate::server::ServerState>()?;
         plain_rs::features::services::files::archive_operations::unpack(
@@ -137,32 +138,32 @@ impl FileOpsMutation {
             state.stop.clone(),
         )
         .await
-        .map_err(async_graphql::Error::new)
+        .map_err(plain_graphql::Error::new)
     }
 
     async fn cache_zip_entry(
         &self,
         ctx: &Context<'_>,
         path: String,
-    ) -> async_graphql::Result<String> {
+    ) -> plain_graphql::Result<String> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let services = ctx.data::<plain_rs::runtime::Runtime>()?;
         let path = services
             .archives
             .preview(&services.file_platform, path)
             .await
-            .map_err(async_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::new)?;
         Ok(path.to_string_lossy().into_owned())
     }
 
-    async fn create_dir(&self, ctx: &Context<'_>, path: String) -> async_graphql::Result<File> {
+    async fn create_dir(&self, ctx: &Context<'_>, path: String) -> plain_graphql::Result<File> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let record = plain_rs::features::services::files::writes::execute(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
             plain_libs::filesystem::writes::Operation::CreateDirectory { path },
         )
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
         Ok(written_file(record))
     }
 
@@ -171,7 +172,7 @@ impl FileOpsMutation {
         ctx: &Context<'_>,
         path: String,
         name: String,
-    ) -> async_graphql::Result<Option<String>> {
+    ) -> plain_graphql::Result<Option<String>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         Ok(ctx
             .data::<Arc<plain_rs::features::services::files::file_tasks::FileTasks>>()?
@@ -185,7 +186,7 @@ impl FileOpsMutation {
         path: String,
         content: String,
         overwrite: bool,
-    ) -> async_graphql::Result<File> {
+    ) -> plain_graphql::Result<File> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let record = plain_rs::features::services::files::writes::execute(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
@@ -196,7 +197,7 @@ impl FileOpsMutation {
             },
         )
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
         Ok(written_file(record))
     }
 
@@ -206,12 +207,12 @@ impl FileOpsMutation {
         src: String,
         directory: String,
         name: String,
-    ) -> async_graphql::Result<Option<String>> {
+    ) -> plain_graphql::Result<Option<String>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         if (src.starts_with("content://") || src.starts_with("ph://"))
             && !public_gate::is_local(ctx)
         {
-            return Err(async_graphql::Error::new("no_permission"));
+            return Err(plain_graphql::Error::new("no_permission"));
         }
         Ok(plain_rs::features::services::files::named_copy::copy(
             ctx.data::<crate::server::ServerState>()?,
@@ -229,7 +230,7 @@ impl FileOpsMutation {
         src: String,
         dst: String,
         overwrite: bool,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         transfer(ctx, "COPY", src, dst, overwrite).await
     }
@@ -240,7 +241,7 @@ impl FileOpsMutation {
         src: String,
         dst: String,
         overwrite: bool,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         transfer(ctx, "MOVE", src, dst, overwrite).await
     }
@@ -249,12 +250,12 @@ impl FileOpsMutation {
         &self,
         ctx: &Context<'_>,
         file_id: String,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         let base = upload_base(ctx).await?;
         ctx.data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
             .delete(&base, &file_id)
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
 
     /// Starts the merge and returns immediately; completion arrives over the
@@ -267,7 +268,7 @@ impl FileOpsMutation {
         path: String,
         replace: bool,
         total_size: plain_rs::infrastructure::types::Long,
-    ) -> async_graphql::Result<MergeTask> {
+    ) -> plain_graphql::Result<MergeTask> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let platform =
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?;
@@ -316,7 +317,7 @@ impl FileOpsMutation {
         total_chunks: i32,
         file_name: String,
         total_size: plain_rs::infrastructure::types::Long,
-    ) -> async_graphql::Result<MergeTask> {
+    ) -> plain_graphql::Result<MergeTask> {
         start_merge(
             ctx,
             file_id,
@@ -341,7 +342,7 @@ impl MediaItemsMutation {
         ctx: &Context<'_>,
         r#type: MediaDataType,
         query: String,
-    ) -> async_graphql::Result<ActionResult> {
+    ) -> plain_graphql::Result<ActionResult> {
         require_explicit_query(&query)?;
         require_narrowing_media(ctx, r#type, &query).await?;
         let affected = media_action(ctx, "delete", r#type, &query, Value::Null).await?;
@@ -355,7 +356,7 @@ impl MediaItemsMutation {
         ctx: &Context<'_>,
         r#type: MediaDataType,
         query: String,
-    ) -> async_graphql::Result<ActionResult> {
+    ) -> plain_graphql::Result<ActionResult> {
         require_explicit_query(&query)?;
         require_narrowing_media(ctx, r#type, &query).await?;
         let affected = media_action(ctx, "trash", r#type, &query, Value::Null).await?;
@@ -369,7 +370,7 @@ impl MediaItemsMutation {
         ctx: &Context<'_>,
         r#type: MediaDataType,
         query: String,
-    ) -> async_graphql::Result<ActionResult> {
+    ) -> plain_graphql::Result<ActionResult> {
         require_explicit_query(&query)?;
         require_narrowing_media(ctx, r#type, &query).await?;
         let affected = media_action(ctx, "restore", r#type, &query, Value::Null).await?;
@@ -387,7 +388,7 @@ impl MediaItemsMutation {
         r#type: MediaDataType,
         query: String,
         dest_dir: String,
-    ) -> async_graphql::Result<ActionResult> {
+    ) -> plain_graphql::Result<ActionResult> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         require_explicit_query(&query)?;
         require_narrowing_media(ctx, r#type, &query).await?;
@@ -398,9 +399,9 @@ impl MediaItemsMutation {
     }
 }
 
-fn require_explicit_query(query: &str) -> async_graphql::Result<()> {
+fn require_explicit_query(query: &str) -> plain_graphql::Result<()> {
     if query.trim().is_empty() {
-        return Err(async_graphql::Error::new("explicit query required"));
+        return Err(plain_graphql::Error::new("explicit query required"));
     }
     Ok(())
 }
@@ -414,7 +415,7 @@ async fn require_narrowing_media(
     ctx: &Context<'_>,
     r#type: MediaDataType,
     query: &str,
-) -> async_graphql::Result<()> {
+) -> plain_graphql::Result<()> {
     let provider = match r#type {
         MediaDataType::AUDIO => Provider::Audio,
         MediaDataType::VIDEO => Provider::Video,
@@ -422,7 +423,7 @@ async fn require_narrowing_media(
         MediaDataType::DOC => Provider::Doc,
     };
     provider_plan::require_narrowing(ctx.data_unchecked::<Arc<Db>>(), provider, query)
-        .map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))
 }
 
 async fn transfer(
@@ -431,7 +432,7 @@ async fn transfer(
     src: String,
     dst: String,
     overwrite: bool,
-) -> async_graphql::Result<bool> {
+) -> plain_graphql::Result<bool> {
     let kind = match kind {
         "COPY" => plain_rs::features::files::tasks::FileTaskType::Copy,
         "MOVE" => plain_rs::features::files::tasks::FileTaskType::Move,
@@ -459,7 +460,7 @@ async fn media_action(
     r#type: MediaDataType,
     query: &str,
     dest: Value,
-) -> async_graphql::Result<i32> {
+) -> plain_graphql::Result<i32> {
     use plain_rs::features::media::actions::Action;
     let action = match action {
         "delete" => Action::Delete,
@@ -516,7 +517,7 @@ fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<plain_rs::features::prefs::Prefs> 
 #[path = "../../../../../tests/plain-server/unit/graphql/resolvers/files/operations.rs"]
 mod tests;
 
-async fn upload_base(ctx: &Context<'_>) -> async_graphql::Result<std::path::PathBuf> {
+async fn upload_base(ctx: &Context<'_>) -> plain_graphql::Result<std::path::PathBuf> {
     Ok(ctx
         .data::<Arc<plain_rs::features::services::files::upload_chunks::UploadChunks>>()?
         .directory()
@@ -528,7 +529,7 @@ async fn start_merge(
     count: i32,
     size: i64,
     kind: plain_rs::features::files::uploads::Kind,
-) -> async_graphql::Result<MergeTask> {
+) -> plain_graphql::Result<MergeTask> {
     let base = upload_base(ctx).await?;
     let store = ctx
         .data_unchecked::<std::sync::Arc<plain_rs::features::files::app_files::FileStore>>()
@@ -542,6 +543,6 @@ async fn start_merge(
     let value = runtime
         .start(store, base, id, count, size, kind, events)
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     Ok(merge_task(&value))
 }

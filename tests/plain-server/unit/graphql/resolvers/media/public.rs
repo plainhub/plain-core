@@ -652,10 +652,10 @@ async fn image_search_uses_the_original_query_for_text_filters_paging_and_count(
     );
     let response = schema
         .execute(
-            async_graphql::Request::new(
+            plain_graphql::Request::new(
                 "query($query:String!){images(query:$query,offset:1,limit:1,sortBy:NAME_ASC){title} imageCount(query:$query)}",
             )
-            .variables(async_graphql::Variables::from_json(json!({
+            .variables(plain_graphql::Variables::from_json(json!({
                 "query": "text:\"sunset blue\" bucket_id:/fixture trash:false"
             }))),
         )
@@ -823,9 +823,9 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     let mut failures = Vec::new();
     for (query, offset, limit, expected, count) in cases {
         let response = schema.execute(
-            async_graphql::Request::new(
+            plain_graphql::Request::new(
                 "query($query:String!,$offset:Int!,$limit:Int!){images(query:$query,offset:$offset,limit:$limit,sortBy:NAME_ASC){id} imageCount(query:$query)}",
-            ).variables(async_graphql::Variables::from_json(json!({"query":query,"offset":offset,"limit":limit}))),
+            ).variables(plain_graphql::Variables::from_json(json!({"query":query,"offset":offset,"limit":limit}))),
         ).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let data = response.data.into_json().unwrap();

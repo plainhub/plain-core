@@ -6,7 +6,7 @@ use crate::infrastructure::error::DomainResult;
 use rusqlite::{OptionalExtension, Transaction, params};
 use std::collections::HashSet;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 #[cfg_attr(feature = "graphql", graphql(name = "MediaAction"))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Action {

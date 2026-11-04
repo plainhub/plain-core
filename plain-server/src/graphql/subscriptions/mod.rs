@@ -13,7 +13,7 @@ pub(crate) mod operation;
 pub mod session;
 pub(crate) mod sms;
 
-#[derive(async_graphql::MergedSubscription, Default)]
+#[derive(plain_graphql::MergedSubscription, Default)]
 pub struct Subscription(
     app_state::AppStateSubscriptions,
     casting::CastingSubscriptions,

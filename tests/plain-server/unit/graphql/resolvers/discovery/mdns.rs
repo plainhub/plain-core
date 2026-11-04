@@ -17,7 +17,7 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
     )
     .unwrap();
     let native = server.native_graphql().unwrap();
-    let response = native.execute(async_graphql::Request::new("{ mdnsState { runtimeId revision running scanning services { instanceFqdn } packetsIn { time } packetsOut { time } } }")).await;
+    let response = native.execute(plain_graphql::Request::new("{ mdnsState { runtimeId revision running scanning services { instanceFqdn } packetsIn { time } packetsOut { time } } }")).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     let state = &data["mdnsState"];
@@ -27,12 +27,12 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
     assert_eq!(state["services"], json!([]));
     assert_eq!(state["packetsIn"], json!([]));
     let response = native
-        .execute(async_graphql::Request::new("mutation { stopDiscovery }"))
+        .execute(plain_graphql::Request::new("mutation { stopDiscovery }"))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["stopDiscovery"], true);
     let response = native
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "{ mdnsState { runtimeId running } }",
         ))
         .await;
@@ -41,7 +41,7 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
     assert_eq!(stopped["mdnsState"]["runtimeId"], state["runtimeId"]);
     assert_eq!(stopped["mdnsState"]["running"], false);
     let response = native
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "{ chatRecords(query: \"peer:unknown-peer\", offset: 0, limit: 20) { id } }",
         ))
         .await;
@@ -55,7 +55,7 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
         "capturing",
     ] {
         let response = native
-            .execute(async_graphql::Request::new(format!(
+            .execute(plain_graphql::Request::new(format!(
                 "{{mdnsState{{{field}}}}}"
             )))
             .await;
@@ -90,7 +90,7 @@ async fn native_schema_does_not_expose_platform_scan_lifecycle() {
     .unwrap();
     let native = server.native_graphql().unwrap();
     let retired = native
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "{ mdnsDebug { services { hostname } } }",
         ))
         .await;
@@ -102,7 +102,7 @@ async fn native_schema_does_not_expose_platform_scan_lifecycle() {
         "mutation { browseMdns { revision } }",
         "mutation { endBleScan(scanId: \"retired\") }",
     ] {
-        let response = native.execute(async_graphql::Request::new(request)).await;
+        let response = native.execute(plain_graphql::Request::new(request)).await;
         assert!(!response.errors.is_empty());
     }
     server.shutdown().await;
@@ -115,7 +115,7 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
     let executor = core.native_graphql().unwrap();
-    let request = async_graphql::Request::new(
+    let request = plain_graphql::Request::new(
         r#"mutation{setPref(key:"mdns_hostname",value:" renderer.local ")}"#,
     );
     let response = executor.execute(request).await;
@@ -129,7 +129,7 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
         "renderer.local"
     );
     let response = executor
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "{mdnsState{running services{hostname} activity{time event detail}}}",
         ))
         .await;
@@ -139,7 +139,7 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
     assert_eq!(value["mdnsState"]["services"], json!([]));
     assert_eq!(value["mdnsState"]["activity"], json!([]));
     let invalid = executor
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"mutation{setPref(key:"mdns_hostname",value:"invalid.example")}"#,
         ))
         .await;
@@ -152,7 +152,7 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
     );
     let remote = crate::graphql::executor::execute_graphql(
         &state.public,
-        async_graphql::Request::new("{mdnsState{activity{event}}}"),
+        plain_graphql::Request::new("{mdnsState{activity{event}}}"),
         crate::graphql::executor::RequestContext::remote(Some(state.clone())),
     )
     .await;
@@ -167,7 +167,7 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
     ] {
         assert!(
             !executor
-                .execute(async_graphql::Request::new(document))
+                .execute(plain_graphql::Request::new(document))
                 .await
                 .errors
                 .is_empty()
@@ -189,13 +189,13 @@ async fn status_and_browser_queries_do_not_collect_packet_capture_snapshots() {
         "query { state:mdnsState { ...Status } } fragment Status on MdnsState { runtimeId revision running scanning }",
     ] {
         let response = executor
-            .execute(async_graphql::Request::new(document))
+            .execute(plain_graphql::Request::new(document))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
     }
     let remote = crate::graphql::executor::execute_graphql(
         &state.public,
-        async_graphql::Request::new("{mdnsState{runtimeId revision running scanning}}"),
+        plain_graphql::Request::new("{mdnsState{runtimeId revision running scanning}}"),
         crate::graphql::executor::RequestContext::remote(Some(state.clone())),
     )
     .await;
@@ -208,7 +208,7 @@ async fn status_and_browser_queries_do_not_collect_packet_capture_snapshots() {
         0
     );
     let response = executor
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "{mdnsState{packetsIn{summary}}}",
         ))
         .await;

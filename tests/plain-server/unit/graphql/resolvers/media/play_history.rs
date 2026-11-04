@@ -30,8 +30,8 @@ fn audio(db: &Db, id: &str, title: &str, artist: &str) {
 }
 
 async fn query(schema: &PublicSchema, text: &str, offset: i32, limit: i32) -> Value {
-    let response = schema.execute(async_graphql::Request::new("query($query: String!, $offset: Int!, $limit: Int!) { mediaPlayHistory(query: $query, offset: $offset, limit: $limit) { mediaId positionMs playCount media { id title path } } }")
-        .variables(async_graphql::Variables::from_json(json!({"query":text,"offset":offset,"limit":limit})))
+    let response = schema.execute(plain_graphql::Request::new("query($query: String!, $offset: Int!, $limit: Int!) { mediaPlayHistory(query: $query, offset: $offset, limit: $limit) { mediaId positionMs playCount media { id title path } } }")
+        .variables(plain_graphql::Variables::from_json(json!({"query":text,"offset":offset,"limit":limit})))
         .data(RequestOrigin::Remote)).await;
     serde_json::to_value(response).unwrap()
 }

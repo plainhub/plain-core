@@ -1,7 +1,8 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::facts::rows;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Object, SimpleObject};
+use plain_graphql::{Context, Object, SimpleObject};
+
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 use serde_json::json;
@@ -17,22 +18,29 @@ use crate::graphql::resolvers::media::public::row;
 #[graphql(complex)]
 pub struct Doc {
     pub duration_ms: Long,
-    pub id: async_graphql::ID,
+    #[graphql(getter = true)]
+    pub id: plain_graphql::ID,
+    #[graphql(getter = true)]
     pub title: String,
+    #[graphql(getter = true)]
     pub path: String,
     pub extension: String,
+    #[graphql(getter = true)]
     pub size: Long,
     #[graphql(name = "bucketId")]
-    pub bucket_id: async_graphql::ID,
+    #[graphql(getter = true)]
+    pub bucket_id: plain_graphql::ID,
     #[graphql(name = "createdAt")]
+    #[graphql(getter = true)]
     pub created_at: Instant,
     #[graphql(name = "updatedAt")]
+    #[graphql(getter = true)]
     pub updated_at: Instant,
 }
 
-#[async_graphql::ComplexObject]
+#[plain_graphql::ComplexObject]
 impl Doc {
-    async fn tags(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<Vec<Tag>> {
+    async fn tags(&self, ctx: &plain_graphql::Context<'_>) -> plain_graphql::Result<Vec<Tag>> {
         crate::graphql::resolvers::tags::loader::load(
             ctx,
             plain_rs::features::enums::DataType::Doc,
@@ -53,7 +61,7 @@ pub struct DocsQuery;
 
 #[Object]
 impl DocsQuery {
-    async fn doc_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
+    async fn doc_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
         if !public_gate::require_granted(ctx, &[STORAGE]).await? {
             return Ok(0);
         }
@@ -67,7 +75,7 @@ impl DocsQuery {
         offset: i32,
         limit: i32,
         sort_by: plain_rs::features::prefs::settings::FileSortBy,
-    ) -> async_graphql::Result<Vec<Doc>> {
+    ) -> plain_graphql::Result<Vec<Doc>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let items = media_rows(
             ctx,
@@ -102,7 +110,7 @@ impl DocsQuery {
         &self,
         ctx: &Context<'_>,
         #[graphql(default)] query: String,
-    ) -> async_graphql::Result<Vec<DocExtGroup>> {
+    ) -> plain_graphql::Result<Vec<DocExtGroup>> {
         if !public_gate::require_granted(ctx, &[STORAGE]).await? {
             return Ok(Vec::new());
         }
@@ -113,7 +121,7 @@ impl DocsQuery {
         .await?
         .document_extensions(&query)
         .await
-        .map_err(async_graphql::Error::new)?
+        .map_err(plain_graphql::Error::new)?
         .into_iter()
         .map(|(ext, count)| DocExtGroup { ext, count })
         .collect())

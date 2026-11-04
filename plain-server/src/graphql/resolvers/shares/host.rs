@@ -1,5 +1,6 @@
 use crate::graphql::types::parse_instant;
-use async_graphql::{Context, ID, Object, SimpleObject};
+use plain_graphql::{Context, ID, Object, SimpleObject};
+
 use plain_rs::features::files::shares::Root;
 use plain_rs::features::files::shares::Service;
 use plain_rs::infrastructure::db::Db;
@@ -19,8 +20,8 @@ struct ShareRecord {
     updated_at: Instant,
     roots: Vec<Root>,
 }
-fn record(row: ShareRow) -> async_graphql::Result<ShareRecord> {
-    let roots = Service::roots(&row).map_err(|e| async_graphql::Error::new(e.to_string()))?;
+fn record(row: ShareRow) -> plain_graphql::Result<ShareRecord> {
+    let roots = Service::roots(&row).map_err(|e| plain_graphql::Error::new(e.to_string()))?;
     Ok(ShareRecord {
         id: ID(row.id),
         name: row.name,
@@ -41,13 +42,13 @@ impl ShareHostQuery {
         &self,
         ctx: &Context<'_>,
         id: ID,
-    ) -> async_graphql::Result<Option<ShareRecord>> {
+    ) -> plain_graphql::Result<Option<ShareRecord>> {
         ctx.data::<Arc<Db>>()?
             .share_get(&id)?
             .map(record)
             .transpose()
     }
-    fn share_records(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ShareRecord>> {
+    fn share_records(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<ShareRecord>> {
         ctx.data::<Arc<Db>>()?
             .share_list()?
             .into_iter()
@@ -66,7 +67,7 @@ impl ShareHostMutation {
         real_paths: Vec<String>,
         read_only: bool,
         expires_at: Option<Instant>,
-    ) -> async_graphql::Result<ShareRecord> {
+    ) -> plain_graphql::Result<ShareRecord> {
         let service = ctx.data::<Arc<Service>>()?.clone();
         record(
             blocking(move || {
@@ -87,7 +88,7 @@ impl ShareHostMutation {
         name: String,
         expires_at: Option<Instant>,
         real_paths: Option<Vec<String>>,
-    ) -> async_graphql::Result<ShareRecord> {
+    ) -> plain_graphql::Result<ShareRecord> {
         let service = ctx.data::<Arc<Service>>()?.clone();
         record(
             blocking(move || {
@@ -101,17 +102,17 @@ impl ShareHostMutation {
             .await?,
         )
     }
-    fn delete_share(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
+    fn delete_share(&self, ctx: &Context<'_>, id: ID) -> plain_graphql::Result<bool> {
         Ok(ctx.data::<Arc<Db>>()?.share_delete(&id)? > 0)
     }
 }
 
 async fn blocking<T: Send + 'static>(
     operation: impl FnOnce() -> anyhow::Result<T> + Send + 'static,
-) -> async_graphql::Result<T> {
+) -> plain_graphql::Result<T> {
     tokio::task::spawn_blocking(operation)
         .await?
-        .map_err(|e| async_graphql::Error::new(e.to_string()))
+        .map_err(|e| plain_graphql::Error::new(e.to_string()))
 }
 
 #[cfg(test)]

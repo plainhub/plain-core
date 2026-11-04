@@ -4,7 +4,7 @@ use crate::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 
 pub async fn granted(host: &Host) -> Result<Vec<String>, String> {
-    let names: Vec<&str> = <Permission as async_graphql::EnumType>::items()
+    let names: Vec<&str> = <Permission as plain_graphql::EnumType>::items()
         .iter()
         .map(|item| item.name)
         .collect();

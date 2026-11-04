@@ -96,7 +96,7 @@ async fn reads_come_from_the_rust_store() {
     assert!(data["prefs"].get("master_secret").is_none());
     let response = schema
         .execute(
-            async_graphql::Request::new("{prefs}")
+            plain_graphql::Request::new("{prefs}")
                 .data(crate::graphql::executor::RequestOrigin::Local),
         )
         .await;
@@ -220,10 +220,10 @@ async fn saved_data_uses_kv_and_drafts_are_scoped_to_the_full_target() {
         ("quick_note_draft", "note"),
     ] {
         let document = format!(r#"mutation {{ setSavedValue(key:{key:?},value:{value:?}) }}"#);
-        let response = schema.execute(async_graphql::Request::new(document)).await;
+        let response = schema.execute(plain_graphql::Request::new(document)).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let response = schema
-            .execute(async_graphql::Request::new(format!(
+            .execute(plain_graphql::Request::new(format!(
                 "{{savedValue(key:{key:?})}}"
             )))
             .await;
@@ -244,7 +244,7 @@ async fn saved_data_uses_kv_and_drafts_are_scoped_to_the_full_target() {
         "http_port",
     ] {
         let response = schema
-            .execute(async_graphql::Request::new(format!(
+            .execute(plain_graphql::Request::new(format!(
                 r#"mutation {{ setSavedValue(key:{key:?},value:"x") }}"#
             )))
             .await;
@@ -268,7 +268,7 @@ async fn remote_tools_receive_effective_app_home_features_without_local_settings
 
     let response = schema
         .execute(
-            async_graphql::Request::new(
+            plain_graphql::Request::new(
                 r#"mutation { setPref(key:"app_home_features", value:"NOTES|FILES") }"#,
             )
             .data(crate::graphql::executor::RequestOrigin::Local),
@@ -347,7 +347,7 @@ async fn file_index_scope_paths_and_writes_require_remote_storage_permission() {
     }
     let response = schema
         .execute(
-            async_graphql::Request::new("{prefs}")
+            plain_graphql::Request::new("{prefs}")
                 .data(crate::graphql::executor::RequestOrigin::Local),
         )
         .await;

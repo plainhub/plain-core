@@ -1,4 +1,5 @@
-use async_graphql::{ID, Result, SimpleObject};
+use plain_graphql::{ID, Result, SimpleObject};
+
 use plain_rs::infrastructure::db::ClipboardRow;
 use plain_rs::infrastructure::types::Instant;
 
@@ -13,7 +14,7 @@ pub struct ClipboardItem {
     created_at: Instant,
 }
 impl TryFrom<ClipboardRow> for ClipboardItem {
-    type Error = async_graphql::Error;
+    type Error = plain_graphql::Error;
     fn try_from(row: ClipboardRow) -> Result<Self> {
         Ok(Self {
             id: ID(row.id),

@@ -1,5 +1,6 @@
 use crate::server::ServerState;
-use async_graphql::{Context, Object, SimpleObject};
+use plain_graphql::{Context, Object, SimpleObject};
+
 use plain_rs::features::services::discovery::mdns_runtime;
 use plain_rs::features::services::discovery::mdns_runtime::Request;
 use plain_rs::infrastructure::types::Long;
@@ -52,10 +53,10 @@ struct MdnsActivity {
     event: String,
     detail: String,
 }
-#[async_graphql::ComplexObject]
+#[plain_graphql::ComplexObject]
 impl MdnsState {
     #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
-    fn activity(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<MdnsActivity>> {
+    fn activity(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<MdnsActivity>> {
         let runtime = &ctx.data::<ServerState>()?.mdns;
         let activity = runtime
             .browser_activity()
@@ -67,7 +68,7 @@ impl MdnsState {
                     detail: entry.detail,
                 })
             })
-            .collect::<async_graphql::Result<Vec<_>>>()?;
+            .collect::<plain_graphql::Result<Vec<_>>>()?;
         Ok(activity)
     }
 }
@@ -76,7 +77,7 @@ impl MdnsState {
 pub struct MdnsQuery;
 #[Object]
 impl MdnsQuery {
-    fn mdns_state(&self, ctx: &Context<'_>) -> async_graphql::Result<MdnsState> {
+    fn mdns_state(&self, ctx: &Context<'_>) -> plain_graphql::Result<MdnsState> {
         let state = ctx.data::<ServerState>()?;
         if *state.stop.borrow() {
             return Err("Server stopped".into());
@@ -95,8 +96,8 @@ impl MdnsMutation {
     async fn acquire_discovery(
         &self,
         ctx: &Context<'_>,
-        token: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        token: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         mdns_runtime::control(
             ctx.data::<ServerState>()?,
             Request::Acquire {
@@ -110,8 +111,8 @@ impl MdnsMutation {
     async fn release_discovery(
         &self,
         ctx: &Context<'_>,
-        token: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        token: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         mdns_runtime::control(
             ctx.data::<ServerState>()?,
             Request::Release {
@@ -128,7 +129,7 @@ impl MdnsMutation {
 #[path = "../../../../../tests/plain-server/unit/graphql/resolvers/discovery/mdns.rs"]
 mod tests;
 
-fn discovery_owner(ctx: &Context<'_>) -> async_graphql::Result<String> {
+fn discovery_owner(ctx: &Context<'_>) -> plain_graphql::Result<String> {
     if crate::http::auth::public_gate::is_local(ctx) {
         return Ok(ctx
             .data_opt::<plain_rs::infrastructure::host::request_scope::NativeRequestScope>()

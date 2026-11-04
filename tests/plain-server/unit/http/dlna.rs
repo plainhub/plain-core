@@ -480,10 +480,10 @@ impl MainDlnaClient {
             let response = self
                 .0
                 .execute(
-                    async_graphql::Request::new(
+                    plain_graphql::Request::new(
                         "mutation($value:JSON!){setPref(key:\"dlna\",value:$value)}",
                     )
-                    .variables(async_graphql::Variables::from_json(
+                    .variables(plain_graphql::Variables::from_json(
                         json!({"value":enabled}),
                     )),
                 )

@@ -3,9 +3,10 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::events::WS_POMODORO_ACTION;
 use crate::infrastructure::events::WsEvent;
 use crate::infrastructure::types::Instant;
-use async_graphql::{Enum, SimpleObject};
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
+use plain_graphql::{Enum, SimpleObject};
+
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

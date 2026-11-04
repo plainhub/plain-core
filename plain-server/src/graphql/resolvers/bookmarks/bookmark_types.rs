@@ -1,5 +1,6 @@
 use crate::graphql::resolvers::common::content_common::instant as parse_instant;
-use async_graphql::{ComplexObject, ID, InputObject, SimpleObject};
+use plain_graphql::{ComplexObject, ID, InputObject, SimpleObject};
+
 use plain_rs::infrastructure::db::bookmark::DBookmark;
 use plain_rs::infrastructure::db::bookmark::DBookmarkGroup;
 use plain_rs::infrastructure::types::Instant;
@@ -86,15 +87,15 @@ pub struct BookmarkInput {
 
 #[ComplexObject]
 impl Bookmark {
-    fn created_at(&self) -> async_graphql::Result<Instant> {
+    fn created_at(&self) -> plain_graphql::Result<Instant> {
         parse_instant(&self.created_at)
     }
 
-    fn updated_at(&self) -> async_graphql::Result<Instant> {
+    fn updated_at(&self) -> plain_graphql::Result<Instant> {
         parse_instant(&self.updated_at)
     }
 
-    fn last_clicked_at(&self) -> async_graphql::Result<Option<Instant>> {
+    fn last_clicked_at(&self) -> plain_graphql::Result<Option<Instant>> {
         self.last_clicked_at
             .as_deref()
             .map(parse_instant)
@@ -104,10 +105,10 @@ impl Bookmark {
 
 #[ComplexObject]
 impl BookmarkGroup {
-    fn created_at(&self) -> async_graphql::Result<Instant> {
+    fn created_at(&self) -> plain_graphql::Result<Instant> {
         parse_instant(&self.created_at)
     }
-    fn updated_at(&self) -> async_graphql::Result<Instant> {
+    fn updated_at(&self) -> plain_graphql::Result<Instant> {
         parse_instant(&self.updated_at)
     }
 }

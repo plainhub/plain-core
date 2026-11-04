@@ -1,7 +1,8 @@
 use crate::graphql::resolvers::common::content_common;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::ActionResult;
-use async_graphql::{ComplexObject, Context, ID, Object, SimpleObject};
+use plain_graphql::{ComplexObject, Context, ID, Object, SimpleObject};
+
 use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 
@@ -11,7 +12,7 @@ use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::db::notes_feeds::FeedEntryRow;
 use plain_rs::infrastructure::db::notes_feeds::FeedRow;
 
-type GqlResult<T> = async_graphql::Result<T>;
+type GqlResult<T> = plain_graphql::Result<T>;
 
 #[derive(SimpleObject, Clone)]
 pub struct FeedPreview {

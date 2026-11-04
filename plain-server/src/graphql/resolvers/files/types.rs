@@ -1,6 +1,5 @@
-use async_graphql::Enum;
-use async_graphql::ID;
-use async_graphql::SimpleObject;
+use plain_graphql::{Enum, ID, SimpleObject};
+
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
@@ -70,11 +69,11 @@ pub struct File {
     pub child_count: i32,
 }
 
-#[async_graphql::ComplexObject]
+#[plain_graphql::ComplexObject]
 impl File {
-    fn is_system(&self) -> async_graphql::Result<bool> {
+    fn is_system(&self) -> plain_graphql::Result<bool> {
         plain_libs::filesystem::system_items::contains(&self.path)
-            .map_err(async_graphql::Error::new)
+            .map_err(plain_graphql::Error::new)
     }
 }
 
@@ -138,7 +137,7 @@ pub struct VideoFileInfo {
     pub location: Option<Location>,
 }
 
-#[derive(async_graphql::Union, Clone, Debug)]
+#[derive(plain_graphql::Union, Clone, Debug)]
 pub enum MediaFileInfo {
     Image(ImageFileInfo),
     Audio(AudioFileInfo),

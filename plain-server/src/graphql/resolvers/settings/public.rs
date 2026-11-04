@@ -1,6 +1,7 @@
 //! Public preference roots share the local Rust store and notify UI projections.
 
-use async_graphql::{Context, Json, Object};
+use plain_graphql::{Context, Json, Object};
+
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::prefs::pref_keys::{APP_HOME_FEATURES, AUTO_CHECK_UPDATE, SKIP_VERSION};
 use serde_json::Value;
@@ -8,9 +9,9 @@ use std::sync::Arc;
 
 /// Measured in bytes, not characters: the limit is what the store has to
 /// hold, and a multi-byte value would slip past a character count.
-fn validate_value(value: &Value) -> async_graphql::Result<()> {
+fn validate_value(value: &Value) -> plain_graphql::Result<()> {
     if value.to_string().len() > 65536 {
-        return Err(async_graphql::Error::new("invalid_pref_value"));
+        return Err(plain_graphql::Error::new("invalid_pref_value"));
     }
     Ok(())
 }
@@ -20,7 +21,7 @@ pub struct PrefsQuery;
 
 #[Object]
 impl PrefsQuery {
-    fn prefs(&self, ctx: &Context<'_>) -> async_graphql::Result<Json<Value>> {
+    fn prefs(&self, ctx: &Context<'_>) -> plain_graphql::Result<Json<Value>> {
         let prefs = prefs(ctx);
         let index_allowed =
             crate::http::auth::public_gate::require(ctx, prefs, &["WRITE_EXTERNAL_STORAGE"])
@@ -57,7 +58,7 @@ impl PrefsQuery {
                         state
                             .media_scans
                             .snapshot()
-                            .map_err(async_graphql::Error::new)?,
+                            .map_err(plain_graphql::Error::new)?,
                     )?,
                 );
             }
@@ -72,13 +73,13 @@ impl PrefsQuery {
                         prefs,
                         &plain_rs::features::prefs::file_index::defaults(),
                     )
-                    .map_err(async_graphql::Error::new)?,
+                    .map_err(plain_graphql::Error::new)?,
                 )?,
             );
         }
         Ok(Json(Value::Object(values)))
     }
-    fn saved_value(&self, ctx: &Context<'_>, key: String) -> async_graphql::Result<Json<Value>> {
+    fn saved_value(&self, ctx: &Context<'_>, key: String) -> plain_graphql::Result<Json<Value>> {
         saved_key(&key)?;
         let state = ctx.data::<crate::server::ServerState>()?;
         Ok(Json(
@@ -97,12 +98,12 @@ impl PrefsMutation {
         ctx: &Context<'_>,
         key: String,
         value: Json<Value>,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         super::state::set_pref(ctx, &key, value.0).await?;
         Ok(true)
     }
 
-    async fn remove_pref(&self, ctx: &Context<'_>, key: String) -> async_graphql::Result<bool> {
+    async fn remove_pref(&self, ctx: &Context<'_>, key: String) -> plain_graphql::Result<bool> {
         authorize(ctx, &key)?;
         if matches!(key.as_str(), SKIP_VERSION | AUTO_CHECK_UPDATE) {
             let default = if key == SKIP_VERSION {
@@ -121,7 +122,7 @@ impl PrefsMutation {
         ctx: &Context<'_>,
         key: String,
         value: Json<Value>,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         saved_key(&key)?;
         validate_value(&value.0)?;
         let state = ctx.data::<crate::server::ServerState>()?;
@@ -144,17 +145,17 @@ fn is_local(ctx: &Context<'_>) -> bool {
 pub(crate) fn allowed(ctx: &Context<'_>, key: &str) -> bool {
     plain_rs::features::prefs::pref_keys::writable(key, is_local(ctx))
 }
-pub(crate) fn authorize(ctx: &Context<'_>, key: &str) -> async_graphql::Result<()> {
+pub(crate) fn authorize(ctx: &Context<'_>, key: &str) -> plain_graphql::Result<()> {
     if matches!(key, "media_source_dirs" | "file_index_excluded_dirs") {
         crate::http::auth::public_gate::require(ctx, prefs(ctx), &["WRITE_EXTERNAL_STORAGE"])?;
     }
     if !allowed(ctx, key) {
-        return Err(async_graphql::Error::new("Preference is not accessible"));
+        return Err(plain_graphql::Error::new("Preference is not accessible"));
     }
     Ok(())
 }
 
-fn saved_key(key: &str) -> async_graphql::Result<()> {
+fn saved_key(key: &str) -> plain_graphql::Result<()> {
     if matches!(
         key,
         "last_file_path" | "quick_note_draft" | "recent_searches" | "recent_save_dirs"
@@ -164,6 +165,6 @@ fn saved_key(key: &str) -> async_graphql::Result<()> {
     }) {
         Ok(())
     } else {
-        Err(async_graphql::Error::new("Unknown saved data key"))
+        Err(plain_graphql::Error::new("Unknown saved data key"))
     }
 }

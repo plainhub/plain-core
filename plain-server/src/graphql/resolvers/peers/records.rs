@@ -1,4 +1,4 @@
-use async_graphql::SimpleObject;
+use plain_graphql::SimpleObject;
 use plain_rs::infrastructure::types::Instant;
 use serde::Deserialize;
 
@@ -22,9 +22,9 @@ impl From<plain_rs::features::services::peers::peer_address::Address> for PeerAd
         }
     }
 }
-#[derive(async_graphql::InputObject, serde::Serialize)]
+#[derive(plain_graphql::InputObject, serde::Serialize)]
 struct PeerRecordInput {
-    id: async_graphql::ID,
+    id: plain_graphql::ID,
     name: String,
     ip: String,
     key: String,
@@ -38,15 +38,15 @@ struct PeerRecordInput {
 }
 #[derive(Default)]
 pub struct PeerRecordQuery;
-#[async_graphql::Object]
+#[plain_graphql::Object]
 impl PeerRecordQuery {
     async fn peer_file_url(
         &self,
-        ctx: &async_graphql::Context<'_>,
-        id: async_graphql::ID,
+        ctx: &plain_graphql::Context<'_>,
+        id: plain_graphql::ID,
         expected: PeerRecordInput,
         file_id: String,
-    ) -> async_graphql::Result<String> {
+    ) -> plain_graphql::Result<String> {
         let db = ctx.data::<crate::server::ServerState>()?.db.clone();
         let expected = serde_json::from_value(serde_json::to_value(expected)?)?;
         tokio::task::spawn_blocking(move || {
@@ -55,7 +55,7 @@ impl PeerRecordQuery {
             plain_rs::features::services::peers::peer_address::file_url(&peer, &file_id)
         })
         .await?
-        .map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
 }
 #[cfg(all(test, feature = "http_transport"))]

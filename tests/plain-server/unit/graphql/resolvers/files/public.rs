@@ -11,7 +11,7 @@ const GRANTED: &str = r#"["WRITE_EXTERNAL_STORAGE"]"#;
 #[tokio::test]
 async fn file_classification_is_available_in_the_main_file_contract_without_hiding_entries() {
     struct Files;
-    #[async_graphql::Object]
+    #[plain_graphql::Object]
     impl Files {
         async fn entries(&self) -> Vec<File> {
             ["/etc", "/home/person/etc"]
@@ -20,10 +20,10 @@ async fn file_classification_is_available_in_the_main_file_contract_without_hidi
                 .collect()
         }
     }
-    let schema = async_graphql::Schema::new(
+    let schema = plain_graphql::Schema::new(
         Files,
-        async_graphql::EmptyMutation,
-        async_graphql::EmptySubscription,
+        plain_graphql::EmptyMutation,
+        plain_graphql::EmptySubscription,
     );
     let response = schema.execute("{entries{path isSystem}}").await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -186,7 +186,7 @@ async fn file_info_combines_rust_gps_with_sdk_decode_bounds() {
     let path = dir.path().join("pic.jpg");
     fs::write(&path, image_gps_metadata()).unwrap();
     let response = schema
-        .execute(async_graphql::Request::new(format!(
+        .execute(plain_graphql::Request::new(format!(
             r#"query {{ fileInfo(path:{:?}) {{ path size updatedAt
                       data {{ ... on ImageFileInfo {{ width height location {{ latitude longitude }} }} }} }} }}"#,
             path.to_string_lossy()
@@ -217,7 +217,7 @@ async fn the_display_name_selects_the_media_type_and_rust_sniffs_the_container()
     )
     .unwrap();
     let response = schema
-        .execute(async_graphql::Request::new(format!(
+        .execute(plain_graphql::Request::new(format!(
             r#"query {{ fileInfo(path:{:?}, fileName:"track.m4a")
                       {{ data {{ ... on AudioFileInfo {{ durationMs location {{ latitude longitude }} }} }} }} }}"#,
             path.to_string_lossy()
@@ -550,8 +550,8 @@ async fn video_details_and_stat_only_aliases_use_rust_without_whole_host_metadat
     let path = dir.path().join("video.mp4");
     fs::write(&path, b"sample").unwrap();
     let execute = |query: &str| {
-        async_graphql::Request::new(query)
-            .variables(async_graphql::Variables::from_json(json!({"path":path})))
+        plain_graphql::Request::new(query)
+            .variables(plain_graphql::Variables::from_json(json!({"path":path})))
             .data(plain_rs::features::services::files::info::Info::sdk(
                 schema_host(&schema),
             ))
@@ -587,8 +587,8 @@ async fn native_main_image_info_reads_directly_without_media_host_dispatch() {
     let (_generation, mut requests) = core.runtime_state().host.connect();
     let path = directory.path().join("photo.png");
     image::RgbImage::new(3, 2).save(&path).unwrap();
-    let response = core.native_graphql().unwrap().execute(async_graphql::Request::new("query($path:String!){fileInfo(path:$path){data{... on ImageFileInfo{width height}}}}")
-        .variables(async_graphql::Variables::from_json(json!({"path":path})))).await;
+    let response = core.native_graphql().unwrap().execute(plain_graphql::Request::new("query($path:String!){fileInfo(path:$path){data{... on ImageFileInfo{width height}}}}")
+        .variables(plain_graphql::Variables::from_json(json!({"path":path})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["fileInfo"]["data"],
@@ -708,9 +708,9 @@ async fn native_main_audio_info_uses_shared_rust_parsing_without_the_media_featu
     )
     .unwrap();
     let (_generation, mut requests) = core.runtime_state().host.connect();
-    let response = core.native_graphql().unwrap().execute(async_graphql::Request::new(
+    let response = core.native_graphql().unwrap().execute(plain_graphql::Request::new(
         "query($path:String!){fileInfo(path:$path){data{... on AudioFileInfo{durationMs location{latitude longitude}}}}}"
-    ).variables(async_graphql::Variables::from_json(json!({"path":path})))).await;
+    ).variables(plain_graphql::Variables::from_json(json!({"path":path})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let info = response.data.into_json().unwrap()["fileInfo"]["data"].clone();
     assert_eq!(info["durationMs"].as_i64().unwrap() / 1000, 4);
@@ -761,8 +761,8 @@ async fn duration_only_media_info_uses_shared_rust_probing_through_aliases_and_f
     )
     .unwrap();
     let document = "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){metadata:data{__typename ...DurationOnly}}} fragment DurationOnly on AudioFileInfo{time:durationMs}";
-    let request = async_graphql::Request::new(document)
-        .variables(async_graphql::Variables::from_json(json!({"path":path})))
+    let request = plain_graphql::Request::new(document)
+        .variables(plain_graphql::Variables::from_json(json!({"path":path})))
         .data(plain_rs::features::services::files::info::Info::sdk(
             schema_host(&schema),
         ));
@@ -783,9 +783,9 @@ async fn type_only_media_info_never_requests_sdk_metadata() {
         ("photo.jpg", "ImageFileInfo"),
         ("audio.mp3", "AudioFileInfo"),
     ] {
-        let response = schema.execute(async_graphql::Request::new(
+        let response = schema.execute(plain_graphql::Request::new(
             "query($path:String!,$name:String!){fileInfo(path:$path,fileName:$name){data{__typename}}}"
-        ).variables(async_graphql::Variables::from_json(json!({"path":path,"name":name})))
+        ).variables(plain_graphql::Variables::from_json(json!({"path":path,"name":name})))
             .data(plain_rs::features::services::files::info::Info::sdk(schema_host(&schema))))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -805,9 +805,9 @@ async fn duration_only_video_info_does_not_read_stream_or_tag_metadata() {
         &path,
     )
     .unwrap();
-    let response = schema.execute(async_graphql::Request::new(
+    let response = schema.execute(plain_graphql::Request::new(
         "query($path:String!){fileInfo(path:$path){metadata:data{... on VideoFileInfo{time:durationMs}}}}"
-    ).variables(async_graphql::Variables::from_json(json!({"path":path})))
+    ).variables(plain_graphql::Variables::from_json(json!({"path":path})))
         .data(plain_rs::features::services::files::info::Info::sdk(schema_host(&schema))))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -834,9 +834,9 @@ async fn unknown_duration_only_file_info_returns_null_without_platform_metadata(
     });
     let path = directory.path().join("unrecognized.mp4");
     fs::write(&path, b"unsupported container").unwrap();
-    let response = schema.execute(async_graphql::Request::new(
+    let response = schema.execute(plain_graphql::Request::new(
         "query($path:String!){fileInfo(path:$path){data{... on VideoFileInfo{durationMs}}}}"
-    ).variables(async_graphql::Variables::from_json(json!({"path":path})))
+    ).variables(plain_graphql::Variables::from_json(json!({"path":path})))
         .data(plain_rs::features::services::files::info::Info::sdk(schema_host(&schema))))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -880,9 +880,9 @@ async fn file_queries_resolve_shared_references_and_preserve_the_requested_path(
         format!("fid:{suffix}"),
     ];
     for reference in references {
-        let response = schema.execute(async_graphql::Request::new(
+        let response = schema.execute(plain_graphql::Request::new(
             "query($path:String!){fileInfo(path:$path){path size data{... on VideoFileInfo{width height durationMs}}} pathExists(path:$path) pathKind(path:$path)}"
-        ).variables(async_graphql::Variables::from_json(json!({"path":reference})))).await;
+        ).variables(plain_graphql::Variables::from_json(json!({"path":reference})))).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let data = response.data.into_json().unwrap();
         assert_eq!(data["fileInfo"]["path"], reference);
@@ -904,9 +904,9 @@ async fn file_queries_resolve_shared_references_and_preserve_the_requested_path(
         "fid:invalid",
         "file://remote/clip.mp4",
     ] {
-        let response = schema.execute(async_graphql::Request::new(
+        let response = schema.execute(plain_graphql::Request::new(
             "query($path:String!){fileInfo(path:$path){path size data{__typename}} pathExists(path:$path) pathKind(path:$path)}"
-        ).variables(async_graphql::Variables::from_json(json!({"path":reference})))).await;
+        ).variables(plain_graphql::Variables::from_json(json!({"path":reference})))).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let data = response.data.into_json().unwrap();
         assert_eq!(data["fileInfo"]["path"], reference);
@@ -965,9 +965,9 @@ async fn audio_duration_selection_probes_unknown_file_names_without_sdk_metadata
             &path,
         )
         .unwrap();
-        let response = schema.execute(async_graphql::Request::new(
+        let response = schema.execute(plain_graphql::Request::new(
             "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){data{... on AudioFileInfo{durationMs}}}}"
-        ).variables(async_graphql::Variables::from_json(json!({"path":path})))
+        ).variables(plain_graphql::Variables::from_json(json!({"path":path})))
             .data(plain_rs::features::services::files::info::Info::sdk(schema_host(&schema))))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -996,9 +996,9 @@ async fn audio_duration_selection_keeps_null_for_missing_invalid_and_unknown_sou
         String::new(),
         "app://../outside".to_owned(),
     ] {
-        let response = schema.execute(async_graphql::Request::new(
+        let response = schema.execute(plain_graphql::Request::new(
             "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){data{... on AudioFileInfo{durationMs}}}}"
-        ).variables(async_graphql::Variables::from_json(json!({"path":path})))
+        ).variables(plain_graphql::Variables::from_json(json!({"path":path})))
             .data(plain_rs::features::services::files::info::Info::sdk(schema_host(&schema))))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -1026,9 +1026,9 @@ async fn audio_duration_selection_preserves_permission_and_probe_errors() {
         .unwrap()
         .shutdown()
         .await;
-    let response = schema.execute(async_graphql::Request::new(
+    let response = schema.execute(plain_graphql::Request::new(
         "query($path:String!){fileInfo(path:$path,fileName:\"audio.mp3\"){data{... on AudioFileInfo{durationMs}}}}"
-    ).variables(async_graphql::Variables::from_json(json!({"path":path})))).await;
+    ).variables(plain_graphql::Variables::from_json(json!({"path":path})))).await;
     assert_eq!(response.errors.len(), 1);
     assert_eq!(response.errors[0].message, "Media duration runtime stopped");
 }
@@ -1036,7 +1036,7 @@ async fn audio_duration_selection_preserves_permission_and_probe_errors() {
 #[tokio::test]
 async fn mount_labels_and_disk_models_are_available_in_the_main_schema() {
     struct Volumes;
-    #[async_graphql::Object]
+    #[plain_graphql::Object]
     impl Volumes {
         async fn mounts(&self) -> Vec<Mount> {
             vec![mount(
@@ -1044,10 +1044,10 @@ async fn mount_labels_and_disk_models_are_available_in_the_main_schema() {
             )]
         }
     }
-    let schema = async_graphql::Schema::new(
+    let schema = plain_graphql::Schema::new(
         Volumes,
-        async_graphql::EmptyMutation,
-        async_graphql::EmptySubscription,
+        plain_graphql::EmptyMutation,
+        plain_graphql::EmptySubscription,
     );
     let response = schema.execute("{mounts{name label diskModel}}").await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

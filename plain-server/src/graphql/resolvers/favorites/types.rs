@@ -1,4 +1,4 @@
-use async_graphql::SimpleObject;
+use plain_graphql::SimpleObject;
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct FavoriteFolder {

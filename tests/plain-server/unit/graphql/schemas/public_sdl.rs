@@ -1,5 +1,5 @@
 use crate::graphql::resolvers;
-use async_graphql::{
+use plain_graphql::{
     OutputType,
     registry::{MetaType, Registry},
 };

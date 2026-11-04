@@ -37,8 +37,8 @@ async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_
         server: &crate::server::ContentServer,
         expected: &DPeer,
         id: &str,
-    ) -> async_graphql::Response {
-        server.native_graphql().unwrap().execute(async_graphql::Request::new(r#"query($expected:PeerRecordInput!,$file:String!){peerFileUrl(id:"fixture",expected:$expected,fileId:$file)}"#).variables(async_graphql::Variables::from_json(json!({"expected":{"id":expected.id,"name":expected.name,"ip":expected.ip,"key":expected.key,"publicKey":expected.public_key,"status":expected.status,"port":expected.port,"deviceType":expected.device_type,"token":expected.token,"createdAt":expected.created_at,"updatedAt":expected.updated_at},"file":id})))).await
+    ) -> plain_graphql::Response {
+        server.native_graphql().unwrap().execute(plain_graphql::Request::new(r#"query($expected:PeerRecordInput!,$file:String!){peerFileUrl(id:"fixture",expected:$expected,fileId:$file)}"#).variables(plain_graphql::Variables::from_json(json!({"expected":{"id":expected.id,"name":expected.name,"ip":expected.ip,"key":expected.key,"publicKey":expected.public_key,"status":expected.status,"port":expected.port,"deviceType":expected.device_type,"token":expected.token,"createdAt":expected.created_at,"updatedAt":expected.updated_at},"file":id})))).await
     }
     let response = file(&server, &peer, file_id).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

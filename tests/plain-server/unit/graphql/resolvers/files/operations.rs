@@ -147,10 +147,10 @@ async fn delete_files_reports_what_was_actually_removed() {
     }
     let response = schema
         .execute(
-            async_graphql::Request::new(
+            plain_graphql::Request::new(
                 "mutation($paths:[String!]!) {deleteFiles(paths:$paths){affectedCount}}",
             )
-            .variables(async_graphql::Variables::from_json(json!({"paths":paths}))),
+            .variables(plain_graphql::Variables::from_json(json!({"paths":paths}))),
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -181,8 +181,8 @@ async fn deleting_no_paths_is_a_no_op() {
 async fn a_created_directory_reads_back_as_a_file_row() {
     let (dir, schema) = fixture(GRANTED);
     let path = dir.path().join("DCIM");
-    let response = schema.execute(async_graphql::Request::new("mutation($path:String!){createDir(path:$path){name path isDir childCount mediaId updatedAt}}")
-        .variables(async_graphql::Variables::from_json(json!({"path":path})))).await;
+    let response = schema.execute(plain_graphql::Request::new("mutation($path:String!){createDir(path:$path){name path isDir childCount mediaId updatedAt}}")
+        .variables(plain_graphql::Variables::from_json(json!({"path":path})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let value = response.data.into_json().unwrap();
     let row = &value["createDir"];
@@ -203,7 +203,7 @@ async fn a_refused_rename_reports_false() {
     });
     let response = schema
         .execute(
-            async_graphql::Request::new(r#"mutation { renameFile(path:"/a", name:"..") }"#)
+            plain_graphql::Request::new(r#"mutation { renameFile(path:"/a", name:"..") }"#)
                 .data("file-test".to_owned()),
         )
         .await;
@@ -219,8 +219,8 @@ async fn copy_and_move_use_the_shared_file_tasks() {
     for name in ["copyFile", "moveFile"] {
         std::fs::write(&source, "new").unwrap();
         std::fs::write(&destination, "old").unwrap();
-        let response = schema.execute(async_graphql::Request::new(format!("mutation($src:String!,$dst:String!){{{name}(src:$src,dst:$dst,overwrite:true)}}"))
-            .variables(async_graphql::Variables::from_json(json!({"src":source,"dst":destination}))).data("file-test".to_owned())).await;
+        let response = schema.execute(plain_graphql::Request::new(format!("mutation($src:String!,$dst:String!){{{name}(src:$src,dst:$dst,overwrite:true)}}"))
+            .variables(plain_graphql::Variables::from_json(json!({"src":source,"dst":destination}))).data("file-test".to_owned())).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(response.data.into_json().unwrap()[name], true);
         assert_eq!(std::fs::read_to_string(&destination).unwrap(), "new");
@@ -451,9 +451,9 @@ async fn file_uri_exports_replace_complete_bytes_and_preserve_existing_files_on_
         if complete {
             std::fs::write(chunks.join("chunk_1"), b"</opml>").unwrap();
         }
-        let response = schema.execute(async_graphql::Request::new(
+        let response = schema.execute(plain_graphql::Request::new(
             "mutation($path:String!){mergeChunks(fileId:\"export\",totalChunks:2,path:$path,replace:true,totalSize:13){status}}",
-        ).variables(async_graphql::Variables::from_json(json!({"path":uri})))).await;
+        ).variables(plain_graphql::Variables::from_json(json!({"path":uri})))).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let result = wait_merge(&schema, "export").await;
         if complete {
@@ -639,7 +639,7 @@ async fn main_upload_resume_query_observes_only_completed_native_byte_streams() 
     let uploads = core.native_uploads().unwrap();
     let mut pending = uploads.open_chunk("stream-fixture", 0, 3).await.unwrap();
     pending.write(b"abc").await.unwrap();
-    let response = executor.execute(async_graphql::Request::new(query)).await;
+    let response = executor.execute(plain_graphql::Request::new(query)).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["uploadedChunks"],
@@ -649,7 +649,7 @@ async fn main_upload_resume_query_observes_only_completed_native_byte_streams() 
     let mut aborted = uploads.open_chunk("stream-fixture", 1, 3).await.unwrap();
     aborted.write(b"x").await.unwrap();
     drop(aborted);
-    let response = executor.execute(async_graphql::Request::new(query)).await;
+    let response = executor.execute(plain_graphql::Request::new(query)).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["uploadedChunks"],
@@ -659,7 +659,7 @@ async fn main_upload_resume_query_observes_only_completed_native_byte_streams() 
     core.stop_core().await;
     assert!(
         !executor
-            .execute(async_graphql::Request::new(query))
+            .execute(plain_graphql::Request::new(query))
             .await
             .errors
             .is_empty()
@@ -682,8 +682,8 @@ async fn existing_media_delete_uses_shared_batches_and_refuses_blank_queries_bef
     for query in ["", " ", "\n\t"] {
         let response = schema
             .execute(
-                async_graphql::Request::new(document)
-                    .variables(async_graphql::Variables::from_json(json!({"query":query}))),
+                plain_graphql::Request::new(document)
+                    .variables(plain_graphql::Variables::from_json(json!({"query":query}))),
             )
             .await;
         assert_eq!(response.errors.len(), 1, "blank query must be rejected");
@@ -698,8 +698,8 @@ async fn existing_media_delete_uses_shared_batches_and_refuses_blank_queries_bef
     let mut requested = ids.clone();
     requested.push(ids[0].clone());
     let response = schema
-        .execute(async_graphql::Request::new(document).variables(
-            async_graphql::Variables::from_json(
+        .execute(plain_graphql::Request::new(document).variables(
+            plain_graphql::Variables::from_json(
                 json!({"query":format!("ids:{} trash:false",requested.join(","))}),
             ),
         ))

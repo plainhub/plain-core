@@ -29,7 +29,7 @@ async fn native_recent_files_use_the_owned_preferences_without_media_or_host_dis
     let response = core
         .native_graphql()
         .unwrap()
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "{ recentFiles { name path size isDir } }",
         ))
         .await;

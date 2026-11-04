@@ -9,7 +9,7 @@ use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 pub enum AudioSelectionAction {
     Next,
     Previous,

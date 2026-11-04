@@ -7,13 +7,11 @@
 //! convention.
 use crate::graphql::resolvers::tags::domain_types::Tag;
 
-use async_graphql::{Enum, ID, InputObject, SimpleObject};
+use plain_graphql::{Enum, ID, InputObject, SimpleObject};
+
 use plain_rs::infrastructure::types::Instant;
 
-/// The GraphQL enum name, which is also what the platform's kotlinx enum
-/// deserializer expects. Derived from the variant with the same case-boundary
-/// rule async-graphql uses, so the two cannot drift apart — the schema test
-/// pins that agreement against the rendered SDL.
+// The schema test verifies that GraphQL enum casing matches the platform wire name.
 fn screaming_snake(variant: &str) -> String {
     let mut name = String::new();
     for (index, ch) in variant.char_indices() {
@@ -229,9 +227,9 @@ pub struct Contact {
     pub updated_at: Instant,
 }
 
-#[async_graphql::ComplexObject]
+#[plain_graphql::ComplexObject]
 impl Contact {
-    async fn tags(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<Vec<Tag>> {
+    async fn tags(&self, ctx: &plain_graphql::Context<'_>) -> plain_graphql::Result<Vec<Tag>> {
         crate::graphql::resolvers::tags::loader::load(
             ctx,
             plain_rs::features::enums::DataType::Contact,

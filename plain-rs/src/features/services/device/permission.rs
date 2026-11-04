@@ -1,6 +1,6 @@
 #[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 pub enum Permission {
     WriteExternalStorage,
     ReadSms,

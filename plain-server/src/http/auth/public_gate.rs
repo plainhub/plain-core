@@ -7,7 +7,7 @@
 //! for it (`require_granted`), which plain-app's
 //! `Permission.enabledAndIsGrantedAsync` does and `checkEnabledAsync` does not.
 
-use async_graphql::Context;
+use plain_graphql::Context;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::host::bridge::Host;
 use std::sync::Arc;
@@ -27,28 +27,28 @@ pub(crate) fn is_local(ctx: &Context<'_>) -> bool {
 
 pub(crate) struct LocalOwner;
 
-impl async_graphql::Guard for LocalOwner {
-    async fn check(&self, ctx: &Context<'_>) -> async_graphql::Result<()> {
+impl plain_graphql::Guard for LocalOwner {
+    async fn check(&self, ctx: &Context<'_>) -> plain_graphql::Result<()> {
         if is_local(ctx) {
             Ok(())
         } else {
-            Err(async_graphql::Error::new("no_permission"))
+            Err(plain_graphql::Error::new("no_permission"))
         }
     }
 }
 
 pub(crate) fn require(
-    ctx: &async_graphql::Context<'_>,
+    ctx: &plain_graphql::Context<'_>,
     prefs: &Prefs,
     permissions: &[&str],
-) -> async_graphql::Result<()> {
+) -> plain_graphql::Result<()> {
     if is_local(ctx) {
         return Ok(());
     }
     if plain_rs::features::services::device::access::is_enabled(prefs, permissions) {
         Ok(())
     } else {
-        Err(async_graphql::Error::new("no_permission"))
+        Err(plain_graphql::Error::new("no_permission"))
     }
 }
 

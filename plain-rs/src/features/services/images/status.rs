@@ -1,6 +1,6 @@
 use serde::Serialize;
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Serialize)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ImageSearchStatusType {
     #[default]
@@ -12,7 +12,7 @@ pub enum ImageSearchStatusType {
 }
 
 #[derive(Clone, Debug, Serialize)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::SimpleObject))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 #[serde(rename_all = "camelCase")]
 pub struct ImageSearchStatus {
     pub status: ImageSearchStatusType,

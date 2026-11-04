@@ -3,7 +3,8 @@ use crate::graphql::resolvers::app::capability_types::{
     SambaSettings, SambaSettingsInput, SambaShare, SambaShareAuth,
 };
 use crate::server::ServerState;
-use async_graphql::{Context, Object, Result};
+use plain_graphql::{Context, Object, Result};
+
 use plain_rs::features::services::settings::types::AppUpdate;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_APPLY;
@@ -53,7 +54,7 @@ impl PlatformQuery {
                                 at.with_timezone(&chrono::Utc),
                             ),
                         })
-                        .map_err(|error| async_graphql::Error::new(error.to_string())),
+                        .map_err(|error| plain_graphql::Error::new(error.to_string())),
                 )
             })
             .collect()
@@ -70,8 +71,8 @@ impl PlatformQuery {
         require_capability(ctx, "DISK_MANAGER").await?;
         let disks = tokio::task::spawn_blocking(plain_rs::infrastructure::platform::disks::list)
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?
-            .map_err(async_graphql::Error::new)?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?
+            .map_err(plain_graphql::Error::new)?;
         Ok(disks
             .into_iter()
             .map(|disk| Disk {
@@ -96,7 +97,7 @@ impl PlatformQuery {
 async fn require_capability(ctx: &Context<'_>, name: &str) -> Result<()> {
     plain_rs::features::services::capabilities::require(ctx.data::<Arc<Host>>()?, name)
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))
 }
 
 async fn samba_service(ctx: &Context<'_>) -> Result<SambaServiceFacts> {
@@ -105,7 +106,7 @@ async fn samba_service(ctx: &Context<'_>) -> Result<SambaServiceFacts> {
         .data::<Arc<Host>>()?
         .call(SYSTEM_SAMBA_SERVICE_FACTS, serde_json::json!({}))
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
     Ok(serde_json::from_value(value)?)
 }
 
@@ -160,7 +161,7 @@ async fn samba_apply(
             serde_json::to_value(SambaApplyRequest { settings })?,
         )
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
     if value != serde_json::Value::Bool(true) {
         return Err("Samba apply failed".into());
     }
@@ -186,7 +187,7 @@ impl PlatformMutation {
                 serde_json::to_value(request)?,
             )
             .await
-            .map_err(async_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::new)?;
         if value != serde_json::Value::Bool(true) {
             return Err("Disk format failed".into());
         }
@@ -208,7 +209,7 @@ impl PlatformMutation {
                 })?,
             )
             .await
-            .map_err(async_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::new)?;
         if value != serde_json::Value::Bool(true) {
             return Err("Hostname update failed".into());
         }
@@ -225,7 +226,7 @@ impl PlatformMutation {
     fn set_mount_alias(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
+        id: plain_graphql::ID,
         alias: String,
     ) -> Result<bool> {
         let state = ctx.data::<ServerState>()?;
@@ -259,7 +260,7 @@ impl PlatformMutation {
             .collect();
         let settings =
             plain_rs::features::prefs::samba::configure(&state.prefs, input.enabled, shares)
-                .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+                .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         samba_apply(ctx, settings).await?;
         Ok(true)
     }
@@ -278,7 +279,7 @@ impl PlatformMutation {
                 serde_json::to_value(SambaPasswordRequest { password })?,
             )
             .await
-            .map_err(async_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::new)?;
         if value != serde_json::Value::Bool(true) {
             return Err("Samba password update failed".into());
         }

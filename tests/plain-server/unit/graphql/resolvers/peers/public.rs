@@ -250,7 +250,7 @@ async fn main_identity_rename_and_pairing_code_use_shared_preferences_and_refuse
     let executor = core.native_graphql().unwrap();
     let identity = "{app{clientId deviceName}}";
     let response = executor
-        .execute(async_graphql::Request::new(identity))
+        .execute(plain_graphql::Request::new(identity))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let value = response.data.into_json().unwrap();
@@ -266,13 +266,13 @@ async fn main_identity_rename_and_pairing_code_use_shared_preferences_and_refuse
     assert!(!settings["mdns_hostname"].as_str().unwrap().is_empty());
     let public_key = settings["signature_public_key"].clone();
     let changed = executor
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"mutation{updateDeviceName(name:"Shared device")}"#,
         ))
         .await;
     assert!(changed.errors.is_empty(), "{:?}", changed.errors);
     let response = executor
-        .execute(async_graphql::Request::new(identity))
+        .execute(plain_graphql::Request::new(identity))
         .await;
     let value = response.data.into_json().unwrap();
     assert_eq!(value["app"]["deviceName"], "Shared device");
@@ -297,7 +297,7 @@ async fn main_identity_rename_and_pairing_code_use_shared_preferences_and_refuse
     ] {
         assert!(
             !executor
-                .execute(async_graphql::Request::new(document))
+                .execute(plain_graphql::Request::new(document))
                 .await
                 .errors
                 .is_empty()

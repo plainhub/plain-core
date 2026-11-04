@@ -1,7 +1,5 @@
 use super::*;
-use async_graphql::{
-    CustomDirective, Directive, EmptySubscription, Enum, ID, InputObject, Json, Object, Schema,
-};
+use plain_graphql::{EmptySubscription, Enum, ID, InputObject, Json, Object, Schema};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -22,15 +20,6 @@ struct Nested {
 struct Filter {
     choices: Vec<Choice>,
     nested: Option<Nested>,
-}
-
-struct ChoiceDirective;
-impl CustomDirective for ChoiceDirective {}
-
-#[Directive(location = "Field")]
-fn choose(choice: Choice) -> impl CustomDirective {
-    let _ = choice;
-    ChoiceDirective
 }
 
 struct Query;
@@ -63,10 +52,7 @@ impl Mutation {
 
 fn schema() -> (Schema<Query, Mutation, EmptySubscription>, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
-    let schema = Schema::build(Query, Mutation(calls.clone()), EmptySubscription)
-        .extension(EnumLiteralValidation)
-        .directive(choose)
-        .finish();
+    let schema = Schema::build(Query, Mutation(calls.clone()), EmptySubscription).finish();
     (schema, calls)
 }
 
@@ -85,11 +71,10 @@ async fn quoted_enum_literals_are_rejected_without_any_resolver_side_effects() {
         r#"mutation { record(choice: "FIRST") @skip(if: true) }"#,
         r#"mutation($choice: Choice = "FIRST") { record(choice: $choice) }"#,
         r#"mutation($filter: Filter = {choices: ["FIRST"]}) { record(filter: $filter) }"#,
-        r#"mutation { record @choose(choice: "FIRST") }"#,
     ] {
         let response = schema.execute(query).await;
         assert!(!response.errors.is_empty(), "{query}: {response:?}");
-        assert_eq!(response.data, async_graphql::Value::Null, "{query}");
+        assert_eq!(response.data, plain_graphql::Value::Null, "{query}");
         assert!(!response.errors[0].locations.is_empty(), "{query}");
         assert_eq!(calls.load(Ordering::SeqCst), 0, "{query}");
     }
@@ -105,20 +90,19 @@ async fn enum_variables_tokens_defaults_and_unrelated_string_scalars_remain_vali
         "mutation($choice: Choice = FIRST) { record(choice: $choice) }",
         "mutation { ...Good } fragment Good on Mutation { record(choice: FIRST) }",
         r#"mutation { record(text: "FIRST", id: "SECOND", json: {choice: "FIRST", choices: ["SECOND"]}) }"#,
-        "mutation { record @choose(choice: FIRST) }",
     ] {
         let before = calls.load(Ordering::SeqCst);
         let response = schema.execute(query).await;
         assert!(response.errors.is_empty(), "{query}: {:?}", response.errors);
         assert_eq!(calls.load(Ordering::SeqCst), before + 1, "{query}");
     }
-    let response = schema.execute(async_graphql::Request::new(
+    let response = schema.execute(plain_graphql::Request::new(
         "mutation($choice: Choice, $filter: Filter, $matrix: [[Choice!]!]) { record(choice: $choice, filter: $filter, matrix: $matrix) }",
-    ).variables(async_graphql::Variables::from_json(serde_json::json!({
+    ).variables(plain_graphql::Variables::from_json(serde_json::json!({
         "choice": "FIRST", "filter": {"choices": ["FIRST", "SECOND"], "nested": {"choice": "SECOND"}}, "matrix": [["FIRST"], ["SECOND"]],
     })))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(calls.load(Ordering::SeqCst), 8);
+    assert_eq!(calls.load(Ordering::SeqCst), 7);
 }
 
 #[tokio::test]
@@ -131,9 +115,36 @@ async fn invalid_defaults_in_other_operations_and_invalid_unused_fragments_still
         "mutation Selected { ...Cycle } fragment Cycle on Mutation { ...Cycle }",
     ] {
         let response = schema
-            .execute(async_graphql::Request::new(query).operation_name("Selected"))
+            .execute(plain_graphql::Request::new(query).operation_name("Selected"))
             .await;
         assert!(!response.errors.is_empty(), "{query}: {response:?}");
         assert_eq!(calls.load(Ordering::SeqCst), 0, "{query}");
     }
+}
+
+#[test]
+fn enum_literals_in_directive_arguments_are_checked_without_extension_hooks() {
+    use plain_graphql::{
+        InputType,
+        registry::{__DirectiveLocation, MetaDirective, MetaInputValue},
+    };
+    let mut registry = Registry::default();
+    Choice::create_type_info(&mut registry);
+    registry.add_directive(MetaDirective {
+        name: "choose".into(),
+        description: None,
+        locations: vec![__DirectiveLocation::Field],
+        args: [("choice".into(), MetaInputValue::new("choice", "Choice"))].into(),
+        is_repeatable: false,
+    });
+    let quoted =
+        plain_graphql::parser::parse_query(r#"{ ready @choose(choice: "FIRST") }"#).unwrap();
+    let error = validate(&registry, &quoted).unwrap_err();
+    assert_eq!(
+        error.message,
+        "Enum \"Choice\" cannot represent a string literal."
+    );
+    assert!(!error.locations.is_empty());
+    let token = plain_graphql::parser::parse_query("{ ready @choose(choice: FIRST) }").unwrap();
+    assert!(validate(&registry, &token).is_ok());
 }

@@ -1,5 +1,6 @@
 use crate::graphql::resolvers::audio::public::AudioItem;
-use async_graphql::{Context, ID, Object, Result, SimpleObject};
+use plain_graphql::{Context, ID, Object, Result, SimpleObject};
+
 use plain_rs::features::media::audio::{commands, playback, queue};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::audio::host::Audio;
@@ -44,7 +45,7 @@ impl AudioCommandsMutation {
         #[graphql(default)] shuffle: bool,
     ) -> Result<Option<AudioSelection>> {
         if expected_revision.0 < 0 {
-            return Err(async_graphql::Error::new(
+            return Err(plain_graphql::Error::new(
                 "invalid audio selection revision",
             ));
         }

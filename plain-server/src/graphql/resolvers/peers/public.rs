@@ -2,7 +2,8 @@
 
 use crate::graphql::resolvers::device::public::device_type as parse_device_type;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Enum, InputObject, Object, SimpleObject};
+use plain_graphql::{Context, Enum, InputObject, Object, SimpleObject};
+
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::device::types::DeviceType;
 use plain_rs::infrastructure::host::bridge::Host;
@@ -20,7 +21,7 @@ pub enum DiscoveryMethod {
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct Peer {
-    pub id: async_graphql::ID,
+    pub id: plain_graphql::ID,
     pub name: String,
     pub ip: String,
     pub status: PeerStatus,
@@ -75,7 +76,7 @@ impl Peer {
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct Sim {
-    pub id: async_graphql::ID,
+    pub id: plain_graphql::ID,
     pub label: String,
     pub number: String,
     #[graphql(name = "subscriptionId")]
@@ -84,7 +85,7 @@ pub struct Sim {
 
 #[derive(InputObject, Clone)]
 pub struct PairingDeviceInput {
-    pub id: Option<async_graphql::ID>,
+    pub id: Option<plain_graphql::ID>,
     pub host: Option<String>,
     pub mode: Option<PairingMode>,
     pub password: Option<String>,
@@ -94,7 +95,7 @@ pub struct PairingDeviceInput {
 #[derive(InputObject, Clone, Debug)]
 pub struct PairingRequestInput {
     #[graphql(name = "fromId")]
-    pub from_id: async_graphql::ID,
+    pub from_id: plain_graphql::ID,
     #[graphql(name = "fromName")]
     pub from_name: String,
     pub port: i32,
@@ -130,7 +131,7 @@ impl From<PairingMode> for plain_rs::features::services::discovery::pairing_atte
 #[derive(SimpleObject, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PairingState {
-    device_id: Option<async_graphql::ID>,
+    device_id: Option<plain_graphql::ID>,
     generation: String,
     mode: PairingMode,
     phase: String,
@@ -143,7 +144,7 @@ pub struct PeersQuery;
 
 #[Object]
 impl PeersQuery {
-    async fn pairing_states(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<PairingState>> {
+    async fn pairing_states(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<PairingState>> {
         let value = plain_rs::features::services::discovery::pairing_runtime::execute(
             ctx.data::<crate::server::ServerState>()?,
             plain_rs::features::services::discovery::pairing_runtime::Request::States,
@@ -151,7 +152,7 @@ impl PeersQuery {
         .await?;
         Ok(serde_json::from_value(value)?)
     }
-    fn peers(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Peer>> {
+    fn peers(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Peer>> {
         let state = ctx.data::<crate::server::ServerState>()?;
         let rows = plain_rs::infrastructure::db::chat_store::peers::all(&state.db)?;
         let local = plain_rs::infrastructure::transport::lan::local_interfaces();
@@ -171,7 +172,7 @@ impl PeersQuery {
             .collect())
     }
 
-    async fn sims(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Sim>> {
+    async fn sims(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Sim>> {
         public_gate::require(
             ctx,
             ctx.data_unchecked::<Arc<Prefs>>(),
@@ -196,11 +197,11 @@ impl PeersMutation {
         &self,
         ctx: &Context<'_>,
         input: PairingDeviceInput,
-    ) -> async_graphql::Result<PairingState> {
+    ) -> plain_graphql::Result<PairingState> {
         if (input.mode == Some(PairingMode::Manage) || input.generation.is_some())
             && !crate::http::auth::public_gate::is_local(ctx)
         {
-            return Err(async_graphql::Error::new("no_permission"));
+            return Err(plain_graphql::Error::new("no_permission"));
         }
         let state = plain_rs::features::services::discovery::pairing_attempts::start(
             ctx.data::<crate::server::ServerState>()?,
@@ -220,7 +221,7 @@ impl PeersMutation {
         &self,
         ctx: &Context<'_>,
         generation: String,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         let state = ctx.data::<crate::server::ServerState>()?;
         if state
             .pairing_runtime
@@ -231,7 +232,7 @@ impl PeersMutation {
             })
             && !crate::http::auth::public_gate::is_local(ctx)
         {
-            return Err(async_graphql::Error::new("no_permission"));
+            return Err(plain_graphql::Error::new("no_permission"));
         }
         Ok(
             plain_rs::features::services::discovery::pairing_attempts::cancel(state, &generation)
@@ -244,7 +245,7 @@ impl PeersMutation {
         ctx: &Context<'_>,
         input: PairingRequestInput,
         accepted: bool,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         plain_rs::features::services::discovery::pairing_runtime::respond_device(
             ctx.data::<crate::server::ServerState>()?,
             serde_json::from_value(request(&input))?,
@@ -257,8 +258,8 @@ impl PeersMutation {
     async fn delete_peer(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         crate::graphql::resolvers::peers::actions::remove(
             ctx.data::<crate::server::ServerState>()?,
             id.as_str(),
@@ -270,8 +271,8 @@ impl PeersMutation {
     async fn unpair_peer(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         crate::graphql::resolvers::peers::actions::unpair(
             ctx.data::<crate::server::ServerState>()?,
             id.as_str(),
@@ -297,11 +298,11 @@ fn request(input: &PairingRequestInput) -> Value {
     })
 }
 
-async fn host_call(ctx: &Context<'_>, method: &str, params: Value) -> async_graphql::Result<Value> {
+async fn host_call(ctx: &Context<'_>, method: &str, params: Value) -> plain_graphql::Result<Value> {
     ctx.data_unchecked::<Arc<Host>>()
         .call(method, params)
         .await
-        .map_err(async_graphql::Error::new)
+        .map_err(plain_graphql::Error::new)
 }
 
 #[cfg(all(test, feature = "http_transport"))]

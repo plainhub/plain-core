@@ -1,7 +1,8 @@
 use crate::graphql::resolvers::clipboard::models::ClipboardItem;
 use crate::graphql::types::ActionResult;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Object};
+use plain_graphql::{Context, Object};
+
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
@@ -22,7 +23,7 @@ impl ClipboardQuery {
         query: String,
         offset: i32,
         limit: i32,
-    ) -> async_graphql::Result<Vec<ClipboardItem>> {
+    ) -> plain_graphql::Result<Vec<ClipboardItem>> {
         enabled(ctx)?;
         let (limit, offset) = if public_gate::is_local(ctx) {
             (limit, offset)
@@ -36,7 +37,7 @@ impl ClipboardQuery {
             .collect()
     }
 
-    fn clipboard_item_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
+    fn clipboard_item_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
         enabled(ctx)?;
         Ok(ctx.data::<Arc<Db>>()?.clipboard_count(&query)?.try_into()?)
     }
@@ -50,7 +51,7 @@ impl ClipboardMutation {
     /// Write text into the system clipboard on behalf of the calling client.
     /// The write is recorded with the caller as source; the local watcher
     /// sees it but skips re-broadcasting (hash dedup), so there is no loop.
-    async fn set_clipboard(&self, ctx: &Context<'_>, text: String) -> async_graphql::Result<bool> {
+    async fn set_clipboard(&self, ctx: &Context<'_>, text: String) -> plain_graphql::Result<bool> {
         enabled(ctx)?;
         let source = ctx
             .data_opt::<crate::graphql::executor::RequestClient>()
@@ -63,7 +64,7 @@ impl ClipboardMutation {
             source,
             false,
         )
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
         if let Some(state) = ctx.data_opt::<crate::server::ServerState>() {
             state.clipboard_changes.received(&text);
         }
@@ -71,7 +72,7 @@ impl ClipboardMutation {
             .data::<Arc<Host>>()?
             .call("systemSetClipboard", serde_json::json!({ "text": text }))
             .await
-            .map_err(async_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::new)?;
         Ok(serde_json::from_value(result)?)
     }
 
@@ -82,17 +83,17 @@ impl ClipboardMutation {
         &self,
         ctx: &Context<'_>,
         query: String,
-    ) -> async_graphql::Result<ActionResult> {
+    ) -> plain_graphql::Result<ActionResult> {
         enabled(ctx)?;
         if query.trim().is_empty() {
-            return Err(async_graphql::Error::new(
+            return Err(plain_graphql::Error::new(
                 "query is required for bulk mutations — pass 'all:true' to explicitly target everything",
             ));
         }
         let affected_count = ctx
             .data::<Arc<Db>>()?
             .clipboard_delete_query(&query)
-            .map_err(async_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::new)?;
         if affected_count > 0 {
             ctx.data::<Arc<Host>>()?
                 .invalidate("clipboardHistoryRefresh");
@@ -103,7 +104,7 @@ impl ClipboardMutation {
     }
 }
 
-fn enabled(ctx: &Context<'_>) -> async_graphql::Result<()> {
+fn enabled(ctx: &Context<'_>) -> plain_graphql::Result<()> {
     // plain-app's clipboard roots raise their own error here, not `no_permission`.
     if public_gate::is_local(ctx)
         || plain_rs::features::services::device::access::is_enabled(
@@ -113,7 +114,7 @@ fn enabled(ctx: &Context<'_>) -> async_graphql::Result<()> {
     {
         Ok(())
     } else {
-        Err(async_graphql::Error::new("clipboard_sync_disabled"))
+        Err(plain_graphql::Error::new("clipboard_sync_disabled"))
     }
 }
 

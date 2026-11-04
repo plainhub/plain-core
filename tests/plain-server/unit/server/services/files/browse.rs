@@ -39,11 +39,11 @@ async fn existing_file_queries_authorize_effective_parent_and_own_pages_counts_a
         native: &crate::native::graphql::NativeGraphqlExecutor,
         query: &str,
         variables: Value,
-    ) -> async_graphql::Response {
+    ) -> plain_graphql::Response {
         native
             .execute(
-                async_graphql::Request::new(query)
-                    .variables(async_graphql::Variables::from_json(variables)),
+                plain_graphql::Request::new(query)
+                    .variables(plain_graphql::Variables::from_json(variables)),
             )
             .await
     }

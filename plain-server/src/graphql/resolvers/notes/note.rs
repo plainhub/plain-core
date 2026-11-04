@@ -1,7 +1,8 @@
 use crate::graphql::resolvers::common::content_common;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::ActionResult;
-use async_graphql::{ComplexObject, Context, ID, InputObject, Object, SimpleObject};
+use plain_graphql::{ComplexObject, Context, ID, InputObject, Object, SimpleObject};
+
 use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;
 
@@ -10,7 +11,7 @@ use plain_rs::features::notes;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::db::notes_feeds::NoteRow;
 
-type GqlResult<T> = async_graphql::Result<T>;
+type GqlResult<T> = plain_graphql::Result<T>;
 
 #[derive(SimpleObject, Clone)]
 #[graphql(complex)]

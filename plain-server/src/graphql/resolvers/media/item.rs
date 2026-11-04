@@ -4,7 +4,7 @@ use crate::graphql::resolvers::{
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
-use async_graphql::{ID, Interface};
+use plain_graphql::{ID, Interface};
 
 #[derive(Interface)]
 #[graphql(

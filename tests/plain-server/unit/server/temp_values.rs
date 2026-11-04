@@ -7,7 +7,7 @@ async fn main_mutation_and_resource_store_share_one_runtime_and_keep_other_runti
     let response = first
         .native_graphql()
         .unwrap()
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"mutation { setTempValue(key:"selection",value:"[]") { key value } }"#,
         ))
         .await;

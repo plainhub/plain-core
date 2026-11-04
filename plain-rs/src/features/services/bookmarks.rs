@@ -106,7 +106,7 @@ pub fn import_bookmarks(db: &Db, html: &str) -> Result<i32> {
     .map_err(Into::into)
 }
 
-#[derive(async_graphql::SimpleObject)]
+#[derive(plain_graphql::SimpleObject)]
 pub struct PageMetadata {
     pub title: Option<String>,
     pub favicon_url: Option<String>,

@@ -1,5 +1,5 @@
 use super::*;
-use async_graphql::{EmptySubscription, Schema};
+use plain_graphql::{EmptySubscription, Schema};
 type Mutations = crate::graphql::resolvers::settings::public::PrefsMutation;
 fn fixture() -> (
     tempfile::TempDir,
@@ -48,7 +48,7 @@ async fn adb_token_verification_uses_native_management_and_has_no_graphql_oracle
             Some(RequestOrigin::Remote),
             Some(RequestOrigin::Local),
         ] {
-            let mut request = async_graphql::Request::new(&document);
+            let mut request = plain_graphql::Request::new(&document);
             if let Some(origin) = origin {
                 request = request.data(origin);
             }
@@ -198,7 +198,7 @@ async fn generic_writes_and_removals_reject_unknown_and_rust_owned_keys() {
                 format!("mutation {{ removePref(key:{key:?}) }}"),
             ] {
                 let response = schema
-                    .execute(async_graphql::Request::new(document).data(origin))
+                    .execute(plain_graphql::Request::new(document).data(origin))
                     .await;
                 assert!(!response.errors.is_empty(), "{key}");
                 assert!(events.try_recv().is_err());
@@ -220,7 +220,7 @@ async fn remote_cannot_write_remove_or_reset_local_security_settings() {
     ] {
         let response = schema
             .execute(
-                async_graphql::Request::new(document)
+                plain_graphql::Request::new(document)
                     .data(crate::graphql::executor::RequestOrigin::Remote),
             )
             .await;

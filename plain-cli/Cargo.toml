@@ -27,7 +27,7 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 tempfile = "3"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 rcgen = { version = "0.13", default-features = false, features = ["pem", "ring"] }
-async-graphql = { version = "=8.0.0-rc.5", default-features = false }
+plain-graphql = { path = "../plain-graphql-macros/runtime" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 plain-rs = { path = "../plain-rs", default-features = false, features = ["linux-platform"] }

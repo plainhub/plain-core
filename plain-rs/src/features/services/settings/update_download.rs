@@ -17,7 +17,7 @@ use std::{
 use tokio::{io::AsyncWriteExt, sync::watch};
 
 #[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, async_graphql::Enum,
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, plain_graphql::Enum,
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum AppUpdateDownloadStatus {
@@ -29,11 +29,11 @@ pub enum AppUpdateDownloadStatus {
     Cancelled,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, async_graphql::SimpleObject)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, plain_graphql::SimpleObject)]
 #[serde(rename_all = "camelCase")]
 pub struct AppUpdateDownload {
-    pub core_id: async_graphql::ID,
-    pub task_id: async_graphql::ID,
+    pub core_id: plain_graphql::ID,
+    pub task_id: plain_graphql::ID,
     pub revision: Long,
     pub status: AppUpdateDownloadStatus,
     pub progress: i32,

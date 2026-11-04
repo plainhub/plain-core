@@ -1,6 +1,7 @@
 use super::types::ScanProgress;
 use crate::server::ServerState;
-use async_graphql::{Context, Object, Result};
+use plain_graphql::{Context, Object, Result};
+
 use plain_rs::features::services::files::scanning;
 use plain_rs::features::services::files::scanning::Command;
 
@@ -9,7 +10,7 @@ async fn state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
     crate::http::auth::public_gate::require(ctx, &state.prefs, &[super::public::STORAGE])?;
     if !crate::http::auth::public_gate::require_granted(ctx, &[super::public::STORAGE])
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?
     {
         return Err("no_permission".into());
     }

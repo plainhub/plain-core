@@ -1,4 +1,4 @@
-use async_graphql::{Request, Response};
+use plain_graphql::{Request, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[derive(Serialize, Deserialize)]
@@ -18,7 +18,7 @@ pub enum ServerMessage {
     },
     Error {
         id: String,
-        payload: Vec<async_graphql::ServerError>,
+        payload: Vec<plain_graphql::ServerError>,
     },
     Complete {
         id: String,

@@ -456,7 +456,7 @@ async fn connection_loop(
                 for spec in management_wire::operations() {
                     let message = ClientMessage::Subscribe {
                         id: spec.field.into(),
-                        payload: async_graphql::Request::new(
+                        payload: plain_graphql::Request::new(
                             crate::infrastructure::protocols::graphql::events::document(spec),
                         ),
                     };

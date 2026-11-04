@@ -1,6 +1,6 @@
 #![cfg(feature = "http_transport")]
 
-use async_graphql::{Request, Variables};
+use plain_graphql::{Request, Variables};
 use plain_rs::runtime::Runtime as ServerState;
 use serde_json::{Value, json};
 use std::collections::HashMap;
