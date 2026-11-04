@@ -18,8 +18,8 @@ description = "Reusable cryptography, media, file, format and native components"
 "phone" = ["dep:regex", "dep:flate2", "dep:serde_json"]
 "phone-batch" = ["phone", "tokio/rt"]
 "media" = ["time", "dep:lofty", "dep:anyhow", "dep:encoding_rs"]
-"thumbnails" = ["media", "crypto", "dep:image", "dep:tempfile", "dep:fast_image_resize", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util"]
-"filesystem" = ["time", "tokio/fs", "tokio/rt", "tokio/time", "tokio/sync"]
+"thumbnails" = ["media", "crypto", "dep:image", "dep:tempfile", "dep:fast_image_resize", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util"]
+"filesystem" = ["time", "tokio/fs", "tokio/rt", "tokio/time"]
 "watch" = ["filesystem", "tokio/net"]
 "apk" = ["dep:anyhow", "dep:zip"]
 "dlna" = ["dep:reqwest", "reqwest/rustls-tls"]
@@ -38,7 +38,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "serde" = { "version" = "1", "features" = ["derive"] }
 "sha2" = "0.10"
 "pbkdf2" = { version = "=0.13.0", default-features = false, features = ["sha2"], optional = true }
-"tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }
+"tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util", "sync"] }
 "anyhow" = { "version" = "1", "optional" = true }
 "chrono" = { "version" = "0.4", "features" = ["serde"], "optional" = true }
 "regex" = { "version" = "1", "optional" = true }
