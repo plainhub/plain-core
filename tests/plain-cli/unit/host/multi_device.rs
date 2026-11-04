@@ -106,8 +106,8 @@ impl Drop for Node {
 async fn query(native: &NativeGraphqlExecutor, document: &str, variables: Value) -> Value {
     let response = native
         .execute(
-            async_graphql::Request::new(document)
-                .variables(async_graphql::Variables::from_json(variables)),
+            plain_graphql::Request::new(document)
+                .variables(plain_graphql::Variables::from_json(variables)),
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

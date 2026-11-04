@@ -2,21 +2,19 @@
 //! view over the app's SQLite file.
 //!
 
-use async_graphql::{Context, Enum};
-use plain_graphql_macros::{SimpleObject, object as Object};
+use plain_graphql::{Context, Enum, Object, SimpleObject};
+
 use plain_rs::infrastructure::db::devtools::SqliteFile;
 use plain_rs::infrastructure::types::Long;
 use std::sync::Arc;
 
 #[derive(SimpleObject, Clone, Debug, Default)]
-#[graphql(getters = false)]
 pub struct DbTableInfo {
     #[graphql(name = "idKey")]
     pub id_key: String,
 }
 
 #[derive(SimpleObject, Clone, Debug, Default)]
-#[graphql(getters = false)]
 pub struct DbTableColumn {
     pub name: String,
     #[graphql(name = "dataType")]
@@ -58,11 +56,11 @@ pub struct DbQuery;
 
 #[Object]
 impl DbQuery {
-    async fn db_path(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+    async fn db_path(&self, ctx: &Context<'_>) -> plain_graphql::Result<String> {
         Ok(app_db(ctx).await?.path().to_string_lossy().into_owned())
     }
 
-    async fn db_tables(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<String>> {
+    async fn db_tables(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<String>> {
         let file = app_db(ctx).await?;
         if !has_path(&file) {
             return Ok(vec![]);
@@ -74,7 +72,7 @@ impl DbQuery {
         &self,
         ctx: &Context<'_>,
         table: String,
-    ) -> async_graphql::Result<Long> {
+    ) -> plain_graphql::Result<Long> {
         let file = app_db(ctx).await?;
         if !has_path(&file) {
             return Ok(Long(0));
@@ -91,7 +89,7 @@ impl DbQuery {
         table: String,
         offset: i32,
         limit: i32,
-    ) -> async_graphql::Result<Vec<String>> {
+    ) -> plain_graphql::Result<Vec<String>> {
         let file = app_db(ctx).await?;
         if !has_path(&file) {
             return Ok(vec![]);
@@ -103,7 +101,7 @@ impl DbQuery {
         &self,
         ctx: &Context<'_>,
         table: String,
-    ) -> async_graphql::Result<Vec<DbTableColumn>> {
+    ) -> plain_graphql::Result<Vec<DbTableColumn>> {
         let file = app_db(ctx).await?;
         if !has_path(&file) {
             return Ok(vec![]);
@@ -128,7 +126,7 @@ impl DbQuery {
         &self,
         ctx: &Context<'_>,
         table: String,
-    ) -> async_graphql::Result<DbTableInfo> {
+    ) -> plain_graphql::Result<DbTableInfo> {
         let file = app_db(ctx).await?;
         if !has_path(&file) {
             return Ok(DbTableInfo {
@@ -157,7 +155,7 @@ impl DbMutation {
         ctx: &Context<'_>,
         table: String,
         row: String,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         let file = app_db(ctx).await?;
         if !has_path(&file) {
             return Ok(false);
@@ -180,7 +178,7 @@ impl DbMutation {
         ctx: &Context<'_>,
         table: String,
         ids: Vec<String>,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         if ids.is_empty() {
             return Ok(false);
         }
@@ -196,7 +194,7 @@ impl DbMutation {
     }
 }
 
-async fn app_db(ctx: &Context<'_>) -> async_graphql::Result<SqliteFile> {
+async fn app_db(ctx: &Context<'_>) -> plain_graphql::Result<SqliteFile> {
     let path = ctx
         .data::<Arc<plain_rs::infrastructure::db::Db>>()?
         .with_conn(|connection| connection.path().map(std::path::PathBuf::from))
@@ -208,15 +206,15 @@ fn has_path(file: &SqliteFile) -> bool {
     !file.path().as_os_str().is_empty()
 }
 
-async fn spawn<T, F>(work: F) -> async_graphql::Result<T>
+async fn spawn<T, F>(work: F) -> plain_graphql::Result<T>
 where
     F: FnOnce() -> anyhow::Result<T> + Send + 'static,
     T: Send + 'static,
 {
     tokio::task::spawn_blocking(work)
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?
-        .map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))
 }
 
 #[cfg(test)]

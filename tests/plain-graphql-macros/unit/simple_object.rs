@@ -21,14 +21,14 @@ fn getters(input: syn::DeriveInput) -> Vec<String> {
 }
 
 #[test]
-fn existing_objects_keep_getters_by_default() {
+fn ordinary_objects_do_not_generate_unused_getters() {
     assert_eq!(
         getters(syn::parse_quote!(
             struct Item {
                 value: i32,
             }
         )),
-        ["value"]
+        Vec::<String>::new()
     );
 }
 
@@ -36,7 +36,6 @@ fn existing_objects_keep_getters_by_default() {
 fn disabled_getters_keep_only_explicit_interface_methods() {
     assert_eq!(
         getters(syn::parse_quote! {
-            #[graphql(getters = false)]
             struct Item { hidden_method: i32, #[graphql(getter = true)] id: i32 }
         }),
         ["id"]
@@ -47,7 +46,7 @@ fn disabled_getters_keep_only_explicit_interface_methods() {
 fn field_opt_out_preserves_other_getters() {
     assert_eq!(
         getters(syn::parse_quote! {
-            struct Item { #[graphql(getter = false)] hidden_method: i32, id: i32 }
+            struct Item { #[graphql(getter = false)] hidden_method: i32, #[graphql(getter = true)] id: i32 }
         }),
         ["id"]
     );
@@ -56,15 +55,14 @@ fn field_opt_out_preserves_other_getters() {
 #[test]
 fn disabled_getters_do_not_emit_an_empty_inherent_impl() {
     assert!(
-        getters(syn::parse_quote! {
-            #[graphql(getters = false)] struct Item { value: i32 }
+        getters(syn::parse_quote! { struct Item { value: i32 }
         })
         .is_empty()
     );
-    let args = args::SimpleObject::from_derive_input(&syn::parse_quote! {
-        #[graphql(getters = false)] struct Item { value: i32 }
-    })
-    .unwrap();
+    let args =
+        args::SimpleObject::from_derive_input(&syn::parse_quote! { struct Item { value: i32 }
+        })
+        .unwrap();
     let generated = syn::parse2::<syn::File>(generate(&args).unwrap()).unwrap();
     assert!(
         !generated

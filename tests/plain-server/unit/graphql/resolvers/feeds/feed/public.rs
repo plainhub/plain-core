@@ -1,5 +1,5 @@
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use async_graphql::Request;
+use plain_graphql::Request;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::db::notes_feeds::FeedEntryRow;

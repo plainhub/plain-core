@@ -1,5 +1,5 @@
 use crate::server::ContentServer;
-use async_graphql::{Request, Variables};
+use plain_graphql::{Request, Variables};
 use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
 use plain_rs::infrastructure::db::DChannel;
 use plain_rs::infrastructure::db::DPeer;
@@ -105,7 +105,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
         .unwrap();
     assert_eq!(resolve("peer-a"), Some("127.0.0.1:9443".into()));
     let query = "{peers{id name port token publicKey online}}";
-    let response = executor.execute(async_graphql::Request::new(query)).await;
+    let response = executor.execute(plain_graphql::Request::new(query)).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let value = response.data.into_json().unwrap();
     assert_eq!(value["peers"][0]["port"], 9443);
@@ -117,7 +117,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
             .await
             .unwrap()
     );
-    let response = executor.execute(async_graphql::Request::new(query)).await;
+    let response = executor.execute(plain_graphql::Request::new(query)).await;
     assert_eq!(
         response.data.into_json().unwrap()["peers"][0]["token"],
         serde_json::json!("")
@@ -144,7 +144,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
     assert_eq!(resolve("peer-a"), None);
     assert!(
         !executor
-            .execute(async_graphql::Request::new(query))
+            .execute(plain_graphql::Request::new(query))
             .await
             .errors
             .is_empty()
@@ -175,7 +175,7 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
     ] {
         let response = crate::graphql::executor::execute_graphql(
             &state.public,
-            async_graphql::Request::new(document),
+            plain_graphql::Request::new(document),
             crate::graphql::executor::RequestContext::remote(Some(state.clone())),
         )
         .await;
@@ -197,11 +197,11 @@ async fn retired_client_name_mirroring_is_not_available_through_any_main_transpo
     let native = core
         .native_graphql()
         .unwrap()
-        .execute(async_graphql::Request::new(document))
+        .execute(plain_graphql::Request::new(document))
         .await;
     let remote = crate::graphql::executor::execute_graphql(
         &state.public,
-        async_graphql::Request::new(document),
+        plain_graphql::Request::new(document),
         crate::graphql::executor::RequestContext::remote(Some(state.clone())),
     )
     .await;

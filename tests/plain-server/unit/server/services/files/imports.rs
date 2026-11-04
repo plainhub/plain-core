@@ -11,7 +11,7 @@ async fn main_import_keeps_its_staged_source_until_the_database_commit_before_ca
     let importing = {
         let core = core.clone();
         tokio::spawn(async move {
-            core.native_graphql().unwrap().execute(async_graphql::Request::new(
+            core.native_graphql().unwrap().execute(plain_graphql::Request::new(
             "mutation {importAppFile(source:\"content://fixture/picked\",fileName:\"picked.txt\",mimeType:\"text/plain\",deleteSource:false){id}}",
         )).await
         })

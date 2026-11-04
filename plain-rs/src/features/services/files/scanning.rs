@@ -9,7 +9,7 @@ pub struct Progress {
 }
 /// Media-index scan lifecycle, shared by `scanProgress.state` and the
 /// `media:scan:progress` WS payload (same values on both wires).
-#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug, serde::Deserialize)]
+#[derive(plain_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug, serde::Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ScanState {
     Idle,

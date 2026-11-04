@@ -1,9 +1,8 @@
-use plain_graphql_macros::SimpleObject;
+use plain_graphql::SimpleObject;
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct NearbyDevice {
-    pub id: async_graphql::ID,
+    pub id: plain_graphql::ID,
     pub name: String,
     pub ips: Vec<String>,
     pub port: i32,

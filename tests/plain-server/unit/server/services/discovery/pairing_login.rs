@@ -503,7 +503,7 @@ async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
     )
     .unwrap();
     let scope = plain_rs::infrastructure::host::request_scope::NativeRequestScope::default();
-    let response = local.native_graphql().unwrap().execute_scoped(async_graphql::Request::new(format!("mutation {{ pairDevice(input: {{ host: \"127.0.0.1:{port}\", mode: MANAGE }}) {{ generation }} }}")), scope.clone()).await;
+    let response = local.native_graphql().unwrap().execute_scoped(plain_graphql::Request::new(format!("mutation {{ pairDevice(input: {{ host: \"127.0.0.1:{port}\", mode: MANAGE }}) {{ generation }} }}")), scope.clone()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     let generation = data["pairDevice"]["generation"].as_str().unwrap();

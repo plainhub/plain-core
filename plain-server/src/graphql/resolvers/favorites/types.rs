@@ -1,7 +1,6 @@
-use plain_graphql_macros::SimpleObject;
+use plain_graphql::SimpleObject;
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct FavoriteFolder {
     pub root_path: String,
     pub full_path: String,

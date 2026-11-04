@@ -137,7 +137,7 @@ async fn native_download_command_requires_current_capability_before_starting_net
     let retired = core
         .native_graphql()
         .unwrap()
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "{ appUpdateDownload { status } }",
         ))
         .await;
@@ -146,7 +146,7 @@ async fn native_download_command_requires_current_capability_before_starting_net
     assert!(!state.cache.app_updates().exists());
     let remote = crate::graphql::executor::execute_graphql(
         &state.public,
-        async_graphql::Request::new("mutation { cancelAppUpdateDownload { status } }"),
+        plain_graphql::Request::new("mutation { cancelAppUpdateDownload { status } }"),
         crate::graphql::executor::RequestContext::remote(Some(state.clone())),
     )
     .await;

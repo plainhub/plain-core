@@ -1,7 +1,7 @@
-use async_graphql::{
-    ComplexObject, EmptyMutation, EmptySubscription, ID, Interface, Schema, value,
+use plain_graphql::{
+    ComplexObject, EmptyMutation, EmptySubscription, ID, Interface, MergedObject, Object, Schema,
+    SimpleObject, value,
 };
-use plain_graphql_macros::{MergedObject, SimpleObject, object as Object};
 
 #[derive(Default)]
 struct First;
@@ -52,7 +52,7 @@ async fn merged_registration_preserves_field_order_precedence_and_cache_policy()
 }
 
 #[derive(SimpleObject)]
-#[graphql(getters = false, complex)]
+#[graphql(complex)]
 struct Lean {
     #[graphql(getter = true)]
     id: ID,
@@ -102,78 +102,13 @@ async fn selective_getters_preserve_interfaces_complex_fields_and_fragment_resol
     );
 }
 
-#[derive(SimpleObject)]
-struct Product {
-    id: i32,
-}
-
-#[derive(Default)]
-struct Entities;
-#[Object]
-impl Entities {
-    #[graphql(entity)]
-    async fn product(&self, id: i32) -> Product {
-        Product { id }
-    }
-}
-
-#[derive(MergedObject, Default)]
-struct Federated(Entities, First);
-
-#[tokio::test]
-async fn trimming_empty_entity_methods_preserves_real_entity_lookup_and_input_errors() {
-    let schema = Schema::new(Federated::default(), EmptyMutation, EmptySubscription);
-    let response = schema.execute(r#"{ _entities(representations: [{__typename: "Product", id: 42}]) { ... on Product { id } } }"#).await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(response.data, value!({ "_entities": [{ "id": 42 }] }));
-    for representation in [
-        r#"{__typename: "Product"}"#,
-        r#"{__typename: "Product", id: "invalid"}"#,
-        "{id: 42}",
-    ] {
-        let response = schema
-            .execute(format!(
-                "{{ _entities(representations: [{representation}]) {{ ... on Product {{ id }} }} }}"
-            ))
-            .await;
-        assert!(
-            !response.errors.is_empty(),
-            "invalid representation accepted: {representation}"
-        );
-    }
-}
-
-struct GenericEntities<T>(std::marker::PhantomData<T>);
-
-#[Object(concrete(name = "IntEntities", params(i32)))]
-impl<T: Send + Sync> GenericEntities<T> {
-    #[graphql(entity)]
-    async fn product(&self, id: i32) -> Product {
-        Product { id }
-    }
-}
-
-#[tokio::test]
-async fn generic_entity_objects_keep_concrete_lookup_delegation() {
-    let schema = Schema::new(
-        GenericEntities::<i32>(std::marker::PhantomData),
-        EmptyMutation,
-        EmptySubscription,
-    );
-    let response = schema.execute(r#"{ _entities(representations: [{__typename: "Product", id: 42}]) { ... on Product { id } } }"#).await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(response.data, value!({ "_entities": [{ "id": 42 }] }));
-    let response = schema.execute(r#"{ _entities(representations: [{__typename: "Product"}]) { ... on Product { id } } }"#).await;
-    assert!(!response.errors.is_empty());
-}
-
 thread_local! {
-    static CACHE_POLICIES: std::cell::Cell<[async_graphql::CacheControl; 2]> = const {
-        std::cell::Cell::new([async_graphql::CacheControl { public: true, max_age: 0 }; 2])
+    static CACHE_POLICIES: std::cell::Cell<[plain_graphql::CacheControl; 2]> = const {
+        std::cell::Cell::new([plain_graphql::CacheControl { public: true, max_age: 0 }; 2])
     };
 }
 
-#[derive(async_graphql::SimpleObject)]
+#[derive(plain_graphql::SimpleObject)]
 struct PolicyLeaf {
     value: i32,
 }
@@ -181,100 +116,152 @@ struct PolicyLeaf {
 macro_rules! policy_member {
     ($name:ident, $index:expr) => {
         struct $name;
-        impl async_graphql::OutputType for $name {
+        impl plain_graphql::OutputType for $name {
             fn type_name() -> std::borrow::Cow<'static, str> {
                 stringify!($name).into()
             }
-            fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+            fn create_type_info(registry: &mut plain_graphql::registry::Registry) -> String {
                 registry.create_output_type::<Self, _>(
-                    async_graphql::registry::MetaTypeId::Object,
+                    plain_graphql::registry::MetaTypeId::Object,
                     |registry| {
-                        let async_graphql::registry::MetaType::Object { fields, .. } =
+                        let plain_graphql::registry::MetaType::Object { fields, .. } =
                             registry.create_fake_output_type::<PolicyLeaf>()
                         else {
                             panic!("policy fixture must be an object")
                         };
-                        async_graphql::registry::ObjectBuilder::new(
-                            stringify!($name),
-                            fields,
-                        )
-                        .cache_control(CACHE_POLICIES.with(|policies| policies.get()[$index]))
-                        .build()
+                        plain_graphql::registry::ObjectBuilder::new(stringify!($name), fields)
+                            .cache_control(CACHE_POLICIES.with(|policies| policies.get()[$index]))
+                            .build()
                     },
                 )
             }
             async fn resolve(
                 &self,
-                ctx: &async_graphql::ContextSelectionSet<'_>,
-                _: &async_graphql::Positioned<async_graphql::parser::types::Field>,
-            ) -> async_graphql::ServerResult<async_graphql::Value> {
-                async_graphql::resolver_utils::resolve_container(ctx, self).await
+                ctx: &plain_graphql::ContextSelectionSet<'_>,
+                _: &plain_graphql::Positioned<plain_graphql::parser::types::Field>,
+            ) -> plain_graphql::ServerResult<plain_graphql::Value> {
+                plain_graphql::resolver_utils::resolve_container(ctx, self).await
             }
         }
-        impl async_graphql::resolver_utils::ContainerType for $name {
+        impl plain_graphql::resolver_utils::ContainerType for $name {
             async fn resolve_field(
                 &self,
-                ctx: &async_graphql::Context<'_>,
-            ) -> async_graphql::ServerResult<Option<async_graphql::Value>> {
-                async_graphql::resolver_utils::ContainerType::resolve_field(
+                ctx: &plain_graphql::Context<'_>,
+            ) -> plain_graphql::ServerResult<Option<plain_graphql::Value>> {
+                plain_graphql::resolver_utils::ContainerType::resolve_field(
                     &PolicyLeaf { value: $index },
                     ctx,
                 )
                 .await
             }
         }
-        impl async_graphql::ObjectType for $name {}
+        impl plain_graphql::ObjectType for $name {}
     };
 }
 policy_member!(PolicyLeft, 0);
 policy_member!(PolicyRight, 1);
 
-#[derive(plain_graphql_macros::MergedObject)]
+#[derive(plain_graphql::MergedObject)]
 struct LocalPolicy(PolicyLeft, PolicyRight);
-#[derive(async_graphql::MergedObject)]
-struct ReferencePolicy(PolicyLeft, PolicyRight);
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CachePolicy {
+    public: bool,
+    max_age: i32,
+}
+#[derive(serde::Deserialize)]
+struct CachePolicyCase {
+    left: CachePolicy,
+    right: CachePolicy,
+    expected: CachePolicy,
+}
 
 #[tokio::test]
-async fn local_cache_policy_matches_the_official_runtime_for_defaults_limits_and_privacy() {
-    for left_public in [false, true] {
-        for right_public in [false, true] {
-            for left_age in [i32::MIN, -2, -1, 0, 1, 30, i32::MAX] {
-                for right_age in [i32::MIN, -2, -1, 0, 1, 30, i32::MAX] {
-                    CACHE_POLICIES.with(|policies| {
-                        policies.set([
-                            async_graphql::CacheControl {
-                                public: left_public,
-                                max_age: left_age,
-                            },
-                            async_graphql::CacheControl {
-                                public: right_public,
-                                max_age: right_age,
-                            },
-                        ])
-                    });
-                    let local = Schema::new(
-                        LocalPolicy(PolicyLeft, PolicyRight),
-                        EmptyMutation,
-                        EmptySubscription,
-                    )
-                    .execute("{ value }")
-                    .await;
-                    let reference = Schema::new(
-                        ReferencePolicy(PolicyLeft, PolicyRight),
-                        EmptyMutation,
-                        EmptySubscription,
-                    )
-                    .execute("{ value }")
-                    .await;
-                    assert!(local.errors.is_empty(), "{:?}", local.errors);
-                    assert!(reference.errors.is_empty(), "{:?}", reference.errors);
-                    assert_eq!(local.data, reference.data);
-                    assert_eq!(
-                        local.cache_control, reference.cache_control,
-                        "ages={left_age}/{right_age}, public={left_public}/{right_public}"
-                    );
-                }
-            }
-        }
+async fn local_cache_policy_matches_frozen_reference_cases() {
+    let cases: Vec<CachePolicyCase> = serde_json::from_str(include_str!(
+        "../../../../plain-rs/testdata/graphql/cache-policy.json"
+    ))
+    .unwrap();
+    assert_eq!(cases.len(), 196);
+    for case in cases {
+        CACHE_POLICIES.with(|policies| {
+            policies.set([
+                plain_graphql::CacheControl {
+                    public: case.left.public,
+                    max_age: case.left.max_age,
+                },
+                plain_graphql::CacheControl {
+                    public: case.right.public,
+                    max_age: case.right.max_age,
+                },
+            ])
+        });
+        let local = Schema::new(
+            LocalPolicy(PolicyLeft, PolicyRight),
+            EmptyMutation,
+            EmptySubscription,
+        )
+        .execute("{ value }")
+        .await;
+        assert!(local.errors.is_empty(), "{:?}", local.errors);
+        assert_eq!(local.data, value!({ "value": 1 }));
+        assert_eq!(local.cache_control.public, case.expected.public);
+        assert_eq!(local.cache_control.max_age, case.expected.max_age);
     }
+}
+
+struct LeftEvents;
+#[plain_graphql::Subscription]
+impl LeftEvents {
+    async fn values(&self) -> impl futures_util::Stream<Item = plain_graphql::Result<i32>> {
+        futures_util::stream::iter([Ok(7), Err(plain_graphql::Error::new("stream error"))])
+    }
+}
+struct RightEvents;
+#[plain_graphql::Subscription]
+impl RightEvents {
+    async fn final_value(&self) -> impl futures_util::Stream<Item = i32> {
+        futures_util::stream::once(async { 9 })
+    }
+}
+#[derive(plain_graphql::MergedSubscription)]
+struct CombinedEvents(LeftEvents, RightEvents);
+
+#[tokio::test]
+async fn merged_subscriptions_preserve_selection_aliases_errors_and_member_order() {
+    use futures_util::StreamExt;
+    let schema = Schema::new(
+        First,
+        EmptyMutation,
+        CombinedEvents(LeftEvents, RightEvents),
+    );
+    let responses = schema
+        .execute_stream("subscription { alias: values }")
+        .collect::<Vec<_>>()
+        .await;
+    assert_eq!(responses.len(), 2);
+    assert!(responses[0].errors.is_empty());
+    assert_eq!(responses[0].data, value!({ "alias": 7 }));
+    assert_eq!(responses[1].errors.len(), 1);
+    assert_eq!(responses[1].errors[0].message, "stream error");
+    assert_eq!(
+        responses[1].errors[0].path,
+        vec![plain_graphql::PathSegment::Field("alias".into())]
+    );
+    let responses = schema
+        .execute_stream("subscription { finalValue }")
+        .collect::<Vec<_>>()
+        .await;
+    assert_eq!(responses.len(), 1);
+    assert!(responses[0].errors.is_empty());
+    assert_eq!(responses[0].data, value!({ "finalValue": 9 }));
+    let response = schema
+        .execute("{ __type(name: \"CombinedEvents\") { fields { name } } }")
+        .await;
+    assert!(response.errors.is_empty());
+    assert_eq!(
+        response.data,
+        value!({ "__type": { "fields": [{ "name": "values" }, { "name": "finalValue" }] } })
+    );
 }

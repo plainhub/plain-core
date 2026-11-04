@@ -1,20 +1,17 @@
-use async_graphql::ID;
-use plain_graphql_macros::SimpleObject;
+use plain_graphql::{ID, SimpleObject};
+
 use plain_rs::infrastructure::types::Long;
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 pub struct MirrorState {
     pub running: bool,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 pub struct LibraryChange {
     pub types: Vec<i32>,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct FeedSyncChange {
     pub feed_id: ID,
@@ -22,7 +19,6 @@ pub struct FeedSyncChange {
     pub cancelled: Option<bool>,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadMergeResult {
     pub file_id: ID,
@@ -32,12 +28,10 @@ pub struct UploadMergeResult {
     pub error: Option<String>,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 pub struct SmsProviderChange {
     pub uris: Vec<String>,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct SmsSendResult {
     pub request_id: Option<ID>,
@@ -45,7 +39,6 @@ pub struct SmsSendResult {
     pub result_code: Option<i32>,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct MmsSendResult {
     pub pending_id: ID,
@@ -53,7 +46,6 @@ pub struct MmsSendResult {
     pub result_code: Option<i32>,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 pub struct ClipboardChange {
     pub text: String,
     pub sensitive: bool,
@@ -61,14 +53,12 @@ pub struct ClipboardChange {
 }
 
 #[derive(SimpleObject, Deserialize, serde::Serialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct MirrorCodecConfiguration {
     pub annex_b: String,
 }
 
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelInvite {
     pub channel_id: ID,
@@ -77,21 +67,18 @@ pub struct ChannelInvite {
     pub owner_peer_name: String,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelInviteCancellation {
     pub channel_id: ID,
     pub owner_peer_id: ID,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 pub struct ChannelChange {
     pub changed: bool,
     pub invite: Option<ChannelInvite>,
     pub cancel: Option<ChannelInviteCancellation>,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageModelsUpdate {
     pub version: Long,
@@ -105,7 +92,6 @@ pub struct ImageModelsUpdate {
     pub indexed_images: i32,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingRequestNotice {
     pub from_id: ID,
@@ -122,7 +108,6 @@ pub struct PairingRequestNotice {
     pub verification_code: String,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingCompletedNotice {
     pub device_id: ID,
@@ -130,7 +115,6 @@ pub struct PairingCompletedNotice {
     pub ip: String,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingProgressNotice {
     pub device_id: ID,
@@ -138,7 +122,6 @@ pub struct PairingProgressNotice {
     pub error: Option<String>,
 }
 #[derive(SimpleObject, Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct PomodoroAction {
     pub today: plain_rs::features::services::pomodoro::PomodoroToday,

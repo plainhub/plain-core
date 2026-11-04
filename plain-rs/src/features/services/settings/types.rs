@@ -1,6 +1,6 @@
 use crate::infrastructure::types::Instant;
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "graphql", derive(plain_graphql_macros::SimpleObject))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 pub struct AppUpdate {
     pub current_version: String,
     pub latest_version: Option<String>,

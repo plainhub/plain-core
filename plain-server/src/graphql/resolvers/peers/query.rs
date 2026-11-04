@@ -1,4 +1,4 @@
-use async_graphql::{
+use plain_graphql::{
     Context, ContextSelectionSet, ObjectType, OutputType, Positioned, ServerResult, Value,
     parser::types::Field,
     registry::{self, MetaTypeId},

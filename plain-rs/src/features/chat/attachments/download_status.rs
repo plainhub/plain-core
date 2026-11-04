@@ -1,7 +1,7 @@
 use std::{fmt, str::FromStr};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 #[cfg_attr(
     feature = "graphql",
     graphql(name = "DownloadStatus", rename_items = "SCREAMING_SNAKE_CASE")

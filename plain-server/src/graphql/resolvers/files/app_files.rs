@@ -1,6 +1,6 @@
 use crate::graphql::resolvers::files::app_file::AppFile;
-use async_graphql::Context;
-use plain_graphql_macros::object as Object;
+use plain_graphql::{Context, Object};
+
 use plain_rs::features::files::app_files::FileStore;
 use std::sync::Arc;
 
@@ -15,7 +15,7 @@ impl AppFilesMutation {
         file_name: String,
         mime_type: String,
         delete_source: bool,
-    ) -> async_graphql::Result<AppFile> {
+    ) -> plain_graphql::Result<AppFile> {
         crate::http::auth::public_gate::require(
             ctx,
             ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?,
@@ -37,7 +37,7 @@ impl AppFilesMutation {
             state.cache_changes.clone(),
         )
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
         let name = if file_name.is_empty() {
             plain_rs::features::chat::attachments::app_file_store::display_name(
                 &file,
@@ -52,11 +52,11 @@ impl AppFilesMutation {
         &self,
         ctx: &Context<'_>,
         file_id: String,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         ctx.data::<Arc<FileStore>>()?
             .release(file_id)
             .await
-            .map_err(async_graphql::Error::new)
+            .map_err(plain_graphql::Error::new)
     }
 }
 

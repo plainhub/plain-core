@@ -347,7 +347,7 @@ async fn discovery_commands_use_the_shared_runtime_and_platform_multicast_lease(
     let execute = |document: &str| {
         state
             .public
-            .execute(async_graphql::Request::new(document).data(state.clone()))
+            .execute(plain_graphql::Request::new(document).data(state.clone()))
     };
     let response = execute("{isDiscovering}").await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -404,7 +404,7 @@ async fn local_app_permissions_use_os_grants_without_web_opt_in() {
         ),
     ] {
         let response = schema
-            .execute(async_graphql::Request::new(query).data(origin))
+            .execute(plain_graphql::Request::new(query).data(origin))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(

@@ -1,6 +1,6 @@
 #[derive(Debug, Clone, Copy, Eq, PartialEq, serde::Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 #[cfg_attr(feature = "graphql", graphql(rename_items = "SCREAMING_SNAKE_CASE"))]
 pub enum MediaPlayMode {
     Repeat,

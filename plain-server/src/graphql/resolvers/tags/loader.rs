@@ -1,5 +1,5 @@
 use super::domain_types::Tag;
-use async_graphql::Context;
+use plain_graphql::Context;
 use plain_rs::features::enums::DataType;
 use plain_rs::infrastructure::db::Db;
 use std::{
@@ -15,7 +15,7 @@ struct TagKey {
     id: String,
 }
 
-type TagResult = async_graphql::Result<Vec<Tag>>;
+type TagResult = plain_graphql::Result<Vec<Tag>>;
 type PendingTags = HashMap<TagKey, Vec<oneshot::Sender<TagResult>>>;
 
 pub(crate) struct TagsLoader {
@@ -63,10 +63,10 @@ impl TagsLoader {
         }
         receiver
             .await
-            .map_err(|_| async_graphql::Error::new("tag batch task stopped"))?
+            .map_err(|_| plain_graphql::Error::new("tag batch task stopped"))?
     }
 
-    fn load_batch(&self, keys: &[TagKey]) -> async_graphql::Result<HashMap<TagKey, Vec<Tag>>> {
+    fn load_batch(&self, keys: &[TagKey]) -> plain_graphql::Result<HashMap<TagKey, Vec<Tag>>> {
         #[cfg(test)]
         self.loads
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);

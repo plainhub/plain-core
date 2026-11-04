@@ -6,12 +6,11 @@ use std::{
 };
 use tokio::sync::{Semaphore, broadcast, watch};
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, plain_graphql_macros::SimpleObject)]
-#[graphql(getters = false)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, plain_graphql::SimpleObject)]
 #[serde(rename_all = "camelCase")]
 pub struct FeedSyncState {
-    pub feed_id: async_graphql::ID,
-    pub task_id: async_graphql::ID,
+    pub feed_id: plain_graphql::ID,
+    pub task_id: plain_graphql::ID,
     pub revision: crate::infrastructure::types::Long,
     pub status: String,
     pub error: String,

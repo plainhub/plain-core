@@ -1,5 +1,5 @@
-use async_graphql::{ComplexObject, Context};
-use plain_graphql_macros::{SimpleObject, object as Object};
+use plain_graphql::{ComplexObject, Context, Object, SimpleObject};
+
 use std::sync::Arc;
 
 use crate::graphql::types::parse_instant;
@@ -11,7 +11,6 @@ use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
 #[derive(SimpleObject)]
-#[graphql(getters = false)]
 #[graphql(name = "AppFile")]
 #[graphql(complex)]
 pub struct AppFile {
@@ -29,20 +28,20 @@ pub struct AppFile {
 
 #[ComplexObject]
 impl AppFile {
-    fn real_path(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+    fn real_path(&self, ctx: &Context<'_>) -> plain_graphql::Result<String> {
         Ok(ctx
             .data::<Arc<plain_rs::features::files::app_files::FileStore>>()?
             .stored_path(&self.real_path)
-            .map_err(async_graphql::Error::new)?
+            .map_err(plain_graphql::Error::new)?
             .to_string_lossy()
             .into_owned())
     }
 
-    fn created_at(&self) -> async_graphql::Result<Instant> {
+    fn created_at(&self) -> plain_graphql::Result<Instant> {
         parse_instant(&self.created_at)
     }
 
-    fn updated_at(&self) -> async_graphql::Result<Instant> {
+    fn updated_at(&self) -> plain_graphql::Result<Instant> {
         parse_instant(&self.updated_at)
     }
 }
@@ -72,9 +71,9 @@ impl AppFileQuery {
         query: String,
         offset: i32,
         limit: i32,
-    ) -> async_graphql::Result<Vec<AppFile>> {
+    ) -> plain_graphql::Result<Vec<AppFile>> {
         if offset < 0 || limit < 0 {
-            return Err(async_graphql::Error::new("invalid pagination"));
+            return Err(plain_graphql::Error::new("invalid pagination"));
         }
         let db = ctx.data::<Arc<Db>>()?;
         let files = db.app_file_items(offset, limit, &query)?;
@@ -88,7 +87,7 @@ impl AppFileQuery {
             .collect())
     }
 
-    fn app_file_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
+    fn app_file_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
         Ok(ctx.data::<Arc<Db>>()?.app_file_count(&query)?)
     }
 }

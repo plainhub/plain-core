@@ -347,7 +347,7 @@ impl Session {
             terminal = true;
             encoded = serde_json::to_string(&ServerMessage::Error {
                 id: id.clone(),
-                payload: vec![async_graphql::ServerError::new(
+                payload: vec![plain_graphql::ServerError::new(
                     "subscription_result_too_large",
                     None,
                 )],
@@ -436,7 +436,7 @@ impl Session {
                         return self.queue_control(
                             ServerMessage::Error {
                                 id,
-                                payload: vec![async_graphql::ServerError::new(error, None)],
+                                payload: vec![plain_graphql::ServerError::new(error, None)],
                             },
                             None,
                             Some(scope),
@@ -472,13 +472,29 @@ impl Session {
                         };
                         if !ready_sent && *readiness.borrow() {
                             ready_sent = true;
-                            let response = async_graphql::Response::default().extension("subscriptionReady", async_graphql::Value::Boolean(true));
-                            if session.queue_operation(ServerMessage::Next { id: task_id.clone(), payload: response }, spec, task_scope.clone()).await.is_err() { break; }
+                            let response = plain_graphql::Response::default().extension(
+                                "subscriptionReady",
+                                plain_graphql::Value::Boolean(true),
+                            );
+                            if session
+                                .queue_operation(
+                                    ServerMessage::Next {
+                                        id: task_id.clone(),
+                                        payload: response,
+                                    },
+                                    spec,
+                                    task_scope.clone(),
+                                )
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
                         }
                         let Some(response) = response else {
                             continue;
                         };
-                        let terminal = response.data == async_graphql::Value::Null
+                        let terminal = response.data == plain_graphql::Value::Null
                             && !response.errors.is_empty();
                         let message = if terminal {
                             ServerMessage::Error {
@@ -560,7 +576,7 @@ impl Session {
                         }
                         return serde_json::to_string(&ServerMessage::Error {
                             id,
-                            payload: vec![async_graphql::ServerError::new(error.message, None)],
+                            payload: vec![plain_graphql::ServerError::new(error.message, None)],
                         })
                         .map_err(|e| e.to_string());
                     }

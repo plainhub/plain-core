@@ -117,7 +117,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
     );
     let native = server.native_graphql().unwrap();
     let response = native
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"mutation{retryChatItem(id:"retry-native"){id}}"#,
         ))
         .await;

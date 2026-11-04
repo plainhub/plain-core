@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["plain-libs", "plain-rs", "plain-server", "plain-cli", "plain-graphql-macros"]
+members = ["plain-libs", "plain-rs", "plain-server", "plain-cli", "plain-graphql-macros", "plain-graphql-macros/runtime"]
 
 [profile.dev]
 debug = "line-tables-only"
@@ -26,6 +26,11 @@ debug = "line-tables-only"
 debug = "line-tables-only"
 
 [profile.dev.package.plain-graphql-macros]
+opt-level = 3
+debug = false
+incremental = false
+
+[profile.dev.package.plain-graphql]
 opt-level = 3
 debug = false
 incremental = false

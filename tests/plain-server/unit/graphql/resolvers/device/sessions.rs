@@ -1,7 +1,7 @@
 use super::*;
 use crate::graphql::executor::RequestOrigin;
 use crate::server::ContentServer;
-use async_graphql::Request;
+use plain_graphql::Request;
 use plain_rs::features::sessions::SessionStore;
 
 fn fixture() -> (tempfile::TempDir, ContentServer) {
@@ -27,7 +27,7 @@ async fn execute(
     caller: &str,
     origin: RequestOrigin,
     query: &str,
-) -> async_graphql::Response {
+) -> plain_graphql::Response {
     state
         .public
         .execute(

@@ -15,12 +15,12 @@ async fn cache_settings_execute_the_main_contract_without_platform_operations() 
     let (_generation, mut requests) =
         crate::test_support::HostRequests::connect(&server.runtime_state().host);
     let response = native
-        .execute(async_graphql::Request::new("{appCacheSize}"))
+        .execute(plain_graphql::Request::new("{appCacheSize}"))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["appCacheSize"], 12);
     let response = native
-        .execute(async_graphql::Request::new("mutation{clearAppCache}"))
+        .execute(plain_graphql::Request::new("mutation{clearAppCache}"))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.into_json().unwrap()["clearAppCache"], true);
@@ -32,7 +32,7 @@ async fn cache_settings_execute_the_main_contract_without_platform_operations() 
     let state = server.runtime_state();
     let remote = crate::graphql::executor::execute_graphql(
         &state.public,
-        async_graphql::Request::new("{appCacheSize}"),
+        plain_graphql::Request::new("{appCacheSize}"),
         crate::graphql::executor::RequestContext::remote(Some(state.clone())),
     )
     .await;

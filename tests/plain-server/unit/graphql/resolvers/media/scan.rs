@@ -1,4 +1,4 @@
-use async_graphql::Request;
+use plain_graphql::Request;
 
 #[cfg(feature = "media")]
 #[tokio::test]
@@ -38,7 +38,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     let set = native
         .execute(
             Request::new("mutation($dirs:[String!]!){setMediaSourceDirs(dirs:$dirs)}").variables(
-                async_graphql::Variables::from_json(
+                plain_graphql::Variables::from_json(
                     serde_json::json!({"dirs":[source_path.to_str().unwrap()]}),
                 ),
             ),

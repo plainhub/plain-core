@@ -10,8 +10,8 @@ use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::text;
 use crate::graphql::types::facts::{host_json, provider_params};
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Enum, ID};
-use plain_graphql_macros::{SimpleObject, object as Object};
+use plain_graphql::{Context, Enum, ID, Object, SimpleObject};
+
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::services::files::provider_query::Provider;
@@ -52,7 +52,6 @@ impl CallType {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct PhoneGeo {
     pub country: String,
     #[graphql(name = "numberType")]
@@ -62,7 +61,6 @@ pub struct PhoneGeo {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct Call {
     pub type_code: i32,
@@ -93,9 +91,9 @@ impl From<plain_libs::phone::Metadata> for PhoneGeo {
     }
 }
 
-#[async_graphql::ComplexObject]
+#[plain_graphql::ComplexObject]
 impl Call {
-    async fn tags(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<Vec<Tag>> {
+    async fn tags(&self, ctx: &plain_graphql::Context<'_>) -> plain_graphql::Result<Vec<Tag>> {
         crate::graphql::resolvers::tags::loader::load(
             ctx,
             plain_rs::features::enums::DataType::Call,
@@ -116,14 +114,14 @@ impl CallsQuery {
         query: String,
         offset: i32,
         limit: i32,
-    ) -> async_graphql::Result<Vec<Call>> {
+    ) -> plain_graphql::Result<Vec<Call>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
         if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[READ]).await? {
             return Ok(Vec::new());
         }
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CALLS")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
 
         let facts = host_json(
             ctx,
@@ -166,7 +164,7 @@ impl CallsQuery {
                     &key,
                     &plain_rs::features::files::resource_link::Resource::reference(&path),
                 )
-                .map_err(|error| async_graphql::Error::new(error.to_string()))?
+                .map_err(|error| plain_graphql::Error::new(error.to_string()))?
             };
             calls.push(row);
         }
@@ -181,13 +179,13 @@ impl CallsQuery {
         Ok(calls)
     }
 
-    async fn call_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
+    async fn call_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
         if !public_gate::require_granted(ctx, &[WRITE]).await? {
             return Ok(0);
         }
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CALLS")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let count = ctx
             .data_unchecked::<Arc<Host>>()
             .call(
@@ -201,7 +199,7 @@ impl CallsQuery {
                 .await?,
             )
             .await
-            .map_err(|error| async_graphql::Error::new(error))?;
+            .map_err(|error| plain_graphql::Error::new(error))?;
         Ok(count.as_i64().unwrap_or_default() as i32)
     }
 }
@@ -215,9 +213,9 @@ impl CallsMutation {
         &self,
         ctx: &Context<'_>,
         query: String,
-    ) -> async_graphql::Result<ActionResult> {
+    ) -> plain_graphql::Result<ActionResult> {
         if query.trim().is_empty() {
-            return Err(async_graphql::Error::new(
+            return Err(plain_graphql::Error::new(
                 "query is required for bulk mutations — pass 'all:true' to explicitly target everything",
             ));
         }
@@ -229,10 +227,10 @@ impl CallsMutation {
             Provider::Call,
             &query,
         )
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CALLS")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let ids: Vec<Value> = host_json(
             ctx,
             "systemCallIds",
@@ -256,9 +254,9 @@ impl CallsMutation {
                     serde_json::json!({"provider": "CALL", "ids": ids}),
                 )
                 .await
-                .map_err(|error| async_graphql::Error::new(error))?,
+                .map_err(|error| plain_graphql::Error::new(error))?,
         )
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(ActionResult {
             affected_count: deleted.len() as i32,
         })
@@ -271,18 +269,18 @@ impl CallsMutation {
         ctx: &Context<'_>,
         number: String,
         show_dialer: bool,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &["CALL_PHONE"])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CALL_PHONE")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         ctx.data_unchecked::<Arc<Host>>()
             .call(
                 "systemMakeCall",
                 serde_json::json!({"number": number, "showDialer": show_dialer}),
             )
             .await
-            .map_err(|error| async_graphql::Error::new(error))?;
+            .map_err(|error| plain_graphql::Error::new(error))?;
         Ok(true)
     }
 }

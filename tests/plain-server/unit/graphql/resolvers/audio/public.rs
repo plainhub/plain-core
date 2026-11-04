@@ -118,13 +118,13 @@ fn database(schema: &PublicSchema) -> &Arc<Db> {
 
 async fn query(schema: &PublicSchema, document: &str) -> Value {
     let request =
-        async_graphql::Request::new(document).data(crate::graphql::executor::RequestOrigin::Remote);
+        plain_graphql::Request::new(document).data(crate::graphql::executor::RequestOrigin::Remote);
     serde_json::to_value(schema.execute(request).await).unwrap()
 }
 
 async fn local_query(schema: &PublicSchema, document: &str) -> Value {
     let request =
-        async_graphql::Request::new(document).data(crate::graphql::executor::RequestOrigin::Local);
+        plain_graphql::Request::new(document).data(crate::graphql::executor::RequestOrigin::Local);
     serde_json::to_value(schema.execute(request).await).unwrap()
 }
 
@@ -927,7 +927,7 @@ async fn playlist_query_removal_reports_actual_count_without_changing_other_list
 
 struct AlbumArtFixture(Audio);
 
-#[async_graphql::Object]
+#[plain_graphql::Object]
 impl AlbumArtFixture {
     async fn audio(&self) -> Audio {
         self.0.clone()
@@ -939,7 +939,7 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token(
     let directory = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
     let uri = "content://media/external/audio/albumart/17";
-    let schema = async_graphql::Schema::build(
+    let schema = plain_graphql::Schema::build(
         AlbumArtFixture(Audio {
             album_id: "17".into(),
             id: "track".into(),
@@ -955,8 +955,8 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token(
             updated_at: Instant::default(),
             is_favorite: false,
         }),
-        async_graphql::EmptyMutation,
-        async_graphql::EmptySubscription,
+        plain_graphql::EmptyMutation,
+        plain_graphql::EmptySubscription,
     )
     .data(prefs.clone())
     .finish();
@@ -1015,8 +1015,8 @@ async fn main_audio_metadata_reads_unindexed_tags_without_changing_playback_or_s
     let before = preferences.entries();
     let current = domain::get_audio_current(db).unwrap();
     let count = domain::queue_total(db).unwrap();
-    let request = async_graphql::Request::new("query Metadata($path: String!) { audioMetadata(path: $path) { title artist path durationMs } }")
-        .variables(async_graphql::Variables::from_json(json!({"path":path})));
+    let request = plain_graphql::Request::new("query Metadata($path: String!) { audioMetadata(path: $path) { title artist path durationMs } }")
+        .variables(plain_graphql::Variables::from_json(json!({"path":path})));
     let response = schema.execute(request).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let metadata = response.data.into_json().unwrap();
@@ -1035,10 +1035,10 @@ async fn main_audio_metadata_reads_unindexed_tags_without_changing_playback_or_s
     for path in ["", "/missing/audio.mp3"] {
         let response = schema
             .execute(
-                async_graphql::Request::new(
+                plain_graphql::Request::new(
                     "query($path: String!) { audioMetadata(path: $path) { title } }",
                 )
-                .variables(async_graphql::Variables::from_json(json!({"path":path}))),
+                .variables(plain_graphql::Variables::from_json(json!({"path":path}))),
             )
             .await;
         assert!(!response.errors.is_empty());
@@ -1061,10 +1061,10 @@ async fn main_audio_cover_extracts_original_bytes_and_preserves_nullable_absence
     let (_directory, schema) =
         fixture_with(GRANTED, |method, _| panic!("unexpected host call {method}"));
     let request = |path: &str| {
-        async_graphql::Request::new(
+        plain_graphql::Request::new(
             "mutation Cover($path: String!) { cacheAudioCover(path: $path) }",
         )
-        .variables(async_graphql::Variables::from_json(json!({"path":path})))
+        .variables(plain_graphql::Variables::from_json(json!({"path":path})))
     };
     let response = schema
         .execute(request(concat!(

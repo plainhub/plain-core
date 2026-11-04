@@ -1,17 +1,16 @@
 use crate::graphql::resolvers::app::capability_types::DlnaRenderer;
 use crate::graphql::resolvers::media::types::MediaDataType;
 use crate::server::ServerState;
-use async_graphql::{Context, InputObject, Result};
-use plain_graphql_macros::{SimpleObject, object as Object};
+use plain_graphql::{Context, InputObject, Object, Result, SimpleObject};
+
 use plain_rs::features::services::casting::dlna_sender_runtime as sender;
 use plain_rs::features::services::casting::dlna_sender_runtime::Command;
 use plain_rs::infrastructure::types::Long;
 
 #[derive(SimpleObject, serde::Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DlnaSenderDevice {
-    id: async_graphql::ID,
+    id: plain_graphql::ID,
     host_address: String,
     name: String,
     location: String,
@@ -27,7 +26,6 @@ impl From<sender::Device> for DlnaSenderDevice {
     }
 }
 #[derive(SimpleObject, serde::Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DlnaSenderMedia {
     path: String,
@@ -75,7 +73,6 @@ impl From<DlnaMediaInput> for sender::Item {
     }
 }
 #[derive(SimpleObject, serde::Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DlnaSenderState {
     version: Long,
@@ -89,7 +86,7 @@ pub(crate) struct DlnaSenderState {
     supports_callback: bool,
 }
 impl TryFrom<sender::Snapshot> for DlnaSenderState {
-    type Error = async_graphql::Error;
+    type Error = plain_graphql::Error;
     fn try_from(row: sender::Snapshot) -> Result<Self> {
         Ok(Self {
             version: Long(row.version.try_into()?),
@@ -107,7 +104,7 @@ impl TryFrom<sender::Snapshot> for DlnaSenderState {
 async fn command(ctx: &Context<'_>, command: Command) -> Result<DlnaSenderState> {
     sender::run(ctx.data::<ServerState>()?, command)
         .await
-        .map_err(async_graphql::Error::new)?
+        .map_err(plain_graphql::Error::new)?
         .try_into()
 }
 #[derive(Default)]
@@ -124,7 +121,7 @@ impl DlnaSenderQuery {
             .cast
             .devices
             .lock()
-            .map_err(|_| async_graphql::Error::new("DLNA device state unavailable"))?;
+            .map_err(|_| plain_graphql::Error::new("DLNA device state unavailable"))?;
         let mut rows = devices
             .values()
             .filter_map(|device| device.to_renderer())
@@ -176,7 +173,7 @@ impl DlnaSenderMutation {
         }
         .await;
         runtime.publish(state);
-        result.map_err(async_graphql::Error::new)?;
+        result.map_err(plain_graphql::Error::new)?;
         Ok(true)
     }
     async fn start_dlna_scan(&self, ctx: &Context<'_>) -> Result<DlnaSenderState> {
@@ -203,7 +200,7 @@ impl DlnaSenderMutation {
     async fn select_dlna_device(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
+        id: plain_graphql::ID,
     ) -> Result<DlnaSenderState> {
         command(ctx, Command::Select { id: id.to_string() }).await
     }

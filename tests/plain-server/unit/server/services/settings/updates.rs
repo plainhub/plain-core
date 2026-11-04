@@ -1,5 +1,5 @@
 use crate::server::ContentServer;
-use async_graphql::Request;
+use plain_graphql::Request;
 use plain_rs::features::prefs::pref_keys::AUTO_CHECK_UPDATE;
 use plain_rs::features::prefs::pref_keys::SKIP_VERSION;
 use plain_rs::features::services::settings::updates::*;

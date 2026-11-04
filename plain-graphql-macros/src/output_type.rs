@@ -1,12 +1,10 @@
 use proc_macro2::{Ident, Span};
 use quote::quote;
 use syn::{Error, GenericArgument, PathArguments, Result, Type};
-
 pub enum OutputType<'a> {
     Value(&'a Type),
     Result(&'a Type),
 }
-
 impl<'a> OutputType<'a> {
     pub fn parse(input: &'a Type) -> Result<Self> {
         let ty = if let Type::Path(p) = input {
@@ -41,7 +39,6 @@ impl<'a> OutputType<'a> {
         };
         Ok(ty)
     }
-
     pub fn value_type(&self) -> Type {
         let tokens = match self {
             OutputType::Value(ty) => quote! {#ty},
@@ -51,7 +48,6 @@ impl<'a> OutputType<'a> {
         Self::remove_lifecycle(&mut ty);
         ty
     }
-
     fn remove_lifecycle(ty: &mut Type) {
         match ty {
             Type::Reference(r) => {

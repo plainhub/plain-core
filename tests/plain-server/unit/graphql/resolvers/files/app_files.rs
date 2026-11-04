@@ -128,9 +128,9 @@ async fn remote_import_requires_storage_authorization_before_reading_or_deleting
             "content://fixture/denied".into(),
         ] {
             let response = state.public.execute(
-                async_graphql::Request::new(
+                plain_graphql::Request::new(
                     "mutation($path:String!,$delete:Boolean!){importAppFile(source:$path,fileName:\"owned.txt\",mimeType:\"text/plain\",deleteSource:$delete){id}}",
-                ).variables(async_graphql::Variables::from_json(serde_json::json!({"path":path,"delete":delete_source})))
+                ).variables(plain_graphql::Variables::from_json(serde_json::json!({"path":path,"delete":delete_source})))
                     .data(crate::graphql::executor::RequestOrigin::Remote)
                     .data(state.clone()),
             ).await;
@@ -149,8 +149,8 @@ async fn remote_import_requires_storage_authorization_before_reading_or_deleting
         )
         .unwrap();
     let response = state.public.execute(
-        async_graphql::Request::new("mutation($path:String!){importAppFile(source:$path,fileName:\"owned.txt\",mimeType:\"text/plain\",deleteSource:false){id}}")
-            .variables(async_graphql::Variables::from_json(serde_json::json!({"path":source.to_string_lossy()})))
+        plain_graphql::Request::new("mutation($path:String!){importAppFile(source:$path,fileName:\"owned.txt\",mimeType:\"text/plain\",deleteSource:false){id}}")
+            .variables(plain_graphql::Variables::from_json(serde_json::json!({"path":source.to_string_lossy()})))
             .data(crate::graphql::executor::RequestOrigin::Remote)
             .data(state.clone()),
     ).await;
@@ -169,7 +169,7 @@ async fn main_schema_import_accepts_platform_bytes_without_app_managed_paths() {
     let schema = core.native_graphql().unwrap();
     let (generation, mut requests) = state.host.connect();
     let execution = tokio::spawn(async move {
-        schema.execute(async_graphql::Request::new(
+        schema.execute(plain_graphql::Request::new(
             r#"mutation { importAppFile(source:"content://fixture/picked",fileName:"picked.txt",mimeType:"text/plain",deleteSource:false) { id realPath size fileName } }"#,
         )).await
     });

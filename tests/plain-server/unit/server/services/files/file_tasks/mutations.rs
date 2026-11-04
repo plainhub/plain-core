@@ -1,19 +1,19 @@
 use crate::server::ContentServer;
-use async_graphql::Request;
+use plain_graphql::Request;
 use serde_json::json;
 
 async fn rename(
     core: &ContentServer,
     path: &std::path::Path,
     name: &str,
-) -> async_graphql::Response {
+) -> plain_graphql::Response {
     core.native_graphql()
         .unwrap()
         .execute(
             Request::new(
                 "mutation($path:String!,$name:String!){renameFile(path:$path,name:$name)}",
             )
-            .variables(async_graphql::Variables::from_json(
+            .variables(plain_graphql::Variables::from_json(
                 json!({"path":path,"name":name}),
             )),
         )
@@ -75,7 +75,7 @@ async fn strict_native_rename_and_delete_rebind_and_clean_generic_file_reference
         .unwrap()
         .execute(
             Request::new("mutation($paths:[String!]!){deleteFiles(paths:$paths){affectedCount}}")
-                .variables(async_graphql::Variables::from_json(
+                .variables(plain_graphql::Variables::from_json(
                     json!({"paths":[destination]}),
                 )),
         )
@@ -236,7 +236,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
     std::fs::write(&source, b"copied bytes").unwrap();
     let native = core.native_graphql().unwrap();
     let response = native.execute(Request::new("mutation($src:String!,$directory:String!){copyFileToDirectory(src:$src,directory:$directory,name:\"saved.txt\")}")
-        .variables(async_graphql::Variables::from_json(json!({"src":format!("file://{}",source.to_str().unwrap()),"directory":target})))).await;
+        .variables(plain_graphql::Variables::from_json(json!({"src":format!("file://{}",source.to_str().unwrap()),"directory":target})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["copyFileToDirectory"],
@@ -249,7 +249,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
             Request::new(
                 "mutation($src:String!,$dst:String!){copyFile(src:$src,dst:$dst,overwrite:true)}",
             )
-            .variables(async_graphql::Variables::from_json(
+            .variables(plain_graphql::Variables::from_json(
                 json!({"src":source,"dst":destination}),
             )),
         )
@@ -295,7 +295,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
                 "mutation($src:String!,$dst:String!){copyFile(src:$src,dst:$dst,overwrite:true)}",
             )
             .data("copy-request-owner".to_owned())
-            .variables(async_graphql::Variables::from_json(
+            .variables(plain_graphql::Variables::from_json(
                 json!({"src":source,"dst":foreign_destination}),
             )),
         )
@@ -313,7 +313,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
     assert_eq!(std::fs::read(foreign_destination).unwrap(), b"replacement");
     for name in ["", "..", "../outside", "a/b", "a\\b"] {
         let response = native.execute(Request::new("mutation($src:String!,$directory:String!,$name:String!){copyFileToDirectory(src:$src,directory:$directory,name:$name)}")
-            .variables(async_graphql::Variables::from_json(json!({"src":source,"directory":target,"name":name})))).await;
+            .variables(plain_graphql::Variables::from_json(json!({"src":source,"directory":target,"name":name})))).await;
         assert!(!response.errors.is_empty(), "{name}");
     }
     assert!(!directory.path().join("outside").exists());
@@ -337,7 +337,7 @@ async fn main_batch_delete_validates_all_paths_before_effects_and_counts_actual_
     for invalid in ["relative", "/"] {
         let response = native
             .execute(
-                Request::new(document).variables(async_graphql::Variables::from_json(
+                Request::new(document).variables(plain_graphql::Variables::from_json(
                     json!({"paths":[first,invalid]}),
                 )),
             )
@@ -348,7 +348,7 @@ async fn main_batch_delete_validates_all_paths_before_effects_and_counts_actual_
     }
     let response = native
         .execute(
-            Request::new(document).variables(async_graphql::Variables::from_json(
+            Request::new(document).variables(plain_graphql::Variables::from_json(
                 json!({"paths":[first,absent,first,second]}),
             )),
         )
@@ -381,7 +381,7 @@ async fn named_copy_preserves_existing_files_and_returns_each_actual_collision_d
     for suffix in [2, 3] {
         let response = native.execute(Request::new(
             "mutation($src:String!,$directory:String!){copyFileToDirectory(src:$src,directory:$directory,name:\"saved.txt\")}",
-        ).variables(async_graphql::Variables::from_json(json!({"src":source,"directory":target})))).await;
+        ).variables(plain_graphql::Variables::from_json(json!({"src":source,"directory":target})))).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let destination = target.join(format!("saved ({suffix}).txt"));
         assert_eq!(
@@ -417,7 +417,7 @@ async fn named_copy_does_not_treat_an_existing_named_directory_as_the_destinatio
     std::fs::write(existing.join("source.bin"), b"existing content").unwrap();
     let response = core.native_graphql().unwrap().execute(Request::new(
         "mutation($src:String!,$directory:String!){copyFileToDirectory(src:$src,directory:$directory,name:\"saved.bin\")}",
-    ).variables(async_graphql::Variables::from_json(json!({"src":source,"directory":target})))).await;
+    ).variables(plain_graphql::Variables::from_json(json!({"src":source,"directory":target})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let actual = target.join("saved (1).bin");
     assert_eq!(

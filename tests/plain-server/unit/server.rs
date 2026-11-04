@@ -125,7 +125,7 @@ async fn configured_public_uses_core_settings_and_keeps_listeners_on_tls_preflig
     let response = core
         .native_graphql()
         .unwrap()
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "mutation{http:setPref(key:\"http_port\",value:0) https:setPref(key:\"https_port\",value:0)}",
         ))
         .await;
@@ -400,7 +400,7 @@ async fn startup_device_name_initialization_is_shared_and_preserves_user_changes
             prefs.set("device_name", name).unwrap();
             let response = crate::graphql::executor::execute_graphql(
                 &state.public,
-                async_graphql::Request::new("{app{deviceName}}"),
+                plain_graphql::Request::new("{app{deviceName}}"),
                 crate::graphql::executor::RequestContext::local(state.clone()),
             )
             .await;
@@ -446,7 +446,7 @@ async fn embedded_web_assets_survive_cache_clear_without_extraction() {
             let cleared = server
                 .native_graphql()
                 .unwrap()
-                .execute(async_graphql::Request::new("mutation { clearAppCache }"))
+                .execute(plain_graphql::Request::new("mutation { clearAppCache }"))
                 .await;
             assert!(cleared.errors.is_empty(), "{:?}", cleared.errors);
             assert_eq!(cleared.data.into_json().unwrap()["clearAppCache"], true);
@@ -493,7 +493,7 @@ async fn app_certificate_fingerprint_describes_the_active_listener() {
     let api = core.native_graphql().unwrap();
     let read = || async {
         let response = api
-            .execute(async_graphql::Request::new("{app{tlsCertificateSha256}}"))
+            .execute(plain_graphql::Request::new("{app{tlsCertificateSha256}}"))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         response.data.into_json().unwrap()["app"]["tlsCertificateSha256"].clone()

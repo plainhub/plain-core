@@ -11,7 +11,7 @@ use std::{
 use tokio::sync::mpsc;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 pub enum FileTaskType {
     Copy,
     Move,
@@ -19,7 +19,7 @@ pub enum FileTaskType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 pub enum FileTaskStatus {
     Queued,
     Running,

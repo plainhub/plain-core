@@ -343,7 +343,7 @@ async fn a_blank_query_is_refused_before_the_platform_is_touched() {
 
 #[tokio::test]
 async fn notes_and_feed_entries_tag_selected_ids_without_host_or_body_reads() {
-    use async_graphql::{EmptySubscription, Schema};
+    use plain_graphql::{EmptySubscription, Schema};
     use rusqlite::hooks::{AuthAction, AuthContext, Authorization};
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
     let now = "2026-01-02T03:04:05.000Z";
@@ -388,11 +388,11 @@ async fn notes_and_feed_entries_tag_selected_ids_without_host_or_body_reads() {
                 "unsupported_scope:value".to_owned(),
                 format!("ids:{selected}"),
             ] {
-                let request = async_graphql::Request::new(format!(
+                let request = plain_graphql::Request::new(format!(
                     "mutation($q:String!){{ {action}(type:{name},tagIds:[\"{}\"],query:$q) }}",
                     tag.id
                 ))
-                .variables(async_graphql::Variables::from_json(json!({"q":&query})));
+                .variables(plain_graphql::Variables::from_json(json!({"q":&query})));
                 let response = tokio::select! {
                     response = schema.execute(request) => response,
                     request = requests.recv() => panic!("unexpected host request {request:?}"),

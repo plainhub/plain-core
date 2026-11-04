@@ -63,8 +63,8 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
         stream.decode(&frame, &key).unwrap(),
         ("IMAGE_EDITOR_READY".into(), vec![])
     );
-    let request = async_graphql::Request::new("mutation($id: ID!, $update: String!) { broadcastImageEditorUpdate(id: $id, update: $update) }")
-        .variables(async_graphql::Variables::from_json(json!({"id":"project", "update":"AQID"})));
+    let request = plain_graphql::Request::new("mutation($id: ID!, $update: String!) { broadcastImageEditorUpdate(id: $id, update: $update) }")
+        .variables(plain_graphql::Variables::from_json(json!({"id":"project", "update":"AQID"})));
     let response = core.native_graphql().unwrap().execute(request).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let ClientMessage::Binary(frame) = tokio::time::timeout(Duration::from_secs(3), socket.next())
@@ -536,10 +536,10 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
     .unwrap();
     let native = core.native_graphql().unwrap();
     let settings = json!({"workDurationMin":26,"shortBreakDurationMin":5,"longBreakDurationMin":15,"pomodorosBeforeLongBreak":4,"showNotification":true,"playSoundOnComplete":true,"soundPath":"","originalSoundName":""});
-    let request = async_graphql::Request::new(
+    let request = plain_graphql::Request::new(
         "mutation($value: JSON!) { setPref(key: \"pomodoro_settings\", value: $value) }",
     )
-    .variables(async_graphql::Variables::from_json(
+    .variables(plain_graphql::Variables::from_json(
         json!({"value":settings}),
     ));
     assert!(native.execute(request).await.errors.is_empty());

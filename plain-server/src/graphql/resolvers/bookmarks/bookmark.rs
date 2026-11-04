@@ -1,5 +1,5 @@
-use async_graphql::{Context, ID};
-use plain_graphql_macros::object as Object;
+use plain_graphql::{Context, ID, Object};
+
 use serde_json::json;
 use std::sync::Arc;
 
@@ -51,7 +51,7 @@ pub struct BookmarkQuery;
 
 #[Object]
 impl BookmarkQuery {
-    fn bookmark(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<Option<Bookmark>> {
+    fn bookmark(&self, ctx: &Context<'_>, id: ID) -> plain_graphql::Result<Option<Bookmark>> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         Ok(bookmark_db::get_bookmark_by_id(db, id.as_str())?.map(Bookmark::from))
     }
@@ -95,7 +95,7 @@ impl BookmarkMutation {
         ctx: &Context<'_>,
         urls: Vec<String>,
         group_id: ID,
-    ) -> async_graphql::Result<Vec<Bookmark>> {
+    ) -> plain_graphql::Result<Vec<Bookmark>> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         let created = urls
             .into_iter()
@@ -115,10 +115,10 @@ impl BookmarkMutation {
         ctx: &Context<'_>,
         id: ID,
         input: BookmarkInput,
-    ) -> Result<Bookmark, async_graphql::Error> {
+    ) -> Result<Bookmark, plain_graphql::Error> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         let mut bookmark = bookmark_db::get_bookmark_by_id(db, id.as_str())?
-            .ok_or_else(|| async_graphql::Error::new("bookmark not found"))?;
+            .ok_or_else(|| plain_graphql::Error::new("bookmark not found"))?;
         bookmark.url = input.url;
         bookmark.title = input.title;
         bookmark.group_id = (!input.group_id.is_empty()).then(|| input.group_id.to_string());
@@ -131,8 +131,8 @@ impl BookmarkMutation {
             Some(url) => Some(assets.cache_bookmark_icon(url).await?),
         };
         let saved = bookmark_db::update_fields(db, &bookmark, favicon_path.as_deref())
-            .map_err(async_graphql::Error::from)
-            .and_then(|saved| saved.ok_or_else(|| async_graphql::Error::new("bookmark not found")));
+            .map_err(plain_graphql::Error::from)
+            .and_then(|saved| saved.ok_or_else(|| plain_graphql::Error::new("bookmark not found")));
         let (bookmark, previous_favicon) = match saved {
             Ok(saved) => saved,
             Err(error) => {
@@ -153,7 +153,7 @@ impl BookmarkMutation {
         &self,
         ctx: &Context<'_>,
         ids: Vec<ID>,
-    ) -> async_graphql::Result<ActionResult> {
+    ) -> plain_graphql::Result<ActionResult> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         let ids = ids.into_iter().map(|id| id.to_string()).collect::<Vec<_>>();
         let removed = bookmark_db::delete_bookmarks_with_rows(db, &ids)?;
@@ -168,7 +168,7 @@ impl BookmarkMutation {
         })
     }
 
-    fn record_bookmark_click(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
+    fn record_bookmark_click(&self, ctx: &Context<'_>, id: ID) -> plain_graphql::Result<bool> {
         bookmark_db::record_click(ctx.data_unchecked::<Arc<Db>>(), id.as_str())?;
         Ok(true)
     }
@@ -177,7 +177,7 @@ impl BookmarkMutation {
         &self,
         ctx: &Context<'_>,
         name: String,
-    ) -> async_graphql::Result<BookmarkGroup> {
+    ) -> plain_graphql::Result<BookmarkGroup> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         let group = DBookmarkGroup::new(name.trim());
         bookmark_db::insert_bookmark_group(db, &group)?;
@@ -191,10 +191,10 @@ impl BookmarkMutation {
         name: String,
         collapsed: bool,
         sort_order: i32,
-    ) -> Result<BookmarkGroup, async_graphql::Error> {
+    ) -> Result<BookmarkGroup, plain_graphql::Error> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         let mut group = bookmark_db::get_bookmark_group_by_id(db, id.as_str())
-            .ok_or_else(|| async_graphql::Error::new("bookmark group not found"))?;
+            .ok_or_else(|| plain_graphql::Error::new("bookmark group not found"))?;
         group.name = name;
         group.collapsed = collapsed;
         group.sort_order = sort_order;
@@ -204,7 +204,7 @@ impl BookmarkMutation {
         Ok(BookmarkGroup::from_group(group, item_count))
     }
 
-    fn delete_bookmark_group(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
+    fn delete_bookmark_group(&self, ctx: &Context<'_>, id: ID) -> plain_graphql::Result<bool> {
         let db = ctx.data_unchecked::<Arc<Db>>();
         let updated = bookmark_db::delete_bookmark_group(db, id.as_str())?;
         emit_bookmark_updated(ctx, &updated);

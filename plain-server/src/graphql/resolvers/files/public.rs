@@ -13,9 +13,9 @@ use crate::graphql::types::facts::list;
 use crate::graphql::types::facts::rows;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Enum};
 use chrono::{DateTime, Utc};
-use plain_graphql_macros::object as Object;
+use plain_graphql::{Context, Enum, Object};
+
 use plain_libs::filesystem::SortBy;
 use plain_libs::filesystem::browse::Request;
 use plain_rs::features::prefs::settings::FileSortBy;
@@ -39,7 +39,7 @@ impl FilesQuery {
         offset: i32,
         limit: i32,
         sort_by: FileSortBy,
-    ) -> async_graphql::Result<Vec<File>> {
+    ) -> plain_graphql::Result<Vec<File>> {
         if !public_gate::require_granted(ctx, &[STORAGE]).await? {
             return Ok(Vec::new());
         }
@@ -47,14 +47,14 @@ impl FilesQuery {
             .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .indexed_files(query, offset, limit, sort_by, false)
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(rows(&items, file))
     }
     async fn indexed_file_count(
         &self,
         ctx: &Context<'_>,
         query: String,
-    ) -> async_graphql::Result<Long> {
+    ) -> plain_graphql::Result<Long> {
         if !public_gate::require_granted(ctx, &[STORAGE]).await? {
             return Ok(Long(0));
         }
@@ -62,22 +62,22 @@ impl FilesQuery {
             .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .indexed_files(query, 0, 0, FileSortBy::NameAsc, true)
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(Long(count.as_i64().ok_or("invalid indexed file count")?))
     }
 
-    async fn mounts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Mount>> {
+    async fn mounts(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Mount>> {
         let facts = ctx
             .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
             .mounts(prefs(ctx).clone())
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(rows(&facts, mount))
     }
 
     /// Recently-opened files. Reading them is a storage read, so this one
     /// gates — plain-app's `recentFiles` calls `checkEnabledAsync`.
-    async fn recent_files(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<File>> {
+    async fn recent_files(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<File>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let items = ctx
             .data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?
@@ -97,7 +97,7 @@ impl FilesQuery {
         offset: i32,
         limit: i32,
         sort_by: FileSortBy,
-    ) -> async_graphql::Result<Vec<File>> {
+    ) -> plain_graphql::Result<Vec<File>> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let page = file_reads::execute(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
@@ -111,7 +111,7 @@ impl FilesQuery {
             },
         )
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
         Ok(list(&page, "items", file))
     }
 
@@ -121,7 +121,7 @@ impl FilesQuery {
         ctx: &Context<'_>,
         root: String,
         query: String,
-    ) -> async_graphql::Result<i32> {
+    ) -> plain_graphql::Result<i32> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let page = file_reads::execute(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
@@ -135,7 +135,7 @@ impl FilesQuery {
             },
         )
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
         Ok(page["count"].as_u64().unwrap_or_default() as i32)
     }
 
@@ -144,7 +144,7 @@ impl FilesQuery {
         ctx: &Context<'_>,
         path: String,
         file_name: Option<String>,
-    ) -> async_graphql::Result<FileInfo> {
+    ) -> plain_graphql::Result<FileInfo> {
         public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let record = file_reads::stat_record(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
@@ -177,7 +177,7 @@ impl FilesQuery {
     /// A total predicate, never an error: a blank path, `"."`, a missing
     /// file and a denied path all read as `false` so callers can use it in
     /// a filter without guarding every call.
-    async fn path_exists(&self, ctx: &Context<'_>, path: String) -> async_graphql::Result<bool> {
+    async fn path_exists(&self, ctx: &Context<'_>, path: String) -> plain_graphql::Result<bool> {
         Ok(file_reads::stat_record(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
             &path,
@@ -192,7 +192,7 @@ impl FilesQuery {
         &self,
         ctx: &Context<'_>,
         path: String,
-    ) -> async_graphql::Result<Option<PathKind>> {
+    ) -> plain_graphql::Result<Option<PathKind>> {
         Ok(file_reads::stat_record(
             ctx.data::<Arc<plain_rs::features::services::files::platform::FilePlatform>>()?,
             &path,
@@ -221,7 +221,7 @@ async fn media_info(
     ctx: &Context<'_>,
     path: &str,
     name: &str,
-) -> async_graphql::Result<Option<MediaFileInfo>> {
+) -> plain_graphql::Result<Option<MediaFileInfo>> {
     let extension = Path::new(name)
         .extension()
         .map(|extension| extension.to_string_lossy().to_lowercase())
@@ -249,14 +249,14 @@ async fn media_info(
                 .data::<Arc<plain_rs::features::services::files::duration_updates::Runtime>>()?
                 .probe_milliseconds(path)
                 .await
-                .map_err(async_graphql::Error::new)?
+                .map_err(plain_graphql::Error::new)?
             {
                 Some(duration) => json!({"durationMs":duration}),
                 None => ctx
                     .data::<Arc<plain_rs::features::services::files::info::Info>>()?
                     .read(path, kind)
                     .await
-                    .map_err(async_graphql::Error::new)?,
+                    .map_err(plain_graphql::Error::new)?,
             }
         } else {
             json!({})
@@ -265,7 +265,7 @@ async fn media_info(
         ctx.data::<Arc<plain_rs::features::services::files::info::Info>>()?
             .read(path, kind)
             .await
-            .map_err(async_graphql::Error::new)?
+            .map_err(plain_graphql::Error::new)?
     };
     if facts.is_null() {
         return Ok(None);
@@ -377,7 +377,7 @@ fn file(item: &Value) -> File {
         file_id: item["mediaId"]
             .as_str()
             .filter(|value| !value.is_empty())
-            .map(|value| async_graphql::ID::from(value)),
+            .map(|value| plain_graphql::ID::from(value)),
         name: text(item, "name"),
         path: text(item, "path"),
         created_at: item["createdAt"].as_i64().map(|millis| instant(millis)),
@@ -390,7 +390,7 @@ fn file(item: &Value) -> File {
 
 fn mount(item: &Value) -> Mount {
     Mount {
-        id: async_graphql::ID(
+        id: plain_graphql::ID(
             item.get("id")
                 .and_then(Value::as_str)
                 .filter(|id| !id.is_empty())

@@ -10,7 +10,6 @@ fn sdl() -> String {
         super::Mutation::default(),
         crate::graphql::subscriptions::Subscription::default(),
     )
-    .extension(crate::graphql::enum_literals::EnumLiteralValidation)
     .register_output_type::<crate::graphql::resolvers::media::item::MediaItem>()
     .finish()
     .sdl()
@@ -647,7 +646,7 @@ async fn no_root_field_fails_for_unregistered_schema_data() {
         };
         let response = schema
             .execute(
-                async_graphql::Request::new(query.as_str())
+                plain_graphql::Request::new(query.as_str())
                     .data(server.runtime_state())
                     .data(server.runtime_state().native_client_id().unwrap()),
             )
@@ -809,7 +808,7 @@ async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host
         "mmsSent",
     ] {
         assert_eq!(
-            crate::graphql::subscriptions::operation::spec(&async_graphql::Request::new(format!(
+            crate::graphql::subscriptions::operation::spec(&plain_graphql::Request::new(format!(
                 "subscription {{ {field} }}"
             )))
             .unwrap()

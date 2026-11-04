@@ -1,7 +1,7 @@
 use super::events;
 use crate::graphql::resolvers::chat::public::ChatItem;
-use async_graphql::{Context, Result, Subscription};
 use futures_util::stream::BoxStream;
+use plain_graphql::{Context, Result, Subscription};
 
 #[derive(Default)]
 pub struct ChatSubscriptions;

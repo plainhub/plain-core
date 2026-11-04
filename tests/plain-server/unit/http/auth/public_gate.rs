@@ -22,11 +22,11 @@ fn prefs_with(permissions: &[&str]) -> Arc<Prefs> {
 /// A remote caller with no granted permission is refused, exactly as before.
 #[test]
 fn remote_caller_without_permission_is_refused() {
-    use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema};
+    use plain_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema};
     struct Query;
     #[Object]
     impl Query {
-        async fn probe(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        async fn probe(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
             require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &["STORAGE"])?;
             Ok(true)
         }
@@ -38,7 +38,7 @@ fn remote_caller_without_permission_is_refused() {
         let response = tokio::runtime::Runtime::new().unwrap().block_on(async {
             schema
                 .execute(
-                    async_graphql::Request::new("query { probe }")
+                    plain_graphql::Request::new("query { probe }")
                         .data(prefs.clone())
                         .data(origin),
                 )
@@ -57,11 +57,11 @@ fn remote_caller_without_permission_is_refused() {
 /// going through loopback HTTP.
 #[test]
 fn local_caller_bypasses_the_web_permission_list() {
-    use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema};
+    use plain_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema};
     struct Query;
     #[Object]
     impl Query {
-        async fn probe(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        async fn probe(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
             require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &["STORAGE"])?;
             Ok(true)
         }
@@ -72,7 +72,7 @@ fn local_caller_bypasses_the_web_permission_list() {
     let response = tokio::runtime::Runtime::new().unwrap().block_on(async {
         schema
             .execute(
-                async_graphql::Request::new("query { probe }")
+                plain_graphql::Request::new("query { probe }")
                     .data(prefs.clone())
                     .data(RequestOrigin::Local),
             )
@@ -88,11 +88,11 @@ fn local_caller_bypasses_the_web_permission_list() {
 /// A remote caller that *was* granted the permission still passes.
 #[test]
 fn remote_caller_with_permission_is_allowed() {
-    use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema};
+    use plain_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema};
     struct Query;
     #[Object]
     impl Query {
-        async fn probe(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        async fn probe(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
             require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &["STORAGE"])?;
             Ok(true)
         }
@@ -103,7 +103,7 @@ fn remote_caller_with_permission_is_allowed() {
     let response = tokio::runtime::Runtime::new().unwrap().block_on(async {
         schema
             .execute(
-                async_graphql::Request::new("query { probe }")
+                plain_graphql::Request::new("query { probe }")
                     .data(prefs.clone())
                     .data(RequestOrigin::Remote),
             )

@@ -1,6 +1,6 @@
 #[cfg(feature = "core")]
 use crate::server::ServerState;
-use async_graphql::{ObjectType, Request, Response, Schema, SubscriptionType};
+use plain_graphql::{ObjectType, Request, Response, Schema, SubscriptionType};
 #[cfg(feature = "core")]
 use plain_rs::infrastructure::events::WsEvent;
 
@@ -29,21 +29,21 @@ impl RequestClient {
 
 #[cfg(feature = "core")]
 pub(crate) fn resource_credentials(
-    ctx: &async_graphql::Context<'_>,
-) -> async_graphql::Result<(plain_rs::features::files::resource_link::Scope, String)> {
+    ctx: &plain_graphql::Context<'_>,
+) -> plain_graphql::Result<(plain_rs::features::files::resource_link::Scope, String)> {
     use plain_rs::features::files::resource_link::Scope;
     if ctx.data_opt::<RequestOrigin>() == Some(&RequestOrigin::Remote) {
         let id = ctx.data::<RequestClient>()?.client_id();
         let row = ctx
             .data::<std::sync::Arc<plain_rs::infrastructure::db::Db>>()?
             .session_get(id)?
-            .ok_or_else(|| async_graphql::Error::new("Session unavailable"))?;
+            .ok_or_else(|| plain_graphql::Error::new("Session unavailable"))?;
         Ok((Scope::Session(id.into()), row.url_token))
     } else {
         let token = ctx
             .data::<std::sync::Arc<plain_rs::features::prefs::Prefs>>()?
             .get::<String>(plain_rs::features::prefs::pref_keys::URL_TOKEN)?
-            .ok_or_else(|| async_graphql::Error::new("URL token unavailable"))?;
+            .ok_or_else(|| plain_graphql::Error::new("URL token unavailable"))?;
         Ok((Scope::Global, token))
     }
 }
@@ -106,7 +106,7 @@ impl RequestContext {
                         Ok(client_id) => Some(client_id),
                         Err(error) => {
                             return Err(Response::from_errors(vec![
-                                async_graphql::ServerError::new(error, None),
+                                plain_graphql::ServerError::new(error, None),
                             ]));
                         }
                     }
@@ -156,7 +156,7 @@ pub async fn execute_graphql<
 }
 
 pub(crate) fn content_changes(request: &Request) -> bool {
-    use async_graphql::parser::{
+    use plain_graphql::parser::{
         parse_query,
         types::{OperationType, Selection},
     };
@@ -268,7 +268,7 @@ pub(crate) fn subscription_stream(
 ) -> futures_util::stream::BoxStream<'static, Response> {
     use futures_util::StreamExt;
     let valid = (|| {
-        let document = async_graphql::parser::parse_query(&request.query).ok()?;
+        let document = plain_graphql::parser::parse_query(&request.query).ok()?;
         let operations = document
             .operations
             .iter()
@@ -280,7 +280,7 @@ pub(crate) fn subscription_stream(
             })
             .collect::<Vec<_>>();
         (operations.len() == 1
-            && operations[0].1.node.ty == async_graphql::parser::types::OperationType::Subscription)
+            && operations[0].1.node.ty == plain_graphql::parser::types::OperationType::Subscription)
             .then_some(())
     })()
     .is_some();
@@ -288,7 +288,7 @@ pub(crate) fn subscription_stream(
         context.prepare(request)
     } else {
         Err(Response::from_errors(vec![
-            async_graphql::ServerError::new("Subscription document required", None),
+            plain_graphql::ServerError::new("Subscription document required", None),
         ]))
     };
     match request {

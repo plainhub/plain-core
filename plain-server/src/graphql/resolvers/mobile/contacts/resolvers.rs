@@ -6,8 +6,8 @@ use crate::graphql::types::facts::list;
 use crate::graphql::types::facts::text;
 use crate::graphql::types::facts::{host_json, provider_params};
 use crate::http::auth::public_gate;
-use async_graphql::{Context, ID};
-use plain_graphql_macros::object as Object;
+use plain_graphql::{Context, ID, Object};
+
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::services::contacts::write as contact_write;
@@ -30,11 +30,11 @@ impl ContactsQuery {
         query: String,
         offset: i32,
         limit: i32,
-    ) -> async_graphql::Result<Vec<Contact>> {
+    ) -> plain_graphql::Result<Vec<Contact>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[READ]).await? {
             return Ok(Vec::new());
         }
@@ -53,10 +53,10 @@ impl ContactsQuery {
         Ok(facts.iter().map(|fact| contact(fact)).collect())
     }
 
-    async fn contact_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
+    async fn contact_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         if !public_gate::require_granted(
             ctx,
             &[if public_gate::is_local(ctx) {
@@ -82,18 +82,18 @@ impl ContactsQuery {
                 .await?,
             )
             .await
-            .map_err(|error| async_graphql::Error::new(error))?;
+            .map_err(|error| plain_graphql::Error::new(error))?;
         Ok(count.as_i64().unwrap_or_default() as i32)
     }
 
     async fn contact_sources(
         &self,
         ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<ContactSource>> {
+    ) -> plain_graphql::Result<Vec<ContactSource>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(plain_rs::features::services::contacts::projection::sources(
             host_json(ctx, "systemContactSources", json!({})).await?,
         )
@@ -105,11 +105,11 @@ impl ContactsQuery {
         .collect())
     }
 
-    async fn contact_groups(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ContactGroup>> {
+    async fn contact_groups(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<ContactGroup>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(plain_rs::features::services::contacts::projection::groups(
             host_json(ctx, "systemContactGroupFacts", json!({})).await?,
         )
@@ -128,7 +128,7 @@ impl ContactsMutation {
         &self,
         ctx: &Context<'_>,
         input: ContactInput,
-    ) -> async_graphql::Result<Contact> {
+    ) -> plain_graphql::Result<Contact> {
         let id = contact_write_call(
             ctx,
             contact_write::Request {
@@ -149,7 +149,7 @@ impl ContactsMutation {
         ctx: &Context<'_>,
         id: ID,
         input: ContactInput,
-    ) -> async_graphql::Result<Contact> {
+    ) -> plain_graphql::Result<Contact> {
         contact_write_call(
             ctx,
             contact_write::Request {
@@ -169,22 +169,22 @@ impl ContactsMutation {
         &self,
         ctx: &Context<'_>,
         query: String,
-    ) -> async_graphql::Result<ActionResult> {
+    ) -> plain_graphql::Result<ActionResult> {
         if query.trim().is_empty() {
-            return Err(async_graphql::Error::new(
+            return Err(plain_graphql::Error::new(
                 "query is required for bulk mutations — pass 'all:true' to explicitly target everything",
             ));
         }
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[WRITE])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         plain_rs::features::services::phone_query::require_narrowing(
             ctx.data_unchecked::<Arc<plain_rs::infrastructure::db::Db>>(),
             plain_rs::features::services::files::provider_query::Provider::Contact,
             &query,
         )
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let ids: Vec<Value> = host_json(
             ctx,
             "systemContactIds",
@@ -208,9 +208,9 @@ impl ContactsMutation {
                     json!({"provider": "CONTACT", "ids": ids}),
                 )
                 .await
-                .map_err(|error| async_graphql::Error::new(error))?,
+                .map_err(|error| plain_graphql::Error::new(error))?,
         )
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(ActionResult {
             affected_count: deleted.len() as i32,
         })
@@ -222,7 +222,7 @@ impl ContactsMutation {
         name: String,
         account_name: String,
         account_type: String,
-    ) -> async_graphql::Result<ContactGroup> {
+    ) -> plain_graphql::Result<ContactGroup> {
         let created = contact_write_call(
             ctx,
             contact_write::Request {
@@ -247,7 +247,7 @@ impl ContactsMutation {
         ctx: &Context<'_>,
         id: ID,
         name: String,
-    ) -> async_graphql::Result<ContactGroup> {
+    ) -> plain_graphql::Result<ContactGroup> {
         contact_write_call(
             ctx,
             contact_write::Request {
@@ -267,7 +267,7 @@ impl ContactsMutation {
         })
     }
 
-    async fn delete_contact_group(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
+    async fn delete_contact_group(&self, ctx: &Context<'_>, id: ID) -> plain_graphql::Result<bool> {
         contact_write_call(
             ctx,
             contact_write::Request {
@@ -289,30 +289,30 @@ impl ContactsMutation {
 async fn contact_write_call(
     ctx: &Context<'_>,
     request: contact_write::Request,
-) -> async_graphql::Result<String> {
+) -> plain_graphql::Result<String> {
     let result = contact_write::execute(
         ctx.data_unchecked::<Arc<Prefs>>(),
         ctx.data_unchecked::<Arc<Host>>(),
         request,
     )
     .await
-    .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+    .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     Ok(result["id"].as_str().unwrap_or_default().to_owned())
 }
 
 /// The contract returns the freshly written contact, so the row is read back
 /// through the same provider search instead of being assembled from the input.
-async fn contact_rows(ctx: &Context<'_>, params: Value) -> async_graphql::Result<Vec<Value>> {
+async fn contact_rows(ctx: &Context<'_>, params: Value) -> plain_graphql::Result<Vec<Value>> {
     let value = ctx
         .data_unchecked::<Arc<Host>>()
         .call("systemContactFacts", params)
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
     plain_rs::features::services::contacts::projection::contacts(value)
-        .map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))
 }
 
-async fn reload(ctx: &Context<'_>, id: &str, phase: &str) -> async_graphql::Result<Contact> {
+async fn reload(ctx: &Context<'_>, id: &str, phase: &str) -> plain_graphql::Result<Contact> {
     let facts = contact_rows(
         ctx,
         provider_params(
@@ -327,7 +327,7 @@ async fn reload(ctx: &Context<'_>, id: &str, phase: &str) -> async_graphql::Resu
     let fact = facts
         .iter()
         .find(|fact| text(fact, "id") == id)
-        .ok_or_else(|| async_graphql::Error::new(format!("Contact {id} not found {phase}")))?;
+        .ok_or_else(|| plain_graphql::Error::new(format!("Contact {id} not found {phase}")))?;
     Ok(contact(fact))
 }
 

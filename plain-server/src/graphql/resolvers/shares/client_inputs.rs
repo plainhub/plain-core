@@ -1,8 +1,8 @@
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
-use async_graphql::{ID, InputObject};
 use chrono::SubsecRound;
+use plain_graphql::{ID, InputObject};
 use plain_rs::features::{chat::messages::share_card, files::shares::client};
 
 #[derive(InputObject)]
@@ -42,12 +42,12 @@ pub(super) struct SharedEntryInput {
     has_thumb: bool,
 }
 
-fn port(value: i32) -> async_graphql::Result<u16> {
-    u16::try_from(value).map_err(|_| async_graphql::Error::new("Invalid share port"))
+fn port(value: i32) -> plain_graphql::Result<u16> {
+    u16::try_from(value).map_err(|_| plain_graphql::Error::new("Invalid share port"))
 }
 
 impl TryFrom<SharedLinkInput> for client::Link {
-    type Error = async_graphql::Error;
+    type Error = plain_graphql::Error;
     fn try_from(value: SharedLinkInput) -> Result<Self, Self::Error> {
         Ok(Self {
             host: value.host,
@@ -60,7 +60,7 @@ impl TryFrom<SharedLinkInput> for client::Link {
 }
 
 impl TryFrom<SharedMessageCardInput> for share_card::Card {
-    type Error = async_graphql::Error;
+    type Error = plain_graphql::Error;
     fn try_from(value: SharedMessageCardInput) -> Result<Self, Self::Error> {
         Ok(Self {
             share_id: value.share_id.0,

@@ -6,7 +6,7 @@
 //! matching plain-app's `Instant.fromEpochMilliseconds(0)` for facts the
 //! platform could not fill in.
 
-use async_graphql::{Context, ID};
+use plain_graphql::{Context, ID};
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Instant;
 use serde_json::Value;
@@ -17,13 +17,13 @@ pub(crate) async fn host_json(
     ctx: &Context<'_>,
     method: &str,
     params: Value,
-) -> async_graphql::Result<Vec<Value>> {
+) -> plain_graphql::Result<Vec<Value>> {
     let facts = ctx
         .data_unchecked::<Arc<Host>>()
         .call(method, params)
         .await
-        .map_err(|error| async_graphql::Error::new(error))?;
-    serde_json::from_value(facts).map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(|error| plain_graphql::Error::new(error))?;
+    serde_json::from_value(facts).map_err(|error| plain_graphql::Error::new(error.to_string()))
 }
 
 pub(crate) async fn provider_params(
@@ -31,14 +31,14 @@ pub(crate) async fn provider_params(
     provider: plain_rs::features::services::files::provider_query::Provider,
     query: &str,
     params: Value,
-) -> async_graphql::Result<Value> {
+) -> plain_graphql::Result<Value> {
     plain_rs::features::services::files::provider_query::params(
         ctx.data_unchecked::<Arc<plain_rs::infrastructure::db::Db>>(),
         provider,
         query,
         params,
     )
-    .map_err(|error| async_graphql::Error::new(error.to_string()))
+    .map_err(|error| plain_graphql::Error::new(error.to_string()))
 }
 
 pub(crate) fn text(value: &Value, key: &str) -> String {

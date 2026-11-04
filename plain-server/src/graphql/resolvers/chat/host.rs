@@ -1,11 +1,10 @@
 use super::public::{ChatItem, item};
 use crate::server::ServerState;
-use async_graphql::{Context, ID};
-use plain_graphql_macros::{SimpleObject, object as Object};
+use plain_graphql::{Context, ID, Object, SimpleObject};
+
 use plain_rs::features::services::chat::chat_actions;
 
 #[derive(SimpleObject)]
-#[graphql(getters = false)]
 pub struct ChatConversation {
     pub id: ID,
     pub chat: ChatItem,
@@ -17,7 +16,7 @@ impl ChatHostQuery {
     fn chat_conversations(
         &self,
         ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<ChatConversation>> {
+    ) -> plain_graphql::Result<Vec<ChatConversation>> {
         Ok(plain_rs::features::chat::cacher::ChatCacher::conversations(
             &ctx.data::<ServerState>()?.db,
         )?
@@ -34,7 +33,7 @@ impl ChatHostQuery {
         query: String,
         offset: i32,
         limit: i32,
-    ) -> async_graphql::Result<Vec<ChatItem>> {
+    ) -> plain_graphql::Result<Vec<ChatItem>> {
         let state = ctx.data::<ServerState>()?;
         let filter = filter(&query, offset, limit, false);
         let value = plain_rs::infrastructure::db::chat_store::messages::list(&state.db, &filter)?;
@@ -42,7 +41,7 @@ impl ChatHostQuery {
         plain_rs::features::services::chat::prewarm::prepare_conversation(state, &filter);
         Ok(rows.iter().map(item).collect())
     }
-    fn chat_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
+    fn chat_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
         let state = ctx.data::<ServerState>()?;
         let value = plain_rs::infrastructure::db::chat_store::messages::list(
             &state.db,
@@ -52,7 +51,6 @@ impl ChatHostQuery {
     }
 }
 #[derive(SimpleObject)]
-#[graphql(getters = false)]
 pub struct ChatTextEdit {
     pub changed: bool,
     pub chat: ChatItem,
@@ -66,7 +64,7 @@ impl ChatHostMutation {
         ctx: &Context<'_>,
         targets: Vec<String>,
         content: String,
-    ) -> async_graphql::Result<Vec<ChatItem>> {
+    ) -> plain_graphql::Result<Vec<ChatItem>> {
         Ok(
             chat_actions::send_many(ctx.data::<ServerState>()?, targets, content)
                 .await?
@@ -81,7 +79,7 @@ impl ChatHostMutation {
         ctx: &Context<'_>,
         targets: Vec<String>,
         share_id: ID,
-    ) -> async_graphql::Result<Vec<ChatItem>> {
+    ) -> plain_graphql::Result<Vec<ChatItem>> {
         Ok(plain_rs::features::services::chat::share_send::existing(
             ctx.data::<ServerState>()?,
             ctx.data::<std::sync::Arc<plain_rs::features::files::shares::Service>>()?
@@ -102,7 +100,7 @@ impl ChatHostMutation {
         path: String,
         name: String,
         expires_at: Option<plain_rs::infrastructure::types::Instant>,
-    ) -> async_graphql::Result<Vec<ChatItem>> {
+    ) -> plain_graphql::Result<Vec<ChatItem>> {
         Ok(plain_rs::features::services::chat::share_send::folder(
             ctx.data::<ServerState>()?,
             ctx.data::<std::sync::Arc<plain_rs::features::files::shares::Service>>()?
@@ -123,7 +121,7 @@ impl ChatHostMutation {
         ctx: &Context<'_>,
         id: ID,
         targets: Vec<String>,
-    ) -> async_graphql::Result<Vec<ChatItem>> {
+    ) -> plain_graphql::Result<Vec<ChatItem>> {
         Ok(
             chat_actions::forward_many(ctx.data::<ServerState>()?, id.as_str(), targets)
                 .await?
@@ -137,7 +135,7 @@ impl ChatHostMutation {
         ctx: &Context<'_>,
         id: ID,
         recipients: Option<Vec<ID>>,
-    ) -> async_graphql::Result<ChatItem> {
+    ) -> plain_graphql::Result<ChatItem> {
         let recipients = recipients.map(|ids| ids.into_iter().map(|id| id.to_string()).collect());
         let receipt = plain_rs::features::services::chat::chat_delivery::deliver(
             ctx.data::<ServerState>()?,
@@ -146,7 +144,7 @@ impl ChatHostMutation {
         )
         .await?;
         Ok(item(&receipt.chat.ok_or_else(|| {
-            async_graphql::Error::new("Message unavailable")
+            plain_graphql::Error::new("Message unavailable")
         })?))
     }
     fn edit_chat_text(
@@ -154,7 +152,7 @@ impl ChatHostMutation {
         ctx: &Context<'_>,
         id: ID,
         text: String,
-    ) -> async_graphql::Result<ChatTextEdit> {
+    ) -> plain_graphql::Result<ChatTextEdit> {
         let state = ctx.data::<ServerState>()?;
         let result = plain_rs::features::services::link_preview::edit(
             &state.db,

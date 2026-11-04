@@ -97,7 +97,7 @@ async fn remote_and_invalid_restart_requests_never_start_a_runtime_operation() {
     let state = core.runtime_state();
     let remote = crate::graphql::executor::execute_graphql(
         &state.public,
-        async_graphql::Request::new("mutation{restartHttpServer(httpPort:0){revision}}"),
+        plain_graphql::Request::new("mutation{restartHttpServer(httpPort:0){revision}}"),
         crate::graphql::executor::RequestContext::remote(Some(state.clone())),
     )
     .await;
@@ -110,7 +110,7 @@ async fn remote_and_invalid_restart_requests_never_start_a_runtime_operation() {
             !core
                 .native_graphql()
                 .unwrap()
-                .execute(async_graphql::Request::new(document))
+                .execute(plain_graphql::Request::new(document))
                 .await
                 .errors
                 .is_empty()

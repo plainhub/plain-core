@@ -206,7 +206,7 @@ async fn run_with_context(
     request: &str,
     context: crate::graphql::executor::RequestContext,
 ) -> Result<Vec<u8>, StatusCode> {
-    let parsed: async_graphql::Request =
+    let parsed: plain_graphql::Request =
         serde_json::from_str(request).map_err(|_| StatusCode::BAD_REQUEST)?;
     serde_json::to_vec(&crate::graphql::executor::execute_graphql(schema, parsed, context).await)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
@@ -278,7 +278,7 @@ async fn execute_guest(state: &ServerState, id: &str, body: &[u8]) -> (u16, Vec<
         Ok(p) => p,
         Err(_) => return (400, vec![]),
     };
-    let request: async_graphql::Request = match serde_json::from_str(body) {
+    let request: plain_graphql::Request = match serde_json::from_str(body) {
         Ok(p) => p,
         Err(_) => return (400, vec![]),
     };

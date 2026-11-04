@@ -26,7 +26,7 @@ async fn quoted_enum_literals_are_rejected_before_local_or_remote_mutations_exec
             .await
         };
         assert!(!response.errors.is_empty(), "{response:?}");
-        assert_eq!(response.data, async_graphql::Value::Null);
+        assert_eq!(response.data, plain_graphql::Value::Null);
         assert_eq!(prefs.get::<bool>("auto_check_update").unwrap(), Some(true));
     }
     server.shutdown().await;

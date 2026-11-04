@@ -3,7 +3,7 @@ name = "plain-graphql-macros"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.99"
-description = "GraphQL object macros for Plain"
+description = "GraphQL macros for Plain"
 license = "MIT OR Apache-2.0"
 
 [lib]
@@ -15,7 +15,7 @@ heck = "=0.5.0"
 proc-macro-crate = "=3.5.0"
 proc-macro2 = "=1.0.107"
 quote = "=1.0.47"
-syn = { version = "=2.0.119", features = ["extra-traits", "visit"] }
+syn = { version = "=2.0.119", features = ["extra-traits", "visit-mut"] }
 thiserror = "=2.0.21"
 
 [package.metadata.upstream]

@@ -1,10 +1,9 @@
-use async_graphql::{Enum, ID, InputObject};
-use plain_graphql_macros::SimpleObject;
+use plain_graphql::{Enum, ID, InputObject, SimpleObject};
+
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct Disk {
     pub id: ID,
     pub name: String,
@@ -50,7 +49,6 @@ impl AuditEventType {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct AuditEvent {
     pub id: ID,
     pub r#type: AuditEventType,
@@ -81,7 +79,6 @@ pub struct SambaSettingsInput {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct SambaShare {
     pub name: String,
     pub share_path: String,
@@ -90,7 +87,6 @@ pub struct SambaShare {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct SambaSettings {
     pub enabled: bool,
     pub username: String,
@@ -102,7 +98,6 @@ pub struct SambaSettings {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct DlnaRenderer {
     pub udn: String,
     pub name: String,

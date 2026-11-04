@@ -30,7 +30,7 @@ async fn native_import_preserves_image_bytes_and_resolves_duplicate_names_in_rus
     assert!(requests.try_recv().is_err());
     let remote = crate::graphql::executor::execute_graphql(
         &state.public,
-        async_graphql::Request::new(
+        plain_graphql::Request::new(
             r#"mutation{importNoteImage(source:"/missing",fileName:"remote.png")}"#,
         ),
         crate::graphql::executor::RequestContext::remote(Some(state.clone())),

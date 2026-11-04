@@ -3,9 +3,9 @@ use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::optional_instant;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use async_graphql::Context;
 use chrono::{DateTime, Utc};
-use plain_graphql_macros::object as Object;
+use plain_graphql::{Context, Object};
+
 use plain_rs::features::enums::DataType;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Instant;
@@ -22,11 +22,11 @@ pub use super::types::{MediaBucket, MediaDataType};
 /// nothing in it can be queried on its own — the three concrete types each
 /// add fields and are what the lists return.
 pub(crate) struct Row {
-    pub(crate) id: async_graphql::ID,
+    pub(crate) id: plain_graphql::ID,
     pub(crate) title: String,
     pub(crate) path: String,
     pub(crate) size: Long,
-    pub(crate) bucket_id: async_graphql::ID,
+    pub(crate) bucket_id: plain_graphql::ID,
     pub(crate) created_at: Instant,
     pub(crate) updated_at: Instant,
 }
@@ -52,7 +52,7 @@ impl MediaQuery {
         &self,
         ctx: &Context<'_>,
         r#type: MediaDataType,
-    ) -> async_graphql::Result<Vec<MediaBucket>> {
+    ) -> plain_graphql::Result<Vec<MediaBucket>> {
         if !public_gate::require_granted(ctx, &[STORAGE]).await? {
             return Ok(Vec::new());
         }
@@ -60,20 +60,20 @@ impl MediaQuery {
         let facts = catalog(ctx)
             .buckets(data_type)
             .await
-            .map_err(async_graphql::Error::new)?;
+            .map_err(plain_graphql::Error::new)?;
         let items = serde_json::from_value(facts)
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let buckets =
             plain_rs::features::services::files::media_buckets::aggregate(r#type.as_str(), items)
-                .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+                .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         buckets
             .into_iter()
             .map(|bucket| {
                 Ok(MediaBucket {
-                    id: async_graphql::ID::from(bucket.id),
+                    id: plain_graphql::ID::from(bucket.id),
                     name: bucket.name,
                     item_count: i32::try_from(bucket.item_count)
-                        .map_err(|error| async_graphql::Error::new(error.to_string()))?,
+                        .map_err(|error| plain_graphql::Error::new(error.to_string()))?,
                     size: Long(bucket.size),
                     top_item_paths: bucket.top_items,
                 })
@@ -94,7 +94,7 @@ pub(crate) fn text_field(query: &str) -> String {
 }
 
 /// One page of library rows, still in the host's raw JSON shape.
-pub(crate) async fn media_rows(ctx: &Context<'_>, params: Value) -> async_graphql::Result<Value> {
+pub(crate) async fn media_rows(ctx: &Context<'_>, params: Value) -> plain_graphql::Result<Value> {
     let request: RowsRequest = serde_json::from_value(params)?;
     Ok(Value::Array(
         library_rows(
@@ -113,12 +113,12 @@ pub(crate) async fn media_count(
     ctx: &Context<'_>,
     data_type: &str,
     query: String,
-) -> async_graphql::Result<i32> {
+) -> plain_graphql::Result<i32> {
     let count = catalog(ctx)
         .count(data_type_of(data_type)?, &query)
         .await
-        .map_err(async_graphql::Error::new)?;
-    i32::try_from(count).map_err(|error| async_graphql::Error::new(error.to_string()))
+        .map_err(plain_graphql::Error::new)?;
+    i32::try_from(count).map_err(|error| plain_graphql::Error::new(error.to_string()))
 }
 
 #[derive(serde::Deserialize)]
@@ -131,14 +131,14 @@ struct RowsRequest {
     offset: u32,
 }
 
-fn data_type_of(value: &str) -> async_graphql::Result<DataType> {
+fn data_type_of(value: &str) -> plain_graphql::Result<DataType> {
     Ok(match value {
         "AUDIO" => DataType::Audio,
         "VIDEO" => DataType::Video,
         "IMAGE" => DataType::Image,
         "DOC" => DataType::Doc,
         other => {
-            return Err(async_graphql::Error::new(format!(
+            return Err(plain_graphql::Error::new(format!(
                 "Unsupported media catalog type: {other}"
             )));
         }
@@ -164,15 +164,15 @@ pub(crate) async fn library_rows(
     sort_by: plain_rs::features::prefs::settings::FileSortBy,
     offset: u32,
     limit: u32,
-) -> async_graphql::Result<Vec<Value>> {
+) -> plain_graphql::Result<Vec<Value>> {
     let mut rows = catalog(ctx)
         .rows(data_type, &query, sort_by, limit, offset)
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
     ctx.data::<Arc<plain_rs::features::services::files::duration_updates::Runtime>>()?
         .enrich(data_type, &mut rows)
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
     Ok(rows)
 }
 
@@ -180,11 +180,11 @@ pub(crate) async fn library_keys(
     ctx: &Context<'_>,
     data_type: DataType,
     query: String,
-) -> async_graphql::Result<Vec<String>> {
+) -> plain_graphql::Result<Vec<String>> {
     catalog(ctx)
         .ids(data_type, &query, false)
         .await
-        .map_err(async_graphql::Error::new)
+        .map_err(plain_graphql::Error::new)
 }
 
 pub(crate) fn instant(value: &Value, key: &str) -> Instant {

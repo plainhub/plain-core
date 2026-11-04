@@ -1,4 +1,4 @@
-use async_graphql::{Context, Result};
+use plain_graphql::{Context, Result};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::settings::preferences::Preferences;
 use plain_rs::features::services::settings::security_preferences::SecurityPreferences;

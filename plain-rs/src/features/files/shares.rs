@@ -13,7 +13,7 @@ use std::{
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "graphql", derive(plain_graphql_macros::SimpleObject))]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::SimpleObject))]
 #[serde(rename_all = "camelCase")]
 pub struct Root {
     pub relative_path: String,

@@ -1,5 +1,5 @@
 use crate::server::ContentServer;
-use async_graphql::Request;
+use plain_graphql::Request;
 use serde_json::{Value, json};
 use std::sync::Arc;
 

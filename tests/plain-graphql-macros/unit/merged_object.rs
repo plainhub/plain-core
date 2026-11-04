@@ -1,6 +1,6 @@
 use super::*;
 use darling::FromDeriveInput;
-use syn::visit::{self, Visit};
+use syn::visit_mut::{self, VisitMut};
 
 #[derive(Default)]
 struct Registration {
@@ -8,18 +8,18 @@ struct Registration {
     merge_types: usize,
 }
 
-impl<'ast> Visit<'ast> for Registration {
-    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+impl VisitMut for Registration {
+    fn visit_expr_method_call_mut(&mut self, node: &mut syn::ExprMethodCall) {
         if node.method == "create_fake_output_type" {
             self.members.push(quote!(#node).to_string());
         }
-        visit::visit_expr_method_call(self, node);
+        visit_mut::visit_expr_method_call_mut(self, node);
     }
 
-    fn visit_type_path(&mut self, node: &'ast syn::TypePath) {
+    fn visit_type_path_mut(&mut self, node: &mut syn::TypePath) {
         self.merge_types +=
             usize::from(node.path.segments.iter().any(|s| s.ident == "MergedObject"));
-        visit::visit_type_path(self, node);
+        visit_mut::visit_type_path_mut(self, node);
     }
 }
 
@@ -31,9 +31,9 @@ fn registration_calls_members_directly_without_intermediate_merge_types() {
             .collect();
         let input = syn::parse2(quote!(struct Root(#(#types),*);)).unwrap();
         let args = args::MergedObject::from_derive_input(&input).unwrap();
-        let generated = syn::parse2::<syn::File>(generate(&args).unwrap()).unwrap();
+        let mut generated = syn::parse2::<syn::File>(generate(&args).unwrap()).unwrap();
         let mut registration = Registration::default();
-        registration.visit_file(&generated);
+        registration.visit_file_mut(&mut generated);
         assert_eq!(registration.members.len(), count);
         assert_eq!(registration.merge_types, 0);
         for (call, member) in registration.members.iter().zip(types) {

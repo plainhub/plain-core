@@ -6,7 +6,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use async_graphql::Enum;
+use plain_graphql::Enum;
 
 macro_rules! wire_enum {
     ($(#[$meta:meta])* $name:ident { $($variant:ident => $wire:expr),+ $(,)? }) => {

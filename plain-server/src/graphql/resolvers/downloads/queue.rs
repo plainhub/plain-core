@@ -1,13 +1,12 @@
 use crate::graphql::resolvers::peers::public::Peer;
 use crate::server::ServerState;
-use async_graphql::Context;
-use plain_graphql_macros::{SimpleObject, object as Object};
+use plain_graphql::{Context, Object, SimpleObject};
+
 use plain_rs::features::chat::attachments::download_status::DownloadStatus;
 use plain_rs::infrastructure::types::Long;
 use serde::Deserialize;
 
 #[derive(SimpleObject)]
-#[graphql(getters = false)]
 struct ChatDownloadFile {
     file_id: String,
     uri: String,
@@ -37,7 +36,7 @@ struct FileReceipt {
     file_name: String,
 }
 impl TryFrom<FileReceipt> for ChatDownloadFile {
-    type Error = async_graphql::Error;
+    type Error = plain_graphql::Error;
     fn try_from(file: FileReceipt) -> Result<Self, Self::Error> {
         let duration = match file.duration_ms {
             Some(value) => value,
@@ -45,7 +44,7 @@ impl TryFrom<FileReceipt> for ChatDownloadFile {
                 .duration
                 .unwrap_or_default()
                 .checked_mul(1000)
-                .ok_or_else(|| async_graphql::Error::new("Attachment duration overflow"))?,
+                .ok_or_else(|| plain_graphql::Error::new("Attachment duration overflow"))?,
         };
         Ok(Self {
             file_id: file.id,
@@ -63,7 +62,7 @@ impl TryFrom<FileReceipt> for ChatDownloadFile {
 #[serde(rename_all = "camelCase")]
 struct TaskReceipt {
     id: String,
-    message_id: async_graphql::ID,
+    message_id: plain_graphql::ID,
     file: FileReceipt,
     peer: plain_rs::infrastructure::db::DPeer,
     status: DownloadStatus,
@@ -80,10 +79,9 @@ struct QueueReceipt {
     tasks: Vec<TaskReceipt>,
 }
 #[derive(SimpleObject)]
-#[graphql(getters = false)]
 struct ChatDownloadTask {
-    id: async_graphql::ID,
-    message_id: async_graphql::ID,
+    id: plain_graphql::ID,
+    message_id: plain_graphql::ID,
     file: ChatDownloadFile,
     peer: Peer,
     status: DownloadStatus,
@@ -93,7 +91,6 @@ struct ChatDownloadTask {
     speed: Long,
 }
 #[derive(SimpleObject)]
-#[graphql(getters = false)]
 struct ChatDownloadQueue {
     runtime_id: String,
     revision: Long,
@@ -102,7 +99,7 @@ struct ChatDownloadQueue {
 fn snapshot(
     value: serde_json::Value,
     online: &std::collections::HashSet<&str>,
-) -> async_graphql::Result<ChatDownloadQueue> {
+) -> plain_graphql::Result<ChatDownloadQueue> {
     let local = plain_rs::infrastructure::transport::lan::local_interfaces();
     let receipt: QueueReceipt = serde_json::from_value(value)?;
     Ok(ChatDownloadQueue {
@@ -127,7 +124,7 @@ fn snapshot(
                     speed: task.speed,
                 })
             })
-            .collect::<async_graphql::Result<Vec<_>>>()?,
+            .collect::<plain_graphql::Result<Vec<_>>>()?,
     })
 }
 #[derive(Default)]
@@ -137,7 +134,7 @@ impl ChatDownloadQuery {
     async fn chat_download_queue(
         &self,
         ctx: &Context<'_>,
-    ) -> async_graphql::Result<ChatDownloadQueue> {
+    ) -> plain_graphql::Result<ChatDownloadQueue> {
         let state = ctx.data::<ServerState>()?;
         let queue = state.downloads.clone();
         let connections = state.peer_status.connections.snapshot(&state.db);
@@ -160,54 +157,54 @@ impl ChatDownloadMutation {
     async fn enqueue_chat_download(
         &self,
         ctx: &Context<'_>,
-        message_id: async_graphql::ID,
+        message_id: plain_graphql::ID,
         file_id: String,
-        peer_id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        peer_id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         let queue = ctx.data::<ServerState>()?.downloads.clone();
         tokio::task::spawn_blocking(move || queue.enqueue(&message_id, &file_id, &peer_id))
             .await?
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
     async fn pause_chat_download(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         let queue = ctx.data::<ServerState>()?.downloads.clone();
         tokio::task::spawn_blocking(move || queue.control(&id, "pause"))
             .await?
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
     async fn resume_chat_download(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         let queue = ctx.data::<ServerState>()?.downloads.clone();
         tokio::task::spawn_blocking(move || queue.control(&id, "resume"))
             .await?
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
     async fn retry_chat_download(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         let queue = ctx.data::<ServerState>()?.downloads.clone();
         tokio::task::spawn_blocking(move || queue.control(&id, "retry"))
             .await?
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
     async fn remove_chat_download(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         let queue = ctx.data::<ServerState>()?.downloads.clone();
         tokio::task::spawn_blocking(move || queue.control(&id, "remove"))
             .await?
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
 }
 

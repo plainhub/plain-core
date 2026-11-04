@@ -121,11 +121,11 @@ fn write_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     (dir, server)
 }
 
-async fn write_request(state: &crate::server::ServerState, text: &str) -> async_graphql::Response {
+async fn write_request(state: &crate::server::ServerState, text: &str) -> plain_graphql::Response {
     crate::graphql::executor::execute_graphql(
         &state.public,
-        async_graphql::Request::new("mutation($text:String!){setClipboard(text:$text)}")
-            .variables(async_graphql::Variables::from_json(json!({"text":text}))),
+        plain_graphql::Request::new("mutation($text:String!){setClipboard(text:$text)}")
+            .variables(plain_graphql::Variables::from_json(json!({"text":text}))),
         crate::graphql::executor::RequestContext::authenticated_remote(
             state.clone(),
             "fixture-client".into(),
@@ -208,7 +208,7 @@ async fn set_clipboard_records_authenticated_source_before_platform_write_and_su
     );
     let response = server
         .graphql_executor()
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "mutation { setClipboard(text: \"local input\") }",
         ))
         .await;

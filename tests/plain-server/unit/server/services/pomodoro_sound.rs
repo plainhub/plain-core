@@ -30,7 +30,7 @@ async fn native_import_replaces_sound_in_the_owned_layout_without_host_calls() {
     assert!(requests.try_recv().is_err());
     let response = crate::graphql::executor::execute_graphql(
         &state.public,
-        async_graphql::Request::new(r#"mutation{importPomodoroSound(source:"/missing")}"#),
+        plain_graphql::Request::new(r#"mutation{importPomodoroSound(source:"/missing")}"#),
         crate::graphql::executor::RequestContext::remote(Some(state.clone())),
     )
     .await;

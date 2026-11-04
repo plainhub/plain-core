@@ -1,7 +1,7 @@
 use crate::graphql::types::ActionResult;
 use crate::http::auth::public_gate;
-use async_graphql::{Context, Enum, ID, Result};
-use plain_graphql_macros::{SimpleObject, object as Object};
+use plain_graphql::{Context, Enum, ID, Object, Result, SimpleObject};
+
 use plain_rs::features::files::trash::{SortOrder, Trash, TrashItem};
 use plain_rs::features::services::files::file_tasks::FileTasks;
 use plain_rs::infrastructure::types::Instant;
@@ -23,7 +23,6 @@ pub enum TrashedFileType {
     Dir,
 }
 #[derive(SimpleObject)]
-#[graphql(getters = false)]
 struct TrashedFile {
     id: ID,
     r#type: TrashedFileType,
@@ -40,7 +39,7 @@ struct TrashedFile {
     trashed_path: String,
 }
 impl TryFrom<TrashItem> for TrashedFile {
-    type Error = async_graphql::Error;
+    type Error = plain_graphql::Error;
     fn try_from(row: TrashItem) -> Result<Self> {
         let path = Trash::physical_path(&row).to_string_lossy().into_owned();
         Ok(Self {

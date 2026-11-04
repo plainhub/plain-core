@@ -1,5 +1,5 @@
-use async_graphql::Context;
-use plain_graphql_macros::object as Object;
+use plain_graphql::{Context, Object};
+
 use plain_rs::features::services::pomodoro::PomodoroToday;
 use plain_rs::features::services::pomodoro::Service;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ impl PomodoroControlMutation {
         &self,
         ctx: &Context<'_>,
         duration_sec: i32,
-    ) -> async_graphql::Result<PomodoroToday> {
+    ) -> plain_graphql::Result<PomodoroToday> {
         Ok(ctx
             .data::<Arc<Service>>()?
             .command("adjust", Some(duration_sec))?)

@@ -2,19 +2,19 @@
 pub struct Instant(pub chrono::DateTime<chrono::Utc>);
 
 #[cfg(feature = "graphql")]
-#[async_graphql::Scalar]
-impl async_graphql::ScalarType for Instant {
-    fn parse(value: async_graphql::Value) -> async_graphql::InputValueResult<Self> {
-        if let async_graphql::Value::String(s) = &value
+#[plain_graphql::Scalar]
+impl plain_graphql::ScalarType for Instant {
+    fn parse(value: plain_graphql::Value) -> plain_graphql::InputValueResult<Self> {
+        if let plain_graphql::Value::String(s) = &value
             && let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s)
         {
             return Ok(Instant(dt.with_timezone(&chrono::Utc)));
         }
-        Err(async_graphql::InputValueError::expected_type(value))
+        Err(plain_graphql::InputValueError::expected_type(value))
     }
 
-    fn to_value(&self) -> async_graphql::Value {
-        async_graphql::Value::String(self.wire())
+    fn to_value(&self) -> plain_graphql::Value {
+        plain_graphql::Value::String(self.wire())
     }
 }
 
@@ -43,18 +43,18 @@ impl<'de> serde::Deserialize<'de> for Instant {
 pub struct Long(pub i64);
 
 #[cfg(feature = "graphql")]
-#[async_graphql::Scalar]
-impl async_graphql::ScalarType for Long {
-    fn parse(value: async_graphql::Value) -> async_graphql::InputValueResult<Self> {
-        if let async_graphql::Value::Number(n) = &value
+#[plain_graphql::Scalar]
+impl plain_graphql::ScalarType for Long {
+    fn parse(value: plain_graphql::Value) -> plain_graphql::InputValueResult<Self> {
+        if let plain_graphql::Value::Number(n) = &value
             && let Some(i) = n.as_i64()
         {
             return Ok(Long(i));
         }
-        Err(async_graphql::InputValueError::expected_type(value))
+        Err(plain_graphql::InputValueError::expected_type(value))
     }
 
-    fn to_value(&self) -> async_graphql::Value {
-        async_graphql::Value::from(self.0)
+    fn to_value(&self) -> plain_graphql::Value {
+        plain_graphql::Value::from(self.0)
     }
 }

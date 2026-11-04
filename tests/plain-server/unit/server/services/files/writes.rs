@@ -1,11 +1,11 @@
 use crate::server::ContentServer;
-use async_graphql::Request;
+use plain_graphql::Request;
 use serde_json::{Value, json};
 
-async fn graphql(core: &ContentServer, query: &str, variables: Value) -> async_graphql::Response {
+async fn graphql(core: &ContentServer, query: &str, variables: Value) -> plain_graphql::Response {
     core.native_graphql()
         .unwrap()
-        .execute(Request::new(query).variables(async_graphql::Variables::from_json(variables)))
+        .execute(Request::new(query).variables(plain_graphql::Variables::from_json(variables)))
         .await
 }
 

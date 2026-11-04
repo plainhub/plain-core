@@ -1,4 +1,4 @@
-use async_graphql::Enum;
+use plain_graphql::Enum;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Capability {

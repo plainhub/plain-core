@@ -7,14 +7,11 @@
 //! convention.
 use crate::graphql::resolvers::tags::domain_types::Tag;
 
-use async_graphql::{Enum, ID, InputObject};
-use plain_graphql_macros::SimpleObject;
+use plain_graphql::{Enum, ID, InputObject, SimpleObject};
+
 use plain_rs::infrastructure::types::Instant;
 
-/// The GraphQL enum name, which is also what the platform's kotlinx enum
-/// deserializer expects. Derived from the variant with the same case-boundary
-/// rule async-graphql uses, so the two cannot drift apart — the schema test
-/// pins that agreement against the rendered SDL.
+// The schema test verifies that GraphQL enum casing matches the platform wire name.
 fn screaming_snake(variant: &str) -> String {
     let mut name = String::new();
     for (index, ch) in variant.char_indices() {
@@ -121,7 +118,6 @@ data_kind!(ImProtocol {
 });
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct ContactPhoneNumber {
     pub type_code: i32,
     pub value: String,
@@ -132,7 +128,6 @@ pub struct ContactPhoneNumber {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct ContactEmail {
     pub type_code: i32,
     pub value: String,
@@ -141,7 +136,6 @@ pub struct ContactEmail {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct ContactAddress {
     pub type_code: i32,
     pub value: String,
@@ -150,7 +144,6 @@ pub struct ContactAddress {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct ContactEvent {
     pub type_code: i32,
     pub value: String,
@@ -159,7 +152,6 @@ pub struct ContactEvent {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct ContactWebsite {
     pub type_code: i32,
     pub value: String,
@@ -168,7 +160,6 @@ pub struct ContactWebsite {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct ContactIm {
     pub type_code: i32,
     pub value: String,
@@ -178,14 +169,12 @@ pub struct ContactIm {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct Organization {
     pub company: String,
     pub title: String,
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct ContactGroup {
     pub id: ID,
     pub name: String,
@@ -194,7 +183,6 @@ pub struct ContactGroup {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 pub struct ContactSource {
     pub name: String,
     pub r#type: String,
@@ -204,7 +192,6 @@ pub struct ContactSource {
 /// `tags(type:)` filter instead — so it is not `content_types::Tag`.
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct Contact {
     pub id: ID,
@@ -240,9 +227,9 @@ pub struct Contact {
     pub updated_at: Instant,
 }
 
-#[async_graphql::ComplexObject]
+#[plain_graphql::ComplexObject]
 impl Contact {
-    async fn tags(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<Vec<Tag>> {
+    async fn tags(&self, ctx: &plain_graphql::Context<'_>) -> plain_graphql::Result<Vec<Tag>> {
         crate::graphql::resolvers::tags::loader::load(
             ctx,
             plain_rs::features::enums::DataType::Contact,

@@ -117,7 +117,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
     let mut events = state.events.subscribe();
     let native = server.native_graphql().unwrap();
     let response = native
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"mutation { enqueueChatDownload(messageId:"exact", fileId:"exact", peerId:"peer") }"#,
         ))
         .await;
@@ -156,7 +156,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
     })
     .await
     .unwrap();
-    let response = native.execute(async_graphql::Request::new("{ chatDownloadQueue { runtimeId revision tasks { id status downloaded file { id: fileId uri durationMs } peer { id createdAt updatedAt } } } }")).await;
+    let response = native.execute(plain_graphql::Request::new("{ chatDownloadQueue { runtimeId revision tasks { id status downloaded file { id: fileId uri durationMs } peer { id createdAt updatedAt } } } }")).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let projected = response.data.into_json().unwrap();
     assert_eq!(
@@ -279,7 +279,7 @@ async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_byt
         }
         let native = server.native_graphql().unwrap();
         let response = native
-            .execute(async_graphql::Request::new(format!("mutation {{{root}}}")))
+            .execute(plain_graphql::Request::new(format!("mutation {{{root}}}")))
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert!(terminal(&state, "retry").await.is_none());

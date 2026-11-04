@@ -1,35 +1,10 @@
-use async_graphql::{
-    Pos, Positioned, ServerError, ServerResult, Value, Variables,
-    extensions::{Extension, ExtensionContext, ExtensionFactory, NextParseQuery},
+use crate::{
+    Pos, Positioned, ServerError, ServerResult, Value,
     parser::types::{Directive, ExecutableDocument, OperationType, Selection, SelectionSet},
     registry::{MetaType, MetaTypeName, Registry},
 };
-use std::sync::Arc;
 
-pub(crate) struct EnumLiteralValidation;
-
-impl ExtensionFactory for EnumLiteralValidation {
-    fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(Self)
-    }
-}
-
-#[async_graphql::async_trait::async_trait]
-impl Extension for EnumLiteralValidation {
-    async fn parse_query(
-        &self,
-        context: &ExtensionContext<'_>,
-        query: &str,
-        variables: &Variables,
-        next: NextParseQuery<'_>,
-    ) -> ServerResult<ExecutableDocument> {
-        let document = next.run(context, query, variables).await?;
-        validate(&context.schema_env.registry, &document)?;
-        Ok(document)
-    }
-}
-
-fn validate(registry: &Registry, document: &ExecutableDocument) -> ServerResult<()> {
+pub(crate) fn validate(registry: &Registry, document: &ExecutableDocument) -> ServerResult<()> {
     for (_, operation) in document.operations.iter() {
         for variable in &operation.node.variable_definitions {
             if let Some(default) = &variable.node.default_value {
@@ -160,5 +135,5 @@ fn input(registry: &Registry, expected: &str, value: &Value, position: Pos) -> S
 }
 
 #[cfg(test)]
-#[path = "../../../tests/plain-server/unit/graphql/enum_literals.rs"]
+#[path = "../../../../tests/plain-graphql/unit/validation/enum_literals.rs"]
 mod tests;

@@ -1,6 +1,6 @@
 use crate::graphql::types::ActionResult;
-use async_graphql::{Context, Enum};
-use plain_graphql_macros::{SimpleObject, object as Object};
+use plain_graphql::{Context, Enum, Object, SimpleObject};
+
 use plain_rs::infrastructure::db::DChat;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Instant;
@@ -24,16 +24,14 @@ pub enum ChannelMemberStatus {
 }
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatChannelMember {
     #[graphql(name = "peerId")]
-    pub peer_id: async_graphql::ID,
+    pub peer_id: plain_graphql::ID,
     pub status: ChannelMemberStatus,
 }
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatChannelActions {
     pub is_owner: bool,
@@ -44,13 +42,12 @@ pub struct ChatChannelActions {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-#[graphql(getters = false)]
 #[graphql(complex)]
 pub struct ChatChannel {
     pub actions: ChatChannelActions,
-    pub id: async_graphql::ID,
+    pub id: plain_graphql::ID,
     #[graphql(name = "ownerId")]
-    pub owner_id: async_graphql::ID,
+    pub owner_id: plain_graphql::ID,
     pub name: String,
     pub members: Vec<ChatChannelMember>,
     /// Monotonically increasing mutation counter; receivers ignore channel
@@ -63,10 +60,10 @@ pub struct ChatChannel {
     pub updated_at: Instant,
 }
 
-#[async_graphql::ComplexObject]
+#[plain_graphql::ComplexObject]
 impl ChatChannel {
     #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
-    async fn key(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+    async fn key(&self, ctx: &Context<'_>) -> plain_graphql::Result<String> {
         let db = db(ctx)?.clone();
         let id = self.id.clone();
         let row = tokio::task::spawn_blocking(move || {
@@ -74,28 +71,27 @@ impl ChatChannel {
         })
         .await??;
         Ok(row
-            .ok_or_else(|| async_graphql::Error::new("Chat channel no longer exists"))?
+            .ok_or_else(|| plain_graphql::Error::new("Chat channel no longer exists"))?
             .key)
     }
 }
 
 #[derive(SimpleObject, Clone, Debug, serde::Deserialize)]
-#[graphql(getters = false)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatItem {
     /// `me` when this device created the item, otherwise the client id of
     /// the originating peer.
     #[graphql(name = "fromId")]
-    pub from_id: async_graphql::ID,
+    pub from_id: plain_graphql::ID,
     /// Peer id for direct messages; empty for channel messages —
     /// `channelId` is authoritative there.
     #[graphql(name = "toId")]
-    pub to_id: async_graphql::ID,
+    pub to_id: plain_graphql::ID,
     /// Null for direct messages: the store keeps "" and the contract says
     /// null, because "" is not a channel a client can query.
     #[graphql(name = "channelId")]
-    pub channel_id: Option<async_graphql::ID>,
-    pub id: async_graphql::ID,
+    pub channel_id: Option<plain_graphql::ID>,
+    pub id: plain_graphql::ID,
     /// Message envelope JSON: `{type: TEXT|IMAGES|FILES|SHARE, value: {…}}` —
     /// parse `value` according to `type`.
     pub content: String,
@@ -127,7 +123,7 @@ impl ChatQuery {
         query: String,
         offset: i32,
         limit: i32,
-    ) -> async_graphql::Result<Vec<ChatItem>> {
+    ) -> plain_graphql::Result<Vec<ChatItem>> {
         let text = text_of(&query);
         let rows = db(ctx)?.get_chats_page(&target, &text, offset, limit);
         if let Some(state) = ctx.data_opt::<crate::server::ServerState>() {
@@ -141,8 +137,8 @@ impl ChatQuery {
     fn chat_item(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<Option<ChatItem>> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<Option<ChatItem>> {
         Ok(
             plain_rs::infrastructure::db::chat_store::messages::get(db(ctx)?, id.as_str())?
                 .as_ref()
@@ -150,7 +146,7 @@ impl ChatQuery {
         )
     }
 
-    fn chat_channels(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ChatChannel>> {
+    fn chat_channels(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<ChatChannel>> {
         let facts = plain_rs::features::chat::events::public_channels(db(ctx)?, &actor(ctx)?)?;
         Ok(rows(&facts, channel))
     }
@@ -171,7 +167,7 @@ impl ChatMutation {
         ctx: &Context<'_>,
         target: String,
         content: String,
-    ) -> async_graphql::Result<Vec<ChatItem>> {
+    ) -> plain_graphql::Result<Vec<ChatItem>> {
         let row = plain_rs::features::services::chat::chat_actions::send(
             ctx.data::<crate::server::ServerState>()?,
             &target,
@@ -186,8 +182,8 @@ impl ChatMutation {
     fn delete_chat_item(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         plain_rs::features::services::chat::chat_actions::delete(
             ctx.data::<crate::server::ServerState>()?,
             vec![id.to_string()],
@@ -199,7 +195,7 @@ impl ChatMutation {
         &self,
         ctx: &Context<'_>,
         query: String,
-    ) -> async_graphql::Result<ActionResult> {
+    ) -> plain_graphql::Result<ActionResult> {
         let count = plain_rs::features::services::chat::chat_actions::delete_query(
             ctx.data::<crate::server::ServerState>()?,
             &query,
@@ -212,8 +208,8 @@ impl ChatMutation {
     async fn retry_chat_item(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<ChatItem> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<ChatItem> {
         let row = plain_rs::features::services::chat::chat_actions::retry(
             ctx.data::<crate::server::ServerState>()?,
             id.to_string(),
@@ -226,16 +222,16 @@ impl ChatMutation {
         &self,
         ctx: &Context<'_>,
         name: String,
-    ) -> async_graphql::Result<ChatChannel> {
+    ) -> plain_graphql::Result<ChatChannel> {
         action(ctx, "create", &[("name", json!(name))]).await
     }
 
     async fn update_chat_channel(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
+        id: plain_graphql::ID,
         name: String,
-    ) -> async_graphql::Result<ChatChannel> {
+    ) -> plain_graphql::Result<ChatChannel> {
         action(
             ctx,
             "rename",
@@ -247,25 +243,25 @@ impl ChatMutation {
     async fn delete_chat_channel(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         flag(ctx, "delete", &[("id", json!(id.as_str()))]).await
     }
 
     async fn leave_chat_channel(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         flag(ctx, "leave", &[("id", json!(id.as_str()))]).await
     }
 
     async fn add_chat_channel_member(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-        peer_id: async_graphql::ID,
-    ) -> async_graphql::Result<ChatChannel> {
+        id: plain_graphql::ID,
+        peer_id: plain_graphql::ID,
+    ) -> plain_graphql::Result<ChatChannel> {
         action(
             ctx,
             "invite",
@@ -280,9 +276,9 @@ impl ChatMutation {
     async fn remove_chat_channel_member(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-        peer_id: async_graphql::ID,
-    ) -> async_graphql::Result<ChatChannel> {
+        id: plain_graphql::ID,
+        peer_id: plain_graphql::ID,
+    ) -> plain_graphql::Result<ChatChannel> {
         action(
             ctx,
             "kick",
@@ -297,16 +293,16 @@ impl ChatMutation {
     async fn accept_chat_channel_invite(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         flag(ctx, "accept", &[("id", json!(id.as_str()))]).await
     }
 
     async fn decline_chat_channel_invite(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<bool> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<bool> {
         flag(ctx, "decline", &[("id", json!(id.as_str()))]).await
     }
 }
@@ -315,7 +311,7 @@ async fn action(
     ctx: &Context<'_>,
     action: &str,
     fields: &[(&str, Value)],
-) -> async_graphql::Result<ChatChannel> {
+) -> plain_graphql::Result<ChatChannel> {
     let mut params = serde_json::Map::new();
     params.insert("action".to_string(), json!(action));
     for (key, value) in fields {
@@ -342,7 +338,7 @@ async fn flag(
     ctx: &Context<'_>,
     action: &str,
     fields: &[(&str, Value)],
-) -> async_graphql::Result<bool> {
+) -> plain_graphql::Result<bool> {
     let mut params = serde_json::Map::new();
     params.insert("action".to_string(), json!(action));
     for (key, value) in fields {
@@ -433,7 +429,7 @@ fn rows<T>(value: &Value, item: impl Fn(&Value) -> T) -> Vec<T> {
     crate::graphql::types::facts::rows(value, item)
 }
 
-fn db<'a>(ctx: &'a Context<'_>) -> async_graphql::Result<&'a Arc<Db>> {
+fn db<'a>(ctx: &'a Context<'_>) -> plain_graphql::Result<&'a Arc<Db>> {
     ctx.data::<Arc<Db>>()
 }
 
@@ -441,9 +437,9 @@ fn db<'a>(ctx: &'a Context<'_>) -> async_graphql::Result<&'a Arc<Db>> {
 #[path = "../../../../../tests/plain-server/unit/graphql/resolvers/chat/public.rs"]
 mod tests;
 
-fn actor(ctx: &Context<'_>) -> async_graphql::Result<String> {
+fn actor(ctx: &Context<'_>) -> plain_graphql::Result<String> {
     ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?
         .get::<String>(plain_rs::features::prefs::pref_keys::CLIENT_ID)?
         .filter(|actor| !actor.is_empty())
-        .ok_or_else(|| async_graphql::Error::new("Missing client identity"))
+        .ok_or_else(|| plain_graphql::Error::new("Missing client identity"))
 }

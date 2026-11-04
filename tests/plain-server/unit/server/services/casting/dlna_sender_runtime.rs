@@ -10,7 +10,7 @@ async fn queue_mutations_preserve_duplicates_and_order_through_the_main_schema()
     let server = crate::server::ContentServer::open(dir.path()).unwrap();
     let native = server.native_graphql().unwrap();
     for path in ["a.mp3", "b.mp3", "a.mp3"] {
-        let response = native.execute(async_graphql::Request::new("mutation($path:String!){addDlnaItem(item:{path:$path,title:$path}){items{path}}}").variables(async_graphql::Variables::from_json(json!({"path":path})))).await;
+        let response = native.execute(plain_graphql::Request::new("mutation($path:String!){addDlnaItem(item:{path:$path,title:$path}){items{path}}}").variables(plain_graphql::Variables::from_json(json!({"path":path})))).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
     }
     let response = native

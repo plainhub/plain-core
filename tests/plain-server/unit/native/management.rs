@@ -135,7 +135,7 @@ async fn retired_management_roots_are_unavailable_to_local_and_authenticated_rem
         ),
         ("checkAppUpdate", "mutation{checkAppUpdate}"),
     ] {
-        let local = native.execute(async_graphql::Request::new(document)).await;
+        let local = native.execute(plain_graphql::Request::new(document)).await;
         assert!(
             local
                 .errors
@@ -147,7 +147,7 @@ async fn retired_management_roots_are_unavailable_to_local_and_authenticated_rem
         );
         let remote = execute_graphql(
             &state.public,
-            async_graphql::Request::new(document),
+            plain_graphql::Request::new(document),
             RequestContext::authenticated_remote(state.clone(), "fixture".into()),
         )
         .await;

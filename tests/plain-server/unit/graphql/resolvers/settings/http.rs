@@ -90,7 +90,7 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     );
     let native = first.native_graphql().unwrap();
     let disabled = native
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"mutation { setPref(key:"desktop_access",value:false) }"#,
         ))
         .await;
@@ -104,7 +104,7 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
         call(second.runtime_state(), &other, "{prefs}").await.0,
         StatusCode::OK
     );
-    let snapshot = native.execute(async_graphql::Request::new("{prefs}")).await;
+    let snapshot = native.execute(plain_graphql::Request::new("{prefs}")).await;
     assert!(snapshot.errors.is_empty(), "{:?}", snapshot.errors);
     assert_eq!(
         snapshot.data.into_json().unwrap()["prefs"]["desktop_access"],

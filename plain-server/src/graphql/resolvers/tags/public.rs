@@ -1,7 +1,7 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::resolvers::tags::domain_types::TagRelation;
-use async_graphql::Context;
-use plain_graphql_macros::object as Object;
+use plain_graphql::{Context, Object};
+
 pub use plain_rs::features::enums::DataType;
 use plain_rs::features::services::capabilities;
 use plain_rs::features::tags;
@@ -16,7 +16,7 @@ pub struct TagsQuery;
 
 #[Object]
 impl TagsQuery {
-    fn tags(&self, ctx: &Context<'_>, r#type: DataType) -> async_graphql::Result<Vec<Tag>> {
+    fn tags(&self, ctx: &Context<'_>, r#type: DataType) -> plain_graphql::Result<Vec<Tag>> {
         let db = db(ctx);
         Ok(tags::tags_by_type(db, r#type.kind())
             .map_err(failed)?
@@ -30,13 +30,13 @@ impl TagsQuery {
         ctx: &Context<'_>,
         r#type: DataType,
         keys: Vec<String>,
-    ) -> async_graphql::Result<Vec<TagRelation>> {
+    ) -> plain_graphql::Result<Vec<TagRelation>> {
         let db = db(ctx);
         Ok(tags::relations_for_keys_of_kind(db, &keys, r#type.kind())
             .map_err(failed)?
             .iter()
             .map(|row| TagRelation {
-                tag_id: async_graphql::ID::from(row.tag_id.clone()),
+                tag_id: plain_graphql::ID::from(row.tag_id.clone()),
                 key: row.target_key.clone(),
             })
             .collect())
@@ -45,8 +45,8 @@ impl TagsQuery {
     fn tag_keys(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
-    ) -> async_graphql::Result<Vec<String>> {
+        id: plain_graphql::ID,
+    ) -> plain_graphql::Result<Vec<String>> {
         let db = db(ctx);
         tags::keys_for_tag(db, id.as_str()).map_err(failed)
     }
@@ -62,7 +62,7 @@ impl TagsMutation {
         ctx: &Context<'_>,
         r#type: DataType,
         name: String,
-    ) -> async_graphql::Result<Tag> {
+    ) -> plain_graphql::Result<Tag> {
         let row = tags::create_tag(db(ctx), r#type.kind(), &name).map_err(failed)?;
         Ok(tag(&row))
     }
@@ -70,16 +70,16 @@ impl TagsMutation {
     fn update_tag(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
+        id: plain_graphql::ID,
         name: String,
-    ) -> async_graphql::Result<Tag> {
+    ) -> plain_graphql::Result<Tag> {
         let row = tags::update_tag(db(ctx), id.as_str(), &name).map_err(failed)?;
         row.as_ref()
             .map(tag)
-            .ok_or_else(|| async_graphql::Error::new(format!("Tag {} not found", id.as_str())))
+            .ok_or_else(|| plain_graphql::Error::new(format!("Tag {} not found", id.as_str())))
     }
 
-    fn delete_tag(&self, ctx: &Context<'_>, id: async_graphql::ID) -> async_graphql::Result<bool> {
+    fn delete_tag(&self, ctx: &Context<'_>, id: plain_graphql::ID) -> plain_graphql::Result<bool> {
         tags::delete_tag(db(ctx), id.as_str()).map_err(failed)?;
         Ok(true)
     }
@@ -88,9 +88,9 @@ impl TagsMutation {
         &self,
         ctx: &Context<'_>,
         r#type: DataType,
-        tag_ids: Vec<async_graphql::ID>,
+        tag_ids: Vec<plain_graphql::ID>,
         query: String,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         let keys = tag_query_keys(ctx, r#type, &query).await?;
         let ids = tag_ids
             .into_iter()
@@ -104,9 +104,9 @@ impl TagsMutation {
         &self,
         ctx: &Context<'_>,
         r#type: DataType,
-        tag_ids: Vec<async_graphql::ID>,
+        tag_ids: Vec<plain_graphql::ID>,
         query: String,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         let keys = tag_query_keys(ctx, r#type, &query).await?;
         let ids = tag_ids
             .into_iter()
@@ -121,9 +121,9 @@ impl TagsMutation {
         ctx: &Context<'_>,
         r#type: DataType,
         keys: Vec<String>,
-        add_tag_ids: Vec<async_graphql::ID>,
-        remove_tag_ids: Vec<async_graphql::ID>,
-    ) -> async_graphql::Result<bool> {
+        add_tag_ids: Vec<plain_graphql::ID>,
+        remove_tag_ids: Vec<plain_graphql::ID>,
+    ) -> plain_graphql::Result<bool> {
         let add = add_tag_ids
             .into_iter()
             .map(|id| id.to_string())
@@ -141,7 +141,7 @@ async fn tag_query_keys(
     ctx: &Context<'_>,
     r#type: DataType,
     query: &str,
-) -> async_graphql::Result<Vec<String>> {
+) -> plain_graphql::Result<Vec<String>> {
     require_queryable(r#type, query)?;
     if r#type == DataType::Note {
         return Ok(db(ctx).note_ids(query, None)?);
@@ -159,11 +159,11 @@ async fn provider_query_keys(
     ctx: &Context<'_>,
     kind: DataType,
     query: &str,
-) -> async_graphql::Result<Vec<String>> {
+) -> plain_graphql::Result<Vec<String>> {
     if kind == DataType::Contact {
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     }
     if kind == DataType::Sms {
         let facts = plain_rs::features::services::sms::query::execute(
@@ -175,20 +175,20 @@ async fn provider_query_keys(
             },
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         return serde_json::from_value(facts["ids"].clone())
-            .map_err(|error| async_graphql::Error::new(error.to_string()));
+            .map_err(|error| plain_graphql::Error::new(error.to_string()));
     }
     let method = if kind == DataType::Call {
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CALLS")
             .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         "systemCallIds"
     } else {
         "systemContactIds"
     };
     let provider = plain_rs::features::services::files::provider_query::media_provider(kind)
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     let params =
         crate::graphql::types::facts::provider_params(ctx, provider, query, json!({})).await?;
     let facts = crate::graphql::types::facts::host_json(ctx, method, params).await?;
@@ -202,15 +202,15 @@ async fn provider_query_keys(
 /// A blank query would match every row of the kind. That is never what a
 /// client meant, and the desktop UI has no way to express "tag everything",
 /// so it is refused rather than silently applied.
-fn require_queryable(r#type: DataType, query: &str) -> async_graphql::Result<()> {
+fn require_queryable(r#type: DataType, query: &str) -> plain_graphql::Result<()> {
     if !tags_queryable(r#type) {
-        return Err(async_graphql::Error::new(format!(
+        return Err(plain_graphql::Error::new(format!(
             "Unsupported tag query type: {}",
             data_type_name(r#type)
         )));
     }
     if query.trim().is_empty() {
-        return Err(async_graphql::Error::new("explicit query required"));
+        return Err(plain_graphql::Error::new("explicit query required"));
     }
     Ok(())
 }
@@ -250,15 +250,15 @@ fn data_type_name(kind: DataType) -> &'static str {
 
 fn tag(row: &TagRow) -> Tag {
     Tag {
-        id: async_graphql::ID::from(row.id.clone()),
+        id: plain_graphql::ID::from(row.id.clone()),
         name: row.name.clone(),
         r#type: row.kind,
         count: row.count,
     }
 }
 
-fn failed(error: plain_rs::infrastructure::error::DomainError) -> async_graphql::Error {
-    async_graphql::Error::new(error.to_string())
+fn failed(error: plain_rs::infrastructure::error::DomainError) -> plain_graphql::Error {
+    plain_graphql::Error::new(error.to_string())
 }
 
 fn db<'a>(ctx: &'a Context<'_>) -> &'a Arc<Db> {

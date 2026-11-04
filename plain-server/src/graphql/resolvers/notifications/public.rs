@@ -5,8 +5,8 @@ use crate::graphql::types::facts::instant;
 use crate::graphql::types::facts::strings;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use async_graphql::Context;
-use plain_graphql_macros::object as Object;
+use plain_graphql::{Context, Object};
+
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::notifications::types::Notification;
 use plain_rs::infrastructure::host::bridge::Host;
@@ -26,14 +26,14 @@ impl NotificationsQuery {
         query: String,
         offset: i32,
         limit: i32,
-    ) -> async_graphql::Result<Vec<Notification>> {
+    ) -> plain_graphql::Result<Vec<Notification>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "NOTIFICATIONS",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let items = notification_items(ctx, &query).await?;
         Ok(items
             .into_iter()
@@ -47,14 +47,14 @@ impl NotificationsQuery {
         &self,
         ctx: &Context<'_>,
         query: String,
-    ) -> async_graphql::Result<i32> {
+    ) -> plain_graphql::Result<i32> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "NOTIFICATIONS",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         Ok(notification_items(ctx, &query).await?.len() as i32)
     }
 }
@@ -67,15 +67,15 @@ impl NotificationsMutation {
     async fn delete_notifications(
         &self,
         ctx: &Context<'_>,
-        ids: Vec<async_graphql::ID>,
-    ) -> async_graphql::Result<ActionResult> {
+        ids: Vec<plain_graphql::ID>,
+    ) -> plain_graphql::Result<ActionResult> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "NOTIFICATIONS",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let ids: Vec<String> = ids.iter().map(|id| id.0.clone()).collect();
         let receipt = ctx
             .data_unchecked::<Arc<Host>>()
@@ -84,13 +84,13 @@ impl NotificationsMutation {
                 serde_json::json!({ "ids": ids }),
             )
             .await
-            .map_err(|error| async_graphql::Error::new(error))?;
+            .map_err(|error| plain_graphql::Error::new(error))?;
         let cancelled: Vec<String> = serde_json::from_value(receipt)
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         // The platform only confirms what it actually dismissed; a receipt
         // naming an id that was never sent is a host contract violation.
         if cancelled.iter().any(|id| !ids.contains(id)) {
-            return Err(async_graphql::Error::new(
+            return Err(plain_graphql::Error::new(
                 "invalid notification cancellation receipt",
             ));
         }
@@ -112,20 +112,20 @@ impl NotificationsMutation {
     async fn reply_notification(
         &self,
         ctx: &Context<'_>,
-        id: async_graphql::ID,
+        id: plain_graphql::ID,
         action_index: i32,
         text: String,
-    ) -> async_graphql::Result<bool> {
+    ) -> plain_graphql::Result<bool> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
         if action_index < 0 {
-            return Err(async_graphql::Error::new("action_not_found"));
+            return Err(plain_graphql::Error::new("action_not_found"));
         }
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "NOTIFICATIONS",
         )
         .await
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let receipt = ctx
             .data_unchecked::<Arc<Host>>()
             .call(
@@ -137,28 +137,28 @@ impl NotificationsMutation {
                 }),
             )
             .await
-            .map_err(|error| async_graphql::Error::new(error))?;
+            .map_err(|error| plain_graphql::Error::new(error))?;
         if receipt != Value::Bool(true) {
-            return Err(async_graphql::Error::new("action_not_found"));
+            return Err(plain_graphql::Error::new("action_not_found"));
         }
         Ok(true)
     }
 }
 
-async fn notification_items(ctx: &Context<'_>, query: &str) -> async_graphql::Result<Vec<Value>> {
+async fn notification_items(ctx: &Context<'_>, query: &str) -> plain_graphql::Result<Vec<Value>> {
     let facts = ctx
         .data_unchecked::<Arc<Host>>()
         .call("systemNotificationFacts", serde_json::json!({}))
         .await
-        .map_err(|error| async_graphql::Error::new(error))?;
+        .map_err(|error| plain_graphql::Error::new(error))?;
     let facts: Vec<Value> = serde_json::from_value(facts)
-        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     plain_rs::features::services::notifications::query::notifications(
         ctx.data_unchecked::<Arc<Prefs>>(),
         facts,
         query,
     )
-    .map_err(|error| async_graphql::Error::new(error.to_string()))
+    .map_err(|error| plain_graphql::Error::new(error.to_string()))
 }
 
 pub(crate) fn notification(value: &Value) -> Notification {

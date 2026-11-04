@@ -1,7 +1,7 @@
 use crate::graphql::executor::GraphqlExecutor;
 use crate::native::events::NativeEventStream;
 use crate::server::ServerState;
-use async_graphql::{Request, Response};
+use plain_graphql::{Request, Response};
 use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 use plain_rs::infrastructure::protocols::graphql::PeerSubscriptionTarget;
 
@@ -69,7 +69,7 @@ impl NativeGraphqlExecutor {
     pub async fn execute_scoped(&self, request: Request, scope: NativeRequestScope) -> Response {
         let mut closed = scope.cancellation();
         let rejected = || {
-            Response::from_errors(vec![async_graphql::ServerError::new(
+            Response::from_errors(vec![plain_graphql::ServerError::new(
                 "Native request scope closed",
                 None,
             )])

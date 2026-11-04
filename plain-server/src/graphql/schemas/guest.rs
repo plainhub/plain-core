@@ -1,11 +1,10 @@
 use crate::server::ServerState;
-use async_graphql::{Context, EmptyMutation, EmptySubscription, Schema};
-use plain_graphql_macros::{SimpleObject, object as Object};
+use plain_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject};
+
 use plain_rs::features::files::shares::Service;
 use plain_rs::infrastructure::types::Long;
 
 #[derive(SimpleObject)]
-#[graphql(getters = false)]
 struct SharedFile {
     name: String,
     relative_path: String,
@@ -15,7 +14,6 @@ struct SharedFile {
     has_thumb: bool,
 }
 #[derive(SimpleObject)]
-#[graphql(getters = false)]
 struct SharedInfo {
     name: String,
     read_only: bool,
@@ -35,15 +33,15 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         relative_path: Option<String>,
-    ) -> async_graphql::Result<SharedInfo> {
+    ) -> plain_graphql::Result<SharedInfo> {
         let guest = ctx.data::<Guest>()?;
         let service = Service::new(guest.state.db.clone(), guest.state.prefs.clone());
         let id = guest.id.clone();
         let path = relative_path.unwrap_or_default();
         let (share, roots) = tokio::task::spawn_blocking(move || service.browse(&id, &path))
             .await
-            .map_err(|e| async_graphql::Error::new(e.to_string()))?
-            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+            .map_err(|e| plain_graphql::Error::new(e.to_string()))?
+            .map_err(|e| plain_graphql::Error::new(e.to_string()))?;
         let mut entries = Vec::new();
         for root in roots {
             let name = root
@@ -69,9 +67,9 @@ impl Query {
             } else {
                 let metadata = tokio::fs::metadata(&root.real_path)
                     .await
-                    .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+                    .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
                 let size = i64::try_from(metadata.len())
-                    .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+                    .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
                 (
                     size,
                     plain_libs::utils::mime::mime_from_ext(&root.real_path).to_owned(),
@@ -100,9 +98,8 @@ impl Query {
         })
     }
 }
-fn schema_builder() -> async_graphql::SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
+fn schema_builder() -> plain_graphql::SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
     Schema::build(Query, EmptyMutation, EmptySubscription)
-        .extension(crate::graphql::enum_literals::EnumLiteralValidation)
 }
 
 pub(crate) fn schema(

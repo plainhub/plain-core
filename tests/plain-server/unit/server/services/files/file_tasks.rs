@@ -114,7 +114,7 @@ async fn main_tasks_track_resolved_paths_and_gate_sdk_execution_on_platform_auth
         .runtime_state()
         .public
         .execute(
-            async_graphql::Request::new(
+            plain_graphql::Request::new(
                 "{ fileTasks(query:\"\",offset:0,limit:2147483647) { id } }",
             )
             .data("foreign".to_owned()),
@@ -422,8 +422,8 @@ async fn main_create_task_can_wait_for_completion_and_returns_partial_failure_re
     let native = server.native_graphql().unwrap();
     let document = r#"mutation($ops:[FileTaskOpInput!]!){createFileTask(type:COPY,title:"Paste selection",ops:$ops,waitForCompletion:true){id title status error doneBytes completedOps{src dst}}}"#;
     let response = native
-        .execute(async_graphql::Request::new(document).variables(
-            async_graphql::Variables::from_json(
+        .execute(plain_graphql::Request::new(document).variables(
+            plain_graphql::Variables::from_json(
                 json!({"ops":[{"src":source,"dst":copied,"overwrite":false}]}),
             ),
         ))
@@ -440,7 +440,7 @@ async fn main_create_task_can_wait_for_completion_and_returns_partial_failure_re
     std::fs::create_dir(&tree).unwrap();
     std::fs::write(tree.join("file.txt"), b"tree").unwrap();
     let partial = temp.path().join("partial.txt");
-    let response = native.execute(async_graphql::Request::new(document).variables(async_graphql::Variables::from_json(json!({"ops":[{"src":source,"dst":partial,"overwrite":false},{"src":tree,"dst":tree.join("child"),"overwrite":false}]})))).await;
+    let response = native.execute(plain_graphql::Request::new(document).variables(plain_graphql::Variables::from_json(json!({"ops":[{"src":source,"dst":partial,"overwrite":false},{"src":tree,"dst":tree.join("child"),"overwrite":false}]})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let result = response.data.into_json().unwrap();
     let task = &result["createFileTask"];

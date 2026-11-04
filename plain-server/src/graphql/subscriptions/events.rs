@@ -1,10 +1,10 @@
 use crate::graphql::executor::{RequestClient, RequestOrigin};
 use crate::server::ServerState;
-use async_graphql::{Context, Result};
 use futures_util::{
     StreamExt,
     stream::{self, BoxStream},
 };
+use plain_graphql::{Context, Result};
 use plain_rs::infrastructure::protocols::graphql::events::EVENTS;
 use plain_rs::infrastructure::protocols::graphql::events::EventSpec;
 use serde::de::DeserializeOwned;
@@ -22,7 +22,7 @@ pub(super) async fn authorize(
     if let Some(capability) = spec.capability {
         plain_rs::features::services::capabilities::require(&state.host, capability)
             .await
-            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+            .map_err(|e| plain_graphql::Error::new(e.to_string()))?;
     }
     if !spec.permissions.is_empty() {
         let names = spec
@@ -32,7 +32,7 @@ pub(super) async fn authorize(
             .collect::<Vec<_>>();
         if !plain_rs::features::services::device::access::granted(&state.host, &names)
             .await
-            .map_err(|e| async_graphql::Error::new(e.to_string()))?
+            .map_err(|e| plain_graphql::Error::new(e.to_string()))?
         {
             return Err("no_permission".into());
         }
@@ -45,25 +45,25 @@ async fn mirror_snapshot(state: &ServerState, name: &str) -> Result<String> {
         .host
         .call("systemScreenMirrorState", serde_json::json!({}))
         .await
-        .map_err(async_graphql::Error::new)?;
+        .map_err(plain_graphql::Error::new)?;
     if name == "SCREEN_MIRRORING" {
         #[derive(serde::Deserialize, serde::Serialize)]
         struct Running {
             running: bool,
         }
         let running: Running = serde_json::from_value(snapshot)
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         serde_json::to_string(&running)
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))
     } else {
         #[derive(serde::Deserialize)]
         struct Codec {
             codec: Option<super::models::MirrorCodecConfiguration>,
         }
         let codec: Codec = serde_json::from_value(snapshot)
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         serde_json::to_string(&codec.codec)
-            .map_err(|error| async_graphql::Error::new(error.to_string()))
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
 }
 
@@ -84,11 +84,11 @@ pub(super) async fn stream<T: DeserializeOwned + Send + 'static>(
         "smsSendResult" => state
             .sms_sends
             .replay()
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?,
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?,
         "mmsSendResult" => state
             .mms
             .replay()
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?,
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?,
         _ => {}
     }
     let initial = snapshot(&state, name).await?;
@@ -127,7 +127,7 @@ pub(super) async fn stream<T: DeserializeOwned + Send + 'static>(
             let authorized = authorize(&state, origin, spec).await;
             let result = authorized.and_then(|_| {
                 let payload = if spec.invalidation { "true" } else { &payload };
-                serde_json::from_str(payload).map_err(|e| async_graphql::Error::new(format!("Invalid {name} event: {e}")))
+                serde_json::from_str(payload).map_err(|e| plain_graphql::Error::new(format!("Invalid {name} event: {e}")))
             });
             let terminal = result.is_err();
             return Some((result, (receiver, state, client, stop, None, terminal)));
@@ -141,7 +141,7 @@ async fn snapshot(state: &ServerState, name: &str) -> Result<Option<String>> {
             return mirror_snapshot(state, name).await.map(Some);
         }
         "DLNA_SENDER_CHANGED" => serde_json::to_string(&state.cast.snapshot())
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?,
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?,
         "IMAGE_MODELS_UPDATED" => state.image_models.snapshot().event().payload,
         _ => return Ok(None),
     };

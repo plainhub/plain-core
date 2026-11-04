@@ -2,12 +2,12 @@ use super::events;
 use crate::graphql::executor::RequestOrigin;
 use crate::graphql::resolvers::files::types::File;
 use crate::server::ServerState;
-use async_graphql::{Context, Result, Subscription};
 use futures_util::{
     StreamExt,
     stream::{self, BoxStream},
 };
-use plain_graphql_macros::SimpleObject;
+use plain_graphql::{Context, Result, SimpleObject, Subscription};
+
 use plain_libs::filesystem::browse::Request;
 use plain_rs::features::prefs::settings::FileSortBy;
 use plain_rs::infrastructure::protocols::graphql::events::EventSpec;
@@ -25,7 +25,6 @@ pub(super) const SPEC: EventSpec = EventSpec {
 };
 
 #[derive(SimpleObject)]
-#[graphql(getters = false)]
 pub struct FileSearchResults {
     items: Vec<File>,
     offset: Long,
@@ -57,7 +56,7 @@ impl FileSubscriptions {
                 offset: offset.max(0) as usize,
                 limit: Some(limit.max(0) as usize), count_only: false,
             },
-        ).await.map_err(async_graphql::Error::new)?;
+        ).await.map_err(plain_graphql::Error::new)?;
         if let Some(ready) = ctx.data_opt::<super::session::SubscriptionReady>() {
             ready.0.send_replace(true);
         }
@@ -71,7 +70,7 @@ impl FileSubscriptions {
                     let received = receiver.recv().await?;
                     match received {
                         Ok((page, complete)) => pending = batches(page, complete),
-                        Err(error) => pending.push_back(Err(async_graphql::Error::new(error))),
+                        Err(error) => pending.push_back(Err(plain_graphql::Error::new(error))),
                     }
                 }
                 let result = match events::authorize(&state, origin, &SPEC).await {

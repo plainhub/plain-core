@@ -36,7 +36,7 @@ async fn public_samba_settings_and_mutation_use_core_preferences_and_explicit_ho
     let query = core
         .native_graphql()
         .unwrap()
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             "{ sambaSettings { enabled serviceName serviceActive } }",
         ))
         .await;
@@ -45,7 +45,7 @@ async fn public_samba_settings_and_mutation_use_core_preferences_and_explicit_ho
         query.data.into_json().unwrap()["sambaSettings"]["serviceActive"],
         true
     );
-    let result = core.native_graphql().unwrap().execute(async_graphql::Request::new(
+    let result = core.native_graphql().unwrap().execute(plain_graphql::Request::new(
         r#"mutation { setSambaSettings(input:{enabled:true,shares:[{name:"media",sharePath:"/mnt/media",auth:GUEST,readOnly:true}]}) }"#
     )).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
@@ -67,7 +67,7 @@ async fn public_audit_events_read_the_core_database_without_host_or_legacy_store
         .db
         .audit_event_add("login", "ÄBC", Some("client"))
         .unwrap();
-    let result = core.native_graphql().unwrap().execute(async_graphql::Request::new(
+    let result = core.native_graphql().unwrap().execute(plain_graphql::Request::new(
         r#"{ auditEvents(query:"text:äbc",offset:0,limit:10) { id type message clientId createdAt } }"#
     )).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
@@ -81,7 +81,7 @@ async fn public_audit_events_read_the_core_database_without_host_or_legacy_store
     let result = core
         .native_graphql()
         .unwrap()
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"{ auditEvents(query:"text:/mnt/example",offset:0,limit:10) { id clientId } }"#,
         ))
         .await;
@@ -96,7 +96,7 @@ async fn public_audit_events_read_the_core_database_without_host_or_legacy_store
     let result = core
         .native_graphql()
         .unwrap()
-        .execute(async_graphql::Request::new(
+        .execute(plain_graphql::Request::new(
             r#"{ auditEvents(query:"",offset:0,limit:10) { id } }"#,
         ))
         .await;
