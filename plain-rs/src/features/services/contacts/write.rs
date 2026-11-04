@@ -186,7 +186,7 @@ pub async fn execute(prefs: &Prefs, host: &Host, request: Request) -> anyhow::Re
         Vec::new(),
     );
     anyhow::ensure!(permission_allowed(&configured), "no_permission");
-    capabilities::require(host, "CONTACTS").await?;
+    capabilities::require(host, "TELEPHONY").await?;
     match request.action {
         Action::CreateContact | Action::UpdateContact => {
             let input = request

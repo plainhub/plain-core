@@ -186,7 +186,7 @@ async fn the_app_root_exposes_the_identity_and_the_capability_lists() {
     let (_dir, schema) = fixture(move |method, params| {
         observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         match method {
-            "systemCapabilities" => json!(["SMS", "CONTACTS", "WAT"]),
+            "systemCapabilities" => json!(["TELEPHONY", "WAT"]),
             "systemPermissionFacts" => {
                 permission_sample(params, &["RECORD_AUDIO", "READ_SMS", "ADB", "NOPE"])
             }
@@ -211,7 +211,7 @@ async fn the_app_root_exposes_the_identity_and_the_capability_lists() {
         app["capabilities"]
             .as_array()
             .unwrap()
-            .contains(&json!("SMS"))
+            .contains(&json!("TELEPHONY"))
     );
     assert!(
         !app["capabilities"]
@@ -244,8 +244,13 @@ fn unknown_capabilities_and_permissions_are_dropped() {
     );
     assert_eq!(Capability::parse("BLE"), Some(Capability::Ble));
     assert_eq!(Capability::parse("WIFI_AWARE"), Some(Capability::WifiAware));
-    assert_eq!(Capability::parse("SMS"), Some(Capability::Sms));
-    assert_eq!(Capability::parse("POMODORO"), Some(Capability::Pomodoro));
+    assert_eq!(Capability::parse("TELEPHONY"), Some(Capability::Telephony));
+    for capability in ["SMS", "CALLS", "CALL_PHONE", "SIM_INFO", "CONTACTS"] {
+        assert_eq!(Capability::parse(capability), None);
+    }
+    for capability in ["NOTES", "FEEDS", "POMODORO", "DONATION"] {
+        assert_eq!(Capability::parse(capability), None);
+    }
     assert_eq!(Capability::parse("TELEPORT"), None);
     assert_eq!(Permission::parse("READ_SMS"), Some(Permission::ReadSms));
     assert_eq!(Permission::parse("ADB"), Some(Permission::Adb));
@@ -445,7 +450,7 @@ async fn separate_app_queries_refresh_capabilities_and_permissions() {
     let (_directory, schema) = fixture(move |method, params| match method {
         "systemCapabilities" => {
             if caps.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
-                json!(["SMS"])
+                json!(["TELEPHONY"])
             } else {
                 json!([])
             }
@@ -469,13 +474,13 @@ async fn separate_app_queries_refresh_capabilities_and_permissions() {
         first["app"]["capabilities"]
             .as_array()
             .unwrap()
-            .contains(&json!("SMS"))
+            .contains(&json!("TELEPHONY"))
     );
     assert!(
         !second["app"]["capabilities"]
             .as_array()
             .unwrap()
-            .contains(&json!("SMS"))
+            .contains(&json!("TELEPHONY"))
     );
     assert_eq!(first["app"]["permissions"], json!(["READ_SMS"]));
     assert_eq!(second["app"]["permissions"], json!([]));
@@ -504,16 +509,15 @@ async fn main_app_capabilities_preserve_current_background_execution_opportuniti
         let (_dir, schema) = fixture(move |method, _| {
             assert_eq!(method, "systemCapabilities");
             if timer {
-                json!(["FEEDS", "BACKGROUND_WAKE", "BACKGROUND_TIMER"])
+                json!(["BACKGROUND_WAKE", "BACKGROUND_TIMER"])
             } else {
-                json!(["FEEDS", "BACKGROUND_WAKE"])
+                json!(["BACKGROUND_WAKE"])
             }
         });
         let response = schema.execute("{ app { capabilities } }").await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let data = response.data.into_json().unwrap();
         let names = data["app"]["capabilities"].as_array().unwrap();
-        assert!(names.contains(&json!("FEEDS")));
         assert!(names.contains(&json!("BACKGROUND_WAKE")));
         assert_eq!(names.contains(&json!("BACKGROUND_TIMER")), timer);
     }

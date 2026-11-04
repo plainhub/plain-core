@@ -169,10 +169,7 @@ fn capabilities() -> Vec<String> {
         "DOCUMENT_LIBRARY".into(),
         "FILE_EXPORT".into(),
         "MEDIA_SCAN".into(),
-        "NOTES".into(),
-        "FEEDS".into(),
         "BACKGROUND_TIMER".into(),
-        "POMODORO".into(),
         "APP_UPDATES".into(),
     ];
     capabilities.extend(

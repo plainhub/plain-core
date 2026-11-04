@@ -13,7 +13,7 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
             };
             let method = request["method"].as_str().unwrap_or_default();
             let result = if method == "systemCapabilities" {
-                json!(["CONTACTS"])
+                json!(["TELEPHONY"])
             } else {
                 handler(method, request["params"].clone())
             };
@@ -377,7 +377,7 @@ async fn contact_deletion_rejects_non_narrowing_queries_before_provider_calls() 
                 request = requests.recv() => {
                     let request = request.unwrap();
                     assert_eq!(request["method"], "systemCapabilities", "{query:?} reached the platform provider");
-                    host.reply(generation, json!({"id":request["id"],"result":["CONTACTS"]})).unwrap();
+                    host.reply(generation, json!({"id":request["id"],"result":["TELEPHONY"]})).unwrap();
                 }
                 response = &mut execute => break response,
             }

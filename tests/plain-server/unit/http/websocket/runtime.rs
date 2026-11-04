@@ -976,7 +976,7 @@ async fn native_subscriptions_reject_sms_when_capability_is_unavailable() {
     assert_eq!(response["type"], "error");
     assert_eq!(
         response["payload"][0]["message"],
-        "unsupported capability SMS"
+        "unsupported capability TELEPHONY"
     );
     native.close_subscriptions(id);
     state.host.disconnect(generation);

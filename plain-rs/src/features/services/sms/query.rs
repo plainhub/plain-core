@@ -457,7 +457,7 @@ pub async fn execute(
     host: &crate::infrastructure::host::bridge::Host,
     request: Request,
 ) -> anyhow::Result<Value> {
-    crate::features::services::capabilities::require(host, "SMS").await?;
+    crate::features::services::capabilities::require(host, "TELEPHONY").await?;
     Ok(match request {
         Request::Search {
             query,

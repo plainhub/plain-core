@@ -29,7 +29,7 @@ impl Fixture {
                 let method = request["method"].as_str().unwrap();
                 recorded.lock().unwrap().push(method.into());
                 let result = match method {
-                    "systemCapabilities" => Some(Ok(json!(["SMS"]))),
+                    "systemCapabilities" => Some(Ok(json!(["TELEPHONY"]))),
                     "systemSmsIdsFacts" => Some(Ok(json!(ids))),
                     "systemSmsRowsFacts" => Some(Ok(
                         json!({"items":ids.iter().map(|id| json!({"id":id,"body":"archived","address":"sender","addressCandidates":[{"value":"sender","isSender":true}],"parts":[{"path":"text","contentType":"text/plain","name":"","fileName":"","hasData":false,"text":"archived"}],"date":"2026-01-01T00:00:00Z","threadId":"9","isMms":id.starts_with("mms_")})).collect::<Vec<_>>(),"canonicalAddresses":[],"ownNumbers":[]}),

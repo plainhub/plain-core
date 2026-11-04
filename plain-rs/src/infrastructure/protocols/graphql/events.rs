@@ -195,7 +195,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ uris }",
         permissions: &["READ_SMS"],
-        capability: Some("SMS"),
+        capability: Some("TELEPHONY"),
     },
     EventSpec {
         field: "smsSendResult",
@@ -204,7 +204,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ requestId success resultCode }",
         permissions: &["SEND_SMS"],
-        capability: Some("SMS"),
+        capability: Some("TELEPHONY"),
     },
     EventSpec {
         field: "mmsSendResult",
@@ -213,7 +213,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "{ pendingId success resultCode }",
         permissions: &["SEND_SMS"],
-        capability: Some("SMS"),
+        capability: Some("TELEPHONY"),
     },
     EventSpec {
         field: "mmsSent",
@@ -222,7 +222,7 @@ pub const EVENTS: &[EventSpec] = &[
         invalidation: false,
         selection: "",
         permissions: &["SEND_SMS"],
-        capability: Some("SMS"),
+        capability: Some("TELEPHONY"),
     },
     EventSpec {
         field: "clipboardChanged",

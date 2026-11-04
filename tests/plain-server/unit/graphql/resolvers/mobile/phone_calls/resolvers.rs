@@ -12,7 +12,7 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
             };
             let method = request["method"].as_str().unwrap_or_default();
             let result = if method == "systemCapabilities" {
-                json!(["CALLS", "CALL_PHONE"])
+                json!(["TELEPHONY"])
             } else {
                 handler(method, request["params"].clone())
             };

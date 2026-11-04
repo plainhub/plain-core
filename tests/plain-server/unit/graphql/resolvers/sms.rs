@@ -12,7 +12,7 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
             };
             let method = request["method"].as_str().unwrap_or_default();
             let result = if method == "systemCapabilities" {
-                json!(["SMS"])
+                json!(["TELEPHONY"])
             } else {
                 handler(method, request["params"].clone())
             };
@@ -146,7 +146,7 @@ async fn bulk_sms_mutations_reject_a_blank_query_before_touching_the_platform() 
 async fn bulk_sms_mutations_select_ids_in_rust_and_delete_only_provider_rows() {
     let (_dir, schema) = fixture(json!(["READ_SMS"]));
     stub(schema_host(&schema), |method, params| match method {
-        "systemCapabilities" => json!(["SMS"]),
+        "systemCapabilities" => json!(["TELEPHONY"]),
         "systemSmsIdsFacts" => {
             assert!(params.get("query").is_none());
             assert!(params.get("sms").is_some());
@@ -192,7 +192,7 @@ async fn bulk_sms_mutations_select_ids_in_rust_and_delete_only_provider_rows() {
 async fn archiving_a_conversation_stores_the_last_message_date() {
     let (_dir, schema) = fixture(json!(["READ_SMS"]));
     stub(schema_host(&schema), |method, _| match method {
-        "systemCapabilities" => json!(["SMS"]),
+        "systemCapabilities" => json!(["TELEPHONY"]),
         "systemSmsConversationFacts" => json!({"items":[]}),
         "systemPermissionFacts" => json!({"granted":{"READ_SMS": true}}),
         other => panic!("unexpected host call {other}"),
@@ -238,7 +238,7 @@ async fn send_sms_needs_the_send_permission_and_passes_the_sim_choice() {
     let (_dir, schema) = fixture(json!(["SEND_SMS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemPermissionFacts" => json!({"granted":{"SEND_SMS": true}}),
-        "systemCapabilities" => json!(["SMS"]),
+        "systemCapabilities" => json!(["TELEPHONY"]),
         "systemDivideSmsText" => json!(["hi"]),
         "systemSendSmsParts" => {
             assert_eq!(params["number"], "+1555");
@@ -264,7 +264,7 @@ async fn send_sms_needs_the_send_permission_and_passes_the_sim_choice() {
 async fn send_sms_maps_the_default_sim_to_no_subscription() {
     let (_dir, schema) = fixture(json!(["SEND_SMS"]));
     stub(schema_host(&schema), |method, params| match method {
-        "systemCapabilities" => json!(["SMS"]),
+        "systemCapabilities" => json!(["TELEPHONY"]),
         "systemDivideSmsText" => json!(["hi"]),
         "systemSendSmsParts" => {
             assert_eq!(params["subscriptionId"], Value::Null);

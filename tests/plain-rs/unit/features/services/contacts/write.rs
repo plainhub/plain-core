@@ -129,7 +129,7 @@ async fn creation_resolves_the_account_before_any_provider_write() {
                 responder
                     .reply(
                         generation,
-                        json!({"id":request["id"],"result":["CONTACTS"]}),
+                        json!({"id":request["id"],"result":["TELEPHONY"]}),
                     )
                     .unwrap();
                 continue;

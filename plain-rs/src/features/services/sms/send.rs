@@ -77,7 +77,7 @@ pub async fn execute(
         Vec::new(),
     );
     anyhow::ensure!(permission_allowed(&configured), "no_permission");
-    crate::features::services::capabilities::require(host, "SMS").await?;
+    crate::features::services::capabilities::require(host, "TELEPHONY").await?;
     let request_id = request
         .client_request_id
         .as_deref()

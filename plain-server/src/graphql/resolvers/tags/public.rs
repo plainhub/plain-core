@@ -160,7 +160,7 @@ async fn provider_query_keys(
     query: &str,
 ) -> async_graphql::Result<Vec<String>> {
     if kind == DataType::Contact {
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
     }
@@ -179,7 +179,7 @@ async fn provider_query_keys(
             .map_err(|error| async_graphql::Error::new(error.to_string()));
     }
     let method = if kind == DataType::Call {
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CALLS")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         "systemCallIds"

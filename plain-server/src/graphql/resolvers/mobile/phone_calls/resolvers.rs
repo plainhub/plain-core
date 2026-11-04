@@ -118,7 +118,7 @@ impl CallsQuery {
         if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[READ]).await? {
             return Ok(Vec::new());
         }
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CALLS")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
 
@@ -182,7 +182,7 @@ impl CallsQuery {
         if !public_gate::require_granted(ctx, &[WRITE]).await? {
             return Ok(0);
         }
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CALLS")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         let count = ctx
@@ -227,7 +227,7 @@ impl CallsMutation {
             &query,
         )
         .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CALLS")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         let ids: Vec<Value> = host_json(
@@ -270,7 +270,7 @@ impl CallsMutation {
         show_dialer: bool,
     ) -> async_graphql::Result<bool> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &["CALL_PHONE"])?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CALL_PHONE")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         ctx.data_unchecked::<Arc<Host>>()

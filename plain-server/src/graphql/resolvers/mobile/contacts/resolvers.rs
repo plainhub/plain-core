@@ -31,7 +31,7 @@ impl ContactsQuery {
         limit: i32,
     ) -> async_graphql::Result<Vec<Contact>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[READ]).await? {
@@ -53,7 +53,7 @@ impl ContactsQuery {
     }
 
     async fn contact_count(&self, ctx: &Context<'_>, query: String) -> async_graphql::Result<i32> {
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         if !public_gate::require_granted(
@@ -90,7 +90,7 @@ impl ContactsQuery {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<ContactSource>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         Ok(plain_rs::features::services::contacts::projection::sources(
@@ -106,7 +106,7 @@ impl ContactsQuery {
 
     async fn contact_groups(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ContactGroup>> {
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         Ok(plain_rs::features::services::contacts::projection::groups(
@@ -175,7 +175,7 @@ impl ContactsMutation {
             ));
         }
         public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[WRITE])?;
-        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "CONTACTS")
+        capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         plain_rs::features::services::phone_query::require_narrowing(

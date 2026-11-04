@@ -257,7 +257,7 @@ async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
     let responder = tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
             let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => json!(["SMS"]),
+                "systemCapabilities" => json!(["TELEPHONY"]),
                 "systemPermissionFacts" => json!({"granted":{"SEND_SMS":true}}),
                 method => panic!("Unexpected host request {method}"),
             };

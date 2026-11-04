@@ -85,7 +85,6 @@ async fn queue_due(
         return Ok(Vec::new());
     }
     let capabilities = crate::features::services::capabilities::snapshot(&state.host).await?;
-    crate::features::services::capabilities::require_list(&capabilities, "FEEDS")?;
     crate::features::services::capabilities::require_list(&capabilities, "BACKGROUND_WAKE")?;
     let permitted = allowed(
         settings.feed_auto_refresh_only_wifi,
@@ -306,9 +305,7 @@ async fn tick(state: &CoreRuntime, previous_wake: &mut Option<Option<i64>>) -> R
     if !supported("BACKGROUND_TIMER") {
         state.feeds.release_lease(RESIDENT);
     }
-    if !supported("FEEDS") {
-        state.feeds.apply_auto_policy(false, true);
-    } else if settings.feed_auto_refresh && (!feeds.is_empty() || active_auto) {
+    if settings.feed_auto_refresh && (!feeds.is_empty() || active_auto) {
         let permitted = allowed(
             settings.feed_auto_refresh_only_wifi,
             network::network_type(&state.host)
@@ -320,19 +317,15 @@ async fn tick(state: &CoreRuntime, previous_wake: &mut Option<Option<i64>>) -> R
             state.feeds.queue_feeds(feeds, Some(RESIDENT), false)?;
         }
     }
-    let wake = if supported("FEEDS") {
-        earliest.map(|at| {
-            if at > now {
-                return at;
-            }
-            previous_wake
-                .flatten()
-                .filter(|previous| *previous > now)
-                .unwrap_or(now.saturating_add(RETRY_SECONDS * 1000))
-        })
-    } else {
-        None
-    };
+    let wake = earliest.map(|at| {
+        if at > now {
+            return at;
+        }
+        previous_wake
+            .flatten()
+            .filter(|previous| *previous > now)
+            .unwrap_or(now.saturating_add(RETRY_SECONDS * 1000))
+    });
     if supported("BACKGROUND_WAKE") && previous_wake.as_ref() != Some(&wake) {
         state
             .host

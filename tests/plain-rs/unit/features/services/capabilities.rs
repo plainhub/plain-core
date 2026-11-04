@@ -12,7 +12,7 @@ async fn support_uses_one_capability_sample_without_permission_or_method_probes(
             assert_eq!(request["method"], "systemCapabilities");
             host.reply(
                 generation,
-                serde_json::json!({"id":request["id"],"result":["MEDIA_DELETE","NOTES"]}),
+                serde_json::json!({"id":request["id"],"result":["MEDIA_DELETE"]}),
             )
             .unwrap();
             assert!(requests.try_recv().is_err());
