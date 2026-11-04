@@ -60,9 +60,7 @@ impl FeedEntry {
     async fn tags(&self, ctx: &Context<'_>) -> GqlResult<Vec<Tag>> {
         #[cfg(feature = "core")]
         if ctx
-            .data_opt::<async_graphql::dataloader::DataLoader<
-                crate::graphql::resolvers::tags::loader::TagsLoader,
-            >>()
+            .data_opt::<Arc<crate::graphql::resolvers::tags::loader::TagsLoader>>()
             .is_some()
         {
             return crate::graphql::resolvers::tags::loader::load(

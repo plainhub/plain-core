@@ -565,7 +565,6 @@ async fn all_media_lists_accept_the_original_shared_interface_fragment() {
 #[tokio::test]
 async fn media_tags_are_loaded_only_when_selected_and_batch_all_rows() {
     use crate::graphql::resolvers::tags::loader::TagsLoader;
-    use async_graphql::dataloader::DataLoader;
     use std::sync::atomic::Ordering;
     let (_dir, schema, db) = fixture_seeded(
         GRANTED,
@@ -589,11 +588,7 @@ async fn media_tags_are_loaded_only_when_selected_and_batch_all_rows() {
             .collect::<Vec<_>>(),
     )
     .unwrap();
-    let loads = &schema
-        .data::<DataLoader<TagsLoader>>()
-        .unwrap()
-        .loader()
-        .loads;
+    let loads = &schema.data::<Arc<TagsLoader>>().unwrap().loads;
     let response = schema
         .execute(r#"{ images(offset:0, limit:10, query:"", sortBy:NAME_ASC) { id } }"#)
         .await;

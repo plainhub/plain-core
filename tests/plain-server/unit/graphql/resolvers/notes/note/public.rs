@@ -318,7 +318,6 @@ async fn unselected_tags_do_not_query_the_tag_store() {
 #[tokio::test]
 async fn selected_tags_batch_a_page_and_observe_later_edits() {
     use crate::graphql::resolvers::tags::loader::TagsLoader;
-    use async_graphql::dataloader::DataLoader;
     use std::sync::atomic::Ordering;
 
     let (_dir, schema) = fixture();
@@ -329,7 +328,7 @@ async fn selected_tags_batch_a_page_and_observe_later_edits() {
         let note = plain_rs::features::notes::create(library, title, "").unwrap();
         plain_rs::features::tags::add_relations(library, &[(tag.id.clone(), note.id)]).unwrap();
     }
-    let loader = schema.data::<DataLoader<TagsLoader>>().unwrap().loader();
+    let loader = schema.data::<Arc<TagsLoader>>().unwrap();
     let plain = schema
         .execute(r#"{ notes(query: "", offset: 0, limit: 10) { id } }"#)
         .await;

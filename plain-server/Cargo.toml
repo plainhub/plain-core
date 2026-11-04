@@ -30,7 +30,7 @@ plain-libs = { path = "../plain-libs", default-features = false }
 "log" = "0.4"
 "rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "cache"], "optional" = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }
-"async-graphql" = { "version" = "=8.0.0-rc.5", "path" = "../vendor/async-graphql", "default-features" = false, "features" = ["dataloader", "tokio"], "optional" = true }
+"async-graphql" = { "version" = "=8.0.0-rc.5", "default-features" = false, "features" = ["tokio"], "optional" = true }
 "plain-rs" = { "path" = "../plain-rs", "default-features" = false }
 
 [dev-dependencies]
