@@ -55,8 +55,7 @@ impl Host {
             | "audioLibraryRefresh"
             | "pairingSucceeded"
             | "networkInterfacesChanged"
-            | "onlineClientsChanged"
-            | "systemWebActivity" => Ok(Value::Null),
+            | "onlineClientsChanged" => Ok(Value::Null),
             "systemCapabilities" => {
                 serde_json::to_value(&self.capabilities).map_err(|error| error.to_string())
             }

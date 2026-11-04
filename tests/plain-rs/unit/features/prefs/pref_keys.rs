@@ -10,7 +10,7 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
             editor_font_size editor_status_bar desktop_home_features audio_sort_by video_sort_by
             image_sort_by doc_sort_by file_sort_by pkg_sort_by audio_play_mode audio_playback_speed
             pomodoro_settings screen_mirror_quality volume_alias"),
-        (PrefAccess::LocalOnly, "http_port https_port keep_awake background_service_enabled desktop_access developer_mode
+        (PrefAccess::LocalOnly, "http_port https_port background_service_enabled desktop_access developer_mode
             allow_any_host nearby_discoverable notification_filter launcher_shortcuts
             image_grid_cells_per_row video_grid_cells_per_row https web_address_bar_expanded
             password password_type login_require_approval rotate_url_token_on_restart
@@ -75,7 +75,6 @@ fn exported_constants_match_the_registered_keys() {
         VOLUME_ALIAS,
         HTTP_PORT,
         HTTPS_PORT,
-        KEEP_AWAKE,
         BACKGROUND_SERVICE_ENABLED,
         DESKTOP_ACCESS,
         DEVELOPER_MODE,

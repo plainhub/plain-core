@@ -62,24 +62,6 @@ async fn replacing_a_full_host_releases_capacity_before_recovery_callbacks() {
 }
 
 #[tokio::test]
-async fn web_activity_coalesces_while_the_host_is_processing_it() {
-    let host = Host::default();
-    let (generation, mut requests) = host.connect();
-    host.notify("systemWebActivity", json!({})).unwrap();
-    host.notify("systemWebActivity", json!({})).unwrap();
-    let request = requests.recv().await.unwrap();
-    assert!(requests.try_recv().is_err());
-    host.reply(generation, json!({"id":request["id"],"result":null}))
-        .unwrap();
-    tokio::task::yield_now().await;
-    host.notify("systemWebActivity", json!({})).unwrap();
-    assert_eq!(
-        requests.recv().await.unwrap()["method"],
-        "systemWebActivity"
-    );
-}
-
-#[tokio::test]
 async fn generation_bound_calls_never_enter_a_replacement_host_queue() {
     let host = Arc::new(Host::default());
     let (old, _) = host.connect();

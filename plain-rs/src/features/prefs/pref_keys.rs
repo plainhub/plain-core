@@ -53,7 +53,6 @@ pref_keys! {
     LocalOnly {
         HTTP_PORT = "http_port",
         HTTPS_PORT = "https_port",
-        KEEP_AWAKE = "keep_awake",
         BACKGROUND_SERVICE_ENABLED = "background_service_enabled",
         DESKTOP_ACCESS = "desktop_access",
         DEVELOPER_MODE = "developer_mode",

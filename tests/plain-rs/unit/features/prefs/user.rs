@@ -9,7 +9,6 @@ fn defaults_are_complete_and_partial_patch_does_not_reset_other_settings() {
     let (_dir, prefs) = fixture();
     let settings = snapshot(&prefs).unwrap();
     assert_eq!(settings.http_port, 8080);
-    assert!(settings.keep_awake);
     assert!(settings.desktop_access);
     assert_eq!(
         settings.app_home_features,
@@ -26,14 +25,14 @@ fn defaults_are_complete_and_partial_patch_does_not_reset_other_settings() {
     patch(
         &prefs,
         SettingsPatch {
-            keep_awake: Some(false),
+            desktop_access: Some(false),
             ..Default::default()
         },
     )
     .unwrap();
     let result = snapshot(&prefs).unwrap();
     assert_eq!(result.editor_font_size, 20);
-    assert!(!result.keep_awake);
+    assert!(!result.desktop_access);
 }
 
 #[test]
@@ -56,7 +55,7 @@ fn invalid_patch_and_failed_write_leave_store_unchanged() {
         patch(
             &prefs,
             SettingsPatch {
-                keep_awake: Some(false),
+                desktop_access: Some(false),
                 ..Default::default()
             }
         )

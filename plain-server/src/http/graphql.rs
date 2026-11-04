@@ -5,7 +5,6 @@ use axum::{
     http::{HeaderMap, StatusCode, header::CONTENT_TYPE},
     response::{IntoResponse, Response},
 };
-use serde_json::json;
 use subtle::ConstantTimeEq;
 
 fn bearer_value(value: &str) -> &str {
@@ -282,9 +281,6 @@ async fn execute_guest(state: &ServerState, id: &str, body: &[u8]) -> (u16, Vec<
         Ok(p) => p,
         Err(_) => return (400, vec![]),
     };
-    if let Err(error) = state.host.notify("systemWebActivity", json!({})) {
-        log::warn!("Web activity callback: {error}");
-    }
     let schema = crate::graphql::schemas::guest::schema(state.clone(), id.to_owned());
     let result = schema.execute(request).await;
     match serde_json::to_vec(&result)

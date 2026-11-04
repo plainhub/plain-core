@@ -10,7 +10,6 @@ pub(crate) fn acknowledge_host_callback(
                 | "systemWebLoginClosed"
                 | "systemWebLoginCompleted"
                 | "systemWebLoginSnapshot"
-                | "systemWebActivity"
                 | "peerNotificationsChanged"
                 | "peerClipboardChanged"
                 | "onlineClientsChanged"

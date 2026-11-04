@@ -10,7 +10,6 @@ pub struct SettingsPatch {
     pub dark_theme: Option<DarkTheme>,
     pub amoled_dark_theme: Option<bool>,
     pub pdf_follow_dark_theme: Option<bool>,
-    pub keep_awake: Option<bool>,
     pub locale: Option<String>,
     pub background_service_enabled: Option<bool>,
     pub desktop_access: Option<bool>,

@@ -39,9 +39,6 @@ pub fn snapshot(prefs: &Prefs) -> Result<Settings> {
         settings.pdf_follow_dark_theme =
             serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
     }
-    if let Some(value) = entries.get(keys::KEEP_AWAKE) {
-        settings.keep_awake = serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
-    }
     if let Some(value) = entries.get(keys::LOCALE) {
         settings.locale = serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
     }
@@ -216,13 +213,6 @@ pub fn patch(prefs: &Prefs, patch: SettingsPatch) -> anyhow::Result<bool> {
             let value = serde_json::to_value(value).map_err(PrefsError::Encode)?;
             if entries.get(keys::PDF_FOLLOW_DARK_THEME) != Some(&value) {
                 entries.insert(keys::PDF_FOLLOW_DARK_THEME.into(), value);
-                changed = true;
-            }
-        }
-        if let Some(value) = patch.keep_awake {
-            let value = serde_json::to_value(value).map_err(PrefsError::Encode)?;
-            if entries.get(keys::KEEP_AWAKE) != Some(&value) {
-                entries.insert(keys::KEEP_AWAKE.into(), value);
                 changed = true;
             }
         }

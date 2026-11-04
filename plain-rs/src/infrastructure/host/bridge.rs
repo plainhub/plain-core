@@ -1,10 +1,7 @@
 use serde_json::{Value, json};
 use std::{
     collections::{HashMap, HashSet},
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, Mutex},
     time::Duration,
 };
 use tokio::sync::{Notify, Semaphore, mpsc, oneshot, watch};
@@ -32,14 +29,7 @@ pub struct Host {
     capacity: Arc<Semaphore>,
     connection: watch::Sender<u64>,
     startup: crate::infrastructure::host::startup::StartupConfig,
-    activity_in_flight: Arc<AtomicBool>,
     pending_invalidations: Mutex<HashSet<&'static str>>,
-}
-struct ActivityCall(Arc<AtomicBool>);
-impl Drop for ActivityCall {
-    fn drop(&mut self) {
-        self.0.store(false, Ordering::Release);
-    }
 }
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 impl Default for Host {
@@ -72,7 +62,6 @@ impl Host {
             capacity: Arc::new(Semaphore::new(REQUEST_CAPACITY)),
             connection: watch::channel(0).0,
             startup,
-            activity_in_flight: Arc::new(AtomicBool::new(false)),
             pending_invalidations: Mutex::new(HashSet::new()),
         }
     }
@@ -166,21 +155,14 @@ impl Host {
 
     pub fn notify(&self, method: &'static str, params: Value) -> Result<(), String> {
         #[cfg(any(test, feature = "test-seams"))]
-        self.callback_attempts.fetch_add(1, Ordering::Relaxed);
-        let activity = if method == "systemWebActivity" {
-            if self.activity_in_flight.swap(true, Ordering::AcqRel) {
-                return Ok(());
-            }
-            Some(ActivityCall(self.activity_in_flight.clone()))
-        } else {
-            None
-        };
+        self.callback_attempts
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let permit = self
             .capacity
             .clone()
             .try_acquire_owned()
             .map_err(|_| "host request capacity exceeded")?;
-        self.notify_reserved(method, params, permit, activity)
+        self.notify_reserved_callback(method, params, permit)
     }
 
     pub fn invalidate(self: &Arc<Self>, method: &'static str) {
@@ -219,16 +201,6 @@ impl Host {
         params: Value,
         permit: tokio::sync::OwnedSemaphorePermit,
     ) -> Result<(), String> {
-        self.notify_reserved(method, params, permit, None)
-    }
-
-    fn notify_reserved(
-        &self,
-        method: &'static str,
-        params: Value,
-        permit: tokio::sync::OwnedSemaphorePermit,
-        activity: Option<ActivityCall>,
-    ) -> Result<(), String> {
         let (id, receiver) = {
             let mut state = self.state.lock().unwrap();
             let sender = state.sender.clone().ok_or("host unavailable")?;
@@ -256,7 +228,6 @@ impl Host {
             id,
         };
         tokio::spawn(async move {
-            let _activity = activity;
             let _pending = pending;
             match tokio::time::timeout(Duration::from_secs(25), receiver).await {
                 Ok(Ok(Ok(_))) => {}

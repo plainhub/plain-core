@@ -17,7 +17,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
                 let result = match request["method"].as_str().unwrap() {
                     "systemCapabilities" => json!(["MEDIA_SCAN"]),
                     "systemPermissionFacts" => json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}}),
-                    "onlineClientsChanged" | "systemWebActivity" | "httpServerStatusChanged" => Value::Null,
+                    "onlineClientsChanged" | "httpServerStatusChanged" => Value::Null,
                     method => panic!("unexpected host method {method}"),
                 };
                 host.reply(generation, json!({"id":request["id"],"result":result})).unwrap();

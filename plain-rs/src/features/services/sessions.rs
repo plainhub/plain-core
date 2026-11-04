@@ -1,7 +1,6 @@
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::SessionRow;
 use crate::runtime::Runtime as CoreRuntime;
-use serde_json::json;
 
 /// The key a remote client's frames are encrypted with: its session token.
 pub fn key(db: &Db, client_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
@@ -29,9 +28,6 @@ pub fn touch(state: &CoreRuntime, client_id: &str) -> anyhow::Result<()> {
         client_id.to_owned(),
         plain_libs::utils::dbtime::iso_from_unix_millis(now),
     )])?;
-    if let Err(error) = state.host.notify("systemWebActivity", json!({})) {
-        log::warn!("Web activity callback: {error}");
-    }
     Ok(())
 }
 

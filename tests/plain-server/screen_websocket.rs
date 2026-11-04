@@ -120,7 +120,6 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
                 | "audioPlaybackRefresh"
                 | "audioLibraryRefresh"
                 | "networkInterfacesChanged"
-                | "systemWebActivity"
                 | "pairingSucceeded" => json!(null),
                 "systemCapabilities" => json!(["SCREEN_MIRROR"]),
                 "systemScreenMirrorState" => mirror_host.lock().unwrap().clone(),
