@@ -187,6 +187,10 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
         &excluded,
         &root.join("nested"),
         &root.join(".hidden"),
+        &root.join(".git"),
+        &root.join(".plain-trash"),
+        &root.join("trash"),
+        &root.join("lost+found"),
         &root.join("marked"),
     ] {
         std::fs::create_dir_all(folder).unwrap();
@@ -197,6 +201,10 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
         "photo.heic",
         "excluded/excluded.txt",
         ".hidden/hidden.txt",
+        ".git/internal.txt",
+        ".plain-trash/deleted.txt",
+        "trash/kept.txt",
+        "lost+found/internal.txt",
         "marked/marked.txt",
     ] {
         std::fs::write(root.join(name), b"media facts").unwrap();
@@ -226,7 +234,7 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
         .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
             scan_directories: vec![directory.path().to_string_lossy().into_owned()],
             excluded_directories: Vec::new(),
-            excluded_names: Vec::new(),
+            excluded_names: vec!["lost+found".into()],
         })
         .unwrap();
     catalog.configure_scan_directories(Some(&config)).unwrap();
@@ -259,7 +267,7 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
         catalog
             .count(plain_rs::features::enums::DataType::Doc)
             .unwrap(),
-        3
+        4
     );
     assert_eq!(
         catalog

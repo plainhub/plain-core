@@ -66,10 +66,15 @@ fn path_validation_rejects_relative_roots_and_retains_offline_absolute_roots() {
 #[cfg(any(feature = "library", feature = "filesystem", feature = "chat"))]
 #[test]
 fn directory_walk_skips_excluded_subtrees_before_visiting_them() {
-    let fixture = tempfile::tempdir().unwrap();
+    let fixture = tempfile::Builder::new()
+        .prefix("index-scope-")
+        .tempdir()
+        .unwrap();
     let root = normalized(fixture.path());
     for path in [
         "project/.git/objects",
+        "project/.internal/cache/deep",
+        "project/lost+found/recovery",
         "project/node_modules/library",
         "project/target/debug",
         "project/src",
@@ -77,10 +82,26 @@ fn directory_walk_skips_excluded_subtrees_before_visiting_them() {
         std::fs::create_dir_all(fixture.path().join(path)).unwrap();
     }
     std::fs::write(fixture.path().join("project/src/main.rs"), b"fn main() {}").unwrap();
+    std::fs::write(
+        fixture
+            .path()
+            .join("project/.internal/cache/deep/private.txt"),
+        b"hidden",
+    )
+    .unwrap();
+    std::fs::write(fixture.path().join("project/src/.notes"), b"visible file").unwrap();
     let scope = Scope {
         directories: vec![root],
         exclusions: vec![],
-        defaults: scope().defaults,
+        defaults: Defaults {
+            excluded_names: vec![
+                ".git".into(),
+                "node_modules".into(),
+                "target".into(),
+                "lost+found".into(),
+            ],
+            ..scope().defaults
+        },
     };
     let mut visited = Vec::new();
     plain_libs::file_walk::walk_entries(
@@ -94,6 +115,9 @@ fn directory_walk_skips_excluded_subtrees_before_visiting_them() {
     )
     .unwrap();
     assert!(visited.contains(&fixture.path().join("project/src/main.rs")));
+    assert!(visited.contains(&fixture.path().join("project/src/.notes")));
+    assert!(!visited.contains(&fixture.path().join("project/.internal")));
+    assert!(!visited.contains(&fixture.path().join("project/lost+found")));
     assert!(!visited.iter().any(|path| path.components().any(|part| {
         [".git", "node_modules", "target"]
             .iter()
@@ -101,8 +125,57 @@ fn directory_walk_skips_excluded_subtrees_before_visiting_them() {
     })));
 }
 
+#[cfg(any(feature = "library", feature = "filesystem", feature = "chat"))]
+#[test]
+fn plain_trash_is_pruned_while_regular_trash_remains_indexable() {
+    let fixture = tempfile::Builder::new()
+        .prefix("trash-scope-")
+        .tempdir()
+        .unwrap();
+    for path in [".plain-trash/nested", "trash/nested", "other"] {
+        std::fs::create_dir_all(fixture.path().join(path)).unwrap();
+    }
+    for path in [
+        ".plain-trash/nested/deleted.txt",
+        "trash/nested/kept.txt",
+        "other/trash",
+    ] {
+        std::fs::write(fixture.path().join(path), b"data").unwrap();
+    }
+    let scope = Scope {
+        directories: vec![normalized(fixture.path())],
+        exclusions: Vec::new(),
+        defaults: Defaults {
+            scan_directories: Vec::new(),
+            excluded_directories: Vec::new(),
+            excluded_names: resolve_defaults().excluded_names,
+        },
+    };
+    let mut visited = Vec::new();
+    plain_libs::file_walk::walk_entries(
+        fixture.path(),
+        |path| !scope.contains(path),
+        || false,
+        |path| {
+            visited.push(path.to_owned());
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert!(!visited.contains(&fixture.path().join(".plain-trash")));
+    assert!(!visited.contains(&fixture.path().join(".plain-trash/nested/deleted.txt")));
+    assert!(visited.contains(&fixture.path().join("trash/nested/kept.txt")));
+    assert!(visited.contains(&fixture.path().join("other/trash")));
+}
+
 #[test]
 fn excluded_names_apply_to_directories_and_preserve_same_named_regular_files() {
+    assert!(
+        resolve_defaults()
+            .excluded_names
+            .iter()
+            .any(|name| name == "lost+found")
+    );
     let scope = Scope {
         directories: vec!["/users/example".into()],
         exclusions: Vec::new(),
@@ -115,6 +188,9 @@ fn excluded_names_apply_to_directories_and_preserve_same_named_regular_files() {
     assert!(scope.contains_entry(Path::new("/users/example/build"), false));
     assert!(!scope.contains_entry(Path::new("/users/example/build"), true));
     assert!(!scope.contains_entry(Path::new("/users/example/build/source.rs"), false));
+    assert!(!scope.contains_entry(Path::new("/users/example/.internal"), true));
+    assert!(!scope.contains_entry(Path::new("/users/example/.internal/file"), false));
+    assert!(scope.contains_entry(Path::new("/users/example/.notes"), false));
 }
 
 #[test]
@@ -215,6 +291,34 @@ fn defaults_cover_all_users_and_mounted_data_disks() {
         "/Users/first/project/target/debug/app",
     ] {
         assert!(!scope.contains_entry(Path::new(path), false), "{path}");
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn default_scope_prunes_system_directories_but_keeps_user_and_mounted_data() {
+    let defaults = resolve_defaults();
+    let scope = Scope {
+        directories: vec!["/".into()],
+        exclusions: Vec::new(),
+        defaults,
+    };
+    for path in [
+        "/dev",
+        "/usr",
+        "/var",
+        "/tmp",
+        "/lost+found",
+        "/mnt/disk/lost+found",
+    ] {
+        assert!(!scope.contains_entry(Path::new(path), true), "{path}");
+    }
+    #[cfg(target_os = "linux")]
+    for path in ["/proc", "/sys", "/run", "/etc", "/boot", "/opt"] {
+        assert!(!scope.contains_entry(Path::new(path), true), "{path}");
+    }
+    for path in ["/home", "/root", "/mnt", "/mnt/disk/Documents"] {
+        assert!(scope.contains_entry(Path::new(path), true), "{path}");
     }
 }
 

@@ -52,7 +52,10 @@ async fn deleting_an_indexed_image_publishes_its_library_type_and_preserves_its_
 
 #[tokio::test]
 async fn overwriting_move_ignores_retired_catalog_rows_when_deleting_the_current_file() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = tempfile::Builder::new()
+        .prefix("file-move-")
+        .tempdir()
+        .unwrap();
     let root = directory.path().canonicalize().unwrap();
     let core = ContentServer::open(&root.join("core")).unwrap();
     let state = core.runtime_state();

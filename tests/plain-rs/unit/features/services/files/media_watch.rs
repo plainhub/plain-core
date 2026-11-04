@@ -285,7 +285,10 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
             notify::WatcherKind::NullWatcher
         }
     }
-    let directory = tempfile::tempdir().unwrap();
+    let directory = tempfile::Builder::new()
+        .prefix("media-watch-")
+        .tempdir()
+        .unwrap();
     let root = directory.path();
     std::fs::create_dir_all(root.join("project/src")).unwrap();
     std::fs::create_dir_all(root.join("project/.git/objects")).unwrap();
@@ -325,7 +328,10 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
 
 #[test]
 fn watcher_excluded_event_bursts_do_not_fill_the_watch_queue() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = tempfile::Builder::new()
+        .prefix("media-watch-")
+        .tempdir()
+        .unwrap();
     let root = directory.path();
     let scope = crate::features::prefs::file_index::Scope {
         directories: vec![crate::features::prefs::file_index::normalized(root)],
@@ -335,10 +341,24 @@ fn watcher_excluded_event_bursts_do_not_fill_the_watch_queue() {
         defaults: crate::features::prefs::file_index::Defaults {
             scan_directories: Vec::new(),
             excluded_directories: Vec::new(),
-            excluded_names: Vec::new(),
+            excluded_names: vec!["lost+found".into()],
         },
     };
     let (send, mut receive) = tokio::sync::mpsc::channel(256);
+    for path in [
+        ".git/objects/item",
+        ".internal/cache/item",
+        ".plain-trash/nested/deleted.txt",
+        "lost+found/item",
+    ] {
+        let event = Event::new(EventKind::Modify(ModifyKind::Any)).add_path(root.join(path));
+        enqueue_event(&send, Some(&scope), event).unwrap();
+    }
+    assert!(receive.try_recv().is_err());
+    let ordinary_trash =
+        Event::new(EventKind::Modify(ModifyKind::Any)).add_path(root.join("trash/kept.txt"));
+    enqueue_event(&send, Some(&scope), ordinary_trash.clone()).unwrap();
+    assert_eq!(receive.try_recv().unwrap(), ordinary_trash);
     for index in 0..4096 {
         let event = Event::new(EventKind::Modify(ModifyKind::Any))
             .add_path(root.join(format!("build/{index}")));

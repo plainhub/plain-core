@@ -114,6 +114,7 @@ fn resolve_defaults() -> Defaults {
             "dist",
             "out",
             ".plain-trash",
+            "lost+found",
             "$Recycle.Bin",
             "System Volume Information",
         ]
@@ -138,9 +139,11 @@ impl Defaults {
             })
             .split('/')
             .any(|part| {
-                self.excluded_names
-                    .iter()
-                    .any(|name| component_eq(part, name))
+                part.starts_with('.')
+                    || self
+                        .excluded_names
+                        .iter()
+                        .any(|name| component_eq(part, name))
             })
     }
 }
