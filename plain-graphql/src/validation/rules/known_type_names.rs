@@ -1,0 +1,52 @@
+use crate::{
+    Name, Pos, Positioned,
+    parser::types::{FragmentDefinition, InlineFragment, TypeCondition, VariableDefinition},
+    registry::MetaTypeName,
+    validation::visitor::{Visitor, VisitorContext},
+};
+#[derive(Default)]
+pub struct KnownTypeNames;
+impl<'a> Visitor<'a> for KnownTypeNames {
+    fn enter_fragment_definition(
+        &mut self,
+        ctx: &mut VisitorContext<'a>,
+        _name: &'a Name,
+        fragment_definition: &'a Positioned<FragmentDefinition>,
+    ) {
+        let TypeCondition { on: name } = &fragment_definition.node.type_condition.node;
+        validate_type(ctx, &name.node, fragment_definition.pos);
+    }
+    fn enter_variable_definition(
+        &mut self,
+        ctx: &mut VisitorContext<'a>,
+        variable_definition: &'a Positioned<VariableDefinition>,
+    ) {
+        validate_type(
+            ctx,
+            MetaTypeName::concrete_typename(&variable_definition.node.var_type.to_string()),
+            variable_definition.pos,
+        );
+    }
+    fn enter_inline_fragment(
+        &mut self,
+        ctx: &mut VisitorContext<'a>,
+        inline_fragment: &'a Positioned<InlineFragment>,
+    ) {
+        if let Some(TypeCondition { on: name }) = inline_fragment
+            .node
+            .type_condition
+            .as_ref()
+            .map(|c| &c.node)
+        {
+            validate_type(ctx, &name.node, inline_fragment.pos);
+        }
+    }
+}
+fn validate_type(ctx: &mut VisitorContext<'_>, type_name: &str, pos: Pos) {
+    if !ctx.registry.types.contains_key(type_name) {
+        ctx.report_error(vec![pos], format!(r#"Unknown type "{}""#, type_name));
+    }
+}
+#[cfg(test)]
+#[path = "../../../../tests/plain-graphql/unit/validation/rules/known_type_names_tests.rs"]
+mod tests;

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["plain-libs", "plain-rs", "plain-server", "plain-cli", "plain-graphql-macros", "plain-graphql-macros/runtime"]
+members = ["plain-libs", "plain-rs", "plain-server", "plain-cli", "plain-graphql", "plain-graphql/macros"]
 
 [profile.dev]
 debug = "line-tables-only"

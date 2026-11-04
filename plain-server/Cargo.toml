@@ -30,7 +30,7 @@ plain-libs = { path = "../plain-libs", default-features = false }
 "log" = "0.4"
 "rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "cache"], "optional" = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }
-plain-graphql = { path = "../plain-graphql-macros/runtime", optional = true }
+plain-graphql = { path = "../plain-graphql", optional = true }
 "plain-rs" = { "path" = "../plain-rs", "default-features" = false }
 
 [dev-dependencies]

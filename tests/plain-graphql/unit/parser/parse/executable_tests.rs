@@ -4,7 +4,7 @@ use std::fs;
 fn test_parser() {
     for entry in fs::read_dir(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../plain-rs/testdata/graphql/executables"
+        "/../plain-rs/testdata/graphql/executables"
     ))
     .unwrap()
     {
@@ -21,7 +21,7 @@ fn test_parser() {
 fn test_parser_ast() {
     for entry in fs::read_dir(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../plain-rs/testdata/graphql/executables"
+        "/../plain-rs/testdata/graphql/executables"
     ))
     .unwrap()
     {

@@ -65,7 +65,7 @@ plain-libs = { path = "../plain-libs", default-features = false }
 "libc" = "0.2"
 "bytes" = "1"
 "futures-core" = "0.3"
-plain-graphql = { path = "../plain-graphql-macros/runtime", optional = true }
+plain-graphql = { path = "../plain-graphql", optional = true }
 "regex" = { "version" = "1", "optional" = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }
 
