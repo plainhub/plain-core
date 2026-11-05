@@ -1,6 +1,120 @@
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[tokio::test]
+async fn reconciliation_preserves_rebuild_progress_and_reserves_the_execution_slot() {
+    let (events, mut received) = tokio::sync::broadcast::channel(32);
+    let scans = Arc::new(MediaScans::new(events, std::env::temp_dir()));
+    let rebuild = scans.begin(1).unwrap();
+    rebuild.record(|| Ok(())).unwrap();
+    let completed = rebuild.finish(Ok(())).unwrap();
+    while received.try_recv().is_ok() {}
+    for _ in 0..2 {
+        let reconciliation = scans.begin_discovery(Purpose::Reconcile).unwrap();
+        assert!(scans.begin(1).is_err());
+        assert_eq!(scans.pause().unwrap().unwrap().id, completed.id);
+        assert_eq!(scans.resume().unwrap().unwrap().status, Status::Completed);
+        reconciliation.wait_running().await.unwrap();
+        reconciliation.sources(&["/source/arrived".into()]).unwrap();
+        reconciliation.discovered(1).unwrap();
+        let writes = AtomicUsize::new(0);
+        reconciliation
+            .record_when_running(1, || {
+                writes.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert_eq!(writes.load(Ordering::SeqCst), 1);
+        let idle = scans.wait_idle();
+        tokio::pin!(idle);
+        assert!(futures_util::poll!(idle.as_mut()).is_pending());
+        reconciliation.finish(Ok(())).unwrap();
+        assert!(idle.await.unwrap());
+        assert_eq!(
+            serde_json::to_value(scans.snapshot().unwrap()).unwrap(),
+            serde_json::to_value(Some(&completed)).unwrap()
+        );
+        assert!(received.try_recv().is_err());
+    }
+    let next = scans.begin(2).unwrap();
+    assert_ne!(scans.snapshot().unwrap().unwrap().id, completed.id);
+    assert_eq!(scans.snapshot().unwrap().unwrap().processed_files, 0);
+    assert!(received.try_recv().is_ok());
+    next.finish(Ok(())).unwrap();
+}
+
+#[test]
+fn background_failure_cancellation_drop_and_close_preserve_the_rebuild_result() {
+    for end in ["failure", "cancel", "drop", "close"] {
+        let (events, mut received) = tokio::sync::broadcast::channel(32);
+        let scans = Arc::new(MediaScans::new(events, std::env::temp_dir()));
+        let rebuild = scans.begin(2).unwrap();
+        rebuild.record(|| Ok(())).unwrap();
+        let failed = rebuild.finish(Err("rebuild failure".into())).unwrap();
+        while received.try_recv().is_ok() {}
+        let reconciliation = scans.begin_discovery(Purpose::Reconcile).unwrap();
+        match end {
+            "failure" => {
+                reconciliation
+                    .finish(Err("background failure".into()))
+                    .unwrap();
+            }
+            "cancel" | "close" => {
+                if end == "close" {
+                    scans.close().unwrap();
+                } else {
+                    scans.cancel().unwrap();
+                }
+                let writes = AtomicUsize::new(0);
+                assert!(
+                    reconciliation
+                        .record(|| {
+                            writes.fetch_add(1, Ordering::SeqCst);
+                            Ok(())
+                        })
+                        .is_err()
+                );
+                assert_eq!(writes.load(Ordering::SeqCst), 0);
+                assert_eq!(
+                    reconciliation.finish(Ok(())).unwrap().status,
+                    Status::Cancelled
+                );
+            }
+            "drop" => drop(reconciliation),
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            serde_json::to_value(scans.snapshot().unwrap()).unwrap(),
+            serde_json::to_value(Some(failed)).unwrap()
+        );
+        assert!(received.try_recv().is_err());
+    }
+}
+
+#[test]
+fn reconciliation_without_a_rebuild_has_no_home_progress_and_cannot_replace_a_paused_rebuild() {
+    let (events, mut received) = tokio::sync::broadcast::channel(32);
+    let scans = Arc::new(MediaScans::new(events, std::env::temp_dir()));
+    let background = scans.begin_discovery(Purpose::Reconcile).unwrap();
+    assert!(scans.snapshot().unwrap().is_none());
+    background.finish(Ok(())).unwrap();
+    assert!(scans.snapshot().unwrap().is_none());
+    assert!(received.try_recv().is_err());
+    let rebuild = scans.begin(1).unwrap();
+    let paused = scans.pause().unwrap().unwrap();
+    assert!(scans.begin_discovery(Purpose::Reconcile).is_err());
+    assert_eq!(scans.snapshot().unwrap().unwrap().id, paused.id);
+    assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Paused);
+    scans.cancel().unwrap();
+    let stopped = rebuild.finish(Ok(())).unwrap();
+    assert_eq!(stopped.status, Status::Cancelled);
+    let background = scans.begin_discovery(Purpose::Reconcile).unwrap();
+    background.finish(Ok(())).unwrap();
+    assert_eq!(scans.snapshot().unwrap().unwrap().id, stopped.id);
+    assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Cancelled);
+}
+
 #[test]
 fn cancellation_is_a_commit_barrier_and_busy_or_stale_sessions_do_not_change_jobs() {
     let scans = Arc::new(MediaScans::default());
@@ -67,7 +181,7 @@ async fn wait_stop_observes_existing_cancellation_and_closed_channels() {
 #[test]
 fn directory_discovery_does_not_publish_a_guessed_total() {
     let scans = Arc::new(MediaScans::default());
-    let session = scans.begin_discovery().unwrap();
+    let session = scans.begin_discovery(Purpose::Rebuild).unwrap();
     assert_eq!(scans.snapshot().unwrap().unwrap().total_files, None);
     session.record(|| Ok(())).unwrap();
     session.discovered(1).unwrap();
@@ -79,7 +193,7 @@ fn directory_discovery_does_not_publish_a_guessed_total() {
 #[test]
 fn completion_records_share_the_close_barrier_without_occupying_the_directory_job() {
     let scans = Arc::new(MediaScans::default());
-    let directory = scans.begin_discovery().unwrap();
+    let directory = scans.begin_discovery(Purpose::Rebuild).unwrap();
     let writes = AtomicUsize::new(0);
     scans
         .record_completion(|| {
@@ -158,7 +272,7 @@ async fn cancelling_or_closing_a_paused_scan_wakes_it_without_a_write() {
 #[tokio::test]
 async fn background_session_is_reserved_before_running_and_shutdown_joins_it() {
     let scans = Arc::new(MediaScans::default());
-    let session = scans.begin_discovery().unwrap();
+    let session = scans.begin_discovery(Purpose::Rebuild).unwrap();
     let (started, running) = tokio::sync::oneshot::channel();
     let snapshot = scans
         .spawn(
@@ -175,12 +289,12 @@ async fn background_session_is_reserved_before_running_and_shutdown_joins_it() {
         )
         .unwrap();
     assert_eq!(snapshot.status, Status::Running);
-    assert!(scans.begin_discovery().is_err());
+    assert!(scans.begin_discovery(Purpose::Rebuild).is_err());
     running.await.unwrap();
     scans.close().unwrap();
     scans.wait_background().await.unwrap();
     assert_eq!(scans.snapshot().unwrap().unwrap().status, Status::Cancelled);
-    assert!(scans.begin_discovery().is_err());
+    assert!(scans.begin_discovery(Purpose::Rebuild).is_err());
 }
 
 #[test]
@@ -190,7 +304,7 @@ fn core_scan_events_report_real_lifecycle_and_unknown_totals() {
         events,
         std::env::temp_dir().join("plain-media-scan-cache"),
     ));
-    let session = scans.begin_discovery().unwrap();
+    let session = scans.begin_discovery(Purpose::Rebuild).unwrap();
     let event = received.try_recv().unwrap();
     assert_eq!(
         event.event_type,

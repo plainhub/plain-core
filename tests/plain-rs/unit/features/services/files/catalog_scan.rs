@@ -1,6 +1,190 @@
 use super::*;
 
 #[tokio::test]
+async fn watcher_recovery_and_paired_directory_rename_preserve_rebuild_progress() {
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("source");
+    let old = source.join("old");
+    let new = source.join("new");
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(old.join("document.txt"), b"document").unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    state
+        .media_scans
+        .set_defaults(crate::features::prefs::file_index::Defaults {
+            scan_directories: vec![source.to_string_lossy().into_owned()],
+            ..Default::default()
+        })
+        .unwrap();
+    let before = catalog
+        .scan_directory(source.to_str().unwrap())
+        .await
+        .unwrap();
+    let file_id = catalog
+        .path_identities(&old)
+        .unwrap()
+        .pop()
+        .unwrap()
+        .file_id;
+    let mut progress = state.events.subscribe();
+    catalog
+        .apply_watch_event(notify::Event::new(notify::EventKind::Other))
+        .await
+        .unwrap();
+    std::fs::rename(&old, &new).unwrap();
+    catalog
+        .apply_watch_event(
+            notify::Event::new(notify::EventKind::Modify(notify::event::ModifyKind::Name(
+                notify::event::RenameMode::Both,
+            )))
+            .add_path(old.clone())
+            .add_path(new.clone()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        catalog
+            .path_identities(&new)
+            .unwrap()
+            .pop()
+            .unwrap()
+            .file_id,
+        file_id
+    );
+    assert!(catalog.path_identities(&old).unwrap().is_empty());
+    assert_eq!(
+        serde_json::to_value(state.media_scans.snapshot().unwrap()).unwrap(),
+        serde_json::to_value(Some(before)).unwrap()
+    );
+    while let Ok(event) = progress.try_recv() {
+        assert_ne!(
+            event.event_type,
+            crate::infrastructure::events::MEDIA_SCAN_PROGRESS
+        );
+    }
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn failed_reconciliation_returns_its_error_without_replacing_rebuild_progress() {
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("source");
+    std::fs::create_dir(&source).unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    let before = catalog
+        .scan_directory(source.to_str().unwrap())
+        .await
+        .unwrap();
+    let mut events = state.events.subscribe();
+    let error = catalog
+        .scan_directories(
+            vec![
+                directory
+                    .path()
+                    .join("missing")
+                    .to_string_lossy()
+                    .into_owned(),
+            ],
+            Purpose::Reconcile,
+        )
+        .await
+        .unwrap_err();
+    assert!(!error.is_empty());
+    assert_eq!(
+        serde_json::to_value(state.media_scans.snapshot().unwrap()).unwrap(),
+        serde_json::to_value(Some(before)).unwrap()
+    );
+    assert!(events.try_recv().is_err());
+    core.stop_core().await;
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn native_directory_arrival_preserves_foreground_scan_progress() {
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("source");
+    let incoming = directory.path().join("incoming");
+    let incoming_again = directory.path().join("incoming-again");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::create_dir(&incoming).unwrap();
+    std::fs::write(source.join("existing.txt"), b"existing").unwrap();
+    for index in 0..3 {
+        std::fs::write(incoming.join(format!("document-{index}.txt")), b"incoming").unwrap();
+    }
+    std::fs::create_dir(&incoming_again).unwrap();
+    std::fs::write(incoming_again.join("another.txt"), b"another").unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    catalog
+        .scan_directory(source.to_str().unwrap())
+        .await
+        .unwrap();
+    let before = state.media_scans.snapshot().unwrap().unwrap();
+    let mut progress = state.events.subscribe();
+    let (send, mut receive) = tokio::sync::mpsc::unbounded_channel();
+    let watcher = crate::features::services::files::media_watch::start(
+        &[source.clone()],
+        None,
+        move |event| {
+            let catalog = catalog.clone();
+            let send = send.clone();
+            async move {
+                let captured = event.clone();
+                catalog.apply_watch_event(event).await?;
+                let snapshot = catalog.state.media_scans.snapshot()?.unwrap();
+                let _ = send.send((captured, snapshot));
+                Ok(())
+            }
+        },
+    )
+    .unwrap();
+    for (incoming, destination) in [
+        (incoming, source.join("arrived")),
+        (incoming_again, source.join("arrived-again")),
+    ] {
+        std::fs::rename(&incoming, &destination).unwrap();
+        let (_, after) = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            while let Some((event, snapshot)) = receive.recv().await {
+                if event.paths.contains(&destination) {
+                    return (event, snapshot);
+                }
+            }
+            panic!("native watcher closed before the directory event");
+        })
+        .await
+        .unwrap();
+        let mut events = Vec::new();
+        while let Ok(event) = progress.try_recv() {
+            if event.event_type == crate::infrastructure::events::MEDIA_SCAN_PROGRESS {
+                events.push(serde_json::from_str::<serde_json::Value>(&event.payload).unwrap());
+            }
+        }
+        assert!(
+            events.is_empty(),
+            "background scans must not publish rebuild progress"
+        );
+        assert_eq!(
+            serde_json::to_value(after).unwrap(),
+            serde_json::to_value(&before).unwrap()
+        );
+    }
+    drop(watcher);
+    assert_eq!(
+        state
+            .db
+            .media_file_count(crate::features::enums::DataType::Doc)
+            .unwrap(),
+        5
+    );
+    core.stop_core().await;
+}
+
+#[tokio::test]
 async fn watcher_file_removal_does_not_rescan_its_parent() {
     use notify::event::{EventKind, ModifyKind, RemoveKind, RenameMode};
     for kind in [
@@ -391,15 +575,18 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
         .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let result = catalog
-        .scan_directories(vec![
-            sources[0].clone(),
-            directory
-                .path()
-                .join("missing")
-                .to_str()
-                .unwrap()
-                .to_owned(),
-        ])
+        .scan_directories(
+            vec![
+                sources[0].clone(),
+                directory
+                    .path()
+                    .join("missing")
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+            ],
+            Purpose::Rebuild,
+        )
         .await
         .unwrap();
     assert!(requests.try_recv().is_err());
@@ -409,7 +596,11 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
     assert!(result.error.is_some());
     assert_ne!(
         result.id,
-        catalog.scan_directories(Vec::new()).await.unwrap().id
+        catalog
+            .scan_directories(Vec::new(), Purpose::Rebuild)
+            .await
+            .unwrap()
+            .id
     );
     core.stop_core().await;
 }
@@ -1132,11 +1323,22 @@ async fn watcher_reconciliation_does_not_restart_a_cancelled_scan() {
     let stopped = state.media_scans.snapshot().unwrap().unwrap();
     assert_eq!(stopped.id, id);
     assert_eq!(stopped.status, Status::Cancelled);
+    let mut progress = state.events.subscribe();
     catalog
         .apply_watch_event(notify::Event::new(notify::EventKind::Other))
         .await
         .unwrap();
-    assert_ne!(state.media_scans.snapshot().unwrap().unwrap().id, id);
+    assert_eq!(
+        serde_json::to_value(state.media_scans.snapshot().unwrap()).unwrap(),
+        serde_json::to_value(Some(stopped)).unwrap()
+    );
+    assert!(state.media_scans.wait_idle().await.unwrap());
+    while let Ok(event) = progress.try_recv() {
+        assert_ne!(
+            event.event_type,
+            crate::infrastructure::events::MEDIA_SCAN_PROGRESS
+        );
+    }
     core.stop_core().await;
 }
 

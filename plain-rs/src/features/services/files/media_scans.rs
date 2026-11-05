@@ -43,7 +43,14 @@ pub struct Snapshot {
     pub sources: Vec<SourceCoverage>,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum Purpose {
+    Rebuild,
+    Reconcile,
+}
+
 struct Job {
+    purpose: Purpose,
     snapshot: Snapshot,
     cancel: watch::Sender<bool>,
     activity: watch::Sender<()>,
@@ -53,9 +60,20 @@ struct Job {
 struct State {
     defaults: crate::features::prefs::file_index::Defaults,
     job: Option<Job>,
+    rebuild_result: Option<Snapshot>,
     closed: bool,
     policy: Option<Arc<crate::features::services::files::media_scan_policy::Policy>>,
     task: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl State {
+    fn rebuild_snapshot(&self) -> Option<&Snapshot> {
+        self.job
+            .as_ref()
+            .filter(|job| job.purpose == Purpose::Rebuild)
+            .map(|job| &job.snapshot)
+            .or(self.rebuild_result.as_ref())
+    }
 }
 
 #[derive(Default)]
@@ -84,7 +102,11 @@ impl MediaScans {
         }
     }
 
-    fn publish(&self, snapshot: &Snapshot) {
+    fn publish(&self, job: &Job) {
+        if job.purpose != Purpose::Rebuild {
+            return;
+        }
+        let snapshot = &job.snapshot;
         let Some(events) = &self.events else {
             return;
         };
@@ -110,14 +132,18 @@ impl MediaScans {
     }
 
     pub fn begin(self: &Arc<Self>, total_files: usize) -> Result<Session, String> {
-        self.begin_with_total(Some(total_files))
+        self.begin_with_total(Some(total_files), Purpose::Rebuild)
     }
 
-    pub fn begin_discovery(self: &Arc<Self>) -> Result<Session, String> {
-        self.begin_with_total(None)
+    pub fn begin_discovery(self: &Arc<Self>, purpose: Purpose) -> Result<Session, String> {
+        self.begin_with_total(None, purpose)
     }
 
-    fn begin_with_total(self: &Arc<Self>, total_files: Option<usize>) -> Result<Session, String> {
+    fn begin_with_total(
+        self: &Arc<Self>,
+        total_files: Option<usize>,
+        purpose: Purpose,
+    ) -> Result<Session, String> {
         let mut guard = self
             .state
             .lock()
@@ -133,10 +159,22 @@ impl MediaScans {
         }) {
             return Err("Media scan already running".into());
         }
+        if purpose == Purpose::Reconcile {
+            if let Some(previous) = guard
+                .job
+                .take()
+                .filter(|job| job.purpose == Purpose::Rebuild)
+            {
+                guard.rebuild_result = Some(previous.snapshot);
+            }
+        } else {
+            guard.rebuild_result = None;
+        }
         let (cancel, receiver) = watch::channel(false);
         let (activity, _) = watch::channel(());
         let id = uuid::Uuid::new_v4().to_string();
         guard.job = Some(Job {
+            purpose,
             snapshot: Snapshot {
                 id: id.clone(),
                 status: Status::Running,
@@ -149,7 +187,7 @@ impl MediaScans {
             activity,
         });
         if let Some(job) = &guard.job {
-            self.publish(&job.snapshot);
+            self.publish(job);
         }
         Ok(Session {
             scans: self.clone(),
@@ -241,13 +279,20 @@ impl MediaScans {
         else {
             return Ok(true);
         };
-        while self.snapshot()?.is_some_and(|job| {
-            job.id == id
-                && matches!(
-                    job.status,
-                    Status::Running | Status::Paused | Status::Cancelling
-                )
-        }) {
+        while self
+            .state
+            .lock()
+            .map_err(|_| "Media scan state unavailable")?
+            .job
+            .as_ref()
+            .is_some_and(|job| {
+                job.snapshot.id == id
+                    && matches!(
+                        job.snapshot.status,
+                        Status::Running | Status::Paused | Status::Cancelling
+                    )
+            })
+        {
             activity
                 .changed()
                 .await
@@ -337,9 +382,8 @@ impl MediaScans {
             .state
             .lock()
             .map_err(|_| "Media scan state unavailable")?
-            .job
-            .as_ref()
-            .map(|job| job.snapshot.clone()))
+            .rebuild_snapshot()
+            .cloned())
     }
 
     pub fn pause(&self) -> Result<Option<Snapshot>, String> {
@@ -359,6 +403,7 @@ impl MediaScans {
             return Err("Rust core stopped".into());
         }
         if let Some(job) = guard.job.as_mut()
+            && job.purpose == Purpose::Rebuild
             && matches!(job.snapshot.status, Status::Running | Status::Paused)
         {
             job.snapshot.status = if paused {
@@ -369,9 +414,9 @@ impl MediaScans {
             job.activity.send_replace(());
         }
         if let Some(job) = &guard.job {
-            self.publish(&job.snapshot);
+            self.publish(job);
         }
-        Ok(guard.job.as_ref().map(|job| job.snapshot.clone()))
+        Ok(guard.rebuild_snapshot().cloned())
     }
 
     pub fn cancel(&self) -> Result<Option<Snapshot>, String> {
@@ -387,9 +432,9 @@ impl MediaScans {
             job.activity.send_replace(());
         }
         if let Some(job) = &guard.job {
-            self.publish(&job.snapshot);
+            self.publish(job);
         }
-        Ok(guard.job.as_ref().map(|job| job.snapshot.clone()))
+        Ok(guard.rebuild_snapshot().cloned())
     }
     pub fn close(&self) -> Result<(), String> {
         let mut guard = self
@@ -405,7 +450,7 @@ impl MediaScans {
             job.activity.send_replace(());
         }
         if let Some(job) = &guard.job {
-            self.publish(&job.snapshot);
+            self.publish(job);
         }
         Ok(())
     }
@@ -472,7 +517,7 @@ impl Session {
                     Status::Running => {
                         let value = record.take().ok_or("Media scan record unavailable")?()?;
                         job.snapshot.processed_files += file_count;
-                        self.scans.publish(&job.snapshot);
+                        self.scans.publish(job);
                         return Ok(value);
                     }
                     Status::Paused => job.activity.subscribe(),
@@ -502,7 +547,7 @@ impl Session {
         }
         let value = record()?;
         job.snapshot.processed_files += 1;
-        self.scans.publish(&job.snapshot);
+        self.scans.publish(job);
         Ok(value)
     }
 
@@ -553,7 +598,7 @@ impl Session {
             source.state = state;
             source.error = error;
         }
-        self.scans.publish(&job.snapshot);
+        self.scans.publish(job);
         Ok(())
     }
 
@@ -572,7 +617,7 @@ impl Session {
             return Err("Media scan cancelled".into());
         }
         job.snapshot.total_files = Some(total_files);
-        self.scans.publish(&job.snapshot);
+        self.scans.publish(job);
         Ok(())
     }
 
@@ -602,7 +647,7 @@ impl Session {
             let _ = job.cancel.send(true);
         }
         job.activity.send_replace(());
-        self.scans.publish(&job.snapshot);
+        self.scans.publish(job);
         Ok(job.snapshot.clone())
     }
 }
@@ -619,7 +664,7 @@ impl Drop for Session {
             let _ = job.cancel.send(true);
             job.activity.send_replace(());
             job.snapshot.status = Status::Cancelled;
-            self.scans.publish(&job.snapshot);
+            self.scans.publish(job);
         }
     }
 }

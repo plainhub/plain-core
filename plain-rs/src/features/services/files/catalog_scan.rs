@@ -2,6 +2,9 @@
 mod directory_walk;
 
 #[cfg(feature = "runtime-media")]
+use crate::features::services::files::media_scans::Purpose;
+
+#[cfg(feature = "runtime-media")]
 const SCAN_BATCH_SIZE: usize = 256;
 
 use crate::features::enums::DataType;
@@ -278,7 +281,8 @@ impl NativeMediaCatalog {
         &self,
         reference: &str,
     ) -> Result<crate::features::services::files::media_scans::Snapshot, String> {
-        self.scan_directories(vec![reference.to_owned()]).await
+        self.scan_directories(vec![reference.to_owned()], Purpose::Rebuild)
+            .await
     }
 
     #[cfg(feature = "runtime-media")]
@@ -332,7 +336,8 @@ impl NativeMediaCatalog {
             if !self.state.media_scans.wait_idle().await? {
                 return Ok(());
             }
-            self.scan_directories(self.source_directories()?).await?;
+            self.scan_directories(self.source_directories()?, Purpose::Reconcile)
+                .await?;
             return Ok(());
         }
         if matches!(
@@ -363,7 +368,14 @@ impl NativeMediaCatalog {
                     .await
                     .map_err(|error| error.to_string())?;
                 if destination.is_dir() {
-                    self.scan_directory(&destination.to_string_lossy()).await?;
+                    if !self.state.media_scans.wait_idle().await? {
+                        return Ok(());
+                    }
+                    self.scan_directories(
+                        vec![destination.to_string_lossy().into_owned()],
+                        Purpose::Reconcile,
+                    )
+                    .await?;
                 } else {
                     self.state
                         .file_platform
@@ -415,7 +427,11 @@ impl NativeMediaCatalog {
                             .await
                             .map_err(|error| error.to_string())?;
                     } else if let Some(parent) = path.parent().filter(|parent| parent.is_dir()) {
-                        self.scan_directory(&parent.to_string_lossy()).await?;
+                        self.scan_directories(
+                            vec![parent.to_string_lossy().into_owned()],
+                            Purpose::Reconcile,
+                        )
+                        .await?;
                     }
                 }
                 Effect::RescanSubtree => {
@@ -424,7 +440,11 @@ impl NativeMediaCatalog {
                     } else {
                         path.parent().ok_or("Media directory parent required")?
                     };
-                    self.scan_directory(&root.to_string_lossy()).await?;
+                    self.scan_directories(
+                        vec![root.to_string_lossy().into_owned()],
+                        Purpose::Reconcile,
+                    )
+                    .await?;
                 }
                 Effect::Ignore => {}
             }
@@ -451,7 +471,8 @@ impl NativeMediaCatalog {
         &self,
         root: &str,
     ) -> Result<crate::features::services::files::media_scans::Snapshot, String> {
-        self.scan_directories(self.source_references(root)?).await
+        self.scan_directories(self.source_references(root)?, Purpose::Rebuild)
+            .await
     }
 
     #[cfg(feature = "runtime-media")]
@@ -479,7 +500,7 @@ impl NativeMediaCatalog {
         let runtime = tokio::runtime::Handle::try_current().map_err(|error| error.to_string())?;
         let references = self.source_references(root)?;
         let policy = self.state.media_scans.policy()?;
-        let session = self.state.media_scans.begin_discovery()?;
+        let session = self.state.media_scans.begin_discovery(Purpose::Rebuild)?;
         let catalog = self.clone();
         self.state
             .media_scans
@@ -499,12 +520,20 @@ impl NativeMediaCatalog {
     pub async fn scan_directories(
         &self,
         references: Vec<String>,
+        purpose: Purpose,
     ) -> Result<crate::features::services::files::media_scans::Snapshot, String> {
         self.state.native_client_id()?;
         let policy = self.state.media_scans.policy()?;
-        let session = self.state.media_scans.begin_discovery()?;
-        self.scan_directory_session(references, policy, session)
-            .await
+        let session = self.state.media_scans.begin_discovery(purpose)?;
+        let snapshot = self
+            .scan_directory_session(references, policy, session)
+            .await?;
+        if purpose == Purpose::Reconcile
+            && let Some(error) = &snapshot.error
+        {
+            return Err(error.clone());
+        }
+        Ok(snapshot)
     }
 
     #[cfg(feature = "runtime-media")]
