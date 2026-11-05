@@ -88,6 +88,7 @@ fn local_ip_skips_loopback_so_it_matches_the_ssdp_location() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
     let (dir, server, port) = public_fixture().await;
     let client = reqwest::Client::new();
     let base = format!("http://127.0.0.1:{port}");
@@ -158,12 +159,14 @@ async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
         !stray.contains("<root"),
         "the receiver answered an unknown path"
     );
+    server.shutdown().await;
     drop(dir);
 }
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn a_forged_c_ip_header_cannot_impersonate_an_allowed_sender() {
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
     let (dir, server, port) = public_fixture().await;
     let client = reqwest::Client::new();
     let base = format!("http://127.0.0.1:{port}");
@@ -208,12 +211,14 @@ async fn a_forged_c_ip_header_cannot_impersonate_an_allowed_sender() {
         "a forged c-ip header was trusted: {}",
         after.media_uri
     );
+    server.shutdown().await;
     drop(dir);
 }
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
     let (dir, server, port) = public_fixture().await;
     let controller = MainDlnaClient(server.native_graphql().unwrap(), server.runtime_state());
     let state = server.runtime_state();
@@ -345,6 +350,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
 
 #[tokio::test]
 async fn public_dlna_reads_the_native_players_reported_position() {
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
     let (_dir, server, port) = public_fixture().await;
     let state = server.runtime_state();
     state.prefs.set("background_service_enabled", true).unwrap();
@@ -373,6 +379,7 @@ async fn public_dlna_reads_the_native_players_reported_position() {
         body.contains("<TrackDuration>00:02:00</TrackDuration>"),
         "{body}"
     );
+    server.shutdown().await;
 }
 
 #[tokio::test]
@@ -417,6 +424,7 @@ async fn the_two_body_faults_answer_differently() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn an_oversized_control_request_never_reaches_the_protocol() {
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
     let (dir, server, port) = public_fixture().await;
     let state = server.runtime_state();
     state.prefs.set("background_service_enabled", true).unwrap();
@@ -447,6 +455,7 @@ async fn an_oversized_control_request_never_reaches_the_protocol() {
     let after = state.dlna.snapshot().await;
     assert!(after.pending_cast_request.is_none());
     assert!(after.media_uri.is_empty());
+    server.shutdown().await;
     drop(dir);
 }
 

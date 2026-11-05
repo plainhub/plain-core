@@ -5,6 +5,7 @@ use tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClien
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypted_socket() {
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
     tokio::time::timeout(Duration::from_secs(30), async {
         let directory = tempfile::tempdir().unwrap();
         let server = crate::server::ContentServer::open(directory.path()).unwrap();
@@ -16,6 +17,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
             while let Some(request) = incoming.recv().await {
                 let result = match request["method"].as_str().unwrap() {
                     "systemCapabilities" => json!(["MEDIA_SCAN"]),
+                    "mdnsMulticast" => json!(true),
                     "systemAccessFacts" => json!({"granted":{"FILES":true}}),
                     "onlineClientsChanged" | "httpServerStatusChanged" => Value::Null,
                     method => panic!("unexpected host method {method}"),

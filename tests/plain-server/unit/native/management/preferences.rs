@@ -285,7 +285,7 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
     let url_token = management.get_pref(keys::URL_TOKEN).unwrap();
     state
         .prefs
-        .set(keys::API_PERMISSIONS, vec!["CAMERA"])
+        .set(keys::API_PERMISSIONS, vec!["FILES"])
         .unwrap();
     state
         .prefs
@@ -316,7 +316,7 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
     assert_eq!(management.get_pref(keys::URL_TOKEN).unwrap(), url_token);
     assert_eq!(
         management.get_pref(keys::API_PERMISSIONS).unwrap(),
-        json!(["CAMERA"])
+        json!(["FILES"])
     );
     let selected = management
         .get_prefs(&[
@@ -328,7 +328,7 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
     assert_eq!(selected.len(), 3);
     assert_eq!(selected[keys::CLIENT_ID], client_id);
     assert_eq!(selected[keys::URL_TOKEN], url_token);
-    assert_eq!(selected[keys::API_PERMISSIONS], json!(["CAMERA"]));
+    assert_eq!(selected[keys::API_PERMISSIONS], json!(["FILES"]));
     for key in [
         keys::EDITOR_FONT_SIZE,
         keys::PASSWORD_TYPE,
