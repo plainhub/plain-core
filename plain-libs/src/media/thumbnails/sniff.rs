@@ -28,9 +28,7 @@ impl ImageKind {
         }
     }
 
-    /// Whether the in-tree decoders can decode this format to pixels
-    /// (BMP can be classified but is not an enabled `image` feature).
-    pub fn decodable(self) -> bool {
+    pub fn can_passthrough(self) -> bool {
         !matches!(self, ImageKind::Bmp)
     }
 }
@@ -112,15 +110,24 @@ pub fn sniff_header(buf: &[u8]) -> Result<Sniffed, SniffError> {
         return sniff_webp(buf);
     }
     if buf.starts_with(b"BM") {
-        // BITMAPFILEHEADER: width/height are signed i32 LE at offsets 18/22.
         let rd = |i: usize| -> Option<i32> {
             let b = buf.get(i..i + 4)?;
             Some(i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
         };
-        let w = rd(18).ok_or(SniffError::Truncated)?;
-        let h = rd(22).ok_or(SniffError::Truncated)?;
-        let (w, h) = (w.unsigned_abs(), h.unsigned_abs());
-        if w == 0 || h == 0 {
+        let (w, h) = if rd(14) == Some(12) {
+            (
+                u32::from(le16(buf, 18).ok_or(SniffError::Truncated)?),
+                u32::from(le16(buf, 20).ok_or(SniffError::Truncated)?),
+            )
+        } else {
+            let w = rd(18).ok_or(SniffError::Truncated)?;
+            let h = rd(22).ok_or(SniffError::Truncated)?;
+            if w <= 0 || h == i32::MIN {
+                return Err(SniffError::Unknown);
+            }
+            (w as u32, h.unsigned_abs())
+        };
+        if w == 0 || h == 0 || w > 65_535 || h > 65_535 {
             return Err(SniffError::Unknown);
         }
         return Ok(Sniffed {

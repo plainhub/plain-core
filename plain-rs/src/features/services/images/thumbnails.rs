@@ -129,7 +129,8 @@ async fn decode(
     system: bool,
     cache: &Path,
 ) -> Result<Option<Bytes>, String> {
-    if !cfg!(any(target_os = "android", target_os = "ios")) {
+    let rust_bmp = super::thumbnail_decoder::uses_rust_bmp_decoder(request);
+    if rust_bmp || !cfg!(any(target_os = "android", target_os = "ios")) {
         #[cfg(any(test, feature = "test-seams"))]
         state
             .thumbnails

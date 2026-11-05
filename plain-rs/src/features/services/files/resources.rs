@@ -85,7 +85,12 @@ async fn native(operation: &str, path: &str, params: Value) -> Result<Value, Str
             if !mime.starts_with("image/")
                 || matches!(
                     mime,
-                    "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "image/svg+xml"
+                    "image/jpeg"
+                        | "image/png"
+                        | "image/gif"
+                        | "image/webp"
+                        | "image/svg+xml"
+                        | "image/bmp"
                 )
             {
                 return Ok(Value::Bool(false));

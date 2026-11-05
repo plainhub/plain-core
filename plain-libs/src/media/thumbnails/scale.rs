@@ -253,8 +253,7 @@ fn box_rows<const CHANNELS: usize>(src: &[u8], w: u32, h: u32, f: u32) -> Vec<u8
     let stride = w as usize * CHANNELS;
     let mut vertical = vec![0u32; stride];
     let mut output = Vec::with_capacity(w.div_ceil(f) as usize * h.div_ceil(f) as usize * CHANNELS);
-    let full = RoundedMean::new(f);
-    let right = RoundedMean::new(if w % f == 0 { f } else { w % f });
+    let filter = BoxRowFilter::new(w, f);
     for group in src.chunks(stride * f.min(h) as usize) {
         vertical.fill(0);
         for row in group.chunks_exact(stride) {
@@ -262,26 +261,55 @@ fn box_rows<const CHANNELS: usize>(src: &[u8], w: u32, h: u32, f: u32) -> Vec<u8
                 *sum += u32::from(byte);
             }
         }
-        let mean = RoundedMean::new((group.len() / stride) as u32);
-        for sum in &mut vertical {
+        filter.append::<CHANNELS>(&mut vertical, (group.len() / stride) as u32, &mut output);
+    }
+    output
+}
+
+pub(super) struct BoxRowFilter {
+    full: RoundedMean,
+    right: RoundedMean,
+    factor: u32,
+}
+
+impl BoxRowFilter {
+    pub(super) fn new(width: u32, factor: u32) -> Self {
+        Self {
+            full: RoundedMean::new(factor),
+            right: RoundedMean::new(if width % factor == 0 {
+                factor
+            } else {
+                width % factor
+            }),
+            factor,
+        }
+    }
+
+    pub(super) fn append<const CHANNELS: usize>(
+        &self,
+        vertical: &mut [u32],
+        rows: u32,
+        output: &mut Vec<u8>,
+    ) {
+        let mean = RoundedMean::new(rows);
+        for sum in vertical.iter_mut() {
             *sum = mean.of(*sum);
         }
-        for block in vertical.chunks(f.min(w) as usize * CHANNELS) {
+        for block in vertical.chunks(self.factor as usize * CHANNELS) {
             let mut sums = [0u32; CHANNELS];
             for pixel in block.chunks_exact(CHANNELS) {
                 for c in 0..CHANNELS {
                     sums[c] += pixel[c];
                 }
             }
-            let mean = if block.len() / CHANNELS == f as usize {
-                &full
+            let mean = if block.len() / CHANNELS == self.factor as usize {
+                &self.full
             } else {
-                &right
+                &self.right
             };
             output.extend(sums.map(|sum| mean.of(sum) as u8));
         }
     }
-    output
 }
 
 /// Full resize strategy: optional single box pre-pass when the downscale
@@ -311,7 +339,7 @@ pub fn resize_to(bm: Bitmap, tw: u32, th: u32) -> Bitmap {
 
 /// Final resample via `fast_image_resize` (pure Rust, SIMD convolution).
 /// Bilinear for small thumbnails, Lanczos3 when quality matters more.
-fn fir_resize(bm: Bitmap, tw: u32, th: u32) -> Bitmap {
+pub(super) fn fir_resize(bm: Bitmap, tw: u32, th: u32) -> Bitmap {
     use fast_image_resize::{PixelType, ResizeAlg, ResizeOptions, Resizer};
 
     let (w, h) = (bm.width(), bm.height());

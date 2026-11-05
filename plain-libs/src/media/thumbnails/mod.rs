@@ -18,6 +18,7 @@
 //! (`video.rs`). Other containers/codec combinations have no pure-Rust
 
 pub mod admission;
+mod bmp;
 pub mod decode;
 pub mod encode;
 pub mod exif;
@@ -162,7 +163,7 @@ pub fn read_original_thumbnail(
     let Ok(sniffed) = sniff::sniff_header(&bytes) else {
         return Ok(None);
     };
-    if !sniffed.kind.decodable() {
+    if !sniffed.kind.can_passthrough() {
         return Ok(None);
     }
     let orientation = if sniffed.kind == ImageKind::Jpeg {
@@ -202,9 +203,7 @@ pub async fn get_thumbnail(spec: ThumbSpec, cache: &std::path::Path) -> Result<T
         cache
     };
     let head = read_head(&spec.path).await;
-    let sniffed = sniff::sniff_header(&head)
-        .ok()
-        .filter(|s| s.kind.decodable());
+    let sniffed = sniff::sniff_header(&head).ok();
 
     match sniffed {
         Some(s) => get_image_thumbnail(&spec, head, s, cache).await,
@@ -233,7 +232,9 @@ async fn get_image_thumbnail(
     let (tw, th) = target_size(uw, uh, spec.w, spec.h, spec.center_crop);
 
     // Passthrough: already thumbnail-sized, browser-renderable, small.
-    if original_fits(uw, uh, spec.w, spec.h, spec.center_crop, spec.file_size) {
+    if s.kind.can_passthrough()
+        && original_fits(uw, uh, spec.w, spec.h, spec.center_crop, spec.file_size)
+    {
         let data = tokio::fs::read(&spec.path).await?;
         return Ok(ThumbOutcome::Original {
             data: Bytes::from(data),
@@ -250,11 +251,12 @@ async fn get_image_thumbnail(
         spec.mod_unix,
         spec.file_size,
     );
-    let cache_path = if s.kind == ImageKind::Png {
-        cache_path.with_extension("png")
-    } else {
-        cache_path
-    };
+    let cache_path =
+        if s.kind == ImageKind::Png || (s.kind == ImageKind::Bmp && bmp::has_alpha(&head)) {
+            cache_path.with_extension("png")
+        } else {
+            cache_path
+        };
     let key = cache_path.to_string_lossy().into_owned();
 
     // Hot LRU, then file cache.
@@ -332,11 +334,12 @@ async fn generate_and_cache(
             let (w, h) = crop.unwrap_or((rw, rh));
             let bm = scale::resize_to(bm, w, h);
             let bm = bm.apply_orientation(Orientation(orientation));
-            let jpg = if s.kind == ImageKind::Png {
-                encode::encode_png(bm)?
-            } else {
-                encode::encode_jpeg(bm, quality)?
-            };
+            let jpg =
+                if s.kind == ImageKind::Png || (s.kind == ImageKind::Bmp && bm.channels() == 4) {
+                    encode::encode_png(bm)?
+                } else {
+                    encode::encode_jpeg(bm, quality)?
+                };
             let _ = write_thumb_cache(&cp, &jpg);
             Ok(jpg)
         })
@@ -367,6 +370,9 @@ fn decode_to_target(
         return Ok(scale::crop_for_fill(bitmap, crop));
     }
     let p = std::path::Path::new(path);
+    if s.kind == ImageKind::Bmp {
+        return bmp::thumbnail(p, rw, rh, crop);
+    }
     if s.kind == ImageKind::Jpeg
         && dc_fast_eligible(s, rw, rh)
         && let Ok(bm) = pjpeg::decode_thumbnail(head, p, crop)

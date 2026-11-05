@@ -75,7 +75,7 @@ fn sniff_png_gif_bmp_webp_vp8x() {
     bmp.extend_from_slice(&600i32.to_le_bytes());
     let s = sniff_header(&bmp).unwrap();
     assert_eq!((s.kind, s.width, s.height), (ImageKind::Bmp, 800, 600));
-    assert!(!s.kind.decodable());
+    assert!(!s.kind.can_passthrough());
 
     let mut webp = b"RIFF\x00\x00\x00\x00WEBPVP8X".to_vec();
     webp.extend_from_slice(&[0u8; 4]); // flags

@@ -1,5 +1,33 @@
 use super::*;
 
+#[cfg(feature = "media")]
+#[test]
+fn local_bmp_uses_shared_rust_decoding_and_the_shared_cache_on_every_host() {
+    let mut request = Request {
+        path: std::env::temp_dir()
+            .join("image.BMP")
+            .to_string_lossy()
+            .into_owned(),
+        width: 256,
+        height: 256,
+        center_crop: true,
+        file_id: "catalog-id".into(),
+        access_order: None,
+        file_name: "image.BMP".into(),
+    };
+    assert!(uses_rust_bmp_decoder(&request));
+    assert!(!uses_system_thumbnail(&request));
+    for path in [
+        "content://images/one.bmp",
+        "ph://one.bmp",
+        "relative.bmp",
+        "image.jpg",
+    ] {
+        request.path = path.into();
+        assert!(!uses_rust_bmp_decoder(&request));
+    }
+}
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[test]
 fn native_catalog_ids_do_not_select_the_sdk_thumbnail_route() {

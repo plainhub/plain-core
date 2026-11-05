@@ -137,6 +137,9 @@ fn clamp_request(sw: u32, sh: u32, tw: u32, th: u32) -> (u32, u32) {
 pub fn image_full(path: &std::path::Path) -> Result<Bitmap> {
     let mut reader = image::ImageReader::open(path)?;
     reader = reader.with_guessed_format()?;
+    if reader.format() == Some(image::ImageFormat::Bmp) {
+        return super::bmp::decode_reader(reader.into_inner());
+    }
     reader.no_limits();
     let img = reader.decode().map_err(anyhow::Error::from)?;
     Ok(Bitmap::from_dynamic(img))
@@ -149,6 +152,9 @@ pub fn image_from_bytes(data: &[u8]) -> Result<Bitmap> {
     }
     let mut reader = image::ImageReader::new(std::io::Cursor::new(data));
     reader = reader.with_guessed_format()?;
+    if reader.format() == Some(image::ImageFormat::Bmp) {
+        return super::bmp::decode_reader(reader.into_inner());
+    }
     reader.no_limits();
     let img = reader.decode().map_err(anyhow::Error::from)?;
     Ok(Bitmap::from_dynamic(img))

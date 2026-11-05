@@ -133,6 +133,101 @@ async fn fs_animated_png_preserves_frames_for_both_extensions_and_preview_sizes(
 }
 
 #[tokio::test]
+async fn fs_bmp_previews_decode_and_downloads_keep_original_bytes() {
+    let (_root, _core, state, key) = test_state();
+    let files = tempfile::tempdir().unwrap();
+    let original = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../plain-rs/testdata/bmp/rgb24.bmp"
+    ));
+    let path = files.path().join("photo.bmp");
+    std::fs::write(&path, original).unwrap();
+    let id = file_id(&key, path.to_str().unwrap());
+    let response = call_fs(&state, &format!("id={id}"), &[]).await;
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "image/bmp");
+    assert_eq!(body_bytes(response).await, original);
+    for options in ["&s=sm", "&s=lg"] {
+        let response = call_fs(&state, &format!("id={id}{options}"), &[]).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = body_bytes(response).await;
+        let decoded = image::load_from_memory(&bytes).unwrap();
+        assert!(decoded.width() > 0 && decoded.height() > 0);
+        assert_eq!(
+            call_fs(&state, &format!("id={id}{options}"), &[])
+                .await
+                .status(),
+            StatusCode::OK
+        );
+    }
+    let response = call_fs(&state, &format!("id={id}&s=sm&dl=1"), &[]).await;
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "image/bmp");
+    assert_eq!(body_bytes(response).await, original);
+    assert_eq!(
+        state
+            .thumbnails
+            .native_decodes
+            .load(std::sync::atomic::Ordering::Relaxed),
+        2
+    );
+}
+
+#[tokio::test]
+async fn fs_bmp_alpha_survives_preview_cropping_and_cached_requests() {
+    let (_root, _core, state, key) = test_state();
+    let files = tempfile::tempdir().unwrap();
+    let original = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../plain-rs/testdata/bmp/alpha32.bmp"
+    ));
+    let path = files.path().join("alpha.BMP");
+    std::fs::write(&path, original).unwrap();
+    let id = file_id(&key, path.to_str().unwrap());
+    for size in ["sm", "lg"] {
+        let query = format!("id={id}&s={size}");
+        let response = call_fs(&state, &query, &[]).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "image/png");
+        let etag = response.headers()[header::ETAG]
+            .to_str()
+            .unwrap()
+            .to_owned();
+        let bytes = body_bytes(response).await;
+        let decoded = image::load_from_memory(&bytes).unwrap().into_rgba8();
+        if size == "lg" {
+            assert_eq!(
+                decoded.into_raw(),
+                [255, 0, 0, 0, 0, 255, 0, 128, 0, 0, 255, 255]
+            );
+        } else {
+            assert!(decoded.pixels().all(|pixel| pixel[3] == 128));
+        }
+        let cached = call_fs(&state, &query, &[]).await;
+        assert_eq!(body_bytes(cached).await, bytes);
+        let conditional = call_fs(&state, &query, &[(&header::IF_NONE_MATCH, &etag)]).await;
+        assert_eq!(conditional.status(), StatusCode::NOT_MODIFIED);
+    }
+    let original_response = call_fs(
+        &state,
+        &format!("id={id}&dl=1&s=sm"),
+        &[range_header("bytes=0-5")],
+    )
+    .await;
+    assert_eq!(original_response.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(
+        original_response.headers()[header::CONTENT_TYPE],
+        "image/bmp"
+    );
+    assert_eq!(body_bytes(original_response).await, &original[..6]);
+    assert_eq!(
+        state
+            .thumbnails
+            .native_decodes
+            .load(std::sync::atomic::Ordering::Relaxed),
+        2
+    );
+}
+
+#[tokio::test]
 async fn fs_range_serves_206_with_content_range() {
     let (_root, _core, state, key) = test_state();
     let (_dir, id) = temp_bin(&key);

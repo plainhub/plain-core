@@ -4,6 +4,13 @@ pub fn uses_system_thumbnail(request: &Request) -> bool {
     cfg!(any(target_os = "android", target_os = "ios"))
         && !request.file_id.is_empty()
         && request.width <= 512
+        && !uses_rust_bmp_decoder(request)
+}
+
+pub(super) fn uses_rust_bmp_decoder(request: &Request) -> bool {
+    cfg!(feature = "media")
+        && std::path::Path::new(&request.path).is_absolute()
+        && plain_libs::utils::mime::mime_from_ext(&request.path) == "image/bmp"
 }
 
 pub async fn native(
