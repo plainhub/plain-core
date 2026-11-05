@@ -50,6 +50,41 @@ fn range_header(v: &str) -> (&'static HeaderName, &str) {
 }
 
 #[tokio::test]
+async fn fs_icons_return_original_bytes_for_all_preview_sizes() {
+    let (_root, _core, state, key) = test_state();
+    let files = tempfile::tempdir().unwrap();
+    let original = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../assets/web/favicon.ico"
+    ));
+    for name in ["favicon.ico", "favicon.ICO"] {
+        let path = files.path().join(name);
+        std::fs::write(&path, original).unwrap();
+        let id = file_id(&key, path.to_str().unwrap());
+        for size in ["", "&s=sm", "&s=lg"] {
+            for download in [false, true] {
+                let query = format!("id={id}{size}&dl={}", u8::from(download));
+                let response = call_fs(&state, &query, &[]).await;
+                assert_eq!(response.status(), StatusCode::OK, "{name}{size}");
+                assert_eq!(response.headers()[header::CONTENT_TYPE], "image/x-icon");
+                assert_eq!(
+                    response.headers()[header::CONTENT_DISPOSITION]
+                        .to_str()
+                        .unwrap()
+                        .starts_with("attachment;"),
+                    download
+                );
+                assert_eq!(body_bytes(response).await, original);
+                let response = call_fs(&state, &query, &[range_header("bytes=0-5")]).await;
+                assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+                assert_eq!(response.headers()[header::CONTENT_TYPE], "image/x-icon");
+                assert_eq!(body_bytes(response).await, &original[..6]);
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn fs_range_serves_206_with_content_range() {
     let (_root, _core, state, key) = test_state();
     let (_dir, id) = temp_bin(&key);

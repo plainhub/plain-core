@@ -183,7 +183,7 @@ pub async fn read(
                 .collect(),
         ));
     }
-    if !options.download {
+    if !options.download && mime != "image/x-icon" {
         let animated = if mime.starts_with("image/") {
             crate::features::services::files::resources::read(
                 &state.host,
