@@ -12,6 +12,7 @@ use std::sync::Arc;
 pub struct DbTableInfo {
     #[graphql(name = "idKey")]
     pub id_key: String,
+    pub create_sql: String,
 }
 
 #[derive(SimpleObject, Clone, Debug, Default)]
@@ -131,11 +132,13 @@ impl DbQuery {
         if !has_path(&file) {
             return Ok(DbTableInfo {
                 id_key: "id".to_string(),
+                create_sql: String::new(),
             });
         }
         spawn(move || {
             Ok(DbTableInfo {
                 id_key: file.table_id_key(&table)?,
+                create_sql: file.table_create_sql(&table)?,
             })
         })
         .await

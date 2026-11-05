@@ -17,6 +17,7 @@ type DbTableColumn {
 
 type DbTableInfo {
 	idKey: String!
+	createSql: String!
 }
 
 extend type Mutation {

@@ -141,3 +141,19 @@ fn delete_removes_only_named_rows() {
 
     assert!(delete_table_rows(&db, "tags", &[]).is_err());
 }
+
+#[test]
+fn table_create_sql_preserves_constraints_and_rejects_unknown_tables() {
+    let db = dbs("create-sql");
+    let sql = "CREATE TABLE checked_rows (
+    file_id TEXT NOT NULL PRIMARY KEY CHECK(length(file_id)>0),
+    sort_order INTEGER NOT NULL CHECK(sort_order>=0)
+)";
+    db.with_conn(|conn| conn.execute_batch(sql).unwrap());
+    let path = db.with_conn(|conn| conn.path().unwrap().to_string());
+    let file = SqliteFile::new(path);
+    assert_eq!(file.table_create_sql("checked_rows").unwrap(), sql);
+    for table in ["missing", "checked_rows' OR 1=1 --"] {
+        assert!(file.table_create_sql(table).is_err());
+    }
+}

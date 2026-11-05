@@ -23,7 +23,7 @@ fn fixture() -> (tempfile::TempDir, PublicSchema) {
 #[tokio::test]
 async fn owned_database_browser_works_without_a_connected_host() {
     let (dir, schema) = fixture();
-    let response=schema.execute(r#"{dbPath dbTables dbTableInfo(table:"test_rows"){idKey} dbTableRowCount(table:"test_rows") dbTableColumns(table:"test_rows"){name dataType notNull defaultValue primaryKey} dbTableRows(table:"test_rows",offset:1,limit:1)}"#).await;
+    let response=schema.execute(r#"{dbPath dbTables dbTableInfo(table:"test_rows"){idKey createSql} dbTableRowCount(table:"test_rows") dbTableColumns(table:"test_rows"){name dataType notNull defaultValue primaryKey} dbTableRows(table:"test_rows",offset:1,limit:1)}"#).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(
@@ -42,6 +42,10 @@ async fn owned_database_browser_works_without_a_connected_host() {
             .contains(&json!("test_rows"))
     );
     assert_eq!(data["dbTableInfo"]["idKey"], "key");
+    assert_eq!(
+        data["dbTableInfo"]["createSql"],
+        "CREATE TABLE test_rows (key TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT 'untitled', size INTEGER, ratio REAL, bytes BLOB)"
+    );
     assert_eq!(data["dbTableRowCount"], 2);
     let columns = data["dbTableColumns"].as_array().unwrap();
     assert_eq!(columns[0]["dataType"], "TEXT");

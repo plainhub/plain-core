@@ -96,6 +96,16 @@ impl SqliteFile {
         Ok(browse::table_columns(&conn, table))
     }
 
+    pub fn table_create_sql(&self, table: &str) -> Result<String> {
+        let conn = self.open()?;
+        self.checked(&conn, table)?;
+        Ok(conn.query_row(
+            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
+            [table],
+            |row| row.get(0),
+        )?)
+    }
+
     pub fn table_id_key(&self, table: &str) -> Result<String> {
         let conn = self.open()?;
         self.checked(&conn, table)?;
