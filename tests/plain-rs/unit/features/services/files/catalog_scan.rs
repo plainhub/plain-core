@@ -4,7 +4,7 @@ use super::*;
 #[tokio::test]
 async fn file_scan_cancel_aborts_pending_reads_and_keeps_catalog_unchanged() {
     use crate::features::services::files::media_scans::Status;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = directory_scan_fixture();
     let path = directory.path().join("report.txt");
     std::fs::write(&path, "document").unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
@@ -69,7 +69,7 @@ async fn file_scan_cancel_aborts_pending_reads_and_keeps_catalog_unchanged() {
 #[tokio::test]
 async fn aborted_scan_future_releases_the_shared_job_and_failed_scans_report_partial_progress() {
     use crate::features::services::files::media_scans::Status;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = directory_scan_fixture();
     let path = directory.path().join("report.txt");
     std::fs::write(&path, "document").unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
@@ -155,7 +155,7 @@ async fn directory_scan_cancellation_preserves_basic_facts_before_metadata() {
     catalog.cancel_file_scan().unwrap();
     let result = worker.await.unwrap().unwrap();
     assert_eq!(result.status, Status::Cancelled);
-    assert_eq!(result.processed_files, 1);
+    assert_eq!(result.processed_files, 0);
     assert_eq!(
         catalog
             .count(crate::features::enums::DataType::Doc)
@@ -197,7 +197,7 @@ async fn directory_scan_cancellation_after_discovery_preserves_all_basic_facts()
     catalog.cancel_file_scan().unwrap();
     let result = worker.await.unwrap().unwrap();
     assert_eq!(result.status, Status::Cancelled);
-    assert_eq!(result.processed_files, 96);
+    assert_eq!(result.processed_files, 0);
     assert_eq!(result.total_files, Some(96));
     assert!(requests.try_recv().is_err());
     assert_eq!(
@@ -243,13 +243,13 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
         async move { catalog.scan_source_directories("/").await }
     });
     let mut session_id = None;
-    for _ in 0..2 {
+    for indexed in 0..2 {
         tokio::time::timeout(std::time::Duration::from_secs(5), gate.0.notified())
             .await
             .unwrap();
         let snapshot = catalog.file_scan_status().unwrap().unwrap();
         assert_eq!(snapshot.status, Status::Running);
-        assert_eq!(snapshot.processed_files, 2);
+        assert_eq!(snapshot.processed_files, indexed);
         assert_eq!(snapshot.total_files, Some(2));
         if let Some(id) = &session_id {
             assert_eq!(*id, snapshot.id);
@@ -422,6 +422,9 @@ async fn basic_catalog_is_searchable_before_a_blocked_media_probe() {
     .unwrap();
     assert_eq!(rows.as_array().unwrap().len(), 1);
     assert_eq!(catalog.count(DataType::Doc).unwrap(), 1);
+    let progress = catalog.file_scan_status().unwrap().unwrap();
+    assert_eq!(progress.total_files, Some(2));
+    assert_eq!(progress.processed_files, 1);
     gate.1.add_permits(1);
     assert_eq!(
         worker.await.unwrap().unwrap().status,
@@ -803,7 +806,10 @@ async fn sdk_mount_initializes_default_index_root_before_startup_scan() {
 async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying() {
     use serde_json::json;
     let directory = directory_scan_fixture();
-    let folders: Vec<_> = ["Documents", "Music"].into_iter().map(|name| directory.path().join(name)).collect();
+    let folders: Vec<_> = ["Documents", "Music"]
+        .into_iter()
+        .map(|name| directory.path().join(name))
+        .collect();
     let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata");
     for folder in &folders {
         std::fs::create_dir(folder).unwrap();
@@ -815,9 +821,14 @@ async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying
     let core = crate::test_runtime::Core::open(&directory.path().join("private")).unwrap();
     let state = core.runtime_state();
     state.file_platform.use_sdk_for_test();
-    state.media_scans.set_defaults(crate::features::prefs::file_index::Defaults {
-        scan_directories: vec![], excluded_directories: vec![], excluded_names: vec![],
-    }).unwrap();
+    state
+        .media_scans
+        .set_defaults(crate::features::prefs::file_index::Defaults {
+            scan_directories: vec![],
+            excluded_directories: vec![],
+            excluded_names: vec![],
+        })
+        .unwrap();
     let grants = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let shared = grants.clone();
     let (generation, mut requests) = state.host.connect();
@@ -826,16 +837,27 @@ async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying
         while let Some(request) = requests.recv().await {
             let result = match request["method"].as_str().unwrap() {
                 "systemCapabilities" => json!(["MEDIA_SCAN"]),
-                "systemMountFacts" => json!(shared.lock().unwrap().iter().map(|path| json!({"path":path,"driveType":"INTERNAL_STORAGE"})).collect::<Vec<_>>()),
+                "systemMountFacts" => json!(
+                    shared
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .map(|path| json!({"path":path,"driveType":"INTERNAL_STORAGE"}))
+                        .collect::<Vec<_>>()
+                ),
                 "systemAccessFacts" => json!({"granted":{"FILES":true}}),
                 method => panic!("Unexpected host request: {method}"),
             };
-            host.reply(generation, json!({"id":request["id"],"result":result})).unwrap();
+            host.reply(generation, json!({"id":request["id"],"result":result}))
+                .unwrap();
         }
     });
     let catalog = NativeMediaCatalog::new(state.clone());
     for indices in [vec![0], vec![0, 1], vec![1]] {
-        *grants.lock().unwrap() = indices.iter().map(|index| folders[*index].to_string_lossy().into_owned()).collect();
+        *grants.lock().unwrap() = indices
+            .iter()
+            .map(|index| folders[*index].to_string_lossy().into_owned())
+            .collect();
         access_changed(state.clone(), generation).await.unwrap();
         state.media_scans.wait_background().await.unwrap();
         let expected = indices.len() as i64;
@@ -843,9 +865,164 @@ async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying
             assert_eq!(catalog.count(kind).unwrap(), expected, "{kind:?}");
         }
     }
-    assert_eq!(std::fs::read(folders[0].join("audio-tagged.mp3")).unwrap(), std::fs::read(fixtures.join("audio-tagged.mp3")).unwrap());
+    assert_eq!(
+        std::fs::read(folders[0].join("audio-tagged.mp3")).unwrap(),
+        std::fs::read(fixtures.join("audio-tagged.mp3")).unwrap()
+    );
     assert!(folders[0].join("document.pdf").is_file());
     state.host.disconnect(generation);
     responder.await.unwrap();
+    core.stop_core().await;
+}
+
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
+    let directory = directory_scan_fixture();
+    let root = directory.path().join("source");
+    for folder in [
+        "keep",
+        "target",
+        "node_modules",
+        ".hidden",
+        "excluded",
+        "reports",
+        "data",
+        "repository/.git",
+        "linked",
+        "archive.git/objects",
+        "archive.git/refs",
+    ] {
+        std::fs::create_dir_all(root.join(folder)).unwrap();
+        std::fs::write(root.join(folder).join("sample.rs"), b"source").unwrap();
+    }
+    std::fs::write(root.join("visible.txt"), b"document").unwrap();
+    std::fs::write(root.join(".hidden-file.rs"), b"hidden").unwrap();
+    std::fs::write(root.join("repository/source.rs"), b"source").unwrap();
+    std::fs::write(
+        root.join("linked/.git"),
+        b"gitdir: ../repository/.git/worktrees/linked\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("archive.git/HEAD"), b"ref: refs/heads/main\n").unwrap();
+
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let mut defaults = crate::features::prefs::file_index::defaults();
+    defaults.scan_directories = vec![root.to_string_lossy().into_owned()];
+    state.media_scans.set_defaults(defaults).unwrap();
+    state
+        .prefs
+        .set(
+            crate::features::prefs::pref_keys::FILE_INDEX_EXCLUDED_DIRS,
+            vec![root.join("excluded").to_string_lossy().into_owned()],
+        )
+        .unwrap();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    catalog
+        .set_source_directories(&[root.to_string_lossy().into_owned()])
+        .unwrap();
+    catalog.configure_scan_directories(None).unwrap();
+    let mut previous = Vec::new();
+    for name in ["repository/previous.rs", ".previous.rs"] {
+        let path = root.join(name);
+        std::fs::write(&path, b"previous").unwrap();
+        previous.push(
+            state
+                .db
+                .record_file_paths(&[path.to_string_lossy().into_owned()], None)
+                .unwrap()
+                .remove(0),
+        );
+        std::fs::remove_file(&path).unwrap();
+    }
+    let mut events = state.events.subscribe();
+    let result = catalog
+        .scan_directory(root.to_str().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(result.total_files, Some(4));
+    assert_eq!(result.processed_files, 4);
+    let mut counted = false;
+    let mut indexed = false;
+    while let Ok(event) = events.try_recv() {
+        if event.event_type != crate::infrastructure::events::MEDIA_SCAN_PROGRESS {
+            continue;
+        }
+        let progress: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+        if progress["total"] == 4 && progress["indexed"] == 0 {
+            counted = true;
+        }
+        if progress["indexed"].as_u64().unwrap() > 0 {
+            assert!(
+                counted,
+                "Indexing started before counting completed: {progress}"
+            );
+            assert_eq!(progress["total"], 4);
+            indexed = true;
+        }
+    }
+    assert!(counted && indexed);
+    assert_eq!(
+        state
+            .db
+            .with_conn(|c| c.query_row(
+                "SELECT COUNT(*) FROM files WHERE kind != 'DIRECTORY'",
+                [],
+                |r| r.get::<_, i64>(0)
+            ))
+            .unwrap(),
+        6
+    );
+    for previous in previous {
+        let preserved = state.db.file(&previous.id).unwrap().unwrap();
+        assert_eq!(preserved.updated_at, previous.updated_at);
+        assert!(!preserved.missing);
+    }
+    assert!(
+        crate::features::services::files::native_scan::completed(
+            &state.db,
+            &state.media_scans,
+            &state.directory,
+            vec![
+                root.join("repository/source.rs")
+                    .to_string_lossy()
+                    .into_owned(),
+                root.join(".hidden-file.rs").to_string_lossy().into_owned(),
+            ],
+        )
+        .await
+        .unwrap()
+        .is_empty()
+    );
+    core.stop_core().await;
+}
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn watcher_reconciliation_does_not_restart_a_cancelled_scan() {
+    use crate::features::services::files::media_scans::Status;
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    catalog.set_source_directories(&[]).unwrap();
+    let active = state.media_scans.begin(10).unwrap();
+    let id = state.media_scans.snapshot().unwrap().unwrap().id;
+    let reconcile = catalog.apply_watch_event(notify::Event::new(notify::EventKind::Other));
+    tokio::pin!(reconcile);
+    assert!(futures_util::poll!(reconcile.as_mut()).is_pending());
+    catalog.cancel_file_scan().unwrap();
+    active.finish(Err("Media scan cancelled".into())).unwrap();
+    reconcile.await.unwrap();
+    let stopped = state.media_scans.snapshot().unwrap().unwrap();
+    assert_eq!(stopped.id, id);
+    assert_eq!(stopped.status, Status::Cancelled);
+    catalog
+        .apply_watch_event(notify::Event::new(notify::EventKind::Other))
+        .await
+        .unwrap();
+    assert_ne!(state.media_scans.snapshot().unwrap().unwrap().id, id);
     core.stop_core().await;
 }

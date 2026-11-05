@@ -1,3 +1,6 @@
+#[cfg(feature = "runtime-media")]
+mod directory_walk;
+
 use crate::features::enums::DataType;
 use crate::infrastructure::db::MediaFileMetadata;
 use crate::infrastructure::db::MediaFileRow;
@@ -145,6 +148,9 @@ impl NativeMediaCatalog {
             crate::features::services::files::file_access::resolve_native(&self.state, reference)
                 .await
                 .map_err(|error| error.to_string())?;
+        if crate::features::media::catalog_paths::scan_excluded_root(&path).is_some() {
+            return Err("File excluded from scanning".into());
+        }
         let metadata = tokio::task::spawn_blocking(move || {
             crate::features::media::file_facts::read_file_metadata_with_availability(
                 &path, data_type,
@@ -167,6 +173,15 @@ impl NativeMediaCatalog {
             .media_type_str()
             .ok_or("Unsupported media catalog type")?;
         let policy = self.state.media_scans.policy()?;
+        let references = references
+            .into_iter()
+            .filter(|path| {
+                crate::features::media::catalog_paths::scan_excluded_root(std::path::Path::new(
+                    path,
+                ))
+                .is_none()
+            })
+            .collect::<Vec<_>>();
         let session = self.state.media_scans.begin(references.len())?;
         let mut cancel = session.cancel.clone();
         let mut stop = self.state.stop.clone();
@@ -311,7 +326,9 @@ impl NativeMediaCatalog {
         use crate::features::services::files::media_watch::effect_for;
         use notify::event::{EventKind, ModifyKind, RenameMode};
         if matches!(event.kind, EventKind::Other) {
-            self.state.media_scans.wait_idle().await?;
+            if !self.state.media_scans.wait_idle().await? {
+                return Ok(());
+            }
             self.scan_directories(self.source_directories()?).await?;
             return Ok(());
         }
@@ -326,6 +343,8 @@ impl NativeMediaCatalog {
                 && destination
                     .try_exists()
                     .map_err(|error| error.to_string())?
+                && crate::features::media::catalog_paths::scan_excluded_root(source).is_none()
+                && crate::features::media::catalog_paths::scan_excluded_root(destination).is_none()
                 && self
                     .state
                     .media_scans
@@ -354,6 +373,9 @@ impl NativeMediaCatalog {
         }
         let policy = self.state.media_scans.policy()?;
         for path in event.paths {
+            if crate::features::media::catalog_paths::scan_excluded_root(&path).is_some() {
+                continue;
+            }
             if policy
                 .scope
                 .as_ref()
@@ -368,8 +390,10 @@ impl NativeMediaCatalog {
                 &policy.excluded_roots,
             );
             let effect = effect_for(&path, &event.kind, excluded);
-            if matches!(effect, Effect::Forget | Effect::RescanSubtree) {
-                self.state.media_scans.wait_idle().await?;
+            if matches!(effect, Effect::Forget | Effect::RescanSubtree)
+                && !self.state.media_scans.wait_idle().await?
+            {
+                return Ok(());
             }
             match effect {
                 Effect::Index => {
@@ -501,7 +525,9 @@ impl NativeMediaCatalog {
                 .map(|volume| std::path::PathBuf::from(volume.path))
                 .collect::<Vec<_>>();
             let mut total_files = 0usize;
+            let mut prepared_roots = Vec::new();
             let mut completed_roots = Vec::new();
+            let mut excluded_scan_roots = Vec::new();
             let mut media_queue = Vec::new();
             let mut errors = Vec::new();
             let mut discovery_failed = false;
@@ -572,6 +598,12 @@ impl NativeMediaCatalog {
                         continue;
                     }
                 };
+                if crate::features::media::catalog_paths::scan_excluded_root(&canonical_root)
+                    .is_some()
+                {
+                    session.source_state(&reference, CoverageState::Excluded, None)?;
+                    continue;
+                }
                 let current_volume = match plain_libs::platform::volumes::locate(&canonical_root) {
                     Ok(location) => location.volume,
                     Err(error) => {
@@ -595,74 +627,57 @@ impl NativeMediaCatalog {
                     errors.push(error);
                     continue;
                 }
-                let (send, mut receive) =
-                    tokio::sync::mpsc::channel::<(DataType, std::path::PathBuf)>(32);
-                let directory = tokio::fs::canonicalize(&self.state.directory)
-                    .await
-                    .map_err(|error| error.to_string())?;
-                let policy = policy.clone();
-                let cancelled = worker_cancel.clone();
-                let stopped = worker_stop.clone();
-                let producer_root = canonical_root.clone();
-                let producer = tokio::task::spawn_blocking(move || -> Result<usize, String> {
-                    let mut discovered = 0;
-                    plain_libs::file_walk::walk_entries(
-                        &producer_root,
-                        |path| {
-                            path.to_str().is_some_and(|path| {
-                                policy.scope.as_ref().map_or_else(
-                                    || {
-                                        crate::features::media::catalog_paths::is_file_excluded_at(
-                                            path,
-                                            &directory,
-                                            &policy.cache_directory,
-                                            &policy.excluded_roots,
-                                        )
-                                    },
-                                    |scope| !scope.contains(std::path::Path::new(path)),
-                                )
-                            })
-                        },
-                        || {
-                            *cancelled.borrow()
-                                || cancelled.has_changed().is_err()
-                                || *stopped.borrow()
-                                || stopped.has_changed().is_err()
-                        },
-                        |path| {
-                            let name = path.to_str().ok_or_else(|| {
-                                anyhow::anyhow!("Invalid media file path encoding")
-                            })?;
-                            let kind = crate::features::media::catalog_paths::infer_type(name);
-                            let data_type = if path.is_file()
-                                && !crate::features::media::catalog_paths::is_media_excluded_at(
-                                    name,
-                                    &directory,
-                                    &policy.cache_directory,
-                                    &policy.excluded_roots,
-                                ) {
-                                [
-                                    DataType::Audio,
-                                    DataType::Video,
-                                    DataType::Image,
-                                    DataType::Doc,
-                                ]
-                                .into_iter()
-                                .find(|data_type| data_type.media_type_str() == Some(kind))
-                                .unwrap_or(DataType::File)
-                            } else {
-                                DataType::File
-                            };
-                            send.blocking_send((data_type, path.to_owned()))
-                                .map_err(|_| anyhow::anyhow!("File scan receiver closed"))?;
-                            discovered += usize::from(path.is_file());
-                            Ok(())
-                        },
-                    )
-                    .map_err(|error| error.to_string())?;
-                    Ok(discovered)
-                });
-                while let Some((data_type, path)) = receive.recv().await {
+                prepared_roots.push((reference, canonical_root));
+            }
+            let directory = tokio::fs::canonicalize(&self.state.directory)
+                .await
+                .map_err(|error| error.to_string())?;
+            let mut counted_roots = Vec::new();
+            for (reference, root) in prepared_roots {
+                let (mut receive, producer) = directory_walk::entries(
+                    root.clone(),
+                    directory.clone(),
+                    policy.clone(),
+                    worker_cancel.clone(),
+                    worker_stop.clone(),
+                );
+                let mut total = 0usize;
+                while let Some(path) = receive.recv().await {
+                    session.wait_running().await?;
+                    total = total
+                        .checked_add(usize::from(path.is_file()))
+                        .ok_or("Media scan file count overflow")?;
+                }
+                match producer.await.map_err(|error| error.to_string())? {
+                    Ok(roots) => excluded_scan_roots.extend(roots),
+                    Err(error) => {
+                        session.source_state(
+                            &reference,
+                            CoverageState::Failed,
+                            Some(error.clone()),
+                        )?;
+                        discovery_failed = true;
+                        errors.push(error);
+                        continue;
+                    }
+                }
+                total_files = total_files
+                    .checked_add(total)
+                    .ok_or("Media scan file count overflow")?;
+                counted_roots.push((reference, root));
+            }
+            if !discovery_failed {
+                session.discovered(total_files)?;
+            }
+            for (reference, canonical_root) in counted_roots {
+                let (mut receive, producer) = directory_walk::entries(
+                    canonical_root.clone(),
+                    directory.clone(),
+                    policy.clone(),
+                    worker_cancel.clone(),
+                    worker_stop.clone(),
+                );
+                while let Some(path) = receive.recv().await {
                     session.wait_running().await?;
                     let actual = match tokio::fs::canonicalize(&path).await {
                         Ok(path) => path,
@@ -679,47 +694,66 @@ impl NativeMediaCatalog {
                         .ok_or("Invalid file path encoding")?
                         .to_owned();
                     let file_count = usize::from(actual.is_file());
+                    let kind = crate::features::media::catalog_paths::infer_type(&path);
+                    let data_type = if file_count > 0
+                        && !crate::features::media::catalog_paths::is_media_excluded_at(
+                            &path,
+                            &directory,
+                            &policy.cache_directory,
+                            &policy.excluded_roots,
+                        ) {
+                        [
+                            DataType::Audio,
+                            DataType::Video,
+                            DataType::Image,
+                            DataType::Doc,
+                        ]
+                        .into_iter()
+                        .find(|data_type| data_type.media_type_str() == Some(kind))
+                        .unwrap_or(DataType::File)
+                    } else {
+                        DataType::File
+                    };
                     let kind = crate::infrastructure::db::FileKind::try_from(data_type)
                         .map_err(|error| error.to_string())?;
                     session
-                        .record_when_running(file_count, || {
-                            let rows = self
-                                .state
-                                .db
-                                .record_file_paths(&[path], Some(kind))
-                                .map_err(|error| error.to_string())?;
-                            self.state.media_scans.publish_catalog_types(
-                                rows.iter().map(|row| row.kind.data_type().kind()),
-                            );
-                            Ok(())
-                        })
+                        .record_when_running(
+                            if data_type == DataType::File {
+                                file_count
+                            } else {
+                                0
+                            },
+                            || {
+                                let rows = self
+                                    .state
+                                    .db
+                                    .record_file_paths(&[path], Some(kind))
+                                    .map_err(|error| error.to_string())?;
+                                self.state.media_scans.publish_catalog_types(
+                                    rows.iter().map(|row| row.kind.data_type().kind()),
+                                );
+                                Ok(())
+                            },
+                        )
                         .await?;
                     if data_type != DataType::File {
                         media_queue.push((data_type, actual));
                     }
                 }
-                let total = match producer.await.map_err(|error| error.to_string())? {
-                    Ok(total) => total,
+                match producer.await.map_err(|error| error.to_string())? {
+                    Ok(roots) => excluded_scan_roots.extend(roots),
                     Err(error) => {
                         session.source_state(
                             &reference,
                             CoverageState::Failed,
                             Some(error.clone()),
                         )?;
-                        discovery_failed = true;
                         errors.push(error);
                         continue;
                     }
                 };
                 session.source_state(&reference, CoverageState::Completed, None)?;
                 completed_roots.push(canonical_root);
-
-                total_files = total_files
-                    .checked_add(total)
-                    .ok_or("Media scan file count overflow")?;
-            }
-            if !discovery_failed {
-                session.discovered(total_files)?;
             }
             for (data_type, path) in media_queue {
                 session.wait_running().await?;
@@ -732,7 +766,7 @@ impl NativeMediaCatalog {
                 {
                     Ok(metadata) => {
                         session
-                            .record_when_running(0, || {
+                            .record_when_running(1, || {
                                 self.persist_file_reads(&[metadata], policy.scope.as_ref())
                             })
                             .await?;
@@ -750,6 +784,16 @@ impl NativeMediaCatalog {
                     return Err("Media source became unavailable during reconciliation".into());
                 }
                 for item in self.path_identities(&root)? {
+                    if excluded_scan_roots
+                        .iter()
+                        .any(|root| std::path::Path::new(&item.path).starts_with(root))
+                        || crate::features::media::catalog_paths::scan_excluded_root(
+                            std::path::Path::new(&item.path),
+                        )
+                        .is_some()
+                    {
+                        continue;
+                    }
                     if policy
                         .scope
                         .as_ref()

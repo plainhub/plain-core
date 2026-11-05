@@ -88,7 +88,10 @@ fn enqueue_event(
         };
         event = completed;
         if !event.paths.is_empty()
-            && scope.is_some_and(|scope| event.paths.iter().all(|path| !scope.contains(path)))
+            && event.paths.iter().all(|path| {
+                crate::features::media::catalog_paths::scan_excluded_root(path).is_some()
+                    || scope.is_some_and(|scope| !scope.contains(path))
+            })
         {
             return Ok(());
         }
@@ -262,7 +265,9 @@ fn watch_tree(
     root: &Path,
     scope: Option<&crate::features::prefs::file_index::Scope>,
 ) -> Result<(), String> {
-    if !root.is_dir() || scope.is_some_and(|scope| !scope.contains(root)) {
+    if !root.is_dir()
+        || crate::features::media::catalog_paths::scan_excluded_root(root).is_some()
+        || scope.is_some_and(|scope| !scope.contains(root)) {
         return Ok(());
     }
     if cfg!(any(target_os = "macos", target_os = "windows")) {
@@ -281,7 +286,8 @@ fn watch_tree(
     let mut pending = vec![root.to_owned()];
     let mut failure = None;
     while let Some(path) = pending.pop() {
-        if scope.is_some_and(|scope| !scope.contains_entry(&path, true)) {
+        if crate::features::media::catalog_paths::scan_excluded_root(&path).is_some()
+            || scope.is_some_and(|scope| !scope.contains_entry(&path, true)) {
             continue;
         }
         if !watched.contains(&path) {

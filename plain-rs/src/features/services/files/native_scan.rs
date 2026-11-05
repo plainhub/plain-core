@@ -28,6 +28,15 @@ fn record(
     if paths.iter().any(|path| !Path::new(path).is_absolute()) {
         return Err("Absolute completed file path required".into());
     }
+    let paths = paths
+        .into_iter()
+        .filter(|path| {
+            crate::features::media::catalog_paths::scan_excluded_root(Path::new(path)).is_none()
+        })
+        .collect::<Vec<_>>();
+    if paths.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
+    }
     let policy = scans.policy()?;
     let eligible: Vec<_> = paths
         .iter()

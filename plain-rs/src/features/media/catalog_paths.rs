@@ -31,6 +31,32 @@ const EXCLUDED_DIR_NAMES: &[&str] = &["node_modules"];
 
 const PROFILE_CACHE_NAMES: &[&str] = &["cache", "caches", "gpucache", "code cache", "cachestorage"];
 
+pub fn scan_excluded_root(path: &Path) -> Option<&Path> {
+    path.ancestors()
+        .find(|ancestor| {
+            ancestor
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+                || is_native_hidden(ancestor)
+        })
+        .or_else(|| git_project_root(path))
+}
+
+pub fn git_project_root(path: &Path) -> Option<&Path> {
+    let directory = if path.is_dir() {
+        Some(path)
+    } else {
+        path.parent()
+    }?;
+    directory.ancestors().find(|directory| {
+        std::fs::metadata(directory.join(".git"))
+            .is_ok_and(|metadata| metadata.is_dir() || metadata.is_file())
+            || (directory.join("HEAD").is_file()
+                && directory.join("objects").is_dir()
+                && (directory.join("refs").is_dir() || directory.join("packed-refs").is_file()))
+    })
+}
+
 pub fn is_file_excluded_at(
     path: &str,
     data_dir: &Path,

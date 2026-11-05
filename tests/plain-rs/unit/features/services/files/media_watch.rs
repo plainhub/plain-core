@@ -386,3 +386,25 @@ fn an_inaccessible_watch_root_is_skipped_without_marking_it_watched() {
     assert!(watched.is_empty());
     assert_eq!(watcher.calls, vec![directory.path().to_owned()]);
 }
+
+
+#[test]
+fn git_project_events_are_skipped_without_disabling_other_file_events() {
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap();
+    let directory = tempfile::Builder::new()
+        .prefix("watch-scope-")
+        .tempdir_in(home)
+        .unwrap();
+    assert!(crate::features::media::catalog_paths::scan_excluded_root(directory.path()).is_none());
+    let repo = directory.path().join("project");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    let (send, mut receive) = tokio::sync::mpsc::channel(8);
+    let excluded = Event::new(EventKind::Remove(notify::event::RemoveKind::File))
+        .add_path(repo.join("file.txt"));
+    enqueue_event(&send, None, excluded).unwrap();
+    assert!(receive.try_recv().is_err());
+    let included = Event::new(EventKind::Remove(notify::event::RemoveKind::File))
+        .add_path(directory.path().join("report.txt"));
+    enqueue_event(&send, None, included.clone()).unwrap();
+    assert_eq!(receive.try_recv().unwrap().paths, included.paths);
+}

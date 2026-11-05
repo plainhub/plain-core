@@ -232,3 +232,105 @@ fn every_user_has_the_same_application_and_cloud_document_policy() {
         ));
     }
 }
+
+
+#[test]
+fn git_project_roots_cover_worktrees_submodules_and_bare_repositories() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    for name in [
+        "regular/.git",
+        "linked",
+        "bare.git/objects",
+        "bare.git/refs",
+        "plain/data",
+        "plain/reports",
+    ] {
+        std::fs::create_dir_all(root.join(name)).unwrap();
+    }
+    std::fs::write(
+        root.join("linked/.git"),
+        b"gitdir: ../regular/.git/worktrees/linked\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("bare.git/HEAD"), b"ref: refs/heads/main\n").unwrap();
+    for name in ["regular", "linked", "bare.git"] {
+        let repo = root.join(name);
+        let nested = repo.join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        let file = nested.join("file.txt");
+        std::fs::write(&file, b"data").unwrap();
+        assert_eq!(git_project_root(&repo), Some(repo.as_path()));
+        assert_eq!(git_project_root(&nested), Some(repo.as_path()));
+        assert_eq!(git_project_root(&file), Some(repo.as_path()));
+    }
+    for name in ["plain/data", "plain/reports"] {
+        assert!(git_project_root(&root.join(name)).is_none());
+    }
+}
+
+#[test]
+fn hidden_files_and_directory_descendants_are_excluded_from_scanning() {
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap();
+    let directory = tempfile::Builder::new()
+        .prefix("scan-hidden-")
+        .tempdir_in(home)
+        .unwrap();
+    let root = directory.path();
+    std::fs::create_dir(root.join(".hidden")).unwrap();
+    for name in [".hidden/file.txt", ".secret.txt", "visible.txt"] {
+        std::fs::write(root.join(name), b"data").unwrap();
+    }
+    assert_eq!(
+        scan_excluded_root(&root.join(".secret.txt")),
+        Some(root.join(".secret.txt").as_path())
+    );
+    assert_eq!(
+        scan_excluded_root(&root.join(".hidden/file.txt")),
+        Some(root.join(".hidden").as_path())
+    );
+    assert!(scan_excluded_root(&root.join("visible.txt")).is_none());
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        let file = root.join("system-hidden.txt");
+        let folder = root.join("system-hidden");
+        std::fs::write(&file, b"data").unwrap();
+        std::fs::create_dir(&folder).unwrap();
+        std::fs::write(folder.join("file.txt"), b"data").unwrap();
+        #[cfg(target_os = "macos")]
+        {
+            assert!(
+                std::process::Command::new("chflags")
+                    .arg("hidden")
+                    .arg(&file)
+                    .arg(&folder)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+        }
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::fs::MetadataExt;
+            for path in [&file, &folder] {
+                assert!(
+                    std::process::Command::new("attrib.exe")
+                        .arg("+H")
+                        .arg(path)
+                        .status()
+                        .unwrap()
+                        .success()
+                );
+                assert_ne!(
+                    std::fs::symlink_metadata(path).unwrap().file_attributes() & 0x2,
+                    0
+                );
+            }
+        }
+        assert_eq!(scan_excluded_root(&file), Some(file.as_path()));
+        assert_eq!(
+            scan_excluded_root(&folder.join("file.txt")),
+            Some(folder.as_path())
+        );
+    }
+}

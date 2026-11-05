@@ -35,17 +35,19 @@ pub fn read_files(
         let name = path
             .to_str()
             .ok_or("Invalid completed file path encoding")?;
-        if scope.map_or_else(
-            || {
-                crate::features::media::catalog_paths::is_file_excluded_at(
-                    name,
-                    &directory,
-                    cache,
-                    excluded_roots,
-                )
-            },
-            |scope| !scope.contains(&path),
-        ) {
+        if crate::features::media::catalog_paths::scan_excluded_root(&path).is_some()
+            || scope.map_or_else(
+                || {
+                    crate::features::media::catalog_paths::is_file_excluded_at(
+                        name,
+                        &directory,
+                        cache,
+                        excluded_roots,
+                    )
+                },
+                |scope| !scope.contains(&path),
+            )
+        {
             continue;
         }
         if path.is_dir()

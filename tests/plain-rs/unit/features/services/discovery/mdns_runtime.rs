@@ -221,7 +221,10 @@ async fn refused_or_cancelled_multicast_grants_leave_the_next_runtime_available(
         let core = crate::test_runtime::Core::open(directory.path()).unwrap();
         let state = core.runtime_state();
         state.prefs.set("client_id", "fixture-mdns-grant").unwrap();
-        state.prefs.set("mdns_hostname", "fixture-mdns-grant.local").unwrap();
+        state
+            .prefs
+            .set("mdns_hostname", "fixture-mdns-grant.local")
+            .unwrap();
         let first = Arc::new(Runtime::default());
         let second = Arc::new(Runtime::default());
         let (generation, mut requests) = state.host.connect();
@@ -230,21 +233,28 @@ async fn refused_or_cancelled_multicast_grants_leave_the_next_runtime_available(
             let state = state.clone();
             async move { first.initialize(&state).await }
         });
-        let request = tokio::time::timeout(std::time::Duration::from_secs(2), requests.recv()).await.unwrap().unwrap();
+        let request = tokio::time::timeout(std::time::Duration::from_secs(2), requests.recv())
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(request["method"], "mdnsMulticast");
         assert_eq!(request["params"]["acquire"], true);
         if cancelled {
             pending.abort();
             assert!(pending.await.unwrap_err().is_cancelled());
         } else {
-            state.host.reply(generation, json!({"id":request["id"],"result":false})).unwrap();
+            state
+                .host
+                .reply(generation, json!({"id":request["id"],"result":false}))
+                .unwrap();
             assert!(pending.await.unwrap().is_err());
         }
         let host = state.host.clone();
         let responder = tokio::spawn(async move {
             while let Some(request) = requests.recv().await {
                 assert_eq!(request["method"], "mdnsMulticast");
-                host.reply(generation, json!({"id":request["id"],"result":true})).unwrap();
+                host.reply(generation, json!({"id":request["id"],"result":true}))
+                    .unwrap();
             }
         });
         let result = second.initialize(&state).await;
@@ -253,6 +263,67 @@ async fn refused_or_cancelled_multicast_grants_leave_the_next_runtime_available(
         state.host.disconnect(generation);
         responder.await.unwrap();
         core.stop_core().await;
-        assert!(result.is_ok(), "A rejected or cancelled grant must not own the global runtime: {result:?}");
+        assert!(
+            result.is_ok(),
+            "A rejected or cancelled grant must not own the global runtime: {result:?}"
+        );
     }
+}
+
+#[tokio::test]
+async fn cancelled_multicast_release_leaves_the_next_runtime_available() {
+    let _runtime = TEST_LOCK.lock().await;
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    state
+        .prefs
+        .set("client_id", "fixture-mdns-release")
+        .unwrap();
+    state
+        .prefs
+        .set("mdns_hostname", "fixture-mdns-release.local")
+        .unwrap();
+    let first = Arc::new(Runtime::default());
+    let second = Arc::new(Runtime::default());
+    let (generation, mut requests) = state.host.connect();
+    let starting = tokio::spawn({
+        let first = first.clone();
+        let state = state.clone();
+        async move { first.initialize(&state).await }
+    });
+    let acquire = requests.recv().await.unwrap();
+    assert_eq!(acquire["params"]["acquire"], true);
+    state
+        .host
+        .reply(generation, json!({"id":acquire["id"],"result":true}))
+        .unwrap();
+    starting.await.unwrap().unwrap();
+    let closing = tokio::spawn({
+        let first = first.clone();
+        let host = state.host.clone();
+        async move { first.close(&host).await }
+    });
+    let release = requests.recv().await.unwrap();
+    assert_eq!(release["params"]["acquire"], false);
+    closing.abort();
+    assert!(closing.await.unwrap_err().is_cancelled());
+    assert_eq!(first.snapshot()["receiver"], false);
+    let host = state.host.clone();
+    let responder = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            host.reply(generation, json!({"id":request["id"],"result":true}))
+                .unwrap();
+        }
+    });
+    let result = second.initialize(&state).await;
+    first.close(&state.host).await;
+    second.close(&state.host).await;
+    state.host.disconnect(generation);
+    responder.await.unwrap();
+    core.stop_core().await;
+    assert!(
+        result.is_ok(),
+        "A cancelled release must not retain the global runtime: {result:?}"
+    );
 }

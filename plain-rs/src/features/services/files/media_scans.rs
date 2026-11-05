@@ -218,29 +218,43 @@ impl MediaScans {
         Ok(())
     }
 
-    pub async fn wait_idle(&self) -> Result<(), String> {
-        let Some(mut activity) = self
+    pub async fn wait_idle(&self) -> Result<bool, String> {
+        let Some((id, mut activity, cancelled)) = self
             .state
             .lock()
             .map_err(|_| "Media scan state unavailable")?
             .job
             .as_ref()
-            .map(|job| job.activity.subscribe())
+            .filter(|job| {
+                matches!(
+                    job.snapshot.status,
+                    Status::Running | Status::Paused | Status::Cancelling
+                )
+            })
+            .map(|job| {
+                (
+                    job.snapshot.id.clone(),
+                    job.activity.subscribe(),
+                    job.cancel.subscribe(),
+                )
+            })
         else {
-            return Ok(());
+            return Ok(true);
         };
         while self.snapshot()?.is_some_and(|job| {
-            matches!(
-                job.status,
-                Status::Running | Status::Paused | Status::Cancelling
-            )
+            job.id == id
+                && matches!(
+                    job.status,
+                    Status::Running | Status::Paused | Status::Cancelling
+                )
         }) {
             activity
                 .changed()
                 .await
                 .map_err(|_| "Media scan session closed")?;
         }
-        Ok(())
+        let completed = !*cancelled.borrow();
+        Ok(completed)
     }
 
     pub fn configure(
