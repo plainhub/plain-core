@@ -189,7 +189,7 @@ async fn duplicate_bmp_requests_generate_once_and_share_cached_bytes() {
     std::fs::write(&path, &bytes).unwrap();
     let spec = ThumbSpec::sanitize(path.to_str().unwrap(), 128, 128, 75, 0, bytes.len() as i64);
     let key = thumbnails::thumb_cache_path(
-        directory.path(),
+        &directory.path().join("thumbs/fit-v1-0"),
         path.to_str().unwrap(),
         128,
         128,

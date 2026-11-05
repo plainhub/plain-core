@@ -5,7 +5,9 @@ use tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClien
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypted_socket() {
-    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     tokio::time::timeout(Duration::from_secs(30), async {
         let directory = tempfile::tempdir().unwrap();
         let server = crate::server::ContentServer::open(directory.path()).unwrap();
@@ -129,6 +131,27 @@ async fn heartbeat(socket: &mut TestSocket, cipher: &mut graphql::Stream, key: &
     .unwrap();
 }
 
+async fn connected_http_clients(pem: &str, origin: &str, count: usize) -> Vec<reqwest::Client> {
+    let certificate = reqwest::Certificate::from_pem(pem.as_bytes()).unwrap();
+    let mut clients = Vec::with_capacity(count);
+    for _ in 0..count {
+        let client = reqwest::Client::builder()
+            .add_root_certificate(certificate.clone())
+            .http1_only()
+            .build()
+            .unwrap();
+        let ready = client
+            .get(format!("{origin}/__plain_server_ready"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(ready.status(), StatusCode::NO_CONTENT);
+        ready.bytes().await.unwrap();
+        clients.push(client);
+    }
+    clients
+}
+
 async fn fs_burst_and_page_cancellation(
     server: &crate::server::ContentServer,
     socket: &mut TestSocket,
@@ -183,9 +206,10 @@ async fn fs_burst_and_page_cancellation(
         .collect::<Vec<_>>();
     let gate = std::sync::Arc::new(tokio::sync::Semaphore::new(0));
     *state.thumbnails.decode_gate.lock().unwrap() = Some(gate.clone());
+    let connections = connected_http_clients(&pem, &origin, 300).await;
     let mut pending = tokio::task::JoinSet::new();
-    for id in &ids[..300] {
-        let request = http
+    for (id, connection) in ids[..300].iter().zip(&connections) {
+        let request = connection
             .get(format!("{origin}/fs"))
             .query(&[("id", id.as_str()), ("s", "sm")]);
         pending.spawn(async move { request.send().await.unwrap() });
@@ -257,14 +281,15 @@ async fn fs_burst_and_page_cancellation(
         .unwrap();
     assert_eq!(next.status(), StatusCode::OK);
     let image = image::load_from_memory(&next.bytes().await.unwrap()).unwrap();
-    assert_eq!((image.width(), image.height()), (256, 256));
+    assert_eq!((image.width(), image.height()), (256, 192));
     assert_eq!(
         state.thumbnails.native_decodes.load(Ordering::SeqCst),
         workers + 1
     );
+    let connections = connected_http_clients(&pem, &origin, 300).await;
     let mut complete = tokio::task::JoinSet::new();
-    for id in &ids[..300] {
-        let request = http
+    for (id, connection) in ids[..300].iter().zip(&connections) {
+        let request = connection
             .get(format!("{origin}/fs"))
             .query(&[("id", id.as_str()), ("s", "sm")]);
         complete.spawn(async move {
@@ -273,7 +298,7 @@ async fn fs_burst_and_page_cancellation(
             assert_eq!(response.version(), reqwest::Version::HTTP_11);
             let bytes = response.bytes().await.unwrap();
             let image = image::load_from_memory(&bytes).unwrap();
-            assert_eq!((image.width(), image.height()), (256, 256));
+            assert_eq!((image.width(), image.height()), (256, 192));
         });
     }
     while let Some(result) = complete.join_next().await {

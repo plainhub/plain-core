@@ -312,8 +312,7 @@ fn complete_dc_header_serves_the_same_pixels_without_opening_the_source() {
     );
     let header = super::super::sniff::sniff_header(&data).unwrap();
     let decoded =
-        super::super::decode_to_target("absent-source.jpg", &data, header, 8, 8, None, None)
-            .unwrap();
+        super::super::decode_to_target("absent-source.jpg", &data, header, 8, 8, None).unwrap();
     assert_same(&decoded, &expected, "DC header");
     data.drain(2..20);
     assert!(Decoder::new(&data).unwrap().decode(true, None).is_err());

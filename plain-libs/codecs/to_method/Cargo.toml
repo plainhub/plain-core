@@ -1,0 +1,22 @@
+[package]
+name = "to_method"
+version = "1.1.0"
+edition = "2018"
+license = "CC0-1.0"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/whentze/to_method"
+revision = "2561e38fb04908ac7f02f1c17c25ebbc9fb897e8"
+archive-sha256 = "c7c4ceeeca15c8384bbc3e011dbd8fccb7f068a440b752b7d9b32ceb0ca0e2e8"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[features]
+
+[dependencies]

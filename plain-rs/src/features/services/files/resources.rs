@@ -27,6 +27,25 @@ pub async fn read(
             plain_libs::utils::mime::mime_from_ext(path).into(),
         ));
     }
+    #[cfg(feature = "media")]
+    if operation == "decodePng"
+        && Path::new(path).is_absolute()
+        && matches!(
+            plain_libs::utils::mime::mime_from_ext(path),
+            "image/tiff" | "image/heic"
+        )
+    {
+        let output = params["output"]
+            .as_str()
+            .ok_or("PNG output path required")?;
+        let bytes = plain_libs::media::thumbnails::png_preview(path)
+            .await
+            .map_err(|error| error.to_string())?;
+        tokio::fs::write(output, bytes)
+            .await
+            .map_err(|error| error.to_string())?;
+        return Ok(Value::Bool(true));
+    }
     if operation == "probe" {
         let input = path.to_owned();
         let tracks = tokio::task::spawn_blocking(move || {
@@ -91,6 +110,7 @@ async fn native(operation: &str, path: &str, params: Value) -> Result<Value, Str
                         | "image/webp"
                         | "image/svg+xml"
                         | "image/bmp"
+                        | "image/avif"
                 )
             {
                 return Ok(Value::Bool(false));

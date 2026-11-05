@@ -4,13 +4,16 @@ pub fn uses_system_thumbnail(request: &Request) -> bool {
     cfg!(any(target_os = "android", target_os = "ios"))
         && !request.file_id.is_empty()
         && request.width <= 512
-        && !uses_rust_bmp_decoder(request)
+        && !uses_rust_still_decoder(request)
 }
 
-pub(super) fn uses_rust_bmp_decoder(request: &Request) -> bool {
+pub(super) fn uses_rust_still_decoder(request: &Request) -> bool {
     cfg!(feature = "media")
         && std::path::Path::new(&request.path).is_absolute()
-        && plain_libs::utils::mime::mime_from_ext(&request.path) == "image/bmp"
+        && matches!(
+            plain_libs::utils::mime::mime_from_ext(&request.path),
+            "image/bmp" | "image/tiff" | "image/avif" | "image/heic"
+        )
 }
 
 pub async fn native(
@@ -20,7 +23,6 @@ pub async fn native(
     let path = request.path.clone();
     let width = request.width.min(16384);
     let height = request.height.min(16384);
-    let crop = request.center_crop;
     tokio::task::spawn_blocking(move || {
         use image::ImageDecoder;
         let reader = image::ImageReader::open(path)
@@ -39,11 +41,13 @@ pub async fn native(
         let mut image =
             image::DynamicImage::from_decoder(decoder).map_err(|error| error.to_string())?;
         image.apply_orientation(orientation);
-        let image = if crop {
-            image.resize_to_fill(width, height, image::imageops::FilterType::Lanczos3)
-        } else {
-            image.thumbnail(width, height)
-        };
+        let (width, height) = plain_libs::media::thumbnail_limits::compute_target_size(
+            image.width(),
+            image.height(),
+            width,
+            height,
+        );
+        let image = image.thumbnail_exact(width, height);
         let mut bytes = Vec::new();
         if format == Some(image::ImageFormat::Png) {
             image

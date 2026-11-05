@@ -2,7 +2,7 @@ use super::*;
 
 #[cfg(feature = "media")]
 #[test]
-fn local_bmp_uses_shared_rust_decoding_and_the_shared_cache_on_every_host() {
+fn local_still_formats_use_shared_rust_decoding_and_the_shared_cache_on_every_host() {
     let mut request = Request {
         path: std::env::temp_dir()
             .join("image.BMP")
@@ -15,8 +15,22 @@ fn local_bmp_uses_shared_rust_decoding_and_the_shared_cache_on_every_host() {
         access_order: None,
         file_name: "image.BMP".into(),
     };
-    assert!(uses_rust_bmp_decoder(&request));
-    assert!(!uses_system_thumbnail(&request));
+    for name in [
+        "image.BMP",
+        "image.tif",
+        "image.TIFF",
+        "image.avif",
+        "image.heic",
+        "image.HEIF",
+    ] {
+        request.path = std::env::temp_dir()
+            .join(name)
+            .to_string_lossy()
+            .into_owned();
+        request.file_name = name.into();
+        assert!(uses_rust_still_decoder(&request), "{name}");
+        assert!(!uses_system_thumbnail(&request), "{name}");
+    }
     for path in [
         "content://images/one.bmp",
         "ph://one.bmp",
@@ -24,7 +38,7 @@ fn local_bmp_uses_shared_rust_decoding_and_the_shared_cache_on_every_host() {
         "image.jpg",
     ] {
         request.path = path.into();
-        assert!(!uses_rust_bmp_decoder(&request));
+        assert!(!uses_rust_still_decoder(&request));
     }
 }
 
@@ -48,7 +62,7 @@ fn native_catalog_ids_do_not_select_the_sdk_thumbnail_route() {
     not(any(target_os = "android", target_os = "ios"))
 ))]
 #[tokio::test]
-async fn core_only_thumbnail_crops_without_host_requests_or_output_tokens() {
+async fn core_only_thumbnail_preserves_aspect_without_host_requests_or_output_tokens() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("image.png");
     image::RgbImage::from_pixel(8, 4, image::Rgb([200, 100, 50]))
@@ -73,7 +87,7 @@ async fn core_only_thumbnail_crops_without_host_requests_or_output_tokens() {
         .unwrap()
         .unwrap();
     let image = image::load_from_memory(&bytes).unwrap();
-    assert_eq!((image.width(), image.height()), (2, 2));
+    assert_eq!((image.width(), image.height()), (8, 4));
     assert!(requests.try_recv().is_err());
     core.stop_core().await;
 }
@@ -134,4 +148,35 @@ async fn native_png_thumbnail_retains_transparent_and_partial_alpha() {
     assert_eq!(decoded.dimensions(), (256, 256));
     assert_eq!(decoded.get_pixel(32, 128)[3], 0);
     assert_eq!(decoded.get_pixel(224, 128)[3], 128);
+}
+
+#[tokio::test]
+async fn native_image_fit_preserves_aspect_without_enlarging_small_images() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("small.png");
+    image::RgbImage::from_pixel(8, 4, image::Rgb([200, 100, 50]))
+        .save(&path)
+        .unwrap();
+    for (width, height, dimensions) in [(2, 2, (2, 1)), (32, 32, (8, 4))] {
+        let mut first = None;
+        for center_crop in [true, false] {
+            let request = Request {
+                path: path.to_string_lossy().into_owned(),
+                width,
+                height,
+                center_crop,
+                file_id: String::new(),
+                access_order: None,
+                file_name: "small.png".into(),
+            };
+            let bytes = native(&request, directory.path()).await.unwrap().unwrap();
+            let image = image::load_from_memory(&bytes).unwrap();
+            assert_eq!((image.width(), image.height()), dimensions);
+            if let Some(expected) = &first {
+                assert_eq!(&bytes, expected);
+            } else {
+                first = Some(bytes);
+            }
+        }
+    }
 }

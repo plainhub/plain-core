@@ -4,27 +4,12 @@ use plain_rs::features::services::images::thumbnails::Request;
 use sha2::Digest;
 use std::sync::{Arc, atomic::Ordering};
 
-fn variant(base: &Request, center_crop: Option<bool>) -> Request {
-    Request {
-        center_crop: center_crop.unwrap_or(base.center_crop),
-        ..Request {
-            path: base.path.clone(),
-            width: base.width,
-            height: base.height,
-            center_crop: base.center_crop,
-            file_id: base.file_id.clone(),
-            access_order: None,
-            file_name: base.file_name.clone(),
-        }
-    }
-}
-
 fn request_for(path: &std::path::Path) -> Request {
     Request {
         path: path.to_str().unwrap().to_owned(),
-        width: 80,
-        height: 60,
-        center_crop: true,
+        width: 256,
+        height: 256,
+        center_crop: false,
         file_id: String::new(),
         access_order: None,
         file_name: String::new(),
@@ -85,7 +70,7 @@ async fn concurrent_requests_for_one_key_decode_once() {
     let (_keep, core, _cache) = dir;
     let state = core.runtime_state();
     let source = state.directory.join("source.png");
-    write_image(&source, 160, 80);
+    write_image(&source, 1600, 800);
 
     let (_generation, mut host_requests) = state.host.connect();
 
@@ -111,7 +96,8 @@ async fn concurrent_requests_for_one_key_decode_once() {
     assert_eq!(first.0, 200);
     assert_eq!(header(&first.1, "content-type"), "image/png");
     assert!(host_requests.try_recv().is_err());
-    assert_eq!(image::load_from_memory(&first.2).unwrap().width(), 256);
+    let image = image::load_from_memory(&first.2).unwrap();
+    assert_eq!((image.width(), image.height()), (256, 128));
     assert_eq!(header(&first.1, "cache-control"), "private, no-cache");
 
     core.stop_core().await;
@@ -119,34 +105,45 @@ async fn concurrent_requests_for_one_key_decode_once() {
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
-async fn a_changed_source_and_a_different_shape_both_invalidate() {
+async fn a_changed_source_and_a_different_size_both_invalidate() {
     let (_dir, core, _cache) = server_with_cache();
     let state = core.runtime_state();
     let source = state.directory.join("source.png");
-    write_image(&source, 160, 80);
+    write_image(&source, 1600, 800);
 
     let base = request_for(&source);
-    let first = render(&state, variant(&base, None)).await;
+    let first = render(&state, base.clone()).await;
     assert_eq!(first.0, 200);
 
-    let again = render(&state, variant(&base, None)).await;
+    let again = render(&state, base.clone()).await;
     assert_eq!(again, first);
     assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
+    let mut legacy = base.clone();
+    legacy.center_crop = true;
+    assert_eq!(render(&state, legacy).await, first);
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
 
-    write_image(&source, 240, 100);
-    let changed = render(&state, variant(&base, None)).await;
+    write_image(&source, 2400, 1000);
+    let changed = render(&state, base.clone()).await;
     assert_ne!(
         changed.2, first.2,
         "a changed source must not serve the old bytes"
     );
 
-    let mut cropped = variant(&base, None);
-    cropped.center_crop = false;
-    let uncropped = render(&state, cropped).await;
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 2);
+    let mut large = base.clone();
+    large.width = 1024;
+    large.height = 1024;
+    let enlarged = render(&state, large.clone()).await;
     assert_ne!(
-        uncropped.2, changed.2,
-        "center-crop is part of the cache key"
+        enlarged.2, changed.2,
+        "output bounds are part of the cache key"
     );
+    let pixels = image::load_from_memory(&enlarged.2).unwrap();
+    assert_eq!((pixels.width(), pixels.height()), (1024, 426));
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 3);
+    assert_eq!(render(&state, large).await, enlarged);
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 3);
 
     core.stop_core().await;
 }
@@ -157,37 +154,46 @@ async fn a_matching_conditional_request_answers_not_modified() {
     let (_dir, core, _cache) = server_with_cache();
     let state = core.runtime_state();
     let source = state.directory.join("source.png");
-    write_image(&source, 160, 80);
+    write_image(&source, 1600, 800);
 
     let base = request_for(&source);
-    let first = render(&state, variant(&base, None)).await;
+    let first = render(&state, base.clone()).await;
     assert_eq!(first.0, 200);
     let etag = header(&first.1, "etag");
     assert_eq!(etag, format!("\"{}\"", hex(&first.2)));
 
     let conditional = format!("\"old\", {etag}");
-    let not_modified = render_conditional(&state, variant(&base, None), Some(&conditional)).await;
+    let not_modified = render_conditional(&state, base.clone(), Some(&conditional)).await;
     assert_eq!(not_modified.0, 304);
     assert!(not_modified.2.is_empty(), "304 carries no body");
 
     let weak = format!("W/{etag}");
     assert_eq!(
-        render_conditional(&state, variant(&base, None), Some(&weak))
+        render_conditional(&state, base.clone(), Some(&weak))
             .await
             .0,
         304
     );
 
-    let mut other = variant(&base, None);
-    other.center_crop = false;
-    let other_etag = header(&render(&state, variant(&other, None)).await.1, "etag");
+    let mut other = base.clone();
+    other.width = 1024;
+    other.height = 1024;
+    let other_image = render(&state, other.clone()).await;
+    let other_etag = header(&other_image.1, "etag");
+    let pixels = image::load_from_memory(&other_image.2).unwrap();
+    assert_eq!((pixels.width(), pixels.height()), (1024, 512));
     assert_eq!(
-        render_conditional(&state, variant(&other, None), Some(&etag))
+        render_conditional(&state, other.clone(), Some(&etag))
             .await
             .0,
         200
     );
     assert_ne!(other_etag, etag);
+    let large_not_modified = render_conditional(&state, other, Some(&other_etag)).await;
+    assert_eq!(large_not_modified.0, 304);
+    assert!(large_not_modified.2.is_empty());
+    assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 2);
+    core.stop_core().await;
 }
 
 #[cfg(unix)]
@@ -230,7 +236,7 @@ async fn a_corrupt_native_image_returns_bad_request_with_a_json_decoder_error() 
     let (_directory, core, _cache) = server_with_cache();
     let state = core.runtime_state();
     let source = state.directory.join("corrupt.png");
-    write_image(&source, 200, 100);
+    write_image(&source, 640, 320);
     let mut corrupt = std::fs::read(&source).unwrap();
     corrupt.truncate(33);
     std::fs::write(&source, &corrupt).unwrap();

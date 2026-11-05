@@ -213,7 +213,7 @@ pub async fn read(
                             path: path.clone(),
                             width: pixels,
                             height: pixels,
-                            center_crop: size == Size::Small,
+                            center_crop: !mime.starts_with("image/") && size == Size::Small,
                             file_id: media_id,
                             file_name: plain_libs::utils::query::url_encode(filename),
                         },

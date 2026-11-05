@@ -1,5 +1,4 @@
-use super::dimensions;
-use super::exif_gps;
+use super::{WebpHeaderError, dimensions, exif_gps, webp_header};
 
 #[test]
 fn ico_dimensions_parse() {
@@ -58,14 +57,8 @@ fn bmp_dimensions_parse() {
 
 #[test]
 fn webp_vp8l_dimensions_parse() {
-    // RIFF | size | WEBP | VP8L | signature | packed dims (zeros => 1x1)
-    let mut b = Vec::new();
-    b.extend_from_slice(b"RIFF");
-    b.extend_from_slice(&[0, 0, 0, 0]);
-    b.extend_from_slice(b"WEBP");
-    b.extend_from_slice(b"VP8L");
-    b.extend_from_slice(&[0x2F, 0x00, 0x00, 0x00, 0x00]);
-    assert_eq!(dimensions(&b), Some((1, 1)));
+    let bytes = webp_header_bytes(b"VP8L", &[0x2f, 0, 0, 0, 0]);
+    assert_eq!(dimensions(&bytes), Some((1, 1)));
 }
 
 #[test]
@@ -202,4 +195,59 @@ fn exif_gps_absent_is_none() {
     // TIFF without GPS IFD.
     let b = build_le_tiff(&[(0x0100, 3, 1, 5)], &[], 40);
     assert_eq!(exif_gps(&b), None);
+}
+
+fn webp_header_bytes(kind: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+    let length = payload.len() as u32;
+    let mut bytes = b"RIFF".to_vec();
+    bytes.extend_from_slice(&(12 + length + (length & 1)).to_le_bytes());
+    bytes.extend_from_slice(b"WEBP");
+    bytes.extend_from_slice(kind);
+    bytes.extend_from_slice(&length.to_le_bytes());
+    bytes.extend_from_slice(payload);
+    if length & 1 != 0 {
+        bytes.push(0);
+    }
+    bytes
+}
+
+#[test]
+fn all_webp_headers_share_validated_dimensions_alpha_and_animation() {
+    let packed = 127_u32 | (63 << 14) | (1 << 28);
+    let mut lossless = vec![0x2f];
+    lossless.extend_from_slice(&packed.to_le_bytes());
+    for (bytes, alpha, animated, required) in [
+        (
+            webp_header_bytes(b"VP8X", &[0x12, 0, 0, 0, 127, 0, 0, 63, 0, 0]),
+            true,
+            true,
+            30,
+        ),
+        (webp_header_bytes(b"VP8L", &lossless), true, false, 25),
+        (
+            webp_header_bytes(b"VP8 ", &[0, 0, 0, 0x9d, 0x01, 0x2a, 128, 0, 64, 0]),
+            false,
+            false,
+            30,
+        ),
+    ] {
+        let header = webp_header(&bytes).unwrap();
+        assert_eq!(
+            (
+                header.width,
+                header.height,
+                header.has_alpha,
+                header.animated
+            ),
+            (128, 64, alpha, animated)
+        );
+        assert_eq!(dimensions(&bytes), Some((128, 64)));
+        for end in 0..required {
+            assert_eq!(dimensions(&bytes[..end]), None);
+        }
+    }
+    let mut bytes = webp_header_bytes(b"VP8L", &lossless);
+    bytes[20] = 0;
+    assert_eq!(webp_header(&bytes), Err(WebpHeaderError::Invalid));
+    assert_eq!(dimensions(&bytes), None);
 }

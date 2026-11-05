@@ -1,0 +1,26 @@
+[package]
+name = "heic-rs"
+version = "0.1.4"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/tbraun96/heic-rs"
+revision = "999470f514c8e9a1a7c37ea44ba70cc32b1308fe"
+archive-sha256 = "8883c3bfa6b4ff19a40e52a6dc051c5612cbe21bf408fc6d4875e8dfd777cb66"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[features]
+"bench" = []
+"default" = ["std"]
+"parallel" = []
+"std" = []
+
+[dependencies]

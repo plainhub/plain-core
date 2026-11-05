@@ -1,0 +1,26 @@
+[package]
+name = "zerocopy-derive"
+version = "0.7.35"
+edition = "2018"
+license = "BSD-2-Clause OR Apache-2.0 OR MIT"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/google/zerocopy"
+revision = "727de668608f2d16e151c42e344d172c0931b1e9"
+archive-sha256 = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+proc-macro = true
+
+[features]
+
+[dependencies]
+"proc-macro2" = { version = "=1.0.107" }
+"quote" = { version = "=1.0.47" }
+"syn" = { version = "=2.0.119" }

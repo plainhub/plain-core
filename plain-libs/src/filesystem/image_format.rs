@@ -42,8 +42,9 @@ pub fn is_animated_image_or_svg(path: &Path) -> bool {
         return false;
     }
 
-    if n >= 17 && &header[0..4] == b"RIFF" && &header[8..12] == b"WEBP" {
-        return &header[12..16] == b"VP8X" && n > 17 && (header[16] & 0b10) != 0;
+    if n >= 12 && &header[..4] == b"RIFF" && &header[8..12] == b"WEBP" {
+        return crate::utils::image_dimensions::webp_header(header)
+            .is_ok_and(|header| header.animated);
     }
 
     if n >= 12 && &header[4..8] == b"ftyp" {

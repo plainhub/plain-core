@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["plain-libs", "plain-rs", "plain-server", "plain-cli", "plain-graphql", "plain-graphql/macros"]
+members = ["plain-libs", "plain-rs", "plain-server", "plain-cli", "plain-graphql", "plain-graphql/macros", "plain-libs/codecs/tiff", "plain-libs/codecs/heic-rs", "plain-libs/codecs/rav1d", "plain-libs/codecs/assert_matches", "plain-libs/codecs/atomig-macro", "plain-libs/codecs/atomig", "plain-libs/codecs/fax", "plain-libs/codecs/fax_derive", "plain-libs/codecs/strum", "plain-libs/codecs/strum_macros", "plain-libs/codecs/to_method", "plain-libs/codecs/zerocopy-derive", "plain-libs/codecs/zerocopy"]
 
 [profile.dev]
 debug = "line-tables-only"
@@ -34,6 +34,18 @@ incremental = false
 opt-level = 3
 debug = false
 incremental = false
+
+[profile.dev.package.rav1d]
+opt-level = 3
+debug = false
+
+[profile.dev.package.heic-rs]
+opt-level = 3
+debug = false
+
+[profile.dev.package.tiff]
+opt-level = 3
+debug = false
 
 [profile.release]
 opt-level = 3

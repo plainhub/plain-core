@@ -1,5 +1,3 @@
-//! Unit tests for `src/media/thumb_engine/mod.rs` — moved out-of-line; compiled
-//! as the `tests` child module via `#[cfg(test)] #[path]` there.
 use super::*;
 
 fn cache_dir() -> std::path::PathBuf {
@@ -27,12 +25,32 @@ async fn render_keeps_the_encoded_cache_allocation() {
         .await
         .unwrap()
         .unwrap();
-    let second = render(path.to_str().unwrap(), 128, 128, true, dir.path())
+    let second = render(path.to_str().unwrap(), 128, 128, false, dir.path())
         .await
         .unwrap()
         .unwrap();
     assert_eq!(first, second);
     assert_eq!(first.as_ptr(), second.as_ptr());
+}
+
+fn image_cache_path(
+    root: &std::path::Path,
+    path: &str,
+    w: u32,
+    h: u32,
+    quality: u8,
+    modified: i64,
+    size: i64,
+) -> std::path::PathBuf {
+    thumb_cache_path(
+        &root.join("thumbs/fit-v1-0"),
+        path,
+        w,
+        h,
+        quality,
+        modified,
+        size,
+    )
 }
 
 fn write_jpeg(path: &std::path::Path, w: u32, h: u32) {
@@ -93,9 +111,15 @@ fn jpeg_decode_strategy_matrix() {
         width: 4000,
         height: 6000,
         progressive: true,
+        preserve_alpha: false,
+        orientation: 1,
+        work_bytes: 0,
     };
     let base = Sniffed {
         progressive: false,
+        preserve_alpha: false,
+        orientation: 1,
+        work_bytes: 0,
         ..prog
     };
     // Big-to-small: scaled decode (either-axis ratio >= 2).
@@ -117,6 +141,9 @@ fn jpeg_decode_strategy_matrix() {
         width: 1536,
         height: 2288,
         progressive: true,
+        preserve_alpha: false,
+        orientation: 1,
+        work_bytes: 0,
     };
     assert!(!dc_fast_eligible(small_prog, 512, 512)); // 192x286 < 512
     assert!(dc_fast_eligible(small_prog, 128, 128));
@@ -175,7 +202,7 @@ async fn end_to_end_generate_then_cache_hit() {
     assert!(!d1.is_empty());
     assert!(d1.starts_with(&[0xFF, 0xD8]));
     // Cache file exists with identical bytes.
-    let cp = thumb_cache_path(
+    let cp = image_cache_path(
         &cache_dir(),
         &spec.path,
         spec.w,
@@ -210,7 +237,7 @@ async fn concurrent_identical_requests_coalesce() {
     write_jpeg(&img, 1200, 900);
     let spec = spec_for(&img, 256, 256);
 
-    let key = thumb_cache_path(
+    let key = image_cache_path(
         &cache_dir(),
         &spec.path,
         spec.w,
@@ -240,7 +267,7 @@ async fn concurrent_identical_requests_coalesce() {
         after - before
     );
     // Cleanup for other tests.
-    let cp = thumb_cache_path(
+    let cp = image_cache_path(
         &cache_dir(),
         &spec.path,
         spec.w,
@@ -313,7 +340,7 @@ async fn exif_oriented_thumbnail_dimensions() {
         (75, 100),
         "orientation-6 thumb must be portrait 75x100"
     );
-    let cp = thumb_cache_path(
+    let cp = image_cache_path(
         &cache_dir(),
         &spec.path,
         spec.w,
@@ -343,7 +370,7 @@ async fn unicode_and_spaced_paths() {
     // Cleanup: engine writes to the real cache dir.
     for p in [&img, &img2] {
         let s = spec_for(p, 64, 64);
-        let cp = thumb_cache_path(
+        let cp = image_cache_path(
             &cache_dir(),
             &s.path,
             s.w,
@@ -457,7 +484,7 @@ async fn progressive_photo_dc_fast_path_end_to_end() {
     let decoded = image::load_from_memory(&d).unwrap();
     assert_eq!((decoded.width(), decoded.height()), (128, 85));
     // Cleanup.
-    let cp = thumb_cache_path(
+    let cp = image_cache_path(
         &cache_dir(),
         &spec.path,
         spec.w,
@@ -554,7 +581,7 @@ async fn real_photos_end_to_end() {
                 decoded.height()
             );
             // Cleanup real cache dir entries.
-            let cp = thumb_cache_path(
+            let cp = image_cache_path(
                 &cache_dir(),
                 &spec.path,
                 spec.w,
@@ -576,7 +603,7 @@ async fn explicit_cache_directories_keep_native_runtimes_independent() {
     let spec = spec_for(&source, 40, 40);
     for name in ["first-cache", "second-cache"] {
         let cache = directory.path().join(name);
-        let key = thumb_cache_path(
+        let key = image_cache_path(
             &cache,
             &spec.path,
             spec.w,
@@ -617,7 +644,7 @@ async fn explicit_cache_roots_keep_independent_files_for_the_same_source() {
         .await
         .unwrap();
     let cache_path = |root: &std::path::Path| {
-        thumb_cache_path(
+        image_cache_path(
             root,
             &spec.path,
             spec.w,
@@ -640,7 +667,7 @@ async fn explicit_cache_roots_keep_independent_files_for_the_same_source() {
 }
 
 #[tokio::test]
-async fn render_crop_cache_changes_when_source_changes_within_the_same_second() {
+async fn render_fit_cache_changes_when_source_changes_within_the_same_second() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("source.jpg");
     let base = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
@@ -662,12 +689,12 @@ async fn render_crop_cache_changes_when_source_changes_within_the_same_second() 
             .unwrap()
             .unwrap();
         let decoded = image::load_from_memory(&bytes).unwrap().to_rgb8();
-        assert_eq!(decoded.dimensions(), (128, 128));
-        let pixel = decoded.get_pixel(64, 64);
+        assert_eq!(decoded.dimensions(), (128, 64));
+        let pixel = decoded.get_pixel(64, 32);
         if nanos == 100 {
             assert!(pixel[0] > pixel[1] + 100);
         } else {
-            assert!(pixel[1] > pixel[0] + 100, "stale crop cache: {pixel:?}");
+            assert!(pixel[1] > pixel[0] + 100, "stale fit cache: {pixel:?}");
         }
     }
 }
@@ -701,7 +728,7 @@ async fn thumbnail_latency_benchmark() {
     warm.sort_by(f64::total_cmp);
     println!(
         "{}",
-        serde_json::json!({"input":"synthetic baseline JPEG 4000x3000","target":"512x512 center crop","samples":20,"coldMedianMs":cold[10],"coldP95Ms":cold[18],"warmMedianMs":warm[10],"warmP95Ms":warm[18]})
+        serde_json::json!({"input":"synthetic baseline JPEG 4000x3000","target":"512x384 aspect fit","samples":20,"coldMedianMs":cold[10],"coldP95Ms":cold[18],"warmMedianMs":warm[10],"warmP95Ms":warm[18]})
     );
 }
 
@@ -758,7 +785,7 @@ async fn sufficiently_large_embedded_preview_is_used_without_decoding_the_origin
 }
 
 #[tokio::test]
-async fn crop_disk_cache_contains_the_final_output_without_a_second_encode() {
+async fn fit_disk_cache_contains_the_final_output_without_a_second_encode() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("image.jpg");
     write_jpeg(&path, 800, 400);
@@ -775,7 +802,7 @@ async fn crop_disk_cache_contains_the_final_output_without_a_second_encode() {
     let namespace = directory
         .path()
         .join("thumbs")
-        .join(format!("render-v2-true-{}", spec.modified_nanos));
+        .join(format!("fit-v1-{}", spec.modified_nanos));
     let cached = thumb_cache_path(
         &namespace,
         path.to_str().unwrap(),
@@ -785,13 +812,31 @@ async fn crop_disk_cache_contains_the_final_output_without_a_second_encode() {
         spec.mod_unix,
         spec.file_size,
     );
+    let legacy = thumb_cache_path(
+        &directory
+            .path()
+            .join("thumbs")
+            .join(format!("render-v2-true-{}", spec.modified_nanos)),
+        path.to_str().unwrap(),
+        128,
+        128,
+        85,
+        spec.mod_unix,
+        spec.file_size,
+    );
+    std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    image::RgbImage::from_pixel(128, 128, image::Rgb([255, 255, 255]))
+        .save(&legacy)
+        .unwrap();
+    let legacy_bytes = std::fs::read(&legacy).unwrap();
     let bytes = render(path.to_str().unwrap(), 128, 128, true, directory.path())
         .await
         .unwrap()
         .unwrap();
     assert_eq!(std::fs::read(&cached).unwrap(), bytes);
     let image = image::open(cached).unwrap();
-    assert_eq!((image.width(), image.height()), (128, 128));
+    assert_eq!((image.width(), image.height()), (128, 64));
+    assert_eq!(std::fs::read(legacy).unwrap(), legacy_bytes);
 }
 
 #[tokio::test]
@@ -810,11 +855,11 @@ async fn decoded_pixels_and_output_buffers_are_admitted_before_allocating_them()
 }
 
 #[test]
-fn original_thumbnail_selection_preserves_crop_bounds_and_transfer_budget() {
+fn original_thumbnail_selection_preserves_source_bounds_and_transfer_budget() {
     assert!(super::original_fits(80, 80, 96, 96, true, 1000));
     assert!(super::original_fits(96, 96, 96, 96, true, 1000));
     assert!(super::original_fits(80, 40, 96, 96, false, 1000));
-    assert!(!super::original_fits(80, 40, 96, 96, true, 1000));
+    assert!(super::original_fits(80, 40, 96, 96, true, 1000));
     assert!(!super::original_fits(97, 96, 96, 96, false, 1000));
     assert!(!super::original_fits(96, 97, 96, 96, false, 1000));
     assert!(!super::original_fits(
@@ -835,6 +880,9 @@ fn dc_input_memory_is_charged_only_for_the_full_jpeg_read_path() {
         width: 4096,
         height: 3072,
         progressive: false,
+        preserve_alpha: false,
+        orientation: 1,
+        work_bytes: 0,
     };
     assert_eq!(dc_input_bytes(jpeg, 256, 256, 12_000_000), 12_000_000);
     assert_eq!(dc_input_bytes(jpeg, 1024, 1024, 12_000_000), 0);
@@ -854,7 +902,7 @@ fn dc_input_memory_is_charged_only_for_the_full_jpeg_read_path() {
 }
 
 #[tokio::test]
-async fn png_thumbnails_keep_transparency_through_resize_crop_and_disk_cache() {
+async fn png_thumbnails_keep_transparency_and_share_fit_cache_for_both_crop_flags() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("alpha.png");
     image::RgbaImage::from_fn(768, 768, |x, _| {
@@ -873,34 +921,189 @@ async fn png_thumbnails_keep_transparency_through_resize_crop_and_disk_cache() {
     })
     .save(&path)
     .unwrap();
-    for crop in [false, true] {
-        let unrelated_key = directory.path().join("unrelated.jpg");
-        let unrelated = Bytes::from(vec![7; 16]);
-        lru::global().put(unrelated_key.clone(), unrelated.clone());
-        let mut spec = spec_for(&path, 256, 256);
-        spec.center_crop = crop;
-        let ThumbOutcome::Generated(first) =
-            get_thumbnail(spec.clone(), directory.path()).await.unwrap()
-        else {
-            panic!("expected resized PNG")
-        };
-        assert!(first.starts_with(b"\x89PNG\r\n\x1a\n"));
-        let decoded = image::load_from_memory(&first).unwrap().into_rgba8();
-        assert_eq!(decoded.dimensions(), (256, 256));
-        for (x, alpha) in [(32, 0), (128, 128), (224, 255)] {
-            assert_eq!(decoded.get_pixel(x, 128)[3], alpha);
-        }
-        let disk_cache = directory.path().join(format!("disk-{crop}"));
-        std::fs::create_dir(&disk_cache).unwrap();
-        std::fs::rename(directory.path().join("thumbs"), disk_cache.join("thumbs")).unwrap();
-        let ThumbOutcome::Generated(second) = get_thumbnail(spec, &disk_cache).await.unwrap()
-        else {
-            panic!("expected cached PNG")
-        };
-        assert_eq!(first, second);
-        assert_eq!(
-            lru::global().get(&unrelated_key).unwrap().as_ptr(),
-            unrelated.as_ptr()
-        );
+    let unrelated_key = directory.path().join("unrelated.jpg");
+    let unrelated = Bytes::from(vec![7; 16]);
+    lru::global().put(unrelated_key.clone(), unrelated.clone());
+    let mut spec = spec_for(&path, 256, 256);
+    spec.center_crop = false;
+    let ThumbOutcome::Generated(first) =
+        get_thumbnail(spec.clone(), directory.path()).await.unwrap()
+    else {
+        panic!("expected resized PNG")
+    };
+    assert!(first.starts_with(b"\x89PNG\r\n\x1a\n"));
+    let decoded = image::load_from_memory(&first).unwrap().into_rgba8();
+    assert_eq!(decoded.dimensions(), (256, 256));
+    for (x, alpha) in [(32, 0), (128, 128), (224, 255)] {
+        assert_eq!(decoded.get_pixel(x, 128)[3], alpha);
     }
+    spec.center_crop = true;
+    let ThumbOutcome::Generated(alternate) =
+        get_thumbnail(spec.clone(), directory.path()).await.unwrap()
+    else {
+        panic!("expected shared fit PNG")
+    };
+    assert_eq!(alternate.as_ptr(), first.as_ptr());
+    let disk_cache = directory.path().join("disk");
+    std::fs::create_dir(&disk_cache).unwrap();
+    std::fs::rename(directory.path().join("thumbs"), disk_cache.join("thumbs")).unwrap();
+    let ThumbOutcome::Generated(second) = get_thumbnail(spec, &disk_cache).await.unwrap() else {
+        panic!("expected cached PNG")
+    };
+    assert_eq!(first, second);
+    assert_eq!(
+        lru::global().get(&unrelated_key).unwrap().as_ptr(),
+        unrelated.as_ptr()
+    );
+}
+
+async fn check_still_format_thumbnail(name: &str, fixture: &[u8]) {
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join(name);
+    std::fs::write(&source, fixture).unwrap();
+    let cache = directory.path().join("cache");
+    let spec = spec_for(&source, 24, 24);
+    let key = image_cache_path(
+        &cache,
+        &spec.path,
+        spec.w,
+        spec.h,
+        spec.quality,
+        spec.mod_unix,
+        spec.file_size,
+    );
+    let mut tasks = Vec::new();
+    for _ in 0..16 {
+        let spec = spec.clone();
+        let cache = cache.clone();
+        tasks.push(tokio::spawn(
+            async move { get_thumbnail(spec, &cache).await },
+        ));
+    }
+    let mut outputs = Vec::new();
+    for task in tasks {
+        let outcome = task
+            .await
+            .unwrap()
+            .unwrap_or_else(|error| panic!("{name}: {error:#}"));
+        let ThumbOutcome::Generated(bytes) = outcome else {
+            panic!("{name}: browser thumbnail required")
+        };
+        let decoded = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (24, 16), "{name}");
+        outputs.push(bytes);
+    }
+    assert_eq!(generations_for(key.to_str().unwrap()), 1, "{name}");
+    assert!(
+        outputs
+            .iter()
+            .all(|bytes| bytes.as_ptr() == outputs[0].as_ptr()),
+        "{name}"
+    );
+    assert_eq!(std::fs::read(source).unwrap(), fixture, "{name}");
+}
+
+#[tokio::test]
+async fn new_still_format_tiff_thumbnail_coalesces_batch_requests() {
+    check_still_format_thumbnail(
+        "source.tiff",
+        include_bytes!("../../../../../plain-rs/testdata/still-images/rgb.tiff"),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn new_still_format_avif_thumbnail_coalesces_batch_requests() {
+    check_still_format_thumbnail(
+        "source.avif",
+        include_bytes!("../../../../../plain-rs/testdata/still-images/rgb.avif"),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn new_still_format_heic_thumbnail_coalesces_batch_requests() {
+    check_still_format_thumbnail(
+        "source.heic",
+        include_bytes!("../../../../../plain-rs/testdata/still-images/rgb.heic"),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn new_still_format_heif_thumbnail_coalesces_batch_requests() {
+    check_still_format_thumbnail(
+        "source.heif",
+        include_bytes!("../../../../../plain-rs/testdata/still-images/rgb.heic"),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn concurrent_disk_cache_hits_share_the_encoded_storage_without_decoding() {
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("image.jpg");
+    write_jpeg(&source, 800, 600);
+    let spec = spec_for(&source, 128, 128);
+    let ThumbOutcome::Generated(encoded) =
+        get_thumbnail(spec.clone(), &directory.path().join("first"))
+            .await
+            .unwrap()
+    else {
+        panic!("expected generated JPEG")
+    };
+    let cache = directory.path().join("cold");
+    let key = image_cache_path(
+        &cache,
+        &spec.path,
+        spec.w,
+        spec.h,
+        spec.quality,
+        spec.mod_unix,
+        spec.file_size,
+    );
+    std::fs::create_dir_all(key.parent().unwrap()).unwrap();
+    std::fs::write(&key, &encoded).unwrap();
+    let mut tasks = Vec::new();
+    for _ in 0..32 {
+        let spec = spec.clone();
+        let cache = cache.clone();
+        tasks.push(tokio::spawn(async move {
+            get_thumbnail(spec, &cache).await.unwrap()
+        }));
+    }
+    let mut outputs = Vec::new();
+    for task in tasks {
+        let ThumbOutcome::Generated(bytes) = task.await.unwrap() else {
+            panic!("expected cached JPEG")
+        };
+        assert_eq!(bytes, encoded);
+        outputs.push(bytes);
+    }
+    assert!(
+        outputs
+            .iter()
+            .all(|bytes| bytes.as_ptr() == outputs[0].as_ptr())
+    );
+    assert_eq!(generations_for(key.to_str().unwrap()), 0);
+}
+
+#[tokio::test]
+async fn transparent_webp_uses_the_shared_aspect_fit_and_alpha_output() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("transparent.webp");
+    let image = image::RgbaImage::from_pixel(1024, 768, image::Rgba([40, 90, 150, 128]));
+    let mut input = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(image)
+        .write_to(&mut input, image::ImageFormat::WebP)
+        .unwrap();
+    std::fs::write(&path, input.into_inner()).unwrap();
+    let bytes = render(path.to_str().unwrap(), 256, 256, true, directory.path())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+    let pixels = image::load_from_memory(&bytes).unwrap().into_rgba8();
+    assert_eq!(pixels.dimensions(), (256, 192));
+    assert!(pixels.pixels().all(|p| p[3] == 128));
 }

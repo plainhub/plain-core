@@ -66,8 +66,8 @@ fn shared_header_detection_preserves_animated_and_static_container_rules() {
     ));
     for (name, bytes, animated) in [
         ("one.gif", b"GIF89a\0\0".to_vec(), true),
-        ("two.webp", b"RIFF\0\0\0\0WEBPVP8X\x02\0".to_vec(), true),
-        ("three.webp", b"RIFF\0\0\0\0WEBPVP8X\0\0".to_vec(), false),
+        ("two.webp", webp_header_bytes(0x02), true),
+        ("three.webp", webp_header_bytes(0), false),
         ("four.heic", b"\0\0\0\0ftypmsf1".to_vec(), true),
         ("five.heic", b"\0\0\0\0ftypheic".to_vec(), false),
         ("six.txt", b"<svg/>".to_vec(), false),
@@ -147,5 +147,36 @@ fn isobmff_animation_scan_stays_inside_ftyp_and_handles_extended_sizes() {
         b"\0\0\0\x15ftypavif\0\0\0\0avis",
     ] {
         assert!(!is_animated_isobmff(&mut std::io::Cursor::new(bytes)));
+    }
+}
+
+fn webp_header_bytes(flags: u8) -> Vec<u8> {
+    let mut bytes = b"RIFF".to_vec();
+    bytes.extend_from_slice(&22_u32.to_le_bytes());
+    bytes.extend_from_slice(b"WEBPVP8X");
+    bytes.extend_from_slice(&10_u32.to_le_bytes());
+    bytes.extend_from_slice(&[flags, 0, 0, 0, 127, 0, 0, 63, 0, 0]);
+    bytes
+}
+
+#[test]
+fn webp_animation_uses_extended_flags_and_rejects_every_incomplete_header() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("image.webp");
+    for (flags, animated) in [(0, false), (0x10, false), (0x02, true), (0x12, true)] {
+        let bytes = webp_header_bytes(flags);
+        std::fs::write(&path, &bytes).unwrap();
+        assert_eq!(is_animated_image_or_svg(&path), animated);
+        assert_eq!(
+            crate::utils::image_dimensions::dimensions(&bytes),
+            Some((128, 64))
+        );
+        for end in 0..bytes.len() {
+            std::fs::write(&path, &bytes[..end]).unwrap();
+            assert!(
+                !is_animated_image_or_svg(&path),
+                "truncated flags={flags} length={end}"
+            );
+        }
     }
 }

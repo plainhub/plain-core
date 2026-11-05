@@ -24,7 +24,9 @@ pub fn dimensions(bytes: &[u8]) -> Option<(i32, i32)> {
         return bmp(bytes);
     }
     if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
-        return webp(bytes);
+        return webp_header(bytes)
+            .ok()
+            .map(|header| (header.width as i32, header.height as i32));
     }
     // TIFF (little- or big-endian).
     if bytes.starts_with(b"II") || bytes.starts_with(b"MM") {
@@ -132,47 +134,92 @@ fn bmp(b: &[u8]) -> Option<(i32, i32)> {
     Some((w.abs(), h.abs()))
 }
 
-/// WebP dimensions across the three chunk types (`VP8 `, `VP8L`, `VP8X`).
-fn webp(b: &[u8]) -> Option<(i32, i32)> {
-    if b.len() < 16 {
-        return None;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct WebpHeader {
+    pub width: u32,
+    pub height: u32,
+    pub has_alpha: bool,
+    pub animated: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WebpHeaderError {
+    Truncated,
+    Invalid,
+}
+
+// https://developers.google.com/speed/webp/docs/riff_container
+pub(crate) fn webp_header(buf: &[u8]) -> Result<WebpHeader, WebpHeaderError> {
+    let signature = buf.get(..12).ok_or(WebpHeaderError::Truncated)?;
+    if &signature[..4] != b"RIFF" || &signature[8..] != b"WEBP" {
+        return Err(WebpHeaderError::Invalid);
     }
-    match &b[12..16] {
-        b"VP8 " => {
-            if b.len() < 30 {
-                return None;
-            }
-            // Frame tag + start code (10 bytes), scale (3), width + height (4).
-            let i = 16 + 10;
-            let w = u16::from_le_bytes([b[i], b[i + 1]]) as i32 & 0x3FFF;
-            let h = u16::from_le_bytes([b[i + 2], b[i + 3]]) as i32 & 0x3FFF;
-            Some((w, h))
-        }
-        b"VP8L" => {
-            if b.len() < 21 {
-                return None;
-            }
-            let i = 16 + 1;
-            let d = &b[i..i + 4];
-            let w = 1 + (((d[1] & 0x3F) as i32) << 8 | d[0] as i32);
-            let h = 1
-                + ((((d[3] & 0x0F) as i32) << 10)
-                    | ((d[2] as i32) << 2)
-                    | ((d[1] & 0xC0) as i32) >> 6);
-            Some((w, h))
-        }
-        b"VP8X" => {
-            if b.len() < 30 {
-                return None;
-            }
-            let i = 16 + 8;
-            let d = &b[i..i + 6];
-            let w = (d[0] as i32) | ((d[1] as i32) << 8) | ((d[2] as i32) << 16) + 1;
-            let h = (d[3] as i32) | ((d[4] as i32) << 8) | ((d[5] as i32) << 16) + 1;
-            Some((w, h))
-        }
-        _ => None,
+    let chunk_size = u32::from_le_bytes(
+        buf.get(16..20)
+            .ok_or(WebpHeaderError::Truncated)?
+            .try_into()
+            .unwrap(),
+    );
+    let file_size = u32::from_le_bytes(buf[4..8].try_into().unwrap());
+    if u64::from(chunk_size) + 12 + u64::from(chunk_size & 1) > u64::from(file_size) {
+        return Err(WebpHeaderError::Invalid);
     }
+    let (width, height, has_alpha, animated) = match buf.get(12..16) {
+        Some(b"VP8X") => {
+            if chunk_size < 10 {
+                return Err(WebpHeaderError::Invalid);
+            }
+            let header = buf.get(20..30).ok_or(WebpHeaderError::Truncated)?;
+            let width = 1 + u32::from_le_bytes([header[4], header[5], header[6], 0]);
+            let height = 1 + u32::from_le_bytes([header[7], header[8], header[9], 0]);
+            if u64::from(width) * u64::from(height) > u64::from(u32::MAX) {
+                return Err(WebpHeaderError::Invalid);
+            }
+            (width, height, header[0] & 0x10 != 0, header[0] & 0x02 != 0)
+        }
+        Some(b"VP8 ") => {
+            if chunk_size < 10 {
+                return Err(WebpHeaderError::Invalid);
+            }
+            let header = buf.get(20..30).ok_or(WebpHeaderError::Truncated)?;
+            if header[0] & 1 != 0 || header[3..6] != [0x9d, 0x01, 0x2a] {
+                return Err(WebpHeaderError::Invalid);
+            }
+            let width = u32::from(u16::from_le_bytes([header[6], header[7]]) & 0x3fff);
+            let height = u32::from(u16::from_le_bytes([header[8], header[9]]) & 0x3fff);
+            if width == 0 || height == 0 {
+                return Err(WebpHeaderError::Invalid);
+            }
+            (width, height, false, false)
+        }
+        Some(b"VP8L") => {
+            // https://developers.google.com/speed/webp/docs/webp_lossless_bitstream_specification#riff_header
+            if chunk_size < 5 {
+                return Err(WebpHeaderError::Invalid);
+            }
+            let header = buf.get(20..25).ok_or(WebpHeaderError::Truncated)?;
+            if header[0] != 0x2f {
+                return Err(WebpHeaderError::Invalid);
+            }
+            let packed = u32::from_le_bytes(header[1..].try_into().unwrap());
+            if packed >> 29 != 0 {
+                return Err(WebpHeaderError::Invalid);
+            }
+            (
+                (packed & 0x3fff) + 1,
+                ((packed >> 14) & 0x3fff) + 1,
+                packed & (1 << 28) != 0,
+                false,
+            )
+        }
+        _ => return Err(WebpHeaderError::Invalid),
+    };
+    Ok(WebpHeader {
+        width,
+        height,
+        has_alpha,
+        animated,
+    })
 }
 
 /// ICO dimensions from the first `ICONDIRENTRY` (`0` encodes 256).

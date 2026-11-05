@@ -421,20 +421,29 @@ async fn sufficient_originals_skip_generation_and_thumbnail_cache_files() {
     let (directory, core, cache) = server_with_cache();
     let state = core.runtime_state();
     for extension in ["jpg", "png", "webp"] {
-        let path = directory.path().join(format!("original.{extension}"));
-        image::RgbImage::from_pixel(80, 80, image::Rgb([200, 40, 50]))
-            .save(&path)
-            .unwrap();
-        let mut request = request_for(&path);
-        request.width = 96;
-        request.height = 96;
-        let bytes = state
-            .thumbnails
-            .get(&state, request)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(bytes, std::fs::read(path).unwrap());
+        for (width, height) in [(80, 80), (80, 40), (40, 80)] {
+            let path = directory
+                .path()
+                .join(format!("original-{width}-{height}.{extension}"));
+            image::RgbImage::from_pixel(width, height, image::Rgb([200, 40, 50]))
+                .save(&path)
+                .unwrap();
+            for center_crop in [true, false] {
+                let mut request = request_for(&path);
+                request.width = 96;
+                request.height = 96;
+                request.center_crop = center_crop;
+                let bytes = state
+                    .thumbnails
+                    .get(&state, request)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(bytes, std::fs::read(&path).unwrap());
+                let image = image::load_from_memory(&bytes).unwrap();
+                assert_eq!((image.width(), image.height()), (width, height));
+            }
+        }
     }
     assert_eq!(
         state
@@ -563,9 +572,27 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
         };
         requests.spawn(async move { state.thumbnails.get(&state, request).await });
     }
+    let mut first = None;
     while let Some(result) = requests.join_next().await {
-        assert_eq!(result.unwrap().unwrap().unwrap(), expected);
+        let bytes = result.unwrap().unwrap().unwrap();
+        assert_eq!(bytes, expected);
+        first.get_or_insert(bytes);
     }
+    let alternate = state
+        .thumbnails
+        .get(
+            &state,
+            Request {
+                width: 256,
+                height: 256,
+                center_crop: false,
+                ..request_for(&path)
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(alternate.as_ptr(), first.unwrap().as_ptr());
     assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
     assert_eq!(
         state.thumbnails.cache_bytes_written.load(Ordering::Relaxed),
@@ -573,9 +600,13 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
     );
     for (width, height, crop, dimensions) in [
         (96, 96, false, (256, 192)),
+        (96, 96, true, (256, 192)),
         (1024, 1024, false, (1024, 768)),
+        (1024, 1024, true, (1024, 768)),
         (512, 1024, false, (512, 384)),
+        (512, 1024, true, (512, 384)),
         (1024, 512, false, (682, 512)),
+        (1024, 512, true, (682, 512)),
     ] {
         let request = Request {
             width,
@@ -602,7 +633,7 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
 
 #[cfg(feature = "media")]
 #[tokio::test]
-async fn real_image_extensions_skip_old_white_thumbnails_and_preserve_source_keys() {
+async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cache_keys() {
     let (directory, core, _) = server_with_cache();
     let state = core.runtime_state();
     let source = directory.path().join("alpha.PNG");
@@ -615,7 +646,7 @@ async fn real_image_extensions_skip_old_white_thumbnails_and_preserve_source_key
         height: 256,
         ..request_for(&source)
     };
-    let legacy_key = |request: &Request| {
+    let source_key = |request: &Request, version: &str| {
         let metadata = std::fs::metadata(&request.path).unwrap();
         let input = serde_json::json!([
             request.path,
@@ -626,13 +657,13 @@ async fn real_image_extensions_skip_old_white_thumbnails_and_preserve_source_key
             request.center_crop,
             "",
             "",
-            "thumbnail-v2"
+            version
         ])
         .to_string();
         plain_libs::utils::hex::bytes_to_hex(&sha2::Sha256::digest(input.as_bytes()))
     };
-    let old_key = legacy_key(&request);
-    assert_eq!(
+    let old_key = source_key(&request, "thumbnail-v2");
+    assert_ne!(
         super::source_fingerprint(&request).unwrap().unwrap(),
         old_key
     );
@@ -655,6 +686,7 @@ async fn real_image_extensions_skip_old_white_thumbnails_and_preserve_source_key
         super::source_fingerprint(&Request {
             width: 256,
             height: 256,
+            center_crop: false,
             ..request_for(&source)
         })
         .unwrap()
@@ -680,7 +712,7 @@ async fn real_image_extensions_skip_old_white_thumbnails_and_preserve_source_key
     };
     assert_eq!(
         super::source_fingerprint(&request).unwrap().unwrap(),
-        legacy_key(&request)
+        source_key(&request, "thumbnail-v3")
     );
     core.stop_core().await;
 }

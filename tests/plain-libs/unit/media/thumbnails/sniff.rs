@@ -1,5 +1,3 @@
-//! Unit tests for `src/media/thumb_engine/sniff.rs` — moved out-of-line; compiled
-//! as the `tests` child module via `#[cfg(test)] #[path]` there.
 use super::*;
 
 fn minimal_jpeg(w: u16, h: u16, progressive: bool) -> Vec<u8> {
@@ -35,7 +33,10 @@ fn sniff_jpeg_baseline_and_progressive() {
             kind: ImageKind::Jpeg,
             width: 4000,
             height: 3000,
-            progressive: false
+            progressive: false,
+            preserve_alpha: false,
+            orientation: 1,
+            work_bytes: 0,
         }
     );
     let s = sniff_header(&minimal_jpeg(640, 480, true)).unwrap();
@@ -77,10 +78,10 @@ fn sniff_png_gif_bmp_webp_vp8x() {
     assert_eq!((s.kind, s.width, s.height), (ImageKind::Bmp, 800, 600));
     assert!(!s.kind.can_passthrough());
 
-    let mut webp = b"RIFF\x00\x00\x00\x00WEBPVP8X".to_vec();
-    webp.extend_from_slice(&[0u8; 4]); // flags
-    webp.extend_from_slice(&127u32.to_le_bytes()[..3]);
-    webp.extend_from_slice(&63u32.to_le_bytes()[..3]);
+    let mut payload = vec![0; 4];
+    payload.extend_from_slice(&127u32.to_le_bytes()[..3]);
+    payload.extend_from_slice(&63u32.to_le_bytes()[..3]);
+    let webp = webp_chunk(b"VP8X", &payload);
     let s = sniff_header(&webp).unwrap();
     assert_eq!((s.kind, s.width, s.height), (ImageKind::WebP, 128, 64));
 }
@@ -124,4 +125,127 @@ fn every_truncated_png_header_is_an_error_without_panicking() {
     for length in 12..24 {
         assert_eq!(sniff_header(&png[..length]), Err(SniffError::Truncated));
     }
+}
+
+fn webp_chunk(kind: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+    let length = payload.len() as u32;
+    let mut bytes = b"RIFF".to_vec();
+    bytes.extend_from_slice(&(12 + length + (length & 1)).to_le_bytes());
+    bytes.extend_from_slice(b"WEBP");
+    bytes.extend_from_slice(kind);
+    bytes.extend_from_slice(&length.to_le_bytes());
+    bytes.extend_from_slice(payload);
+    if length & 1 != 0 {
+        bytes.push(0);
+    }
+    bytes
+}
+
+#[test]
+fn real_webp_encoder_outputs_keep_dimensions_and_transparency_flags() {
+    for alpha in [false, true] {
+        let source = image::RgbaImage::from_fn(37, 19, |x, _| {
+            image::Rgba([40, 90, 150, if alpha && x < 20 { 128 } else { 255 }])
+        });
+        let mut bytes = Vec::new();
+        if alpha {
+            image::codecs::webp::WebPEncoder::new_lossless(&mut bytes)
+                .encode(source.as_raw(), 37, 19, image::ExtendedColorType::Rgba8)
+                .unwrap();
+        } else {
+            let rgb = image::DynamicImage::ImageRgba8(source.clone()).into_rgb8();
+            image::codecs::webp::WebPEncoder::new_lossless(&mut bytes)
+                .encode(rgb.as_raw(), 37, 19, image::ExtendedColorType::Rgb8)
+                .unwrap();
+        }
+        let actual = sniff_header(&bytes).unwrap();
+        assert_eq!(
+            (actual.width, actual.height, actual.preserve_alpha),
+            (37, 19, alpha)
+        );
+        assert_eq!(
+            image::load_from_memory(&bytes).unwrap().into_rgba8(),
+            source
+        );
+        assert_eq!(bytes.get(12..16), Some(b"VP8L".as_slice()));
+        let mut header = vec![if alpha { 0x10 } else { 0 }, 0, 0, 0];
+        header.extend_from_slice(&36_u32.to_le_bytes()[..3]);
+        header.extend_from_slice(&18_u32.to_le_bytes()[..3]);
+        let mut extended = webp_chunk(b"VP8X", &header);
+        extended.extend_from_slice(&bytes[12..]);
+        let length = (extended.len() - 8) as u32;
+        extended[4..8].copy_from_slice(&length.to_le_bytes());
+        let actual = sniff_header(&extended).unwrap();
+        assert_eq!(
+            (actual.width, actual.height, actual.preserve_alpha),
+            (37, 19, alpha)
+        );
+        assert_eq!(
+            image::load_from_memory(&extended).unwrap().into_rgba8(),
+            source
+        );
+        for input in [&bytes, &extended] {
+            assert_eq!(
+                crate::utils::image_dimensions::dimensions(input),
+                Some((37, 19))
+            );
+            #[cfg(feature = "filesystem")]
+            {
+                let directory = tempfile::tempdir().unwrap();
+                let path = directory.path().join("static.webp");
+                std::fs::write(&path, input).unwrap();
+                assert!(!crate::filesystem::image_format::is_animated_image_or_svg(
+                    &path
+                ));
+            }
+        }
+    }
+}
+
+#[test]
+fn webp_prefixes_and_invalid_image_headers_are_rejected() {
+    let extended = webp_chunk(b"VP8X", &[0x10, 0, 0, 0, 36, 0, 0, 18, 0, 0]);
+    let packed = 36_u32 | (18 << 14) | (1 << 28);
+    let mut payload = vec![0x2f];
+    payload.extend_from_slice(&packed.to_le_bytes());
+    let lossless = webp_chunk(b"VP8L", &payload);
+    let lossy = webp_chunk(b"VP8 ", &[0, 0, 0, 0x9d, 0x01, 0x2a, 37, 0, 19, 0]);
+    for (bytes, required) in [(&extended, 30), (&lossless, 25), (&lossy, 30)] {
+        for end in 0..required {
+            assert!(sniff_header(&bytes[..end]).is_err(), "prefix {end}");
+        }
+        assert_eq!(
+            (
+                sniff_header(bytes).unwrap().width,
+                sniff_header(bytes).unwrap().height
+            ),
+            (37, 19)
+        );
+        let mut invalid = bytes.clone();
+        invalid[4..8].copy_from_slice(&0_u32.to_le_bytes());
+        assert_eq!(sniff_header(&invalid), Err(SniffError::Unknown));
+        let mut invalid = bytes.clone();
+        invalid[16..20].copy_from_slice(&1_u32.to_le_bytes());
+        assert_eq!(sniff_header(&invalid), Err(SniffError::Unknown));
+    }
+    let mut invalid = lossless.clone();
+    invalid[20] = 0;
+    assert_eq!(sniff_header(&invalid), Err(SniffError::Unknown));
+    let mut invalid = lossless;
+    invalid[24] |= 0x20;
+    assert_eq!(sniff_header(&invalid), Err(SniffError::Unknown));
+    let mut invalid = lossy.clone();
+    invalid[23] = 0;
+    assert_eq!(sniff_header(&invalid), Err(SniffError::Unknown));
+    let mut invalid = lossy;
+    invalid[20] = 1;
+    assert_eq!(sniff_header(&invalid), Err(SniffError::Unknown));
+    assert_eq!(
+        sniff_header(&webp_chunk(b"VP8X", &[0; 9])),
+        Err(SniffError::Unknown)
+    );
+    assert_eq!(
+        sniff_header(&webp_chunk(b"VP8L", &[0; 4])),
+        Err(SniffError::Unknown)
+    );
 }

@@ -109,7 +109,7 @@ fn source_fingerprint(request: &Request) -> Result<Option<String>, String> {
         request.center_crop,
         if system { &request.file_id } else { "" },
         if system { &request.file_name } else { "" },
-        "thumbnail-v2"
+        "thumbnail-v3"
     ])
     .to_string();
     Ok(Some(plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(
@@ -129,8 +129,8 @@ async fn decode(
     system: bool,
     cache: &Path,
 ) -> Result<Option<Bytes>, String> {
-    let rust_bmp = super::thumbnail_decoder::uses_rust_bmp_decoder(request);
-    if rust_bmp || !cfg!(any(target_os = "android", target_os = "ios")) {
+    let rust_still = super::thumbnail_decoder::uses_rust_still_decoder(request);
+    if rust_still || !cfg!(any(target_os = "android", target_os = "ios")) {
         #[cfg(any(test, feature = "test-seams"))]
         state
             .thumbnails
@@ -268,6 +268,9 @@ impl Thumbnails {
     ) -> Result<Option<Bytes>, String> {
         if request.width == 0 || request.height == 0 || !Path::new(&request.path).is_absolute() {
             return Err("positive thumbnail dimensions and absolute path required".into());
+        }
+        if plain_libs::utils::mime::mime_from_ext(&request.path).starts_with("image/") {
+            request.center_crop = false;
         }
         if request.width < 1024 && request.height < 1024 {
             request.width = THUMBNAIL_SIZE;

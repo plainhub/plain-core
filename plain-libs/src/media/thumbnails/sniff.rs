@@ -14,6 +14,9 @@ pub enum ImageKind {
     Gif,
     WebP,
     Bmp,
+    Tiff,
+    Avif,
+    Heif,
 }
 
 impl ImageKind {
@@ -25,11 +28,17 @@ impl ImageKind {
             ImageKind::Gif => "image/gif",
             ImageKind::WebP => "image/webp",
             ImageKind::Bmp => "image/bmp",
+            ImageKind::Tiff => "image/tiff",
+            ImageKind::Avif => "image/avif",
+            ImageKind::Heif => "image/heic",
         }
     }
 
     pub fn can_passthrough(self) -> bool {
-        !matches!(self, ImageKind::Bmp)
+        !matches!(
+            self,
+            ImageKind::Bmp | ImageKind::Tiff | ImageKind::Avif | ImageKind::Heif
+        )
     }
 }
 
@@ -41,6 +50,9 @@ pub struct Sniffed {
     pub height: u32,
     /// JPEG-only: progressive DCT scan order.
     pub progressive: bool,
+    pub preserve_alpha: bool,
+    pub orientation: u8,
+    pub work_bytes: u64,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -91,6 +103,9 @@ pub fn sniff_header(buf: &[u8]) -> Result<Sniffed, SniffError> {
             width: w,
             height: h,
             progressive: false,
+            preserve_alpha: true,
+            orientation: 1,
+            work_bytes: 0,
         });
     }
     if buf.starts_with(b"GIF87a") || buf.starts_with(b"GIF89a") {
@@ -104,6 +119,9 @@ pub fn sniff_header(buf: &[u8]) -> Result<Sniffed, SniffError> {
             width: w,
             height: h,
             progressive: false,
+            preserve_alpha: false,
+            orientation: 1,
+            work_bytes: 0,
         });
     }
     if buf.starts_with(b"RIFF") && buf.get(8..12) == Some(b"WEBP") {
@@ -135,6 +153,9 @@ pub fn sniff_header(buf: &[u8]) -> Result<Sniffed, SniffError> {
             width: w,
             height: h,
             progressive: false,
+            preserve_alpha: super::bmp::has_alpha(buf),
+            orientation: 1,
+            work_bytes: 0,
         });
     }
     Err(SniffError::Unknown)
@@ -178,6 +199,9 @@ fn sniff_jpeg(buf: &[u8]) -> Result<Sniffed, SniffError> {
                     width: w,
                     height: h,
                     progressive: m == 0xC2,
+                    preserve_alpha: false,
+                    orientation: 1,
+                    work_bytes: 0,
                 });
             }
             _ => {
@@ -195,54 +219,20 @@ fn sniff_jpeg(buf: &[u8]) -> Result<Sniffed, SniffError> {
 }
 
 fn sniff_webp(buf: &[u8]) -> Result<Sniffed, SniffError> {
-    // Chunk data starts at offset 12: "VP8X" | "VP8 " | "VP8L".
-    match buf.get(12..16) {
-        Some(b"VP8X") => {
-            // VP8X: [flags(4)][canvas_w-1 (3B LE)][canvas_h-1 (3B LE)] at +4.
-            let r = buf.get(20..26).ok_or(SniffError::Truncated)?;
-            let w = 1u32 + (r[0] as u32 | (r[1] as u32) << 8 | (r[2] as u32) << 16);
-            let h = 1u32 + (r[3] as u32 | (r[4] as u32) << 8 | (r[5] as u32) << 16);
-            Ok(Sniffed {
-                kind: ImageKind::WebP,
-                width: w,
-                height: h,
-                progressive: false,
-            })
-        }
-        Some(b"VP8 ") => {
-            // Lossy: keyframe header; w/h are 14-bit LE values at offsets
-            // 26/28 within the frame (after the 20-byte frame tag + sync code).
-            let w = le16(buf, 26).ok_or(SniffError::Truncated)? & 0x3FFF;
-            let h = le16(buf, 28).ok_or(SniffError::Truncated)? & 0x3FFF;
-            if w == 0 || h == 0 {
-                return Err(SniffError::Unknown);
-            }
-            Ok(Sniffed {
-                kind: ImageKind::WebP,
-                width: u32::from(w),
-                height: u32::from(h),
-                progressive: false,
-            })
-        }
-        Some(b"VP8L") => {
-            // Lossless: 0x2F signature, then 14-bit packed dims at offset 21:
-            // bits [0..14) = width-1, bits [14..28) = height-1 (LE).
-            let g = |r: usize| -> Option<u32> { buf.get(21 + r).map(|v| *v as u32) };
-            let bits = |shift: u32, mask: u32| -> Option<u32> {
-                let v = (g(0)? | (g(1)? << 8) | (g(2)? << 16) | (g(3)? << 24)) >> shift;
-                Some(v & mask)
-            };
-            let w = bits(0, 0x3FFF).ok_or(SniffError::Truncated)? + 1;
-            let h = bits(14, 0x3FFF).ok_or(SniffError::Truncated)? + 1;
-            Ok(Sniffed {
-                kind: ImageKind::WebP,
-                width: w,
-                height: h,
-                progressive: false,
-            })
-        }
-        _ => Err(SniffError::Unknown),
-    }
+    use crate::utils::image_dimensions::{WebpHeaderError, webp_header};
+    let header = webp_header(buf).map_err(|error| match error {
+        WebpHeaderError::Truncated => SniffError::Truncated,
+        WebpHeaderError::Invalid => SniffError::Unknown,
+    })?;
+    Ok(Sniffed {
+        kind: ImageKind::WebP,
+        width: header.width,
+        height: header.height,
+        progressive: false,
+        preserve_alpha: header.has_alpha,
+        orientation: 1,
+        work_bytes: 0,
+    })
 }
 
 #[cfg(test)]

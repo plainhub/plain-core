@@ -1,0 +1,30 @@
+[package]
+name = "zerocopy"
+version = "0.7.35"
+edition = "2018"
+license = "BSD-2-Clause OR Apache-2.0 OR MIT"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/google/zerocopy"
+revision = "727de668608f2d16e151c42e344d172c0931b1e9"
+archive-sha256 = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[features]
+"__internal_use_only_features_that_work_on_stable" = ["alloc", "derive", "simd"]
+"alloc" = []
+"default" = ["byteorder"]
+"derive" = ["zerocopy-derive"]
+"simd" = []
+"simd-nightly" = ["simd"]
+
+[dependencies]
+"byteorder" = { version = "=1.5.0", optional = true, default-features = false }
+"zerocopy-derive" = { path = "../zerocopy-derive", optional = true }

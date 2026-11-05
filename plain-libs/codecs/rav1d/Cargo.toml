@@ -1,0 +1,40 @@
+[package]
+name = "rav1d"
+version = "1.1.0"
+edition = "2021"
+license = "BSD-2-Clause"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/memorysafety/rav1d"
+revision = "782dab2135ea64a057c097088a13eb8ed3cc3320"
+archive-sha256 = "1932f060d5e7bd49dc9f8b272c1dc5e9ce0ffe141c28be900265d3989b36c9ed"
+
+[lib]
+path = "lib.rs"
+doctest = false
+
+[features]
+"asm" = []
+"asm_arm64_dotprod" = ["asm"]
+"asm_arm64_i8mm" = ["asm"]
+"asm_arm64_sve2" = ["asm"]
+"bitdepth_16" = []
+"bitdepth_8" = []
+"default" = ["bitdepth_8", "bitdepth_16"]
+
+[dependencies]
+"assert_matches" = { path = "../assert_matches" }
+"atomig" = { path = "../atomig", features = ["derive"] }
+"bitflags" = { version = "=2.13.2" }
+"cfg-if" = { version = "=1.0.5" }
+"libc" = { version = "=0.2.189" }
+"parking_lot" = { version = "=0.12.5" }
+"paste" = { version = "=1.0.15" }
+"raw-cpuid" = { version = "=11.6.0" }
+"strum" = { path = "../strum", features = ["derive"] }
+"to_method" = { path = "../to_method" }
+"zerocopy" = { path = "../zerocopy", features = ["derive"] }

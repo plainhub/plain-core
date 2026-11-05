@@ -26,13 +26,13 @@ pub mod lru;
 pub mod pjpeg;
 pub mod scale;
 pub mod sniff;
+mod still;
 pub mod video;
 mod workers;
 
 use anyhow::{Result, bail};
 use bytes::Bytes;
 use std::sync::LazyLock;
-use tokio::io::AsyncReadExt;
 
 use exif::Orientation;
 use scale::Bitmap;
@@ -131,15 +131,12 @@ pub fn original_fits(
     height: u32,
     target_width: u32,
     target_height: u32,
-    center_crop: bool,
+    _center_crop: bool,
     bytes: i64,
 ) -> bool {
     u64::try_from(bytes).is_ok_and(|size| size <= PASSTHROUGH_MAX_BYTES)
         && (target_width == 0 || width <= target_width)
         && (target_height == 0 || height <= target_height)
-        && (!center_crop
-            || u64::from(width) * u64::from(target_height)
-                == u64::from(height) * u64::from(target_width))
 }
 
 pub fn read_original_thumbnail(
@@ -190,24 +187,30 @@ pub fn read_original_thumbnail(
 }
 
 pub async fn get_thumbnail(spec: ThumbSpec, cache: &std::path::Path) -> Result<ThumbOutcome> {
-    if spec.center_crop && (spec.w == 0 || spec.h == 0) {
-        bail!("positive crop dimensions required");
-    }
-    let versioned = cache.join("thumbs").join(format!(
-        "render-v2-{}-{}",
-        spec.center_crop, spec.modified_nanos
-    ));
-    let cache = if spec.center_crop || spec.modified_nanos != 0 {
-        versioned.as_path()
-    } else {
-        cache
-    };
-    let head = read_head(&spec.path).await;
-    let sniffed = sniff::sniff_header(&head).ok();
+    let (head, sniffed) = inspect_image(&spec.path).await?;
 
     match sniffed {
-        Some(s) => get_image_thumbnail(&spec, head, s, cache).await,
-        None => dispatch_non_image(&spec, cache).await,
+        Some(s) => {
+            let cache = cache
+                .join("thumbs")
+                .join(format!("fit-v1-{}", spec.modified_nanos));
+            get_image_thumbnail(&spec, head, s, &cache).await
+        }
+        None => {
+            if spec.center_crop && (spec.w == 0 || spec.h == 0) {
+                bail!("positive crop dimensions required");
+            }
+            let versioned = cache.join("thumbs").join(format!(
+                "render-v2-{}-{}",
+                spec.center_crop, spec.modified_nanos
+            ));
+            let cache = if spec.center_crop || spec.modified_nanos != 0 {
+                versioned.as_path()
+            } else {
+                cache
+            };
+            dispatch_non_image(&spec, cache).await
+        }
     }
 }
 
@@ -222,14 +225,14 @@ async fn get_image_thumbnail(
     let orientation = if s.kind == ImageKind::Jpeg {
         exif::orientation(&head).unwrap_or(1)
     } else {
-        1
+        s.orientation
     };
     let (uw, uh) = if Orientation(orientation).swaps_axes() {
         (s.height, s.width)
     } else {
         (s.width, s.height)
     };
-    let (tw, th) = target_size(uw, uh, spec.w, spec.h, spec.center_crop);
+    let (tw, th) = compute_target_size(uw, uh, spec.w, spec.h);
 
     // Passthrough: already thumbnail-sized, browser-renderable, small.
     if s.kind.can_passthrough()
@@ -251,20 +254,14 @@ async fn get_image_thumbnail(
         spec.mod_unix,
         spec.file_size,
     );
-    let cache_path =
-        if s.kind == ImageKind::Png || (s.kind == ImageKind::Bmp && bmp::has_alpha(&head)) {
-            cache_path.with_extension("png")
-        } else {
-            cache_path
-        };
+    let cache_path = if s.preserve_alpha {
+        cache_path.with_extension("png")
+    } else {
+        cache_path
+    };
     let key = cache_path.to_string_lossy().into_owned();
 
-    // Hot LRU, then file cache.
     if let Some(d) = lru::global().get(&cache_path) {
-        return Ok(ThumbOutcome::Generated(d));
-    }
-    if let Some(d) = read_cache_file(&cache_path).await {
-        lru::global().put(cache_path.clone(), d.clone());
         return Ok(ThumbOutcome::Generated(d));
     }
 
@@ -317,29 +314,26 @@ async fn generate_and_cache(
     let est = est
         .saturating_mul(2)
         .saturating_add(u64::from(spec.w) * u64::from(spec.h) * 4);
-    let est = est.saturating_add(dc_input_bytes(s, rw, rh, spec.file_size));
+    let est = est.saturating_add(if matches!(s.kind, ImageKind::Avif | ImageKind::Heif) {
+        (spec.file_size.max(0) as u64).saturating_mul(2)
+    } else {
+        dc_input_bytes(s, rw, rh, spec.file_size)
+    });
 
     let path = spec.path.clone();
     let quality = spec.quality;
     let cp = cache_path.clone();
-    let crop = spec.center_crop.then_some(if swaps {
-        (spec.h, spec.w)
-    } else {
-        (spec.w, spec.h)
-    });
     let jpg = admission::global()
         .run(est, move || -> Result<Vec<u8>> {
             let preview = preview.as_ref().map(|(bytes, _)| bytes.as_slice());
-            let bm = decode_to_target(&path, &head, s, rw, rh, crop, preview)?;
-            let (w, h) = crop.unwrap_or((rw, rh));
-            let bm = scale::resize_to(bm, w, h);
+            let bm = decode_to_target(&path, &head, s, rw, rh, preview)?;
+            let bm = scale::resize_to(bm, rw, rh);
             let bm = bm.apply_orientation(Orientation(orientation));
-            let jpg =
-                if s.kind == ImageKind::Png || (s.kind == ImageKind::Bmp && bm.channels() == 4) {
-                    encode::encode_png(bm)?
-                } else {
-                    encode::encode_jpeg(bm, quality)?
-                };
+            let jpg = if s.preserve_alpha {
+                encode::encode_png(bm)?
+            } else {
+                encode::encode_jpeg(bm, quality)?
+            };
             let _ = write_thumb_cache(&cp, &jpg);
             Ok(jpg)
         })
@@ -361,21 +355,23 @@ fn decode_to_target(
     s: Sniffed,
     rw: u32,
     rh: u32,
-    crop: Option<(u32, u32)>,
     preview: Option<&[u8]>,
 ) -> Result<Bitmap> {
     if let Some(bytes) = preview
         && let Ok(bitmap) = decode::jpeg_scaled_bytes(bytes, rw, rh)
     {
-        return Ok(scale::crop_for_fill(bitmap, crop));
+        return Ok(bitmap);
     }
     let p = std::path::Path::new(path);
+    if matches!(s.kind, ImageKind::Tiff | ImageKind::Avif | ImageKind::Heif) {
+        return still::thumbnail(p, s.kind, rw, rh);
+    }
     if s.kind == ImageKind::Bmp {
-        return bmp::thumbnail(p, rw, rh, crop);
+        return bmp::thumbnail(p, rw, rh, None);
     }
     if s.kind == ImageKind::Jpeg
         && dc_fast_eligible(s, rw, rh)
-        && let Ok(bm) = pjpeg::decode_thumbnail(head, p, crop)
+        && let Ok(bm) = pjpeg::decode_thumbnail(head, p, None)
     {
         return Ok(bm);
     }
@@ -384,7 +380,7 @@ fn decode_to_target(
     } else {
         decode::image_full(p)?
     };
-    Ok(scale::crop_for_fill(bm, crop))
+    Ok(bm)
 }
 
 #[allow(dead_code)] // parity with the server: kept for parity tests
@@ -411,6 +407,12 @@ fn dc_input_bytes(s: Sniffed, rw: u32, rh: u32, file_size: i64) -> u64 {
 }
 
 fn estimated_decoded_bytes(s: Sniffed, rw: u32, rh: u32) -> u64 {
+    if s.work_bytes > 0 {
+        let factor = (s.width / rw.max(1)).min(s.height / rh.max(1)).clamp(1, 64);
+        return s.work_bytes.saturating_add(
+            u64::from(s.width.div_ceil(factor)) * u64::from(s.height.div_ceil(factor)) * 4,
+        );
+    }
     let px: u64 = if s.kind == ImageKind::Jpeg && dc_fast_eligible(s, rw, rh) {
         u64::from(s.width.div_ceil(8)) * u64::from(s.height.div_ceil(8))
     } else if s.kind == ImageKind::Jpeg && jpeg_use_scaled(s.width, s.height, rw, rh) {
@@ -532,27 +534,6 @@ fn encode_bitmap(bm: Bitmap, spec: &ThumbSpec) -> Result<Vec<u8>> {
     encode::encode_jpeg(bm, spec.quality)
 }
 
-fn target_size(sw: u32, sh: u32, w: u32, h: u32, crop: bool) -> (u32, u32) {
-    if !crop || w == 0 || h == 0 {
-        return compute_target_size(sw, sh, w, h);
-    }
-    if u64::from(w) * u64::from(sh) >= u64::from(h) * u64::from(sw) {
-        (
-            w.min(sw),
-            (u64::from(sh) * u64::from(w))
-                .div_ceil(u64::from(sw))
-                .min(u64::from(sh)) as u32,
-        )
-    } else {
-        (
-            (u64::from(sw) * u64::from(h))
-                .div_ceil(u64::from(sh))
-                .min(u64::from(sw)) as u32,
-            h.min(sh),
-        )
-    }
-}
-
 fn is_video_ext(path: &str) -> bool {
     let ext = std::path::Path::new(path)
         .extension()
@@ -623,46 +604,36 @@ async fn read_cache_file(cache_path: &std::path::Path) -> Option<Bytes> {
     }
 }
 
-async fn read_head(path: &str) -> Vec<u8> {
-    match tokio::fs::File::open(path).await {
-        Ok(mut f) => {
-            let mut buf = vec![0u8; HEAD_READ];
-            match f.read(&mut buf).await {
-                Ok(n) => {
-                    buf.truncate(n);
-                    buf
-                }
-                Err(_) => Vec::new(),
-            }
+async fn inspect_image(path: &str) -> Result<(Vec<u8>, Option<Sniffed>)> {
+    let path = path.to_owned();
+    tokio::task::spawn_blocking(move || {
+        use std::io::Read;
+        let Ok(mut file) = std::fs::File::open(&path) else {
+            return Ok((Vec::new(), None));
+        };
+        let mut head = vec![0; 64];
+        let Ok(length) = file.read(&mut head) else {
+            return Ok((Vec::new(), None));
+        };
+        head.truncate(length);
+        if let Some(kind) = still::kind(&head) {
+            return Ok((head, Some(still::probe(std::path::Path::new(&path), kind)?)));
         }
-        Err(_) => Vec::new(),
-    }
+        head.reserve(HEAD_READ - length);
+        if file
+            .take((HEAD_READ - length) as u64)
+            .read_to_end(&mut head)
+            .is_err()
+        {
+            return Ok((Vec::new(), None));
+        }
+        let facts = sniff::sniff_header(&head).ok();
+        Ok((head, facts))
+    })
+    .await?
 }
 
-/// Compute target dimensions preserving aspect ratio (no upscaling), based
-/// on the *upright* source dimensions.
-pub fn compute_target_size(src_w: u32, src_h: u32, w: u32, h: u32) -> (u32, u32) {
-    let mut tw = src_w;
-    let mut th = src_h;
-    if w > 0 && h > 0 {
-        let rw = f64::from(w) / f64::from(src_w);
-        let rh = f64::from(h) / f64::from(src_h);
-        let r = rw.min(rh);
-        if r < 1.0 {
-            tw = (f64::from(src_w) * r) as u32;
-            th = (f64::from(src_h) * r) as u32;
-        }
-    } else if w > 0 && w < src_w {
-        let r = f64::from(w) / f64::from(src_w);
-        tw = w;
-        th = (f64::from(src_h) * r) as u32;
-    } else if h > 0 && h < src_h {
-        let r = f64::from(h) / f64::from(src_h);
-        th = h;
-        tw = (f64::from(src_w) * r) as u32;
-    }
-    (tw.max(1), th.max(1))
-}
+pub use crate::media::thumbnail_limits::compute_target_size;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Settings {
@@ -718,4 +689,38 @@ pub async fn render(
         ThumbOutcome::Original { data, .. } => data,
     };
     Ok(Some(bytes))
+}
+
+pub async fn png_preview(path: &str) -> Result<Vec<u8>> {
+    let owned = path.to_owned();
+    let (facts, size) = tokio::task::spawn_blocking(move || -> Result<_> {
+        let mut file = std::fs::File::open(&owned)?;
+        let size = file.metadata()?.len();
+        let mut head = [0; 64];
+        let length = std::io::Read::read(&mut file, &mut head)?;
+        let kind = still::kind(&head[..length])
+            .ok_or_else(|| anyhow::anyhow!("Unsupported preview image"))?;
+        Ok((still::probe(std::path::Path::new(&owned), kind)?, size))
+    })
+    .await??;
+    if u64::from(facts.width) * u64::from(facts.height) > admission::MAX_SOURCE_PIXELS {
+        bail!("Preview exceeds pixel limit");
+    }
+    let pixels = u64::from(facts.width) * u64::from(facts.height);
+    let cost = facts
+        .work_bytes
+        .saturating_add(pixels.saturating_mul(8))
+        .saturating_add(size.saturating_mul(2));
+    let path = path.to_owned();
+    admission::global()
+        .run(cost, move || {
+            let image = still::thumbnail(
+                std::path::Path::new(&path),
+                facts.kind,
+                facts.width,
+                facts.height,
+            )?;
+            encode::encode_png(image.apply_orientation(Orientation(facts.orientation)))
+        })
+        .await?
 }

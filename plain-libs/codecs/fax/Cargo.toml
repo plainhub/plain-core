@@ -1,0 +1,24 @@
+[package]
+name = "fax"
+version = "0.2.6"
+edition = "2018"
+license = "MIT"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/pdf-rs/fax"
+revision = "40b226eb97b391355e971fd95a8dd532a4c127a0"
+archive-sha256 = "f05de7d48f37cd6730705cbca900770cab77a89f413d23e100ad7fad7795a0ab"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[features]
+"debug" = []
+
+[dependencies]
+"fax_derive" = { path = "../fax_derive" }

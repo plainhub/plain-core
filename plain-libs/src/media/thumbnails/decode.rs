@@ -135,6 +135,12 @@ fn clamp_request(sw: u32, sh: u32, tw: u32, th: u32) -> (u32, u32) {
 /// GIF, BMP-less). Returns a Bitmap without intermediate DynamicImage
 /// copies for the common RGB/RGBA cases.
 pub fn image_full(path: &std::path::Path) -> Result<Bitmap> {
+    let mut input = std::fs::File::open(path)?;
+    let mut header = [0; 64];
+    let n = input.read(&mut header)?;
+    if let Some(kind) = super::still::kind(&header[..n]) {
+        return super::still::decode_file(path, kind);
+    }
     let mut reader = image::ImageReader::open(path)?;
     reader = reader.with_guessed_format()?;
     if reader.format() == Some(image::ImageFormat::Bmp) {
@@ -149,6 +155,9 @@ pub fn image_full(path: &std::path::Path) -> Result<Bitmap> {
 pub fn image_from_bytes(data: &[u8]) -> Result<Bitmap> {
     if data.len() < 12 {
         bail!("cover bytes too short");
+    }
+    if let Some(kind) = super::still::kind(data) {
+        return super::still::decode_bytes(data, kind);
     }
     let mut reader = image::ImageReader::new(std::io::Cursor::new(data));
     reader = reader.with_guessed_format()?;
