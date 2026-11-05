@@ -386,7 +386,7 @@ impl Db {
             };
             let changes = if let Some(paths) = paths {
                 if paths.is_empty() { return Ok(()); }
-                let volumes = connection.prepare("SELECT id,path FROM volumes")?
+                let volumes = connection.prepare("SELECT id,path FROM volumes WHERE instr(path,'://')=0")?
                     .query_map([], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)))?
                     .collect::<rusqlite::Result<Vec<_>>>()?;
                 let fields = "id,COALESCE(original_path,path),indexed,kind";
@@ -411,7 +411,7 @@ impl Db {
                 }
                 changes.into_iter().map(|(id,(path,indexed,kind))|(id,path,indexed,kind)).collect::<Vec<_>>()
             } else {
-                connection.prepare("SELECT file_id,COALESCE(original_path,path),indexed,kind FROM file_catalog")?
+                connection.prepare("SELECT file_id,COALESCE(original_path,path),indexed,kind FROM file_catalog WHERE instr(path,'://')=0")?
                     .query_map([],read_row)?.collect::<rusqlite::Result<Vec<_>>>()?
             };
             let tx = connection.unchecked_transaction()?;
