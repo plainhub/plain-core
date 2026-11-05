@@ -23,10 +23,7 @@ fn native_read_access_rechecks_real_targets_and_rejects_missing_or_relative_path
 #[tokio::test]
 async fn sdk_file_access_without_a_system_media_catalog_records_portable_file_metadata() {
     let directory = tempfile::tempdir().unwrap();
-    let source = tempfile::Builder::new()
-        .prefix("catalog-source-")
-        .tempdir_in(std::env::current_dir().unwrap())
-        .unwrap();
+    let source = crate::test_runtime::public_directory();
     let path = source.path().join("document.txt");
     std::fs::write(&path, b"owned catalog document").unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();

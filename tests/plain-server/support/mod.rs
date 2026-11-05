@@ -1,3 +1,7 @@
+#[path = "../../support/filesystem.rs"]
+mod filesystem;
+pub(crate) use filesystem::public_directory;
+
 pub(crate) async fn graphql_http(port: u16, token: &str, query: &str) -> serde_json::Value {
     graphql_http_variables(port, token, query, serde_json::json!({})).await
 }

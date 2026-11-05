@@ -52,10 +52,7 @@ async fn deleting_an_indexed_image_publishes_its_library_type_and_preserves_its_
 
 #[tokio::test]
 async fn overwriting_move_ignores_retired_catalog_rows_when_deleting_the_current_file() {
-    let directory = tempfile::Builder::new()
-        .prefix("file-move-")
-        .tempdir()
-        .unwrap();
+    let directory = crate::test_runtime::public_directory();
     let root = directory.path().canonicalize().unwrap();
     let core = ContentServer::open(&root.join("core")).unwrap();
     let state = core.runtime_state();
@@ -149,8 +146,8 @@ fn relation(core: &ContentServer, tag: &str) -> Option<String> {
 
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
-async fn deletion_scan_failure_is_visible_after_cleanup_and_a_repeat_does_not_retry() {
-    let directory = tempfile::tempdir().unwrap();
+async fn deletion_cleans_catalog_without_reindexing_missing_files_and_repeat_is_empty() {
+    let directory = crate::test_runtime::public_directory();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     let source = directory.path().join("source.txt");
@@ -168,15 +165,9 @@ async fn deletion_scan_failure_is_visible_after_cleanup_and_a_repeat_does_not_re
             later.to_str().unwrap().into(),
         ])
         .await;
-    assert!(
-        first
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("Rust core stopped")
-    );
+    assert_eq!(first.unwrap(), 2);
     assert!(!source.exists());
-    assert_eq!(std::fs::read(&later).unwrap(), b"later");
+    assert!(!later.exists());
     assert!(relation(&core, "file").is_none());
     let repeated = state
         .files

@@ -13,6 +13,45 @@ use std::{
 };
 use tokio::io::AsyncWriteExt;
 
+#[derive(Default)]
+pub(super) struct BlockingWork {
+    active: tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
+}
+impl BlockingWork {
+    async fn join(active: &mut Option<tokio::task::JoinHandle<()>>) -> Result<()> {
+        let result = match active.as_mut() {
+            Some(job) => job.await.map_err(anyhow::Error::from),
+            None => Ok(()),
+        };
+        *active = None;
+        result
+    }
+    async fn run<T: Send + 'static>(
+        &self,
+        work: impl FnOnce() -> Result<T> + Send + 'static,
+    ) -> Result<T> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        {
+            let mut active = self.active.lock().await;
+            Self::join(&mut active).await?;
+            *active = Some(tokio::task::spawn_blocking(move || {
+                let _ = sender.send(work());
+            }));
+        }
+        match receiver.await {
+            Ok(result) => result,
+            Err(error) => {
+                self.finish().await?;
+                Err(error.into())
+            }
+        }
+    }
+    pub(super) async fn finish(&self) -> Result<()> {
+        let mut active = self.active.lock().await;
+        Self::join(&mut active).await
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Target {
@@ -50,22 +89,22 @@ impl Temporary {
         self.0.clear();
     }
 }
-async fn create_file(path: PathBuf) -> Result<(tokio::fs::File, Temporary)> {
-    tokio::task::spawn_blocking(move || {
+async fn create_file(work: &BlockingWork, path: PathBuf) -> Result<(tokio::fs::File, Temporary)> {
+    work.run(move || {
         let file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&path)?;
         Ok((tokio::fs::File::from_std(file), Temporary(path)))
     })
-    .await?
+    .await
 }
-async fn commit(source: PathBuf, target: PathBuf) -> Result<Temporary> {
-    tokio::task::spawn_blocking(move || {
+async fn commit(work: &BlockingWork, source: PathBuf, target: PathBuf) -> Result<Temporary> {
+    work.run(move || {
         std::fs::rename(source, &target)?;
         Ok(Temporary(target))
     })
-    .await?
+    .await
 }
 pub fn directory(root: &Path, generation: &str) -> Result<PathBuf> {
     uuid::Uuid::parse_str(generation)?;
@@ -80,6 +119,7 @@ pub async fn cleanup(root: &Path, generation: &str) -> Result<()> {
 }
 async fn destination(
     state: &CoreRuntime,
+    work: &BlockingWork,
     path: &Path,
     unique: bool,
 ) -> Result<(PathBuf, Option<Temporary>)> {
@@ -95,7 +135,9 @@ async fn destination(
     let parent = path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Missing shared destination parent"))?;
-    tokio::fs::create_dir_all(parent).await?;
+    let parent_directory = parent.to_path_buf();
+    work.run(move || Ok(std::fs::create_dir_all(parent_directory)?))
+        .await?;
     if !unique {
         return Ok((path.to_path_buf(), None));
     }
@@ -114,7 +156,7 @@ async fn destination(
         } else {
             parent.join(format!("{stem} ({number}){extension}"))
         };
-        match create_file(candidate.clone()).await {
+        match create_file(work, candidate.clone()).await {
             Ok((file, reservation)) => {
                 drop(file);
                 return Ok((candidate, Some(reservation)));
@@ -143,6 +185,7 @@ impl Progress {
 }
 async fn download(
     state: &CoreRuntime,
+    work: &BlockingWork,
     run: &Run,
     ticket: &str,
     url: String,
@@ -162,7 +205,7 @@ async fn download(
     if let Some(length) = response.content_length() {
         ensure!(length == expected as u64, "Shared file length mismatch");
     }
-    let (mut output, temporary) = create_file(path.to_path_buf()).await?;
+    let (mut output, temporary) = create_file(work, path.to_path_buf()).await?;
     let mut stream = response.bytes_stream();
     let mut downloaded = 0_i64;
     let started = std::time::Instant::now();
@@ -202,6 +245,7 @@ async fn download(
 }
 async fn perform(
     state: &CoreRuntime,
+    work: &BlockingWork,
     run: &Run,
     ticket: &str,
     operation: Operation,
@@ -218,6 +262,7 @@ async fn perform(
             } else {
                 destination(
                     state,
+                    work,
                     &target.write_dir.join(&target.entry.name),
                     target.store_to_downloads,
                 )
@@ -226,9 +271,12 @@ async fn perform(
             let parent = target_path
                 .parent()
                 .ok_or_else(|| anyhow::anyhow!("Missing shared destination parent"))?;
-            tokio::fs::create_dir_all(parent).await?;
+            let parent_directory = parent.to_path_buf();
+            work.run(move || Ok(std::fs::create_dir_all(parent_directory)?))
+                .await?;
             let (bytes, staging) = download(
                 state,
+                work,
                 run,
                 ticket,
                 url,
@@ -236,7 +284,7 @@ async fn perform(
                 target.entry.size,
             )
             .await?;
-            let committed = commit(staging.0.clone(), target_path.clone()).await?;
+            let committed = commit(work, staging.0.clone(), target_path.clone()).await?;
             if let Some(reservation) = reservation {
                 reservation.keep();
             }
@@ -250,17 +298,18 @@ async fn perform(
             })
         }
         Operation::Zip { items, path } => {
-            let (path, _) = destination(state, &path, false).await?;
+            let (path, _) = destination(state, work, &path, false).await?;
             let parent = path.parent().unwrap().to_path_buf();
             let canceled = Arc::new(AtomicBool::new(false));
             let _cancel = crate::features::services::peers::shared_zip::Cancel(canceled.clone());
-            let (file, temporary) = tokio::task::spawn_blocking(move || {
-                crate::features::services::peers::shared_zip::pack(parent, items, canceled)
-            })
-            .await??;
+            let (file, temporary) = work
+                .run(move || {
+                    crate::features::services::peers::shared_zip::pack(parent, items, canceled)
+                })
+                .await?;
             let bytes = i64::try_from(file.metadata()?.len())?;
             drop(file);
-            let committed = commit(temporary.0.clone(), path.clone()).await?;
+            let committed = commit(work, temporary.0.clone(), path.clone()).await?;
             Ok(Saved {
                 receipt: Receipt {
                     path: path.to_string_lossy().into_owned(),
@@ -272,8 +321,9 @@ async fn perform(
         }
     }
 }
-pub async fn operation(
+pub(super) async fn operation(
     state: &CoreRuntime,
+    work: &BlockingWork,
     run: &Run,
     name: &str,
     size: Option<i64>,
@@ -287,7 +337,7 @@ pub async fn operation(
             .begin(&run.snapshot.id, &run.snapshot.generation, name, size)?;
     let Saved { receipt, committed } = match tokio::time::timeout(
         Duration::from_secs(15 * 60),
-        perform(state, run, &ticket, operation),
+        perform(state, work, run, &ticket, operation),
     )
     .await
     {

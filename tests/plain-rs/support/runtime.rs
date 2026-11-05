@@ -1,4 +1,7 @@
 use std::{path::Path, sync::Arc};
+#[path = "../../support/filesystem.rs"]
+mod filesystem;
+pub use filesystem::public_directory;
 pub struct Core {
     state: crate::runtime::Runtime,
     stop: tokio::sync::watch::Sender<bool>,

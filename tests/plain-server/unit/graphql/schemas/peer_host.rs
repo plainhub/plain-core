@@ -292,14 +292,16 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     )
     .unwrap();
     assert_eq!(content["data"]["channelSystemMessage"], true, "{content}");
-    let event = tokio::time::timeout(std::time::Duration::from_secs(2), channel_events.recv())
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(
-        event.event_type,
-        plain_rs::features::chat::events::WS_CHANNELS_UPDATED
-    );
+    let event = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while let Ok(event) = channel_events.recv().await {
+            if event.event_type == plain_rs::features::chat::events::WS_CHANNELS_UPDATED {
+                return event;
+            }
+        }
+        panic!("Channel event stream closed");
+    })
+    .await
+    .unwrap();
     let event: Value = serde_json::from_str(&event.payload).unwrap();
     assert_eq!(event["channels"][0]["id"], channel.id);
     assert_eq!(event["channels"][0]["members"][1]["status"], "JOINED");

@@ -1,5 +1,5 @@
 fn catalog_test_core(directory: &std::path::Path) -> crate::server::ContentServer {
-    let core = crate::server::ContentServer::open(directory).unwrap();
+    let core = crate::server::ContentServer::open(&directory.join("data")).unwrap();
     #[cfg(feature = "media")]
     core.runtime_state()
         .media_scans
@@ -53,7 +53,7 @@ async fn catalog_is_created_from_core_and_stopped_handles_reject_access() {
 #[cfg(all(feature = "media", not(any(target_os = "android", target_os = "ios"))))]
 #[tokio::test]
 async fn native_file_metadata_reaches_catalog_without_any_host_request() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::public_directory();
     let path = directory.path().join("report.txt");
     std::fs::write(&path, "document").unwrap();
     let core = catalog_test_core(directory.path());
@@ -122,7 +122,7 @@ async fn native_file_metadata_reaches_catalog_without_any_host_request() {
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn rescan_with_failed_probe_retains_current_known_metadata_without_host_round_trips() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::public_directory();
     let path = directory.path().join("damaged.mp3");
     std::fs::write(&path, b"unrecognized audio bytes").unwrap();
     let core = catalog_test_core(directory.path());
@@ -187,7 +187,7 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
         &excluded,
         &root.join("nested"),
         &root.join(".hidden"),
-        &root.join(".git"),
+        &root.join("repository/.git"),
         &root.join(".plain-trash"),
         &root.join("trash"),
         &root.join("lost+found"),
@@ -201,7 +201,7 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
         "photo.heic",
         "excluded/excluded.txt",
         ".hidden/hidden.txt",
-        ".git/internal.txt",
+        "repository/.git/internal.txt",
         ".plain-trash/deleted.txt",
         "trash/kept.txt",
         "lost+found/internal.txt",
@@ -261,8 +261,8 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
     done.send(()).unwrap();
     authorize.await.unwrap();
     assert_eq!(result.status, Status::Completed);
-    assert_eq!(result.total_files, Some(7));
-    assert_eq!(result.processed_files, 7);
+    assert_eq!(result.total_files, Some(6));
+    assert_eq!(result.processed_files, 6);
     assert_eq!(
         catalog
             .count(plain_rs::features::enums::DataType::Doc)
@@ -453,10 +453,7 @@ async fn the_watcher_stops_with_the_core_and_rejects_after_it() {
 #[tokio::test]
 async fn filesystem_watch_events_from_an_os_thread_update_the_shared_catalog() {
     let directory = tempfile::tempdir().unwrap();
-    let source = tempfile::Builder::new()
-        .prefix("watch-source-")
-        .tempdir_in(std::env::current_dir().unwrap())
-        .unwrap();
+    let source = crate::test_support::public_directory();
     let core = catalog_test_core(directory.path());
     let catalog = core.native_media_catalog().unwrap();
     catalog

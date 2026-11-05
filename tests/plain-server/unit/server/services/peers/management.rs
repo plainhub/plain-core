@@ -209,6 +209,7 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
                     assert_eq!(request["params"]["text"], "new clipboard");
                     json!(success.load(Ordering::SeqCst))
                 }
+                "mdnsMulticast" => json!(false),
                 method => panic!("Unexpected host primitive {method}"),
             };
             host.reply(generation, json!({"id":request["id"],"result":result}))
@@ -300,6 +301,7 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
                     assert_eq!(item[0].source, expected_source);
                     json!(true)
                 }
+                "mdnsMulticast" => json!(false),
                 method => panic!("Unexpected remote host primitive {method}"),
             };
             remote_host

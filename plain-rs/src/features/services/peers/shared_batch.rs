@@ -3,8 +3,8 @@ use crate::features::files::shares::batch_plan::Plan;
 use crate::features::files::shares::batch_plan::Walker;
 use crate::features::files::shares::batch_queue::Queue;
 use crate::features::files::shares::batch_queue::Run;
-use crate::features::services::peers::shared_transfer::cleanup;
 use crate::features::services::peers::shared_transfer::operation;
+use crate::features::services::peers::shared_transfer::{BlockingWork, cleanup};
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use serde_json::json;
@@ -38,22 +38,32 @@ pub fn downloads_directory(
         .to_owned())
 }
 
+struct Worker {
+    generation: String,
+    task: Option<JoinHandle<()>>,
+    clean: Arc<AtomicBool>,
+    io: Arc<BlockingWork>,
+}
+
 #[derive(Default)]
 pub struct Runtime {
     pub queue: Queue,
-    workers: Mutex<HashMap<String, (String, Option<JoinHandle<()>>, Arc<AtomicBool>)>>,
+    workers: Mutex<HashMap<String, Worker>>,
 }
 impl Runtime {
     pub async fn shutdown(&self, directory: &std::path::Path) {
         self.queue.stop();
         let mut workers = self.workers.lock().await;
-        for (_, (generation, job, clean)) in workers.drain() {
-            if let Some(job) = job {
+        for (_, worker) in workers.drain() {
+            if let Some(job) = worker.task {
                 job.abort();
                 let _ = job.await;
             }
-            if !clean.load(Ordering::SeqCst) {
-                if let Err(error) = cleanup(directory, &generation).await {
+            if let Err(error) = worker.io.finish().await {
+                log::error!("Shared transfer I/O failed: {error}");
+            }
+            if !worker.clean.load(Ordering::SeqCst) {
+                if let Err(error) = cleanup(directory, &worker.generation).await {
                     log::error!("Shared transfer cleanup failed: {error}");
                 }
             }
@@ -63,7 +73,7 @@ impl Runtime {
 pub async fn control(state: &CoreRuntime, id: &str, command: &str) -> Result<bool> {
     ensure!(!*state.stop.borrow(), "Core stopped");
     let mut workers = state.shared_batches.workers.lock().await;
-    if let Some((generation, worker, clean)) = workers.get_mut(id) {
+    if let Some(worker) = workers.get_mut(id) {
         if !matches!(command, "pause" | "cancel" | "remove") {
             ensure!(
                 !state.shared_batches.queue.is_active(id),
@@ -71,13 +81,16 @@ pub async fn control(state: &CoreRuntime, id: &str, command: &str) -> Result<boo
             );
         }
         let paused = state.shared_batches.queue.control(id, "pause")?.is_some();
-        if let Some(job) = worker.take() {
+        if let Some(job) = worker.task.as_mut() {
             job.abort();
             let _ = job.await;
         }
-        if !clean.load(Ordering::SeqCst) {
-            cleanup(&state.directory, generation).await?;
+        worker.task = None;
+        let finished = worker.io.finish().await;
+        if !worker.clean.load(Ordering::SeqCst) {
+            cleanup(&state.directory, &worker.generation).await?;
         }
+        finished?;
         workers.remove(id);
         if command == "pause" {
             return Ok(paused);
@@ -107,8 +120,8 @@ pub fn start(state: CoreRuntime) {
         loop {
             {
                 let mut workers = state.shared_batches.workers.lock().await;
-                workers.retain(|id, (_, _, clean)| {
-                    !clean.load(Ordering::SeqCst) || state.shared_batches.queue.is_active(id)
+                workers.retain(|id, worker| {
+                    !worker.clean.load(Ordering::SeqCst) || state.shared_batches.queue.is_active(id)
                 });
                 while workers.len() < 3 {
                     let Some(run) = state
@@ -123,14 +136,18 @@ pub fn start(state: CoreRuntime) {
                     let worker_state = state.clone();
                     let cleaned = Arc::new(AtomicBool::new(false));
                     let worker_cleaned = cleaned.clone();
+                    let io = Arc::new(BlockingWork::default());
+                    let worker_io = io.clone();
                     let job = tokio::spawn(async move {
-                        let result = execute(&worker_state, &run).await;
+                        let result = execute(&worker_state, &worker_io, &run).await;
+                        let finished = worker_io.finish().await;
                         let released =
                             cleanup(&worker_state.directory, &run.snapshot.generation).await;
                         worker_cleaned.store(released.is_ok(), Ordering::SeqCst);
                         let error = result
                             .err()
                             .map(|error| error.to_string())
+                            .or_else(|| finished.err().map(|error| error.to_string()))
                             .or_else(|| released.err().map(|error| error.to_string()));
                         worker_state.shared_batches.queue.finish(
                             &run.snapshot.id,
@@ -138,7 +155,15 @@ pub fn start(state: CoreRuntime) {
                             error,
                         );
                     });
-                    workers.insert(id, (generation, Some(job), cleaned));
+                    workers.insert(
+                        id,
+                        Worker {
+                            generation,
+                            task: Some(job),
+                            clean: cleaned,
+                            io,
+                        },
+                    );
                 }
             }
             tokio::select! {_=stop.changed()=>break, result=changed.changed()=>if result.is_err(){break}}
@@ -164,7 +189,7 @@ async fn plan(state: &CoreRuntime, run: &Run) -> Result<Plan> {
     }
     walker.finish()
 }
-async fn execute(state: &CoreRuntime, run: &Run) -> Result<()> {
+async fn execute(state: &CoreRuntime, work: &BlockingWork, run: &Run) -> Result<()> {
     let plan = match &run.plan {
         Some(plan) => plan.clone(),
         None => plan(state, run).await?,
@@ -184,6 +209,7 @@ async fn execute(state: &CoreRuntime, run: &Run) -> Result<()> {
                 .file_url(&run.intent.url_token, &target.entry.relative_path, false)?;
         let result = operation(
             state,
+            work,
             run,
             &target.entry.name,
             Some(target.entry.size),
@@ -224,7 +250,7 @@ async fn execute(state: &CoreRuntime, run: &Run) -> Result<()> {
     }
     if run.intent.kind == Kind::Zip {
         ensure!(!items.is_empty(), "No shared files to archive");
-        let receipt = operation(state,run,"",None,json!({"kind":"zip","items":items,"path":format!("{}/{}",run.intent.downloads_base.trim_end_matches('/'),run.intent.zip_name)})).await?;
+        let receipt = operation(state,work,run,"",None,json!({"kind":"zip","items":items,"path":format!("{}/{}",run.intent.downloads_base.trim_end_matches('/'),run.intent.zip_name)})).await?;
         state.file_platform.scan(&[receipt.path]).await?;
     }
     Ok(())

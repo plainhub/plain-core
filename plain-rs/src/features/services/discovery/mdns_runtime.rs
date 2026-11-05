@@ -631,10 +631,10 @@ impl Runtime {
         if owner.as_ref() == Some(&self.id) {
             host_responder::stop();
             crate::infrastructure::protocols::mdns::packet_capture::set_enabled(false);
+            *owner = None;
             let _ = host
                 .call("mdnsMulticast", json!({"acquire":false,"lease":self.id}))
                 .await;
-            *owner = None;
         }
     }
 }

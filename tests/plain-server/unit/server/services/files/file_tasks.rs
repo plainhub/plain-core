@@ -56,6 +56,8 @@ async fn main_tasks_track_resolved_paths_and_gate_sdk_execution_on_platform_auth
             let request: Value = serde_json::from_str(&text).unwrap();
             let reply = if request["method"] == "systemCapabilities" {
                 json!({"id":request["id"],"result":[]})
+            } else if request["method"] == "mdnsMulticast" {
+                json!({"id":request["id"],"result":false})
             } else if denied.load(std::sync::atomic::Ordering::SeqCst) {
                 json!({"id":request["id"],"error":"synthetic permission revoked"})
             } else {
@@ -238,6 +240,7 @@ async fn media_move_case(missing_destination: bool) {
             let result = match request["method"].as_str().unwrap() {
                 "fileTaskScan" => json!(true),
                 "systemCapabilities" => json!([]),
+                "mdnsMulticast" => json!(false),
                 "systemAccessFacts" => json!({"granted":{"FILES":true}}),
                 "fileTaskMediaSnapshot" => {
                     let rows = params["paths"].as_array().unwrap().iter().filter_map(|path| {

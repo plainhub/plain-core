@@ -2,18 +2,20 @@ use super::*;
 
 #[tokio::test]
 async fn failed_file_creation_preserves_existing_content() {
+    let work = BlockingWork::default();
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("existing");
     std::fs::write(&path, b"keep existing content").unwrap();
-    assert!(create_file(path.clone()).await.is_err());
+    assert!(create_file(&work, path.clone()).await.is_err());
     assert_eq!(std::fs::read(path).unwrap(), b"keep existing content");
 }
 
 #[tokio::test]
 async fn created_file_is_removed_only_when_its_guard_is_dropped() {
+    let work = BlockingWork::default();
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("owned");
-    let (mut file, temporary) = create_file(path.clone()).await.unwrap();
+    let (mut file, temporary) = create_file(&work, path.clone()).await.unwrap();
     file.write_all(b"owned content").await.unwrap();
     file.flush().await.unwrap();
     drop(file);
@@ -29,6 +31,7 @@ fn canceled_queued_file_creation_cannot_leave_a_partial_file() {
         .max_blocking_threads(1)
         .build()
         .unwrap();
+    let work = BlockingWork::default();
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join(".shared-fixture.part");
     runtime.block_on(async {
@@ -39,12 +42,16 @@ fn canceled_queued_file_creation_cannot_leave_a_partial_file() {
             blocked.recv().unwrap();
         });
         ready.await.unwrap();
-        let mut creation = Box::pin(create_file(path.clone()));
+        let mut creation = Box::pin(create_file(&work, path.clone()));
         assert!(futures_util::poll!(creation.as_mut()).is_pending());
         drop(creation);
+        let mut finish = Box::pin(work.finish());
+        assert!(futures_util::poll!(finish.as_mut()).is_pending());
+        drop(finish);
         release.send(()).unwrap();
         blocker.await.unwrap();
-        tokio::task::spawn_blocking(|| {}).await.unwrap();
+        work.finish().await.unwrap();
+        assert!(!path.exists());
     });
     runtime.shutdown_timeout(Duration::from_secs(5));
     assert!(!path.exists());

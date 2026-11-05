@@ -106,6 +106,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
                             .collect();
                     json!({"granted":granted})
                 }
+                "mdnsMulticast" => json!(false),
                 method => panic!("Unexpected metadata primitive {method}"),
             };
             host.reply(generation, json!({"id":request["id"],"result":value}))

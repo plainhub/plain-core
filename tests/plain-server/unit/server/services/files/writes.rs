@@ -111,7 +111,7 @@ async fn text_export_replaces_only_the_selected_file_with_exact_captured_bytes()
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn a_scan_failure_is_reported_after_the_physical_write_and_does_not_claim_a_result() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::public_directory();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state().core;
     state.media_scans.close().unwrap();

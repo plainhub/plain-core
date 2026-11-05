@@ -238,6 +238,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
                         }
                         json!(sdk_facts.lock().unwrap().clone())
                     }
+                    "mdnsMulticast" => json!(false),
                     method => panic!("Unexpected notification primitive {method}"),
                 };
                 host.reply(generation, json!({"id":request["id"],"result":result}))

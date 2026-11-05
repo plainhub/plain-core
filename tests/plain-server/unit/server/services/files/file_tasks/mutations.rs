@@ -103,7 +103,7 @@ async fn strict_native_rename_and_delete_rebind_and_clean_generic_file_reference
 #[tokio::test]
 async fn rename_postprocessing_failure_preserves_physical_receipt_and_does_not_retry_after_restart()
 {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::public_directory();
     let core_directory = directory.path().join("core");
     let first = ContentServer::open(&core_directory).unwrap();
     let state = first.runtime_state().core;
