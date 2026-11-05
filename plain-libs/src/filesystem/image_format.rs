@@ -47,10 +47,64 @@ pub fn is_animated_image_or_svg(path: &Path) -> bool {
     }
 
     if n >= 12 && &header[4..8] == b"ftyp" {
-        return matches!(&header[8..12], b"msf1" | b"hevc" | b"hevx");
+        return is_animated_isobmff(&mut file);
     }
 
     header.windows(4).any(|w| w == b"<svg")
+}
+
+fn is_animated_isobmff(file: &mut (impl Read + Seek)) -> bool {
+    if file.seek(SeekFrom::Start(0)).is_err() {
+        return false;
+    }
+    let mut header = [0; 8];
+    if file.read_exact(&mut header).is_err() || &header[4..] != b"ftyp" {
+        return false;
+    }
+    let size = u32::from_be_bytes(header[..4].try_into().unwrap());
+    let (size, header_size) = if size == 1 {
+        let mut extended = [0; 8];
+        if file.read_exact(&mut extended).is_err() {
+            return false;
+        }
+        (u64::from_be_bytes(extended), 16)
+    } else {
+        (u64::from(size), 8)
+    };
+    let sequence = |brand: &[u8]| matches!(brand, b"avis" | b"msf1" | b"hevc" | b"hevx");
+    let mut brand = [0; 4];
+    if file.read_exact(&mut brand).is_err() {
+        return false;
+    }
+    if sequence(&brand) {
+        return true;
+    }
+    let size = if size == 0 {
+        let Ok(size) = file.seek(SeekFrom::End(0)) else {
+            return false;
+        };
+        size
+    } else {
+        size
+    };
+    let Some(mut remaining) = size.checked_sub(header_size + 8) else {
+        return false;
+    };
+    if remaining % 4 != 0 || file.seek(SeekFrom::Start(header_size + 8)).is_err() {
+        return false;
+    }
+    let mut brands = [0; 512];
+    while remaining != 0 {
+        let length = remaining.min(brands.len() as u64) as usize;
+        if file.read_exact(&mut brands[..length]).is_err() {
+            return false;
+        }
+        if brands[..length].chunks_exact(4).any(sequence) {
+            return true;
+        }
+        remaining -= length as u64;
+    }
+    false
 }
 
 fn is_animated_png(file: &mut (impl Read + Seek)) -> bool {

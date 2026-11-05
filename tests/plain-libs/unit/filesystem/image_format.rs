@@ -100,3 +100,52 @@ fn animated_header_matrix_covers_removed_app_parser_cases() {
         assert_eq!(is_animated_image_or_svg(&path), expected, "{bytes:?}");
     }
 }
+
+#[test]
+fn isobmff_sequences_are_recognized_by_major_and_compatible_brands() {
+    let directory = tempfile::tempdir().unwrap();
+    for extension in ["avif", "AVIF", "heic", "heif"] {
+        let path = directory.path().join(format!("sequence.{extension}"));
+        for brand in [b"avis", b"msf1", b"hevc", b"hevx"] {
+            let mut bytes = 24_u32.to_be_bytes().to_vec();
+            bytes.extend_from_slice(b"ftyp");
+            bytes.extend_from_slice(brand);
+            bytes.extend_from_slice(b"\0\0\0\0mif1avif");
+            std::fs::write(&path, &bytes).unwrap();
+            assert!(is_animated_image_or_svg(&path), "major {brand:?}");
+            bytes[8..12].copy_from_slice(b"mif1");
+            bytes[20..24].copy_from_slice(brand);
+            std::fs::write(&path, &bytes).unwrap();
+            assert!(is_animated_image_or_svg(&path), "compatible {brand:?}");
+        }
+    }
+}
+
+#[test]
+fn isobmff_animation_scan_stays_inside_ftyp_and_handles_extended_sizes() {
+    for extended in [false, true] {
+        let mut bytes = Vec::new();
+        let size = if extended { 1048_u64 } else { 1040_u64 };
+        bytes.extend_from_slice(&(if extended { 1_u32 } else { size as u32 }).to_be_bytes());
+        bytes.extend_from_slice(b"ftyp");
+        if extended {
+            bytes.extend_from_slice(&size.to_be_bytes());
+        }
+        bytes.extend_from_slice(b"avif\0\0\0\0");
+        bytes.resize(size as usize, 0);
+        bytes.extend_from_slice(b"\0\0\0\x10mdatavishevc");
+        let mut input = std::io::Cursor::new(bytes.clone());
+        assert!(!is_animated_isobmff(&mut input));
+        assert_eq!(input.position(), size);
+        bytes[size as usize - 4..size as usize].copy_from_slice(b"avis");
+        let mut input = std::io::Cursor::new(bytes);
+        assert!(is_animated_isobmff(&mut input));
+        assert_eq!(input.position(), size);
+    }
+    for bytes in [
+        b"\0\0\0\x08ftypavif".as_slice(),
+        b"\0\0\0\x15ftypavif\0\0\0\0avis",
+    ] {
+        assert!(!is_animated_isobmff(&mut std::io::Cursor::new(bytes)));
+    }
+}
