@@ -233,11 +233,6 @@ extend type Mutation {
 	"""
 	mergeChunks(fileId: String!, totalChunks: Int!, path: String!, replace: Boolean!, totalSize: Long!): MergeTask!
 	moveFile(src: String!, dst: String!, overwrite: Boolean!): Boolean!
-	"""
-	The only media action that is also a storage write, so it is the
-	only one that gates — the others just move rows between the library
-	and the trash.
-	"""
 	moveMediaItems(type: MediaDataType!, query: String!, destDir: String!): ActionResult!
 	releaseAppFile(fileId: String!): Boolean!
 	renameFile(path: String!, name: String!): String

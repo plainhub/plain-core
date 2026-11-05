@@ -4,10 +4,17 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn closed_native_page_cancels_its_pending_main_schema_request_before_radio_acquisition() {
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
+    prefs.set("client_id", "fixture-native-scope").unwrap();
+    prefs
+        .set("mdns_hostname", "fixture-native-scope.local")
+        .unwrap();
     let server = ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[7; 32]),
@@ -32,10 +39,18 @@ async fn closed_native_page_cancels_its_pending_main_schema_request_before_radio
                 .await
         }
     });
-    let request = requests.recv().await.unwrap();
-    assert_eq!(request["method"], "systemCapabilities");
+    let request = tokio::time::timeout(std::time::Duration::from_secs(5), requests.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(request["method"], "mdnsMulticast");
+    assert_eq!(request["params"]["acquire"], true);
+    assert!(!request["params"]["lease"].as_str().unwrap().is_empty());
     scope.close();
-    let response = pending.await.unwrap();
+    let response = tokio::time::timeout(std::time::Duration::from_secs(5), pending)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(!response.errors.is_empty());
     assert!(scope.is_closed());
     assert_eq!(state.mdns.snapshot()["receiver"], false);

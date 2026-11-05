@@ -50,7 +50,7 @@ fn fact(id: &str, kind: &str, size: i64) -> Value {
 
 #[tokio::test]
 async fn packages_maps_host_facts_into_the_contract_types() {
-    let (dir, schema, _prefs) = fixture(json!(["QUERY_ALL_PACKAGES"]));
+    let (dir, schema, _prefs) = fixture(json!(["APPS"]));
     let host = schema_host(&schema);
     stub(host.clone(), |method, _| match method {
         "systemPackageFacts" => json!([fact("com.b", "SYSTEM", 20), fact("com.a", "USER", 10),]),
@@ -87,7 +87,7 @@ async fn packages_maps_host_facts_into_the_contract_types() {
 
 #[tokio::test]
 async fn package_roots_error_out_without_the_api_permission() {
-    let (_dir, schema, _prefs) = fixture(json!(["READ_CONTACTS"]));
+    let (_dir, schema, _prefs) = fixture(json!(["CONTACTS"]));
     let response = schema.execute(r#"query { packageCount(query:"") }"#).await;
     // plain-app degrades packageCount to 0 instead of erroring.
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -101,11 +101,11 @@ async fn package_roots_error_out_without_the_api_permission() {
 
 #[tokio::test]
 async fn package_count_requires_the_platform_grant_too() {
-    let (_dir, schema, _prefs) = fixture(json!(["QUERY_ALL_PACKAGES"]));
+    let (_dir, schema, _prefs) = fixture(json!(["APPS"]));
     let host = schema_host(&schema);
     stub(host.clone(), |method, _| match method {
         "systemPackageFacts" => json!([fact("com.a", "USER", 1), fact("com.b", "USER", 2)]),
-        "systemPermissionFacts" => json!({"granted":{"QUERY_ALL_PACKAGES": false}}),
+        "systemAccessFacts" => json!({"granted":{"APPS": false}}),
         other => panic!("unexpected host call {other}"),
     });
     let response = schema.execute(r#"query { packageCount(query:"") }"#).await;
@@ -115,7 +115,7 @@ async fn package_count_requires_the_platform_grant_too() {
 
 #[tokio::test]
 async fn package_statuses_keep_missing_packages_in_the_reply() {
-    let (_dir, schema, _prefs) = fixture(json!(["QUERY_ALL_PACKAGES"]));
+    let (_dir, schema, _prefs) = fixture(json!(["APPS"]));
     let host = schema_host(&schema);
     stub(host.clone(), |method, params| match method {
         "systemPackageStatuses" => {
@@ -137,7 +137,7 @@ async fn package_statuses_keep_missing_packages_in_the_reply() {
 
 #[tokio::test]
 async fn install_package_parses_identity_in_rust_and_dispatches_only_sdk_execution() {
-    let (dir, schema, _prefs) = fixture(json!(["QUERY_ALL_PACKAGES"]));
+    let (dir, schema, _prefs) = fixture(json!(["APPS"]));
     let path = dir.path().join("source.apk");
     std::fs::write(&path, plain_libs::test_apk::apk("com.a", None)).unwrap();
     let expected = path.clone();
@@ -172,7 +172,7 @@ fn schema_host(schema: &PublicSchema) -> Arc<Host> {
 
 #[tokio::test]
 async fn package_manifest_uses_the_installed_path_and_no_platform_parser() {
-    let (dir, schema, _prefs) = fixture(json!(["QUERY_ALL_PACKAGES"]));
+    let (dir, schema, _prefs) = fixture(json!(["APPS"]));
     let path = dir.path().join("installed.apk");
     std::fs::write(&path, plain_libs::test_apk::apk("com.a", None)).unwrap();
     let host = schema_host(&schema);
@@ -201,7 +201,7 @@ async fn package_manifest_preserves_package_permission_and_missing_package_error
             .iter()
             .any(|error| error.message == "no_permission")
     );
-    let (_dir, schema, _prefs) = fixture(json!(["QUERY_ALL_PACKAGES"]));
+    let (_dir, schema, _prefs) = fixture(json!(["APPS"]));
     stub(schema_host(&schema), |method, _| match method {
         "systemPackageStatuses" => json!({"com.a":null}),
         other => panic!("unexpected platform operation {other}"),

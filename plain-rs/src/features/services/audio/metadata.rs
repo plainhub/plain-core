@@ -1,6 +1,7 @@
 use crate::features::media::audio::queue::AudioTrack;
 #[cfg(test)]
 use crate::infrastructure::db::MediaFileRow;
+#[cfg(test)]
 use crate::infrastructure::db::audio_catalog::AudioMedia;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;

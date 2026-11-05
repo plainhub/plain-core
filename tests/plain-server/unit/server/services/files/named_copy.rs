@@ -307,7 +307,7 @@ async fn native_provider_uri_copy_is_not_exposed_to_remote_filesystem_callers() 
     let state = core.runtime_state();
     state
         .prefs
-        .set("api_permissions", json!(["WRITE_EXTERNAL_STORAGE"]))
+        .set("api_permissions", json!(["FILES"]))
         .unwrap();
     let (generation, mut requests) = state.host.connect();
     let target = dir.path().join("exports");

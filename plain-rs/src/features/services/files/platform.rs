@@ -1,3 +1,4 @@
+use crate::features::access::AccessFeature;
 mod media_rows;
 pub(super) mod paths;
 
@@ -20,6 +21,7 @@ pub struct FilePlatform {
     directory: PathBuf,
     cache: PathBuf,
     pub(super) private_roots: std::result::Result<[PathBuf; 2], String>,
+    #[cfg(not(feature = "runtime-media"))]
     events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
     #[cfg(any(test, feature = "test-seams"))]
     sdk: std::sync::atomic::AtomicBool,
@@ -33,6 +35,7 @@ impl FilePlatform {
         prefs: Arc<crate::features::prefs::Prefs>,
         directory: PathBuf,
         cache: PathBuf,
+        #[cfg(not(feature = "runtime-media"))]
         events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
         #[cfg(feature = "runtime-media")] scans: Arc<
             crate::features::services::files::media_scans::MediaScans,
@@ -52,6 +55,7 @@ impl FilePlatform {
             prefs,
             directory,
             cache,
+            #[cfg(not(feature = "runtime-media"))]
             events,
             #[cfg(any(test, feature = "test-seams"))]
             sdk: std::sync::atomic::AtomicBool::new(cfg!(any(
@@ -334,7 +338,7 @@ impl FilePlatform {
         if needed
             && !crate::features::services::device::access::granted(
                 &self.host,
-                &["WRITE_EXTERNAL_STORAGE".to_owned()],
+                &[AccessFeature::Files],
             )
             .await?
         {

@@ -21,7 +21,7 @@ fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema, Arc<Db>) {
 
 #[tokio::test]
 async fn clipboard_roots_refuse_to_answer_without_the_web_permission() {
-    let (_dir, schema, _db) = fixture(json!(["READ_CONTACTS"]));
+    let (_dir, schema, _db) = fixture(json!(["CONTACTS"]));
     for query in [
         r#"query { clipboardItems(offset:0, limit:10, query:"") { id text } }"#,
         r#"query { clipboardItemCount(query:"") }"#,

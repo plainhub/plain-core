@@ -33,7 +33,7 @@ pub struct SecurityState {
     pub rotate_url_token_on_restart: bool,
     pub adb_token: String,
     pub url_token: String,
-    pub api_permissions: Vec<String>,
+    pub api_permissions: Vec<crate::features::access::AccessFeature>,
     pub client_id: String,
     pub mdns_hostname: String,
     pub signature_public_key: String,
@@ -245,7 +245,7 @@ pub fn get_entry(prefs: &Prefs, key: &str) -> anyhow::Result<Option<Value>> {
                 .unwrap_or(DEFAULT_LOGIN_REQUIRE_APPROVAL)
         ),
         ROTATE_URL_TOKEN_ON_RESTART => json!(prefs.get::<bool>(key)?.unwrap_or_default()),
-        API_PERMISSIONS => json!(prefs.get::<Vec<String>>(key)?.unwrap_or_default()),
+        API_PERMISSIONS => json!(prefs.get::<Vec<crate::features::access::AccessFeature>>(key)?.unwrap_or_default()),
         AUTO_CHECK_UPDATE => json!(prefs.get::<bool>(key)?.unwrap_or(true)),
         SIGNATURE_PUBLIC_KEY => json!(signature_public_key(prefs)?),
         _ => return Ok(None),
@@ -280,33 +280,6 @@ pub fn snapshot(prefs: &Prefs) -> anyhow::Result<SecurityState> {
 #[cfg(test)]
 #[path = "../../../../../tests/plain-rs/unit/features/prefs/system.rs"]
 mod tests;
-
-pub const PERMISSIONS: &[&str] = &[
-    "WRITE_EXTERNAL_STORAGE",
-    "READ_SMS",
-    "SEND_SMS",
-    "READ_CONTACTS",
-    "WRITE_CONTACTS",
-    "READ_CALL_LOG",
-    "WRITE_CALL_LOG",
-    "CALL_PHONE",
-    "POST_NOTIFICATIONS",
-    "NEARBY_WIFI_DEVICES",
-    "ACCESS_FINE_LOCATION",
-    "CAMERA",
-    "SYSTEM_ALERT_WINDOW",
-    "RECORD_AUDIO",
-    "READ_MEDIA_IMAGES",
-    "READ_MEDIA_VIDEOS",
-    "READ_MEDIA_AUDIO",
-    "NOTIFICATION_LISTENER",
-    "READ_PHONE_STATE",
-    "READ_PHONE_NUMBERS",
-    "SCHEDULE_EXACT_ALARM",
-    "QUERY_ALL_PACKAGES",
-    "ADB",
-    "CLIPBOARD",
-];
 
 pub(crate) fn generate_mdns_hostname() -> String {
     use rand::Rng;

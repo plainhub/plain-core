@@ -33,14 +33,17 @@ impl Service {
         if let Some(defaults) = options.file_index_defaults.clone() {
             core.runtime()
                 .media_scans
-                .set_defaults_for_test(defaults)
+                .set_defaults(defaults)
                 .map_err(anyhow::Error::msg)?;
         }
         let prefs = core.shared_preferences().map_err(anyhow::Error::msg)?;
         plain_rs::features::prefs::security::configure_password_login(&prefs)?;
         let permissions = plain_rs::features::prefs::pref_keys::API_PERMISSIONS;
         if prefs.get::<Vec<String>>(permissions)?.is_none() {
-            prefs.set(permissions, [plain_rs::features::services::device::permission::Permission::WriteExternalStorage])?;
+            prefs.set(
+                permissions,
+                plain_rs::features::access::AccessFeature::FILE_FEATURES,
+            )?;
         }
         storage::source_directories(&prefs, &options.media_directories)?;
         let log_file =
@@ -162,11 +165,6 @@ impl Service {
 
 fn capabilities() -> Vec<String> {
     let mut capabilities = vec![
-        "FILE_BROWSER".into(),
-        "IMAGE_LIBRARY".into(),
-        "AUDIO_LIBRARY".into(),
-        "VIDEO_LIBRARY".into(),
-        "DOCUMENT_LIBRARY".into(),
         "FILE_EXPORT".into(),
         "MEDIA_SCAN".into(),
         "BACKGROUND_TIMER".into(),

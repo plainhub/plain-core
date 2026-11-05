@@ -38,6 +38,7 @@ async fn sdk_file_access_without_a_system_media_catalog_records_portable_file_me
         state.prefs.clone(),
         state.directory.clone(),
         state.cache.root().to_owned(),
+        #[cfg(not(feature = "runtime-media"))]
         state.events.clone(),
         #[cfg(feature = "runtime-media")]
         state.media_scans.clone(),
@@ -88,6 +89,7 @@ async fn sdk_recents(
         state.prefs.clone(),
         directory.path().to_path_buf(),
         state.cache.root().to_owned(),
+        #[cfg(not(feature = "runtime-media"))]
         state.events.clone(),
         #[cfg(feature = "runtime-media")]
         state.media_scans.clone(),
@@ -302,14 +304,11 @@ async fn metadata_authorization_batches_sdk_paths_without_requiring_existing_fil
     let host = state.host.clone();
     let worker = tokio::spawn(async move {
         let request = requests.recv().await.unwrap();
-        assert_eq!(request["method"], "systemPermissionFacts");
-        assert_eq!(
-            request["params"],
-            json!({"permissions":["WRITE_EXTERNAL_STORAGE"]})
-        );
+        assert_eq!(request["method"], "systemAccessFacts");
+        assert_eq!(request["params"], json!({"features":["FILES"]}));
         host.reply(
             generation,
-            json!({"id":request["id"], "result":{"granted":{"WRITE_EXTERNAL_STORAGE":true}}}),
+            json!({"id":request["id"], "result":{"granted":{"FILES":true}}}),
         )
         .unwrap();
         requests
@@ -373,15 +372,12 @@ async fn sdk_private_paths_skip_host_and_external_task_batches_sample_one_live_g
         let mut calls = 0;
         for granted in [true, false] {
             let request = requests.recv().await.unwrap();
-            assert_eq!(request["method"], "systemPermissionFacts");
-            assert_eq!(
-                request["params"],
-                json!({"permissions":["WRITE_EXTERNAL_STORAGE"]})
-            );
+            assert_eq!(request["method"], "systemAccessFacts");
+            assert_eq!(request["params"], json!({"features":["FILES"]}));
             calls += 1;
             host.reply(
                 generation,
-                json!({"id":request["id"],"result":{"granted":{"WRITE_EXTERNAL_STORAGE":granted}}}),
+                json!({"id":request["id"],"result":{"granted":{"FILES":granted}}}),
             )
             .unwrap();
         }

@@ -1,3 +1,4 @@
+use crate::features::access::AccessFeature;
 use super::*;
 fn fixture() -> (tempfile::TempDir, Prefs) {
     let dir = tempfile::tempdir().unwrap();
@@ -41,11 +42,11 @@ fn parallel_permission_updates_do_not_lose_changes() {
     let (_dir, prefs) = fixture();
     bootstrap(&prefs).unwrap();
     std::thread::scope(|scope| {
-        for name in ["CAMERA", "ADB", "READ_SMS", "CLIPBOARD"] {
+        for name in [AccessFeature::Images, AccessFeature::Adb, AccessFeature::Sms, AccessFeature::Clipboard] {
             let prefs = &prefs;
             scope.spawn(move || {
                 Command::SetApiPermission {
-                    permission: name.into(),
+                    permission: name,
                     enabled: true,
                 }
                 .apply(prefs)
@@ -54,14 +55,9 @@ fn parallel_permission_updates_do_not_lose_changes() {
         }
     });
     assert_eq!(snapshot(&prefs).unwrap().api_permissions.len(), 4);
-    assert!(
-        Command::SetApiPermission {
-            permission: "UNKNOWN".into(),
-            enabled: true
-        }
-        .apply(&prefs)
-        .is_err()
-    );
+    assert!(serde_json::from_value::<Command>(serde_json::json!({
+        "action":"setApiPermission", "permission":"UNKNOWN", "enabled":true,
+    })).is_err());
 }
 
 #[test]
@@ -111,28 +107,23 @@ fn key_value_settings_validate_protected_fields_and_patch_permissions_atomically
         assert_eq!(prefs.entries(), before);
     }
     set_entry(&prefs, PASSWORD, serde_json::json!("Synthetic password")).unwrap();
+    set_entry(&prefs, API_PERMISSIONS, serde_json::json!(["SMS", "AUDIO"])).unwrap();
     set_entry(
         &prefs,
         API_PERMISSIONS,
-        serde_json::json!(["READ_SMS", "SEND_SMS"]),
-    )
-    .unwrap();
-    set_entry(
-        &prefs,
-        API_PERMISSIONS,
-        serde_json::json!({"READ_SMS":false,"READ_CONTACTS":true}),
+        serde_json::json!({"SMS":false,"CONTACTS":true}),
     )
     .unwrap();
     assert_eq!(
         snapshot(&prefs).unwrap().api_permissions,
-        ["READ_CONTACTS", "SEND_SMS"]
+        [AccessFeature::Audio, AccessFeature::Contacts]
     );
     let before = prefs.entries();
     assert!(
         set_entry(
             &prefs,
             API_PERMISSIONS,
-            serde_json::json!({"READ_SMS":true,"UNKNOWN":false})
+            serde_json::json!({"SMS":true,"UNKNOWN":false})
         )
         .is_err()
     );
@@ -209,10 +200,10 @@ fn keyed_security_reads_preserve_snapshot_defaults_without_reading_unrelated_key
     );
     prefs.set(SIGNATURE_KEY_PAIR, "invalid identity").unwrap();
     prefs.set(PASSWORD_TYPE, "invalid type").unwrap();
-    prefs.set(API_PERMISSIONS, vec!["CAMERA"]).unwrap();
+    prefs.set(API_PERMISSIONS, vec!["IMAGES"]).unwrap();
     assert_eq!(
         get_entry(&prefs, API_PERMISSIONS).unwrap(),
-        Some(json!(["CAMERA"]))
+        Some(json!(["IMAGES"]))
     );
     assert_eq!(
         get_entry(&prefs, PASSWORD).unwrap(),
@@ -222,5 +213,19 @@ fn keyed_security_reads_preserve_snapshot_defaults_without_reading_unrelated_key
     assert!(get_entry(&prefs, PASSWORD_TYPE).is_err());
     for key in [MASTER_SECRET, SIGNATURE_KEY_PAIR, "unknown"] {
         assert_eq!(get_entry(&prefs, key).unwrap(), None, "{key}");
+    }
+}
+
+#[test]
+fn manage_files_patch_changes_all_five_features_and_preserves_other_access() {
+    let (_directory, prefs) = fixture();
+    set_entry(&prefs, API_PERMISSIONS, serde_json::json!(["CONTACTS"])).unwrap();
+    for enabled in [true, false] {
+        let patch: std::collections::BTreeMap<_, _> = AccessFeature::FILE_FEATURES.into_iter().map(|feature| (feature, enabled)).collect();
+        set_entry(&prefs, API_PERMISSIONS, serde_json::to_value(patch).unwrap()).unwrap();
+        assert!(crate::features::services::device::access::is_enabled(&prefs, &[AccessFeature::Contacts]));
+        for feature in AccessFeature::FILE_FEATURES {
+            assert_eq!(crate::features::services::device::access::is_enabled(&prefs, &[feature]), enabled);
+        }
     }
 }

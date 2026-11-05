@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::flag;
@@ -18,7 +19,7 @@ use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::Value;
 use std::sync::Arc;
 
-const READ: &str = "READ_SMS";
+const READ: AccessFeature = AccessFeature::Sms;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub enum SmsType {

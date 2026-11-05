@@ -46,7 +46,7 @@ fn filesystem_media_host(
     .unwrap();
     core.runtime_state()
         .media_scans
-        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+        .set_defaults(plain_rs::features::prefs::file_index::Defaults {
             scan_directories: Vec::new(),
             excluded_directories: Vec::new(),
             excluded_names: Vec::new(),

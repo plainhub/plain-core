@@ -1,25 +1,9 @@
-//! The web-facing permission gate, shared by the host provider route and
-//! the public `/graphql` schema.
-//!
-//! "Enabled" means the user handed this client the API permission in the
-//! `api_permissions` pref — a per-app opt-in, independent of the Android
-//! runtime grant. The runtime grant is only re-checked when the caller asks
-//! for it (`require_granted`), which plain-app's
-//! `Permission.enabledAndIsGrantedAsync` does and `checkEnabledAsync` does not.
-
+use plain_rs::features::access::AccessFeature;
 use plain_graphql::Context;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::host::bridge::Host;
 use std::sync::Arc;
 
-/// plain-app's `checkEnabledAsync`: error out unless every named permission
-/// was handed to the web client.
-///
-/// A local caller already sits inside the app and is held by real OS grants and
-/// file authorization, so the web opt-in list does not apply to it — otherwise
-/// the app could not reuse these fields for its own data once it stops calling
-/// over loopback HTTP. The origin comes from the adapter that received the
-/// request, so a remote caller cannot claim to be local.
 pub(crate) fn is_local(ctx: &Context<'_>) -> bool {
     ctx.data_opt::<crate::graphql::executor::RequestOrigin>()
         .is_some_and(|origin| *origin == crate::graphql::executor::RequestOrigin::Local)
@@ -40,39 +24,33 @@ impl plain_graphql::Guard for LocalOwner {
 pub(crate) fn require(
     ctx: &plain_graphql::Context<'_>,
     prefs: &Prefs,
-    permissions: &[&str],
+    features: &[AccessFeature],
 ) -> plain_graphql::Result<()> {
     if is_local(ctx) {
         return Ok(());
     }
-    if plain_rs::features::services::device::access::is_enabled(prefs, permissions) {
+    if plain_rs::features::services::device::access::is_enabled(prefs, features) {
         Ok(())
     } else {
         Err(plain_graphql::Error::new("no_permission"))
     }
 }
 
-/// plain-app's `Permission.enabledAndIsGrantedAsync`: the pref opt-in *and*
-/// the platform grant. Used where plain-app degrades to an empty result
-/// instead of erroring (`packageCount`).
 pub(crate) async fn require_granted(
     ctx: &Context<'_>,
-    permissions: &[&str],
+    features: &[AccessFeature],
 ) -> anyhow::Result<bool> {
     if !is_local(ctx)
         && !plain_rs::features::services::device::access::is_enabled(
             ctx.data_unchecked::<Arc<Prefs>>(),
-            permissions,
+            features,
         )
     {
         return Ok(false);
     }
     plain_rs::features::services::device::access::granted(
         ctx.data_unchecked::<Arc<Host>>(),
-        &permissions
-            .iter()
-            .map(|name| name.to_string())
-            .collect::<Vec<_>>(),
+        features,
     )
     .await
 }

@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::clipboard::models::ClipboardItem;
 use crate::graphql::types::ActionResult;
 use crate::http::auth::public_gate;
@@ -8,7 +9,7 @@ use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
 use std::sync::Arc;
 
-const PERMISSION: &str = "CLIPBOARD";
+const PERMISSION: AccessFeature = AccessFeature::Clipboard;
 const MAX_LIMIT: i32 = 200;
 
 #[derive(Default)]

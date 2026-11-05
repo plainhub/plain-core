@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::facts::flag;
 use crate::graphql::types::facts::optional_instant;
@@ -10,7 +11,7 @@ use plain_rs::infrastructure::types::Long;
 use serde_json::Value;
 use std::sync::Arc;
 
-use crate::graphql::resolvers::media::public::STORAGE;
+const FEATURE: AccessFeature = AccessFeature::Images;
 use crate::graphql::resolvers::media::public::prefs;
 use crate::graphql::resolvers::media::public::row;
 use crate::graphql::resolvers::media::public::text_field;
@@ -62,7 +63,7 @@ pub struct ImagesQuery;
 #[Object]
 impl ImagesQuery {
     async fn image_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
-        if !public_gate::require_granted(ctx, &[STORAGE]).await? {
+        if !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(0);
         }
         plain_rs::features::services::images::search::count(
@@ -87,7 +88,7 @@ impl ImagesQuery {
         limit: i32,
         sort_by: plain_rs::features::prefs::settings::FileSortBy,
     ) -> plain_graphql::Result<Vec<Image>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let items = Value::Array(
             plain_rs::features::services::images::search::rows(
                 &crate::graphql::resolvers::media::public::catalog(

@@ -3,7 +3,7 @@ fn catalog_test_core(directory: &std::path::Path) -> crate::server::ContentServe
     #[cfg(feature = "media")]
     core.runtime_state()
         .media_scans
-        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+        .set_defaults(plain_rs::features::prefs::file_index::Defaults {
             scan_directories: Vec::new(),
             excluded_directories: Vec::new(),
             excluded_names: Vec::new(),
@@ -231,7 +231,7 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
     );
     core.runtime_state()
         .media_scans
-        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+        .set_defaults(plain_rs::features::prefs::file_index::Defaults {
             scan_directories: vec![directory.path().to_string_lossy().into_owned()],
             excluded_directories: Vec::new(),
             excluded_names: vec!["lost+found".into()],
@@ -247,9 +247,9 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
                 _ = &mut finish => break,
                 request=requests.recv() => {
                     let request=request.unwrap();
-                    assert_eq!(request["method"],"systemPermissionFacts");
-                    assert_eq!(request["params"]["permissions"],serde_json::json!(["WRITE_EXTERNAL_STORAGE"]));
-                    host.reply(generation,serde_json::json!({"id":request["id"],"result":{"granted":{"WRITE_EXTERNAL_STORAGE":true}}})).unwrap();
+                    assert_eq!(request["method"],"systemAccessFacts");
+                    assert_eq!(request["params"]["features"],serde_json::json!(["FILES"]));
+                    host.reply(generation,serde_json::json!({"id":request["id"],"result":{"granted":{"FILES":true}}})).unwrap();
                 },
             }
         }

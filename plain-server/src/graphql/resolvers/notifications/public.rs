@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::flag;
 use crate::graphql::types::facts::id;
@@ -13,7 +14,7 @@ use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::Value;
 use std::sync::Arc;
 
-const PERMISSION: &str = "NOTIFICATION_LISTENER";
+const FEATURE: AccessFeature = AccessFeature::Notifications;
 
 #[derive(Default)]
 pub struct NotificationsQuery;
@@ -27,7 +28,7 @@ impl NotificationsQuery {
         offset: i32,
         limit: i32,
     ) -> plain_graphql::Result<Vec<Notification>> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "NOTIFICATIONS",
@@ -48,7 +49,7 @@ impl NotificationsQuery {
         ctx: &Context<'_>,
         query: String,
     ) -> plain_graphql::Result<i32> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "NOTIFICATIONS",
@@ -69,7 +70,7 @@ impl NotificationsMutation {
         ctx: &Context<'_>,
         ids: Vec<plain_graphql::ID>,
     ) -> plain_graphql::Result<ActionResult> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "NOTIFICATIONS",
@@ -116,7 +117,7 @@ impl NotificationsMutation {
         action_index: i32,
         text: String,
     ) -> plain_graphql::Result<bool> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         if action_index < 0 {
             return Err(plain_graphql::Error::new("action_not_found"));
         }
@@ -200,7 +201,7 @@ pub(crate) fn publish(
         _ => return Err("invalid notification event type".into()),
     };
     if kind != "NOTIFICATION_DELETED"
-        && (!plain_rs::features::services::device::access::is_enabled(prefs, &[PERMISSION])
+        && (!plain_rs::features::services::device::access::is_enabled(prefs, &[FEATURE])
             || plain_rs::features::services::notifications::query::notifications(
                 prefs,
                 vec![facts.notification.clone()],

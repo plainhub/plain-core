@@ -719,3 +719,132 @@ async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {
     );
     core.stop_core().await;
 }
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn sdk_mount_initializes_default_index_root_before_startup_scan() {
+    use serde_json::json;
+    let directory = directory_scan_fixture();
+    let documents = directory.path().join("Documents");
+    std::fs::create_dir(&documents).unwrap();
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata");
+    for file in ["audio-tagged.mp3", "video-h264-baseline.mp4"] {
+        std::fs::copy(fixtures.join(file), documents.join(file)).unwrap();
+    }
+    std::fs::write(documents.join("document.pdf"), b"%PDF-1.4\n").unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("private")).unwrap();
+    let state = core.runtime_state();
+    state.file_platform.use_sdk_for_test();
+    state
+        .media_scans
+        .set_defaults(crate::features::prefs::file_index::Defaults {
+            scan_directories: vec![],
+            excluded_directories: vec![],
+            excluded_names: vec![],
+        })
+        .unwrap();
+    let (generation, mut requests) = state.host.connect();
+    let host = state.host.clone();
+    let root = documents.to_string_lossy().into_owned();
+    let expected = documents
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let replies = tokio::spawn(async move {
+        let mut mount_calls = 0;
+        while let Some(request) = requests.recv().await {
+            let result = match request["method"].as_str().unwrap() {
+                "systemCapabilities" => json!(["MEDIA_SCAN"]),
+                "systemMountFacts" => {
+                    mount_calls += 1;
+                    json!([
+                        {"path":root,"driveType":"INTERNAL_STORAGE"},
+                        {"path":"/private-data","driveType":"APP"}
+                    ])
+                }
+                "systemAccessFacts" => {
+                    assert_eq!(request["params"]["features"], json!(["FILES"]));
+                    json!({"granted":{"FILES":true}})
+                }
+                method => panic!("Unexpected host request: {method}"),
+            };
+            host.reply(generation, json!({"id":request["id"],"result":result}))
+                .unwrap();
+        }
+        mount_calls
+    });
+    host_connected(state.clone(), generation).await.unwrap();
+    assert_eq!(
+        NativeMediaCatalog::new(state.clone())
+            .source_directories()
+            .unwrap(),
+        vec![expected]
+    );
+    state.media_scans.wait_background().await.unwrap();
+    let snapshot = state.media_scans.snapshot().unwrap().unwrap();
+    assert_eq!(
+        snapshot.status,
+        crate::features::services::files::media_scans::Status::Completed,
+        "{snapshot:?}"
+    );
+    let catalog = NativeMediaCatalog::new(state.clone());
+    for kind in [DataType::Audio, DataType::Video, DataType::Doc] {
+        assert_eq!(catalog.count(kind).unwrap(), 1, "{kind:?}");
+    }
+    state.host.disconnect(generation);
+    assert_eq!(replies.await.unwrap(), 1);
+    core.stop_core().await;
+}
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying() {
+    use serde_json::json;
+    let directory = directory_scan_fixture();
+    let folders: Vec<_> = ["Documents", "Music"].into_iter().map(|name| directory.path().join(name)).collect();
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata");
+    for folder in &folders {
+        std::fs::create_dir(folder).unwrap();
+        for name in ["audio-tagged.mp3", "video-h264-baseline.mp4"] {
+            std::fs::copy(fixtures.join(name), folder.join(name)).unwrap();
+        }
+        std::fs::write(folder.join("document.pdf"), b"%PDF-1.4\n").unwrap();
+    }
+    let core = crate::test_runtime::Core::open(&directory.path().join("private")).unwrap();
+    let state = core.runtime_state();
+    state.file_platform.use_sdk_for_test();
+    state.media_scans.set_defaults(crate::features::prefs::file_index::Defaults {
+        scan_directories: vec![], excluded_directories: vec![], excluded_names: vec![],
+    }).unwrap();
+    let grants = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let shared = grants.clone();
+    let (generation, mut requests) = state.host.connect();
+    let host = state.host.clone();
+    let responder = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let result = match request["method"].as_str().unwrap() {
+                "systemCapabilities" => json!(["MEDIA_SCAN"]),
+                "systemMountFacts" => json!(shared.lock().unwrap().iter().map(|path| json!({"path":path,"driveType":"INTERNAL_STORAGE"})).collect::<Vec<_>>()),
+                "systemAccessFacts" => json!({"granted":{"FILES":true}}),
+                method => panic!("Unexpected host request: {method}"),
+            };
+            host.reply(generation, json!({"id":request["id"],"result":result})).unwrap();
+        }
+    });
+    let catalog = NativeMediaCatalog::new(state.clone());
+    for indices in [vec![0], vec![0, 1], vec![1]] {
+        *grants.lock().unwrap() = indices.iter().map(|index| folders[*index].to_string_lossy().into_owned()).collect();
+        access_changed(state.clone(), generation).await.unwrap();
+        state.media_scans.wait_background().await.unwrap();
+        let expected = indices.len() as i64;
+        for kind in [DataType::Audio, DataType::Video, DataType::Doc] {
+            assert_eq!(catalog.count(kind).unwrap(), expected, "{kind:?}");
+        }
+    }
+    assert_eq!(std::fs::read(folders[0].join("audio-tagged.mp3")).unwrap(), std::fs::read(fixtures.join("audio-tagged.mp3")).unwrap());
+    assert!(folders[0].join("document.pdf").is_file());
+    state.host.disconnect(generation);
+    responder.await.unwrap();
+    core.stop_core().await;
+}

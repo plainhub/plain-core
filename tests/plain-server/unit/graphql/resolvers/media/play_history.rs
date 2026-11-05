@@ -38,7 +38,7 @@ async fn query(schema: &PublicSchema, text: &str, offset: i32, limit: i32) -> Va
 
 #[tokio::test]
 async fn history_filters_current_metadata_before_paging_and_skips_missing_media() {
-    let (_directory, db, schema) = fixture(&[STORAGE]);
+    let (_directory, db, schema) = fixture(&["AUDIO", "VIDEOS"]);
     audio(&db, "1", "Road Song", "Ferry");
     audio(&db, "2", "Another Song", "Ferry");
     audio(&db, "3", "Unrelated", "Other");
@@ -95,7 +95,7 @@ async fn history_requires_storage_access_and_rejects_invalid_page_windows() {
     let (_denied_dir, denied_db, denied) = fixture(&[]);
     audio(&denied_db, "1", "Private", "Artist");
     assert!(!query(&denied, "", 0, 10).await["errors"].is_null());
-    let (_directory, db, schema) = fixture(&[STORAGE]);
+    let (_directory, db, schema) = fixture(&["AUDIO", "VIDEOS"]);
     audio(&db, "1", "One", "Artist");
     for (offset, limit) in [(-1, 10), (0, -1)] {
         assert!(!query(&schema, "", offset, limit).await["errors"].is_null());
@@ -103,4 +103,19 @@ async fn history_requires_storage_access_and_rejects_invalid_page_windows() {
     let empty = query(&schema, "", 0, 0).await;
     assert!(empty["errors"].is_null(), "{empty}");
     assert_eq!(empty["data"]["mediaPlayHistory"], json!([]));
+}
+
+#[tokio::test]
+async fn history_only_exposes_authorized_media_categories() {
+    for (features, expected) in [(&["AUDIO"][..], "a"), (&["VIDEOS"][..], "v")] {
+        let (_directory, db, schema) = fixture(features);
+        audio(&db, "a", "Song", "Artist");
+        db.with_conn(|conn| conn.execute("INSERT INTO files(id,volume_id,path,file_name,kind,title,size_bytes,duration_ms,created_at,updated_at) VALUES('v',1,'v.mp4','v.mp4','VIDEO','Clip',1,1000,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')", [])).unwrap();
+        play_history::record(&db, DataType::Video, "v", 0).unwrap();
+        let result = query(&schema, "", 0, 10).await;
+        assert!(result["errors"].is_null(), "{result}");
+        let items = result["data"]["mediaPlayHistory"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["mediaId"], expected);
+    }
 }

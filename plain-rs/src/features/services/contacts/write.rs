@@ -38,7 +38,7 @@ pub struct Request {
 }
 
 fn permission_allowed(configured: &[String]) -> bool {
-    configured.iter().any(|name| name == "WRITE_CONTACTS")
+    configured.iter().any(|name| name == "CONTACTS")
 }
 
 fn required<'a>(field: Option<&'a String>, name: &str) -> anyhow::Result<&'a str> {

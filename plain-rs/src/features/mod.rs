@@ -48,3 +48,6 @@ pub mod tags;
 
 #[cfg(feature = "prefs")]
 pub mod updates;
+
+#[cfg(feature = "prefs")]
+pub mod access;

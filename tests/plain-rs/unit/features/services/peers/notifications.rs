@@ -113,7 +113,7 @@ fn observation(items: Vec<Notification>) -> Result<(App, Vec<Notification>, reqw
         App {
             device_name: "Fixture".into(),
             capabilities: vec!["NOTIFICATIONS".into()],
-            permissions: vec!["NOTIFICATION_LISTENER".into()],
+            access: vec![crate::features::access::AccessFeature::Notifications],
             url_token: plain_libs::utils::base64::base64_encode(&[9; 32]),
         },
         items,
@@ -270,7 +270,7 @@ async fn capability_or_permission_revocation_clears_data_and_regrant_starts_a_fr
         if capability {
             app.capabilities.clear()
         } else {
-            app.permissions.clear()
+            app.access.clear()
         }
         store
             .apply(

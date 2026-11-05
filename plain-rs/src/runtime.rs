@@ -214,6 +214,7 @@ impl Runtime {
                 prefs.clone(),
                 directory.clone(),
                 cache.root().to_owned(),
+                #[cfg(not(feature = "runtime-media"))]
                 events.clone(),
                 #[cfg(feature = "runtime-media")]
                 media_scans.clone(),

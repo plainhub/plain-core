@@ -30,6 +30,9 @@ async fn peer_schema_preserves_required_arguments_and_empty_query() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     use crate::server::ContentServer;
     use plain_rs::features::chat::enums::DeviceType;
     use plain_rs::features::chat::enums::PeerStatus;
@@ -86,6 +89,11 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             let request: Value = serde_json::from_str(message.to_text().unwrap()).unwrap();
             let result = match request["method"].as_str().unwrap() {
                 "systemCapabilities" => json!(["WIFI_AWARE"]),
+                "mdnsMulticast" => {
+                    assert!(request["params"]["acquire"].is_boolean());
+                    assert!(!request["params"]["lease"].as_str().unwrap().is_empty());
+                    json!(true)
+                }
                 "peerStartAware" => {
                     let port = if count == 0 { 443 } else { 5443 };
                     assert_eq!(

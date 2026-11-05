@@ -9,10 +9,7 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs
-        .set(
-            "api_permissions",
-            serde_json::json!(["WRITE_EXTERNAL_STORAGE"]),
-        )
+        .set("api_permissions", serde_json::json!(["FILES"]))
         .unwrap();
     let path = dir.path().join("plain.db");
     let server = ContentServer::start(path.parent().unwrap(), &token, prefs.clone()).unwrap();
@@ -143,10 +140,7 @@ async fn remote_import_requires_storage_authorization_before_reading_or_deleting
     }
     state
         .prefs
-        .set(
-            "api_permissions",
-            serde_json::json!(["WRITE_EXTERNAL_STORAGE"]),
-        )
+        .set("api_permissions", serde_json::json!(["FILES"]))
         .unwrap();
     let response = state.public.execute(
         plain_graphql::Request::new("mutation($path:String!){importAppFile(source:$path,fileName:\"owned.txt\",mimeType:\"text/plain\",deleteSource:false){id}}")

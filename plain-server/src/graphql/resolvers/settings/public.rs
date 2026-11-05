@@ -1,5 +1,6 @@
 //! Public preference roots share the local Rust store and notify UI projections.
 
+use plain_rs::features::access::AccessFeature;
 use plain_graphql::{Context, Json, Object};
 
 use plain_rs::features::prefs::Prefs;
@@ -23,9 +24,7 @@ pub struct PrefsQuery;
 impl PrefsQuery {
     fn prefs(&self, ctx: &Context<'_>) -> plain_graphql::Result<Json<Value>> {
         let prefs = prefs(ctx);
-        let index_allowed =
-            crate::http::auth::public_gate::require(ctx, prefs, &["WRITE_EXTERNAL_STORAGE"])
-                .is_ok();
+        let index_allowed = crate::http::auth::public_gate::require(ctx, prefs, &[AccessFeature::Files]).is_ok();
         let mut values = serde_json::Map::new();
         for (key, value) in prefs.entries() {
             if !index_allowed
@@ -147,7 +146,7 @@ pub(crate) fn allowed(ctx: &Context<'_>, key: &str) -> bool {
 }
 pub(crate) fn authorize(ctx: &Context<'_>, key: &str) -> plain_graphql::Result<()> {
     if matches!(key, "media_source_dirs" | "file_index_excluded_dirs") {
-        crate::http::auth::public_gate::require(ctx, prefs(ctx), &["WRITE_EXTERNAL_STORAGE"])?;
+        crate::http::auth::public_gate::require(ctx, prefs(ctx), &[AccessFeature::Files])?;
     }
     if !allowed(ctx, key) {
         return Err(plain_graphql::Error::new("Preference is not accessible"));

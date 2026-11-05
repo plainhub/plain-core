@@ -10,6 +10,8 @@ fn photo_snapshot_populates_shared_image_queries_and_preserves_identity() {
     let mut asset = Asset {
         id: "asset/L0/001".into(),
         name: "photo.jpg".into(),
+        media_type: 1,
+        duration_ms: 0,
         width: 800,
         height: 600,
         created_at: "2026-01-01T00:00:00Z".into(),
@@ -34,6 +36,28 @@ fn photo_snapshot_populates_shared_image_queries_and_preserves_identity() {
             .path,
         rows[0].path
     );
+    let prefs = crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap();
+    let documents = directory.path().join("Documents");
+    std::fs::create_dir(&documents).unwrap();
+    let scope = crate::features::prefs::file_index::Scope::load(
+        &prefs,
+        &directory.path().join("private"),
+        &directory.path().join("cache"),
+        &[],
+        crate::features::prefs::file_index::Defaults {
+            scan_directories: vec![documents.to_string_lossy().into_owned()],
+            excluded_directories: vec![],
+            excluded_names: vec![],
+        },
+    )
+    .unwrap();
+    for paths in [None, Some(vec!["/".to_owned()])] {
+        db.update_index_visibility(&scope, paths.as_deref())
+            .unwrap();
+        assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 1);
+    }
+    db.with_conn(|conn| conn.execute("UPDATE files SET indexed=0 WHERE volume_id='photos'", []))
+        .unwrap();
     asset.name = "edited.jpg".into();
     asset.favorite = true;
     asset.created_at = "2026-01-02T00:00:00Z".into();
@@ -65,15 +89,15 @@ async fn photo_queries_use_raw_pages_once_per_revision_and_remove_hidden_assets(
     let replies = host.clone();
     let worker = tokio::spawn(async move {
         for (method, value) in [
-            ("imageCatalogSnapshot", json!({"revision":"1","total":1})),
+            ("photoCatalogSnapshot", json!({"revision":"1","total":1})),
             (
                 "photoCatalogPage",
-                json!([{"id":"asset/L0/001","name":"photo.jpg","width":800,"height":600,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","favorite":false}]),
+                json!([{"id":"asset/L0/001","name":"photo.jpg","mediaType":1,"durationMs":0,"width":800,"height":600,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","favorite":false}]),
             ),
-            ("imageCatalogVerify", json!(true)),
-            ("imageCatalogSnapshot", json!({"revision":"1","total":1})),
-            ("imageCatalogSnapshot", json!({"revision":"1","total":0})),
-            ("imageCatalogVerify", json!(true)),
+            ("photoCatalogVerify", json!(true)),
+            ("photoCatalogSnapshot", json!({"revision":"1","total":1})),
+            ("photoCatalogSnapshot", json!({"revision":"1","total":0})),
+            ("photoCatalogVerify", json!(true)),
         ] {
             let request = requests.recv().await.unwrap();
             assert_eq!(request["method"], method);
@@ -90,4 +114,25 @@ async fn photo_queries_use_raw_pages_once_per_revision_and_remove_hidden_assets(
     catalog.sync(&db, &host).await.unwrap();
     assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 0);
     worker.await.unwrap();
+}
+
+#[test]
+fn photo_snapshot_stores_videos_in_the_shared_catalog_without_copying() {
+    let directory = tempfile::tempdir().unwrap();
+    let db = Db::open(&directory.path().join("db")).unwrap();
+    let assets: Vec<Asset> = serde_json::from_value(json!([
+        {"id":"photo/L0/001","name":"photo.jpg","mediaType":1,"durationMs":0,"width":800,"height":600,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","favorite":false},
+        {"id":"video/L0/001","name":"video.mov","mediaType":2,"durationMs":1250,"width":1920,"height":1080,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","favorite":true}
+    ])).unwrap();
+    replace(&db, &assets).unwrap();
+    let videos = media_catalog::rows(&db, DataType::Video, "", FileSortBy::NameAsc, 10, 0).unwrap();
+    assert_eq!(videos.len(), 1);
+    assert_eq!(videos[0].path, "ph://video/L0/001");
+    assert_eq!(videos[0].size_bytes, 0);
+    assert_eq!(videos[0].duration_ms, 1250);
+    assert_eq!(videos[0].width, 1920);
+    assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 1);
+    assert_eq!(db.media_resource_path(&videos[0].id).unwrap(), videos[0].path);
+    replace(&db, &assets[..1]).unwrap();
+    assert_eq!(media_catalog::count(&db, DataType::Video, "").unwrap(), 0);
 }

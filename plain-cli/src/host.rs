@@ -60,8 +60,9 @@ impl Host {
                 serde_json::to_value(&self.capabilities).map_err(|error| error.to_string())
             }
             "peerTransportCapabilities" => Ok(serde_json::json!([])),
-            "systemPermissionFacts" => plain_rs::infrastructure::host::permission_facts::facts(
-                &["WRITE_EXTERNAL_STORAGE".to_owned()],
+            "systemRequestAccess" => Ok(serde_json::json!(false)),
+            "systemAccessFacts" => plain_rs::infrastructure::host::access_facts::facts(
+                &plain_rs::features::access::AccessFeature::FILE_FEATURES,
                 params,
             ),
             method if plain_server::native::audio::handles(method) => {

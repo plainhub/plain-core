@@ -52,7 +52,7 @@ fn schema_host(schema: &PublicSchema) -> Arc<Host> {
 
 #[tokio::test]
 async fn notifications_map_host_facts_into_the_contract_type() {
-    let (_dir, schema) = fixture(json!(["NOTIFICATION_LISTENER"]));
+    let (_dir, schema) = fixture(json!(["NOTIFICATIONS"]));
     stub(schema_host(&schema), |method, _| match method {
         "systemNotificationFacts" => json!([
             fact("0|1|com.a", "com.a", "2026-10-05T01:00:00.000Z"),
@@ -87,7 +87,7 @@ async fn notification_roots_error_out_without_the_api_permission() {
 
 #[tokio::test]
 async fn delete_notifications_counts_only_what_the_platform_confirmed() {
-    let (_dir, schema) = fixture(json!(["NOTIFICATION_LISTENER"]));
+    let (_dir, schema) = fixture(json!(["NOTIFICATIONS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemCancelNotifications" => {
             assert_eq!(params["ids"], json!(["a", "b"]));
@@ -116,7 +116,7 @@ async fn delete_notifications_counts_only_what_the_platform_confirmed() {
 
 #[tokio::test]
 async fn a_receipt_naming_an_unrequested_notification_is_rejected() {
-    let (_dir, schema) = fixture(json!(["NOTIFICATION_LISTENER"]));
+    let (_dir, schema) = fixture(json!(["NOTIFICATIONS"]));
     stub(schema_host(&schema), |method, _| match method {
         "systemCancelNotifications" => json!(["never-requested"]),
         other => panic!("unexpected host call {other}"),
@@ -132,7 +132,7 @@ async fn a_receipt_naming_an_unrequested_notification_is_rejected() {
 
 #[tokio::test]
 async fn reply_notification_reports_a_vanished_action_as_action_not_found() {
-    let (_dir, schema) = fixture(json!(["NOTIFICATION_LISTENER"]));
+    let (_dir, schema) = fixture(json!(["NOTIFICATIONS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemReplyNotification" => {
             assert_eq!(params["id"], "a");
@@ -152,7 +152,7 @@ async fn reply_notification_reports_a_vanished_action_as_action_not_found() {
 /// would return null there too, but it must not reach the host either.
 #[tokio::test]
 async fn reply_notification_rejects_a_negative_index_without_calling_the_host() {
-    let (_dir, schema) = fixture(json!(["NOTIFICATION_LISTENER"]));
+    let (_dir, schema) = fixture(json!(["NOTIFICATIONS"]));
     stub(schema_host(&schema), |method, _| {
         panic!("unexpected host call {method}")
     });
@@ -176,7 +176,7 @@ fn reported_notifications_keep_permission_filtering_and_project_public_events() 
     publish(&prefs, &events, facts("NOTIFICATION_CREATED")).unwrap();
     assert!(receiver.try_recv().is_err());
     prefs
-        .set("api_permissions", json!(["NOTIFICATION_LISTENER"]))
+        .set("api_permissions", json!(["NOTIFICATIONS"]))
         .unwrap();
     publish(&prefs, &events, facts("NOTIFICATION_UPDATED")).unwrap();
     let event = receiver.try_recv().unwrap();
@@ -213,7 +213,7 @@ fn sms_refresh_hints_follow_notification_permissions_filters_and_event_kinds() {
     .unwrap();
     assert!(receiver.try_recv().is_err());
     prefs
-        .set("api_permissions", json!(["NOTIFICATION_LISTENER"]))
+        .set("api_permissions", json!(["NOTIFICATIONS"]))
         .unwrap();
     for kind in ["NOTIFICATION_CREATED", "NOTIFICATION_UPDATED"] {
         publish(
@@ -258,7 +258,7 @@ fn sms_refresh_hints_follow_notification_permissions_filters_and_event_kinds() {
 async fn rejected_and_empty_cancellation_receipts_do_not_publish_refresh_hints() {
     for receipt in [json!([]), json!(["not-requested"])] {
         let empty = receipt.as_array().unwrap().is_empty();
-        let (_dir, schema) = fixture(json!(["NOTIFICATION_LISTENER"]));
+        let (_dir, schema) = fixture(json!(["NOTIFICATIONS"]));
         stub(schema_host(&schema), move |method, _| match method {
             "systemCancelNotifications" => receipt.clone(),
             method => panic!("unexpected host call {method}"),

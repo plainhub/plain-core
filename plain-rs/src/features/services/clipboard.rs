@@ -1,3 +1,4 @@
+use crate::features::access::AccessFeature;
 use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 use std::sync::Arc;
@@ -88,7 +89,7 @@ pub fn record_history(
 
 pub fn report(state: &CoreRuntime, payload: &str) -> Result<(), String> {
     let value: Report = serde_json::from_str(payload).map_err(|error| error.to_string())?;
-    if !crate::features::services::device::access::is_enabled(&state.prefs, &["CLIPBOARD"]) {
+    if !crate::features::services::device::access::is_enabled(&state.prefs, &[AccessFeature::Clipboard]) {
         return Ok(());
     }
     let (item, inserted) =

@@ -23,13 +23,10 @@ async fn existing_file_queries_authorize_effective_parent_and_own_pages_counts_a
     let (generation, mut requests) = host.connect();
     let worker = tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
-            assert_eq!(request["method"], "systemPermissionFacts");
-            assert_eq!(
-                request["params"]["permissions"],
-                json!(["WRITE_EXTERNAL_STORAGE"])
-            );
-            facts.lock().unwrap().push("WRITE_EXTERNAL_STORAGE".into());
-            let response = json!({"id":request["id"],"result":{"granted":{"WRITE_EXTERNAL_STORAGE":!deny.load(std::sync::atomic::Ordering::SeqCst)}}});
+            assert_eq!(request["method"], "systemAccessFacts");
+            assert_eq!(request["params"]["features"], json!(["FILES"]));
+            facts.lock().unwrap().push("FILES".into());
+            let response = json!({"id":request["id"],"result":{"granted":{"FILES":!deny.load(std::sync::atomic::Ordering::SeqCst)}}});
             host.reply(generation, response).unwrap();
         }
     });

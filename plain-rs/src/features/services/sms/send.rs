@@ -27,7 +27,7 @@ pub struct Request {
 }
 
 fn permission_allowed(configured: &[String]) -> bool {
-    configured.iter().any(|name| name == "SEND_SMS")
+    configured.iter().any(|name| name == "SMS")
 }
 
 fn digest(bytes: &[u8]) -> String {

@@ -1,6 +1,6 @@
 use super::{
     item::MediaItem,
-    public::{STORAGE, library_rows, prefs},
+    public::{library_rows, prefs},
     types::MediaDataType,
 };
 use crate::graphql::resolvers::audio::public::audio_from_facts;
@@ -40,7 +40,20 @@ impl MediaPlayHistoryQuery {
         offset: i32,
         limit: i32,
     ) -> Result<Vec<MediaPlayHistory>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        let allowed: Vec<_> = [MediaDataType::AUDIO, MediaDataType::VIDEO]
+            .into_iter()
+            .filter(|kind| {
+                public_gate::is_local(ctx)
+                    || plain_rs::features::services::device::access::is_enabled(
+                        prefs(ctx),
+                        &[super::public::access_feature(kind.data_type())],
+                    )
+            })
+            .collect();
+        if allowed.is_empty() {
+            return Err("no_permission".into());
+        }
+
         let offset = usize::try_from(offset)?;
         let limit = usize::try_from(limit)?;
         if limit == 0 {
@@ -57,7 +70,7 @@ impl MediaPlayHistoryQuery {
         let mut result = Vec::new();
         for batch in history.chunks(500) {
             let mut media = HashMap::new();
-            for kind in [MediaDataType::AUDIO, MediaDataType::VIDEO] {
+            for kind in allowed.iter().copied() {
                 let ids: Vec<_> = batch
                     .iter()
                     .filter(|row| row.media_type == kind.data_type().kind())
@@ -127,7 +140,11 @@ impl MediaPlayHistoryMutation {
         r#type: MediaDataType,
         position_ms: Long,
     ) -> Result<bool> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(
+            ctx,
+            prefs(ctx),
+            &[super::public::access_feature(r#type.data_type())],
+        )?;
         let db = ctx.data::<Arc<Db>>()?.clone();
         tokio::task::spawn_blocking(move || {
             play_history::record(&db, r#type.data_type(), file_id.as_str(), position_ms.0)
@@ -148,7 +165,11 @@ impl MediaPlayHistoryMutation {
         r#type: MediaDataType,
         position_ms: Long,
     ) -> Result<bool> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(
+            ctx,
+            prefs(ctx),
+            &[super::public::access_feature(r#type.data_type())],
+        )?;
         let db = ctx.data::<Arc<Db>>()?.clone();
         tokio::task::spawn_blocking(move || {
             play_history::save(&db, r#type.data_type(), file_id.as_str(), position_ms.0)

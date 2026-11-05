@@ -5,7 +5,7 @@ use plain_rs::infrastructure::db::Db;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-const GRANTED: &str = r#"["WRITE_EXTERNAL_STORAGE"]"#;
+const GRANTED: &str = r#"["IMAGES","VIDEOS","AUDIO","DOCS","FILES"]"#;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
     let (generation, mut requests) = host.connect();
@@ -26,8 +26,8 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 
 /// `granted` is the platform's runtime answer for WRITE_EXTERNAL_STORAGE.
 fn fixture(permissions: &str, granted: bool) -> (tempfile::TempDir, PublicSchema) {
-    fixture_with(permissions, granted, move |method, _| match method {
-        "systemPermissionFacts" => json!({ "granted": { "WRITE_EXTERNAL_STORAGE": granted } }),
+    fixture_with(permissions, granted, move |method, params| match method {
+        "systemAccessFacts" => access_sample(&params, granted),
         other => panic!("unexpected host call {other}"),
     })
 }
@@ -59,8 +59,8 @@ fn fixture_seeded(
     seed(&db);
     let host = Arc::new(Host::default());
     stub(host.clone(), move |method, params| {
-        if method == "systemPermissionFacts" {
-            return json!({ "granted": { "WRITE_EXTERNAL_STORAGE": granted } });
+        if method == "systemAccessFacts" {
+            return access_sample(&params, granted);
         }
         handler(method, params)
     });
@@ -865,4 +865,59 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     drop(calls);
     models.shutdown().await;
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+fn access_sample(params: &Value, granted: bool) -> Value {
+    let values: serde_json::Map<String, Value> = params["features"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|feature| (feature.as_str().unwrap().to_owned(), json!(granted)))
+        .collect();
+    json!({"granted":values})
+}
+
+#[tokio::test]
+async fn file_access_does_not_grant_media_libraries() {
+    for (enabled, expected_image_count) in [(r#"["FILES"]"#, 0), (r#"["IMAGES"]"#, 1)] {
+        let (_directory, schema, _) = fixture_seeded(
+            enabled,
+            true,
+            |db| {
+                db.record_media_files(&[
+                    media(
+                        DataType::Image,
+                        "/storage/Photos/a.jpg",
+                        "image",
+                        10,
+                        "images",
+                    ),
+                    media(
+                        DataType::Video,
+                        "/storage/Videos/a.mp4",
+                        "video",
+                        10,
+                        "videos",
+                    ),
+                    media(
+                        DataType::Audio,
+                        "/storage/Music/a.mp3",
+                        "audio",
+                        10,
+                        "audio",
+                    ),
+                    media(DataType::Doc, "/storage/Docs/a.pdf", "doc", 10, "docs"),
+                ])
+                .unwrap();
+            },
+            |method, _| panic!("unexpected host call {method}"),
+        );
+        let response = schema.execute(r#"{ imageCount(query: "") videoCount(query: "") audioCount(query: "") docCount(query: "") }"#).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().unwrap();
+        assert_eq!(data["imageCount"], expected_image_count);
+        for field in ["videoCount", "audioCount", "docCount"] {
+            assert_eq!(data[field], 0);
+        }
+    }
 }

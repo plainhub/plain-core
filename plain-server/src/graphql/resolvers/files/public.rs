@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::files::types::AudioFileInfo;
 use crate::graphql::resolvers::files::types::DriveType;
 use crate::graphql::resolvers::files::types::File;
@@ -25,7 +26,7 @@ use plain_rs::infrastructure::types::Long;
 use serde_json::{Value, json};
 use std::{path::Path, sync::Arc};
 
-const STORAGE: &str = "WRITE_EXTERNAL_STORAGE";
+const STORAGE: AccessFeature = AccessFeature::Files;
 
 #[derive(Default)]
 pub struct FilesQuery;

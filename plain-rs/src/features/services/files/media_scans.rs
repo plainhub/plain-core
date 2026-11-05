@@ -207,7 +207,7 @@ impl MediaScans {
             .clone())
     }
 
-    pub fn set_defaults_for_test(
+    pub fn set_defaults(
         &self,
         defaults: crate::features::prefs::file_index::Defaults,
     ) -> Result<(), String> {

@@ -1,3 +1,20 @@
+enum AccessFeature {
+	IMAGES
+	VIDEOS
+	AUDIO
+	DOCS
+	FILES
+	CONTACTS
+	SMS
+	CALL_LOGS
+	CALL_PHONE
+	PHONE_NUMBER
+	APPS
+	NOTIFICATIONS
+	CLIPBOARD
+	ADB
+}
+
 type AndroidExtras {
 	sdkVersion: Int!
 	versionCodeName: String!
@@ -27,7 +44,7 @@ type App {
 	deviceType: DeviceType!
 	capabilities: [Capability!]!
 	buildChannel: AppChannelType!
-	permissions: [Permission!]!
+	access: [AccessFeature!]!
 	downloadsDir: String!
 	debug: Boolean!
 }
@@ -39,15 +56,12 @@ enum AppChannelType {
 }
 
 enum Capability {
+	ADB
+	DIRECTORY_ACCESS
 	BLE
 	WIFI_AWARE
 	BACKGROUND_SERVICE
 	LAUNCHER_SHORTCUTS
-	FILE_BROWSER
-	IMAGE_LIBRARY
-	AUDIO_LIBRARY
-	VIDEO_LIBRARY
-	DOCUMENT_LIBRARY
 	SOUND_METER
 	BACKGROUND_TIMER
 	BACKGROUND_WAKE
@@ -128,33 +142,6 @@ type KeyValuePair {
 	value: String!
 }
 
-enum Permission {
-	WRITE_EXTERNAL_STORAGE
-	READ_SMS
-	SEND_SMS
-	READ_CONTACTS
-	WRITE_CONTACTS
-	READ_CALL_LOG
-	WRITE_CALL_LOG
-	CALL_PHONE
-	POST_NOTIFICATIONS
-	NEARBY_WIFI_DEVICES
-	ACCESS_FINE_LOCATION
-	CAMERA
-	SYSTEM_ALERT_WINDOW
-	RECORD_AUDIO
-	READ_MEDIA_IMAGES
-	READ_MEDIA_VIDEOS
-	READ_MEDIA_AUDIO
-	NOTIFICATION_LISTENER
-	READ_PHONE_STATE
-	READ_PHONE_NUMBERS
-	SCHEDULE_EXACT_ALARM
-	QUERY_ALL_PACKAGES
-	ADB
-	CLIPBOARD
-}
-
 type Session {
 	clientId: String!
 	clientName: String!
@@ -187,6 +174,7 @@ extend type Mutation {
 	"""
 	relaunchApp: Boolean!
 	renameSession(clientId: String!, name: String!): Boolean!
+	requestAccess(feature: AccessFeature!): Boolean!
 	revokeSession(clientId: String!): Boolean!
 	setTempValue(key: String!, value: String!): KeyValuePair!
 	startDiscovery: Boolean!

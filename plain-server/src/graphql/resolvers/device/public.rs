@@ -3,7 +3,7 @@ use crate::graphql::types::KeyValuePair;
 use crate::graphql::types::facts::flag;
 use plain_graphql::{ComplexObject, Context, Object, SimpleObject};
 
-use plain_rs::features::services::device::permission::Permission;
+use plain_rs::features::access::AccessFeature;
 use plain_rs::features::services::device::types::*;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Long;
@@ -21,15 +21,34 @@ pub struct App {
     #[graphql(skip)]
     capabilities_sample: Arc<tokio::sync::OnceCell<Result<Vec<String>, String>>>,
     #[graphql(skip)]
-    permissions_sample: Arc<tokio::sync::OnceCell<Result<Vec<String>, String>>>,
+    access_sample: Arc<tokio::sync::OnceCell<Result<Vec<AccessFeature>, String>>>,
 }
 
 impl App {
-    async fn granted_permissions(&self, ctx: &Context<'_>) -> plain_graphql::Result<&Vec<String>> {
-        self.permissions_sample
+    async fn capability_names(&self, ctx: &Context<'_>) -> plain_graphql::Result<&Vec<String>> {
+        self.capabilities_sample
+            .get_or_init(|| async {
+                plain_rs::features::services::capabilities::snapshot(
+                    ctx.data::<Arc<Host>>().map_err(|error| error.message)?,
+                )
+                .await
+                .map_err(|error| error.to_string())
+            })
+            .await
+            .as_ref()
+            .map_err(|error| plain_graphql::Error::new(error.clone()))
+    }
+    async fn granted_access(&self, ctx: &Context<'_>) -> plain_graphql::Result<&Vec<AccessFeature>> {
+        self.access_sample
             .get_or_init(|| async {
                 let host = ctx.data::<Arc<Host>>().map_err(|error| error.message)?;
-                plain_rs::features::services::device::permissions::granted(host).await
+                plain_rs::features::services::device::access::snapshot_with_capabilities(
+                    host,
+                    self.capability_names(ctx)
+                        .await
+                        .map_err(|error| error.message)?,
+                )
+                .await
             })
             .await
             .as_ref()
@@ -77,19 +96,7 @@ impl App {
         ))
     }
     async fn capabilities(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Capability>> {
-        let mut names = self
-            .capabilities_sample
-            .get_or_init(|| async {
-                plain_rs::features::services::capabilities::snapshot(
-                    ctx.data::<Arc<Host>>().map_err(|error| error.message)?,
-                )
-                .await
-                .map_err(|error| error.to_string())
-            })
-            .await
-            .as_ref()
-            .map_err(|error| plain_graphql::Error::new(error.clone()))?
-            .clone();
+        let mut names = self.capability_names(ctx).await?.clone();
         names.extend(
             plain_rs::features::services::files::browser::capabilities()
                 .into_iter()
@@ -107,21 +114,18 @@ impl App {
             &ctx.data::<Arc<Host>>()?.startup().build_channel,
         ))
     }
-    async fn permissions(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Permission>> {
-        let grants = self.granted_permissions(ctx).await?;
+    async fn access(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<AccessFeature>> {
+        let grants = self.granted_access(ctx).await?;
         let names = if crate::http::auth::public_gate::is_local(ctx) {
             grants.clone()
         } else {
-            plain_rs::features::services::device::permissions::enabled(
+            plain_rs::features::services::device::access::enabled_features(
                 ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?,
                 grants,
             )
             .map_err(plain_graphql::Error::new)?
         };
-        Ok(names
-            .iter()
-            .filter_map(|name| Permission::parse(name))
-            .collect())
+        Ok(names)
     }
     fn downloads_dir(&self, ctx: &Context<'_>) -> plain_graphql::Result<String> {
         Ok(ctx.data::<Arc<Host>>()?.startup().downloads_dir.clone())
@@ -219,7 +223,7 @@ impl DeviceQuery {
             device_name: user.device_name,
             developer_mode: user.developer_mode,
             capabilities_sample: Arc::new(tokio::sync::OnceCell::new()),
-            permissions_sample: Arc::new(tokio::sync::OnceCell::new()),
+            access_sample: Arc::new(tokio::sync::OnceCell::new()),
         })
     }
 
@@ -274,6 +278,33 @@ pub struct DeviceMutation;
 
 #[Object]
 impl DeviceMutation {
+    async fn request_access(
+        &self,
+        ctx: &Context<'_>,
+        feature: plain_rs::features::access::AccessFeature,
+    ) -> plain_graphql::Result<bool> {
+        if let Some(capability) = feature.capability() {
+            plain_rs::features::services::capabilities::require(
+                ctx.data_unchecked::<Arc<Host>>(),
+                capability,
+            )
+            .await
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        }
+        let accepted = ctx
+            .data_unchecked::<Arc<Host>>()
+            .call(
+                "systemRequestAccess",
+                serde_json::json!({
+                    "feature": feature.as_str(),
+                }),
+            )
+            .await
+            .map_err(plain_graphql::Error::new)?;
+        serde_json::from_value(accepted)
+            .map_err(|error| plain_graphql::Error::new(error.to_string()))
+    }
+
     async fn clear_app_logs(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
         ctx.data::<plain_rs::runtime::Runtime>()?
             .logs

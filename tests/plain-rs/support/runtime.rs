@@ -46,7 +46,7 @@ impl Core {
         #[cfg(feature = "runtime-media")]
         state
             .media_scans
-            .set_defaults_for_test(crate::features::prefs::file_index::Defaults {
+            .set_defaults(crate::features::prefs::file_index::Defaults {
                 scan_directories: Vec::new(),
                 excluded_directories: Vec::new(),
                 excluded_names: Vec::new(),

@@ -6,7 +6,7 @@ use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-const GRANTED: &str = r#"["WRITE_EXTERNAL_STORAGE"]"#;
+const GRANTED: &str = r#"["IMAGES","VIDEOS","AUDIO","DOCS","FILES"]"#;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
     let (generation, mut requests) = host.connect();
@@ -27,7 +27,7 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 
 fn fixture(permissions: &str) -> (tempfile::TempDir, PublicSchema) {
     fixture_with(permissions, |method, _| match method {
-        "systemPermissionFacts" => json!({ "granted": { "WRITE_EXTERNAL_STORAGE": true } }),
+        "systemAccessFacts" => json!({ "granted": { "FILES": true } }),
         other => panic!("unexpected host call {other}"),
     })
 }
@@ -164,7 +164,7 @@ async fn delete_files_reports_what_was_actually_removed() {
 #[tokio::test]
 async fn deleting_no_paths_is_a_no_op() {
     let (_dir, schema) = fixture_with(GRANTED, |method, _| match method {
-        "systemPermissionFacts" => json!({ "granted": { "WRITE_EXTERNAL_STORAGE": true } }),
+        "systemAccessFacts" => json!({ "granted": { "FILES": true } }),
         other => panic!("the platform must not be asked: {other}"),
     });
     let response = schema
@@ -198,7 +198,7 @@ async fn a_created_directory_reads_back_as_a_file_row() {
 #[tokio::test]
 async fn a_refused_rename_reports_false() {
     let (_dir, schema) = fixture_with(GRANTED, |method, _| match method {
-        "systemPermissionFacts" => json!({ "granted": { "WRITE_EXTERNAL_STORAGE": true } }),
+        "systemAccessFacts" => json!({ "granted": { "FILES": true } }),
         other => panic!("unexpected host call {other}"),
     });
     let response = schema
@@ -242,7 +242,7 @@ async fn copy_and_move_use_the_shared_file_tasks() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn unsupported_trash_actions_report_the_capability_without_requiring_a_storage_grant() {
-    let (_dir, schema) = fixture("[]");
+    let (_dir, schema) = fixture(r#"["IMAGES"]"#);
     for action in ["trashMediaItems", "restoreMediaItems"] {
         let response = schema
             .execute(format!(
@@ -261,7 +261,7 @@ async fn unsupported_trash_actions_report_the_capability_without_requiring_a_sto
 #[tokio::test]
 async fn moving_media_is_gated() {
     let (_dir, schema) = fixture_with("[]", |method, _| match method {
-        "systemPermissionFacts" => json!({ "granted": { "WRITE_EXTERNAL_STORAGE": true } }),
+        "systemAccessFacts" => json!({ "granted": { "FILES": true } }),
         other => panic!("the platform must not be asked: {other}"),
     });
     let response = schema
@@ -319,7 +319,7 @@ async fn moving_media_uses_the_shared_native_commit_and_preserves_destination_co
 #[tokio::test]
 async fn a_blank_media_query_is_refused_before_the_platform() {
     let (_dir, schema) = fixture_with(GRANTED, |method, _| match method {
-        "systemPermissionFacts" => json!({ "granted": { "WRITE_EXTERNAL_STORAGE": true } }),
+        "systemAccessFacts" => json!({ "granted": { "FILES": true } }),
         other => panic!("the platform must not be asked: {other}"),
     });
     for name in [
@@ -346,7 +346,7 @@ async fn a_blank_media_query_is_refused_before_the_platform() {
 
 fn upload_fixture() -> (tempfile::TempDir, PublicSchema, std::path::PathBuf) {
     let (dir, schema) = fixture_with(GRANTED, |method, _| match method {
-        "systemPermissionFacts" => json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}}),
+        "systemAccessFacts" => json!({"granted":{"FILES":true}}),
         other => panic!("Unexpected platform primitive: {other}"),
     });
     let base = dir.path().join("uploads");
@@ -502,7 +502,7 @@ fn merge_status_reads_back_the_names_the_contract_uses() {
 #[tokio::test]
 async fn a_media_action_refuses_a_query_that_selects_nothing_and_all_true_still_goes_through() {
     let (_dir, schema) = fixture_with(GRANTED, |method, _| match method {
-        "systemPermissionFacts" => json!({ "granted": { "WRITE_EXTERNAL_STORAGE": true } }),
+        "systemAccessFacts" => json!({ "granted": { "FILES": true } }),
         "systemMediaIdsFacts" => json!([]),
         other => panic!("unexpected host call {other}"),
     });

@@ -1,7 +1,6 @@
 #[cfg(any(target_os = "ios", all(test, target_os = "macos")))]
 use plain_libs::platform::apple_device;
 pub mod info;
-pub mod permissions;
 
 use crate::features::services::device::types::{DeviceStatus, Temperature};
 
@@ -281,7 +280,6 @@ fn storage_bytes(directory: &std::path::Path, total: bool) -> Result<i64, String
         .min(i64::MAX as u64) as i64)
 }
 
-pub mod permission;
 pub mod types;
 
 pub mod access;

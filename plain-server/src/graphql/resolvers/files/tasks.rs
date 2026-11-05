@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use plain_graphql::{Context, ID, InputObject, Object, Result, SimpleObject};
 
 use plain_rs::features::files::tasks::CompletedOp;
@@ -126,7 +127,7 @@ async fn create(
     crate::http::auth::public_gate::require(
         ctx,
         ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?,
-        &["WRITE_EXTERNAL_STORAGE"],
+        &[AccessFeature::Files],
     )?;
     let client_id = caller(ctx)?;
     let tasks = ctx.data::<Arc<FileTasks>>()?;

@@ -1,3 +1,4 @@
+use crate::features::access::AccessFeature;
 use super::*;
 use serde::Deserialize;
 
@@ -19,14 +20,14 @@ pub enum Command {
     ResetUrlToken,
     ResetAdbToken,
     SetApiPermission {
-        permission: String,
+        permission: AccessFeature,
         enabled: bool,
     },
     SetApiPermissions {
-        permissions: Vec<String>,
+        permissions: Vec<AccessFeature>,
     },
     PatchApiPermissions {
-        permissions: std::collections::BTreeMap<String, bool>,
+        permissions: std::collections::BTreeMap<AccessFeature, bool>,
     },
     SetMdnsHostname {
         hostname: String,
@@ -46,22 +47,6 @@ impl Command {
                 );
             }
             Self::SetMdnsHostname { ref hostname } => validate_hostname(hostname)?,
-            Self::SetApiPermission { ref permission, .. } => anyhow::ensure!(
-                PERMISSIONS.contains(&permission.as_str()),
-                "Unknown permission"
-            ),
-            Self::SetApiPermissions { ref permissions } => anyhow::ensure!(
-                permissions
-                    .iter()
-                    .all(|p| PERMISSIONS.contains(&p.as_str())),
-                "Unknown permission"
-            ),
-            Self::PatchApiPermissions { ref permissions } => anyhow::ensure!(
-                permissions
-                    .keys()
-                    .all(|permission| PERMISSIONS.contains(&permission.as_str())),
-                "Unknown permission"
-            ),
             _ => {}
         }
         let mut changed = false;
@@ -82,28 +67,28 @@ impl Command {
                     permission,
                     enabled,
                 } => {
-                    let mut permissions: Vec<String> = read(map, API_PERMISSIONS)?;
+                    let mut permissions: Vec<AccessFeature> = read(map, API_PERMISSIONS)?;
                     permissions.retain(|p| p != &permission);
                     if enabled {
                         permissions.push(permission);
                     }
-                    permissions.sort();
+                    permissions.sort_by_key(|feature| feature.as_str());
                     put(map, API_PERMISSIONS, permissions)?;
                 }
                 Self::SetApiPermissions { mut permissions } => {
-                    permissions.sort();
+                    permissions.sort_by_key(|feature| feature.as_str());
                     permissions.dedup();
                     put(map, API_PERMISSIONS, permissions)?;
                 }
                 Self::PatchApiPermissions { permissions } => {
-                    let mut current: Vec<String> = read(map, API_PERMISSIONS)?;
+                    let mut current: Vec<AccessFeature> = read(map, API_PERMISSIONS)?;
                     current.retain(|permission| !permissions.contains_key(permission));
                     current.extend(
                         permissions
                             .into_iter()
                             .filter_map(|(permission, enabled)| enabled.then_some(permission)),
                     );
-                    current.sort();
+                    current.sort_by_key(|feature| feature.as_str());
                     current.dedup();
                     put(map, API_PERMISSIONS, current)?;
                 }

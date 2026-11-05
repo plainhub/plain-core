@@ -51,7 +51,7 @@ fn sms_fact(id: &str) -> Value {
 /// Everything the SMS roots need before a query reaches the platform.
 fn sms_facts(schema: &PublicSchema, items: Value, count: i64) {
     stub(schema_host(schema), move |method, _| match method {
-        "systemPermissionFacts" => json!({"granted":{"READ_SMS": true}}),
+        "systemAccessFacts" => json!({"granted":{"SMS": true}}),
         "systemSmsRowsFacts" => {
             json!({"items": items.clone(), "canonicalAddresses": ["+1555"], "ownNumbers": []})
         }
@@ -62,9 +62,9 @@ fn sms_facts(schema: &PublicSchema, items: Value, count: i64) {
 
 #[tokio::test]
 async fn sms_reads_degrade_to_empty_without_the_platform_grant() {
-    let (_dir, schema) = fixture(json!(["READ_SMS"]));
+    let (_dir, schema) = fixture(json!(["SMS"]));
     stub(schema_host(&schema), |method, _| match method {
-        "systemPermissionFacts" => json!({"granted":{"READ_SMS": false}}),
+        "systemAccessFacts" => json!({"granted":{"SMS": false}}),
         other => panic!("unexpected host call {other}"),
     });
     let response = schema
@@ -87,7 +87,7 @@ async fn sms_reads_degrade_to_empty_without_the_platform_grant() {
 
 #[tokio::test]
 async fn sms_maps_the_provider_rows_onto_the_contract_type() {
-    let (_dir, schema) = fixture(json!(["READ_SMS"]));
+    let (_dir, schema) = fixture(json!(["SMS"]));
     sms_facts(&schema, json!([sms_fact("m1")]), 3);
     let response = schema
         .execute(
@@ -122,7 +122,7 @@ fn unknown_sms_box_is_unknown() {
 
 #[tokio::test]
 async fn bulk_sms_mutations_reject_a_blank_query_before_touching_the_platform() {
-    let (_dir, schema) = fixture(json!(["READ_SMS"]));
+    let (_dir, schema) = fixture(json!(["SMS"]));
     stub(schema_host(&schema), |method, _| {
         panic!("unexpected host call {method}")
     });
@@ -144,7 +144,7 @@ async fn bulk_sms_mutations_reject_a_blank_query_before_touching_the_platform() 
 
 #[tokio::test]
 async fn bulk_sms_mutations_select_ids_in_rust_and_delete_only_provider_rows() {
-    let (_dir, schema) = fixture(json!(["READ_SMS"]));
+    let (_dir, schema) = fixture(json!(["SMS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemCapabilities" => json!(["TELEPHONY"]),
         "systemSmsIdsFacts" => {
@@ -190,11 +190,11 @@ async fn bulk_sms_mutations_select_ids_in_rust_and_delete_only_provider_rows() {
 
 #[tokio::test]
 async fn archiving_a_conversation_stores_the_last_message_date() {
-    let (_dir, schema) = fixture(json!(["READ_SMS"]));
+    let (_dir, schema) = fixture(json!(["SMS"]));
     stub(schema_host(&schema), |method, _| match method {
         "systemCapabilities" => json!(["TELEPHONY"]),
         "systemSmsConversationFacts" => json!({"items":[]}),
-        "systemPermissionFacts" => json!({"granted":{"READ_SMS": true}}),
+        "systemAccessFacts" => json!({"granted":{"SMS": true}}),
         other => panic!("unexpected host call {other}"),
     });
     let response = schema
@@ -235,9 +235,9 @@ async fn send_sms_needs_the_send_permission_and_passes_the_sim_choice() {
         .await;
     assert_eq!(response.errors[0].message, "no_permission");
 
-    let (_dir, schema) = fixture(json!(["SEND_SMS"]));
+    let (_dir, schema) = fixture(json!(["SMS"]));
     stub(schema_host(&schema), |method, params| match method {
-        "systemPermissionFacts" => json!({"granted":{"SEND_SMS": true}}),
+        "systemAccessFacts" => json!({"granted":{"SMS": true}}),
         "systemCapabilities" => json!(["TELEPHONY"]),
         "systemDivideSmsText" => json!(["hi"]),
         "systemSendSmsParts" => {
@@ -262,7 +262,7 @@ async fn send_sms_needs_the_send_permission_and_passes_the_sim_choice() {
 /// -1 means "system default", which reaches the platform as no subscription.
 #[tokio::test]
 async fn send_sms_maps_the_default_sim_to_no_subscription() {
-    let (_dir, schema) = fixture(json!(["SEND_SMS"]));
+    let (_dir, schema) = fixture(json!(["SMS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemCapabilities" => json!(["TELEPHONY"]),
         "systemDivideSmsText" => json!(["hi"]),
@@ -282,7 +282,7 @@ async fn send_sms_maps_the_default_sim_to_no_subscription() {
 
 #[tokio::test]
 async fn send_mms_allocates_one_rust_pending_id_and_launches_only_a_native_intent() {
-    let (_dir, schema) = fixture(json!(["SEND_SMS"]));
+    let (_dir, schema) = fixture(json!(["SMS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemMmsLatest" => json!(7),
         "systemMmsLaunch" => {

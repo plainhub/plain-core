@@ -277,10 +277,7 @@ impl HostEvents {
         #[cfg(not(target_os = "ios"))]
         self.state.image_models.catalog_changed();
         #[cfg(target_os = "ios")]
-        plain_rs::features::services::files::catalog_events::publish(
-            &self.state.events,
-            [plain_rs::features::enums::DataType::Image.kind()],
-        );
+        self.refresh_photos().await?;
         return Ok(());
     }
 
@@ -406,7 +403,21 @@ impl HostEvents {
             log::warn!("BLE advertising permission recovery failed: {error}");
         }
 
-        self.publish(WsEvent::host_text("PERMISSIONS_UPDATED", payload))
+        self.publish(WsEvent::host_text("ACCESS_UPDATED", payload))?;
+        plain_rs::features::services::files::catalog_scan::access_changed(self.state.core.clone(), self.generation).await?;
+        #[cfg(target_os = "ios")]
+        self.refresh_photos().await?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "ios")]
+    async fn refresh_photos(&self) -> Result<(), String> {
+        self.state.file_platform.photos.sync(&self.state.db, &self.state.host).await?;
+        plain_rs::features::services::files::catalog_events::publish(
+            &self.state.events,
+            [plain_rs::features::enums::DataType::Image.kind(), plain_rs::features::enums::DataType::Video.kind()],
+        );
+        Ok(())
     }
 
     pub async fn report_dlna_position(&self, payload: String) -> Result<(), String> {
@@ -530,7 +541,7 @@ impl HostEvents {
             "SMS_PROVIDER_CHANGED" => self.report_sms_provider_changed(payload).await,
             "SMS_PART_SENT_REPORTED" => self.report_sms_part_sent(payload).await,
             "CLIPBOARD_REPORTED" => self.report_clipboard(payload).await,
-            "PERMISSIONS_UPDATED" => self.report_permissions(payload).await,
+            "ACCESS_UPDATED" => self.report_permissions(payload).await,
             "DLNA_POSITION_REPORTED" => self.report_dlna_position(payload).await,
             "DLNA_PLAYBACK_REPORTED" => self.report_dlna_playback(payload).await,
             "DLNA_SEEK_CONSUMED_REPORTED" => self.report_dlna_seek_consumed(payload).await,

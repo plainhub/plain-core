@@ -25,7 +25,7 @@ impl SecurityPreferences<'_> {
         };
         self.notify(changed);
         if changed && key == API_PERMISSIONS {
-            self.notify_permissions_changed().await?;
+            self.notify_access_changed();
         }
         if key == crate::features::prefs::pref_keys::MDNS_HOSTNAME {
             if let Some(state) = self.server {
@@ -39,7 +39,7 @@ impl SecurityPreferences<'_> {
         let changed = crate::features::prefs::security::remove_entry(self.prefs, key)?;
         self.notify(changed);
         if changed && key == API_PERMISSIONS {
-            self.notify_permissions_changed().await?;
+            self.notify_access_changed();
         }
         if key == crate::features::prefs::pref_keys::MDNS_HOSTNAME {
             if let Some(state) = self.server {
@@ -77,24 +77,12 @@ impl SecurityPreferences<'_> {
         }
     }
 
-    async fn notify_permissions_changed(&self) -> anyhow::Result<()> {
+    fn notify_access_changed(&self) {
         if let Some(events) = self.events {
-            let state = self
-                .server
-                .ok_or_else(|| anyhow::anyhow!("Permission runtime unavailable"))?;
-            let granted = crate::features::services::device::permissions::granted(&state.host)
-                .await
-                .map_err(anyhow::Error::msg)?;
-            let permissions =
-                crate::features::services::device::permissions::enabled(self.prefs, &granted)
-                    .map_err(anyhow::Error::msg)?;
-            let _ = events.send(WsEvent::broadcast(
-                "PERMISSIONS_UPDATED",
-                serde_json::to_string(&permissions)?,
-            ));
+            let _ = events.send(WsEvent::broadcast("ACCESS_UPDATED", "true".into()));
         }
-        Ok(())
     }
+
 }
 
 pub fn security_key(key: &str) -> bool {

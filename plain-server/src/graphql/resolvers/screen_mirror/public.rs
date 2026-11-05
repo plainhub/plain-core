@@ -183,53 +183,6 @@ impl SettingsMutation {
         )
         .await
     }
-
-    async fn open_web_settings(
-        &self,
-        ctx: &Context<'_>,
-        feature: Option<WebSettingsFeature>,
-    ) -> plain_graphql::Result<bool> {
-        ctx.data_unchecked::<Arc<Host>>()
-            .call(
-                "systemOpenWebSettings",
-                serde_json::json!({
-                    "feature": feature.map(|feature| feature.as_str()),
-                }),
-            )
-            .await
-            .map_err(plain_graphql::Error::new)?;
-        Ok(true)
-    }
-}
-
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
-pub enum WebSettingsFeature {
-    Files,
-    Contacts,
-    Sms,
-    CallLogs,
-    CallPhone,
-    PhoneNumber,
-    Apps,
-    Notifications,
-    Clipboard,
-}
-
-impl WebSettingsFeature {
-    /// The app event carries this name and opens the matching settings page.
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Files => "FILES",
-            Self::Contacts => "CONTACTS",
-            Self::Sms => "SMS",
-            Self::CallLogs => "CALL_LOGS",
-            Self::CallPhone => "CALL_PHONE",
-            Self::PhoneNumber => "PHONE_NUMBER",
-            Self::Apps => "APPS",
-            Self::Notifications => "NOTIFICATIONS",
-            Self::Clipboard => "CLIPBOARD",
-        }
-    }
 }
 
 async fn state(ctx: &Context<'_>) -> plain_graphql::Result<Value> {

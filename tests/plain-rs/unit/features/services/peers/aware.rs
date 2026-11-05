@@ -301,7 +301,7 @@ async fn permission_events_retry_rejected_subscriptions_without_a_page_command()
     state
         .events
         .send(
-            crate::infrastructure::events::WsEvent::host_text("PERMISSIONS_UPDATED", "[]".into())
+            crate::infrastructure::events::WsEvent::host_text("ACCESS_UPDATED", "[]".into())
                 .unwrap(),
         )
         .unwrap();

@@ -3,6 +3,7 @@
 //! Reads reuse the same provider search the contact roots use, so a call and
 //! a contact from the same query DSL behave alike.
 
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::instant;
@@ -20,8 +21,7 @@ use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::Value;
 use std::sync::Arc;
 
-const READ: &str = "READ_CALL_LOG";
-const WRITE: &str = "WRITE_CALL_LOG";
+const FEATURE: AccessFeature = AccessFeature::CallLogs;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub enum CallType {
@@ -115,8 +115,8 @@ impl CallsQuery {
         offset: i32,
         limit: i32,
     ) -> plain_graphql::Result<Vec<Call>> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
-        if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[READ]).await? {
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
+        if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(Vec::new());
         }
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
@@ -180,7 +180,7 @@ impl CallsQuery {
     }
 
     async fn call_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
-        if !public_gate::require_granted(ctx, &[WRITE]).await? {
+        if !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(0);
         }
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
@@ -219,7 +219,7 @@ impl CallsMutation {
                 "query is required for bulk mutations — pass 'all:true' to explicitly target everything",
             ));
         }
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[WRITE])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         // Call contributes no clause of its own, so a query carrying only
         // fields it does not act on resolves to the entire call log.
         plain_rs::features::services::phone_query::require_narrowing(
@@ -270,7 +270,7 @@ impl CallsMutation {
         number: String,
         show_dialer: bool,
     ) -> plain_graphql::Result<bool> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &["CALL_PHONE"])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[AccessFeature::CallPhone])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;

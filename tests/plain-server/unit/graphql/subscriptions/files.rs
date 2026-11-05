@@ -14,10 +14,10 @@ async fn native_directory_search_streams_unindexed_files_in_excluded_directories
     let (generation, mut incoming) = host.connect();
     let permissions = tokio::spawn(async move {
         while let Some(request) = incoming.recv().await {
-            assert_eq!(request["method"], "systemPermissionFacts");
+            assert_eq!(request["method"], "systemAccessFacts");
             host.reply(
                 generation,
-                json!({"id":request["id"],"result":{"granted":{"WRITE_EXTERNAL_STORAGE":true}}}),
+                json!({"id":request["id"],"result":{"granted":{"FILES":true}}}),
             )
             .unwrap();
         }
@@ -73,7 +73,7 @@ async fn large_search_keeps_frames_bounded_and_waits_for_a_slow_reader() {
         while let Some(request) = incoming.recv().await {
             host.reply(
                 generation,
-                json!({"id":request["id"],"result":{"granted":{"WRITE_EXTERNAL_STORAGE":true}}}),
+                json!({"id":request["id"],"result":{"granted":{"FILES":true}}}),
             )
             .unwrap();
         }

@@ -300,6 +300,7 @@ fn platform() -> DevicePlatform {
     }
 }
 
+#[cfg(any(test, target_os = "android"))]
 fn cpu_model(text: &str) -> Option<String> {
     text.lines()
         .filter_map(|line| line.split_once(':'))

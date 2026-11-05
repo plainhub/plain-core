@@ -1,3 +1,4 @@
+use crate::features::access::AccessFeature;
 use crate::features::services::peers::management::Identity;
 use crate::features::services::peers::management::current_peer;
 use crate::runtime::Runtime as CoreRuntime;
@@ -88,7 +89,7 @@ pub async fn send(
     if !current_peer(state, peer_id, identity, cancelled).await?
         || *access.borrow() != Some(true)
         || !crate::features::clipboard::sync::sends(&state.prefs, peer_id)?
-        || !crate::features::services::device::access::is_enabled(&state.prefs, &["CLIPBOARD"])
+        || !crate::features::services::device::access::is_enabled(&state.prefs, &[AccessFeature::Clipboard])
         || !state.clipboard_changes.can_send(text)
     {
         return Ok(false);
@@ -128,7 +129,7 @@ pub async fn follow(
     let mut delay = Duration::from_secs(1);
     while !*cancellation.borrow() && !*stop.borrow() {
         if !crate::features::clipboard::sync::sends(&state.prefs, peer_id).unwrap_or(false)
-            || !crate::features::services::device::access::is_enabled(&state.prefs, &["CLIPBOARD"])
+            || !crate::features::services::device::access::is_enabled(&state.prefs, &[AccessFeature::Clipboard])
             || *access.borrow() == Some(false)
         {
             pending = None;
@@ -155,7 +156,7 @@ pub async fn follow(
                     refresh = enabled && !receiving;
                     receiving = enabled;
                 },
-                Ok(event) if event.event_type == "PERMISSIONS_UPDATED" => refresh = true,
+                Ok(event) if event.event_type == "ACCESS_UPDATED" => refresh = true,
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => { pending = None; refresh = true; },
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
                 _ => {},

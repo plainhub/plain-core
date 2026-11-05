@@ -257,7 +257,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
         "startImageIndex(force: Boolean): Boolean!",
         "cancelImageIndex: Boolean!",
         "openAccessibilitySettings: Boolean!",
-        "openWebSettings(feature: WebSettingsFeature): Boolean!",
+        "requestAccess(feature: AccessFeature!): Boolean!",
         "appFiles(query: String!, offset: Int!, limit: Int!): [AppFile!]!",
         "appFileCount(query: String!): Int!",
         "bookmark(id: ID!): Bookmark",

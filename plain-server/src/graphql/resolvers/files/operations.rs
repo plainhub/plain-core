@@ -1,6 +1,7 @@
 //! Public `/graphql` roots that write: file operations, media-library
 //! actions and the resumable-upload merge state.
 //!
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::files::types::File;
 use crate::graphql::resolvers::media::public::MediaDataType;
 use crate::graphql::types::ActionResult;
@@ -15,7 +16,7 @@ use plain_rs::infrastructure::types::Long;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-const STORAGE: &str = "WRITE_EXTERNAL_STORAGE";
+const STORAGE: AccessFeature = AccessFeature::Files;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub enum MergeTaskStatus {
@@ -379,9 +380,6 @@ impl MediaItemsMutation {
         })
     }
 
-    /// The only media action that is also a storage write, so it is the
-    /// only one that gates — the others just move rows between the library
-    /// and the trash.
     async fn move_media_items(
         &self,
         ctx: &Context<'_>,
@@ -461,6 +459,13 @@ async fn media_action(
     query: &str,
     dest: Value,
 ) -> plain_graphql::Result<i32> {
+    public_gate::require(
+        ctx,
+        prefs(ctx),
+        &[crate::graphql::resolvers::media::public::access_feature(
+            r#type.data_type(),
+        )],
+    )?;
     use plain_rs::features::media::actions::Action;
     let action = match action {
         "delete" => Action::Delete,

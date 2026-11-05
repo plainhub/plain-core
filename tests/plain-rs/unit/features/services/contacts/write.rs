@@ -29,8 +29,8 @@ fn contact(source: &str, extra: Value) -> Value {
 #[test]
 fn contact_writes_require_the_write_contacts_api_permission() {
     assert!(!permission_allowed(&[]));
-    assert!(!permission_allowed(&["READ_CONTACTS".into()]));
-    assert!(permission_allowed(&["WRITE_CONTACTS".into()]));
+    assert!(!permission_allowed(&["FILES".into()]));
+    assert!(permission_allowed(&["CONTACTS".into()]));
 }
 
 #[test]
@@ -114,9 +114,7 @@ fn oversized_and_malformed_contact_input_is_rejected() {
 async fn creation_resolves_the_account_before_any_provider_write() {
     let dir = tempfile::tempdir().unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
-    prefs
-        .set("api_permissions", json!(["WRITE_CONTACTS"]))
-        .unwrap();
+    prefs.set("api_permissions", json!(["CONTACTS"])).unwrap();
     let host = std::sync::Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
     let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));

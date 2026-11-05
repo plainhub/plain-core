@@ -391,37 +391,3 @@ pub use plain_rs::features::chat::attachments::download_status::DownloadStatus;
 // ── MediaPlayMode ──────────────────────────────────────────────────────────
 
 pub use plain_rs::features::media::audio::play_mode::MediaPlayMode;
-
-// ── Permission ─────────────────────────────────────────────────────────────
-
-/// Client-side access rights, mirroring the plain-app `Permission` enum.
-/// The desktop local server grants none — phone features require a paired
-/// phone backend.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Enum)]
-#[graphql(name = "Permission", rename_items = "SCREAMING_SNAKE_CASE")]
-pub enum Permission {
-    WriteExternalStorage,
-    ReadSms,
-    SendSms,
-    ReadContacts,
-    WriteContacts,
-    ReadCallLog,
-    WriteCallLog,
-    CallPhone,
-    PostNotifications,
-    NearbyWifiDevices,
-    AccessFineLocation,
-    Camera,
-    SystemAlertWindow,
-    RecordAudio,
-    ReadMediaImages,
-    ReadMediaVideos,
-    ReadMediaAudio,
-    NotificationListener,
-    ReadPhoneState,
-    ReadPhoneNumbers,
-    ScheduleExactAlarm,
-    QueryAllPackages,
-    Adb,
-    Clipboard,
-}

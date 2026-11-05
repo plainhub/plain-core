@@ -9,14 +9,14 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         let directory = tempfile::tempdir().unwrap();
         let server = crate::server::ContentServer::open(directory.path()).unwrap();
         let state = server.runtime_state();
-        state.prefs.set(plain_rs::features::prefs::pref_keys::API_PERMISSIONS, vec!["WRITE_EXTERNAL_STORAGE"]).unwrap();
+        state.prefs.set(plain_rs::features::prefs::pref_keys::API_PERMISSIONS, vec!["FILES"]).unwrap();
         let host = state.host.clone();
         let (generation, mut incoming) = host.connect();
         let replies = tokio::spawn(async move {
             while let Some(request) = incoming.recv().await {
                 let result = match request["method"].as_str().unwrap() {
                     "systemCapabilities" => json!(["MEDIA_SCAN"]),
-                    "systemPermissionFacts" => json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}}),
+                    "systemAccessFacts" => json!({"granted":{"FILES":true}}),
                     "onlineClientsChanged" | "httpServerStatusChanged" => Value::Null,
                     method => panic!("unexpected host method {method}"),
                 };

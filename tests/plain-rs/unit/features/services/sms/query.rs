@@ -243,7 +243,10 @@ async fn conversation_provider_reports_raw_candidates_and_rust_filters_own_numbe
             let request = requests.recv().await.unwrap();
             if request["method"] == "systemCapabilities" {
                 replies
-                    .reply(generation, json!({"id":request["id"],"result":["TELEPHONY"]}))
+                    .reply(
+                        generation,
+                        json!({"id":request["id"],"result":["TELEPHONY"]}),
+                    )
                     .unwrap();
             } else {
                 break request;
@@ -362,7 +365,10 @@ async fn filtered_conversation_rows_and_count_decode_the_actual_android_pair_obj
                 let request = requests.recv().await.unwrap();
                 if request["method"] == "systemCapabilities" {
                     replies
-                        .reply(generation, json!({"id":request["id"],"result":["TELEPHONY"]}))
+                        .reply(
+                            generation,
+                            json!({"id":request["id"],"result":["TELEPHONY"]}),
+                        )
                         .unwrap();
                 } else {
                     break request;

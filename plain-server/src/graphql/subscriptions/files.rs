@@ -20,7 +20,7 @@ pub(super) const SPEC: EventSpec = EventSpec {
     aliases: &[],
     invalidation: false,
     selection: "",
-    permissions: &["WRITE_EXTERNAL_STORAGE"],
+    access: &[plain_rs::features::access::AccessFeature::Files],
     capability: None,
 };
 

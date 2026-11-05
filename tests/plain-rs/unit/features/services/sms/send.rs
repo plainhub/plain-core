@@ -6,8 +6,8 @@ use super::permission_allowed;
 #[test]
 fn sms_send_requires_explicit_api_permission() {
     assert!(!permission_allowed(&[]));
-    assert!(!permission_allowed(&["READ_SMS".into()]));
-    assert!(permission_allowed(&["SEND_SMS".into()]));
+    assert!(!permission_allowed(&["CONTACTS".into()]));
+    assert!(permission_allowed(&["SMS".into()]));
 }
 
 #[test]

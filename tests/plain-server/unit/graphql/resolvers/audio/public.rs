@@ -66,7 +66,7 @@ fn engine_report(params: &Value) -> Value {
     report
 }
 
-const GRANTED: &str = r#"["WRITE_EXTERNAL_STORAGE"]"#;
+const GRANTED: &str = r#"["AUDIO"]"#;
 
 fn fixture() -> (tempfile::TempDir, PublicSchema) {
     fixture_with(GRANTED, |method, params| match method {
@@ -1218,9 +1218,8 @@ async fn overview_projects_the_authoritative_catalog_without_sdk_metadata_calls(
     let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let count = calls.clone();
     let (_dir, schema) = fixture_with(GRANTED, move |method, _| {
-        assert_eq!(method, "systemCapabilities");
         count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        json!(["AUDIO_LIBRARY"])
+        panic!("Unexpected host call: {method}")
     });
     let db = database(&schema);
     let rows = db
@@ -1277,22 +1276,23 @@ async fn overview_projects_the_authoritative_catalog_without_sdk_metadata_calls(
         result["data"]["audioOverview"]["recentItems"],
         json!([{"id":rows[1].id,"path":"/two.mp3"}])
     );
-    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
-async fn overview_requires_an_implemented_audio_library_capability() {
+async fn overview_is_available_without_capability_sampling() {
     let (_dir, schema) = fixture_with(GRANTED, |method, _| {
-        assert_eq!(method, "systemCapabilities");
-        json!([])
+        panic!("Unexpected host call: {method}")
     });
-    let result = query(&schema, "{ audioOverview { artists { name } } }").await;
-    assert!(result["errors"].is_array(), "{result}");
-    assert!(
-        result["errors"][0]["message"]
-            .as_str()
-            .unwrap()
-            .contains("AUDIO_LIBRARY")
+    let result = query(
+        &schema,
+        "{ audioOverview { artists { name } recentItems { id } } }",
+    )
+    .await;
+    assert!(result["errors"].is_null(), "{result}");
+    assert_eq!(
+        result["data"]["audioOverview"],
+        json!({"artists":[],"recentItems":[]})
     );
 }
 

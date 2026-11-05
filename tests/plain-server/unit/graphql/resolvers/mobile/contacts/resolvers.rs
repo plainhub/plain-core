@@ -136,7 +136,7 @@ async fn detail_enum_names_are_exactly_the_members_the_schema_publishes() {
 
 #[tokio::test]
 async fn contacts_map_the_host_facts_onto_the_contract_type() {
-    let (_dir, schema) = fixture(json!(["READ_CONTACTS"]));
+    let (_dir, schema) = fixture(json!(["CONTACTS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemContactFacts" => {
             assert!(params.get("query").is_none());
@@ -208,7 +208,7 @@ async fn contact_reads_refuse_to_answer_without_the_web_permission() {
 
 #[tokio::test]
 async fn create_contact_reads_the_new_row_back_through_the_provider_search() {
-    let (_dir, schema) = fixture(json!(["WRITE_CONTACTS"]));
+    let (_dir, schema) = fixture(json!(["CONTACTS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemContactSources" => json!([{"name":"Local","type":"local"}]),
         "systemCreateContact" => {
@@ -245,7 +245,7 @@ async fn create_contact_reads_the_new_row_back_through_the_provider_search() {
 
 #[tokio::test]
 async fn a_write_that_cannot_be_read_back_fails_the_mutation() {
-    let (_dir, schema) = fixture(json!(["WRITE_CONTACTS"]));
+    let (_dir, schema) = fixture(json!(["CONTACTS"]));
     stub(schema_host(&schema), |method, _| match method {
         "systemUpdateContact" => json!(true),
         "systemContactFacts" => json!({"rows":[],"details":[],"groups":[]}),
@@ -268,7 +268,7 @@ async fn a_write_that_cannot_be_read_back_fails_the_mutation() {
 
 #[tokio::test]
 async fn delete_contacts_counts_only_the_ids_the_platform_deleted() {
-    let (_dir, schema) = fixture(json!(["WRITE_CONTACTS"]));
+    let (_dir, schema) = fixture(json!(["CONTACTS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemContactIds" => {
             assert!(params.get("query").is_none());
@@ -294,7 +294,7 @@ async fn delete_contacts_counts_only_the_ids_the_platform_deleted() {
 
 #[tokio::test]
 async fn delete_contacts_rejects_a_blank_query_before_touching_the_platform() {
-    let (_dir, schema) = fixture(json!(["WRITE_CONTACTS"]));
+    let (_dir, schema) = fixture(json!(["CONTACTS"]));
     stub(schema_host(&schema), |method, _| {
         panic!("unexpected host call {method}")
     });
@@ -312,7 +312,7 @@ async fn delete_contacts_rejects_a_blank_query_before_touching_the_platform() {
 
 #[tokio::test]
 async fn group_writes_return_the_group_they_just_wrote() {
-    let (_dir, schema) = fixture(json!(["WRITE_CONTACTS"]));
+    let (_dir, schema) = fixture(json!(["CONTACTS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemCreateContactGroup" => {
             assert_eq!(params["name"], "Friends");
@@ -355,7 +355,7 @@ async fn group_writes_return_the_group_they_just_wrote() {
 
 #[tokio::test]
 async fn contact_deletion_rejects_non_narrowing_queries_before_provider_calls() {
-    let (_directory, schema) = fixture(json!(["WRITE_CONTACTS"]));
+    let (_directory, schema) = fixture(json!(["CONTACTS"]));
     let host = schema_host(&schema);
     let (generation, mut requests) = host.connect();
     for query in [

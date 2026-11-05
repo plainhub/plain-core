@@ -59,7 +59,7 @@ fn unknown_call_direction_is_unknown() {
 
 #[tokio::test]
 async fn calls_map_the_provider_rows_onto_the_contract_type() {
-    let (_dir, schema) = fixture(json!(["READ_CALL_LOG"]));
+    let (_dir, schema) = fixture(json!(["CALL_LOGS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemCallFacts" => {
             assert!(params.get("query").is_none());
@@ -93,9 +93,9 @@ async fn calls_map_the_provider_rows_onto_the_contract_type() {
 
 #[tokio::test]
 async fn call_count_degrades_to_zero_without_the_platform_grant() {
-    let (_dir, schema) = fixture(json!(["READ_CALL_LOG"]));
+    let (_dir, schema) = fixture(json!(["CALL_LOGS"]));
     stub(schema_host(&schema), |method, _| match method {
-        "systemPermissionFacts" => json!({"granted":{"WRITE_CALL_LOG": false}}),
+        "systemAccessFacts" => json!({"granted":{"CALL_LOGS": false}}),
         other => panic!("unexpected host call {other}"),
     });
     let response = schema.execute(r#"query { callCount(query:"") }"#).await;
@@ -117,7 +117,7 @@ async fn call_reads_refuse_to_answer_without_the_web_permission() {
 
 #[tokio::test]
 async fn placing_a_call_needs_the_call_phone_permission() {
-    let (_dir, schema) = fixture(json!(["READ_CALL_LOG"]));
+    let (_dir, schema) = fixture(json!(["CALL_LOGS"]));
     stub(schema_host(&schema), |method, _| {
         panic!("unexpected host call {method}")
     });
@@ -144,7 +144,7 @@ async fn placing_a_call_needs_the_call_phone_permission() {
 
 #[tokio::test]
 async fn delete_calls_counts_only_what_the_platform_deleted() {
-    let (_dir, schema) = fixture(json!(["WRITE_CALL_LOG"]));
+    let (_dir, schema) = fixture(json!(["CALL_LOGS"]));
     stub(schema_host(&schema), |method, params| match method {
         "systemCallIds" => {
             assert!(params.get("query").is_none());
@@ -170,7 +170,7 @@ async fn delete_calls_counts_only_what_the_platform_deleted() {
 
 #[tokio::test]
 async fn delete_calls_rejects_a_blank_query_before_touching_the_platform() {
-    let (_dir, schema) = fixture(json!(["WRITE_CALL_LOG"]));
+    let (_dir, schema) = fixture(json!(["CALL_LOGS"]));
     stub(schema_host(&schema), |method, _| {
         panic!("unexpected host call {method}")
     });
@@ -192,7 +192,7 @@ async fn delete_calls_rejects_a_blank_query_before_touching_the_platform() {
 /// platform. That is the whole call log.
 #[tokio::test]
 async fn delete_calls_refuses_a_query_of_fields_it_does_not_act_on() {
-    let (_dir, schema) = fixture(json!(["WRITE_CALL_LOG"]));
+    let (_dir, schema) = fixture(json!(["CALL_LOGS"]));
     stub(schema_host(&schema), |method, _| {
         panic!("a refused delete must not reach the platform: {method}")
     });
@@ -213,7 +213,7 @@ async fn delete_calls_refuses_a_query_of_fields_it_does_not_act_on() {
 
 #[tokio::test]
 async fn calls_without_geo_preserve_provider_values_without_phone_metadata_calls() {
-    let (_dir, schema) = fixture(json!(["READ_CALL_LOG"]));
+    let (_dir, schema) = fixture(json!(["CALL_LOGS"]));
     let calls = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let observed = calls.clone();
     stub(schema_host(&schema), move |method, _| {
@@ -240,7 +240,7 @@ async fn calls_without_geo_preserve_provider_values_without_phone_metadata_calls
 
 #[tokio::test]
 async fn phone_geo_samples_locale_once_for_the_page_and_never_dispatches_number_metadata() {
-    let (_dir, schema) = fixture(json!(["READ_CALL_LOG"]));
+    let (_dir, schema) = fixture(json!(["CALL_LOGS"]));
     let requests = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let observed = requests.clone();
     stub(schema_host(&schema), move |method, _| {
@@ -276,7 +276,7 @@ async fn phone_geo_samples_locale_once_for_the_page_and_never_dispatches_number_
 
 #[tokio::test]
 async fn empty_call_page_does_not_request_locale_or_number_metadata() {
-    let (_dir, schema) = fixture(json!(["READ_CALL_LOG"]));
+    let (_dir, schema) = fixture(json!(["CALL_LOGS"]));
     stub(schema_host(&schema), |method, _| match method {
         "systemCallFacts" => json!([]),
         other => panic!("unexpected host call {other}"),

@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::http::auth::public_gate;
 use plain_graphql::{Context, Object, SimpleObject};
@@ -15,7 +16,7 @@ use plain_rs::infrastructure::types::Long;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-const STORAGE: &str = "WRITE_EXTERNAL_STORAGE";
+const FEATURE: AccessFeature = AccessFeature::Audio;
 
 pub use plain_rs::features::media::audio::play_mode::MediaPlayMode;
 
@@ -158,13 +159,7 @@ pub struct AudioQuery;
 #[Object]
 impl AudioQuery {
     async fn audio_overview(&self, ctx: &Context<'_>) -> plain_graphql::Result<AudioOverview> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
-        plain_rs::features::services::capabilities::require(
-            ctx.data::<Arc<Host>>()?,
-            "AUDIO_LIBRARY",
-        )
-        .await
-        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let mut summary = plain_rs::features::services::audio::overview::read(
             ctx.data::<Arc<plain_rs::infrastructure::db::Db>>()?.clone(),
             crate::graphql::resolvers::media::public::catalog(
@@ -199,12 +194,12 @@ impl AudioQuery {
         ctx: &Context<'_>,
         path: String,
     ) -> plain_graphql::Result<AudioItem> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         Ok(item(audio(ctx)?.metadata(path).await?))
     }
 
     async fn audio_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
-        if !public_gate::require_granted(ctx, &[STORAGE]).await? {
+        if !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(0);
         }
         crate::graphql::resolvers::media::public::media_count(ctx, "AUDIO", query).await
@@ -218,7 +213,7 @@ impl AudioQuery {
         limit: i32,
         sort_by: FileSortBy,
     ) -> plain_graphql::Result<Vec<Audio>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let items = crate::graphql::types::facts::rows(
             &crate::graphql::resolvers::media::public::media_rows(
                 ctx,
@@ -238,7 +233,7 @@ impl AudioQuery {
         ctx: &Context<'_>,
         path: String,
     ) -> plain_graphql::Result<Option<String>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let state = ctx.data_opt::<crate::server::ServerState>();
         let lyrics = plain_rs::features::services::audio::lyrics::read_for_playback(
             path,
@@ -253,7 +248,7 @@ impl AudioQuery {
         ctx: &Context<'_>,
         #[graphql(name = "mediaId")] file_id: plain_graphql::ID,
     ) -> plain_graphql::Result<Option<String>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let path = audio(ctx)?
             .run(move |db, lib| {
                 lib.cache_ids(&[file_id.to_string()])?;
@@ -270,7 +265,7 @@ impl AudioQuery {
         offset: i32,
         limit: i32,
     ) -> plain_graphql::Result<Vec<AudioItem>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         Ok(audio(ctx)?
             .run(move |db, _| domain::queue_page(db, offset as i64, limit as i64, &query))
             .await?
@@ -280,7 +275,7 @@ impl AudioQuery {
     }
 
     async fn audio_queue_item_count(&self, ctx: &Context<'_>) -> plain_graphql::Result<i32> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         Ok(audio(ctx)?
             .run(|db, _| domain::queue_total(db))
             .await?
@@ -328,7 +323,7 @@ impl AudioQuery {
         ctx: &Context<'_>,
         ids: Vec<plain_graphql::ID>,
     ) -> plain_graphql::Result<Vec<AudioPlaylistCovers>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let ids = ids.into_iter().map(|id| id.to_string()).collect::<Vec<_>>();
         Ok(audio(ctx)?
             .run(move |db, _| {
@@ -405,7 +400,7 @@ impl AudioMutation {
         ctx: &Context<'_>,
         path: String,
     ) -> plain_graphql::Result<Option<String>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         Ok(audio(ctx)?
             .cover(&path)
             .await
@@ -451,7 +446,7 @@ impl AudioMutation {
         sort_by: FileSortBy,
         shuffle: bool,
     ) -> plain_graphql::Result<Option<AudioItem>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let tracks = search_tracks(ctx, &query, sort_by).await?;
         let prefs = prefs(ctx).clone();
         let local = is_local(ctx);

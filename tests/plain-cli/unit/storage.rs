@@ -50,7 +50,7 @@ async fn startup_scan_indexes_configured_directories_through_the_headless_host()
     );
     core.runtime()
         .media_scans
-        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+        .set_defaults(plain_rs::features::prefs::file_index::Defaults {
             scan_directories: Vec::new(),
             excluded_directories: Vec::new(),
             excluded_names: Vec::new(),

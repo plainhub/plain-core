@@ -183,7 +183,7 @@ pub fn start(state: CoreRuntime) {
                 changed = peers.changed() => { if changed.is_err() { break; } false },
                 changed = connection.changed() => { if changed.is_err() { break; } false },
                 event = events.recv() => match event {
-                    Ok(event) if event.event_type == "PERMISSIONS_UPDATED" => true,
+                    Ok(event) if event.event_type == "ACCESS_UPDATED" => true,
                     Ok(event) if event.event_type == "PREFS_UPDATED" => false,
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => true,
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,

@@ -238,7 +238,7 @@ type Subscription {
 	pomodoroAction: PomodoroAction!
 	dlnaSenderChanged: DlnaSenderState!
 	deviceNameUpdated: String!
-	permissionsUpdated: Boolean!
+	accessUpdated: Boolean!
 	contentChanged: Boolean!
 	clipboardChanged: ClipboardChange!
 	screenMirrorState: MirrorState!

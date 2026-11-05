@@ -122,6 +122,7 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
                 | "networkInterfacesChanged"
                 | "pairingSucceeded" => json!(null),
                 "systemCapabilities" => json!(["SCREEN_MIRROR"]),
+                "mdnsMulticast" => json!(true),
                 "systemScreenMirrorState" => mirror_host.lock().unwrap().clone(),
                 "systemScreenMirrorControls" | "systemScreenMirrorResetTouch" => {
                     sent.send((method.to_owned(), request["params"].clone()))

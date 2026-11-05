@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::facts::flag;
 use crate::graphql::types::facts::integer;
@@ -10,7 +11,7 @@ use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 use serde_json::{Value, json};
 
-use crate::graphql::resolvers::media::public::STORAGE;
+const FEATURE: AccessFeature = AccessFeature::Videos;
 use crate::graphql::resolvers::media::public::media_count;
 use crate::graphql::resolvers::media::public::media_rows;
 use crate::graphql::resolvers::media::public::prefs;
@@ -65,7 +66,7 @@ pub struct VideosQuery;
 #[Object]
 impl VideosQuery {
     async fn video_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
-        if !public_gate::require_granted(ctx, &[STORAGE]).await? {
+        if !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(0);
         }
         media_count(ctx, "VIDEO", query).await
@@ -79,7 +80,7 @@ impl VideosQuery {
         limit: i32,
         sort_by: plain_rs::features::prefs::settings::FileSortBy,
     ) -> plain_graphql::Result<Vec<Video>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let items = media_rows(
             ctx,
             json!({

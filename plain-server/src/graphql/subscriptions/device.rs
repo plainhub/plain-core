@@ -13,11 +13,8 @@ impl DeviceSubscriptions {
     ) -> Result<BoxStream<'static, Result<String>>> {
         events::stream(ctx, "DEVICE_NAME_UPDATED").await
     }
-    async fn permissions_updated(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<BoxStream<'static, Result<bool>>> {
-        events::stream(ctx, "PERMISSIONS_UPDATED").await
+    async fn access_updated(&self, ctx: &Context<'_>) -> Result<BoxStream<'static, Result<bool>>> {
+        events::stream(ctx, "ACCESS_UPDATED").await
     }
     async fn content_changed(&self, ctx: &Context<'_>) -> Result<BoxStream<'static, Result<bool>>> {
         events::stream(ctx, "CONTENT_CHANGED").await

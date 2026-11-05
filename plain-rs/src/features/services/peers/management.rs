@@ -347,7 +347,7 @@ pub async fn refresh_data(
         };
     let clipboard = app.as_ref().ok().map(|app| {
         app.capabilities.iter().any(|value| value == "CLIPBOARD")
-            && app.permissions.iter().any(|value| value == "CLIPBOARD")
+            && app.access.contains(&crate::features::access::AccessFeature::Clipboard)
     });
     if let Some(access) = clipboard_access {
         access.send_replace(clipboard);
@@ -514,7 +514,7 @@ async fn connection_loop(
                                             data_changed.notify_one();
                                         }
                                         delay = Duration::from_secs(1);
-                                        if kind == "PERMISSIONS_UPDATED" {
+                                        if kind == "ACCESS_UPDATED" {
                                             break;
                                         }
                                     }

@@ -6,7 +6,7 @@ use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::{fs, sync::Arc};
 
-const GRANTED: &str = r#"["WRITE_EXTERNAL_STORAGE"]"#;
+const GRANTED: &str = r#"["FILES"]"#;
 
 #[tokio::test]
 async fn file_classification_is_available_in_the_main_file_contract_without_hiding_entries() {
@@ -55,9 +55,9 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 
 fn fixture(permissions: &str) -> (tempfile::TempDir, PublicSchema) {
     fixture_with(permissions, |method, params| match method {
-        "systemPermissionFacts" => {
-            assert_eq!(params["permissions"], json!(["WRITE_EXTERNAL_STORAGE"]));
-            json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}})
+        "systemAccessFacts" => {
+            assert_eq!(params["features"], json!(["FILES"]));
+            json!({"granted":{"FILES":true}})
         }
         other => panic!("unexpected host call {other}"),
     })
@@ -179,7 +179,7 @@ async fn the_page_and_the_count_describe_the_same_query() {
 #[tokio::test]
 async fn file_info_combines_rust_gps_with_sdk_decode_bounds() {
     let (dir, schema) = fixture_with(GRANTED, |method, _| match method {
-        "systemPermissionFacts" => json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}}),
+        "systemAccessFacts" => json!({"granted":{"FILES":true}}),
         "imageDecodeBounds" => json!({"width": 4032, "height": 3024}),
         other => panic!("unexpected host call {other}"),
     });
@@ -204,7 +204,7 @@ async fn file_info_combines_rust_gps_with_sdk_decode_bounds() {
 #[tokio::test]
 async fn the_display_name_selects_the_media_type_and_rust_sniffs_the_container() {
     let (dir, schema) = fixture_with(GRANTED, |method, _| match method {
-        "systemPermissionFacts" => json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}}),
+        "systemAccessFacts" => json!({"granted":{"FILES":true}}),
         other => panic!("unexpected host call {other}"),
     });
     let path = dir.path().join("blob");
@@ -312,7 +312,7 @@ async fn unresolvable_paths_are_false_rather_than_errors() {
 #[tokio::test]
 async fn a_denied_root_reads_as_absent() {
     let (_dir, schema) = fixture_with(GRANTED, |method, _| match method {
-        "systemPermissionFacts" => json!({"granted":{"WRITE_EXTERNAL_STORAGE":false}}),
+        "systemAccessFacts" => json!({"granted":{"FILES":false}}),
         other => panic!("unexpected host call {other}"),
     });
     let response = schema
@@ -331,7 +331,7 @@ async fn a_denied_root_reads_as_absent() {
 #[tokio::test]
 async fn a_denied_path_is_never_probed_for_media() {
     let (_dir, schema) = fixture_with(GRANTED, |method, _| match method {
-        "systemPermissionFacts" => json!({"granted":{"WRITE_EXTERNAL_STORAGE":false}}),
+        "systemAccessFacts" => json!({"granted":{"FILES":false}}),
         other => panic!("media probe ran for a denied path: {other}"),
     });
     let response = schema
@@ -826,7 +826,7 @@ async fn unknown_duration_only_file_info_returns_null_without_platform_metadata(
     let samples = Arc::new(AtomicUsize::new(0));
     let calls = samples.clone();
     let (directory, schema) = fixture_with(GRANTED, move |method, _| match method {
-        "systemPermissionFacts" => json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}}),
+        "systemAccessFacts" => json!({"granted":{"FILES":true}}),
         other => {
             calls.fetch_add(1, Ordering::SeqCst);
             panic!("Unexpected host operation: {other}");

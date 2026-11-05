@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::types::facts::id;
 use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::optional_instant;
@@ -13,7 +14,7 @@ use plain_rs::infrastructure::types::Long;
 use serde_json::Value;
 use std::sync::Arc;
 
-pub(crate) const STORAGE: &str = "WRITE_EXTERNAL_STORAGE";
+pub(crate) const STORAGE: AccessFeature = AccessFeature::Files;
 
 pub use super::types::{MediaBucket, MediaDataType};
 
@@ -53,7 +54,8 @@ impl MediaQuery {
         ctx: &Context<'_>,
         r#type: MediaDataType,
     ) -> plain_graphql::Result<Vec<MediaBucket>> {
-        if !public_gate::require_granted(ctx, &[STORAGE]).await? {
+        let feature = access_feature(r#type.data_type());
+        if !public_gate::require_granted(ctx, &[feature]).await? {
             return Ok(Vec::new());
         }
         let data_type = data_type_of(r#type.as_str())?;
@@ -152,7 +154,7 @@ pub(crate) async fn catalog(
     data_type: DataType,
 ) -> plain_graphql::Result<plain_rs::features::services::files::catalog::MediaCatalog> {
     #[cfg(target_os = "ios")]
-    if data_type == DataType::Image {
+    if matches!(data_type, DataType::Image | DataType::Video) {
         let platform = ctx
             .data_unchecked::<Arc<plain_rs::features::services::files::platform::FilePlatform>>();
         platform
@@ -221,3 +223,13 @@ pub(crate) fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<plain_rs::features::pre
 #[cfg(test)]
 #[path = "../../../../../tests/plain-server/unit/graphql/resolvers/media/public.rs"]
 mod tests;
+
+pub(crate) fn access_feature(data_type: DataType) -> AccessFeature {
+    match data_type {
+        DataType::Image => AccessFeature::Images,
+        DataType::Video => AccessFeature::Videos,
+        DataType::Audio => AccessFeature::Audio,
+        DataType::Doc => AccessFeature::Docs,
+        _ => AccessFeature::Files,
+    }
+}

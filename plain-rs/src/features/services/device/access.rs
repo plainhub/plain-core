@@ -1,45 +1,75 @@
-use crate::features::prefs::Prefs;
+use crate::features::access::AccessFeature;
+use crate::features::prefs::{Prefs, pref_keys::API_PERMISSIONS};
 use crate::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
-use std::collections::HashSet;
-/// `WRITE_CONTACTS` implies `READ_CONTACTS` and `WRITE_CALL_LOG` implies
-/// `READ_CALL_LOG`: the web UI only ever offers the wider permission, so
-/// asking for the narrower one must not fail.
-pub fn api_enabled(permissions: &[String], configured: &HashSet<String>) -> bool {
-    permissions.iter().all(|name| {
-        configured.contains(name)
-            || (name == "READ_CONTACTS" && configured.contains("WRITE_CONTACTS"))
-            || (name == "READ_CALL_LOG" && configured.contains("WRITE_CALL_LOG"))
-    })
-}
+use serde_json::json;
 
-fn configured(prefs: &Prefs) -> Vec<String> {
-    prefs.get_or(
-        crate::features::prefs::pref_keys::API_PERMISSIONS,
-        Vec::new(),
-    )
-}
-
-pub async fn granted(host: &Host, permissions: &[String]) -> anyhow::Result<bool> {
-    let facts = host
-        .call(
-            "systemPermissionFacts",
-            json!({ "permissions": permissions }),
-        )
-        .await
-        .map_err(anyhow::Error::msg)?;
-    let grants = facts["granted"]
-        .as_object()
-        .ok_or_else(|| anyhow::anyhow!("invalid permission facts"))?;
-    Ok(permissions
+pub fn is_enabled(prefs: &Prefs, features: &[AccessFeature]) -> bool {
+    let configured: Vec<AccessFeature> = prefs.get_or(API_PERMISSIONS, Vec::new());
+    features
         .iter()
-        .all(|name| grants.get(name).and_then(Value::as_bool) == Some(true)))
+        .all(|name| configured.iter().any(|value| value == name))
 }
 
-pub fn is_enabled(prefs: &Prefs, permissions: &[&str]) -> bool {
-    let names: Vec<String> = permissions.iter().map(|name| name.to_string()).collect();
-    let configured: HashSet<String> = configured(prefs).into_iter().collect();
-    api_enabled(&names, &configured)
+pub async fn sample(host: &Host, features: &[AccessFeature]) -> Result<Vec<AccessFeature>, String> {
+    let sample = host
+        .call("systemAccessFacts", json!({"features": features}))
+        .await?;
+    #[derive(serde::Deserialize)]
+    struct Facts {
+        granted: std::collections::BTreeMap<AccessFeature, bool>,
+    }
+    let facts: Facts = serde_json::from_value(sample).map_err(|error| error.to_string())?;
+    let mut granted = Vec::new();
+    for feature in features {
+        match facts.granted.get(feature) {
+            Some(true) => granted.push(*feature),
+            Some(false) => {}
+            None => return Err(format!("Missing access sample: {}", feature.as_str())),
+        }
+    }
+    Ok(granted)
+}
+
+pub async fn granted(host: &Host, features: &[AccessFeature]) -> anyhow::Result<bool> {
+    Ok(sample(host, features)
+        .await
+        .map_err(anyhow::Error::msg)?
+        .len()
+        == features.len())
+}
+
+pub async fn snapshot(host: &Host) -> Result<Vec<AccessFeature>, String> {
+    let capabilities = crate::features::services::capabilities::snapshot(host)
+        .await
+        .map_err(|error| error.to_string())?;
+    snapshot_with_capabilities(host, &capabilities).await
+}
+
+pub async fn snapshot_with_capabilities(
+    host: &Host,
+    capabilities: &[String],
+) -> Result<Vec<AccessFeature>, String> {
+    let features: Vec<_> = AccessFeature::ALL
+        .into_iter()
+        .filter(|feature| {
+            feature
+                .capability()
+                .is_none_or(|capability| capabilities.iter().any(|value| value == capability))
+        })
+        .collect();
+    sample(host, &features).await
+}
+
+pub fn enabled_features(prefs: &Prefs, grants: &[AccessFeature]) -> Result<Vec<AccessFeature>, String> {
+    let configured: Vec<AccessFeature> = prefs
+        .get(API_PERMISSIONS)
+        .map_err(|error| error.to_string())?
+        .unwrap_or_default();
+    Ok(grants
+        .iter()
+        .filter(|name| configured.contains(name))
+        .copied()
+        .collect())
 }
 
 #[cfg(test)]

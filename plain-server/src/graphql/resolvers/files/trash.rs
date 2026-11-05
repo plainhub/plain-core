@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::types::ActionResult;
 use crate::http::auth::public_gate;
 use plain_graphql::{Context, Enum, ID, Object, Result, SimpleObject};
@@ -74,7 +75,7 @@ fn tasks<'a>(ctx: &'a Context<'_>) -> Result<&'a Arc<FileTasks>> {
     public_gate::require(
         ctx,
         ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?,
-        &["WRITE_EXTERNAL_STORAGE"],
+        &[AccessFeature::Files],
     )?;
     ctx.data::<Arc<FileTasks>>()
 }

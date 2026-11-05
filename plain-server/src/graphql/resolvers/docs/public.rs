@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::tags::domain_types::Tag;
 use crate::graphql::types::facts::rows;
 use crate::http::auth::public_gate;
@@ -8,7 +9,7 @@ use plain_rs::infrastructure::types::Long;
 use serde_json::json;
 use std::path::Path;
 
-use crate::graphql::resolvers::media::public::STORAGE;
+const FEATURE: AccessFeature = AccessFeature::Docs;
 use crate::graphql::resolvers::media::public::media_count;
 use crate::graphql::resolvers::media::public::media_rows;
 use crate::graphql::resolvers::media::public::prefs;
@@ -62,7 +63,7 @@ pub struct DocsQuery;
 #[Object]
 impl DocsQuery {
     async fn doc_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
-        if !public_gate::require_granted(ctx, &[STORAGE]).await? {
+        if !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(0);
         }
         media_count(ctx, "DOC", query).await
@@ -76,7 +77,7 @@ impl DocsQuery {
         limit: i32,
         sort_by: plain_rs::features::prefs::settings::FileSortBy,
     ) -> plain_graphql::Result<Vec<Doc>> {
-        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
+        public_gate::require(ctx, prefs(ctx), &[FEATURE])?;
         let items = media_rows(
             ctx,
             json!({
@@ -111,7 +112,7 @@ impl DocsQuery {
         ctx: &Context<'_>,
         #[graphql(default)] query: String,
     ) -> plain_graphql::Result<Vec<DocExtGroup>> {
-        if !public_gate::require_granted(ctx, &[STORAGE]).await? {
+        if !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(Vec::new());
         }
         Ok(crate::graphql::resolvers::media::public::catalog(

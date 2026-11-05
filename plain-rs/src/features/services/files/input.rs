@@ -43,7 +43,10 @@ fn reader(file: std::fs::File, seekable: bool) -> std::io::Result<Reader> {
         {
             return Err(std::io::Error::last_os_error());
         }
-        return tokio::io::unix::AsyncFd::new(file).map(Reader::Pipe);
+        // The owned File keeps its descriptor open and unchanged until AsyncFd drops it.
+        return unsafe { tokio::io::unix::AsyncFd::register(file) }
+            .map(Reader::Pipe)
+            .map_err(Into::into);
     }
     #[cfg(not(unix))]
     let _ = seekable;

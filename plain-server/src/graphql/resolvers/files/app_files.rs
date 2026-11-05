@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::files::app_file::AppFile;
 use plain_graphql::{Context, Object};
 
@@ -19,7 +20,7 @@ impl AppFilesMutation {
         crate::http::auth::public_gate::require(
             ctx,
             ctx.data::<Arc<plain_rs::features::prefs::Prefs>>()?,
-            &["WRITE_EXTERNAL_STORAGE"],
+            &[AccessFeature::Files],
         )?;
         let store = ctx.data::<Arc<FileStore>>()?;
         let state = ctx.data::<crate::server::ServerState>()?;

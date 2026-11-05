@@ -284,7 +284,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
     assert!(rows.iter().all(|task| task.client_id == owner));
     state
         .prefs
-        .set("api_permissions", json!(["WRITE_EXTERNAL_STORAGE"]))
+        .set("api_permissions", json!(["FILES"]))
         .unwrap();
     let foreign_destination = target.join("foreign.txt");
     let response = core

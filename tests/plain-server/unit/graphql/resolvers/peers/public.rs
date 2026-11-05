@@ -32,9 +32,7 @@ fn fixture_with(
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();
-    prefs
-        .set("api_permissions", vec!["READ_PHONE_NUMBERS"])
-        .unwrap();
+    prefs.set("api_permissions", vec!["PHONE_NUMBER"]).unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),

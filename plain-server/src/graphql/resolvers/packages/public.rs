@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::packages::types::Certificate;
 use crate::graphql::resolvers::packages::types::Package;
 use crate::graphql::resolvers::packages::types::PackageInstallPending;
@@ -20,7 +21,7 @@ use plain_rs::infrastructure::types::Long;
 use serde_json::Value;
 use std::sync::Arc;
 
-const PERMISSION: &str = "QUERY_ALL_PACKAGES";
+const FEATURE: AccessFeature = AccessFeature::Apps;
 
 #[derive(Default)]
 pub struct PackagesQuery;
@@ -32,7 +33,7 @@ impl PackagesQuery {
         ctx: &Context<'_>,
         id: plain_graphql::ID,
     ) -> plain_graphql::Result<String> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "PACKAGES",
@@ -69,7 +70,7 @@ impl PackagesQuery {
         limit: i32,
         sort_by: FileSortBy,
     ) -> plain_graphql::Result<Vec<Package>> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "PACKAGES",
@@ -86,7 +87,7 @@ impl PackagesQuery {
     }
 
     async fn package_count(&self, ctx: &Context<'_>, query: String) -> plain_graphql::Result<i32> {
-        if !public_gate::require_granted(ctx, &[PERMISSION]).await? {
+        if !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(0);
         }
         plain_rs::features::services::capabilities::require(
@@ -103,7 +104,7 @@ impl PackagesQuery {
         ctx: &Context<'_>,
         ids: Vec<plain_graphql::ID>,
     ) -> plain_graphql::Result<Vec<PackageStatus>> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "PACKAGES",
@@ -130,7 +131,7 @@ impl PackagesMutation {
         ctx: &Context<'_>,
         ids: Vec<plain_graphql::ID>,
     ) -> plain_graphql::Result<bool> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "PACKAGES",
@@ -150,7 +151,7 @@ impl PackagesMutation {
         ctx: &Context<'_>,
         path: String,
     ) -> plain_graphql::Result<PackageInstallPending> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[PERMISSION])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         plain_rs::features::services::capabilities::require(
             ctx.data_unchecked::<Arc<Host>>(),
             "PACKAGES",

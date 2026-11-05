@@ -19,21 +19,8 @@ type ScreenMirrorVideoCodec {
 	keyFrame: String
 }
 
-enum WebSettingsFeature {
-	FILES
-	CONTACTS
-	SMS
-	CALL_LOGS
-	CALL_PHONE
-	PHONE_NUMBER
-	APPS
-	NOTIFICATIONS
-	CLIPBOARD
-}
-
 extend type Mutation {
 	openAccessibilitySettings: Boolean!
-	openWebSettings(feature: WebSettingsFeature): Boolean!
 	"""
 	Returns false when the device has not granted RECORD_AUDIO yet; the
 	platform asks for it and the caller retries.

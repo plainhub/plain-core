@@ -196,7 +196,7 @@ async fn run(state: &CoreRuntime) -> Result<bool> {
                 }
             },
             event = events.recv() => match event {
-                Ok(event) if matches!(event.event_type, "PERMISSIONS_UPDATED" | "PREFS_UPDATED") => return Ok(true),
+                Ok(event) if matches!(event.event_type, "ACCESS_UPDATED" | "PREFS_UPDATED") => return Ok(true),
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => return Ok(true),
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => return Ok(false),
                 _ => {},

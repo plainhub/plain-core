@@ -134,10 +134,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
         .unwrap();
     remote_state
         .prefs
-        .set(
-            "api_permissions",
-            json!(["NOTIFICATION_LISTENER", "CLIPBOARD"]),
-        )
+        .set("api_permissions", json!(["NOTIFICATIONS", "CLIPBOARD"]))
         .unwrap();
     let session = remote
         .native_management()
@@ -211,9 +208,9 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
                             json!(["CLIPBOARD"])
                         }
                     }
-                    "systemPermissionFacts" => {
+                    "systemAccessFacts" => {
                         let granted: serde_json::Map<String, serde_json::Value> = request["params"]
-                            ["permissions"]
+                            ["features"]
                             .as_array()
                             .unwrap()
                             .iter()
@@ -222,7 +219,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
                                     name.as_str().unwrap().to_owned(),
                                     json!(
                                         name == "CLIPBOARD"
-                                            || (name == "NOTIFICATION_LISTENER"
+                                            || (name == "NOTIFICATIONS"
                                                 && sdk_allowed.load(Ordering::SeqCst))
                                     ),
                                 )
@@ -399,16 +396,11 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     ));
     let denied = event(&mut callbacks);
     assert!(denied["group"]["items"].as_array().unwrap().is_empty());
-    assert!(
-        denied["group"]["permissions"]
-            .as_array()
-            .unwrap()
-            .is_empty()
-    );
+    assert!(denied["group"]["access"].as_array().unwrap().is_empty());
     assert_eq!(reads.load(Ordering::SeqCst), before);
     remote_state
         .prefs
-        .set("api_permissions", json!(["NOTIFICATION_LISTENER"]))
+        .set("api_permissions", json!(["NOTIFICATIONS"]))
         .unwrap();
     hold.store(true, Ordering::SeqCst);
     let pending = refresh(&state, &peer.id, &identity, &cancelled);

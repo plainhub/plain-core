@@ -92,13 +92,13 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
         while let Some(request) = requests.recv().await {
             let value = match request["method"].as_str().unwrap() {
                 "systemCapabilities" => json!([]),
-                "systemPermissionFacts" => {
+                "systemAccessFacts" => {
                     if sdk_hold.swap(false, Ordering::SeqCst) {
                         sdk_requested.notify_one();
                         sdk_release.notified().await;
                     }
                     let granted: serde_json::Map<String, serde_json::Value> =
-                        request["params"]["permissions"]
+                        request["params"]["features"]
                             .as_array()
                             .unwrap()
                             .iter()

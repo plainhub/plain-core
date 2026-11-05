@@ -40,14 +40,14 @@ async fn access_primitives_report_capabilities_and_grants_without_an_app_busines
     );
     let permissions = runtime
         .dispatch(
-            "systemPermissionFacts",
-            serde_json::json!({"permissions":["WRITE_EXTERNAL_STORAGE","READ_SMS"]}),
+            "systemAccessFacts",
+            serde_json::json!({"features":["FILES","SMS"]}),
         )
         .await
         .unwrap();
     assert_eq!(
         permissions,
-        serde_json::json!({"granted":{"WRITE_EXTERNAL_STORAGE":true,"READ_SMS":false}})
+        serde_json::json!({"granted":{"FILES":true,"SMS":false}})
     );
     assert!(
         runtime

@@ -104,7 +104,7 @@ async fn whole_selection_preflight_case(sdk: bool) {
             while let Some(request) = requests.recv().await {
                 let method = request["method"].as_str().unwrap().to_owned();
                 observed.lock().unwrap().push(method.clone());
-                host.reply(generation, json!({"id":request["id"],"result":if method == "systemPermissionFacts" { json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}}) } else { json!(true) }})).unwrap();
+                host.reply(generation, json!({"id":request["id"],"result":if method == "systemAccessFacts" { json!({"granted":{"FILES":true}}) } else { json!(true) }})).unwrap();
             }
         });
         let source = directory.path().join("selected-first.bin");
@@ -158,7 +158,7 @@ async fn whole_selection_preflight_case(sdk: bool) {
         assert!(!missing_destination.exists());
         let calls = receipts.lock().unwrap().clone();
         if sdk {
-            assert_eq!(calls, vec!["systemPermissionFacts"]);
+            assert_eq!(calls, vec!["systemAccessFacts"]);
         } else {
             assert!(calls.is_empty());
         }

@@ -166,6 +166,7 @@ async fn provider_delete_uses_two_batch_exchanges_and_no_business_action_on_host
         Arc::new(crate::features::prefs::Prefs::in_memory()),
         directory.path().to_path_buf(),
         directory.path().join("cache"),
+        #[cfg(not(feature = "runtime-media"))]
         tokio::sync::broadcast::channel(8).0,
         #[cfg(feature = "runtime-media")]
         Arc::new(super::super::media_scans::MediaScans::new(

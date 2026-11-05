@@ -18,14 +18,14 @@ async fn stat_authorizes_the_resolved_path_once_and_rejects_invalid_references_b
     let (generation, mut incoming) = host.connect();
     let worker = tokio::spawn(async move {
         while let Some(request) = incoming.recv().await {
-            assert_eq!(request["method"], "systemPermissionFacts");
+            assert_eq!(request["method"], "systemAccessFacts");
             observed
                 .lock()
                 .unwrap()
-                .push(request["params"]["permissions"].clone());
+                .push(request["params"]["features"].clone());
             host.reply(
                 generation,
-                json!({"id":request["id"],"result":{"granted":{"WRITE_EXTERNAL_STORAGE":false}}}),
+                json!({"id":request["id"],"result":{"granted":{"FILES":false}}}),
             )
             .unwrap();
         }
@@ -51,10 +51,7 @@ async fn stat_authorizes_the_resolved_path_once_and_rejects_invalid_references_b
         .await
         .is_none()
     );
-    assert_eq!(
-        *calls.lock().unwrap(),
-        vec![json!(["WRITE_EXTERNAL_STORAGE"])]
-    );
+    assert_eq!(*calls.lock().unwrap(), vec![json!(["FILES"])]);
     for reference in [
         "",
         " ",

@@ -20,8 +20,40 @@ pub async fn host_connected(state: CoreRuntime, generation: u64) -> Result<(), S
     }
     #[cfg(feature = "runtime-media")]
     {
-        if state.media_scans.policy()?.scope.is_some() {
+        let configured = state.media_scans.policy()?.scope.is_some();
+        let mut defaults = state.media_scans.defaults()?;
+        let previous = defaults.scan_directories.clone();
+        if state.file_platform.uses_sdk() {
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Mount {
+                path: String,
+                drive_type: String,
+            }
+            let mounts: Vec<Mount> = serde_json::from_value(
+                state
+                    .file_platform
+                    .mounts(state.prefs.clone())
+                    .await
+                    .map_err(|error| error.to_string())?,
+            )
+            .map_err(|error| error.to_string())?;
+            if !state.host.is_current(generation) {
+                return Ok(());
+            }
+            defaults.scan_directories = crate::features::prefs::file_index::validate_directories(
+                mounts
+                    .into_iter()
+                    .filter(|mount| mount.drive_type == "INTERNAL_STORAGE")
+                    .map(|mount| mount.path)
+                    .collect(),
+            )?;
+        }
+        if configured && defaults.scan_directories == previous {
             return Ok(());
+        }
+        if defaults.scan_directories != previous {
+            state.media_scans.set_defaults(defaults)?;
         }
         let catalog = NativeMediaCatalog::new(state);
         catalog.configure_scan_directories(None)?;
@@ -33,6 +65,13 @@ pub async fn host_connected(state: CoreRuntime, generation: u64) -> Result<(), S
     }
     #[cfg(not(feature = "runtime-media"))]
     Err("MEDIA_SCAN advertised without a scanner implementation".into())
+}
+
+pub async fn access_changed(state: CoreRuntime, generation: u64) -> Result<(), String> {
+    if state.file_platform.uses_sdk() && !state.host.uses_system_media_catalog() {
+        host_connected(state, generation).await?;
+    }
+    Ok(())
 }
 
 #[cfg(feature = "runtime-media")]
@@ -856,7 +895,7 @@ impl NativeMediaCatalog {
         Ok(rows)
     }
 
-    #[cfg(any(test, feature = "runtime-media"))]
+    #[cfg(test)]
     fn forget_path(&self, path: &str) -> Result<usize, String> {
         self.state.native_client_id()?;
         let types = self

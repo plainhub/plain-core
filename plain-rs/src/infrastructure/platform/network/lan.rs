@@ -1,5 +1,6 @@
 use plain_libs::platform::network::Interface;
 use plain_libs::platform::network::InterfaceType;
+#[cfg(any(test, target_os = "android"))]
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct NetworkInterfaceFacts {
@@ -8,6 +9,7 @@ pub(crate) struct NetworkInterfaceFacts {
     vpn: bool,
 }
 
+#[cfg(any(test, target_os = "android"))]
 pub(crate) fn apply_interface_facts(
     mut interfaces: Vec<Interface>,
     facts: Vec<NetworkInterfaceFacts>,

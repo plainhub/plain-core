@@ -13,7 +13,7 @@ use tokio::sync::watch;
 pub struct AppSnapshot {
     pub device_name: String,
     pub capabilities: Vec<String>,
-    pub permissions: Vec<String>,
+    pub access: Vec<crate::features::access::AccessFeature>,
     pub url_token: String,
 }
 
@@ -56,7 +56,7 @@ pub async fn refresh(
         &identity.http_url()?,
         &state.native_client_id().map_err(anyhow::Error::msg)?,
         &plain_libs::utils::base64::base64_decode(&identity.token),
-        json!({"query":"{ app { deviceName capabilities permissions urlToken } }"}),
+        json!({"query":"{ app { deviceName capabilities access urlToken } }"}),
         256 * 1024,
     )
     .await?;

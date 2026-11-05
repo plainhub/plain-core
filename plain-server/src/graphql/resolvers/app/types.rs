@@ -2,15 +2,12 @@ use plain_graphql::Enum;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Capability {
+    Adb,
+    DirectoryAccess,
     Ble,
     WifiAware,
     BackgroundService,
     LauncherShortcuts,
-    FileBrowser,
-    ImageLibrary,
-    AudioLibrary,
-    VideoLibrary,
-    DocumentLibrary,
     SoundMeter,
 
     BackgroundTimer,
@@ -44,15 +41,12 @@ pub enum Capability {
 impl Capability {
     pub fn parse(value: &str) -> Option<Self> {
         Some(match value {
+            "ADB" => Self::Adb,
+            "DIRECTORY_ACCESS" => Self::DirectoryAccess,
             "BLE" => Self::Ble,
             "WIFI_AWARE" => Self::WifiAware,
             "BACKGROUND_SERVICE" => Self::BackgroundService,
             "LAUNCHER_SHORTCUTS" => Self::LauncherShortcuts,
-            "FILE_BROWSER" => Self::FileBrowser,
-            "IMAGE_LIBRARY" => Self::ImageLibrary,
-            "AUDIO_LIBRARY" => Self::AudioLibrary,
-            "VIDEO_LIBRARY" => Self::VideoLibrary,
-            "DOCUMENT_LIBRARY" => Self::DocumentLibrary,
             "SOUND_METER" => Self::SoundMeter,
 
             "BACKGROUND_TIMER" => Self::BackgroundTimer,

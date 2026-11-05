@@ -8,7 +8,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     let state = core.runtime_state();
     state
         .media_scans
-        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+        .set_defaults(plain_rs::features::prefs::file_index::Defaults {
             scan_directories: Vec::new(),
             excluded_directories: Vec::new(),
             excluded_names: Vec::new(),
@@ -20,8 +20,8 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         while let Some(request) = requests.recv().await {
             let result = match request["method"].as_str().unwrap() {
                 "systemCapabilities" => serde_json::json!(["MEDIA_SCAN"]),
-                "systemPermissionFacts" => {
-                    serde_json::json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}})
+                "systemAccessFacts" => {
+                    serde_json::json!({"granted":{"FILES":true}})
                 }
                 method => panic!("unexpected {method}"),
             };
@@ -89,7 +89,7 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
     let state = core.runtime_state();
     state
         .media_scans
-        .set_defaults_for_test(plain_rs::features::prefs::file_index::Defaults {
+        .set_defaults(plain_rs::features::prefs::file_index::Defaults {
             scan_directories: Vec::new(),
             excluded_directories: Vec::new(),
             excluded_names: Vec::new(),
@@ -134,12 +134,13 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
                 .unwrap();
                 continue;
             }
-            assert_eq!(request["method"], "systemPermissionFacts");
-            assert_eq!(
-                request["params"]["permissions"],
-                serde_json::json!(["WRITE_EXTERNAL_STORAGE"])
-            );
-            host.reply(generation, serde_json::json!({"id":request["id"], "result":{"granted":{"WRITE_EXTERNAL_STORAGE":granted}}})).unwrap();
+            assert_eq!(request["method"], "systemAccessFacts");
+            assert_eq!(request["params"]["features"], serde_json::json!(["FILES"]));
+            host.reply(
+                generation,
+                serde_json::json!({"id":request["id"], "result":{"granted":{"FILES":granted}}}),
+            )
+            .unwrap();
         }
     });
     let allowed = crate::graphql::executor::execute_graphql(

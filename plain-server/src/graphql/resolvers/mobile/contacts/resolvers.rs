@@ -1,3 +1,4 @@
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::mobile::contacts::types::*;
 use crate::graphql::types::ActionResult;
 use crate::graphql::types::facts::instant;
@@ -16,8 +17,7 @@ use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-const READ: &str = "READ_CONTACTS";
-const WRITE: &str = "WRITE_CONTACTS";
+const FEATURE: AccessFeature = AccessFeature::Contacts;
 
 #[derive(Default)]
 pub struct ContactsQuery;
@@ -31,11 +31,11 @@ impl ContactsQuery {
         offset: i32,
         limit: i32,
     ) -> plain_graphql::Result<Vec<Contact>> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-        if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[READ]).await? {
+        if public_gate::is_local(ctx) && !public_gate::require_granted(ctx, &[FEATURE]).await? {
             return Ok(Vec::new());
         }
 
@@ -60,9 +60,9 @@ impl ContactsQuery {
         if !public_gate::require_granted(
             ctx,
             &[if public_gate::is_local(ctx) {
-                READ
+                FEATURE
             } else {
-                WRITE
+                FEATURE
             }],
         )
         .await?
@@ -90,7 +90,7 @@ impl ContactsQuery {
         &self,
         ctx: &Context<'_>,
     ) -> plain_graphql::Result<Vec<ContactSource>> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
@@ -106,7 +106,7 @@ impl ContactsQuery {
     }
 
     async fn contact_groups(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<ContactGroup>> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[READ])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
@@ -175,7 +175,7 @@ impl ContactsMutation {
                 "query is required for bulk mutations — pass 'all:true' to explicitly target everything",
             ));
         }
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[WRITE])?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[FEATURE])?;
         capabilities::require(ctx.data_unchecked::<Arc<Host>>(), "TELEPHONY")
             .await
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;

@@ -1,9 +1,10 @@
 use super::*;
+use plain_rs::features::access::AccessFeature;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::test]
-async fn service_preserves_explicit_web_permissions_and_password_across_restart() {
-    for configured in [Vec::<String>::new(), vec!["READ_SMS".to_owned()]] {
+async fn service_preserves_explicit_web_access_and_password_across_restart() {
+    for configured in [Vec::<String>::new(), vec!["SMS".to_owned()]] {
         let directory = tempfile::tempdir().unwrap();
         let paths = AppPaths {
             data_dir: directory.path().join("data"),
@@ -48,7 +49,7 @@ async fn service_preserves_explicit_web_permissions_and_password_across_restart(
             );
             assert!(!plain_rs::features::services::device::access::is_enabled(
                 &prefs,
-                &["WRITE_EXTERNAL_STORAGE"]
+                &[AccessFeature::Files]
             ));
             let current = (
                 prefs.get::<String>("client_id").unwrap(),
@@ -99,7 +100,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
     assert!(
         plain_rs::features::services::device::access::is_enabled(
             &service.core.shared_preferences().unwrap(),
-            &["WRITE_EXTERNAL_STORAGE"]
+            &[AccessFeature::Files]
         ),
         "CLI must initialize Web storage access without a mobile settings step"
     );
@@ -107,12 +108,12 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
         .core
         .native_graphql()
         .unwrap()
-        .execute("{app{permissions}}".into())
+        .execute("{app{access}}".into())
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
-        response.data.into_json().unwrap()["app"]["permissions"],
-        serde_json::json!(["WRITE_EXTERNAL_STORAGE"])
+        response.data.into_json().unwrap()["app"]["access"],
+        serde_json::json!(["IMAGES", "VIDEOS", "AUDIO", "DOCS", "FILES"])
     );
     let catalog = service.core.native_media_catalog().unwrap();
     assert_eq!(

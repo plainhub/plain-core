@@ -264,7 +264,6 @@ impl Runtime {
             .flat_map(|p| p.ip.split(',').map(str::to_owned).collect::<Vec<_>>())
             .take(512)
             .collect::<Vec<_>>();
-        *owner = Some(self.id.clone());
         ensure!(
             state
                 .host

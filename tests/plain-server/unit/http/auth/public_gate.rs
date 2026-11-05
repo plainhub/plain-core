@@ -4,7 +4,7 @@ use plain_rs::features::prefs::Prefs;
 use plain_rs::features::prefs::pref_keys::API_PERMISSIONS;
 use std::sync::Arc;
 
-fn prefs_with(permissions: &[&str]) -> Arc<Prefs> {
+fn prefs_with(permissions: &[AccessFeature]) -> Arc<Prefs> {
     let dir = tempfile::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs
@@ -12,7 +12,7 @@ fn prefs_with(permissions: &[&str]) -> Arc<Prefs> {
             API_PERMISSIONS,
             permissions
                 .iter()
-                .map(|p| p.to_string())
+                .map(|p| p.as_str().to_owned())
                 .collect::<Vec<_>>(),
         )
         .unwrap();
@@ -27,7 +27,7 @@ fn remote_caller_without_permission_is_refused() {
     #[Object]
     impl Query {
         async fn probe(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
-            require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &["STORAGE"])?;
+            require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[AccessFeature::Files])?;
             Ok(true)
         }
     }
@@ -62,7 +62,7 @@ fn local_caller_bypasses_the_web_permission_list() {
     #[Object]
     impl Query {
         async fn probe(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
-            require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &["STORAGE"])?;
+            require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[AccessFeature::Files])?;
             Ok(true)
         }
     }
@@ -93,11 +93,11 @@ fn remote_caller_with_permission_is_allowed() {
     #[Object]
     impl Query {
         async fn probe(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
-            require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &["STORAGE"])?;
+            require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[AccessFeature::Files])?;
             Ok(true)
         }
     }
-    let prefs = prefs_with(&["STORAGE"]);
+    let prefs = prefs_with(&[AccessFeature::Files]);
     let schema: Schema<Query, EmptyMutation, EmptySubscription> =
         Schema::build(Query, EmptyMutation, EmptySubscription).finish();
     let response = tokio::runtime::Runtime::new().unwrap().block_on(async {

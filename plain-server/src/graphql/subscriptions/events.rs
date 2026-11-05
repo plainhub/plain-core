@@ -14,26 +14,31 @@ pub(super) async fn authorize(
     origin: RequestOrigin,
     spec: &EventSpec,
 ) -> Result<()> {
-    if origin == RequestOrigin::Remote
-        && !plain_rs::features::services::device::access::is_enabled(&state.prefs, spec.permissions)
-    {
-        return Err("no_permission".into());
-    }
     if let Some(capability) = spec.capability {
         plain_rs::features::services::capabilities::require(&state.host, capability)
             .await
             .map_err(|e| plain_graphql::Error::new(e.to_string()))?;
     }
-    if !spec.permissions.is_empty() {
-        let names = spec
-            .permissions
+    if !spec.access.is_empty() {
+        let features: Vec<_> = spec
+            .access
             .iter()
-            .map(|name| name.to_string())
-            .collect::<Vec<_>>();
-        if !plain_rs::features::services::device::access::granted(&state.host, &names)
+            .copied()
+            .filter(|feature| {
+                origin == RequestOrigin::Local
+                    || plain_rs::features::services::device::access::is_enabled(
+                        &state.prefs,
+                        &[*feature],
+                    )
+            })
+            .collect();
+        if features.is_empty() {
+            return Err("no_permission".into());
+        }
+        let granted = plain_rs::features::services::device::access::sample(&state.host, &features)
             .await
-            .map_err(|e| plain_graphql::Error::new(e.to_string()))?
-        {
+            .map_err(plain_graphql::Error::new)?;
+        if granted.is_empty() {
             return Err("no_permission".into());
         }
     }
@@ -110,7 +115,7 @@ pub(super) async fn stream<T: DeserializeOwned + Send + 'static>(
                         Err(_) => return None,
                     },
                 };
-                if matches!(event.event_type, "PREFS_UPDATED" | "PERMISSIONS_UPDATED") {
+                if matches!(event.event_type, "PREFS_UPDATED" | "ACCESS_UPDATED") {
                     if let Err(error) = authorize(&state, origin, spec).await {
                         return Some((Err(error), (receiver, state, client, stop, None, true)));
                     }

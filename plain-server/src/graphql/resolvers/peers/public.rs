@@ -1,5 +1,6 @@
 //! Public peer, SIM and pairing roots.
 
+use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::device::public::device_type as parse_device_type;
 use crate::http::auth::public_gate;
 use plain_graphql::{Context, Enum, InputObject, Object, SimpleObject};
@@ -173,11 +174,7 @@ impl PeersQuery {
     }
 
     async fn sims(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Sim>> {
-        public_gate::require(
-            ctx,
-            ctx.data_unchecked::<Arc<Prefs>>(),
-            &["READ_PHONE_NUMBERS"],
-        )?;
+        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[AccessFeature::PhoneNumber])?;
         let facts = host_call(ctx, "systemSimFacts", json!({})).await?;
         Ok(crate::graphql::types::facts::rows(&facts, |value| Sim {
             id: crate::graphql::types::facts::id(value, "id"),

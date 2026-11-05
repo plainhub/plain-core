@@ -14,7 +14,7 @@ pub(super) fn operations() -> impl Iterator<Item = &'static EventSpec> {
                 | "NOTIFICATION_UPDATED"
                 | "NOTIFICATION_DELETED"
                 | "NOTIFICATION_REFRESHED"
-                | "PERMISSIONS_UPDATED"
+                | "ACCESS_UPDATED"
                 | "DEVICE_NAME_UPDATED"
                 | "CLIPBOARD_CHANGED"
         )

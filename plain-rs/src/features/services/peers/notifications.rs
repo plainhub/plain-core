@@ -34,7 +34,7 @@ struct Group {
     loading: bool,
     loaded: bool,
     capabilities: Option<Vec<String>>,
-    permissions: Vec<String>,
+    access: Vec<crate::features::access::AccessFeature>,
     items: Vec<Item>,
 }
 
@@ -52,7 +52,7 @@ struct State {
     peers: BTreeMap<String, Peer>,
     recovery_pending: bool,
     missed_alerts: Vec<Item>,
-    missed_permissions_changed: bool,
+    missed_access_changed: bool,
 }
 
 #[derive(Default)]
@@ -62,10 +62,7 @@ fn allowed(app: &AppSnapshot) -> bool {
     app.capabilities
         .iter()
         .any(|value| value == "NOTIFICATIONS")
-        && app
-            .permissions
-            .iter()
-            .any(|value| value == "NOTIFICATION_LISTENER")
+        && app.access.contains(&crate::features::access::AccessFeature::Notifications)
 }
 
 impl State {
@@ -81,24 +78,24 @@ impl Store {
         state: &mut State,
         id: &str,
         alerts: Vec<Item>,
-        permissions_changed: bool,
+        access_changed: bool,
         host: &Arc<crate::infrastructure::host::bridge::Host>,
     ) {
         state.revision += 1;
         if state.recovery_pending {
             state.missed_alerts.extend(alerts);
-            state.missed_permissions_changed |= permissions_changed;
+            state.missed_access_changed |= access_changed;
             return;
         }
         if !host.connected() {
             return;
         }
         let group = state.peers.get(id).map(|peer| &peer.group);
-        let params = json!({"revision":state.revision,"peerId":id,"group":group,"alerts":alerts,"permissionsChanged":permissions_changed});
+        let params = json!({"revision":state.revision,"peerId":id,"group":group,"alerts":alerts,"accessChanged":access_changed});
         if let Err(error) = host.notify("peerNotificationsChanged", params) {
             log::warn!("Peer notifications callback: {error}");
             state.missed_alerts.extend(alerts);
-            state.missed_permissions_changed |= permissions_changed;
+            state.missed_access_changed |= access_changed;
             state.recovery_pending = true;
             let shared = self.0.clone();
             let host = host.clone();
@@ -108,7 +105,7 @@ impl Store {
                 if let Ok(permit) = permit {
                     let mut snapshot = state.snapshot();
                     snapshot["alerts"] = json!(state.missed_alerts);
-                    snapshot["permissionsChanged"] = json!(state.missed_permissions_changed);
+                    snapshot["accessChanged"] = json!(state.missed_access_changed);
                     match host.notify_reserved_callback(
                         "peerNotificationsChanged",
                         snapshot,
@@ -116,7 +113,7 @@ impl Store {
                     ) {
                         Ok(()) => {
                             state.missed_alerts.clear();
-                            state.missed_permissions_changed = false;
+                            state.missed_access_changed = false;
                         }
                         Err(error) => log::warn!("Peer notifications snapshot callback: {error}"),
                     }
@@ -164,7 +161,7 @@ impl Store {
                             loading: true,
                             loaded: false,
                             capabilities: None,
-                            permissions: vec![],
+                            access: vec![],
                             items: vec![],
                         },
                         baseline: false,
@@ -200,12 +197,12 @@ impl Store {
         if !state.missed_alerts.is_empty() {
             snapshot["alerts"] = json!(state.missed_alerts);
         }
-        if state.missed_permissions_changed {
-            snapshot["permissionsChanged"] = json!(true);
+        if state.missed_access_changed {
+            snapshot["accessChanged"] = json!(true);
         }
         host.notify("peerNotificationsChanged", snapshot)?;
         state.missed_alerts.clear();
-        state.missed_permissions_changed = false;
+        state.missed_access_changed = false;
         Ok(())
     }
 
@@ -276,7 +273,7 @@ impl Store {
                 peer.baseline = is_allowed;
                 peer.group.items = projected;
                 peer.group.capabilities = Some(app.capabilities);
-                peer.group.permissions = app.permissions;
+                peer.group.access = app.access;
                 peer.group.online = true;
             }
             Err(error)
@@ -287,8 +284,8 @@ impl Store {
             {
                 peer.group.items.clear();
                 peer.group
-                    .permissions
-                    .retain(|name| name != "NOTIFICATION_LISTENER");
+                    .access
+                    .retain(|feature| *feature != crate::features::access::AccessFeature::Notifications);
                 peer.baseline = false;
                 peer.group.online = true;
             }
@@ -310,8 +307,8 @@ impl Store {
         peer.group.loading = false;
         peer.group.loaded = true;
         if peer.group != before || !alerts.is_empty() {
-            let permissions_changed = peer.group.permissions != before.permissions;
-            self.publish(&mut state, id, alerts, permissions_changed, host);
+            let access_changed = peer.group.access != before.access;
+            self.publish(&mut state, id, alerts, access_changed, host);
         }
         Ok(())
     }

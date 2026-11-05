@@ -64,6 +64,7 @@ impl Runtime {
     }
 }
 
+#[cfg(any(test, feature = "test-seams"))]
 use crate::infrastructure::protocols::ble::Request;
 #[cfg(any(test, feature = "test-seams"))]
 pub fn test_peer_wire(runtime: &Runtime, params: &serde_json::Value, key: &[u8]) -> String {

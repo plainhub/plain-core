@@ -46,8 +46,8 @@ async fn actual_management_socket_authenticates_and_relays_only_decrypted_native
             let method = request["method"].as_str().unwrap_or_default();
             let result = match method {
                 "systemCapabilities" => json!(["CLIPBOARD"]),
-                "systemPermissionFacts" => {
-                    let granted = request["params"]["permissions"]
+                "systemAccessFacts" => {
+                    let granted = request["params"]["features"]
                         .as_array()
                         .unwrap()
                         .iter()

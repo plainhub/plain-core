@@ -23,7 +23,7 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 }
 
 fn permission_sample(params: Value, grants: &[&str]) -> Value {
-    let values: serde_json::Map<String, Value> = params["permissions"]
+    let values: serde_json::Map<String, Value> = params["features"]
         .as_array()
         .unwrap()
         .iter()
@@ -43,7 +43,7 @@ fn fixture(
     plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
     prefs.set("client_id", "c1").unwrap();
     prefs.set("url_token", "dG9rZW4=").unwrap();
-    prefs.set("api_permissions", vec!["READ_SMS"]).unwrap();
+    prefs.set("api_permissions", vec!["SMS"]).unwrap();
     prefs.set("http_port", 8080).unwrap();
     prefs.set("https_port", 8443).unwrap();
     prefs.set("device_name", "Pixel 8").unwrap();
@@ -187,8 +187,8 @@ async fn the_app_root_exposes_the_identity_and_the_capability_lists() {
         observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         match method {
             "systemCapabilities" => json!(["TELEPHONY", "WAT"]),
-            "systemPermissionFacts" => {
-                permission_sample(params, &["RECORD_AUDIO", "READ_SMS", "ADB", "NOPE"])
+            "systemAccessFacts" => {
+                permission_sample(params, &["RECORD_AUDIO", "SMS", "ADB", "NOPE"])
             }
             other => panic!("unexpected host call {other}"),
         }
@@ -196,7 +196,7 @@ async fn the_app_root_exposes_the_identity_and_the_capability_lists() {
     let response = schema
         .execute(
             r#"query { app { clientId urlToken httpPort httpsPort deviceName deviceType
-                        buildChannel capabilities repeatedCapabilities:capabilities permissions repeatedPermissions:permissions developerMode debug } }"#,
+                        buildChannel capabilities repeatedCapabilities:capabilities access repeatedAccess:access developerMode debug } }"#,
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -220,28 +220,30 @@ async fn the_app_root_exposes_the_identity_and_the_capability_lists() {
             .contains(&json!("WAT"))
     );
     assert_eq!(app["repeatedCapabilities"], app["capabilities"]);
-    assert_eq!(app["repeatedPermissions"], app["permissions"]);
-    assert_eq!(
-        app["permissions"],
-        json!(["READ_SMS", "RECORD_AUDIO", "ADB"])
-    );
+    assert_eq!(app["repeatedAccess"], app["access"]);
+    assert_eq!(app["access"], json!(["SMS"]));
 }
 
 /// A capability or permission this build has never heard of is dropped
 /// rather than invented — a client cannot render a section it cannot
 /// drive, and cannot request a permission it has no name for.
 #[test]
-fn unknown_capabilities_and_permissions_are_dropped() {
+fn unknown_capabilities_and_access_are_dropped() {
     assert_eq!(Capability::parse("PEER_DISCOVERY"), None);
     assert_eq!(Capability::parse("BLE_DISCOVERY"), None);
     assert_eq!(
         Capability::parse("BACKGROUND_SERVICE"),
         Some(Capability::BackgroundService)
     );
-    assert_eq!(
-        Capability::parse("FILE_BROWSER"),
-        Some(Capability::FileBrowser)
-    );
+    for capability in [
+        "FILE_BROWSER",
+        "IMAGE_LIBRARY",
+        "AUDIO_LIBRARY",
+        "VIDEO_LIBRARY",
+        "DOCUMENT_LIBRARY",
+    ] {
+        assert_eq!(Capability::parse(capability), None);
+    }
     assert_eq!(Capability::parse("BLE"), Some(Capability::Ble));
     assert_eq!(Capability::parse("WIFI_AWARE"), Some(Capability::WifiAware));
     assert_eq!(Capability::parse("TELEPHONY"), Some(Capability::Telephony));
@@ -252,9 +254,9 @@ fn unknown_capabilities_and_permissions_are_dropped() {
         assert_eq!(Capability::parse(capability), None);
     }
     assert_eq!(Capability::parse("TELEPORT"), None);
-    assert_eq!(Permission::parse("READ_SMS"), Some(Permission::ReadSms));
-    assert_eq!(Permission::parse("ADB"), Some(Permission::Adb));
-    assert_eq!(Permission::parse("NOT_A_PERMISSION"), None);
+    assert_eq!(AccessFeature::parse("SMS"), Some(AccessFeature::Sms));
+    assert_eq!(AccessFeature::parse("ADB"), Some(AccessFeature::Adb));
+    assert_eq!(AccessFeature::parse("NOT_A_PERMISSION"), None);
 }
 
 #[tokio::test]
@@ -383,23 +385,23 @@ async fn renaming_the_device_forwards_the_new_name() {
 }
 
 #[tokio::test]
-async fn local_app_permissions_use_os_grants_without_web_opt_in() {
+async fn local_app_access_use_os_grants_without_web_opt_in() {
     let (_dir, schema) = fixture(|method, params| match method {
-        "systemPermissionFacts" => permission_sample(
-            params,
-            &["READ_SMS", "READ_CONTACTS", "RECORD_AUDIO", "UNKNOWN"],
-        ),
+        "systemCapabilities" => json!(["TELEPHONY"]),
+        "systemAccessFacts" => {
+            permission_sample(params, &["SMS", "CONTACTS", "RECORD_AUDIO", "UNKNOWN"])
+        }
         other => panic!("unexpected host call {other}"),
     });
-    let query = "{ app { permissions } }";
+    let query = "{ app { access } }";
     for (origin, expected) in [
         (
             crate::graphql::executor::RequestOrigin::Local,
-            json!(["READ_SMS", "READ_CONTACTS", "RECORD_AUDIO"]),
+            json!(["CONTACTS", "SMS"]),
         ),
         (
             crate::graphql::executor::RequestOrigin::Remote,
-            json!(["READ_SMS", "RECORD_AUDIO"]),
+            json!(["SMS"]),
         ),
     ] {
         let response = schema
@@ -407,7 +409,7 @@ async fn local_app_permissions_use_os_grants_without_web_opt_in() {
             .await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(
-            response.data.into_json().unwrap()["app"]["permissions"],
+            response.data.into_json().unwrap()["app"]["access"],
             expected
         );
     }
@@ -416,15 +418,16 @@ async fn local_app_permissions_use_os_grants_without_web_opt_in() {
 #[tokio::test]
 async fn incomplete_permission_samples_fail_instead_of_granting_access() {
     let (_dir, schema) = fixture(|method, _| match method {
-        "systemPermissionFacts" => json!({"granted":{"READ_SMS":true}}),
+        "systemCapabilities" => json!(["TELEPHONY"]),
+        "systemAccessFacts" => json!({"granted":{"SMS":true}}),
         other => panic!("unexpected host call {other}"),
     });
-    let response = schema.execute("{ app { permissions } }").await;
+    let response = schema.execute("{ app { access } }").await;
     assert_eq!(response.errors.len(), 1);
     assert!(
         response.errors[0]
             .message
-            .starts_with("Missing permission sample:")
+            .starts_with("Missing access sample:")
     );
 }
 
@@ -442,11 +445,11 @@ async fn app_preferences_do_not_call_the_platform() {
 }
 
 #[tokio::test]
-async fn separate_app_queries_refresh_capabilities_and_permissions() {
+async fn separate_app_queries_refresh_capabilities_and_access() {
     let capabilities = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let permissions = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let access = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let caps = capabilities.clone();
-    let grants = permissions.clone();
+    let grants = access.clone();
     let (_directory, schema) = fixture(move |method, params| match method {
         "systemCapabilities" => {
             if caps.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
@@ -455,17 +458,17 @@ async fn separate_app_queries_refresh_capabilities_and_permissions() {
                 json!([])
             }
         }
-        "systemPermissionFacts" => {
+        "systemAccessFacts" => {
             if grants.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
-                permission_sample(params, &["READ_SMS"])
+                permission_sample(params, &["SMS"])
             } else {
                 permission_sample(params, &[])
             }
         }
         other => panic!("unexpected host call {other}"),
     });
-    let first = schema.execute("{ app { capabilities permissions } }").await;
-    let second = schema.execute("{ app { capabilities permissions } }").await;
+    let first = schema.execute("{ app { capabilities access } }").await;
+    let second = schema.execute("{ app { capabilities access } }").await;
     assert!(first.errors.is_empty(), "{:?}", first.errors);
     assert!(second.errors.is_empty(), "{:?}", second.errors);
     let first = first.data.into_json().unwrap();
@@ -482,10 +485,10 @@ async fn separate_app_queries_refresh_capabilities_and_permissions() {
             .unwrap()
             .contains(&json!("TELEPHONY"))
     );
-    assert_eq!(first["app"]["permissions"], json!(["READ_SMS"]));
-    assert_eq!(second["app"]["permissions"], json!([]));
+    assert_eq!(first["app"]["access"], json!(["SMS"]));
+    assert_eq!(second["app"]["access"], json!([]));
     assert_eq!(capabilities.load(std::sync::atomic::Ordering::SeqCst), 2);
-    assert_eq!(permissions.load(std::sync::atomic::Ordering::SeqCst), 2);
+    assert_eq!(access.load(std::sync::atomic::Ordering::SeqCst), 2);
 }
 
 #[tokio::test]
@@ -521,4 +524,48 @@ async fn main_app_capabilities_preserve_current_background_execution_opportuniti
         assert!(names.contains(&json!("BACKGROUND_WAKE")));
         assert_eq!(names.contains(&json!("BACKGROUND_TIMER")), timer);
     }
+}
+
+#[tokio::test]
+async fn retired_permission_contract_is_not_public() {
+    let (_directory, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    for document in [
+        "{ app { permissions } }",
+        "mutation { openWebSettings(feature: FILES) }",
+    ] {
+        assert!(!schema.execute(document).await.errors.is_empty());
+    }
+    let response = schema.execute(r#"{ old: __type(name: "Permission") { name } feature: __type(name: "AccessFeature") { enumValues { name } } }"#).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert!(data["old"].is_null());
+    assert_eq!(data["feature"]["enumValues"].as_array().unwrap().len(), 14);
+}
+
+#[tokio::test]
+async fn access_request_uses_feature_and_preserves_host_acceptance() {
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = calls.clone();
+    let (_directory, schema) = fixture(move |method, params| match method {
+        "systemCapabilities" => json!([]),
+        "systemRequestAccess" => {
+            assert_eq!(params, json!({"feature":"FILES"}));
+            observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            json!(false)
+        }
+        other => panic!("unexpected host call {other}"),
+    });
+    let response = schema
+        .execute("mutation { requestAccess(feature: FILES) }")
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.into_json().unwrap()["requestAccess"], false);
+    for document in [
+        "mutation { requestAccess }",
+        "mutation { requestAccess(feature: WRITE_EXTERNAL_STORAGE) }",
+        "mutation { requestAccess(feature: SMS) }",
+    ] {
+        assert!(!schema.execute(document).await.errors.is_empty());
+    }
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
 }

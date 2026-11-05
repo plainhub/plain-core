@@ -12,7 +12,7 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
             };
             let method = request["method"].as_str().unwrap_or_default();
             let result = if method == "systemCapabilities" {
-                json!(["SCREEN_MIRROR", "ACCESSIBILITY"])
+                json!(["SCREEN_MIRROR", "ACCESSIBILITY", "TELEPHONY"])
             } else {
                 handler(method, request["params"].clone())
             };
@@ -211,10 +211,10 @@ async fn quality_updates_send_the_mode_name_the_store_understands() {
 }
 
 #[tokio::test]
-async fn web_settings_carry_the_optional_feature_name() {
+async fn access_request_carries_the_feature_name() {
     let (_dir, schema) = fixture();
     stub(schema_host(&schema), |method, params| match method {
-        "systemOpenWebSettings" => {
+        "systemRequestAccess" => {
             assert_eq!(params["feature"], "CALL_LOGS");
             json!(true)
         }
@@ -222,7 +222,7 @@ async fn web_settings_carry_the_optional_feature_name() {
         other => panic!("unexpected host call {other}"),
     });
     let response = schema
-        .execute(r#"mutation { openWebSettings(feature:CALL_LOGS) }"#)
+        .execute(r#"mutation { requestAccess(feature:CALL_LOGS) }"#)
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let response = schema
@@ -232,15 +232,11 @@ async fn web_settings_carry_the_optional_feature_name() {
 }
 
 #[tokio::test]
-async fn web_settings_without_a_feature_reach_the_host_as_null() {
+async fn access_request_requires_a_feature_before_calling_the_host() {
     let (_dir, schema) = fixture();
-    stub(schema_host(&schema), |method, params| match method {
-        "systemOpenWebSettings" => {
-            assert_eq!(params["feature"], Value::Null);
-            json!(true)
-        }
-        other => panic!("unexpected host call {other}"),
+    stub(schema_host(&schema), |method, _| {
+        panic!("unexpected host call {method}")
     });
-    let response = schema.execute(r#"mutation { openWebSettings }"#).await;
-    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let response = schema.execute("mutation { requestAccess }").await;
+    assert!(!response.errors.is_empty());
 }

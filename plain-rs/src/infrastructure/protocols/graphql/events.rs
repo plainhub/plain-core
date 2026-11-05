@@ -1,10 +1,11 @@
+use crate::features::access::AccessFeature;
 pub struct EventSpec {
     pub field: &'static str,
     pub event: &'static str,
     pub aliases: &'static [&'static str],
     pub invalidation: bool,
     pub selection: &'static str,
-    pub permissions: &'static [&'static str],
+    pub access: &'static [AccessFeature],
     pub capability: Option<&'static str>,
 }
 pub const EVENTS: &[EventSpec] = &[
@@ -14,7 +15,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ version devices { id hostAddress name location } currentDevice { id hostAddress name location } items { path title albumArt artist durationMs audio } currentUri playing progressMs durationMs supportsCallback }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -23,7 +24,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: true,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -32,16 +33,16 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
-        field: "permissionsUpdated",
-        event: "PERMISSIONS_UPDATED",
+        field: "accessUpdated",
+        event: "ACCESS_UPDATED",
         aliases: &[],
         invalidation: true,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -50,7 +51,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: true,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -59,7 +60,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ running }",
-        permissions: &[],
+        access: &[],
         capability: Some("SCREEN_MIRROR"),
     },
     EventSpec {
@@ -68,7 +69,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ annexB }",
-        permissions: &[],
+        access: &[],
         capability: Some("SCREEN_MIRROR"),
     },
     EventSpec {
@@ -77,7 +78,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: Some("SCREEN_MIRROR"),
     },
     EventSpec {
@@ -86,7 +87,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ id onlyOnce isClearable appId appName postedAt silent title body actions replyActions }",
-        permissions: &["NOTIFICATION_LISTENER"],
+        access: &[AccessFeature::Notifications],
         capability: Some("NOTIFICATIONS"),
     },
     EventSpec {
@@ -95,7 +96,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ id onlyOnce isClearable appId appName postedAt silent title body actions replyActions }",
-        permissions: &["NOTIFICATION_LISTENER"],
+        access: &[AccessFeature::Notifications],
         capability: Some("NOTIFICATIONS"),
     },
     EventSpec {
@@ -104,7 +105,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ id onlyOnce isClearable appId appName postedAt silent title body actions replyActions }",
-        permissions: &["NOTIFICATION_LISTENER"],
+        access: &[AccessFeature::Notifications],
         capability: Some("NOTIFICATIONS"),
     },
     EventSpec {
@@ -113,7 +114,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: true,
         selection: "",
-        permissions: &["NOTIFICATION_LISTENER"],
+        access: &[AccessFeature::Notifications],
         capability: Some("NOTIFICATIONS"),
     },
     EventSpec {
@@ -122,7 +123,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ id fromId toId channelId content createdAt updatedAt status statusData }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -131,7 +132,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ id fromId toId channelId content createdAt updatedAt status statusData }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -140,7 +141,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -149,7 +150,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ types }",
-        permissions: &["WRITE_EXTERNAL_STORAGE"],
+        access: &[AccessFeature::Images, AccessFeature::Videos, AccessFeature::Audio, AccessFeature::Docs, AccessFeature::Files],
         capability: None,
     },
     EventSpec {
@@ -158,7 +159,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ indexed pending total state error }",
-        permissions: &["WRITE_EXTERNAL_STORAGE"],
+        access: &[AccessFeature::Files],
         capability: None,
     },
     EventSpec {
@@ -167,7 +168,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ id url title faviconPath groupId pinned clickCount lastClickedAt sortOrder createdAt updatedAt }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -176,7 +177,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ feedId error cancelled }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -185,7 +186,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ fileId ok value mergedSize error }",
-        permissions: &["WRITE_EXTERNAL_STORAGE"],
+        access: &[AccessFeature::Files],
         capability: None,
     },
     EventSpec {
@@ -194,7 +195,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ uris }",
-        permissions: &["READ_SMS"],
+        access: &[AccessFeature::Sms],
         capability: Some("TELEPHONY"),
     },
     EventSpec {
@@ -203,7 +204,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ requestId success resultCode }",
-        permissions: &["SEND_SMS"],
+        access: &[AccessFeature::Sms],
         capability: Some("TELEPHONY"),
     },
     EventSpec {
@@ -212,7 +213,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ pendingId success resultCode }",
-        permissions: &["SEND_SMS"],
+        access: &[AccessFeature::Sms],
         capability: Some("TELEPHONY"),
     },
     EventSpec {
@@ -221,7 +222,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "",
-        permissions: &["SEND_SMS"],
+        access: &[AccessFeature::Sms],
         capability: Some("TELEPHONY"),
     },
     EventSpec {
@@ -230,7 +231,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ text sensitive time }",
-        permissions: &["CLIPBOARD"],
+        access: &[AccessFeature::Clipboard],
         capability: Some("CLIPBOARD"),
     },
     EventSpec {
@@ -243,7 +244,7 @@ pub const EVENTS: &[EventSpec] = &[
         ],
         invalidation: true,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -252,7 +253,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ changed invite { channelId channelName ownerPeerId ownerPeerName } cancel { channelId ownerPeerId } }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -261,7 +262,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &["NEARBY_DISCOVERY_STARTED", "NEARBY_DISCOVERY_STOPPED"],
         invalidation: true,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -270,7 +271,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &["NEARBY_DEVICE_FOUND", "NEARBY_DEVICE_UNREACHABLE"],
         invalidation: true,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -279,7 +280,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: true,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -288,7 +289,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ version status downloadProgress errorMessage modelSize modelDir isIndexing totalImages indexedImages }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -297,7 +298,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &["PAIRING_STARTED", "PAIRING_CANCELED", "PAIRING_FAILED"],
         invalidation: true,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -306,7 +307,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ fromId fromName port deviceType ecdhPublicKey signaturePublicKey timestamp ips signature fromIp awareSupported }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -315,7 +316,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ deviceId deviceName ip }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -324,7 +325,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ deviceId deviceName error }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -333,7 +334,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ deviceId deviceName error }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -342,7 +343,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ deviceId deviceName error }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -351,7 +352,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: true,
         selection: "",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
     EventSpec {
@@ -360,7 +361,7 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ today { date state timeLeftSec totalTimeSec completedCount currentRound isRunning isPaused } completedState }",
-        permissions: &[],
+        access: &[],
         capability: None,
     },
 ];

@@ -60,7 +60,7 @@ async fn main_tasks_track_resolved_paths_and_gate_sdk_execution_on_platform_auth
                 json!({"id":request["id"],"error":"synthetic permission revoked"})
             } else {
                 match request["method"].as_str().unwrap() {
-                    "systemPermissionFacts" => {}
+                    "systemAccessFacts" => {}
                     "fileTaskScan" => records.lock().unwrap().extend(
                         request["params"]["paths"]
                             .as_array()
@@ -70,7 +70,7 @@ async fn main_tasks_track_resolved_paths_and_gate_sdk_execution_on_platform_auth
                     ),
                     method => panic!("unexpected method {method}"),
                 }
-                json!({"id":request["id"],"result":if request["method"] == "systemPermissionFacts" {json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}})} else {json!(true)}})
+                json!({"id":request["id"],"result":if request["method"] == "systemAccessFacts" {json!({"granted":{"FILES":true}})} else {json!(true)}})
             };
             socket
                 .send(Message::Text(reply.to_string().into()))
@@ -238,7 +238,7 @@ async fn media_move_case(missing_destination: bool) {
             let result = match request["method"].as_str().unwrap() {
                 "fileTaskScan" => json!(true),
                 "systemCapabilities" => json!([]),
-                "systemPermissionFacts" => json!({"granted":{"WRITE_EXTERNAL_STORAGE":true}}),
+                "systemAccessFacts" => json!({"granted":{"FILES":true}}),
                 "fileTaskMediaSnapshot" => {
                     let rows = params["paths"].as_array().unwrap().iter().filter_map(|path| {
                         let path = path.as_str().unwrap();

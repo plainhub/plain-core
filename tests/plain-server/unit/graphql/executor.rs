@@ -37,9 +37,7 @@ async fn local_and_remote_execute_the_same_envelope_and_preserve_errors() {
     let dir = tempfile::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
-    prefs
-        .set("api_permissions", vec!["WRITE_EXTERNAL_STORAGE"])
-        .unwrap();
+    prefs.set("api_permissions", vec!["AUDIO"]).unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[8; 32]);
     let server = ContentServer::start(dir.path(), &token, prefs).unwrap();
     let state = server.runtime_state();
@@ -258,7 +256,7 @@ async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
         while let Some(request) = requests.recv().await {
             let result = match request["method"].as_str().unwrap() {
                 "systemCapabilities" => json!(["TELEPHONY"]),
-                "systemPermissionFacts" => json!({"granted":{"SEND_SMS":true}}),
+                "systemAccessFacts" => json!({"granted":{"SMS":true}}),
                 method => panic!("Unexpected host request {method}"),
             };
             host.reply(generation, json!({"id":request["id"],"result":result}))
