@@ -44,6 +44,9 @@ fn allow_updates(state: &ServerState) -> tokio::sync::mpsc::UnboundedReceiver<se
 
 #[tokio::test]
 async fn complete_stream_is_published_with_identity_and_restored_without_client_file_checks() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (_dir, core, state) = setup();
     let mut reports = allow_updates(&state);
     let (_cancel, _receiver) = watch::channel(false);

@@ -12,7 +12,64 @@ use std::sync::{
 const WS_MDNS_UPDATED: &'static str = "MDNS_UPDATED";
 #[cfg(any(test, feature = "test-seams"))]
 pub static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-static OWNER: tokio::sync::Mutex<Option<String>> = tokio::sync::Mutex::const_new(None);
+static OWNER: Mutex<Option<String>> = Mutex::new(None);
+struct OwnerLease {
+    id: String,
+    host: Arc<crate::infrastructure::host::bridge::Host>,
+    release_multicast: bool,
+}
+impl OwnerLease {
+    fn new(host: Arc<crate::infrastructure::host::bridge::Host>) -> Result<Self> {
+        ensure!(
+            OWNER.lock().unwrap().is_none(),
+            "mDNS is owned by another runtime"
+        );
+        Ok(Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            host,
+            release_multicast: false,
+        })
+    }
+    fn acquire_owner(&self) -> Result<()> {
+        let mut owner = OWNER.lock().unwrap();
+        ensure!(owner.is_none(), "mDNS is owned by another runtime");
+        *owner = Some(self.id.clone());
+        Ok(())
+    }
+    fn release_owner(&self) {
+        let mut owner = OWNER.lock().unwrap();
+        if owner.as_ref() == Some(&self.id) {
+            host_responder::stop();
+            crate::infrastructure::protocols::mdns::packet_capture::set_enabled(false);
+            *owner = None;
+        }
+    }
+    async fn close(mut self, host: &crate::infrastructure::host::bridge::Host) {
+        self.release_owner();
+        if self.release_multicast {
+            let result = host
+                .call("mdnsMulticast", json!({"acquire":false,"lease":self.id}))
+                .await;
+            self.release_multicast = false;
+            if let Err(error) = result {
+                log::warn!("mDNS multicast release failed: {error}");
+            }
+        }
+    }
+}
+impl Drop for OwnerLease {
+    fn drop(&mut self) {
+        self.release_owner();
+        if self.release_multicast {
+            if let Err(error) = self
+                .host
+                .notify("mdnsMulticast", json!({"acquire":false,"lease":self.id}))
+            {
+                log::warn!("mDNS multicast release failed: {error}");
+            }
+        }
+    }
+}
 struct Session {
     browser: MdnsServiceBrowser,
     /// macOS only. The system DNS-SD browser sees devices the sandboxed
@@ -26,6 +83,17 @@ struct Session {
     manual_scanning: bool,
     debug_sessions: std::collections::HashSet<uuid::Uuid>,
     discovery_sessions: crate::features::discovery::sessions::DiscoverySessions,
+    owner: Option<OwnerLease>,
+}
+impl Drop for Session {
+    fn drop(&mut self) {
+        self.scanning.store(false, Ordering::SeqCst);
+        let _ = self
+            .context
+            .devices
+            .scanning_modes(Some(false), None, vec![]);
+        self.browser.shutdown();
+    }
 }
 impl Session {
     fn set_scanning(&self, active: bool) -> Result<bool> {
@@ -180,16 +248,17 @@ impl Runtime {
         json!({"runtimeId":self.id,"packetsIn":packets_in,"packetsOut":packets_out,"revision":self.revision.load(Ordering::SeqCst),"receiver":session.is_some(),"running":session.is_some() && host_responder::is_running(),"scanning":session.is_some_and(|s|s.scanning.load(Ordering::SeqCst)),"published":session.is_some_and(|s|s.published),"manualScanning":session.is_some_and(|s|s.manual_scanning),"debugSessionCount":session.map(|s|s.debug_sessions.len()).unwrap_or(0),"capturing":session.is_some_and(|s|!s.debug_sessions.is_empty()),"services":services})
     }
     async fn initialize(self: &Arc<Self>, state: &CoreRuntime) -> Result<()> {
-        let mut owner = OWNER.lock().await;
-        ensure!(
-            owner.as_ref().is_none_or(|id| id == &self.id),
-            "mDNS is owned by another runtime"
-        );
-        if self.session.lock().unwrap().is_some() {
+        let lease = self
+            .session
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|session| session.owner.as_ref().unwrap().id.clone());
+        if let Some(lease) = lease {
             ensure!(
                 state
                     .host
-                    .call("mdnsMulticast", json!({"acquire":true,"lease":self.id}))
+                    .call("mdnsMulticast", json!({"acquire":true,"lease":lease}))
                     .await
                     .map_err(anyhow::Error::msg)?
                     .as_bool()
@@ -198,6 +267,7 @@ impl Runtime {
             );
             return Ok(());
         }
+        let mut owner = OwnerLease::new(state.host.clone())?;
         let id = state
             .prefs
             .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
@@ -264,16 +334,15 @@ impl Runtime {
             .flat_map(|p| p.ip.split(',').map(str::to_owned).collect::<Vec<_>>())
             .take(512)
             .collect::<Vec<_>>();
-        ensure!(
-            state
-                .host
-                .call("mdnsMulticast", json!({"acquire":true,"lease":self.id}))
-                .await
-                .map_err(anyhow::Error::msg)?
-                .as_bool()
-                == Some(true),
-            "Multicast permission unavailable"
-        );
+        owner.release_multicast = true;
+        let permission = state
+            .host
+            .call("mdnsMulticast", json!({"acquire":true,"lease":owner.id}))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        owner.release_multicast = permission.as_bool() == Some(true);
+        ensure!(owner.release_multicast, "Multicast permission unavailable");
+        owner.acquire_owner()?;
         browser.seed_known_addrs(&addrs);
         browser.install_listener();
         // The system browser reports the same device shape as the sandboxed
@@ -354,8 +423,8 @@ impl Runtime {
             manual_scanning: false,
             debug_sessions: std::collections::HashSet::new(),
             discovery_sessions: Default::default(),
+            owner: Some(owner),
         });
-        *owner = Some(self.id.clone());
         host_responder::ensure_started(&hostname.read().unwrap());
         Ok(())
     }
@@ -619,22 +688,11 @@ impl Runtime {
     pub async fn close(&self, host: &crate::infrastructure::host::bridge::Host) {
         self.cancel_network_restart();
         let _operation = self.operation.lock().await;
-        let mut owner = OWNER.lock().await;
-        if let Some(session) = self.session.lock().unwrap().take() {
-            session.scanning.store(false, Ordering::SeqCst);
-            let _ = session
-                .context
-                .devices
-                .scanning_modes(Some(false), None, vec![]);
-            session.browser.shutdown();
-        }
-        if owner.as_ref() == Some(&self.id) {
-            host_responder::stop();
-            crate::infrastructure::protocols::mdns::packet_capture::set_enabled(false);
-            *owner = None;
-            let _ = host
-                .call("mdnsMulticast", json!({"acquire":false,"lease":self.id}))
-                .await;
+        let mut session = self.session.lock().unwrap().take();
+        let owner = session.as_mut().and_then(|session| session.owner.take());
+        drop(session);
+        if let Some(owner) = owner {
+            owner.close(host).await;
         }
     }
 }

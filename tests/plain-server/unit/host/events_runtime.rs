@@ -135,6 +135,9 @@ async fn connecting_a_filesystem_media_host_indexes_configured_sources_without_h
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn hosts_without_media_scan_capability_do_not_initialize_filesystem_indexing() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (_directory, core, _sources) = filesystem_media_host(false);
     let session = Arc::new(core.host_events().unwrap());
     let runner = tokio::spawn(session.serve(|method, _params| async move {
@@ -202,6 +205,9 @@ impl Drop for Waiting {
 
 #[tokio::test]
 async fn serving_handles_callbacks_while_request_waits_and_cancels_on_stop() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let session = Arc::new(core.host_events().unwrap());
@@ -245,6 +251,9 @@ async fn serving_handles_callbacks_while_request_waits_and_cancels_on_stop() {
 
 #[tokio::test]
 async fn serving_preserves_request_errors_and_old_session_cannot_disconnect_replacement() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let session = Arc::new(core.host_events().unwrap());
@@ -282,6 +291,9 @@ async fn serving_preserves_request_errors_and_old_session_cannot_disconnect_repl
 
 #[tokio::test]
 async fn aborting_runner_disconnects_session_even_with_retained_handle() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let session = Arc::new(core.host_events().unwrap());

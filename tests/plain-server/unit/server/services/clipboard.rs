@@ -4,6 +4,9 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn platform_callbacks_before_write_reply_do_not_republish_received_text() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let (server, _, _) = start(&directory);
     let state = server.runtime_state().core;
@@ -109,6 +112,9 @@ fn start(
 
 #[tokio::test]
 async fn native_report_http_search_delete_and_restart_share_one_clipboard() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let dir = tempfile::tempdir().unwrap();
     let (server, token, prefs) = start(&dir);
     let bridge = server.host_events().unwrap();

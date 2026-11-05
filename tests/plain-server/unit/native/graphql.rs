@@ -54,6 +54,10 @@ async fn closed_native_page_cancels_its_pending_main_schema_request_before_radio
     assert!(!response.errors.is_empty());
     assert!(scope.is_closed());
     assert_eq!(state.mdns.snapshot()["receiver"], false);
+    let release = requests.try_recv().unwrap();
+    assert_eq!(release["method"], "mdnsMulticast");
+    assert_eq!(release["params"]["acquire"], false);
+    assert_eq!(release["params"]["lease"], request["params"]["lease"]);
     assert!(requests.try_recv().is_err());
     state.host.disconnect(generation);
     server.shutdown().await;
@@ -194,4 +198,102 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
     }
     executor.close_subscriptions(id);
     server.stop_core().await;
+}
+
+#[tokio::test]
+async fn pending_multicast_requests_remain_independent_until_permission_is_granted() {
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
+    let directory = tempfile::tempdir().unwrap();
+    let first = ContentServer::open(&directory.path().join("first")).unwrap();
+    let second = ContentServer::open(&directory.path().join("second")).unwrap();
+    let first_state = first.runtime_state();
+    let second_state = second.runtime_state();
+    first_state
+        .prefs
+        .set("mdns_hostname", "fixture-first-runtime.local")
+        .unwrap();
+    second_state
+        .prefs
+        .set("mdns_hostname", "fixture-second-runtime.local")
+        .unwrap();
+    let (first_generation, mut first_requests) = first_state.host.connect();
+    let (second_generation, mut second_requests) = second_state.host.connect();
+    let acquire = || {
+        Request::new(format!(
+            r#"mutation{{acquireDiscovery(token:"{}")}}"#,
+            uuid::Uuid::new_v4()
+        ))
+    };
+    let first_scope = NativeRequestScope::default();
+    let first_executor = first.native_graphql().unwrap();
+    let first_pending = tokio::spawn({
+        let scope = first_scope.clone();
+        let request = acquire();
+        async move { first_executor.execute_scoped(request, scope).await }
+    });
+    let first_request =
+        tokio::time::timeout(std::time::Duration::from_secs(5), first_requests.recv())
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(first_request["method"], "mdnsMulticast");
+    assert_eq!(first_request["params"]["acquire"], true);
+    let second_scope = NativeRequestScope::default();
+    let second_executor = second.native_graphql().unwrap();
+    let second_pending = tokio::spawn({
+        let scope = second_scope.clone();
+        let request = acquire();
+        async move { second_executor.execute_scoped(request, scope).await }
+    });
+    let second_request =
+        tokio::time::timeout(std::time::Duration::from_secs(5), second_requests.recv())
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(second_request["method"], "mdnsMulticast");
+    assert_eq!(second_request["params"]["acquire"], true);
+    assert_ne!(
+        first_request["params"]["lease"],
+        second_request["params"]["lease"]
+    );
+    first_scope.close();
+    assert!(
+        !tokio::time::timeout(std::time::Duration::from_secs(5), first_pending)
+            .await
+            .unwrap()
+            .unwrap()
+            .errors
+            .is_empty()
+    );
+    assert!(matches!(
+        second_requests.try_recv(),
+        Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+    ));
+    second_scope.close();
+    assert!(
+        !tokio::time::timeout(std::time::Duration::from_secs(5), second_pending)
+            .await
+            .unwrap()
+            .unwrap()
+            .errors
+            .is_empty()
+    );
+    assert_eq!(first_state.mdns.snapshot()["receiver"], false);
+    assert_eq!(second_state.mdns.snapshot()["receiver"], false);
+    for (requests, acquire) in [
+        (&mut first_requests, first_request),
+        (&mut second_requests, second_request),
+    ] {
+        let release = requests.try_recv().unwrap();
+        assert_eq!(release["method"], "mdnsMulticast");
+        assert_eq!(release["params"]["acquire"], false);
+        assert_eq!(release["params"]["lease"], acquire["params"]["lease"]);
+        assert!(requests.try_recv().is_err());
+    }
+    first_state.host.disconnect(first_generation);
+    second_state.host.disconnect(second_generation);
+    first.stop_core().await;
+    second.stop_core().await;
 }

@@ -74,6 +74,9 @@ fn rejecting_confirmation_retains_the_legacy_retry_close_code() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to_the_browser() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     use futures_util::SinkExt;
     use sha2::Digest;
     use tokio_tungstenite::tungstenite::Message as ClientMessage;
@@ -466,6 +469,9 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
 
 #[tokio::test]
 async fn host_replacement_restores_only_authenticated_online_clients() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -496,6 +502,9 @@ async fn host_replacement_restores_only_authenticated_online_clients() {
 
 #[tokio::test]
 async fn saturated_host_recovers_online_clients_without_counting_native_sessions() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
     let native = core.native_graphql().unwrap();
@@ -588,6 +597,9 @@ async fn host_online(host: &crate::host::events::HostEvents, expected: Value) ->
 
 #[tokio::test]
 async fn online_clients_follow_authenticated_graphql_connections() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     use futures_util::SinkExt;
     use tokio_tungstenite::tungstenite::{Message as Frame, client::IntoClientRequest};
 

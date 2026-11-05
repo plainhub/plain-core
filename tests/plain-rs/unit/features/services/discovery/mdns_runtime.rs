@@ -150,7 +150,7 @@ async fn receiver_starts_without_http_and_retries_when_platform_permissions_chan
     tokio::time::advance(std::time::Duration::from_secs(1)).await;
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     server.shutdown().await;
-    assert!(OWNER.lock().await.is_none());
+    assert!(OWNER.lock().unwrap().is_none());
     responder.abort();
 }
 
@@ -214,9 +214,9 @@ async fn inactive_runtime_cleanup_and_updates_do_not_request_platform_capabiliti
 }
 
 #[tokio::test]
-async fn refused_or_cancelled_multicast_grants_leave_the_next_runtime_available() {
+async fn refused_or_cancelled_multicast_grants_release_the_next_acquisition() {
     let _runtime = TEST_LOCK.lock().await;
-    for cancelled in [false, true] {
+    for (cancelled, reuse_runtime) in [(false, false), (true, false), (true, true)] {
         let directory = tempfile::tempdir().unwrap();
         let core = crate::test_runtime::Core::open(directory.path()).unwrap();
         let state = core.runtime_state();
@@ -226,7 +226,11 @@ async fn refused_or_cancelled_multicast_grants_leave_the_next_runtime_available(
             .set("mdns_hostname", "fixture-mdns-grant.local")
             .unwrap();
         let first = Arc::new(Runtime::default());
-        let second = Arc::new(Runtime::default());
+        let second = if reuse_runtime {
+            first.clone()
+        } else {
+            Arc::new(Runtime::default())
+        };
         let (generation, mut requests) = state.host.connect();
         let pending = tokio::spawn({
             let first = first.clone();
@@ -249,10 +253,32 @@ async fn refused_or_cancelled_multicast_grants_leave_the_next_runtime_available(
                 .unwrap();
             assert!(pending.await.unwrap().is_err());
         }
+        if cancelled {
+            let release = requests.try_recv().unwrap();
+            assert_eq!(release["method"], "mdnsMulticast");
+            assert_eq!(release["params"]["acquire"], false);
+            assert_eq!(release["params"]["lease"], request["params"]["lease"]);
+            let mut leases = crate::infrastructure::host::multicast::MulticastLeases::default();
+            assert!(
+                leases
+                    .without_platform_lock(release["params"].clone())
+                    .unwrap()
+            );
+            assert!(
+                !leases
+                    .without_platform_lock(request["params"].clone())
+                    .unwrap()
+            );
+        }
+        assert!(requests.try_recv().is_err());
         let host = state.host.clone();
+        let previous_lease = request["params"]["lease"].clone();
         let responder = tokio::spawn(async move {
             while let Some(request) = requests.recv().await {
                 assert_eq!(request["method"], "mdnsMulticast");
+                if request["params"]["acquire"] == true {
+                    assert_ne!(request["params"]["lease"], previous_lease);
+                }
                 host.reply(generation, json!({"id":request["id"],"result":true}))
                     .unwrap();
             }
@@ -326,4 +352,176 @@ async fn cancelled_multicast_release_leaves_the_next_runtime_available() {
         result.is_ok(),
         "A cancelled release must not retain the global runtime: {result:?}"
     );
+}
+
+#[tokio::test]
+async fn dropping_a_tokio_runtime_releases_its_granted_owner_and_multicast_lease() {
+    let _runtime = TEST_LOCK.lock().await;
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    state
+        .prefs
+        .set("mdns_hostname", "fixture-runtime-drop.local")
+        .unwrap();
+    let (generation, mut requests) = state.host.connect();
+    let ending = tokio::task::spawn_blocking({
+        let state = state.clone();
+        move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            runtime.block_on(async {
+                let owner = Arc::new(Runtime::default());
+                owner.initialize(&state).await.unwrap();
+                tokio::spawn(async move {
+                    let _owner = owner;
+                    std::future::pending::<()>().await;
+                });
+            });
+        }
+    });
+    let acquire = tokio::time::timeout(std::time::Duration::from_secs(5), requests.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(acquire["method"], "mdnsMulticast");
+    assert_eq!(acquire["params"]["acquire"], true);
+    state
+        .host
+        .reply(generation, json!({"id":acquire["id"],"result":true}))
+        .unwrap();
+    ending.await.unwrap();
+    let release = tokio::time::timeout(std::time::Duration::from_secs(5), requests.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(release["method"], "mdnsMulticast");
+    assert_eq!(release["params"]["acquire"], false);
+    assert_eq!(release["params"]["lease"], acquire["params"]["lease"]);
+    assert!(OWNER.lock().unwrap().is_none());
+    assert!(!host_responder::is_running());
+    let next = Arc::new(Runtime::default());
+    let starting = tokio::spawn({
+        let state = state.clone();
+        let next = next.clone();
+        async move { next.initialize(&state).await }
+    });
+    let acquire = tokio::time::timeout(std::time::Duration::from_secs(5), requests.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(acquire["params"]["acquire"], true);
+    assert_ne!(release["params"]["lease"], acquire["params"]["lease"]);
+    state
+        .host
+        .reply(generation, json!({"id":acquire["id"],"result":true}))
+        .unwrap();
+    starting.await.unwrap().unwrap();
+    let closing = tokio::spawn({
+        let host = state.host.clone();
+        async move { next.close(&host).await }
+    });
+    let release = tokio::time::timeout(std::time::Duration::from_secs(5), requests.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(release["params"]["acquire"], false);
+    assert_eq!(release["params"]["lease"], acquire["params"]["lease"]);
+    state
+        .host
+        .reply(generation, json!({"id":release["id"],"result":true}))
+        .unwrap();
+    closing.await.unwrap();
+    assert!(OWNER.lock().unwrap().is_none());
+    state.host.disconnect(generation);
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn concurrent_permission_grants_keep_the_winning_owner_and_release_only_the_loser() {
+    let _runtime = TEST_LOCK.lock().await;
+    let directory = tempfile::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    state
+        .prefs
+        .set("mdns_hostname", "fixture-concurrent-grants.local")
+        .unwrap();
+    let (generation, mut requests) = state.host.connect();
+    let first = Arc::new(Runtime::default());
+    let second = Arc::new(Runtime::default());
+    let start_first = tokio::spawn({
+        let first = first.clone();
+        let state = state.clone();
+        async move { first.initialize(&state).await }
+    });
+    let acquire_first = tokio::time::timeout(std::time::Duration::from_secs(5), requests.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let start_second = tokio::spawn({
+        let second = second.clone();
+        let state = state.clone();
+        async move { second.initialize(&state).await }
+    });
+    let acquire_second = tokio::time::timeout(std::time::Duration::from_secs(5), requests.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(OWNER.lock().unwrap().is_none());
+    assert_ne!(
+        acquire_first["params"]["lease"],
+        acquire_second["params"]["lease"]
+    );
+    state
+        .host
+        .reply(generation, json!({"id":acquire_first["id"],"result":true}))
+        .unwrap();
+    start_first.await.unwrap().unwrap();
+    state
+        .host
+        .reply(generation, json!({"id":acquire_second["id"],"result":true}))
+        .unwrap();
+    assert!(
+        start_second
+            .await
+            .unwrap()
+            .unwrap_err()
+            .to_string()
+            .contains("mDNS is owned by another runtime")
+    );
+    let cancelled = requests.try_recv().unwrap();
+    assert_eq!(cancelled["params"]["acquire"], false);
+    assert_eq!(
+        cancelled["params"]["lease"],
+        acquire_second["params"]["lease"]
+    );
+    assert_eq!(
+        OWNER.lock().unwrap().as_deref(),
+        acquire_first["params"]["lease"].as_str()
+    );
+    assert_eq!(first.snapshot()["receiver"], true);
+    assert_eq!(second.snapshot()["receiver"], false);
+    assert!(host_responder::is_running());
+    let closing = tokio::spawn({
+        let host = state.host.clone();
+        async move { first.close(&host).await }
+    });
+    let release = tokio::time::timeout(std::time::Duration::from_secs(5), requests.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(release["params"]["acquire"], false);
+    assert_eq!(release["params"]["lease"], acquire_first["params"]["lease"]);
+    state
+        .host
+        .reply(generation, json!({"id":release["id"],"result":true}))
+        .unwrap();
+    closing.await.unwrap();
+    assert!(OWNER.lock().unwrap().is_none());
+    assert!(!host_responder::is_running());
+    state.host.disconnect(generation);
+    core.stop_core().await;
 }

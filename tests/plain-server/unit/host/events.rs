@@ -13,6 +13,9 @@ fn server(dir: &tempfile::TempDir) -> ContentServer {
 
 #[tokio::test]
 async fn native_events_enforce_direction_and_reconcile_lag() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let dir = tempfile::tempdir().unwrap();
     let server = server(&dir);
     let bridge = server.host_events().unwrap();
@@ -98,6 +101,9 @@ async fn native_events_enforce_direction_and_reconcile_lag() {
 }
 #[tokio::test]
 async fn native_requests_reply_and_replacement_cancel_pending_calls() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let dir = tempfile::tempdir().unwrap();
     let server = server(&dir);
     let bridge = server.host_events().unwrap();
@@ -157,6 +163,9 @@ async fn native_requests_reply_and_replacement_cancel_pending_calls() {
 
 #[tokio::test]
 async fn replacing_a_host_wakes_a_disconnection_waiter() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let dir = tempfile::tempdir().unwrap();
     let server = server(&dir);
     let original = server.host_events().unwrap();
@@ -181,6 +190,9 @@ async fn replacing_a_host_wakes_a_disconnection_waiter() {
 
 #[tokio::test]
 async fn replaced_hosts_discard_requests_and_events_already_in_the_queue() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let dir = tempfile::tempdir().unwrap();
     let server = server(&dir);
     let original = server.host_events().unwrap();
@@ -203,6 +215,9 @@ async fn replaced_hosts_discard_requests_and_events_already_in_the_queue() {
 
 #[tokio::test]
 async fn raw_ble_advertisements_are_consumed_without_public_rebroadcast() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let dir = tempfile::tempdir().unwrap();
     let server = server(&dir);
     let bridge = server.host_events().unwrap();
@@ -264,6 +279,9 @@ async fn raw_ble_advertisements_are_consumed_without_public_rebroadcast() {
 
 #[tokio::test]
 async fn client_request_errors_cannot_overwrite_shared_image_model_state() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let server = server(&directory);
     let bridge = server.host_events().unwrap();
@@ -287,6 +305,9 @@ async fn client_request_errors_cannot_overwrite_shared_image_model_state() {
 
 #[tokio::test]
 async fn scan_facts_are_validated_and_scoped_to_the_connected_host() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let dir = tempfile::tempdir().unwrap();
     let server = server(&dir);
     let old = server.host_events().unwrap();
@@ -338,6 +359,9 @@ async fn scan_facts_are_validated_and_scoped_to_the_connected_host() {
 
 #[tokio::test]
 async fn preference_updates_send_only_changed_values_and_skip_unchanged_values() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -380,6 +404,9 @@ async fn preference_updates_send_only_changed_values_and_skip_unchanged_values()
 
 #[tokio::test]
 async fn failed_preference_delivery_returns_once_and_does_not_replay_the_change() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -421,6 +448,9 @@ async fn failed_preference_delivery_returns_once_and_does_not_replay_the_change(
 
 #[tokio::test]
 async fn preference_read_failure_does_not_replace_the_running_host() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();

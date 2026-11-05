@@ -365,6 +365,9 @@ async fn replacing_a_pending_login_closes_the_old_request_before_announcing_the_
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn reconnecting_host_receives_pending_login_before_its_close_callback() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
     let mut callbacks = LoginCallbacks::new(&state);

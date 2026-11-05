@@ -78,6 +78,9 @@ async fn aware_config_uses_current_pairing_identity_and_rejects_corrupt_keys() {
 
 #[tokio::test]
 async fn host_transport_snapshots_follow_current_routes_and_reconnect() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state().core;

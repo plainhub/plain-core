@@ -21,6 +21,9 @@ fn fixture() -> (tempfile::TempDir, ContentServer) {
 
 #[tokio::test]
 async fn position_facts_keep_exact_milliseconds_without_snapshots_or_public_refreshes() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (_directory, core) = fixture();
     let state = core.runtime_state().core;
     let bridge = core.host_events().unwrap();
@@ -63,6 +66,9 @@ async fn position_facts_keep_exact_milliseconds_without_snapshots_or_public_refr
 
 #[tokio::test]
 async fn stale_players_cannot_change_the_current_media_and_seek_acknowledgements_match_targets() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (_directory, core) = fixture();
     let state = core.runtime_state().core;
     let bridge = core.host_events().unwrap();
@@ -150,6 +156,9 @@ async fn stale_players_cannot_change_the_current_media_and_seek_acknowledgements
 
 #[tokio::test]
 async fn reports_waiting_on_state_cannot_commit_after_the_host_is_replaced() {
+    let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (_directory, core) = fixture();
     let state = core.runtime_state().core;
     let original = core.host_events().unwrap();
