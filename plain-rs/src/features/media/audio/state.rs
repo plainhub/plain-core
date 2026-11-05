@@ -74,14 +74,22 @@ impl Runtime {
         !*self.restored.lock().unwrap()
     }
 
-    pub fn restore(&self, path: String) -> DomainResult<()> {
+    pub fn restore(&self, file_id: Option<&str>, path: String) -> DomainResult<()> {
         let mut restored = self.restored.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
+        if state.current_file_id.as_deref() != file_id {
+            return Ok(());
+        }
         if !*restored {
-            let mut state = self.state.lock().unwrap();
             if state.playback.path.is_empty() {
                 state.select(&path)?;
             }
             *restored = true;
+        } else if state.playback.path != path {
+            state.advance()?;
+            state.playback.path = path;
+            state.load_revision = -1;
+            state.started_revision = -1;
         }
         Ok(())
     }

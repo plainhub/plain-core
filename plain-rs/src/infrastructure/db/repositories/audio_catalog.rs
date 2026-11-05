@@ -87,11 +87,11 @@ impl Db {
     }
 
     pub fn restore_audio_current(&self) -> crate::infrastructure::error::DomainResult<()> {
-        if !self.audio().restore_needed() {
-            return Ok(());
-        }
         let Some(id) = self.audio_current_file_id() else {
-            return self.audio().restore(String::new());
+            if self.audio().restore_needed() {
+                self.audio().restore(None, String::new())?;
+            }
+            return Ok(());
         };
         let path = self.with_conn(|conn| {
             conn.query_row(
@@ -102,7 +102,7 @@ impl Db {
             .optional()
         })?;
         if let Some(path) = path {
-            self.audio().restore(path)?;
+            self.audio().restore(Some(&id), path)?;
         }
         Ok(())
     }

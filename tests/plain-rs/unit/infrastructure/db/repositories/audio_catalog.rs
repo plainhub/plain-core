@@ -1,6 +1,34 @@
 use super::*;
 
 #[test]
+fn selected_audio_follows_its_file_identity_after_the_catalog_path_changes() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    db.use_platform_audio_catalog().unwrap();
+    let row = |path: &str| AudioMedia {
+        file_id: Some("track".into()),
+        aliases: Vec::new(),
+        track: AudioTrack::from_path_stem(path),
+    };
+    db.cache_platform_audio(&[row("/previous-container/song.mp3")], false)
+        .unwrap();
+    let track = crate::features::media::audio::queue::track_by_id(&db, "track").unwrap();
+    crate::features::media::audio::playback::prepare_track(&db, &track).unwrap();
+    let before = crate::features::media::audio::playback::seek(&db, 1234).unwrap();
+    db.cache_platform_audio(&[row("/current-container/song.mp3")], false)
+        .unwrap();
+
+    let after = crate::features::media::audio::playback::snapshot(&db).unwrap();
+    assert_eq!(after.path, "/current-container/song.mp3");
+    assert_eq!(after.position_ms, 1234);
+    assert!(after.revision > before.revision);
+    assert_eq!(db.audio_current_file_id().as_deref(), Some("track"));
+    assert!(
+        !crate::features::media::audio::playback::report(&db, &before.path, before.revision, 0)
+            .unwrap()
+    );
+}
+
+#[test]
 fn parsed_metadata_updates_only_existing_platform_rows_and_preserves_identity_and_aliases() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let mut track = AudioTrack::from_path_stem("content://media/external/audio/media/7");
