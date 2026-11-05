@@ -75,9 +75,25 @@ async fn positive_duration_and_non_duration_kinds_do_not_open_cache_or_request_h
 }
 
 #[tokio::test]
-async fn native_probe_is_deferred_deduplicated_and_the_next_query_uses_exact_cached_milliseconds() {
-    let (_directory, runtime, row) = fixture(false, true);
+async fn indexed_catalog_does_not_probe_or_open_duration_cache() {
+    let (directory, runtime, row) = fixture(false, true);
     let (_generation, mut requests) = runtime.host.connect();
+    for kind in [DataType::Audio, DataType::Video] {
+        let mut rows = vec![row.clone()];
+        runtime.enrich(kind, &mut rows).await.unwrap();
+        assert_eq!(rows[0], row);
+        assert!(runtime.pending.lock().unwrap().is_empty());
+    }
+    assert!(!directory.path().join("cache").exists());
+    assert!(requests.try_recv().is_err());
+    runtime.shutdown().await;
+}
+
+#[tokio::test]
+async fn provider_probe_is_deferred_deduplicated_and_the_next_query_uses_exact_cached_milliseconds()
+{
+    let (_directory, runtime, row) = fixture(true, true);
+    let (generation, mut requests) = runtime.host.connect();
     let permit = runtime.permits.acquire_many(10).await.unwrap();
     let mut first = vec![row.clone()];
     runtime.enrich(DataType::Video, &mut first).await.unwrap();
@@ -89,6 +105,12 @@ async fn native_probe_is_deferred_deduplicated_and_the_next_query_uses_exact_cac
     assert_eq!(runtime.pending.lock().unwrap().len(), 1);
     assert_eq!(first[0]["durationMs"], 0);
     drop(permit);
+    let request = requests.recv().await.unwrap();
+    assert_eq!(request["method"], "systemMediaRows");
+    runtime
+        .host
+        .reply(generation, json!({"id":request["id"],"result":[row]}))
+        .unwrap();
     wait_idle(&runtime).await;
     runtime.enrich(DataType::Video, &mut first).await.unwrap();
     assert_eq!(first[0]["durationMs"], 3211);
@@ -125,8 +147,8 @@ async fn mp4_probe_only_revalidates_the_provider_without_requesting_a_duration_s
 }
 
 #[tokio::test]
-async fn changed_provider_physical_file_or_invalidation_rejects_stale_work() {
-    for change in ["provider", "physical", "invalidation"] {
+async fn changed_provider_duration_physical_file_or_invalidation_rejects_stale_work() {
+    for change in ["provider", "duration", "physical", "invalidation"] {
         let (_directory, runtime, mut row) = fixture(true, true);
         let (generation, mut requests) = runtime.host.connect();
         let input = identity(DataType::Video, &row).unwrap();
@@ -139,6 +161,7 @@ async fn changed_provider_physical_file_or_invalidation_rejects_stale_work() {
         assert_eq!(request["method"], "systemMediaRows");
         match change {
             "provider" => row["size"] = json!(999),
+            "duration" => row["durationMs"] = json!(8000),
             "physical" => std::fs::write(row["path"].as_str().unwrap(), b"replaced").unwrap(),
             "invalidation" => {
                 runtime.cache.remove("video", &["7".into()]).unwrap();

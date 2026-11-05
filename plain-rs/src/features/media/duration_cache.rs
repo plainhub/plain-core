@@ -10,7 +10,7 @@ use std::sync::{
 };
 use std::{collections::BTreeMap, time::Instant};
 
-const PREFIX: &str = "android_media_duration:";
+const PREFIX: &str = "media_duration:";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Duration {

@@ -104,6 +104,9 @@ impl Runtime {
         kind: DataType,
         rows: &mut [Value],
     ) -> Result<(), String> {
+        if !self.provider_catalog {
+            return Ok(());
+        }
         let missing = rows
             .iter()
             .enumerate()
@@ -183,28 +186,26 @@ impl Runtime {
         let Some(duration) = duration.filter(|duration| *duration > 0) else {
             return Ok(());
         };
-        if self.provider_catalog {
-            let mut plan = Plan::default();
-            plan.ids("_id", vec![item.file_id.clone()]);
-            let rows = self
-                .host
-                .call(
-                    "systemMediaRows",
-                    json!({
-                        "dataType":kind,"plan":plan,"sortBy":"NAME_ASC","limit":1,"offset":0
-                    }),
-                )
-                .await?;
-            let current = rows.as_array().and_then(|rows| rows.first());
-            if current.and_then(|row| identity(kind, row)).as_ref() != Some(&item) {
-                return Ok(());
-            }
-            if current
-                .and_then(|row| row["durationMs"].as_i64())
-                .is_some_and(|duration| duration > 0)
-            {
-                return Ok(());
-            }
+        let mut plan = Plan::default();
+        plan.ids("_id", vec![item.file_id.clone()]);
+        let rows = self
+            .host
+            .call(
+                "systemMediaRows",
+                json!({
+                    "dataType":kind,"plan":plan,"sortBy":"NAME_ASC","limit":1,"offset":0
+                }),
+            )
+            .await?;
+        let current = rows.as_array().and_then(|rows| rows.first());
+        if current.and_then(|row| identity(kind, row)).as_ref() != Some(&item) {
+            return Ok(());
+        }
+        if current
+            .and_then(|row| row["durationMs"].as_i64())
+            .is_some_and(|duration| duration > 0)
+        {
+            return Ok(());
         }
         let input = item.path.clone();
         let after = tokio::task::spawn_blocking(move || Physical::read(&input))

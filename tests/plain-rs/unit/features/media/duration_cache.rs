@@ -25,6 +25,16 @@ fn durations_survive_reopening_and_keep_exact_units_and_typed_ids() {
             .unwrap();
         cache.flush().unwrap();
     }
+    let db =
+        Db::open(&crate::infrastructure::data_paths::DataPaths::new(directory.path()).database())
+            .unwrap();
+    let stored = db.get("media_duration:audio:same").unwrap().unwrap();
+    assert_eq!(
+        serde_json::from_str::<Duration>(&stored)
+            .unwrap()
+            .duration_ms,
+        5_000_000_001
+    );
     let cache = DurationCache::new(directory.path());
     let rows = cache.all().unwrap();
     assert_eq!(rows.len(), 2);
