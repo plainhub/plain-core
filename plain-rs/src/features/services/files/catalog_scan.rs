@@ -718,6 +718,9 @@ impl NativeMediaCatalog {
                     .checked_add(total)
                     .ok_or("Media scan file count overflow")?;
             }
+            if !discovery_failed {
+                session.discovered(total_files)?;
+            }
             for (data_type, path) in media_queue {
                 session.wait_running().await?;
                 match self
@@ -772,9 +775,6 @@ impl NativeMediaCatalog {
                         .map_err(|error| error.to_string())
                 })
                 .await?;
-            if !discovery_failed {
-                session.discovered(total_files)?;
-            }
             if errors.is_empty() {
                 Ok(())
             } else {

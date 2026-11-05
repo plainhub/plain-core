@@ -149,7 +149,7 @@ async fn directory_scan_cancellation_preserves_basic_facts_before_metadata() {
         .unwrap();
     assert_eq!(
         catalog.file_scan_status().unwrap().unwrap().total_files,
-        None
+        Some(1)
     );
     assert!(catalog.configure_scan_directories(None).is_err());
     catalog.cancel_file_scan().unwrap();
@@ -198,7 +198,7 @@ async fn directory_scan_cancellation_after_discovery_preserves_all_basic_facts()
     let result = worker.await.unwrap().unwrap();
     assert_eq!(result.status, Status::Cancelled);
     assert_eq!(result.processed_files, 96);
-    assert_eq!(result.total_files, None);
+    assert_eq!(result.total_files, Some(96));
     assert!(requests.try_recv().is_err());
     assert_eq!(
         catalog
@@ -249,7 +249,8 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
             .unwrap();
         let snapshot = catalog.file_scan_status().unwrap().unwrap();
         assert_eq!(snapshot.status, Status::Running);
-        assert_eq!(snapshot.total_files, None);
+        assert_eq!(snapshot.processed_files, 2);
+        assert_eq!(snapshot.total_files, Some(2));
         if let Some(id) = &session_id {
             assert_eq!(*id, snapshot.id);
         } else {
