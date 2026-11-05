@@ -48,7 +48,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     state.media_scans.wait_background().await.unwrap();
     let query = native
         .execute(Request::new(
-            "{ mediaSourceDirs scanProgress { indexed pending total state error } }",
+            "{ prefs mediaSourceDirs scanProgress { indexed pending total state error } }",
         ))
         .await;
     assert!(query.errors.is_empty(), "{:?}", query.errors);
@@ -58,6 +58,9 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         serde_json::json!([source_path.to_str().unwrap()])
     );
     assert_eq!(data["scanProgress"]["state"], "IDLE");
+    for key in ["file_index_defaults", "file_index_sources", "file_index_progress"] {
+        assert!(data["prefs"].get(key).is_none(), "{key}");
+    }
     assert_eq!(
         core.native_media_catalog()
             .unwrap()

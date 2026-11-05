@@ -48,34 +48,6 @@ impl PrefsQuery {
                     plain_rs::features::prefs::settings::Settings::default().app_home_features,
                 )
             });
-        if index_allowed {
-            #[cfg(all(feature = "core", feature = "media"))]
-            if let Some(state) = ctx.data_opt::<plain_rs::runtime::Runtime>() {
-                values.insert(
-                    "file_index_progress".into(),
-                    serde_json::to_value(
-                        state
-                            .media_scans
-                            .snapshot()
-                            .map_err(plain_graphql::Error::new)?,
-                    )?,
-                );
-            }
-            values.insert(
-                "file_index_defaults".into(),
-                serde_json::to_value(plain_rs::features::prefs::file_index::defaults())?,
-            );
-            values.insert(
-                "file_index_sources".into(),
-                serde_json::to_value(
-                    plain_rs::features::prefs::file_index::source_directories(
-                        prefs,
-                        &plain_rs::features::prefs::file_index::defaults(),
-                    )
-                    .map_err(plain_graphql::Error::new)?,
-                )?,
-            );
-        }
         Ok(Json(Value::Object(values)))
     }
     fn saved_value(&self, ctx: &Context<'_>, key: String) -> plain_graphql::Result<Json<Value>> {

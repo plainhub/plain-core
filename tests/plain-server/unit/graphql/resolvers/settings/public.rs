@@ -353,7 +353,9 @@ async fn file_index_scope_paths_and_writes_require_remote_storage_permission() {
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let values = response.data.into_json().unwrap();
-    assert!(values["prefs"]["file_index_defaults"].is_object());
+    for key in ["file_index_defaults", "file_index_sources", "file_index_progress"] {
+        assert!(values["prefs"].get(key).is_none(), "{key}");
+    }
     assert_eq!(
         values["prefs"]["media_source_dirs"][0],
         directory.path().to_str().unwrap()
