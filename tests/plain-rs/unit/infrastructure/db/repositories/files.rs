@@ -91,6 +91,7 @@ fn remount_changes_only_the_volume_root_and_preserves_file_id_and_relative_path(
             Some(10),
             None,
             "2026-01-01T00:00:00Z",
+            None,
         )
         .unwrap();
         tx.execute("UPDATE files SET favorited=1 WHERE id=?1", [&id])
@@ -108,6 +109,7 @@ fn remount_changes_only_the_volume_root_and_preserves_file_id_and_relative_path(
             Some(10),
             None,
             "2026-01-01T00:00:00Z",
+            None,
         )
         .unwrap();
         tx.commit().unwrap();
@@ -338,4 +340,49 @@ fn visibility_subtrees_preserve_missing_trash_boundaries_and_nested_volumes() {
         .unwrap(),
         4
     );
+}
+
+#[cfg(feature = "chat")]
+#[test]
+fn scan_paths_commit_one_transaction_and_roll_back_a_failed_batch() {
+    let directory = tempfile::tempdir().unwrap();
+    let paths = (0..300)
+        .map(|index| {
+            let path = directory.path().join(format!("{index}.rs"));
+            std::fs::write(&path, b"source").unwrap();
+            (path.to_str().unwrap().to_owned(), FileKind::File)
+        })
+        .collect::<Vec<_>>();
+    let db = Db::open(Path::new(":memory:")).unwrap();
+    let commits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    db.with_conn(|conn| {
+        let commits = commits.clone();
+        conn.commit_hook(Some(move || {
+            commits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            false
+        }))?;
+        Ok::<_, rusqlite::Error>(())
+    })
+    .unwrap();
+    db.record_scan_paths(&paths, "first").unwrap();
+    assert_eq!(commits.load(std::sync::atomic::Ordering::SeqCst), 1);
+    db.with_conn(|conn| {
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM files WHERE last_seen_scan_id='first'", [], |row| row.get::<_,i64>(0))?, 300);
+        conn.execute_batch("CREATE TRIGGER reject_scan_record BEFORE UPDATE ON files WHEN NEW.file_name='299.rs' BEGIN SELECT RAISE(ABORT,'rejected'); END;")
+    }).unwrap();
+    let before = commits.load(std::sync::atomic::Ordering::SeqCst);
+    assert!(db.record_scan_paths(&paths, "failed").is_err());
+    assert_eq!(commits.load(std::sync::atomic::Ordering::SeqCst), before);
+    db.with_conn(|conn| {
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM files WHERE last_seen_scan_id='failed'",
+                [],
+                |row| row.get::<_, i64>(0)
+            )?,
+            0
+        );
+        Ok::<_, rusqlite::Error>(())
+    })
+    .unwrap();
 }

@@ -362,3 +362,89 @@ fn retired_identity_preserves_replacement_and_file_tags_at_the_same_path() {
     })
     .unwrap();
 }
+
+#[test]
+fn scan_reconciliation_is_bounded_preserves_gaps_and_cleans_associated_records_atomically() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    db.with_conn(|conn| conn.execute_batch("INSERT INTO volumes(id,identity,path,is_available) VALUES('scan','scan','/scan',1),('offline','offline','/scan/root_%/offline',0);
+INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,last_seen_scan_id,trashed_at,original_path) VALUES
+('audio','scan','root_%/old.ogg','old.ogg','AUDIO','now',NULL,NULL,NULL),
+('image','scan','root_%/old.jpg','old.jpg','IMAGE','now','previous',NULL,NULL),
+('seen','scan','root_%/seen.rs','seen.rs','FILE','now','current',NULL,NULL),
+('gap','scan','root_%/denied/old.rs','old.rs','FILE','now',NULL,NULL,NULL),
+('outside','scan','root_%_sibling/old.rs','old.rs','FILE','now',NULL,NULL,NULL),
+('trash','scan','root_%/trash.rs','trash.rs','FILE','now',NULL,'now','root_%/original.rs'),
+('offline','offline','old.rs','old.rs','FILE','now',NULL,NULL,NULL);
+INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio','audio',1,'now'),('path','/scan/root_%/old.ogg',22,'now'),('foreign','audio',6,'now');
+INSERT INTO audio_queue_items(file_id,sort_order) VALUES('audio',0);
+INSERT INTO audio_playlists(id,name,created_at,updated_at) VALUES('playlist','Playlist','now','now');
+INSERT INTO audio_playlist_items(id,playlist_id,file_id,sort_order,added_at) VALUES('item','playlist','audio',0,'now');
+INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(1,'audio',123,'now',1);
+INSERT INTO image_embeddings(file_id,path,embedding,created_at,updated_at) VALUES('image','/scan/root_%/old.jpg',x'3f800000','now','now');
+CREATE TRIGGER reject_scan_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABORT,'rejected'); END;" )).unwrap();
+    let root = std::path::Path::new("/scan/root_%");
+    let gaps = [root.join("denied")];
+    assert!(reconcile_scan_batch(&db, root, "current", &gaps, 1, "").is_err());
+    assert!(db.file("audio").unwrap().is_some());
+    db.with_conn(|conn| {
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM audio_queue_items", [], |row| row
+                .get::<_, i64>(0))?,
+            1
+        );
+        conn.execute_batch("DROP TRIGGER reject_scan_delete")
+    })
+    .unwrap();
+    let first = reconcile_scan_batch(&db, root, "current", &gaps, 1, "").unwrap();
+    assert_eq!(first.len(), 1);
+    assert_eq!(
+        reconcile_scan_batch(&db, root, "current", &gaps, 1, &first[0].id)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        reconcile_scan_batch(&db, root, "current", &gaps, 1, "")
+            .unwrap()
+            .is_empty()
+    );
+    for id in ["seen", "gap", "outside", "trash", "offline"] {
+        assert!(db.file(id).unwrap().is_some(), "{id}");
+    }
+    for id in ["audio", "image"] {
+        assert!(db.file(id).unwrap().is_none());
+    }
+    db.with_conn(|conn| {
+        for table in [
+            "audio_queue_items",
+            "audio_playlist_items",
+            "media_play_history",
+            "image_embeddings",
+        ] {
+            assert_eq!(
+                conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row
+                    .get::<_, i64>(0))?,
+                0,
+                "{table}"
+            );
+        }
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM tag_relations WHERE type IN (1,22)",
+                [],
+                |row| row.get::<_, i64>(0)
+            )?,
+            0
+        );
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM tag_relations WHERE type=6",
+                [],
+                |row| row.get::<_, i64>(0)
+            )?,
+            1
+        );
+        Ok::<_, rusqlite::Error>(())
+    })
+    .unwrap();
+}

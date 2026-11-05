@@ -168,6 +168,7 @@ pub(crate) fn upsert(
     size: Option<i64>,
     created: Option<&str>,
     updated: &str,
+    scan_id: Option<&str>,
 ) -> rusqlite::Result<String> {
     let (volume_id, path) = bind_volume(conn, location)?;
     let existing: Option<(String, Option<String>)> = conn
@@ -235,13 +236,13 @@ pub(crate) fn upsert(
                 params![destination, id],
             )?;
         }
-        conn.execute("UPDATE files SET path=?1,file_name=?2,kind=COALESCE(?3,kind),file_identity=COALESCE(?4,file_identity),size_bytes=COALESCE(?5,size_bytes),created_at=COALESCE(created_at,?6),updated_at=?7,missing=0,indexed=1,mime_type=?8 WHERE id=?9",
-            params![path,name,kind,identity,size,created,updated,mime,id])?;
+        conn.execute("UPDATE files SET path=?1,file_name=?2,kind=COALESCE(?3,kind),file_identity=COALESCE(?4,file_identity),size_bytes=COALESCE(?5,size_bytes),created_at=COALESCE(created_at,?6),updated_at=?7,missing=0,indexed=1,mime_type=?8,last_seen_scan_id=COALESCE(?10,last_seen_scan_id) WHERE id=?9",
+            params![path,name,kind,identity,size,created,updated,mime,id,scan_id])?;
         Ok(id)
     } else {
         let id = crate::features::record_id::generate();
-        conn.execute("INSERT INTO files(id,volume_id,path,file_name,kind,file_identity,size_bytes,created_at,updated_at,mime_type) VALUES(?1,?2,?3,?4,COALESCE(?5,'FILE'),?6,?7,?8,?9,?10)",
-            params![id,volume_id,path,name,kind,identity,size,created,updated,mime])?;
+        conn.execute("INSERT INTO files(id,volume_id,path,file_name,kind,file_identity,size_bytes,created_at,updated_at,mime_type,last_seen_scan_id) VALUES(?1,?2,?3,?4,COALESCE(?5,'FILE'),?6,?7,?8,?9,?10,?11)",
+            params![id,volume_id,path,name,kind,identity,size,created,updated,mime,scan_id])?;
         Ok(id)
     }
 }
@@ -541,9 +542,42 @@ impl Db {
         paths: &[String],
         file_kind: Option<FileKind>,
     ) -> rusqlite::Result<Vec<FileRow>> {
+        self.record_file_path_inputs(
+            paths.iter().map(|path| (path.as_str(), file_kind)),
+            None,
+            |conn, id| {
+                conn.query_row(
+                    &format!("SELECT {COLUMNS} FROM files WHERE id=?1"),
+                    [id],
+                    from_row,
+                )
+            },
+        )
+    }
+
+    pub(crate) fn record_scan_paths(
+        &self,
+        paths: &[(String, FileKind)],
+        scan_id: &str,
+    ) -> rusqlite::Result<()> {
+        self.record_file_path_inputs(
+            paths
+                .iter()
+                .map(|(path, kind)| (path.as_str(), Some(*kind))),
+            Some(scan_id),
+            |_, _| Ok(()),
+        )
+        .map(|_| ())
+    }
+
+    fn record_file_path_inputs<'a, T>(
+        &self,
+        paths: impl Iterator<Item = (&'a str, Option<FileKind>)>,
+        scan_id: Option<&str>,
+        read: impl Fn(&Connection, String) -> rusqlite::Result<T>,
+    ) -> rusqlite::Result<Vec<T>> {
         let facts = paths
-            .iter()
-            .map(|path| {
+            .map(|(path, file_kind)| {
                 let location = locate(path)?;
                 let metadata = std::fs::symlink_metadata(&location.path).map_err(sql_error)?;
                 let identity = if metadata.file_type().is_symlink() {
@@ -585,12 +619,9 @@ impl Db {
                         },
                         created.as_deref(),
                         updated,
+                        scan_id,
                     )?;
-                    tx.query_row(
-                        &format!("SELECT {COLUMNS} FROM files WHERE id=?1"),
-                        [id],
-                        from_row,
-                    )
+                    read(&tx, id)
                 })
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             tx.commit()?;

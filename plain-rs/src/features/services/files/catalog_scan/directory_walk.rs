@@ -14,15 +14,11 @@ pub(super) fn entries(
 ) {
     let (send, receive) = mpsc::channel(32);
     let task = tokio::task::spawn_blocking(move || {
-        let mut excluded_roots = Vec::new();
-        plain_libs::file_walk::walk_entries(
+        let mut skipped_roots = Vec::new();
+        plain_libs::file_walk::walk_entries_with_skipped(
             &root,
             |path| {
-                if let Some(root) = crate::features::media::catalog_paths::scan_excluded_root(path)
-                {
-                    if !excluded_roots.iter().any(|existing| existing == root) {
-                        excluded_roots.push(root.to_owned());
-                    }
+                if crate::features::media::catalog_paths::scan_excluded_root(path).is_some() {
                     return true;
                 }
                 path.to_str().is_some_and(|path| {
@@ -49,9 +45,10 @@ pub(super) fn entries(
                 send.blocking_send(path.to_owned())
                     .map_err(|_| anyhow::anyhow!("File scan receiver closed"))
             },
+            |path| skipped_roots.push(path.to_owned()),
         )
         .map_err(|error| error.to_string())?;
-        Ok(excluded_roots)
+        Ok(skipped_roots)
     });
     (receive, task)
 }

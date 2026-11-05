@@ -9,7 +9,7 @@ pub fn walk_files(
     cancelled: impl FnMut() -> bool,
     visit: impl FnMut(&Path) -> Result<()>,
 ) -> Result<()> {
-    walk(root, excluded, cancelled, visit, false)
+    walk(root, excluded, cancelled, visit, false, |_| {})
 }
 
 pub fn walk_entries(
@@ -18,7 +18,17 @@ pub fn walk_entries(
     cancelled: impl FnMut() -> bool,
     visit: impl FnMut(&Path) -> Result<()>,
 ) -> Result<()> {
-    walk(root, excluded, cancelled, visit, true)
+    walk_entries_with_skipped(root, excluded, cancelled, visit, |_| {})
+}
+
+pub fn walk_entries_with_skipped(
+    root: &Path,
+    excluded: impl FnMut(&Path) -> bool,
+    cancelled: impl FnMut() -> bool,
+    visit: impl FnMut(&Path) -> Result<()>,
+    skipped: impl FnMut(&Path),
+) -> Result<()> {
+    walk(root, excluded, cancelled, visit, true, skipped)
 }
 
 fn walk(
@@ -27,6 +37,7 @@ fn walk(
     mut cancelled: impl FnMut() -> bool,
     mut visit: impl FnMut(&Path) -> Result<()>,
     include_directories: bool,
+    mut skipped: impl FnMut(&Path),
 ) -> Result<()> {
     if !root.is_absolute() {
         return Err(anyhow::anyhow!(
@@ -39,7 +50,10 @@ fn walk(
     }
     let root_meta = match fs::symlink_metadata(root) {
         Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => return Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            skipped(root);
+            return Ok(());
+        }
         Err(error) => {
             return Err(error)
                 .with_context(|| format!("cannot read file walk root {}", root.display()));
@@ -75,7 +89,10 @@ fn walk(
         }
         let entries = match fs::read_dir(&directory) {
             Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => continue,
+            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+                skipped(&directory);
+                continue;
+            }
             Err(error) => {
                 return Err(error)
                     .with_context(|| format!("cannot read directory {}", directory.display()));
@@ -88,7 +105,10 @@ fn walk(
         for entry in entries {
             let entry = match entry {
                 Ok(entry) => entry,
-                Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => continue,
+                Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+                    skipped(&directory);
+                    continue;
+                }
                 Err(error) => {
                     return Err(error).with_context(|| {
                         format!("cannot read an entry of {}", directory.display())
@@ -104,7 +124,10 @@ fn walk(
             }
             let file_type = match entry.file_type() {
                 Ok(kind) => kind,
-                Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => continue,
+                Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+                    skipped(&path);
+                    continue;
+                }
                 Err(error) => {
                     return Err(error).with_context(|| {
                         format!("cannot read the file type of {}", path.display())

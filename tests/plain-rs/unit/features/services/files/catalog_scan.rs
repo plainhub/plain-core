@@ -177,6 +177,15 @@ async fn directory_scan_cancellation_after_discovery_preserves_all_basic_facts()
         std::fs::write(root.join(format!("{index}.txt")), b"data").unwrap();
     }
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let stale_path = root.join("previous.rs");
+    std::fs::write(&stale_path, b"previous").unwrap();
+    let stale = core
+        .runtime_state()
+        .db
+        .record_file_paths(&[stale_path.to_str().unwrap().into()], None)
+        .unwrap()
+        .remove(0);
+    std::fs::remove_file(stale_path).unwrap();
     let mut catalog = NativeMediaCatalog::new(core.runtime_state());
     catalog
         .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
@@ -206,6 +215,7 @@ async fn directory_scan_cancellation_after_discovery_preserves_all_basic_facts()
             .unwrap(),
         96
     );
+    assert!(core.runtime_state().db.file(&stale.id).unwrap().is_some());
     core.stop_core().await;
 }
 
@@ -243,13 +253,13 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
         async move { catalog.scan_source_directories("/").await }
     });
     let mut session_id = None;
-    for indexed in 0..2 {
+    for _ in 0..2 {
         tokio::time::timeout(std::time::Duration::from_secs(5), gate.0.notified())
             .await
             .unwrap();
         let snapshot = catalog.file_scan_status().unwrap().unwrap();
         assert_eq!(snapshot.status, Status::Running);
-        assert_eq!(snapshot.processed_files, indexed);
+        assert_eq!(snapshot.processed_files, 0);
         assert_eq!(snapshot.total_files, Some(2));
         if let Some(id) = &session_id {
             assert_eq!(*id, snapshot.id);
@@ -875,7 +885,6 @@ async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying
     core.stop_core().await;
 }
 
-
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
 async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
@@ -973,12 +982,10 @@ async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
                 |r| r.get::<_, i64>(0)
             ))
             .unwrap(),
-        6
+        4
     );
     for previous in previous {
-        let preserved = state.db.file(&previous.id).unwrap().unwrap();
-        assert_eq!(preserved.updated_at, previous.updated_at);
-        assert!(!preserved.missing);
+        assert!(state.db.file(&previous.id).unwrap().is_none());
     }
     assert!(
         crate::features::services::files::native_scan::completed(
@@ -1024,5 +1031,77 @@ async fn watcher_reconciliation_does_not_restart_a_cancelled_scan() {
         .await
         .unwrap();
     assert_ne!(state.media_scans.snapshot().unwrap().unwrap().id, id);
+    core.stop_core().await;
+}
+
+#[cfg(feature = "runtime-media")]
+#[tokio::test]
+async fn directory_scan_batches_records_and_reconciles_unseen_rows() {
+    let directory = directory_scan_fixture();
+    let root = directory.path().join("files");
+    let other = directory.path().join("files-other");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&other).unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    let stale = root.join("gone.rs");
+    let outside = other.join("kept.rs");
+    let git = root.join("repository");
+    std::fs::create_dir_all(git.join(".git")).unwrap();
+    let excluded = git.join("old.rs");
+    let hidden = root.join(".old.rs");
+    for path in [&stale, &outside, &excluded, &hidden] {
+        std::fs::write(path, b"old").unwrap();
+    }
+    let old = state
+        .db
+        .record_file_paths(
+            &[
+                stale.to_str().unwrap().into(),
+                excluded.to_str().unwrap().into(),
+                hidden.to_str().unwrap().into(),
+            ],
+            None,
+        )
+        .unwrap();
+    let outside_id = state
+        .db
+        .record_file_paths(&[outside.to_str().unwrap().into()], None)
+        .unwrap()
+        .remove(0)
+        .id;
+    std::fs::remove_file(stale).unwrap();
+    for index in 0..SCAN_BATCH_SIZE * 2 + 1 {
+        std::fs::write(root.join(format!("{index}.rs")), b"source").unwrap();
+    }
+    let mut events = state.events.subscribe();
+    let result = catalog
+        .scan_directory(root.to_str().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(result.total_files, Some(SCAN_BATCH_SIZE * 2 + 1));
+    assert_eq!(result.processed_files, SCAN_BATCH_SIZE * 2 + 1);
+    for row in old {
+        assert!(state.db.file(&row.id).unwrap().is_none());
+    }
+    assert!(state.db.file(&outside_id).unwrap().is_some());
+    assert!(excluded.exists() && hidden.exists() && outside.exists());
+    let mut catalog_updates = 0;
+    while let Ok(event) = events.try_recv() {
+        if event.event_type == crate::infrastructure::events::MEDIA_LIBRARY_UPDATED {
+            catalog_updates += 1;
+        }
+    }
+    assert_eq!(
+        catalog_updates, 4,
+        "Three record batches and one deletion batch"
+    );
+    state.db.with_conn(|conn| {
+        let (records, generations): (i64, i64) = conn.query_row("SELECT COUNT(*),COUNT(DISTINCT last_seen_scan_id) FROM files WHERE last_seen_scan_id IS NOT NULL", [], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        assert_eq!(records, (SCAN_BATCH_SIZE * 2 + 2) as i64);
+        assert_eq!(generations, 1);
+        Ok::<_, rusqlite::Error>(())
+    }).unwrap();
     core.stop_core().await;
 }

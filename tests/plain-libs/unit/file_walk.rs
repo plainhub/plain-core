@@ -298,7 +298,8 @@ fn unreadable_directories_are_skipped_without_losing_readable_siblings() {
         }
     };
     let mut seen = Vec::new();
-    let result = walk_entries(
+    let mut skipped = Vec::new();
+    let result = walk_entries_with_skipped(
         directory.path(),
         |_| false,
         || false,
@@ -306,6 +307,7 @@ fn unreadable_directories_are_skipped_without_losing_readable_siblings() {
             seen.push(path.to_owned());
             Ok(())
         },
+        |path| skipped.push(path.to_owned()),
     );
     let mut root_visits = 0;
     let denied_result = walk_entries(
@@ -322,6 +324,7 @@ fn unreadable_directories_are_skipped_without_losing_readable_siblings() {
     denied_result.unwrap();
     assert!(seen.contains(&directory.path().join("readable/public.txt")));
     if denied_by_os {
+        assert_eq!(skipped, vec![denied.clone()]);
         assert_eq!(root_visits, 0);
         assert!(!seen.iter().any(|path| path.starts_with(&denied)));
     } else {

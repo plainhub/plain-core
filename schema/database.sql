@@ -198,6 +198,7 @@ CREATE TABLE IF NOT EXISTS files (
     created_at TEXT,
     updated_at TEXT NOT NULL,
     missing INTEGER NOT NULL DEFAULT 0 CHECK(missing IN (0,1)),
+    last_seen_scan_id TEXT,
     indexed INTEGER NOT NULL DEFAULT 1 CHECK(indexed IN (0,1)),
     favorited INTEGER NOT NULL DEFAULT 0 CHECK(favorited IN (0,1)),
     trashed_at TEXT,
