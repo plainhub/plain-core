@@ -4,6 +4,8 @@ use super::*;
 fn mime_guesses() {
     assert_eq!(mime_from_ext("cat.jpg"), "image/jpeg");
     assert_eq!(mime_from_ext("cat.JPG"), "image/jpeg");
+    assert_eq!(mime_from_ext("animation.apng"), "image/apng");
+    assert_eq!(mime_from_ext("animation.APNG"), "image/apng");
     assert_eq!(mime_from_ext("movie.mp4"), "video/mp4");
     assert_eq!(mime_from_ext("thing.unknown"), "application/octet-stream");
 }
@@ -21,8 +23,8 @@ fn mime_handles_empty() {
 #[test]
 fn ext_roundtrips_through_mime() {
     for ext in [
-        "jpg", "png", "gif", "webp", "svg", "bmp", "tif", "heic", "avif", "mp4", "webm", "mov",
-        "mkv", "3gp", "mp3", "m4a", "wav", "ogg", "pdf", "zip", "json", "txt", "html", "md",
+        "jpg", "png", "apng", "gif", "webp", "svg", "bmp", "tif", "heic", "avif", "mp4", "webm",
+        "mov", "mkv", "3gp", "mp3", "m4a", "wav", "ogg", "pdf", "zip", "json", "txt", "html", "md",
         // from the server table merge
         "css", "js", "xml", "csv", "tsv", "ico", "avi", "ogv", "ts", "flac", "opus", "aac", "bz2",
         "xz",

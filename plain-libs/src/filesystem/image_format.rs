@@ -1,3 +1,4 @@
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 const PHOTO_EXTENSIONS: [&str; 13] = [
@@ -17,7 +18,7 @@ pub fn is_animated_image_or_svg(path: &Path) -> bool {
     if ext == "svg" {
         return true;
     }
-    if ext == "png" || ext == "jpg" || ext == "jpeg" {
+    if ext == "jpg" || ext == "jpeg" {
         return false;
     }
 
@@ -25,6 +26,9 @@ pub fn is_animated_image_or_svg(path: &Path) -> bool {
     let Ok(mut file) = std::fs::File::open(path) else {
         return false;
     };
+    if ext == "png" || ext == "apng" {
+        return is_animated_png(&mut file);
+    }
     let n = std::io::Read::read(&mut file, &mut header).unwrap_or(0);
     let header = &header[..n];
 
@@ -47,6 +51,32 @@ pub fn is_animated_image_or_svg(path: &Path) -> bool {
     }
 
     header.windows(4).any(|w| w == b"<svg")
+}
+
+fn is_animated_png(file: &mut (impl Read + Seek)) -> bool {
+    let mut signature = [0; 8];
+    if file.read_exact(&mut signature).is_err() || signature != *b"\x89PNG\r\n\x1a\n" {
+        return false;
+    }
+    let mut chunk = [0; 8];
+    while file.read_exact(&mut chunk).is_ok() {
+        let length = u32::from_be_bytes(chunk[..4].try_into().unwrap());
+        match &chunk[4..] {
+            b"IDAT" | b"IEND" => return false,
+            b"acTL" => {
+                let mut animation = [0; 8];
+                return length == 8
+                    && file.read_exact(&mut animation).is_ok()
+                    && u32::from_be_bytes(animation[..4].try_into().unwrap()) > 0;
+            }
+            _ => {
+                if file.seek(SeekFrom::Current(i64::from(length) + 4)).is_err() {
+                    return false;
+                }
+            }
+        }
+    }
+    false
 }
 
 #[cfg(test)]

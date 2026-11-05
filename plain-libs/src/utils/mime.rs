@@ -27,6 +27,7 @@ pub fn mime_from_ext(filename: &str) -> &'static str {
         // Images
         "jpg" | "jpeg" => "image/jpeg",
         "png" => "image/png",
+        "apng" => "image/apng",
         "gif" => "image/gif",
         "webp" => "image/webp",
         "svg" => "image/svg+xml",
@@ -88,6 +89,7 @@ pub fn mime_extension(mime: &str) -> &'static str {
         // Images
         "image/jpeg" => "jpg",
         "image/png" => "png",
+        "image/apng" => "apng",
         "image/gif" => "gif",
         "image/webp" => "webp",
         "image/svg+xml" => "svg",

@@ -82,6 +82,54 @@ async fn fs_icons_return_original_bytes_for_all_preview_sizes() {
             }
         }
     }
+    assert_eq!(
+        state
+            .thumbnails
+            .native_decodes
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
+}
+
+#[tokio::test]
+async fn fs_animated_png_preserves_frames_for_both_extensions_and_preview_sizes() {
+    use image::AnimationDecoder;
+    let (_root, _core, state, key) = test_state();
+    let files = tempfile::tempdir().unwrap();
+    let original = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../plain-rs/testdata/two-frame.apng"
+    ));
+    let frames = image::codecs::png::PngDecoder::new(std::io::Cursor::new(original))
+        .unwrap()
+        .apng()
+        .unwrap()
+        .into_frames()
+        .collect_frames()
+        .unwrap();
+    assert_eq!(frames.len(), 2);
+    assert_ne!(frames[0].buffer(), frames[1].buffer());
+    for (name, mime) in [
+        ("animation.png", "image/png"),
+        ("animation.apng", "image/apng"),
+    ] {
+        let path = files.path().join(name);
+        std::fs::write(&path, original).unwrap();
+        let id = file_id(&key, path.to_str().unwrap());
+        for options in ["", "&s=sm", "&s=lg", "&s=lg&dl=1"] {
+            let response = call_fs(&state, &format!("id={id}{options}"), &[]).await;
+            assert_eq!(response.status(), StatusCode::OK, "{name}{options}");
+            assert_eq!(response.headers()[header::CONTENT_TYPE], mime);
+            assert_eq!(body_bytes(response).await, original, "{name}{options}");
+        }
+    }
+    assert_eq!(
+        state
+            .thumbnails
+            .native_decodes
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
 }
 
 #[tokio::test]

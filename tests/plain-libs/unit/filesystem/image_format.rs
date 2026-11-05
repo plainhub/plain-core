@@ -1,6 +1,63 @@
 use super::*;
 
 #[test]
+fn png_animation_detection_seeks_over_metadata_without_reading_pixels() {
+    struct Input<'a> {
+        cursor: std::io::Cursor<&'a [u8]>,
+        bytes_read: usize,
+    }
+    impl Read for Input<'_> {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            let bytes = self.cursor.read(buffer)?;
+            self.bytes_read += bytes;
+            Ok(bytes)
+        }
+    }
+    impl Seek for Input<'_> {
+        fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
+            self.cursor.seek(position)
+        }
+    }
+    let bytes = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../plain-rs/testdata/two-frame.apng"
+    ));
+    let mut input = Input {
+        cursor: std::io::Cursor::new(bytes.as_slice()),
+        bytes_read: 0,
+    };
+    assert!(is_animated_png(&mut input));
+    assert_eq!(input.bytes_read, 40);
+}
+
+#[test]
+fn png_animation_detection_preserves_both_extensions_and_skips_metadata() {
+    let directory = tempfile::tempdir().unwrap();
+    let animated = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../plain-rs/testdata/two-frame.apng"
+    ));
+    for name in [
+        "animation.png",
+        "animation.apng",
+        "animation.PNG",
+        "animation.APNG",
+    ] {
+        let path = directory.path().join(name);
+        std::fs::write(&path, animated).unwrap();
+        assert!(is_animated_image_or_svg(&path), "{name}");
+        for length in [0, 8, 20, 33, 256] {
+            std::fs::write(&path, &animated[..length]).unwrap();
+            assert!(!is_animated_image_or_svg(&path), "{name}: {length}");
+        }
+        image::RgbaImage::new(1, 1)
+            .save_with_format(&path, image::ImageFormat::Png)
+            .unwrap();
+        assert!(!is_animated_image_or_svg(&path), "static {name}");
+    }
+}
+
+#[test]
 fn shared_header_detection_preserves_animated_and_static_container_rules() {
     let directory = tempfile::tempdir().unwrap();
     assert!(is_animated_image_or_svg(&directory.path().join("logo.svg")));
