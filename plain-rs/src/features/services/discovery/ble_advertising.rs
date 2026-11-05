@@ -9,13 +9,12 @@ use std::sync::Mutex;
 pub struct Facts {
     lease: uuid::Uuid,
     available: bool,
-    aware_running: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct Advertisement {
     lease: uuid::Uuid,
-    bytes: Option<[u8; 9]>,
+    service_uuid: Option<String>,
 }
 
 #[derive(Default)]
@@ -107,23 +106,20 @@ impl Runtime {
             false
         };
         self.current(state, generation)?;
-        let bytes = if facts.available && supported {
+        let service_uuid = if facts.available && supported {
             let id = state
                 .prefs
                 .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
                 .unwrap_or_default();
-            let aware_supported = state.host.startup().wifi_aware_supported;
-            Some(crate::features::discovery::advertisement::ble(
-                &id,
-                aware_supported,
-                aware_supported && facts.aware_running,
-            )?)
+            let uuid = crate::features::client_identity::parse(&id)
+                .ok_or_else(|| anyhow::anyhow!("Invalid BLE client identity"))?;
+            Some(uuid.to_string())
         } else {
             None
         };
         let advertisement = Advertisement {
             lease: facts.lease,
-            bytes,
+            service_uuid,
         };
         let revision = {
             let mut runtime = self.state.lock().unwrap();
@@ -135,7 +131,7 @@ impl Runtime {
                 return Ok(());
             }
             if runtime.applied.as_ref() == Some(&advertisement)
-                || runtime.applied.is_none() && advertisement.bytes.is_none()
+                || runtime.applied.is_none() && advertisement.service_uuid.is_none()
             {
                 runtime.dirty = false;
                 return Ok(());
@@ -147,16 +143,11 @@ impl Runtime {
                 .ok_or_else(|| anyhow::anyhow!("BLE advertising revision exhausted"))?;
             runtime.revision
         };
-        let bytes = advertisement
-            .bytes
-            .as_ref()
-            .map(|bytes| plain_libs::utils::base64::base64_encode(bytes))
-            .unwrap_or_default();
         let accepted = state
             .host
             .call(
                 "bleAdvertising",
-                json!({"active":advertisement.bytes.is_some(),"bytes":bytes,"revision":revision,"lease":advertisement.lease}),
+                json!({"serviceUuid":advertisement.service_uuid,"revision":revision,"lease":advertisement.lease}),
             )
             .await
             .map_err(anyhow::Error::msg)?;

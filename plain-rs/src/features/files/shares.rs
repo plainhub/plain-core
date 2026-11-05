@@ -80,7 +80,7 @@ impl Service {
             created_at: now.clone(),
             updated_at: now,
         };
-        self.insert_new(row, plain_libs::utils::short_uuid::short_uuid)
+        self.insert_new(row, crate::features::record_id::generate)
     }
     fn insert_new(
         &self,

@@ -13,7 +13,7 @@ pub fn record(
 ) -> Result<(ClipboardRow, bool), String> {
     validate_text(text)?;
     let row = ClipboardRow {
-        id: uuid::Uuid::new_v4().to_string(),
+        id: crate::features::record_id::generate(),
         hash: plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(text.as_bytes())),
         text: text.into(),
         source: source.into(),

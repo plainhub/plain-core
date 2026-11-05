@@ -4,7 +4,6 @@ use crate::infrastructure::protocols::mdns::service_info::build_service_info;
 use anyhow::{Result, ensure};
 use plain_libs::protocols::mdns::records::MdnsServiceInfo;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -51,29 +50,10 @@ pub fn mdns(reply: &DiscoverReply, hostname: &str) -> Result<MdnsServiceInfo> {
         reply.aware_running,
     ))
 }
-pub fn ble(id: &str, supported: bool, running: bool) -> Result<[u8; 9]> {
-    ensure!(!id.is_empty(), "Missing client identity");
-    let mut payload = [0; 9];
-    payload[0] = u8::from(supported) | (u8::from(running) << 1);
-    payload[1..].copy_from_slice(&Sha256::digest(id.as_bytes())[..8]);
-    Ok(payload)
-}
-#[derive(Debug, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct BleParts {
-    pub short_id: String,
-    pub aware_supported: bool,
-    pub aware_running: bool,
-}
-pub fn decode_ble(payload: &[u8]) -> Option<BleParts> {
-    if payload.len() < 9 {
-        return None;
-    }
-    Some(BleParts {
-        short_id: plain_libs::utils::hex::bytes_to_hex(&payload[1..9]),
-        aware_supported: payload[0] & 1 != 0,
-        aware_running: payload[0] & 2 != 0,
-    })
+pub fn decode_ble(service_uuids: &[String]) -> Option<String> {
+    service_uuids
+        .iter()
+        .find_map(|value| crate::features::client_identity::parse(value).map(|id| id.to_string()))
 }
 #[cfg(test)]
 #[path = "../../../../tests/plain-rs/unit/features/discovery/advertisement.rs"]

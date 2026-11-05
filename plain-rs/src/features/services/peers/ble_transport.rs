@@ -24,7 +24,7 @@ impl Runtime {
             .ok_or_else(|| anyhow::anyhow!("BLE host unavailable"))?;
         let request = serde_json::json!({
             "request": plain_libs::utils::base64::base64_encode(&bytes),
-            "shortId": crate::features::discovery::nearby_wire::short_id(&peer.id),
+            "clientId": peer.id,
             "peer": crate::features::services::peers::peer_address::view(peer),
         });
         let mut stop = state.stop.clone();

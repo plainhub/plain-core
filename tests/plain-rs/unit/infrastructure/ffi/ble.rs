@@ -54,21 +54,15 @@ fn removed_gateway_and_nearby_actions_cannot_be_called_through_native_codecs() {
 }
 
 #[test]
-fn discovery_codec_uses_shared_bytes_and_rejects_invalid_inputs() {
-    let payload = crate::features::discovery::advertisement::ble("fixture", true, false).unwrap();
-    let decoded = call(9, 0, 0, 0, 0, false, &payload).unwrap().unwrap();
-    let value: serde_json::Value = serde_json::from_slice(&decoded).unwrap();
+fn discovery_codec_filters_service_uuids_without_service_data() {
+    let id = "706c6169-2d74-8e53-9a16-f08b62c591d3";
+    let input = serde_json::to_vec(&vec!["180D".to_string(), id.to_uppercase()]).unwrap();
+    let decoded = call(9, 0, 0, 0, 0, false, &input).unwrap().unwrap();
+    assert_eq!(serde_json::from_slice::<String>(&decoded).unwrap(), id);
     assert_eq!(
-        value,
-        serde_json::json!({"shortId":"f16d05ec6b29248d", "awareSupported":true, "awareRunning":false})
+        call(9, 0, 0, 0, 0, false, br#"["180D"]"#).unwrap().unwrap(),
+        b"null"
     );
-    for length in 0..9 {
-        assert_eq!(
-            call(9, 0, 0, 0, 0, false, &payload[..length])
-                .unwrap()
-                .unwrap(),
-            b"null"
-        );
-    }
     assert!(call(9, 0, 0, 0, 0, false, &[0; 1651]).is_err());
+    assert!(call(9, 0, 0, 0, 0, false, b"invalid").is_err());
 }

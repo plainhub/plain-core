@@ -57,24 +57,20 @@ impl Scans {
             state.scans.clear();
         }
     }
-    pub fn pending_owner(&self, id: &str, short_id: &str, generation: &str) -> Option<u64> {
+    pub fn pending_owner(&self, id: &str, client_id: &str, generation: &str) -> Option<u64> {
         let state = self.0.lock().unwrap();
-        let entry = state.scans.get(id)?.get(short_id)?;
+        let entry = state.scans.get(id)?.get(client_id)?;
         if entry.generation == generation && entry.reply.is_none() {
             state.owner
         } else {
             None
         }
     }
-    pub fn seen(&self, id: &str, short_id: &str) -> Result<Step> {
-        self.seen_at(id, short_id, Instant::now())
+    pub fn seen(&self, id: &str, client_id: &str) -> Result<Step> {
+        self.seen_at(id, client_id, Instant::now())
     }
-    fn seen_at(&self, id: &str, short_id: &str, now: Instant) -> Result<Step> {
-        if short_id.len() != 16
-            || !short_id
-                .bytes()
-                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
-        {
+    fn seen_at(&self, id: &str, client_id: &str, now: Instant) -> Result<Step> {
+        if crate::features::client_identity::parse(client_id).is_none() {
             return Ok(Step::Wait);
         }
         let mut state = self.0.lock().unwrap();
@@ -82,7 +78,7 @@ impl Scans {
             .scans
             .get_mut(id)
             .ok_or_else(|| anyhow::anyhow!("Unknown BLE scan"))?;
-        if let Some(entry) = entries.get_mut(short_id) {
+        if let Some(entry) = entries.get_mut(client_id) {
             if let Some(reply) = &entry.reply {
                 if entry.last_emit.is_some_and(|last| {
                     now.saturating_duration_since(last) <= Duration::from_secs(5)
@@ -99,7 +95,7 @@ impl Scans {
                 return Ok(Step::Wait);
             }
         }
-        if entries.len() >= 512 && !entries.contains_key(short_id) {
+        if entries.len() >= 512 && !entries.contains_key(client_id) {
             let oldest = entries
                 .iter()
                 .min_by_key(|(_, v)| v.touched)
@@ -109,7 +105,7 @@ impl Scans {
         }
         let generation = uuid::Uuid::new_v4().to_string();
         entries.insert(
-            short_id.into(),
+            client_id.into(),
             Entry {
                 reply: None,
                 generation: generation.clone(),
@@ -122,7 +118,7 @@ impl Scans {
     pub fn reply(
         &self,
         id: &str,
-        short_id: &str,
+        client_id: &str,
         generation: &str,
         payload: Option<&str>,
     ) -> Result<Option<DiscoverReply>> {
@@ -130,13 +126,13 @@ impl Scans {
         let Some(entries) = state.scans.get_mut(id) else {
             return Ok(None);
         };
-        let Some(entry) = entries.get_mut(short_id) else {
+        let Some(entry) = entries.get_mut(client_id) else {
             return Ok(None);
         };
         if entry.generation != generation || entry.reply.is_some() {
             return Ok(None);
         };
-        let reply = payload.map(|p| discover_reply(p, short_id)).transpose();
+        let reply = payload.map(|p| discover_reply(p, client_id)).transpose();
         match reply {
             Ok(Some(reply)) => {
                 let now = Instant::now();
@@ -146,11 +142,11 @@ impl Scans {
                 Ok(Some(reply))
             }
             Ok(None) => {
-                entries.remove(short_id);
+                entries.remove(client_id);
                 Ok(None)
             }
             Err(error) => {
-                entries.remove(short_id);
+                entries.remove(client_id);
                 bail!(error)
             }
         }

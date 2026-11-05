@@ -2,8 +2,6 @@ pub mod print;
 use anyhow::{Result, bail, ensure};
 use std::time::{Duration, Instant};
 
-/// GATT service UUID shared by every Plain peer.
-pub const SERVICE_UUID: &str = "d8d5c4a0-8f0a-4e7d-b9e1-706c70616901";
 /// Characteristic carrying Nearby discovery/pairing messages.
 pub const NEARBY_CHAR_UUID: &str = "d8d5c4a0-8f0a-4e7d-b9e1-706c70616911";
 /// Characteristic carrying peer GraphQL / file-chunk traffic.

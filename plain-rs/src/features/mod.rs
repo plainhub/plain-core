@@ -1,3 +1,6 @@
+pub mod client_identity;
+pub mod record_id;
+
 #[cfg(feature = "chat")]
 pub mod chat;
 

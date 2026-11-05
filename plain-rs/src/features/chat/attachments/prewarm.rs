@@ -19,13 +19,16 @@ pub struct Capabilities {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Advertisement {
-    pub short_id: String,
+    pub client_id: String,
     pub aware_supported: bool,
     pub aware_running: bool,
 }
 pub trait Driver: Send + Sync {
     fn capabilities(&self) -> impl Future<Output = Result<Capabilities>> + Send;
-    fn scan(&self, short_id: &str) -> impl Future<Output = Result<Option<Advertisement>>> + Send;
+    fn discover(
+        &self,
+        client_id: &str,
+    ) -> impl Future<Output = Result<Option<Advertisement>>> + Send;
     fn start_aware(&self, peer_id: &str) -> impl Future<Output = Result<bool>> + Send;
 }
 struct Entry {
@@ -136,12 +139,13 @@ pub async fn run<D: Driver>(
     if !caps.ble_ready {
         return Ok(None);
     }
-    let short_id = crate::features::discovery::nearby_wire::short_id(id);
-    let scan = tokio::time::timeout(Duration::from_secs(15), driver.scan(&short_id)).await;
-    let Some(mut value) = scan.map_err(|_| anyhow::anyhow!("Peer prewarm scan timed out"))?? else {
+    let scan = tokio::time::timeout(Duration::from_secs(120), driver.discover(id)).await;
+    let Some(mut value) =
+        scan.map_err(|_| anyhow::anyhow!("Peer prewarm discovery timed out"))??
+    else {
         return Ok(None);
     };
-    if value.short_id != short_id {
+    if value.client_id != id {
         bail!("Peer prewarm advertisement mismatch")
     }
     if !unchanged(db, &claim, &peer)? {

@@ -1,7 +1,6 @@
 use crate::features::chat::channels::messages::decode_members;
 use crate::features::chat::enums::ChannelStatus;
 use crate::infrastructure::db::now_iso;
-use plain_libs::utils::short_uuid::short_uuid;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DChannel {
@@ -25,7 +24,7 @@ impl DChannel {
     pub fn new(name: &str, owner: &str) -> Self {
         let now = now_iso();
         Self {
-            id: short_uuid(),
+            id: crate::features::record_id::generate(),
             name: name.to_string(),
             owner_id: (!owner.is_empty()).then(|| owner.to_owned()),
             members: "[]".to_string(),

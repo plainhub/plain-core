@@ -1,6 +1,5 @@
 use crate::features::chat::enums::ChatStatus;
 use crate::infrastructure::db::now_iso;
-use crate::infrastructure::db::short_id;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DChat {
@@ -29,7 +28,7 @@ impl DChat {
     pub fn new(from_id: &str, to_id: &str, channel_id: &str, content: &str) -> Self {
         let now = now_iso();
         Self {
-            id: short_id(),
+            id: crate::features::record_id::generate(),
             from_id: from_id.to_string(),
             to_id: to_id.to_string(),
             channel_id: (!channel_id.is_empty()).then(|| channel_id.to_owned()),

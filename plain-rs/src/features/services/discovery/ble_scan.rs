@@ -4,16 +4,16 @@
 //! but everything above the radio now lives here:
 //!
 //! ```text
-//! App scan loop:  for each advertisement -> bleScans.seen(short_id)
-//! Rust:            Step::Read  -> enqueue (scan, short_id, generation)
-//! Rust worker:     pop -> host.call("bleScanRead", {shortId, scan})
+//! App scan loop:  for each advertisement -> bleScans.seen(client_id)
+//! Rust:            Step::Read  -> enqueue (scan, client_id, generation)
+//! Rust worker:     pop -> host.call("bleScanRead", {clientId, scan})
 //!                       -> bleScans.reply(...)  (identity-checked)
 //!                       -> nearby_devices::Context::seen(...)
 //!                       -> emit WS_NEARBY_DEVICE_FOUND
 //! ```
 //!
 //! The App's scan loop therefore never decides *when* to do a GATT read and
-//! never touches the discovered-device list. It only feeds advertised shortIds
+//! never touches the discovered-device list. It only feeds advertised clientIds
 //! and answers `bleScanRead` when asked.
 //!
 //! Reads run on a single worker so the BLE radio is driven by one GATT session
@@ -34,7 +34,7 @@ use tokio::sync::Notify;
 #[derive(Clone)]
 struct Pending {
     scan: String,
-    short_id: String,
+    client_id: String,
     generation: String,
 }
 
@@ -69,12 +69,12 @@ impl Runtime {
 /// `chat/nearby` contract is unchanged. The only behavioural change is that a
 /// `Read` step now also schedules the GATT read on the Rust worker; the App no
 /// longer performs the read itself.
-pub async fn seen(state: &CoreRuntime, id: &str, short_id: &str) -> anyhow::Result<Step> {
-    let step = state.ble_scans.seen(id, short_id)?;
+pub async fn seen(state: &CoreRuntime, id: &str, client_id: &str) -> anyhow::Result<Step> {
+    let step = state.ble_scans.seen(id, client_id)?;
     if let Step::Read { generation } = &step {
         state.ble_scan.schedule(Pending {
             scan: id.to_string(),
-            short_id: short_id.to_string(),
+            client_id: client_id.to_string(),
             generation: generation.clone(),
         });
     }
@@ -92,53 +92,31 @@ async fn run(state: CoreRuntime, pending: Pending) {
     let Some(owner) =
         state
             .ble_scans
-            .pending_owner(&pending.scan, &pending.short_id, &pending.generation)
+            .pending_owner(&pending.scan, &pending.client_id, &pending.generation)
     else {
         return;
     };
-    let result = async {
-        let body = crate::features::discovery::nearby_wire::Message::Discover
-            .wire()
-            .map_err(|error| error.to_string())?;
-        let request = crate::infrastructure::protocols::ble::message(&[], body.as_bytes())
-            .map_err(|error| error.to_string())?;
-        state
-            .host
-            .call_current(
-                owner,
-                "bleScanRead",
-                json!({
-                    "shortId": pending.short_id,
-                    "scan": pending.scan,
-                    "request": plain_libs::utils::base64::base64_encode(&request),
-                }),
-            )
-            .await
-    }
-    .await;
+    let result = read_payload(&state, owner, &pending.client_id).await;
     if *state.stop.borrow() || !state.host.is_current(owner) {
         return;
     }
     let payload = match result {
-        Ok(value) => value
-            .get("payload")
-            .and_then(serde_json::Value::as_str)
-            .map(|s| s.to_string()),
+        Ok(payload) => payload,
         Err(error) => {
-            log::debug!("bleScanRead {} failed: {error}", pending.short_id);
+            log::debug!("bleScanRead {} failed: {error}", pending.client_id);
             None
         }
     };
     let reply = match state.ble_scans.reply(
         &pending.scan,
-        &pending.short_id,
+        &pending.client_id,
         &pending.generation,
         payload.as_deref(),
     ) {
         Ok(Some(reply)) => reply,
         Ok(None) => return,
         Err(error) => {
-            log::debug!("ble scan reply {} rejected: {error}", pending.short_id);
+            log::debug!("ble scan reply {} rejected: {error}", pending.client_id);
             return;
         }
     };
@@ -154,8 +132,35 @@ async fn run(state: CoreRuntime, pending: Pending) {
         discovery_methods: vec!["BLE".to_string()],
     };
     if let Err(error) = Context::from(&state).seen(device, true, false) {
-        log::debug!("ble publish {} failed: {error}", pending.short_id);
+        log::debug!("ble publish {} failed: {error}", pending.client_id);
     }
+}
+
+pub async fn read_payload(
+    state: &CoreRuntime,
+    owner: u64,
+    client_id: &str,
+) -> Result<Option<String>, String> {
+    let body = crate::features::discovery::nearby_wire::Message::Discover
+        .wire()
+        .map_err(|error| error.to_string())?;
+    let request = crate::infrastructure::protocols::ble::message(&[], body.as_bytes())
+        .map_err(|error| error.to_string())?;
+    let reply = state
+        .host
+        .call_current(
+            owner,
+            "bleScanRead",
+            json!({
+                "clientId": client_id,
+                "request": plain_libs::utils::base64::base64_encode(&request),
+            }),
+        )
+        .await?;
+    Ok(reply
+        .get("payload")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned))
 }
 
 /// The single serial read worker. Started once at server bring-up.

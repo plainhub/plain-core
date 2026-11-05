@@ -1,15 +1,6 @@
 use super::*;
 
 #[test]
-fn short_id_is_16_hex_and_unique() {
-    let a = short_id();
-    let b = short_id();
-    assert_eq!(a.len(), 16);
-    assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
-    assert_ne!(a, b);
-}
-
-#[test]
 fn iso_helpers_format_utc() {
     // 2026-01-02T03:04:05.000Z = 20455 days * 86400 + 3*3600 + 4*60 + 5 seconds.
     assert_eq!(

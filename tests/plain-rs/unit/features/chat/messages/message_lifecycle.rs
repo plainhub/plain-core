@@ -36,7 +36,7 @@ fn reception_is_atomic_and_receipt_survives_restart_and_message_deletion() {
     let path = std::env::temp_dir().join(format!(
         "chat-receipt-{}-{}.db",
         std::process::id(),
-        crate::infrastructure::db::short_id()
+        crate::features::record_id::generate()
     ));
     let db = Db::open(&path).unwrap();
     db.upsert_peer(&DPeer::new(

@@ -18,7 +18,10 @@ fn tmp_prefs(tag: &str) -> Prefs {
 fn ensure_identity_generates_and_persists_all_three_keys() {
     let prefs = tmp_prefs("identity");
     let id = ensure_identity(&prefs);
-    assert!(!id.client_id.is_empty());
+    let uuid = uuid::Uuid::parse_str(&id.client_id).expect("clientId must be a UUID");
+    assert_eq!(&uuid.as_bytes()[..4], b"plai");
+    assert_eq!(uuid.get_version_num(), 8);
+    assert_eq!(uuid.get_variant(), uuid::Variant::RFC4122);
     assert!(!id.device_name.is_empty());
     assert!(!id.ed25519_keypair.is_empty());
 
@@ -108,7 +111,7 @@ fn ensure_mdns_hostname_generates_and_persists_the_pre_migration_format() {
 #[test]
 fn default_device_name_prefers_hostname() {
     // Deterministic on the host running the test: either the trimmed
-    // OS hostname or the Plain-<shortid> fallback — never empty, never
+    // OS hostname or the Plain-<UUID> fallback — never empty, never
     // carrying a `.local` suffix.
     let name = default_device_name();
     assert!(!name.is_empty());

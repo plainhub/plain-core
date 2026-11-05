@@ -235,7 +235,7 @@ fn item_to_row(feed: &FeedRow, item: ParsedEntry) -> FeedEntryRow {
         &item.content
     };
     FeedEntryRow {
-        id: uuid::Uuid::new_v4().to_string(),
+        id: crate::features::record_id::generate(),
         feed_id: feed.id.clone(),
         title: html_to_markdown(&item.title),
         url: assets::absolute_url(&feed.url, &item.url).unwrap_or(item.url),
@@ -443,7 +443,7 @@ pub async fn create_without_sync(
     let title = preview_title(db, url).await?;
     Ok(db
         .feed_save(
-            &uuid::Uuid::new_v4().to_string(),
+            &crate::features::record_id::generate(),
             name.filter(|value| !value.is_empty()).unwrap_or(&title),
             url,
             fetch_full_content,

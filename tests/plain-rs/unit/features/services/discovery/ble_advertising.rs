@@ -14,7 +14,9 @@ fn fixture() -> (
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("client_id", "ble-advertising-fixture").unwrap();
+    prefs
+        .set("client_id", "706c6169-2d74-8e53-9a16-f08b62c591d3")
+        .unwrap();
     let core = crate::test_runtime::Core::start_core(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[9; 32]),
@@ -68,7 +70,7 @@ fn report(
     runtime: &Arc<Runtime>,
     generation: u64,
     available: bool,
-    aware_running: bool,
+    _aware_running: bool,
 ) -> tokio::task::JoinHandle<Result<()>> {
     let state = state.clone();
     let runtime = runtime.clone();
@@ -80,7 +82,6 @@ fn report(
                 Facts {
                     lease: uuid::Uuid::from_u128(1),
                     available,
-                    aware_running,
                 },
             )
             .await
@@ -131,13 +132,9 @@ async fn facts_drive_shared_bytes_and_skip_duplicate_platform_work() {
     .await;
     result.unwrap();
     let first = command(&calls);
-    assert_eq!(first["active"], true);
+    assert!(!first["serviceUuid"].is_null());
     assert_eq!(first["revision"], 1);
-    assert_eq!(
-        plain_libs::utils::base64::base64_decode(first["bytes"].as_str().unwrap()),
-        crate::features::discovery::advertisement::ble("ble-advertising-fixture", true, false)
-            .unwrap()
-    );
+    assert_eq!(first["serviceUuid"], "706c6169-2d74-8e53-9a16-f08b62c591d3");
     let (result, calls) = drive(
         &state,
         generation,
@@ -159,12 +156,7 @@ async fn facts_drive_shared_bytes_and_skip_duplicate_platform_work() {
     )
     .await;
     result.unwrap();
-    assert_eq!(command(&calls)["revision"], 2);
-    assert_eq!(
-        plain_libs::utils::base64::base64_decode(command(&calls)["bytes"].as_str().unwrap()),
-        crate::features::discovery::advertisement::ble("ble-advertising-fixture", true, true)
-            .unwrap()
-    );
+    assert!(calls.is_empty());
     let (result, calls) = drive(
         &state,
         generation,
@@ -178,7 +170,7 @@ async fn facts_drive_shared_bytes_and_skip_duplicate_platform_work() {
     assert_eq!(calls.len(), 1);
     assert_eq!(
         command(&calls),
-        &json!({"active":false,"bytes":"","revision":3,"lease":uuid::Uuid::from_u128(1)})
+        &json!({"serviceUuid":null,"revision":2,"lease":uuid::Uuid::from_u128(1)})
     );
     let (result, calls) = drive(
         &state,
@@ -220,7 +212,7 @@ async fn explicit_reconciliation_refreshes_capabilities_without_freezing_mutable
     )
     .await;
     result.unwrap();
-    assert_eq!(command(&calls)["active"], true);
+    assert_eq!(!command(&calls)["serviceUuid"].is_null(), true);
     let (result, calls) = drive(
         &state,
         generation,
@@ -231,7 +223,7 @@ async fn explicit_reconciliation_refreshes_capabilities_without_freezing_mutable
     )
     .await;
     result.unwrap();
-    assert_eq!(command(&calls)["active"], false);
+    assert_eq!(command(&calls)["serviceUuid"].is_null(), true);
     assert_eq!(command(&calls)["revision"], 2);
     state.host.disconnect(generation);
     core.stop_core().await;
@@ -303,7 +295,6 @@ async fn host_replacement_rejects_pending_results_and_old_cleanup_cannot_clear_n
         Some(Facts {
             lease: uuid::Uuid::from_u128(1),
             available: true,
-            aware_running: true
         })
     );
     assert!(runtime.state.lock().unwrap().applied.is_some());
@@ -315,7 +306,6 @@ async fn host_replacement_rejects_pending_results_and_old_cleanup_cannot_clear_n
                 Facts {
                     lease: uuid::Uuid::from_u128(1),
                     available: false,
-                    aware_running: false
                 }
             )
             .await
@@ -343,7 +333,6 @@ async fn queued_unavailability_prevents_a_stale_start_after_capability_sampling(
         Facts {
             lease: uuid::Uuid::from_u128(1),
             available: false,
-            aware_running: false,
         },
     );
     tokio::pin!(unavailable);
@@ -365,10 +354,8 @@ async fn queued_unavailability_prevents_a_stale_start_after_capability_sampling(
 #[test]
 fn facts_accept_only_typed_platform_readings() {
     assert!(
-        serde_json::from_value::<Facts>(
-            json!({"available":true,"awareRunning":false,"lease":uuid::Uuid::from_u128(1)})
-        )
-        .is_ok()
+        serde_json::from_value::<Facts>(json!({"available":true,"lease":uuid::Uuid::from_u128(1)}))
+            .is_ok()
     );
     for value in [
         json!({"available":"true","awareRunning":false}),
@@ -403,14 +390,13 @@ async fn a_new_sdk_lease_receives_a_command_even_when_the_bytes_are_unchanged() 
                 Facts {
                     lease: uuid::Uuid::from_u128(2),
                     available: true,
-                    aware_running: false,
                 },
             )
             .await
     });
     let (result, calls) = drive(&state, generation, &mut requests, task, true, true).await;
     result.unwrap();
-    assert_eq!(command(&calls)["bytes"], first["bytes"]);
+    assert_eq!(command(&calls)["serviceUuid"], first["serviceUuid"]);
     assert_eq!(command(&calls)["revision"], 2);
     assert_eq!(command(&calls)["lease"], json!(uuid::Uuid::from_u128(2)));
     state.host.disconnect(generation);

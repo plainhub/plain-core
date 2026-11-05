@@ -16,6 +16,6 @@ pub fn text(db: &Db, directory: &Path, text: &str) -> Result<Value> {
         })
         .collect();
     Ok(
-        json!({"type":"FILES","value":{"items":[{"id":plain_libs::utils::short_uuid::short_uuid(),"uri":format!("fid:{}",imported.fid_suffix),"fileName":format!("message-{}.txt",chrono::Utc::now().timestamp_millis()),"size":text.len(),"summary":summary,"width":0,"height":0,"durationMs":0}]}}),
+        json!({"type":"FILES","value":{"items":[{"id":crate::features::record_id::generate(),"uri":format!("fid:{}",imported.fid_suffix),"fileName":format!("message-{}.txt",chrono::Utc::now().timestamp_millis()),"size":text.len(),"summary":summary,"width":0,"height":0,"durationMs":0}]}}),
     )
 }

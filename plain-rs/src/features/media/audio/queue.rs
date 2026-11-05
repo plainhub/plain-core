@@ -9,7 +9,6 @@ use crate::infrastructure::db::PlaylistItem;
 use crate::infrastructure::db::QueueItem;
 use crate::infrastructure::error::DomainResult;
 use plain_libs::utils::dbtime::now_iso_millis;
-use plain_libs::utils::shortid;
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioTrack {
@@ -504,7 +503,7 @@ pub fn playlist_by_id(db: &Db, id: &str) -> DomainResult<Option<Playlist>> {
 pub fn create_playlist(db: &Db, name: &str) -> DomainResult<Playlist> {
     let now = now_iso_millis();
     let pl = Playlist {
-        id: shortid::new_id(),
+        id: crate::features::record_id::generate(),
         name: name.to_string(),
         created_at: now.clone(),
         updated_at: now,
@@ -555,7 +554,7 @@ pub fn add_playlist_items(db: &Db, playlist_id: &str, items: &[AudioTrack]) -> D
             }
             let row = PlaylistItem {
                 file_id: a.file_id.clone().unwrap(),
-                id: shortid::new_id(),
+                id: crate::features::record_id::generate(),
                 playlist_id: playlist_id.into(),
                 audio_path: a.path.clone(),
                 title: a.title.clone(),

@@ -6,7 +6,7 @@ use crate::infrastructure::error::DomainResult;
 
 pub fn create_tag(db: &Db, kind: i32, name: &str) -> DomainResult<TagRow> {
     let row = TagRow {
-        id: plain_libs::utils::shortid::new_id(),
+        id: crate::features::record_id::generate(),
         name: name.into(),
         kind,
         count: 0,

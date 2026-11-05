@@ -130,7 +130,11 @@ async fn native_scan_history_preserves_order_and_scoped_deletion() {
             .unwrap()
     });
     assert_eq!(ids.len(), 4);
-    assert!(ids.iter().all(|id| id.len() == 22));
+    for id in &ids {
+        let uuid = uuid::Uuid::parse_str(id).unwrap();
+        assert_eq!(uuid.get_version_num(), 7);
+        assert_eq!(uuid.get_variant(), uuid::Variant::RFC4122);
+    }
     assert!(management.remove_scan_history("duplicate".into()).unwrap());
     assert_eq!(
         management.scan_history().unwrap(),

@@ -41,7 +41,7 @@ pub use models::{
 #[cfg(feature = "chat")]
 pub use models::{DAppFile, DChannel, DChat, DNearbyDeviceCache, DPeer};
 #[cfg(feature = "chat")]
-pub use repositories::db_time::{iso_from_unix_millis, now_iso, now_millis, short_id};
+pub use repositories::db_time::{iso_from_unix_millis, now_iso, now_millis};
 
 #[derive(Clone)]
 pub struct Db(

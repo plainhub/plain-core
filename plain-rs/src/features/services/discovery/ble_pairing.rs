@@ -121,7 +121,7 @@ async fn run(
     let facts = json!({"generation":ticket.generation});
     let connect = json!({
         "generation": ticket.generation,
-        "shortId": crate::features::discovery::nearby_wire::short_id(&ticket.target.device_id),
+        "clientId": ticket.target.device_id,
     });
     if host(state, ticket, "blePairConnect", connect).await? != Value::Bool(true) {
         return Err(Cause::Failed("Connection failed".into()));

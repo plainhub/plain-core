@@ -1,5 +1,4 @@
 use crate::infrastructure::db::now_iso;
-use crate::infrastructure::db::short_id;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DBookmark {
@@ -20,7 +19,7 @@ impl DBookmark {
     pub fn new(url: &str, group_id: &str) -> Self {
         let now = now_iso();
         Self {
-            id: short_id(),
+            id: crate::features::record_id::generate(),
             url: url.to_string(),
             title: url.to_string(),
             favicon_path: String::new(),
@@ -49,7 +48,7 @@ impl DBookmarkGroup {
     pub fn new(name: &str) -> Self {
         let now = now_iso();
         Self {
-            id: short_id(),
+            id: crate::features::record_id::generate(),
             name: name.to_string(),
             collapsed: false,
             sort_order: 0,

@@ -28,11 +28,15 @@ fn canonical_messages_round_trip_and_reject_unknown_or_malformed_payloads() {
     }
 }
 #[test]
-fn discover_identity_matches_advertised_short_id_before_becoming_a_peer() {
-    let body=json!({"id":"peer","name":"Fixture","port":1234,"deviceType":"PHONE","version":"1","platform":"test"}).to_string();
-    assert_eq!(short_id("fixture"), "f16d05ec6b29248d");
-    assert_eq!(short_id("peer"), "2ffc1d06387ef8bb");
-    assert_eq!(discover_reply(&body, &short_id("peer")).unwrap().id, "peer");
-    assert!(discover_reply(&body, &short_id("other")).is_err());
-    assert!(discover_reply("{}", &short_id("peer")).is_err());
+fn discover_identity_matches_the_full_advertised_uuid_before_becoming_a_peer() {
+    let id = "706c6169-2d74-8e53-9a16-f08b62c591d3";
+    let body = json!({"id":id,"name":"Fixture","port":1234,"deviceType":"PHONE","version":"1","platform":"test","awareSupported":true,"awareRunning":false}).to_string();
+    let reply = discover_reply(&body, id).unwrap();
+    assert_eq!(reply.id, id);
+    assert!(reply.aware_supported);
+    assert!(!reply.aware_running);
+    assert!(discover_reply(&body, "706c6169-b903-841f-a6ce-32d75908f4ab").is_err());
+    assert!(discover_reply("{}", id).is_err());
+    let invalid = body.replace(id, "legacy");
+    assert!(discover_reply(&invalid, "legacy").is_err());
 }

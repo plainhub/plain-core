@@ -272,7 +272,7 @@ impl Service {
             } else {
                 tx.execute(
                     "INSERT INTO pomodoro_items(id,date,completed_count,total_work_secs,total_break_secs,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?6)",
-                    params![uuid::Uuid::new_v4().to_string(), r.calendar_date, increment, work, rest, timestamp],
+                    params![crate::features::record_id::generate(), r.calendar_date, increment, work, rest, timestamp],
                 )?;
             }
             count += increment;

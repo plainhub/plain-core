@@ -67,10 +67,7 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
         while let Some(effect) = effects.recv().await {
             let result = match effect["method"].as_str().unwrap() {
                 "blePairConnect" => {
-                    assert_eq!(
-                        effect["params"]["shortId"],
-                        crate::features::discovery::nearby_wire::short_id("remote")
-                    );
+                    assert_eq!(effect["params"]["clientId"], "remote");
                     assert!(effect["params"].get("id").is_none());
                     assert_eq!(effect["params"].as_object().unwrap().len(), 2);
                     json!(true)

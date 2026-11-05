@@ -158,7 +158,7 @@ impl Service {
             .map_err(|e| anyhow!("file task queue: {e}"))?;
         let now = Utc::now();
         let task = FileTask {
-            id: plain_libs::utils::shortid::new_id(),
+            id: uuid::Uuid::new_v4().to_string(),
             client_id: client_id.into(),
             kind,
             title: title.into(),

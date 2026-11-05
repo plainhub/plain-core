@@ -72,7 +72,7 @@ pub fn random_password(length: usize) -> String {
 pub fn bootstrap(prefs: &Prefs) -> Result<()> {
     password_type(prefs)?;
     prefs.update(|map| {
-        ensure(map, CLIENT_ID, plain_libs::utils::short_uuid::short_uuid)?;
+        ensure(map, CLIENT_ID, crate::features::client_identity::generate)?;
         ensure(map, SIGNATURE_KEY_PAIR, || {
             plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
         })?;

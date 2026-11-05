@@ -147,7 +147,7 @@ pub(crate) fn bind_volume(
         )?;
         (id, root)
     } else {
-        let id = plain_libs::utils::shortid::new_id();
+        let id = crate::features::record_id::generate();
         conn.execute(
             "INSERT INTO volumes(id,identity,path,is_available) VALUES(?1,?2,?3,1)",
             params![id, location.volume.identity, path_text(candidate)?],
@@ -239,7 +239,7 @@ pub(crate) fn upsert(
             params![path,name,kind,identity,size,created,updated,mime,id])?;
         Ok(id)
     } else {
-        let id = plain_libs::utils::shortid::new_id();
+        let id = crate::features::record_id::generate();
         conn.execute("INSERT INTO files(id,volume_id,path,file_name,kind,file_identity,size_bytes,created_at,updated_at,mime_type) VALUES(?1,?2,?3,?4,COALESCE(?5,'FILE'),?6,?7,?8,?9,?10)",
             params![id,volume_id,path,name,kind,identity,size,created,updated,mime])?;
         Ok(id)

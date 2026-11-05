@@ -91,10 +91,8 @@ pub fn release(
                     if !metadata.is_file() {
                         bail!("attachment is not a regular file");
                     }
-                    let quarantine = path.with_file_name(format!(
-                        ".release-{}",
-                        plain_libs::utils::short_uuid::short_uuid()
-                    ));
+                    let quarantine = path
+                        .with_file_name(format!(".release-{}", uuid::Uuid::new_v4().to_string()));
                     fs::rename(&path, &quarantine)?;
                     staged.push((path, quarantine));
                 }

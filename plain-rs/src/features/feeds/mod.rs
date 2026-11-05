@@ -128,7 +128,7 @@ pub fn import_opml(db: &Db, content: &str) -> DomainResult<()> {
             continue;
         }
         db.feed_save(
-            &uuid::Uuid::new_v4().to_string(),
+            &crate::features::record_id::generate(),
             &name,
             &url,
             fetch_full_content,

@@ -10,7 +10,7 @@ fn now() -> String {
 }
 
 pub fn create(db: &Db, title: &str, content: &str) -> DomainResult<NoteRow> {
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = crate::features::record_id::generate();
     Ok(db.note_save(&id, &resolved_title(title, content), content, &now())?)
 }
 

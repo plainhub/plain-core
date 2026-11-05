@@ -121,7 +121,7 @@ impl ImageEditorProjectMutation {
         plain_rs::features::media::images::editor::decode(&input.state_b64)
             .map_err(plain_graphql::Error::new)?;
         let id = if id.is_empty() {
-            uuid::Uuid::new_v4().to_string()
+            plain_rs::features::record_id::generate()
         } else {
             id.to_string()
         };

@@ -35,7 +35,7 @@ pub fn create(state: &CoreRuntime, name: String) -> anyhow::Result<SessionRow> {
     let now = plain_libs::utils::dbtime::now_iso();
     let row = SessionRow {
         url_token: plain_libs::crypto::gen_token(),
-        client_id: uuid::Uuid::new_v4().to_string(),
+        client_id: crate::features::client_identity::generate(),
         name,
         r#type: "CUSTOM".into(),
         client_ip: String::new(),

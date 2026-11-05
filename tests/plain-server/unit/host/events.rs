@@ -219,7 +219,7 @@ async fn raw_ble_advertisements_are_consumed_without_public_rebroadcast() {
     bridge
         .publish_text(
             "BLE_ADVERTISEMENT_REPORTED",
-            serde_json::json!({"scanId":scan,"shortId":"invalid"}).to_string(),
+            serde_json::json!({"scanId":scan,"clientId":"invalid"}).to_string(),
         )
         .await
         .unwrap();
@@ -235,7 +235,7 @@ async fn raw_ble_advertisements_are_consumed_without_public_rebroadcast() {
         bridge
             .publish_text(
                 "BLE_ADVERTISEMENT_REPORTED",
-                serde_json::json!({"scanId":scan,"shortId":"0001020304050607"}).to_string()
+                serde_json::json!({"scanId":scan,"clientId":"706c6169-2d74-8e53-9a16-f08b62c591d3"}).to_string()
             )
             .await
             .is_err()
@@ -308,7 +308,10 @@ async fn scan_facts_are_validated_and_scoped_to_the_connected_host() {
     drop(old);
     let state = server.runtime_state();
     assert!(matches!(
-        state.ble_scans.seen(&id, "0001020304050607").unwrap(),
+        state
+            .ble_scans
+            .seen(&id, "706c6169-2d74-8e53-9a16-f08b62c591d3")
+            .unwrap(),
         plain_rs::features::discovery::nearby_scan::Step::Read { .. }
     ));
     for invalid in [
@@ -324,7 +327,12 @@ async fn scan_facts_are_validated_and_scoped_to_the_connected_host() {
         );
     }
     drop(ServingSession(&bridge));
-    assert!(state.ble_scans.seen(&id, "0001020304050607").is_err());
+    assert!(
+        state
+            .ble_scans
+            .seen(&id, "706c6169-2d74-8e53-9a16-f08b62c591d3")
+            .is_err()
+    );
     server.shutdown().await;
 }
 

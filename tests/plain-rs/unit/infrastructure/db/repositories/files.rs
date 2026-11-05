@@ -10,9 +10,11 @@ fn file_paths_are_relative_and_preserve_user_state() {
         .record_file_paths(&[path.to_str().unwrap().into()], None)
         .unwrap()
         .remove(0);
-    assert_eq!(first.id.len(), 22);
-    assert_eq!(first.volume_id.len(), 22);
-    assert!(first.id.bytes().all(|byte| byte.is_ascii_alphanumeric()));
+    for value in [&first.id, &first.volume_id] {
+        let id = uuid::Uuid::parse_str(value).unwrap();
+        assert_eq!(id.get_version_num(), 7);
+        assert_eq!(id.get_variant(), uuid::Variant::RFC4122);
+    }
     assert!(!Path::new(&first.path).is_absolute());
     db.with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [&first.id]))
         .unwrap();

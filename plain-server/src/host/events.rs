@@ -304,14 +304,14 @@ impl HostEvents {
         #[serde(rename_all = "camelCase", deny_unknown_fields)]
         struct Advertisement {
             scan_id: String,
-            short_id: String,
+            client_id: String,
         }
         let value: Advertisement =
             serde_json::from_str(&payload).map_err(|error| error.to_string())?;
         plain_rs::features::services::discovery::ble_scan::seen(
             &self.state,
             &value.scan_id,
-            &value.short_id,
+            &value.client_id,
         )
         .await
         .map_err(|error| error.to_string())?;

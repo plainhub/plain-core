@@ -3,14 +3,14 @@ use super::*;
 fn pending(state: &CoreRuntime, owner: u64, id: &str) -> Pending {
     let scan = uuid::Uuid::new_v4();
     state.ble_scans.report_state(owner, scan, true).unwrap();
-    let short_id = crate::features::discovery::nearby_wire::short_id(id);
-    let Step::Read { generation } = state.ble_scans.seen(&scan.to_string(), &short_id).unwrap()
+    let client_id = id.to_string();
+    let Step::Read { generation } = state.ble_scans.seen(&scan.to_string(), &client_id).unwrap()
     else {
         panic!("Expected a scheduled read");
     };
     Pending {
         scan: scan.to_string(),
-        short_id,
+        client_id,
         generation,
     }
 }
@@ -22,14 +22,14 @@ async fn inactive_and_replaced_scans_do_not_request_platform_reads() {
     let state = core.runtime_state();
     let (owner, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     state.ble_scans.set_owner(owner);
-    let cancelled = pending(&state, owner, "cancelled");
+    let cancelled = pending(&state, owner, "706c6169-2d74-8e53-9a16-f08b62c591d3");
     state
         .ble_scans
         .report_state(owner, cancelled.scan.parse().unwrap(), false)
         .unwrap();
     run(state.clone(), cancelled).await;
     assert!(requests.try_recv().is_err());
-    let replaced = pending(&state, owner, "replaced");
+    let replaced = pending(&state, owner, "706c6169-2d74-8e53-9a16-f08b62c591d3");
     let (replacement, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     run(state.clone(), replaced).await;
     assert!(requests.try_recv().is_err());
@@ -45,8 +45,16 @@ async fn stopping_cancels_the_active_read_and_discards_the_rest_of_the_queue() {
     state.ble_scan = std::sync::Arc::new(Runtime::default());
     let (owner, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     state.ble_scans.set_owner(owner);
-    state.ble_scan.schedule(pending(&state, owner, "first"));
-    state.ble_scan.schedule(pending(&state, owner, "second"));
+    state.ble_scan.schedule(pending(
+        &state,
+        owner,
+        "706c6169-2d74-8e53-9a16-f08b62c591d3",
+    ));
+    state.ble_scan.schedule(pending(
+        &state,
+        owner,
+        "706c6169-b903-841f-a6ce-32d75908f4ab",
+    ));
     let worker = tokio::spawn(work(state.clone()));
     let first = tokio::time::timeout(std::time::Duration::from_secs(3), requests.recv())
         .await
@@ -71,7 +79,11 @@ async fn already_stopped_worker_discards_queued_reads_without_touching_the_platf
     state.ble_scan = std::sync::Arc::new(Runtime::default());
     let (owner, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     state.ble_scans.set_owner(owner);
-    state.ble_scan.schedule(pending(&state, owner, "queued"));
+    state.ble_scan.schedule(pending(
+        &state,
+        owner,
+        "706c6169-2d74-8e53-9a16-f08b62c591d3",
+    ));
     core.stop_core().await;
     work(state.clone()).await;
     assert!(state.ble_scan.queue.lock().unwrap().is_empty());
@@ -80,16 +92,20 @@ async fn already_stopped_worker_discards_queued_reads_without_touching_the_platf
 
 #[tokio::test]
 async fn scheduled_read_supplies_canonical_request_and_checks_reply_identity() {
-    for identity in ["fixture", "other"] {
+    for identity in [
+        "706c6169-2d74-8e53-9a16-f08b62c591d3",
+        "706c6169-b903-841f-a6ce-32d75908f4ab",
+    ] {
         let directory = tempfile::tempdir().unwrap();
         let core = crate::test_runtime::Core::open(directory.path()).unwrap();
         let state = core.runtime_state();
         let (owner, mut requests) = crate::test_support::HostRequests::connect(&state.host);
         let scan = uuid::Uuid::new_v4();
-        let short_id = crate::features::discovery::nearby_wire::short_id("fixture");
+        let client_id = "706c6169-2d74-8e53-9a16-f08b62c591d3".to_string();
         state.ble_scans.set_owner(owner);
         state.ble_scans.report_state(owner, scan, true).unwrap();
-        let Step::Read { generation } = state.ble_scans.seen(&scan.to_string(), &short_id).unwrap()
+        let Step::Read { generation } =
+            state.ble_scans.seen(&scan.to_string(), &client_id).unwrap()
         else {
             panic!("Expected a scheduled read");
         };
@@ -97,7 +113,7 @@ async fn scheduled_read_supplies_canonical_request_and_checks_reply_identity() {
             state.clone(),
             Pending {
                 scan: scan.to_string(),
-                short_id: short_id.clone(),
+                client_id: client_id.clone(),
                 generation,
             },
         ));
@@ -106,8 +122,10 @@ async fn scheduled_read_supplies_canonical_request_and_checks_reply_identity() {
             .unwrap()
             .unwrap();
         assert_eq!(request["method"], "bleScanRead");
-        assert_eq!(request["params"]["shortId"], "f16d05ec6b29248d");
-        assert_eq!(request["params"]["scan"], scan.to_string());
+        assert_eq!(
+            request["params"]["clientId"],
+            "706c6169-2d74-8e53-9a16-f08b62c591d3"
+        );
         let bytes = plain_libs::utils::base64::base64_decode(
             request["params"]["request"].as_str().unwrap(),
         );
@@ -131,7 +149,7 @@ async fn scheduled_read_supplies_canonical_request_and_checks_reply_identity() {
             .unwrap();
         read.await.unwrap();
         let devices = state.nearby_devices.snapshot().devices;
-        if identity == "fixture" {
+        if identity == "706c6169-2d74-8e53-9a16-f08b62c591d3" {
             assert_eq!(devices.len(), 1);
             assert_eq!(devices[0].id, identity);
         } else {

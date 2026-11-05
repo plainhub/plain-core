@@ -7,7 +7,7 @@ struct Directory(std::path::PathBuf);
 
 impl Directory {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(plain_libs::utils::short_uuid::short_uuid());
+        let path = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir(&path).unwrap();
         Self(path)
     }
@@ -205,7 +205,7 @@ async fn completion_scan_runs_directly_without_another_host_request() {
     let home = std::env::var_os("HOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    let directory = Directory(home.join(plain_libs::utils::short_uuid::short_uuid()));
+    let directory = Directory(home.join(uuid::Uuid::new_v4().to_string()));
     std::fs::create_dir(&directory.0).unwrap();
     let core = Arc::new(ContentServer::open(&directory.0.as_path().join("core")).unwrap());
     core.native_media_catalog()

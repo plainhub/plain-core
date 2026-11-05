@@ -157,7 +157,7 @@ impl NativeManagement {
             .with_conn(|conn| {
                 conn.execute(
                     "INSERT INTO scan_history(id,text) VALUES (?1,?2)",
-                    [plain_libs::utils::shortid::new_id(), text],
+                    [plain_rs::features::record_id::generate(), text],
                 )
             })
             .map_err(|error| error.to_string())?;

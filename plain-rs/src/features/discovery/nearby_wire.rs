@@ -4,7 +4,6 @@ use crate::features::peers::pairing::protocol::PairingRequest;
 use crate::features::peers::pairing::protocol::PairingResponse;
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,13 +61,10 @@ impl Message {
         Ok(serde_json::from_value(value)?)
     }
 }
-pub fn short_id(id: &str) -> String {
-    plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(id.as_bytes())[..8])
-}
 pub fn discover_reply(payload: &str, advertised_id: &str) -> Result<DiscoverReply> {
     let reply: DiscoverReply = serde_json::from_str(payload)?;
     ensure!(
-        short_id(&reply.id) == advertised_id,
+        crate::features::client_identity::parse(&reply.id).is_some() && reply.id == advertised_id,
         "BLE discovery identity mismatch"
     );
     Ok(reply)

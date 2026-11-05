@@ -10,7 +10,6 @@ use crate::features::prefs::Prefs;
 use plain_libs::crypto::ed25519_generate;
 use plain_libs::crypto::gen_token;
 use plain_libs::utils::base64::base64_encode;
-use plain_libs::utils::short_uuid;
 
 /// Persistent device identity loaded from the preferences store.
 #[derive(Clone, Debug)]
@@ -23,12 +22,12 @@ pub struct AppIdentity {
 
 /// Default device name shown on first run (before the user renames):
 /// the OS hostname (`.local`/trailing dot stripped), falling back to
-/// `Plain-<short uuid>` when the hostname is empty.
+/// `Plain-<UUID>` when the hostname is empty.
 pub fn default_device_name() -> String {
     let host = plain_libs::utils::hostname::get();
     let trimmed = host.trim().trim_end_matches('.').trim_end_matches(".local");
     if trimmed.is_empty() {
-        format!("Plain-{}", short_uuid::short_uuid())
+        format!("Plain-{}", uuid::Uuid::new_v4().to_string())
     } else {
         trimmed.to_string()
     }
@@ -40,7 +39,7 @@ pub fn default_device_name() -> String {
 pub fn generate_identity() -> AppIdentity {
     let (kp, _) = ed25519_generate();
     AppIdentity {
-        client_id: short_uuid::short_uuid(),
+        client_id: crate::features::client_identity::generate(),
         device_name: default_device_name(),
         ed25519_keypair: base64_encode(&kp),
     }
@@ -67,7 +66,7 @@ pub fn ensure_identity(prefs: &Prefs) -> AppIdentity {
     let client_id = ensure_string(
         prefs,
         crate::features::prefs::pref_keys::CLIENT_ID,
-        short_uuid::short_uuid,
+        crate::features::client_identity::generate,
     );
     let device_name = prefs
         .get::<String>(crate::features::prefs::pref_keys::DEVICE_NAME)

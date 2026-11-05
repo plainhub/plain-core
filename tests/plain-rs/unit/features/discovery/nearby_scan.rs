@@ -7,21 +7,26 @@ fn begin(scans: &Scans) -> String {
     id.to_string()
 }
 fn payload(id: &str) -> String {
-    json!({"id":id,"name":"fixture","deviceType":"PHONE","port":2443,"version":"1","platform":"android"}).to_string()
+    json!({"id":id,"name":"706c6169-2d74-8e53-9a16-f08b62c591d3","deviceType":"PHONE","port":2443,"version":"1","platform":"android"}).to_string()
 }
 
 #[test]
 fn only_active_unanswered_reads_have_a_host_owner() {
     let scans = Scans::default();
     let session = begin(&scans);
-    let short = crate::features::discovery::nearby_wire::short_id("peer");
+    let short = "706c6169-2d74-8e53-9a16-f08b62c591d3".to_string();
     let Step::Read { generation } = scans.seen(&session, &short).unwrap() else {
         panic!();
     };
     assert_eq!(scans.pending_owner(&session, &short, &generation), Some(1));
     assert_eq!(scans.pending_owner(&session, &short, "stale"), None);
     scans
-        .reply(&session, &short, &generation, Some(&payload("peer")))
+        .reply(
+            &session,
+            &short,
+            &generation,
+            Some(&payload("706c6169-2d74-8e53-9a16-f08b62c591d3")),
+        )
         .unwrap();
     assert_eq!(scans.pending_owner(&session, &short, &generation), None);
     let second = uuid::Uuid::new_v4();
@@ -48,7 +53,7 @@ fn only_active_unanswered_reads_have_a_host_owner() {
 fn scan_identity_generation_throttle_and_session_cleanup_are_rust_owned() {
     let scans = Scans::default();
     let session = begin(&scans);
-    let short = crate::features::discovery::nearby_wire::short_id("peer");
+    let short = "706c6169-2d74-8e53-9a16-f08b62c591d3".to_string();
     let now = Instant::now();
     let Step::Read { generation } = scans.seen_at(&session, &short, now).unwrap() else {
         panic!()
@@ -59,13 +64,23 @@ fn scan_identity_generation_throttle_and_session_cleanup_are_rust_owned() {
     ));
     assert!(
         scans
-            .reply(&session, &short, "old", Some(&payload("peer")))
+            .reply(
+                &session,
+                &short,
+                "old",
+                Some(&payload("706c6169-2d74-8e53-9a16-f08b62c591d3"))
+            )
             .unwrap()
             .is_none()
     );
     assert!(
         scans
-            .reply(&session, &short, &generation, Some(&payload("other")))
+            .reply(
+                &session,
+                &short,
+                &generation,
+                Some(&payload("706c6169-b903-841f-a6ce-32d75908f4ab"))
+            )
             .is_err()
     );
     let Step::Read { generation } = scans.seen_at(&session, &short, now).unwrap() else {
@@ -73,11 +88,16 @@ fn scan_identity_generation_throttle_and_session_cleanup_are_rust_owned() {
     };
     assert_eq!(
         scans
-            .reply(&session, &short, &generation, Some(&payload("peer")))
+            .reply(
+                &session,
+                &short,
+                &generation,
+                Some(&payload("706c6169-2d74-8e53-9a16-f08b62c591d3"))
+            )
             .unwrap()
             .unwrap()
             .id,
-        "peer"
+        "706c6169-2d74-8e53-9a16-f08b62c591d3"
     );
     let emit = scans.0.lock().unwrap().scans[&session][&short]
         .last_emit
@@ -100,7 +120,12 @@ fn scan_identity_generation_throttle_and_session_cleanup_are_rust_owned() {
     assert!(scans.seen(&session, &short).is_err());
     assert!(
         scans
-            .reply(&session, &short, &generation, Some(&payload("peer")))
+            .reply(
+                &session,
+                &short,
+                &generation,
+                Some(&payload("706c6169-2d74-8e53-9a16-f08b62c591d3"))
+            )
             .unwrap()
             .is_none()
     );
@@ -109,7 +134,7 @@ fn scan_identity_generation_throttle_and_session_cleanup_are_rust_owned() {
 fn abandoned_gatt_reads_can_be_reclaimed_without_accepting_old_completion() {
     let scans = Scans::default();
     let id = begin(&scans);
-    let short = crate::features::discovery::nearby_wire::short_id("peer");
+    let short = "706c6169-2d74-8e53-9a16-f08b62c591d3".to_string();
     let now = Instant::now();
     let Step::Read { generation: old } = scans.seen_at(&id, &short, now).unwrap() else {
         panic!()
@@ -123,7 +148,12 @@ fn abandoned_gatt_reads_can_be_reclaimed_without_accepting_old_completion() {
     assert_ne!(old, generation);
     assert!(
         scans
-            .reply(&id, &short, &old, Some(&payload("peer")))
+            .reply(
+                &id,
+                &short,
+                &old,
+                Some(&payload("706c6169-2d74-8e53-9a16-f08b62c591d3"))
+            )
             .unwrap()
             .is_none()
     );
@@ -145,7 +175,7 @@ fn duplicate_scan_facts_preserve_pending_reads_and_capacity() {
             .unwrap();
     }
     let id = uuid::Uuid::from_u128(1);
-    let short = "0001020304050607";
+    let short = "706c6169-2d74-8e53-9a16-f08b62c591d3";
     assert!(matches!(
         scans.seen(&id.to_string(), short).unwrap(),
         Step::Read { .. }
@@ -171,7 +201,7 @@ fn duplicate_scan_facts_preserve_pending_reads_and_capacity() {
 fn host_replacement_and_close_reject_stale_lifecycle_and_read_results() {
     let scans = Scans::default();
     let id = begin(&scans);
-    let short = "0001020304050607";
+    let short = "706c6169-2d74-8e53-9a16-f08b62c591d3";
     let Step::Read { generation } = scans.seen(&id, short).unwrap() else {
         panic!()
     };
@@ -179,7 +209,12 @@ fn host_replacement_and_close_reject_stale_lifecycle_and_read_results() {
     assert!(scans.report_state(1, id.parse().unwrap(), true).is_err());
     assert!(
         scans
-            .reply(&id, short, &generation, Some(&payload("peer")))
+            .reply(
+                &id,
+                short,
+                &generation,
+                Some(&payload("706c6169-2d74-8e53-9a16-f08b62c591d3"))
+            )
             .unwrap()
             .is_none()
     );
@@ -192,4 +227,24 @@ fn host_replacement_and_close_reject_stale_lifecycle_and_read_results() {
     scans.set_owner(2);
     assert!(scans.seen(&id, short).is_err());
     assert!(scans.report_state(2, id.parse().unwrap(), true).is_err());
+}
+
+#[test]
+fn only_plain_uuid_v8_advertisements_schedule_discover_reads() {
+    let scans = Scans::default();
+    let session = begin(&scans);
+    for value in [
+        "180D",
+        "f16d05ec6b29248d",
+        "706c6169-2d74-4e53-9a16-f08b62c591d3",
+    ] {
+        assert!(matches!(scans.seen(&session, value).unwrap(), Step::Wait));
+    }
+    assert!(scans.0.lock().unwrap().scans[&session].is_empty());
+    assert!(matches!(
+        scans
+            .seen(&session, "706c6169-2d74-8e53-9a16-f08b62c591d3")
+            .unwrap(),
+        Step::Read { .. }
+    ));
 }

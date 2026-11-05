@@ -21,17 +21,40 @@ impl Driver for Native<'_> {
                 .contains(&crate::infrastructure::transport::router::TransportType::Aware),
         })
     }
-    async fn scan(&self, short_id: &str) -> Result<Option<Advertisement>> {
-        Ok(serde_json::from_value(
+    async fn discover(&self, client_id: &str) -> Result<Option<Advertisement>> {
+        let owner = self
+            .0
+            .host
+            .generation()
+            .ok_or_else(|| anyhow::anyhow!("BLE host unavailable"))?;
+        let found: Option<String> = serde_json::from_value(
             self.0
                 .host
-                .call(
+                .call_current(
+                    owner,
                     "peerTransportPrewarmScan",
-                    json!({"shortId":short_id,"timeoutMs":15000}),
+                    json!({"clientId":client_id,"timeoutMs":15000}),
                 )
                 .await
                 .map_err(anyhow::Error::msg)?,
-        )?)
+        )?;
+        let Some(found) = found else {
+            return Ok(None);
+        };
+        anyhow::ensure!(found == client_id, "Peer prewarm advertisement mismatch");
+        let Some(payload) =
+            crate::features::services::discovery::ble_scan::read_payload(self.0, owner, client_id)
+                .await
+                .map_err(anyhow::Error::msg)?
+        else {
+            return Ok(None);
+        };
+        let reply = crate::features::discovery::nearby_wire::discover_reply(&payload, client_id)?;
+        Ok(Some(Advertisement {
+            client_id: reply.id,
+            aware_supported: reply.aware_supported,
+            aware_running: reply.aware_running,
+        }))
     }
     async fn start_aware(&self, peer_id: &str) -> Result<bool> {
         let prepared = peer_wire::prepare(

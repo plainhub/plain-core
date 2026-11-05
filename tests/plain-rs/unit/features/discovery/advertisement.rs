@@ -41,45 +41,20 @@ fn same_identity_and_os_facts_assemble_all_advertisements() {
     assert!(mdns(&reply, "").is_err());
 }
 #[test]
-fn compact_ble_payload_preserves_all_flags_and_existing_sha256_short_id() {
-    for (supported, running, flags) in [
-        (false, false, 0),
-        (true, false, 1),
-        (false, true, 2),
-        (true, true, 3),
-    ] {
-        let payload = ble("fixture", supported, running).unwrap();
-        assert_eq!(payload.len(), 9);
-        assert_eq!(payload[0], flags);
-        assert_eq!(
-            plain_libs::utils::hex::bytes_to_hex(&payload[1..]),
-            super::super::nearby_wire::short_id("fixture")
-        );
-        assert_eq!(&payload[1..], &Sha256::digest(b"fixture")[..8]);
-    }
-    assert!(ble("", true, true).is_err());
-}
-
-#[test]
-fn ble_scan_header_preserves_wire_bits_and_rejects_truncated_data() {
-    let bytes = [0xf3, 0, 1, 2, 3, 4, 128, 254, 255, 42];
-    for size in 0..9 {
-        assert!(decode_ble(&bytes[..size]).is_none());
-    }
+fn uuid_only_advertisements_share_rust_filtering_and_canonicalization() {
+    let id = "706c6169-2d74-8e53-9a16-f08b62c591d3";
     assert_eq!(
-        decode_ble(&bytes),
-        Some(BleParts {
-            short_id: "000102030480feff".into(),
-            aware_supported: true,
-            aware_running: true
-        })
+        decode_ble(&["180D".into(), id.to_uppercase()]),
+        Some(id.into())
     );
-    for flags in 0..=255 {
-        let mut payload = bytes;
-        payload[0] = flags;
-        let parsed = decode_ble(&payload).unwrap();
-        assert_eq!(parsed.aware_supported, flags & 1 != 0);
-        assert_eq!(parsed.aware_running, flags & 2 != 0);
-        assert_eq!(parsed.short_id, "000102030480feff");
+    for services in [
+        vec![],
+        vec!["180D".into()],
+        vec!["d8d5c4a0-8f0a-4e7d-b9e1-706c70616901".into()],
+    ] {
+        assert!(decode_ble(&services).is_none());
     }
+    let reply = reply(id, "Device", 2443, facts()).unwrap();
+    assert!(reply.aware_supported);
+    assert!(!reply.aware_running);
 }

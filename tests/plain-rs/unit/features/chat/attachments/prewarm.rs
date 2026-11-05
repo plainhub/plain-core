@@ -45,8 +45,8 @@ impl Driver for Mock {
             aware_supported: self.local_aware,
         })
     }
-    async fn scan(&self, short_id: &str) -> Result<Option<Advertisement>> {
-        assert_eq!(short_id, "2ffc1d06387ef8bb");
+    async fn discover(&self, client_id: &str) -> Result<Option<Advertisement>> {
+        assert_eq!(client_id, "peer");
         if let Some(db) = &self.unpair_scan {
             peers::unpair(db, "peer")?;
         }
@@ -55,10 +55,10 @@ impl Driver for Mock {
             std::future::pending::<()>().await;
         }
         Ok(Some(Advertisement {
-            short_id: if self.wrong_id {
+            client_id: if self.wrong_id {
                 "wrong".into()
             } else {
-                short_id.into()
+                client_id.into()
             },
             aware_supported: self.remote_aware,
             aware_running: self.running,

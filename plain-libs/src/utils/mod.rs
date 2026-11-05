@@ -16,8 +16,6 @@ pub mod image_metadata;
 pub mod mime;
 pub mod query;
 pub mod search_dsl;
-pub mod short_uuid;
-pub mod shortid;
 pub mod sort_name;
 pub mod unique_path;
 pub mod xml;

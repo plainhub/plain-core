@@ -9,7 +9,7 @@ impl Db {
         message: &str,
         client_id: Option<&str>,
     ) -> rusqlite::Result<String> {
-        let id = plain_libs::utils::short_uuid::short_uuid();
+        let id = crate::features::record_id::generate();
         let at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
         self.with_conn(|conn| {
             conn.execute(
