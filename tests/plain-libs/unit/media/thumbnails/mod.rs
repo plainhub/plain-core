@@ -874,6 +874,9 @@ async fn png_thumbnails_keep_transparency_through_resize_crop_and_disk_cache() {
     .save(&path)
     .unwrap();
     for crop in [false, true] {
+        let unrelated_key = directory.path().join("unrelated.jpg");
+        let unrelated = Bytes::from(vec![7; 16]);
+        lru::global().put(unrelated_key.clone(), unrelated.clone());
         let mut spec = spec_for(&path, 256, 256);
         spec.center_crop = crop;
         let ThumbOutcome::Generated(first) =
@@ -887,11 +890,17 @@ async fn png_thumbnails_keep_transparency_through_resize_crop_and_disk_cache() {
         for (x, alpha) in [(32, 0), (128, 128), (224, 255)] {
             assert_eq!(decoded.get_pixel(x, 128)[3], alpha);
         }
-        lru::global().clear();
-        let ThumbOutcome::Generated(second) = get_thumbnail(spec, directory.path()).await.unwrap()
+        let disk_cache = directory.path().join(format!("disk-{crop}"));
+        std::fs::create_dir(&disk_cache).unwrap();
+        std::fs::rename(directory.path().join("thumbs"), disk_cache.join("thumbs")).unwrap();
+        let ThumbOutcome::Generated(second) = get_thumbnail(spec, &disk_cache).await.unwrap()
         else {
             panic!("expected cached PNG")
         };
         assert_eq!(first, second);
+        assert_eq!(
+            lru::global().get(&unrelated_key).unwrap().as_ptr(),
+            unrelated.as_ptr()
+        );
     }
 }
