@@ -1,5 +1,111 @@
 use super::*;
 
+#[tokio::test]
+async fn watcher_file_removal_does_not_rescan_its_parent() {
+    use notify::event::{EventKind, ModifyKind, RemoveKind, RenameMode};
+    for kind in [
+        EventKind::Remove(RemoveKind::File),
+        EventKind::Modify(ModifyKind::Name(RenameMode::Any)),
+        EventKind::Remove(RemoveKind::Folder),
+    ] {
+        let directory = directory_scan_fixture();
+        let source = directory.path().join("source");
+        std::fs::create_dir(&source).unwrap();
+        let removed = source.join("removed.txt");
+        let sibling = source.join("sibling.txt");
+        if kind == EventKind::Remove(RemoveKind::Folder) {
+            std::fs::create_dir(&removed).unwrap();
+            std::fs::write(removed.join("nested.txt"), b"removed").unwrap();
+        } else {
+            std::fs::write(&removed, b"removed").unwrap();
+        }
+        std::fs::write(&sibling, b"sibling").unwrap();
+        let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+        let state = core.runtime_state();
+        let catalog = NativeMediaCatalog::new(state.clone());
+        catalog
+            .scan_directory(source.to_str().unwrap())
+            .await
+            .unwrap();
+        let scan_id = state.media_scans.snapshot().unwrap().unwrap().id;
+        let sibling_id = catalog
+            .path_identities(&sibling)
+            .unwrap()
+            .pop()
+            .unwrap()
+            .file_id;
+        if removed.is_dir() {
+            std::fs::remove_dir_all(&removed).unwrap();
+        } else {
+            std::fs::remove_file(&removed).unwrap();
+        }
+        catalog
+            .apply_watch_event(notify::Event::new(kind).add_path(removed.clone()))
+            .await
+            .unwrap();
+        assert_eq!(
+            state.media_scans.snapshot().unwrap().unwrap().id,
+            scan_id,
+            "removing one file must not start a directory scan"
+        );
+        assert_eq!(
+            catalog
+                .count(crate::features::enums::DataType::Doc)
+                .unwrap(),
+            1
+        );
+        assert!(catalog.path_identities(&removed).unwrap().is_empty());
+        assert_eq!(
+            catalog
+                .path_identities(&sibling)
+                .unwrap()
+                .pop()
+                .unwrap()
+                .file_id,
+            sibling_id
+        );
+        assert_eq!(std::fs::read(&sibling).unwrap(), b"sibling");
+        core.stop_core().await;
+    }
+}
+
+#[tokio::test]
+async fn watcher_file_changes_only_index_the_changed_file() {
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("source");
+    std::fs::create_dir(&source).unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    catalog
+        .scan_directory(source.to_str().unwrap())
+        .await
+        .unwrap();
+    let scan_id = state.media_scans.snapshot().unwrap().unwrap().id;
+    let sibling = source.join("unreported.txt");
+    std::fs::write(&sibling, b"unreported").unwrap();
+    let changed = source.join("changed.txt");
+    for kind in [
+        notify::EventKind::Create(notify::event::CreateKind::File),
+        notify::EventKind::Modify(notify::event::ModifyKind::Any),
+    ] {
+        std::fs::write(&changed, b"changed").unwrap();
+        catalog
+            .apply_watch_event(notify::Event::new(kind).add_path(changed.clone()))
+            .await
+            .unwrap();
+        assert_eq!(state.media_scans.snapshot().unwrap().unwrap().id, scan_id);
+        assert_eq!(
+            catalog
+                .count(crate::features::enums::DataType::Doc)
+                .unwrap(),
+            1,
+            "a single-file event must not discover an unrelated sibling"
+        );
+    }
+    core.stop_core().await;
+}
+
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
 async fn file_scan_cancel_aborts_pending_reads_and_keeps_catalog_unchanged() {

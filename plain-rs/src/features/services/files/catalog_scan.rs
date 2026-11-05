@@ -407,7 +407,14 @@ impl NativeMediaCatalog {
                         .map_err(|error| error.to_string())?;
                 }
                 Effect::Forget => {
-                    if let Some(parent) = path.parent().filter(|parent| parent.is_dir()) {
+                    if !path.try_exists().map_err(|error| error.to_string())? {
+                        let items = self.path_identities(&path)?;
+                        self.state
+                            .files
+                            .external_remove(&path, items)
+                            .await
+                            .map_err(|error| error.to_string())?;
+                    } else if let Some(parent) = path.parent().filter(|parent| parent.is_dir()) {
                         self.scan_directory(&parent.to_string_lossy()).await?;
                     }
                 }

@@ -5,6 +5,14 @@
 use super::*;
 use notify::event::{RemoveKind, RenameMode};
 
+fn watch_directory_fixture() -> tempfile::TempDir {
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap();
+    tempfile::Builder::new()
+        .prefix("media-watch-")
+        .tempdir_in(home)
+        .unwrap()
+}
+
 #[test]
 #[cfg(target_os = "linux")]
 fn read_events_and_incomplete_writes_do_not_enter_the_reconciliation_queue() {
@@ -285,10 +293,7 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
             notify::WatcherKind::NullWatcher
         }
     }
-    let directory = tempfile::Builder::new()
-        .prefix("media-watch-")
-        .tempdir()
-        .unwrap();
+    let directory = watch_directory_fixture();
     let root = directory.path();
     std::fs::create_dir_all(root.join("project/src")).unwrap();
     std::fs::create_dir_all(root.join("project/.git/objects")).unwrap();
@@ -328,10 +333,7 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
 
 #[test]
 fn watcher_excluded_event_bursts_do_not_fill_the_watch_queue() {
-    let directory = tempfile::Builder::new()
-        .prefix("media-watch-")
-        .tempdir()
-        .unwrap();
+    let directory = watch_directory_fixture();
     let root = directory.path();
     let scope = crate::features::prefs::file_index::Scope {
         directories: vec![crate::features::prefs::file_index::normalized(root)],
@@ -376,7 +378,7 @@ fn watcher_excluded_event_bursts_do_not_fill_the_watch_queue() {
 
 #[test]
 fn an_inaccessible_watch_root_is_skipped_without_marking_it_watched() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = watch_directory_fixture();
     let mut watcher = DeniedWatcher {
         denied: directory.path().to_owned(),
         ..Default::default()
