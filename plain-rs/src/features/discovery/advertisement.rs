@@ -26,6 +26,7 @@ pub fn reply(id: &str, name: &str, port: u16, facts: Facts) -> Result<DiscoverRe
             name.into()
         },
         port,
+        remote_access: None,
         device_type: facts.device_type,
         version: facts.version,
         platform: facts.platform,
@@ -37,7 +38,7 @@ pub fn reply(id: &str, name: &str, port: u16, facts: Facts) -> Result<DiscoverRe
 pub fn mdns(reply: &DiscoverReply, hostname: &str) -> Result<MdnsServiceInfo> {
     ensure!(reply.port != 0, "Missing discovery HTTPS port");
     ensure!(!hostname.is_empty(), "Missing mDNS hostname");
-    Ok(build_service_info(
+    let mut service = build_service_info(
         &reply.name,
         hostname,
         reply.port,
@@ -48,7 +49,13 @@ pub fn mdns(reply: &DiscoverReply, hostname: &str) -> Result<MdnsServiceInfo> {
         reply.ips.clone(),
         reply.aware_supported,
         reply.aware_running,
-    ))
+    );
+    if let Some(enabled) = reply.remote_access {
+        service
+            .txt_records
+            .push(format!("ra={}", u8::from(enabled)));
+    }
+    Ok(service)
 }
 pub fn decode_ble(service_uuids: &[String]) -> Option<String> {
     service_uuids

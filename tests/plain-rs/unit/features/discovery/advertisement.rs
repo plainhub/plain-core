@@ -58,3 +58,27 @@ fn uuid_only_advertisements_share_rust_filtering_and_canonicalization() {
     assert!(reply.aware_supported);
     assert!(!reply.aware_running);
 }
+
+#[test]
+fn remote_access_advertisement_distinguishes_enabled_disabled_and_unknown() {
+    let mut reply = reply("fixture", "Device", 2443, facts()).unwrap();
+    assert_eq!(reply.remote_access, None);
+    assert!(
+        !mdns(&reply, "fixture.local")
+            .unwrap()
+            .txt_records
+            .iter()
+            .any(|value| value.starts_with("ra="))
+    );
+    for enabled in [false, true] {
+        reply.remote_access = Some(enabled);
+        let service = mdns(&reply, "fixture.local").unwrap();
+        assert!(
+            service
+                .txt_records
+                .contains(&format!("ra={}", u8::from(enabled)))
+        );
+        let wire = serde_json::to_value(&reply).unwrap();
+        assert_eq!(wire["remoteAccess"], enabled);
+    }
+}

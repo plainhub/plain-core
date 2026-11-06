@@ -15,7 +15,8 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
     let settings = crate::features::prefs::settings::snapshot(&state.prefs)?;
     let name = settings.device_name;
     let port = state.public_ports().await.map(|ports| ports.1).unwrap_or(0);
-    let reply = advertisement::reply(&id, &name, port, facts(state).await?)?;
+    let mut reply = advertisement::reply(&id, &name, port, facts(state).await?)?;
+    reply.remote_access = Some(settings.remote_access);
     match request {
         Request::Reply {} => Ok(serde_json::to_value(reply)?),
         Request::Mdns {} => Ok(serde_json::to_value(advertisement::mdns(

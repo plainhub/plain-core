@@ -105,7 +105,9 @@ impl<'a> Preferences<'a> {
                     .await
                     .map_err(anyhow::Error::msg)?;
             }
-            if before.device_name != after.device_name {
+            if before.device_name != after.device_name
+                || before.remote_access != after.remote_access
+            {
                 state.mdns.update_hostname(state).await?;
             }
         }

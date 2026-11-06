@@ -27,11 +27,14 @@ async fn native_advertisements_use_current_preferences_without_host_calls() {
     let (generation, mut requests) = state.host.connect();
     let first = execute(&state, Request::Reply {}).await.unwrap();
     assert_eq!(first["id"], "fixture-root");
+    assert_eq!(first["remoteAccess"], true);
     assert_eq!(first["deviceType"], "COMPUTER");
     assert_eq!(first["platform"], std::env::consts::OS.to_uppercase());
     state.prefs.set("device_name", "Current device").unwrap();
     state.prefs.set("https_port", 3443).unwrap();
+    state.prefs.set("remote_access", false).unwrap();
     let second = execute(&state, Request::Reply {}).await.unwrap();
+    assert_eq!(second["remoteAccess"], false);
     assert_eq!(second["name"], "Current device");
     assert_eq!(second["port"], 0);
     for ip in second["ips"].as_array().unwrap() {
