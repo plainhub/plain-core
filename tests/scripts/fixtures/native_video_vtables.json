@@ -1,0 +1,52 @@
+[
+  {
+    "path": "Windows/Win32/Media/MediaFoundation/mod.rs",
+    "name": "IMFAttributes_Vtbl",
+    "sha256": "12be6dcab76605d7d34a0dedcc4932629c758b737f6bac149c01ec0b45aaa2f4"
+  },
+  {
+    "path": "Windows/Win32/Media/MediaFoundation/mod.rs",
+    "name": "IMFByteStream_Vtbl",
+    "sha256": "669b7a8fac0ce45362f5a3923bae35ef7e4299ac2c994f6951e4ffacfd13dfc6"
+  },
+  {
+    "path": "Windows/Win32/Media/MediaFoundation/mod.rs",
+    "name": "IMFMediaEventGenerator_Vtbl",
+    "sha256": "e094f446a1f60c94f748d6cbd69bbca390a6d3caea926c5961616ee30952daa7"
+  },
+  {
+    "path": "Windows/Win32/Media/MediaFoundation/mod.rs",
+    "name": "IMFMediaSource_Vtbl",
+    "sha256": "87bfb2d42fe1a8d2c421807e8a0c1a175e42201457855c0471b9ad79b29b620e"
+  },
+  {
+    "path": "Windows/Win32/Media/MediaFoundation/mod.rs",
+    "name": "IMFMediaType_Vtbl",
+    "sha256": "38251d1b6ff68c08cdd487c5ce85f50db93bd8cd41ea247c1142fc41de591d63"
+  },
+  {
+    "path": "Windows/Win32/Media/MediaFoundation/mod.rs",
+    "name": "IMFPresentationDescriptor_Vtbl",
+    "sha256": "57a54ff53dfe893b6794780c52520d79d5d1192db34364143ae8423b993b0b00"
+  },
+  {
+    "path": "Windows/Win32/Media/MediaFoundation/mod.rs",
+    "name": "IMFSample_Vtbl",
+    "sha256": "3241c6c472c9a9b7e93c09cedc66aa7dcec8ee91c8e384abe42a2a8748376506"
+  },
+  {
+    "path": "Windows/Win32/Media/MediaFoundation/mod.rs",
+    "name": "IMFSinkWriter_Vtbl",
+    "sha256": "a38a0ff43cb57b681c88a5583b8b41f8d87677473dec5445bdb90098a6b54a55"
+  },
+  {
+    "path": "Windows/Win32/Media/MediaFoundation/mod.rs",
+    "name": "IMFSourceReader_Vtbl",
+    "sha256": "7fcb94f95b673f682f8521500517436b02ea37b8d7a9ee44334815e1bb17ab6e"
+  },
+  {
+    "path": "Windows/Win32/System/Com/mod.rs",
+    "name": "IDispatch_Vtbl",
+    "sha256": "a38e5f7b09602de50e6ae3662c7fad95014ae0567efb09d0401949a2f4199e1e"
+  }
+]

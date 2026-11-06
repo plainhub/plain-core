@@ -14,6 +14,8 @@ fn movie(codec: &[u8; 4], duration: u32, metadata: bool) -> Vec<u8> {
     time.extend(1000u32.to_be_bytes());
     time.extend(duration.to_be_bytes());
     let track = |codec: &[u8; 4], handler: &[u8; 4]| {
+        let mut header = vec![0; 16];
+        header[12..16].copy_from_slice(&if handler == b"vide" { 1u32 } else { 2u32 }.to_be_bytes());
         let mut hdlr = vec![0; 8];
         hdlr.extend(handler);
         let stsd = atom(
@@ -22,10 +24,14 @@ fn movie(codec: &[u8; 4], duration: u32, metadata: bool) -> Vec<u8> {
         );
         atom(
             b"trak",
-            &atom(
-                b"mdia",
-                &[atom(b"hdlr", &hdlr), atom(b"minf", &atom(b"stbl", &stsd))].concat(),
-            ),
+            &[
+                atom(b"tkhd", &header),
+                atom(
+                    b"mdia",
+                    &[atom(b"hdlr", &hdlr), atom(b"minf", &atom(b"stbl", &stsd))].concat(),
+                ),
+            ]
+            .concat(),
         )
     };
     let mut tracks = vec![atom(b"mvhd", &time), track(codec, b"vide")];
@@ -115,11 +121,11 @@ async fn concurrent_requests_encode_once_and_reuse_the_same_committed_bytes() {
     std::fs::write(&file, movie(b"hvc1", 3000, false)).unwrap();
     let runtime = Runtime::new(dir.path().join("core/cache"));
     let calls = AtomicUsize::new(0);
-    let encode = |_: PathBuf, output: PathBuf| {
+    let encode = |_: PathBuf, output: Arc<Output>| {
         let calls = &calls;
         async move {
             calls.fetch_add(1, Ordering::SeqCst);
-            tokio::fs::write(output, b"encoded bytes").await.unwrap();
+            tokio::fs::write(&output.0, b"encoded bytes").await.unwrap();
             Ok(true)
         }
     };
@@ -155,7 +161,7 @@ async fn remux_drops_metadata_by_selecting_the_remux_primitive_once() {
             supported,
             |input, output| async move {
                 assert_eq!(input.file_name().unwrap(), "source.mp4");
-                tokio::fs::write(output, b"remux").await.unwrap();
+                tokio::fs::write(&output.0, b"remux").await.unwrap();
                 Ok(true)
             },
         )
@@ -163,6 +169,69 @@ async fn remux_drops_metadata_by_selecting_the_remux_primitive_once() {
         .unwrap()
         .unwrap();
     assert_eq!(std::fs::read(output).unwrap(), b"remux");
+}
+
+#[tokio::test]
+async fn metadata_removal_uses_shared_rust_without_a_platform_encoder() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("metadata.mp4");
+    let source = movie(b"avc1", 3000, true);
+    std::fs::write(&input, &source).unwrap();
+    let runtime = Runtime::new(directory.path().join("cache"));
+    let output = runtime
+        .convert(input.to_str().unwrap(), Operation::Remux)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        !plain_libs::media::isobmff::tracks(&output)
+            .unwrap()
+            .needs_remux
+    );
+    assert_eq!(std::fs::read(&input).unwrap(), source);
+    assert_eq!(
+        std::fs::metadata(&output).unwrap().len(),
+        source.len() as u64
+    );
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[test]
+fn remux_support_does_not_depend_on_an_installed_encoder() {
+    assert_eq!(declared_capabilities(false), vec!["VIDEO_REMUX"]);
+    assert_eq!(
+        declared_capabilities(true),
+        vec!["VIDEO_REMUX", "VIDEO_TRANSCODE"]
+    );
+}
+
+#[tokio::test]
+async fn cancellation_retains_the_temporary_output_until_the_worker_exits() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("owned.mp4");
+    std::fs::write(&path, b"reserved").unwrap();
+    let output = Arc::new(Output(path.clone()));
+    let (entered, entry) = tokio::sync::oneshot::channel();
+    let (release, resume) = std::sync::mpsc::channel();
+    let (finished, exit) = tokio::sync::oneshot::channel();
+    let worker = tokio::spawn(media_task(move |cancelled| {
+        entered.send(()).unwrap();
+        resume
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        assert!(cancelled.load(Ordering::Acquire));
+        std::fs::write(&output.0, b"last native write")?;
+        drop(output);
+        finished.send(()).unwrap();
+        Ok(true)
+    }));
+    entry.await.unwrap();
+    worker.abort();
+    assert!(worker.await.unwrap_err().is_cancelled());
+    assert!(path.exists());
+    release.send(()).unwrap();
+    exit.await.unwrap();
+    assert!(!path.exists());
 }
 #[tokio::test]
 async fn replaced_sources_and_encoder_failures_never_publish_partial_cache_entries() {
@@ -178,7 +247,7 @@ async fn replaced_sources_and_encoder_failures_never_publish_partial_cache_entri
             supported,
             |input, output| async move {
                 tokio::fs::write(input, b"replaced").await.unwrap();
-                tokio::fs::write(output, b"partial").await.unwrap();
+                tokio::fs::write(&output.0, b"partial").await.unwrap();
                 Ok(true)
             },
         )
@@ -191,7 +260,7 @@ async fn replaced_sources_and_encoder_failures_never_publish_partial_cache_entri
             Operation::Transcode,
             supported,
             |_, output| async move {
-                tokio::fs::write(output, b"partial").await.unwrap();
+                tokio::fs::write(&output.0, b"partial").await.unwrap();
                 Err("synthetic failure".into())
             },
         )
@@ -203,7 +272,7 @@ async fn replaced_sources_and_encoder_failures_never_publish_partial_cache_entri
             Operation::Transcode,
             supported,
             |_, output| async move {
-                tokio::fs::write(output, b"complete").await.unwrap();
+                tokio::fs::write(&output.0, b"complete").await.unwrap();
                 Ok(true)
             },
         )
@@ -213,4 +282,21 @@ async fn replaced_sources_and_encoder_failures_never_publish_partial_cache_entri
     let siblings = std::fs::read_dir(output.parent().unwrap()).unwrap().count();
     assert_eq!(siblings, 1);
     assert_eq!(std::fs::read(output).unwrap(), b"complete");
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[tokio::test]
+async fn native_hev1_conversion_caches_the_result_and_cleans_intermediates() {
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("source.mp4");
+    let bytes = include_bytes!("../../../../../../plain-rs/testdata/video-h265.mp4");
+    std::fs::write(&source, bytes).unwrap();
+    let runtime = Runtime::new(directory.path().join("cache"));
+    let output = runtime.convert(source.to_str().unwrap(), Operation::Transcode).await.unwrap().unwrap();
+    assert_eq!(plain_libs::media::isobmff::tracks(&output).unwrap().first_video_codec.as_deref(), Some("avc1"));
+    let modified = std::fs::metadata(&output).unwrap().modified().unwrap();
+    assert_eq!(runtime.convert(source.to_str().unwrap(), Operation::Transcode).await.unwrap(), Some(output.clone()));
+    assert_eq!(std::fs::metadata(&output).unwrap().modified().unwrap(), modified);
+    assert_eq!(std::fs::read(source).unwrap(), bytes);
+    assert_eq!(std::fs::read_dir(output.parent().unwrap()).unwrap().count(), 1);
 }

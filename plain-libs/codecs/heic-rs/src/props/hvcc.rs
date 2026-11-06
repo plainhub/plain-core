@@ -6,6 +6,9 @@ use crate::boxes::BoxHeader;
 use crate::error::{Error, Result};
 use crate::reader::Reader;
 
+#[path = "../../../../src/media/hevc_config.rs"]
+mod wire;
+
 /// NAL unit type 32: video parameter set.
 pub const NAL_VPS: u8 = 32;
 /// NAL unit type 33: sequence parameter set.
@@ -127,25 +130,15 @@ pub fn parse<'a>(b: &BoxHeader<'a>) -> Result<HevcConfig<'a>> {
 
     let num_arrays = r.u8("hvcC array count")?;
     let mut arrays = Vec::with_capacity(usize::from(num_arrays));
-    for _ in 0..num_arrays {
-        let head = r.u8("hvcC array header")?;
-        let completeness = head & 0x80 != 0;
-        let nal_type = head & 0x3f;
-        let count = r.u16("hvcC nalu count")?;
-        if usize::from(count) * 2 > r.remaining() {
-            return Err(Error::Malformed(
-                "hvcC declares more NAL units than it holds",
-            ));
-        }
-        let mut nals = Vec::with_capacity(usize::from(count));
-        for _ in 0..count {
-            let len = usize::from(r.u16("hvcC nalu length")?);
-            nals.push(r.take(len, "hvcC nal unit")?);
-        }
+    for array in wire::NalArrays::new(r.rest(), num_arrays) {
+        let array = array.map_err(|error| match error {
+            wire::Error::Truncated(name) => Error::Truncated(name),
+            wire::Error::Malformed(name) => Error::Malformed(name),
+        })?;
         arrays.push(NalArray {
-            completeness,
-            nal_type,
-            nals,
+            completeness: array.bytes()[0] & 0x80 != 0,
+            nal_type: array.bytes()[0] & 0x3f,
+            nals: array.nals().collect(),
         });
     }
     Ok(HevcConfig {

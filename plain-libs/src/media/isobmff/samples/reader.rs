@@ -1,12 +1,21 @@
 use super::super::{MAX_BOX_BYTES, atoms, child, header, payload, time_header, u32_at};
-use super::{AvcTrack, avc, defaults, fragments, invalid, required, tables};
+use super::{VideoTrack, avc, defaults, fragments, hevc, invalid, required, tables};
 use std::{
     collections::HashSet,
     io::{self, Read, Seek, SeekFrom},
 };
 
-impl AvcTrack {
-    pub fn read(reader: &mut (impl Read + Seek)) -> io::Result<Self> {
+impl VideoTrack {
+    pub fn read_avc(reader: &mut (impl Read + Seek)) -> io::Result<Self> {
+        Self::read(reader, avc::read)
+    }
+    pub fn read_hevc(reader: &mut (impl Read + Seek)) -> io::Result<Self> {
+        Self::read(reader, hevc::read)
+    }
+    fn read(
+        reader: &mut (impl Read + Seek),
+        describe: fn(&[u8]) -> Option<Option<avc::Config>>,
+    ) -> io::Result<Self> {
         let length = reader.seek(SeekFrom::End(0))?;
         let mut offset = 0;
         let mut movie = None;
@@ -71,10 +80,10 @@ impl AvcTrack {
             selected.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no video track"))?;
         let (timescale, duration_ticks) = required(child(mdia, b"mdhd").and_then(time_header))?;
         let stbl = required(child(mdia, b"minf").and_then(|d| child(d, b"stbl")))?;
-        let config = required(child(stbl, b"stsd").and_then(avc::read))?.ok_or_else(|| {
+        let config = required(child(stbl, b"stsd").and_then(describe))?.ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::Unsupported,
-                "non-AVC video track has no pure-Rust decoder",
+                "unsupported MP4 video sample entry",
             )
         })?;
         let classic = required(tables::Classic::read(stbl))?;
@@ -100,6 +109,8 @@ impl AvcTrack {
             ))?;
         }
         Ok(Self {
+            sample_entry: config.sample_entry,
+            hevc_headers: config.hevc_headers,
             width: config.width,
             height: config.height,
             timescale,

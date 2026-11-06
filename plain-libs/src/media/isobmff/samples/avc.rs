@@ -1,6 +1,8 @@
 use super::super::{atoms, child, u32_at};
 
 pub(super) struct Config {
+    pub sample_entry: [u8; 4],
+    pub hevc_headers: Vec<(usize, u8)>,
     pub width: u32,
     pub height: u32,
     pub length_size: usize,
@@ -35,6 +37,8 @@ pub(super) fn read(stsd: &[u8]) -> Option<Option<Config>> {
         rest = rest.get(1..)?;
         sets(&mut rest, pps, &mut parameter_sets)?;
         return Some(Some(Config {
+            sample_entry: entry.kind,
+            hevc_headers: Vec::new(),
             width,
             height,
             length_size,

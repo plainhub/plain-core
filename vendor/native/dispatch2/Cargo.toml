@@ -1,0 +1,35 @@
+[package]
+name = "dispatch2"
+version = "0.3.1"
+edition = "2021"
+license = "Zlib OR Apache-2.0 OR MIT"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/madsmtm/objc2"
+revision = "8852b424193ca41602281b3d7540d7c8ed51e49a"
+archive-sha256 = "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[features]
+"alloc" = []
+"default" = []
+"objc2" = ["dep:objc2"]
+"std" = ["alloc"]
+
+
+
+[dependencies."objc2"]
+path = "../objc2"
+version = "=0.6.5"
+default-features = false
+optional = true
+features = ["std"]
+
+[workspace]

@@ -80,12 +80,13 @@ fn children(
                     | b"mvex"
                     | b"trex"
                     | b"avcC"
+                    | b"hvcC"
             )
         {
             continue;
         }
         let data = if parent == b"stsd" {
-            if sample_tables && &kind == b"avc1" {
+            if sample_tables && matches!(&kind, b"avc1" | b"hev1" | b"hvc1") {
                 if length < 78 {
                     return None;
                 }
@@ -187,6 +188,7 @@ fn children(
                     sample_tables,
                 )?),
                 b"stsc" | b"stsz" | b"stss" | b"stco" | b"co64" | b"trex" | b"avcC"
+                    | b"hvcC"
                     if sample_tables =>
                 {
                     Some(bytes(reader, body, length, limit)?)

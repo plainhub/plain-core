@@ -228,43 +228,6 @@ impl Drop for Muxer {
     }
 }
 
-fn remux(input: &Input, output: &Path, cancel: &std::sync::atomic::AtomicBool) -> Result<bool> {
-    let extractor = Extractor::open(input)?;
-    let formats = extractor.formats()?;
-    let mut muxer = Muxer::open(output)?;
-    let mut tracks = std::collections::HashMap::new();
-    for (index, format) in formats {
-        let mime = format.string(c"mime").unwrap_or_default();
-        if !mime.starts_with("video/") && !mime.starts_with("audio/") {
-            continue;
-        }
-        if mime.starts_with("video/") {
-            muxer.rotation(format.int(c"rotation-degrees").unwrap_or(0))?;
-        }
-        tracks.insert(index as i32, muxer.add(&format)?);
-        extractor.select(index)?;
-    }
-    if tracks.is_empty() {
-        return Ok(false);
-    }
-    muxer.start()?;
-    let mut bytes = Vec::new();
-    while extractor.track() >= 0 {
-        ensure!(
-            !cancel.load(std::sync::atomic::Ordering::Acquire),
-            "Video conversion cancelled"
-        );
-        let track = *tracks
-            .get(&extractor.track())
-            .ok_or_else(|| anyhow!("Unexpected Android track"))?;
-        let info = extractor.sample(&mut bytes)?;
-        muxer.write(track, &bytes, info)?;
-        extractor.advance();
-    }
-    muxer.finish()?;
-    Ok(true)
-}
-
 struct Codec {
     raw: NonNull<ffi::Codec>,
     started: bool,
@@ -399,15 +362,11 @@ struct Sample {
     bytes: Vec<u8>,
     info: ffi::BufferInfo,
 }
-pub fn capabilities() -> Vec<&'static str> {
+pub fn can_transcode() -> bool {
     static HEVC: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
         Codec::create(c"video/avc", true).is_ok() && Codec::create(c"video/hevc", false).is_ok()
     });
-    let mut values = vec!["VIDEO_REMUX"];
-    if *HEVC {
-        values.push("VIDEO_TRANSCODE");
-    }
-    values
+    *HEVC
 }
 
 pub(crate) fn supports_3gp_conversion() -> bool {
@@ -422,7 +381,6 @@ pub(crate) fn supports_3gp_conversion() -> bool {
 
 #[derive(Clone, Copy)]
 pub enum Operation {
-    Remux,
     Transcode,
     Convert3gp,
 }
@@ -460,7 +418,6 @@ fn encode_input(
     cancel: &std::sync::atomic::AtomicBool,
 ) -> Result<bool> {
     match operation {
-        Operation::Remux => remux(input, output, cancel),
         Operation::Transcode => video::transcode(input, output, cancel),
         Operation::Convert3gp => audio::convert_3gp(input, output, cancel),
     }

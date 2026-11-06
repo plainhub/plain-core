@@ -133,6 +133,34 @@ impl Classic {
         })
     }
 
+    pub fn visit_ranges(
+        &self,
+        description: u32,
+        mut visit: impl FnMut(std::ops::Range<u64>) -> std::io::Result<()>,
+    ) -> std::io::Result<()> {
+        let mut sample = 0;
+        let mut run = 0;
+        for (chunk, &start) in self.chunks.iter().enumerate() {
+            while run + 1 < self.runs.len() && self.runs[run + 1].first_chunk as usize <= chunk + 1
+            {
+                run += 1;
+            }
+            let current = &self.runs[run];
+            if current.description != description {
+                return Err(super::invalid());
+            }
+            let mut offset = start;
+            for _ in 0..current.samples_per_chunk {
+                let size = super::required(self.sizes.get(sample))?;
+                let end = super::required(offset.checked_add(u64::from(size)))?;
+                visit(offset..end)?;
+                sample += 1;
+                offset = end;
+            }
+        }
+        Ok(())
+    }
+
     pub fn range(&self, index: u32, description: u32) -> Option<(u64, u32)> {
         let run = self
             .runs

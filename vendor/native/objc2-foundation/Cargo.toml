@@ -1,0 +1,50 @@
+[package]
+name = "objc2-foundation"
+version = "0.3.2"
+edition = "2021"
+license = "MIT"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/madsmtm/objc2"
+revision = "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b"
+archive-sha256 = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[features]
+"NSArray" = ["bitflags"]
+"NSData" = ["bitflags"]
+"NSDate" = []
+"NSDictionary" = []
+"NSError" = []
+"NSItemProvider" = ["bitflags"]
+"NSLocale" = []
+"NSObject" = []
+"NSString" = ["bitflags"]
+"NSURL" = ["bitflags"]
+"NSUUID" = []
+"NSValue" = []
+"alloc" = []
+"bitflags" = ["dep:bitflags"]
+"default" = []
+"std" = ["alloc"]
+
+[dependencies."bitflags"]
+version = "=2.13.2"
+default-features = false
+optional = true
+features = ["std"]
+
+[dependencies."objc2"]
+path = "../objc2"
+version = "=0.6.5"
+default-features = false
+features = ["std"]
+
+[workspace]

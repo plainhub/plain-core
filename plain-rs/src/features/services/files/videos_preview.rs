@@ -74,24 +74,19 @@ fn filter_codec_tag(tag: &str) -> String {
     tag.chars().filter(|c| c.is_alphanumeric()).collect()
 }
 
-pub async fn encode_browser_video(
+pub async fn transcode_browser_video(
     input: &std::path::Path,
     output: &std::path::Path,
-    transcode: bool,
 ) -> Result<bool> {
     let mut command = tokio::process::Command::new("ffmpeg");
     command
         .kill_on_drop(true)
         .args(["-y", "-v", "error", "-i"])
         .arg(input);
-    if transcode {
-        command.args([
-            "-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf",
-            "23", "-pix_fmt", "yuv420p", "-c:a", "copy",
-        ]);
-    } else {
-        command.args(["-map", "0:v?", "-map", "0:a?", "-c", "copy"]);
-    }
+    command.args([
+        "-map", "0:v:0", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-pix_fmt", "yuv420p", "-c:a", "copy",
+    ]);
     let result = command
         .args(["-movflags", "+faststart", "-f", "mp4"])
         .arg(output)

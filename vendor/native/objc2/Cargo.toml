@@ -1,0 +1,30 @@
+[package]
+name = "objc2"
+version = "0.6.5"
+edition = "2021"
+license = "MIT"
+build = "build.rs"
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/madsmtm/objc2"
+revision = "d7d2fa23ceaa5e6096c923b081040e5d81b3b9df"
+archive-sha256 = "08849bbd4767dfae9457696856ae1c84fe4e0281bbe4a7abff2d0e06fb7981f8"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[features]
+"alloc" = ["objc2-encode/alloc"]
+"default" = []
+"std" = ["alloc", "objc2-encode/std"]
+
+[dependencies."objc2-encode"]
+path = "../objc2-encode"
+version = "=4.1.0"
+default-features = false
+
+[workspace]

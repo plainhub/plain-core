@@ -71,33 +71,64 @@ impl Runtime {
             operation,
             || async { Ok(capabilities().into_iter().map(str::to_owned).collect()) },
             |input, output| async move {
-                #[cfg(target_os = "android")]
-                {
-                    return encode_android(
-                        input,
-                        output,
-                        match operation {
-                            Operation::Remux => {
-                                crate::infrastructure::platform::android::media::Operation::Remux
-                            }
-                            Operation::Transcode => {
-                                crate::infrastructure::platform::android::media::Operation::Transcode
-                            }
-                        },
-                    )
+                if operation == Operation::Remux {
+                    return media_task(move |cancelled| {
+                        let mut input = std::fs::File::open(input)?;
+                        let mut writer = std::fs::OpenOptions::new().write(true).open(&output.0)?;
+                        Ok(plain_libs::media::isobmff::remove_mebx_tracks(
+                            &mut input,
+                            &mut writer,
+                            cancelled,
+                        )?)
+                    })
                     .await;
                 }
-                #[cfg(all(feature = "runtime-media", not(target_os = "android")))]
+                #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
                 {
-                    crate::features::services::files::videos_preview::encode_browser_video(
-                        &input,
-                        &output,
-                        operation == Operation::Transcode,
+                    return media_task(move |cancelled| {
+                        crate::infrastructure::platform::video::transcode(
+                            &input, &output.0, cancelled,
+                        )
+                    })
+                    .await;
+                }
+                #[cfg(target_os = "android")]
+                {
+                    return media_task(move |cancelled| {
+                        crate::infrastructure::platform::android::media::encode(
+                            &input,
+                            &output.0,
+                            crate::infrastructure::platform::android::media::Operation::Transcode,
+                            cancelled,
+                        )
+                    })
+                    .await;
+                }
+                #[cfg(all(
+                    feature = "runtime-media",
+                    not(any(
+                        target_os = "android",
+                        target_os = "macos",
+                        target_os = "ios",
+                        target_os = "windows"
+                    ))
+                ))]
+                {
+                    crate::features::services::files::videos_preview::transcode_browser_video(
+                        &input, &output.0,
                     )
                     .await
                     .map_err(|error| error.to_string())
                 }
-                #[cfg(all(not(feature = "runtime-media"), not(target_os = "android")))]
+                #[cfg(all(
+                    not(feature = "runtime-media"),
+                    not(any(
+                        target_os = "android",
+                        target_os = "macos",
+                        target_os = "ios",
+                        target_os = "windows"
+                    ))
+                ))]
                 {
                     let _ = (input, output);
                     Err("Video encoder unavailable".into())
@@ -116,7 +147,7 @@ impl Runtime {
     where
         C: FnOnce() -> CF,
         CF: std::future::Future<Output = Result<Vec<String>, String>>,
-        E: FnOnce(PathBuf, PathBuf) -> EF,
+        E: FnOnce(PathBuf, Arc<Output>) -> EF,
         EF: std::future::Future<Output = Result<bool, String>>,
     {
         let _conversion = self.conversion.lock().await;
@@ -162,14 +193,19 @@ impl Runtime {
         tokio::fs::create_dir_all(parent)
             .await
             .map_err(|error| error.to_string())?;
-        let temporary = Output(parent.join(format!("{}.mp4", uuid::Uuid::new_v4())));
-        tokio::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary.0)
-            .await
-            .map_err(|error| error.to_string())?;
-        if !encode(source.clone(), temporary.0.clone()).await? {
+        let temporary = Arc::new(Output(parent.join(format!("{}.mp4", uuid::Uuid::new_v4()))));
+        let reservation = temporary.clone();
+        tokio::task::spawn_blocking(move || {
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&reservation.0)
+                .map(drop)
+        })
+        .await
+        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
+        if !encode(source.clone(), temporary.clone()).await? {
             return Ok(None);
         }
         let metadata = tokio::fs::metadata(&temporary.0)
@@ -202,24 +238,41 @@ fn cache_path(root: &Path, path: &str, source: &Source, operation: Operation) ->
         .join(&key[..2])
         .join(format!("{key}.mp4"))
 }
-#[cfg(any(test, not(any(target_os = "android", target_os = "ios"))))]
+#[cfg(any(
+    test,
+    not(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows"
+    ))
+))]
 fn declared_capabilities(available: bool) -> Vec<&'static str> {
     if available {
         vec!["VIDEO_REMUX", "VIDEO_TRANSCODE"]
     } else {
-        Vec::new()
+        vec!["VIDEO_REMUX"]
     }
 }
 pub fn capabilities() -> Vec<&'static str> {
     #[cfg(target_os = "android")]
     {
-        crate::infrastructure::platform::android::media::capabilities()
+        if crate::infrastructure::platform::android::media::can_transcode() {
+            vec!["VIDEO_REMUX", "VIDEO_TRANSCODE"]
+        } else {
+            vec!["VIDEO_REMUX"]
+        }
     }
-    #[cfg(target_os = "ios")]
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "windows"))]
     {
-        Vec::new()
+        vec!["VIDEO_REMUX", "VIDEO_TRANSCODE"]
     }
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(
+        target_os = "android",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "windows"
+    )))]
     {
         declared_capabilities(ffmpeg_available())
     }
@@ -255,18 +308,6 @@ pub(crate) fn ffmpeg_available() -> bool {
 }
 
 #[cfg(target_os = "android")]
-pub async fn encode_android(
-    input: PathBuf,
-    output: PathBuf,
-    operation: crate::infrastructure::platform::android::media::Operation,
-) -> Result<bool, String> {
-    android_task(move |cancel| {
-        crate::infrastructure::platform::android::media::encode(&input, &output, operation, cancel)
-    })
-    .await
-}
-
-#[cfg(target_os = "android")]
 pub async fn encode_android_file(
     input: crate::infrastructure::host::resource_stream::NativeResourceFile,
     output: PathBuf,
@@ -276,7 +317,7 @@ pub async fn encode_android_file(
     let directory = output.parent().ok_or("Missing media output directory")?;
     let input =
         crate::features::services::files::input::prepare(input, directory, stop.clone()).await?;
-    let encoding = android_task(move |cancel| {
+    let encoding = media_task(move |cancel| {
         crate::infrastructure::platform::android::media::encode_file(
             input.file,
             input.offset,
@@ -294,8 +335,7 @@ pub async fn encode_android_file(
     }
 }
 
-#[cfg(target_os = "android")]
-async fn android_task<F>(encode: F) -> Result<bool, String>
+async fn media_task<F>(encode: F) -> Result<bool, String>
 where
     F: FnOnce(&std::sync::atomic::AtomicBool) -> anyhow::Result<bool> + Send + 'static,
 {

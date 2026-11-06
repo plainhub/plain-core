@@ -5,7 +5,7 @@ fn fixed_variable_sizes_and_both_chunk_offsets_return_the_same_samples() {
     for uniform in [false, true] {
         for co64 in [false, true] {
             let mut file = Cursor::new(classic_file(uniform, co64));
-            let track = AvcTrack::read(&mut file).unwrap();
+            let track = VideoTrack::read_avc(&mut file).unwrap();
             assert_eq!(
                 (
                     track.width,
@@ -48,7 +48,7 @@ fn table_counts_runs_offsets_descriptions_and_timing_are_validated() {
         let mut bytes = classic_file(false, false);
         patch_word(&mut bytes, kind, offset, value);
         assert!(
-            AvcTrack::read(&mut Cursor::new(bytes)).is_err(),
+            VideoTrack::read_avc(&mut Cursor::new(bytes)).is_err(),
             "{kind:?} {offset} {value}"
         );
     }
@@ -56,7 +56,7 @@ fn table_counts_runs_offsets_descriptions_and_timing_are_validated() {
         let mut bytes = classic_file(false, false);
         patch_word(&mut bytes, kind, offset, value);
         let mut file = Cursor::new(bytes);
-        let track = AvcTrack::read(&mut file).unwrap();
+        let track = VideoTrack::read_avc(&mut file).unwrap();
         assert!(track.read_sample(&mut file, 1, 10).is_err());
     }
 }
@@ -64,7 +64,7 @@ fn table_counts_runs_offsets_descriptions_and_timing_are_validated() {
 #[test]
 fn sample_budget_is_checked_before_seeking_or_reading_payload() {
     let mut file = Cursor::new(classic_file(false, false));
-    let track = AvcTrack::read(&mut file).unwrap();
+    let track = VideoTrack::read_avc(&mut file).unwrap();
     let position = file.position();
     assert_eq!(track.read_sample(&mut file, 1, 1).unwrap(), None);
     assert_eq!(file.position(), position);
@@ -79,17 +79,17 @@ fn truncated_boxes_and_parameter_sets_fail_without_panicking() {
     let full = classic_file(false, false);
     for end in 0..full.len() {
         assert!(
-            AvcTrack::read(&mut Cursor::new(&full[..end])).is_err(),
+            VideoTrack::read_avc(&mut Cursor::new(&full[..end])).is_err(),
             "end={end}"
         );
     }
     let mut bytes = full.clone();
     patch_word(&mut bytes, b"moov", 0, u32::MAX);
-    assert!(AvcTrack::read(&mut Cursor::new(bytes)).is_err());
+    assert!(VideoTrack::read_avc(&mut Cursor::new(bytes)).is_err());
     let mut bytes = full;
     let avcc = bytes.windows(4).position(|w| w == b"avcC").unwrap() + 4;
     bytes[avcc + 6..avcc + 8].copy_from_slice(&u16::MAX.to_be_bytes());
-    assert!(AvcTrack::read(&mut Cursor::new(bytes)).is_err());
+    assert!(VideoTrack::read_avc(&mut Cursor::new(bytes)).is_err());
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn extended_movie_headers_and_zero_size_terminal_media_are_supported() {
         movie[8..].to_vec(),
     ]
     .concat();
-    assert!(AvcTrack::read(&mut Cursor::new(extended)).is_ok());
+    assert!(VideoTrack::read_avc(&mut Cursor::new(extended)).is_ok());
     let mut movie = movie;
     let offset = ftyp().len() + movie.len() + 8;
     patch_word(&mut movie, b"stco", 8, offset as u32);
@@ -113,7 +113,7 @@ fn extended_movie_headers_and_zero_size_terminal_media_are_supported() {
     let mut terminal = atom(b"mdat", &[1, 2, 3, 4, 5, 6, 7, 8]);
     terminal[..4].fill(0);
     let mut file = Cursor::new([ftyp(), movie, terminal].concat());
-    let track = AvcTrack::read(&mut file).unwrap();
+    let track = VideoTrack::read_avc(&mut file).unwrap();
     assert_eq!(
         track.read_sample(&mut file, 4, 2).unwrap(),
         Some(vec![7, 8])
@@ -143,7 +143,7 @@ fn sample_io_errors_are_propagated() {
         data: Cursor::new(classic_file(false, false)),
         fail: false,
     };
-    let track = AvcTrack::read(&mut file).unwrap();
+    let track = VideoTrack::read_avc(&mut file).unwrap();
     file.fail = true;
     assert_eq!(
         track.read_sample(&mut file, 1, 2).unwrap_err().kind(),
@@ -171,7 +171,7 @@ fn changing_samples_per_chunk_preserves_each_sample_offset() {
         ]
         .concat(),
     );
-    let track = AvcTrack::read(&mut file).unwrap();
+    let track = VideoTrack::read_avc(&mut file).unwrap();
     for id in 1..=4 {
         assert_eq!(
             track.read_sample(&mut file, id, 2).unwrap(),

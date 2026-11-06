@@ -25,3 +25,11 @@ pub mod discovery;
 
 #[cfg(feature = "runtime")]
 pub mod version;
+
+#[cfg(all(feature = "runtime", any(target_os = "macos", target_os = "ios")))]
+#[path = "apple/video.rs"]
+pub mod video;
+
+#[cfg(all(feature = "runtime", target_os = "windows"))]
+#[path = "windows/video.rs"]
+pub mod video;

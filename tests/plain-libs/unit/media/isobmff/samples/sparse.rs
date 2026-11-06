@@ -78,7 +78,7 @@ fn co64_samples_above_four_gib_skip_large_unselected_movie_metadata_and_padding(
         position: 0,
         read_bytes: 0,
     };
-    let track = AvcTrack::read(&mut reader).unwrap();
+    let track = VideoTrack::read_avc(&mut reader).unwrap();
     assert_eq!(
         track.read_sample(&mut reader, 4, 2).unwrap(),
         Some(vec![7, 8])

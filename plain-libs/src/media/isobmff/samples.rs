@@ -4,12 +4,15 @@ mod avc;
 mod defaults;
 mod fragment_run;
 mod fragments;
+pub(super) mod hevc;
 mod reader;
 mod sizes;
 mod tables;
 mod timing;
 
-pub struct AvcTrack {
+pub struct VideoTrack {
+    pub sample_entry: [u8; 4],
+    pub(super) hevc_headers: Vec<(usize, u8)>,
     pub width: u32,
     pub height: u32,
     pub timescale: u32,
@@ -17,7 +20,7 @@ pub struct AvcTrack {
     pub nal_length_size: usize,
     pub parameter_sets: Vec<Vec<u8>>,
     pub sample_count: u32,
-    description: u32,
+    pub(super) description: u32,
     classic: tables::Classic,
     fragments: Vec<fragment_run::Run>,
     media: Vec<(u64, u64)>,
@@ -33,7 +36,7 @@ fn required<T>(value: Option<T>) -> io::Result<T> {
     value.ok_or_else(invalid)
 }
 
-impl AvcTrack {
+impl VideoTrack {
     pub fn keyframe_at(&self, tick: u64) -> u32 {
         let mut previous = None;
         let mut first = None;
@@ -63,6 +66,36 @@ impl AvcTrack {
             .clamp(1, self.sample_count.max(1))
     }
 
+    fn within_media(&self, start: u64, end: u64) -> bool {
+        let index = self.media.partition_point(|(offset, _)| *offset <= start);
+        index > 0 && end <= self.media[index - 1].1
+    }
+
+    pub(super) fn visit_samples(
+        &self,
+        mut visit: impl FnMut(std::ops::Range<u64>) -> io::Result<()>,
+    ) -> io::Result<()> {
+        let mut checked = |range: std::ops::Range<u64>| {
+            if !self.within_media(range.start, range.end) {
+                return Err(invalid());
+            }
+            visit(range)
+        };
+        self.classic.visit_ranges(self.description, &mut checked)?;
+        for run in &self.fragments {
+            if run.description != self.description {
+                return Err(invalid());
+            }
+            let mut offset = run.offset;
+            for index in 0..run.sizes.count {
+                let end = required(offset.checked_add(u64::from(required(run.sizes.get(index))?)))?;
+                checked(offset..end)?;
+                offset = end;
+            }
+        }
+        Ok(())
+    }
+
     pub fn read_sample(
         &self,
         reader: &mut (impl Read + Seek),
@@ -90,11 +123,7 @@ impl AvcTrack {
             )
         };
         let end = required(offset.checked_add(u64::from(size)))?;
-        if !self
-            .media
-            .iter()
-            .any(|(start, limit)| offset >= *start && end <= *limit)
-        {
+        if !self.within_media(offset, end) {
             return Err(invalid());
         }
         let size = usize::try_from(size).map_err(|_| invalid())?;

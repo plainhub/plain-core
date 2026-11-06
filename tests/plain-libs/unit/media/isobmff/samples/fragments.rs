@@ -48,7 +48,7 @@ fn fragments_apply_defaults_signed_offsets_times_and_sync_flags() {
     for explicit in [false, true] {
         for relative in [false, true] {
             let mut file = Cursor::new(fragmented(explicit, relative));
-            let track = AvcTrack::read(&mut file).unwrap();
+            let track = VideoTrack::read_avc(&mut file).unwrap();
             assert_eq!((track.sample_count, track.duration_ticks), (4, 4000));
             assert_eq!(track.keyframe_at(0), 1);
             assert_eq!(track.keyframe_at(1900), 1);
@@ -73,12 +73,12 @@ fn malformed_fragment_counts_offsets_track_ids_and_sizes_are_rejected() {
     ] {
         let mut bytes = fragmented(true, true);
         patch_word(&mut bytes, kind, offset, value);
-        assert!(AvcTrack::read(&mut Cursor::new(bytes)).is_err());
+        assert!(VideoTrack::read_avc(&mut Cursor::new(bytes)).is_err());
     }
     let mut bytes = fragmented(true, true);
     patch_word(&mut bytes, b"trun", 16, u32::MAX);
     let mut file = Cursor::new(bytes);
-    let track = AvcTrack::read(&mut file).unwrap();
+    let track = VideoTrack::read_avc(&mut file).unwrap();
     assert!(track.read_sample(&mut file, 1, usize::MAX).is_err());
 }
 
@@ -139,7 +139,7 @@ fn multiple_runs_inherit_the_previous_traf_end_and_support_version_one_decode_ti
     prefix.extend(moof);
     prefix.extend(atom(b"mdat", &[1, 2, 3, 4, 5, 6]));
     let mut file = Cursor::new(prefix);
-    let track = AvcTrack::read(&mut file).unwrap();
+    let track = VideoTrack::read_avc(&mut file).unwrap();
     assert_eq!(
         (track.sample_count, track.duration_ticks),
         (2, decode_time + 2000)
@@ -170,7 +170,7 @@ fn signed_data_offsets_can_reference_media_before_the_fragment() {
     bytes.extend(media);
     bytes.extend(moof);
     let mut file = Cursor::new(bytes);
-    let track = AvcTrack::read(&mut file).unwrap();
+    let track = VideoTrack::read_avc(&mut file).unwrap();
     assert_eq!(
         track.read_sample(&mut file, 1, 2).unwrap(),
         Some(vec![0, 1])

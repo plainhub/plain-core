@@ -13,8 +13,8 @@ fn avc_encoder(input: &Format) -> Result<Codec> {
         .int(c"frame-rate")
         .filter(|rate| *rate > 0)
         .unwrap_or(30);
-    let bitrate = (i128::from(width) * i128::from(height) * i128::from(rate) * 3 / 20)
-        .clamp(4_000_000, 50_000_000) as i32;
+    let bitrate =
+        plain_libs::media::encoding::h264_bit_rate(width as u32, height as u32, rate as u32) as i32;
     let configure = |high: bool| -> Result<Codec> {
         let format = Format::owned(unsafe { ffi::AMediaFormat_new() })?;
         format.set_string(c"mime", c"video/avc");

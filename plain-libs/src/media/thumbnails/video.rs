@@ -62,7 +62,7 @@ pub fn generate_video_thumbnail(path: &str, w: u32, h: u32, quality: u8) -> Resu
 pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
     let file = std::fs::File::open(path)?;
     let mut reader = std::io::BufReader::new(file);
-    let track = crate::media::isobmff::AvcTrack::read(&mut reader)?;
+    let track = crate::media::isobmff::VideoTrack::read_avc(&mut reader)?;
 
     let frame_w = track.width;
     let frame_h = track.height;

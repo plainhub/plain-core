@@ -1,0 +1,31 @@
+[package]
+name = "block2"
+version = "0.6.2"
+edition = "2021"
+license = "MIT"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/madsmtm/objc2"
+revision = "b4167b582b2f75f9a1be75495c41b765344fd03c"
+archive-sha256 = "cdeb9d870516001442e364c5220d3574d2da8dc765554b4a617230d33fa58ef5"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[features]
+"alloc" = []
+"default" = []
+"std" = ["alloc"]
+
+[dependencies."objc2"]
+path = "../objc2"
+version = "=0.6.5"
+default-features = false
+features = ["std"]
+
+[workspace]

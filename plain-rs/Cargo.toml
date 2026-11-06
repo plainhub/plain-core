@@ -39,7 +39,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "linux-platform" = ["linux-system", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util", "plain-libs/linux-platform"]
 
 "image-metadata" = ["library", "dep:image"]
-"runtime" = ["ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch"]
+"runtime" = ["ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "dep:windows"]
 "runtime-media" = ["runtime", "media", "dep:notify", "tokio/process"]
 
 "ai-image-search" = ["plain-libs/ai-image-search"]
@@ -113,3 +113,17 @@ required-features = ["ai-image-search"]
 [[example]]
 name = "thumb_bench"
 required-features = ["media"]
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+objc2 = { path = "../vendor/native/objc2", version = "=0.6.5", default-features = false, optional = true, features = ["std"] }
+objc2-foundation = { path = "../vendor/native/objc2-foundation", version = "=0.3.2", default-features = false, optional = true, features = ["std", "NSArray", "NSDictionary", "NSError", "NSObject", "NSString", "NSURL", "NSValue"] }
+objc2-av-foundation = { path = "../vendor/native/objc2-av-foundation", version = "=0.3.2", default-features = false, optional = true, features = ["std", "AVAsset", "AVAssetReader", "AVAssetReaderOutput", "AVAssetTrack", "AVAssetWriter", "AVAssetWriterInput", "AVMediaFormat", "AVVideoSettings", "block2", "objc2-core-foundation", "objc2-core-media", "objc2-core-video", "dispatch2"] }
+objc2-core-foundation = { path = "../vendor/native/objc2-core-foundation", version = "=0.3.2", default-features = false, optional = true, features = ["std", "CFString"] }
+objc2-core-media = { path = "../vendor/native/objc2-core-media", version = "=0.3.2", default-features = false, optional = true, features = ["std", "CMSampleBuffer", "CMTime", "CMFormatDescription"] }
+objc2-core-video = { path = "../vendor/native/objc2-core-video", version = "=0.3.2", default-features = false, optional = true, features = ["std", "CVBuffer", "CVImageBuffer", "CVPixelBuffer"] }
+block2 = { path = "../vendor/native/block2", version = "=0.6.2", default-features = false, optional = true, features = ["std"] }
+
+dispatch2 = { path = "../vendor/native/dispatch2", version = "=0.3.1", default-features = false, optional = true, features = ["alloc", "objc2"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { path = "../vendor/native/windows", version = "=0.57.0", default-features = false, optional = true, features = ["Win32_Foundation", "Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant"] }

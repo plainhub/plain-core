@@ -356,4 +356,11 @@ pub fn video_reader(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
 mod projection;
 
 mod samples;
-pub use samples::AvcTrack;
+
+mod metadata_tracks;
+pub use metadata_tracks::remove_mebx_tracks;
+pub use samples::VideoTrack;
+
+mod rewrite;
+mod hevc_normalize;
+pub use hevc_normalize::canonicalize_hev1;

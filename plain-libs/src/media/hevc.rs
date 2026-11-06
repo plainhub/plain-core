@@ -89,28 +89,14 @@ pub(super) fn hvcc(data: &[u8]) -> Option<StreamInfo> {
     if data.len() < 23 || data[0] != 1 {
         return None;
     }
-    let mut offset = 23usize;
-    for _ in 0..data[22] {
-        let kind = *data.get(offset)? & 63;
-        let count = u16::from_be_bytes(
-            data.get(offset + 1..offset.checked_add(3)?)?
-                .try_into()
-                .ok()?,
-        );
-        offset += 3;
-        for _ in 0..count {
-            let size = usize::from(u16::from_be_bytes(
-                data.get(offset..offset.checked_add(2)?)?.try_into().ok()?,
-            ));
-            offset += 2;
-            let end = offset.checked_add(size)?;
-            let nal = data.get(offset..end)?;
-            if kind == 33
-                && let Some(info) = sps(nal)
-            {
-                return Some(info);
+    for array in super::hevc_config::NalArrays::new(&data[23..], data[22]) {
+        let array = array.ok()?;
+        if array.bytes()[0] & 63 == 33 {
+            for nal in array.nals() {
+                if let Some(info) = sps(nal) {
+                    return Some(info);
+                }
             }
-            offset = end;
         }
     }
     None

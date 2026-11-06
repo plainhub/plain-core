@@ -14,7 +14,7 @@ fn existing_video_samples_preserve_bytes_metadata_and_keyframes() {
             .join("../plain-rs/testdata")
             .join(case["file"].as_str().unwrap());
         let mut file = std::io::BufReader::new(std::fs::File::open(path).unwrap());
-        let track = AvcTrack::read(&mut file).unwrap();
+        let track = VideoTrack::read_avc(&mut file).unwrap();
         for (actual, field) in [
             (track.width, "width"),
             (track.height, "height"),

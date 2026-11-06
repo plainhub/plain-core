@@ -1,0 +1,50 @@
+[package]
+name = "objc2-core-video"
+version = "0.3.2"
+edition = "2021"
+license = "Zlib OR Apache-2.0 OR MIT"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/madsmtm/objc2"
+revision = "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b"
+archive-sha256 = "d425caf1df73233f29fd8a5c3e5edbc30d2d4307870f802d18f00d83dc5141a6"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[features]
+"CVBase" = ["bitflags"]
+"CVBuffer" = ["objc2-core-foundation/CFDictionary"]
+"CVImageBuffer" = ["objc2-core-foundation/CFCGTypes", "objc2-core-foundation/CFDictionary"]
+"CVPixelBuffer" = ["bitflags", "objc2-core-foundation/CFArray", "objc2-core-foundation/CFDictionary"]
+"CVPixelBufferPool" = ["bitflags", "objc2-core-foundation/CFDictionary"]
+"alloc" = []
+"bitflags" = ["dep:bitflags"]
+"default" = []
+"objc2" = ["dep:objc2", "objc2-core-foundation/objc2"]
+"std" = ["alloc"]
+
+[dependencies."bitflags"]
+version = "=2.13.2"
+default-features = false
+optional = true
+features = ["std"]
+
+[dependencies."objc2"]
+path = "../objc2"
+version = "=0.6.5"
+default-features = false
+optional = true
+features = ["std"]
+
+[dependencies."objc2-core-foundation"]
+path = "../objc2-core-foundation"
+version = "=0.3.2"
+default-features = false
+
+[workspace]

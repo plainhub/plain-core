@@ -1,0 +1,47 @@
+[package]
+name = "objc2-core-foundation"
+version = "0.3.2"
+edition = "2021"
+license = "Zlib OR Apache-2.0 OR MIT"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/madsmtm/objc2"
+revision = "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b"
+archive-sha256 = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[features]
+"CFArray" = []
+"CFCGTypes" = []
+"CFData" = ["bitflags"]
+"CFDate" = ["bitflags"]
+"CFDictionary" = []
+"CFRunLoop" = ["bitflags"]
+"CFString" = ["bitflags"]
+"alloc" = []
+"bitflags" = ["dep:bitflags"]
+"default" = []
+"objc2" = ["dep:objc2"]
+"std" = ["alloc"]
+
+[dependencies."bitflags"]
+version = "=2.13.2"
+default-features = false
+optional = true
+features = ["std"]
+
+[dependencies."objc2"]
+path = "../objc2"
+version = "=0.6.5"
+default-features = false
+optional = true
+features = ["std"]
+
+[workspace]

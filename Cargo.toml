@@ -1,5 +1,6 @@
 [workspace]
 resolver = "3"
+exclude = ["vendor/native/objc2", "vendor/native/objc2-encode", "vendor/native/block2", "vendor/native/dispatch2", "vendor/native/objc2-foundation", "vendor/native/objc2-av-foundation", "vendor/native/objc2-core-foundation", "vendor/native/objc2-core-media", "vendor/native/objc2-core-video", "vendor/native/windows"]
 members = ["plain-libs", "plain-rs", "plain-server", "plain-cli", "plain-graphql", "plain-graphql/macros", "plain-libs/codecs/tiff", "plain-libs/codecs/heic-rs", "plain-libs/codecs/rav1d", "plain-libs/codecs/assert_matches", "plain-libs/codecs/atomig-macro", "plain-libs/codecs/atomig", "plain-libs/codecs/fax", "plain-libs/codecs/fax_derive", "plain-libs/codecs/strum", "plain-libs/codecs/strum_macros", "plain-libs/codecs/to_method", "plain-libs/codecs/zerocopy-derive", "plain-libs/codecs/zerocopy"]
 
 [profile.dev]
@@ -52,3 +53,15 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+
+[patch.crates-io]
+objc2 = { path = "vendor/native/objc2" }
+objc2-encode = { path = "vendor/native/objc2-encode" }
+block2 = { path = "vendor/native/block2" }
+dispatch2 = { path = "vendor/native/dispatch2" }
+objc2-foundation = { path = "vendor/native/objc2-foundation" }
+objc2-av-foundation = { path = "vendor/native/objc2-av-foundation" }
+objc2-core-foundation = { path = "vendor/native/objc2-core-foundation" }
+objc2-core-media = { path = "vendor/native/objc2-core-media" }
+objc2-core-video = { path = "vendor/native/objc2-core-video" }
+windows = { path = "vendor/native/windows" }
