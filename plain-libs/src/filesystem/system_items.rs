@@ -1,3 +1,6 @@
+#[cfg(any(target_os = "macos", test))]
+const MACOS_DIRECTORIES: &[&str] = &["/Applications", "/Library", "/System"];
+
 #[cfg(any(target_os = "linux", target_os = "android", test))]
 const UNIX_DIRECTORIES: &[&str] = &[
     "/bin",
@@ -44,6 +47,10 @@ pub fn contains(path: &str) -> Result<bool, String> {
     {
         Ok(android(path))
     }
+    #[cfg(target_os = "macos")]
+    {
+        Ok(MACOS_DIRECTORIES.contains(&path))
+    }
     #[cfg(windows)]
     {
         use crate::platform::known_folders::{Folder, resolve};
@@ -63,7 +70,12 @@ pub fn contains(path: &str) -> Result<bool, String> {
         });
         Ok(windows(path, directories))
     }
-    #[cfg(not(any(target_os = "linux", target_os = "android", windows)))]
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        windows
+    )))]
     {
         let _ = path;
         Ok(false)

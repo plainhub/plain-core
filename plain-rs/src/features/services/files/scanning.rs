@@ -20,10 +20,10 @@ pub enum ScanState {
 }
 pub enum Command {
     Rebuild(#[cfg(feature = "runtime-media")] String),
+    RebuildVolume(String),
     Pause,
     Resume,
     Stop,
-    SetDirectories(#[cfg(feature = "runtime-media")] Vec<String>),
 }
 
 async fn available(state: &CoreRuntime) -> Result<()> {
@@ -58,23 +58,38 @@ pub async fn progress(state: &CoreRuntime) -> Result<Progress> {
     #[cfg(not(feature = "runtime-media"))]
     anyhow::bail!("MEDIA_SCAN advertised without a scanner implementation")
 }
-pub async fn directories(state: &CoreRuntime) -> Result<Vec<String>> {
-    available(state).await?;
-    crate::features::services::files::catalog_scan::NativeMediaCatalog::new(state.clone())
-        .source_directories()
-        .map_err(anyhow::Error::msg)
-}
 pub async fn execute(state: &CoreRuntime, command: Command) -> Result<()> {
     available(state).await?;
     #[cfg(feature = "runtime-media")]
     {
         let catalog =
             crate::features::services::files::catalog_scan::NativeMediaCatalog::new(state.clone());
+        if matches!(&command, Command::Rebuild(_) | Command::RebuildVolume(_)) {
+            crate::features::services::files::indexing::discover(state)
+                .await
+                .map_err(anyhow::Error::msg)?;
+            catalog
+                .configure_policy(
+                    (*state.media_scans.policy().map_err(anyhow::Error::msg)?).clone(),
+                )
+                .map_err(anyhow::Error::msg)?;
+            catalog
+                .watch_source_directories()
+                .map_err(anyhow::Error::msg)?;
+        }
         match command {
             Command::Rebuild(root) => {
                 catalog
                     .start_source_scan(&root)
                     .map_err(anyhow::Error::msg)?;
+            }
+            Command::RebuildVolume(id) => {
+                catalog
+                    .start_volume_scan(&id)
+                    .map_err(anyhow::Error::msg)?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("Volume is offline or has no configured index directories")
+                    })?;
             }
             Command::Pause => {
                 catalog.pause_file_scan().map_err(anyhow::Error::msg)?;
@@ -84,14 +99,6 @@ pub async fn execute(state: &CoreRuntime, command: Command) -> Result<()> {
             }
             Command::Stop => {
                 catalog.cancel_file_scan().map_err(anyhow::Error::msg)?;
-            }
-            Command::SetDirectories(dirs) => {
-                crate::features::services::settings::preferences::Preferences::from_server(state)
-                    .set(
-                        crate::features::prefs::pref_keys::MEDIA_SOURCE_DIRS,
-                        serde_json::to_value(dirs)?,
-                    )
-                    .await?;
             }
         }
         Ok(())

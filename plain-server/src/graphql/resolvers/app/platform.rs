@@ -101,7 +101,7 @@ async fn require_capability(ctx: &Context<'_>, name: &str) -> Result<()> {
 }
 
 async fn samba_service(ctx: &Context<'_>) -> Result<SambaServiceFacts> {
-    require_capability(ctx, "LAN_SHARE").await?;
+    require_capability(ctx, "SMB_SERVER").await?;
     let value = ctx
         .data::<Arc<Host>>()?
         .call(SYSTEM_SAMBA_SERVICE_FACTS, serde_json::json!({}))
@@ -266,7 +266,7 @@ impl PlatformMutation {
     }
 
     async fn set_samba_user_password(&self, ctx: &Context<'_>, password: String) -> Result<bool> {
-        require_capability(ctx, "LAN_SHARE").await?;
+        require_capability(ctx, "SMB_SERVER").await?;
         if password.trim().is_empty() {
             return Err("password required".into());
         }

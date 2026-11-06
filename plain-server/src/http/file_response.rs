@@ -9,9 +9,7 @@ pub(crate) async fn stream_file(
     mime: &str,
     headers: &HeaderMap,
 ) -> axum::response::Response {
-    use plain_libs::utils::http::RangeParse;
-    use tokio::io::{AsyncReadExt, AsyncSeekExt};
-    let Ok(mut file) = tokio::fs::File::open(path).await else {
+    let Ok(file) = tokio::fs::File::open(path).await else {
         return StatusCode::NOT_FOUND.into_response();
     };
     let Ok(metadata) = file.metadata().await else {
@@ -20,7 +18,18 @@ pub(crate) async fn stream_file(
     if !metadata.is_file() {
         return StatusCode::NOT_FOUND.into_response();
     }
-    let size = metadata.len();
+    stream_open_file(file, 0, metadata.len(), mime, headers).await
+}
+
+async fn stream_open_file(
+    mut file: tokio::fs::File,
+    base: u64,
+    size: u64,
+    mime: &str,
+    headers: &HeaderMap,
+) -> Response {
+    use plain_libs::utils::http::RangeParse;
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
     let range = headers
         .get(axum::http::header::RANGE)
         .and_then(|v| v.to_str().ok())
@@ -42,7 +51,11 @@ pub(crate) async fn stream_file(
                     .into_response();
             }
         };
-    if file.seek(std::io::SeekFrom::Start(start)).await.is_err() {
+    if file
+        .seek(std::io::SeekFrom::Start(base + start))
+        .await
+        .is_err()
+    {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     let stream =
@@ -215,7 +228,23 @@ pub(crate) async fn resource(
     resources: &plain_rs::infrastructure::host::resources::NativeResources,
     path: &str,
     stop: tokio::sync::watch::Receiver<bool>,
-) -> Result<axum::body::Body, StatusCode> {
+    headers: &HeaderMap,
+) -> Result<Response, StatusCode> {
+    if headers.contains_key(header::RANGE) {
+        let input = resources
+            .read_file(path, stop)
+            .await
+            .map_err(|_| StatusCode::BAD_GATEWAY)?;
+        let size = u64::try_from(input.length).map_err(|_| StatusCode::BAD_GATEWAY)?;
+        return Ok(stream_open_file(
+            tokio::fs::File::from_std(input.file),
+            input.offset as u64,
+            size,
+            "application/octet-stream",
+            headers,
+        )
+        .await);
+    }
     use plain_rs::infrastructure::host::resources::ResourceError;
     let reader = resources
         .read_native(path, stop)
@@ -233,5 +262,9 @@ pub(crate) async fn resource(
             .map(|bytes| bytes.map(|bytes| (bytes, reader)))
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::ConnectionAborted, error))
     });
-    Ok(axum::body::Body::from_stream(stream))
+    Ok((
+        [(header::CONTENT_TYPE, "application/octet-stream")],
+        axum::body::Body::from_stream(stream),
+    )
+        .into_response())
 }

@@ -52,7 +52,7 @@ impl PeerRecordQuery {
         tokio::task::spawn_blocking(move || {
             let peer =
                 plain_rs::features::services::peers::peer_address::current(&db, &id, &expected)?;
-            plain_rs::features::services::peers::peer_address::file_url(&peer, &file_id)
+            plain_rs::features::services::peers::peer_address::download_url(&peer, &file_id)
         })
         .await?
         .map_err(|error| plain_graphql::Error::new(error.to_string()))

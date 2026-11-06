@@ -73,8 +73,29 @@ fn swap_files_only_group_registered_file_backed_swap_and_decode_kernel_paths() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn macos_keeps_its_own_visibility_without_system_groups() {
-    for path in ["/System", "/Library", "/Applications", "/usr"] {
-        assert!(!contains(path).unwrap());
+fn macos_classifies_system_roots_through_the_public_predicate() {
+    for path in MACOS_DIRECTORIES {
+        assert!(contains(path).unwrap(), "{path}");
+    }
+    assert!(!contains("/Users").unwrap());
+}
+
+#[test]
+fn macos_groups_only_the_three_system_root_entries() {
+    for path in ["/Applications", "/Library", "/System"] {
+        assert!(MACOS_DIRECTORIES.contains(&path), "{path}");
+    }
+    for path in [
+        "/Users",
+        "/Volumes",
+        "/usr",
+        "/Users/person/Applications",
+        "/Users/person/Library",
+        "/System/Library",
+        "/Library/Application Support",
+        "/Applications/Utilities",
+        "/System-copy",
+    ] {
+        assert!(!MACOS_DIRECTORIES.contains(&path), "{path}");
     }
 }

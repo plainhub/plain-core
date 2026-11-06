@@ -10,21 +10,6 @@ pub fn install_all_deps() {
     install_avahi();
 }
 
-pub fn install_libre_office() {
-    ensure_installed(&InstallPlan {
-        name: "DOC/DOCX preview (LibreOffice)".into(),
-        present_any: vec!["soffice".into(), "libreoffice".into()],
-        present_all: vec![],
-        apt_pkg: "libreoffice".into(),
-        dnf_pkg: "libreoffice".into(),
-        yum_pkg: "libreoffice".into(),
-        pacman_pkg: "libreoffice-fresh".into(),
-        apk_pkg: "libreoffice".into(),
-        no_supported_msg: "Couldn't detect a supported package manager to install LibreOffice."
-            .into(),
-    });
-}
-
 pub fn install_avahi() {
     ensure_installed(&InstallPlan {
         name: "Local name discovery (.local)".into(),

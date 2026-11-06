@@ -53,9 +53,7 @@ impl Cli {
 
 #[derive(Debug)]
 pub(crate) enum Cmd {
-    Install {
-        with_libreoffice: bool,
-    },
+    Install,
     Uninstall {
         keep_config: bool,
         keep_data: bool,

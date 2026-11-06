@@ -12,12 +12,9 @@ pub fn require_root() -> Result<()> {
     Ok(())
 }
 
-pub fn install(with_libreoffice: bool) -> Result<()> {
+pub fn install() -> Result<()> {
     require_root()?;
     super::deps::install_all_deps();
-    if with_libreoffice {
-        super::deps::install_libre_office();
-    }
     write_service(Path::new(SERVICE_PATH), BINARY_PATH)?;
     if super::packages::has_cmd("systemctl") {
         let status = std::process::Command::new("systemctl")

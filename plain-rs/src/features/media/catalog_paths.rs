@@ -37,7 +37,11 @@ pub fn scan_excluded_root(path: &Path) -> Option<&Path> {
             ancestor
                 .file_name()
                 .is_some_and(|name| name.to_string_lossy().starts_with('.'))
-                || is_native_hidden(ancestor)
+                || hidden_ancestor_excluded(
+                    &path.to_string_lossy(),
+                    ancestor,
+                    is_native_hidden(ancestor),
+                )
         })
         .or_else(|| git_project_root(path))
 }
@@ -64,11 +68,12 @@ pub fn is_file_excluded_at(
     extra_roots: &[String],
 ) -> bool {
     let mut exclusions = extra_roots.to_vec();
-    exclusions.extend([data_dir, cache_dir].map(crate::features::prefs::file_index::normalized));
-    crate::features::prefs::file_index::Scope {
+    exclusions.extend([data_dir, cache_dir].map(crate::features::files::index_scope::normalized));
+    crate::features::files::index_scope::Scope {
         directories: Vec::new(),
+        volumes: Vec::new(),
         exclusions,
-        defaults: crate::features::prefs::file_index::defaults(),
+        defaults: crate::features::files::index_scope::defaults(),
     }
     .excluded(path)
 }
@@ -100,7 +105,7 @@ pub fn is_media_excluded_at(
             }
         }
         if dir.join(".nomedia").is_file()
-            || (is_native_hidden(dir) && !is_cloud_drive_ancestor(&p, dir))
+            || hidden_ancestor_excluded(&p, dir, is_native_hidden(dir))
         {
             return true;
         }
@@ -109,12 +114,18 @@ pub fn is_media_excluded_at(
     false
 }
 
+fn hidden_ancestor_excluded(path: &str, ancestor: &Path, hidden: bool) -> bool {
+    hidden && !is_cloud_drive_ancestor(path, ancestor)
+}
+
 #[cfg(target_os = "macos")]
 fn is_cloud_drive_ancestor(path: &str, ancestor: &Path) -> bool {
-    let Some(cloud) = crate::features::prefs::file_index::macos_cloud_documents_root(path) else {
-        return false;
-    };
-    cloud.starts_with(ancestor)
+    if let Some(cloud) = crate::features::files::index_scope::macos_cloud_documents_root(path) {
+        cloud.starts_with(ancestor)
+    } else {
+        crate::features::files::index_scope::macos_cloud_documents_ancestor(path)
+            && Path::new(path).starts_with(ancestor)
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -168,7 +179,7 @@ pub fn is_media_excluded_name_or_root(
 
 #[cfg(target_os = "macos")]
 fn is_platform_private_root(path: &str) -> bool {
-    crate::features::prefs::file_index::macos_application_directory(path)
+    crate::features::files::index_scope::macos_application_directory(path)
 }
 
 #[cfg(target_os = "windows")]
@@ -220,15 +231,14 @@ pub fn is_native_hidden(_path: &Path) -> bool {
 }
 
 #[cfg(target_os = "macos")]
+pub const MEDIA_PACKAGE_SUFFIXES: &[&str] = &[".photoslibrary", ".app", ".bundle", ".framework"];
+#[cfg(not(target_os = "macos"))]
+pub const MEDIA_PACKAGE_SUFFIXES: &[&str] = &[];
+
 fn is_excluded_package_component(component: &str) -> bool {
-    [".photoslibrary", ".app", ".bundle", ".framework"]
+    MEDIA_PACKAGE_SUFFIXES
         .iter()
         .any(|suffix| component.to_ascii_lowercase().ends_with(suffix))
-}
-
-#[cfg(not(target_os = "macos"))]
-fn is_excluded_package_component(_component: &str) -> bool {
-    false
 }
 
 #[cfg(target_os = "windows")]

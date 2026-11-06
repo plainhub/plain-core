@@ -10,6 +10,15 @@ pub fn download_url(raw: &str) -> Result<reqwest::Url> {
         "Invalid shared download URL"
     );
     let query: std::collections::HashMap<_, _> = url.query_pairs().collect();
+    if url.path() == "/fs" {
+        ensure!(
+            query
+                .get("action")
+                .is_some_and(|action| action == "download")
+                && !query.contains_key("size"),
+            "Original file download action required"
+        );
+    }
     let id = query
         .get("id")
         .ok_or_else(|| anyhow::anyhow!("Missing shared file ID"))?;

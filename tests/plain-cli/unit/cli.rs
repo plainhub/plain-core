@@ -9,14 +9,7 @@ fn renamed_cli_keeps_all_existing_command_entries() {
 
 #[test]
 fn installation_and_uninstallation_options_are_preserved() {
-    assert!(matches!(
-        Cli::try_parse_from(["plainapp", "install", "--with-libreoffice"])
-            .unwrap()
-            .command,
-        Cmd::Install {
-            with_libreoffice: true
-        }
-    ));
+    assert!(Cli::try_parse_from(["plainapp", "install", "--with-libreoffice"]).is_err());
     assert!(matches!(
         Cli::try_parse_from(["plainapp", "uninstall", "--keep-config", "--keep-data"])
             .unwrap()

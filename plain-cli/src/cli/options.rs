@@ -10,7 +10,6 @@ use std::{
 pub(super) struct Values {
     pub(super) data_dir: Option<PathBuf>,
     pub(super) cache_dir: Option<PathBuf>,
-    pub(super) with_libreoffice: bool,
     pub(super) keep_config: bool,
     pub(super) keep_data: bool,
     pub(super) media_directories: Vec<PathBuf>,
@@ -33,7 +32,6 @@ impl Values {
             "--data-dir" | "--cache-dir" => true,
             "--media-dir" | "--web-root" if scope == Scope::Run => true,
             "--after" if scope == Scope::Requests => true,
-            "--with-libreoffice" if scope == Scope::Install => false,
             "--keep-config" | "--keep-data" if scope == Scope::Uninstall => false,
             "--stdin" if scope == Scope::Passwd => false,
             _ => return Err(ParseError::invalid(format!("unexpected argument {name:?}"))),
@@ -73,7 +71,6 @@ impl Values {
             "--web-root" => self.web_root = value.map(PathBuf::from),
             "--media-dir" => self.media_directories.push(PathBuf::from(value.unwrap())),
             "--after" => self.after = Some(text(value.unwrap())?),
-            "--with-libreoffice" => self.with_libreoffice = true,
             "--keep-config" => self.keep_config = true,
             "--keep-data" => self.keep_data = true,
             "--stdin" => self.stdin = true,

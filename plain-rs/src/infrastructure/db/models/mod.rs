@@ -54,7 +54,7 @@ pub mod file;
 #[cfg(feature = "library")]
 pub mod media_file;
 #[cfg(feature = "library")]
-pub use file::{FileKind, FileRow, VolumeRow};
+pub use file::{FileKind, FileRow, IndexMode, VolumeRow};
 #[cfg(feature = "library")]
 pub use media_file::{
     MediaFileMetadata, MediaFileMetadataAvailability, MediaFileMetadataRead, MediaFileRow,

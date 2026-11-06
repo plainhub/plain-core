@@ -1,25 +1,16 @@
 use anyhow::Result;
 use std::path::PathBuf;
 
-pub(super) fn source_directories(
-    prefs: &plain_rs::features::prefs::Prefs,
+pub(super) fn configure_index(
+    db: &plain_rs::infrastructure::db::Db,
     requested: &[PathBuf],
-) -> Result<Vec<String>> {
-    if !requested.is_empty() {
-        let directories = plain_rs::features::prefs::file_index::validate_directories(
-            requested
-                .iter()
-                .map(|path| path.to_string_lossy().into_owned())
-                .collect(),
-        )
-        .map_err(anyhow::Error::msg)?;
-        plain_rs::features::prefs::media::set_source_directories(prefs, &directories)?;
-    }
-    plain_rs::features::prefs::file_index::source_directories(
-        prefs,
-        &plain_rs::features::prefs::file_index::defaults(),
-    )
-    .map_err(anyhow::Error::msg)
+) -> Result<()> {
+    let directories = requested
+        .iter()
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    plain_rs::features::services::files::indexing::set_directories(db, &directories)
+        .map_err(anyhow::Error::msg)
 }
 
 #[cfg(target_os = "linux")]
@@ -37,6 +28,8 @@ pub(crate) fn event_sink(
                 .load(std::sync::atomic::Ordering::SeqCst)
             {
                 let result = (|| -> Result<(), String> {
+                    plain_rs::features::services::files::indexing::discover_native(&state)?;
+                    catalog.configure_policy((*state.media_scans.policy()?).clone())?;
                     catalog.watch_source_directories()?;
                     if !catalog.source_directories()?.is_empty() {
                         catalog.start_source_scan("/")?;

@@ -1,0 +1,1 @@
+function e(e,t={}){let n=t.delay??2e3,r=t.maxWait??1e4,i,a,o=()=>{i=void 0,a=void 0,e()};return{schedule:()=>{a??=Date.now(),i!==void 0&&clearTimeout(i);let e=Date.now()-a;i=setTimeout(o,Math.max(0,Math.min(n,r-e)))},dispose(){i!==void 0&&clearTimeout(i),i=void 0,a=void 0}}}export{e as t};

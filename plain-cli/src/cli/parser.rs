@@ -102,9 +102,7 @@ impl Cli {
             return Err(ParseError::help(scope));
         }
         let command = match scope {
-            Scope::Install => Cmd::Install {
-                with_libreoffice: values.with_libreoffice,
-            },
+            Scope::Install => Cmd::Install,
             Scope::Uninstall => Cmd::Uninstall {
                 keep_config: values.keep_config,
                 keep_data: values.keep_data,

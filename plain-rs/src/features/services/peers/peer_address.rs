@@ -89,13 +89,18 @@ pub fn same_identity(peer: &DPeer, expected: &DPeer) -> bool {
         && peer.public_key == expected.public_key
         && peer.status == expected.status
 }
-pub fn file_url(peer: &DPeer, file_id: &str) -> anyhow::Result<String> {
+pub fn download_url(peer: &DPeer, file_id: &str) -> anyhow::Result<String> {
     let mut url = reqwest::Url::parse(&format!(
         "{}/fs",
         peer.base_url()
             .ok_or_else(|| anyhow::anyhow!("No peer address"))?
     ))?;
-    url.query_pairs_mut().append_pair("id", file_id);
+    url.query_pairs_mut()
+        .append_pair("id", file_id)
+        .append_pair(
+            "action",
+            crate::features::services::files::content::Action::Download.as_str(),
+        );
     Ok(url.to_string())
 }
 pub fn proxy_address(

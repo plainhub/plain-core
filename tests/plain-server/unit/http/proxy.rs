@@ -36,3 +36,29 @@ fn hop_by_hop_and_reencoded_headers_are_not_proxied() {
     assert!(!SKIPPED.contains(&"content-type"));
     assert!(!SKIPPED.contains(&"etag"));
 }
+
+#[test]
+fn resource_proxy_uses_the_requested_operation_and_named_size() {
+    let parameters = crate::http::fs::Parameters {
+        id: "opaque".into(),
+        action: plain_rs::features::services::files::content::Action::Download,
+        size: None,
+        version: Some("updated".into()),
+    };
+    let url = reqwest::Url::parse(
+        &resource_target(
+            "https://device.invalid/fs?id=encrypted%2Breference",
+            &parameters,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let query = url
+        .query_pairs()
+        .collect::<std::collections::HashMap<_, _>>();
+    assert_eq!(query["id"], "encrypted+reference");
+    assert_eq!(query["action"], "download");
+    assert_eq!(query["v"], "updated");
+    assert!(!query.contains_key("size"));
+    assert!(resource_target("https://device.invalid/other?id=reference", &parameters).is_err());
+}

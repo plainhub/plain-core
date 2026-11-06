@@ -2,26 +2,40 @@ use crate::features::services::files::links;
 use crate::features::services::files::previews;
 use crate::runtime::Runtime as CoreRuntime;
 use serde_json::json;
-#[cfg(feature = "runtime-media")]
-use std::path::Path;
 use std::path::PathBuf;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 pub enum Size {
+    #[serde(rename = "sm")]
     Small,
+    #[serde(rename = "lg")]
     Large,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Action {
+    Preview,
+    Download,
+    Probe,
+    Transcode,
+}
+
+impl Action {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Preview => "preview",
+            Self::Download => "download",
+            Self::Probe => "probe",
+            Self::Transcode => "transcode",
+        }
+    }
 }
 
 pub struct Options {
     pub access_order: u64,
-    pub download: bool,
-    pub offset: Option<i64>,
-    pub length: Option<usize>,
+    pub action: Action,
     pub size: Option<Size>,
-    #[cfg(feature = "runtime-media")]
-    pub pdf: bool,
-    pub probe: bool,
-    pub transcode: bool,
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub starts_view: bool,
 }
@@ -43,15 +57,17 @@ pub enum Content {
         name: Option<String>,
         download: bool,
     },
-    Bytes(Vec<u8>),
     Codec(String),
+    Markdown {
+        text: String,
+        name: String,
+    },
     Thumbnail {
         bytes: Result<Option<bytes::Bytes>, crate::features::services::images::thumbnails::Error>,
         name: String,
     },
     NotFound,
     Directory,
-    SliceTooLarge,
     TranscodingUnavailable,
 }
 
@@ -60,6 +76,8 @@ pub async fn read(
     file: links::File,
     options: Options,
 ) -> anyhow::Result<Content> {
+    let download = options.action == Action::Download;
+    let preview = options.action == Action::Preview;
     let links::File {
         path,
         media_id,
@@ -84,24 +102,52 @@ pub async fn read(
         } else {
             &name
         };
+        if preview && options.size.is_none() && super::docs_preview::supports_name(filename) {
+            return super::docs_preview::read(state, &cached.to_string_lossy())
+                .await
+                .map(|text| Content::Markdown {
+                    text,
+                    name: filename.to_owned(),
+                });
+        }
         return Ok(Content::File {
             mime: plain_libs::utils::mime::mime_from_ext(&cached.to_string_lossy()).to_owned(),
             path: cached,
             name: filename.to_owned(),
-            download: options.download,
+            download,
         });
     }
-    if let (Some(offset), Some(length)) = (options.offset, options.length) {
-        if length > 0
-            && !path.starts_with("content://")
-            && !path.starts_with("ph://")
-            && !path.starts_with("pkgicon://")
-        {
-            return read_slice(&path, offset, length).await;
-        }
-    }
     if path.starts_with("content://") || path.starts_with("ph://") {
-        if path.starts_with("content://")
+        if options.action == Action::Probe {
+            return read_codec(state, &path).await;
+        }
+        if options.action == Action::Transcode {
+            return Ok(Content::TranscodingUnavailable);
+        }
+
+        if preview && options.size.is_none() {
+            let document = if super::docs_preview::supports_name(filename) {
+                true
+            } else if path.starts_with("content://") {
+                let mime = super::resources::read(&state.host, "mime", &path, json!({}))
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                mime.as_str()
+                    .is_some_and(super::docs_preview::supports_mime)
+            } else {
+                false
+            };
+            if document {
+                return super::docs_preview::read(state, &path).await.map(|text| {
+                    Content::Markdown {
+                        text,
+                        name: filename.to_owned(),
+                    }
+                });
+            }
+        }
+        if !download
+            && path.starts_with("content://")
             && let Some(file) =
                 previews::convert(state, previews::Conversion::Video3gp, &path).await?
         {
@@ -112,9 +158,9 @@ pub async fn read(
             });
         }
         return Ok(Content::Resource {
-            name: options.download.then(|| filename.to_owned()),
+            name: download.then(|| filename.to_owned()),
             path,
-            download: options.download,
+            download,
         });
     }
     if let Some(package) = path.strip_prefix("pkgicon://") {
@@ -140,50 +186,22 @@ pub async fn read(
     if options.starts_view && options.size != Some(Size::Small) {
         state.file_platform.recent_files.add(&path);
     }
-    #[cfg(feature = "runtime-media")]
-    if !options.download && options.pdf {
-        let modified = meta
-            .modified()?
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs() as i64;
-        let pdf = crate::features::services::files::docs_preview::get_or_create_pdf_preview(
-            state.cache.root(),
-            &path,
-            modified,
-            meta.len() as i64,
-        )
-        .await?;
-        let name = Path::new(if name.is_empty() { &path } else { &name })
-            .file_stem()
-            .and_then(|name| name.to_str())
-            .unwrap_or("document");
-        return Ok(Content::File {
-            path: pdf,
-            mime: "application/pdf".into(),
-            name: format!("{name}.pdf"),
-            download: false,
-        });
+    if preview && options.size.is_none() && super::docs_preview::supports_name(filename) {
+        return super::docs_preview::read(state, &path)
+            .await
+            .map(|text| Content::Markdown {
+                text,
+                name: filename.to_owned(),
+            });
     }
     let mime = plain_libs::utils::mime::mime_from_ext(&path);
-    if options.probe {
-        let codec = crate::features::services::files::resources::read(
-            &state.host,
-            "probe",
-            &path,
-            json!({}),
-        )
-        .await
-        .map_err(anyhow::Error::msg)?;
-        return Ok(Content::Codec(
-            codec
-                .as_str()
-                .unwrap_or_default()
-                .chars()
-                .filter(|ch| ch.is_alphanumeric())
-                .collect(),
-        ));
+    if options.action == Action::Probe {
+        return read_codec(state, &path).await;
     }
-    if !options.download && mime != "image/x-icon" {
+    if options.action == Action::Transcode && !mime.starts_with("video/") {
+        return Ok(Content::TranscodingUnavailable);
+    }
+    if !download && mime != "image/x-icon" {
         let animated = if mime.starts_with("image/") {
             crate::features::services::files::resources::read(
                 &state.host,
@@ -232,7 +250,7 @@ pub async fn read(
                 });
             }
             if mime == "video/mp4" {
-                if options.transcode {
+                if options.action == Action::Transcode {
                     let codec = crate::features::services::files::resources::read(
                         &state.host,
                         "probe",
@@ -285,33 +303,23 @@ pub async fn read(
         path: PathBuf::from(&path),
         mime: mime.into(),
         name: filename.to_owned(),
-        download: options.download,
+        download,
     })
 }
 
-async fn read_slice(path: &str, offset: i64, length: usize) -> anyhow::Result<Content> {
-    if length > 256 * 1024 {
-        return Ok(Content::SliceTooLarge);
-    }
-    if offset < 0 {
-        return Ok(Content::NotFound);
-    }
-    let Ok(mut file) = tokio::fs::File::open(path).await else {
-        return Ok(Content::NotFound);
-    };
-    use tokio::io::{AsyncReadExt, AsyncSeekExt};
-    file.seek(std::io::SeekFrom::Start(offset as u64)).await?;
-    let mut bytes = vec![0; length];
-    let mut n = 0;
-    while n < length {
-        let count = file.read(&mut bytes[n..]).await?;
-        if count == 0 {
-            break;
-        }
-        n += count;
-    }
-    bytes.truncate(n);
-    Ok(Content::Bytes(bytes))
+async fn read_codec(state: &CoreRuntime, path: &str) -> anyhow::Result<Content> {
+    let codec =
+        crate::features::services::files::resources::read(&state.host, "probe", path, json!({}))
+            .await
+            .map_err(anyhow::Error::msg)?;
+    Ok(Content::Codec(
+        codec
+            .as_str()
+            .unwrap_or_default()
+            .chars()
+            .filter(|ch| ch.is_alphanumeric())
+            .collect(),
+    ))
 }
 
 #[cfg(test)]

@@ -1,0 +1,330 @@
+//! BIFF record stream ([MS-XLS] 2.1.4): a sequence of `(type, size, data)` records, where a
+//! record too long for one is carried on in `CONTINUE` records. The framing is the same in every
+//! BIFF version since Excel 2.x; what changed between versions is the record types and layouts,
+//! named here by the version that uses them.
+
+use crate::error::{Error, Result};
+
+pub(super) const BOF: u16 = 0x0809;
+/// The `BOF` of BIFF2, BIFF3 and BIFF4 — the record type itself says the version.
+pub(super) const BOF_BIFF2: u16 = 0x0009;
+pub(super) const BOF_BIFF3: u16 = 0x0209;
+pub(super) const BOF_BIFF4: u16 = 0x0409;
+pub(super) const EOF: u16 = 0x000A;
+pub(super) const CONTINUE: u16 = 0x003C;
+pub(super) const FILEPASS: u16 = 0x002F;
+pub(super) const DATEMODE: u16 = 0x0022;
+pub(super) const BOUNDSHEET8: u16 = 0x0085;
+pub(super) const SST: u16 = 0x00FC;
+pub(super) const FORMAT: u16 = 0x041E;
+pub(super) const XF: u16 = 0x00E0;
+pub(super) const LABELSST: u16 = 0x00FD;
+pub(super) const LABEL: u16 = 0x0204;
+pub(super) const NUMBER: u16 = 0x0203;
+pub(super) const RK: u16 = 0x027E;
+pub(super) const MULRK: u16 = 0x00BD;
+pub(super) const FORMULA: u16 = 0x0006;
+pub(super) const STRING: u16 = 0x0207;
+pub(super) const BOOLERR: u16 = 0x0205;
+pub(super) const MERGEDCELLS: u16 = 0x00E5;
+pub(super) const HLINK: u16 = 0x01B8;
+pub(super) const OBJ: u16 = 0x005D;
+pub(super) const TXO: u16 = 0x01B6;
+pub(super) const NOTE: u16 = 0x001C;
+pub(super) const CODEPAGE: u16 = 0x0042;
+/// `FONT` of BIFF5 and later — the first that names a character set.
+pub(super) const FONT: u16 = 0x0031;
+/// A cell with rich text runs: BIFF5's byte string, BIFF8's `XLUnicodeString`.
+pub(super) const RSTRING: u16 = 0x00D6;
+/// BIFF4 workbook: the name of the worksheet substream that follows it.
+pub(super) const SHEETHDR: u16 = 0x008F;
+/// BIFF2–BIFF3 number format: the string alone, indexed by its order.
+pub(super) const FORMAT_BIFF2: u16 = 0x001E;
+pub(super) const XF_BIFF3: u16 = 0x0243;
+pub(super) const XF_BIFF4: u16 = 0x0443;
+pub(super) const FORMULA_BIFF3: u16 = 0x0206;
+pub(super) const FORMULA_BIFF4: u16 = 0x0406;
+/// BIFF2 cell records, whose head is a 3-byte cell attribute instead of an XF index.
+pub(super) const INTEGER_BIFF2: u16 = 0x0002;
+pub(super) const NUMBER_BIFF2: u16 = 0x0003;
+pub(super) const LABEL_BIFF2: u16 = 0x0004;
+pub(super) const BOOLERR_BIFF2: u16 = 0x0005;
+pub(super) const STRING_BIFF2: u16 = 0x0007;
+
+/// The BIFF version in a BIFF5 and later `BOF` (BIFF7 — Excel 95 — writes BIFF5's).
+pub(super) const BIFF5: u16 = 0x0500;
+pub(super) const BIFF8: u16 = 0x0600;
+
+/// One record, with the data of the `CONTINUE` records that follow it kept as separate
+/// segments: a string split across them restarts with a flags byte, so the boundaries matter.
+#[derive(Debug)]
+pub(super) struct Record<'a> {
+    pub kind: u16,
+    pub segments: Vec<&'a [u8]>,
+}
+
+impl<'a> Record<'a> {
+    /// The record's own data, without its continuations.
+    pub fn data(&self) -> &'a [u8] {
+        self.segments[0]
+    }
+}
+
+/// Reads records from `offset` on, each with its continuations attached.
+pub(super) struct Records<'a> {
+    stream: &'a [u8],
+    at: usize,
+}
+
+impl<'a> Records<'a> {
+    pub fn new(stream: &'a [u8], offset: usize) -> Self {
+        Self { stream, at: offset }
+    }
+
+    /// The stream offset of the next record.
+    pub fn position(&self) -> usize {
+        self.at
+    }
+
+    fn header(&self, at: usize) -> Option<(u16, usize)> {
+        let h = self.stream.get(at..at + 4)?;
+        Some((
+            u16::from_le_bytes([h[0], h[1]]),
+            u16::from_le_bytes([h[2], h[3]]) as usize,
+        ))
+    }
+}
+
+impl<'a> Iterator for Records<'a> {
+    type Item = Result<Record<'a>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (kind, size) = self.header(self.at)?;
+        let offset = self.at;
+        let Some(data) = self.stream.get(offset + 4..offset + 4 + size) else {
+            self.at = self.stream.len();
+            return Some(Err(Error::InvalidData(format!(
+                "Excel workbook: record 0x{kind:04X} at offset {offset} runs past the end of \
+                 the stream"
+            ))));
+        };
+        let mut segments = vec![data];
+        self.at = offset + 4 + size;
+        while let Some((CONTINUE, size)) = self.header(self.at) {
+            match self.stream.get(self.at + 4..self.at + 4 + size) {
+                Some(more) => segments.push(more),
+                None => break,
+            }
+            self.at += 4 + size;
+        }
+        Some(Ok(Record { kind, segments }))
+    }
+}
+
+/// A cursor over a record's segments.
+pub(super) struct Cursor<'a> {
+    segments: &'a [&'a [u8]],
+    segment: usize,
+    at: usize,
+}
+
+fn truncated(what: &str) -> Error {
+    Error::InvalidData(format!("Excel workbook: {what} is truncated"))
+}
+
+impl<'a> Cursor<'a> {
+    pub fn new(segments: &'a [&'a [u8]]) -> Self {
+        Self {
+            segments,
+            segment: 0,
+            at: 0,
+        }
+    }
+
+    /// Bytes left in the current segment.
+    fn left(&self) -> usize {
+        self.segments
+            .get(self.segment)
+            .map_or(0, |s| s.len() - self.at)
+    }
+
+    /// Move to the next segment when the current one is used up.
+    fn advance_if_done(&mut self) {
+        while self.segment < self.segments.len() && self.left() == 0 {
+            self.segment += 1;
+            self.at = 0;
+        }
+    }
+
+    pub fn u8(&mut self) -> Result<u8> {
+        self.advance_if_done();
+        let b = *self
+            .segments
+            .get(self.segment)
+            .and_then(|s| s.get(self.at))
+            .ok_or_else(|| truncated("a record"))?;
+        self.at += 1;
+        Ok(b)
+    }
+
+    pub fn u16(&mut self) -> Result<u16> {
+        Ok(u16::from_le_bytes([self.u8()?, self.u8()?]))
+    }
+
+    pub fn u32(&mut self) -> Result<u32> {
+        Ok(u32::from_le_bytes([
+            self.u8()?,
+            self.u8()?,
+            self.u8()?,
+            self.u8()?,
+        ]))
+    }
+
+    pub fn skip(&mut self, mut n: usize) -> Result<()> {
+        while n > 0 {
+            self.advance_if_done();
+            let step = n.min(self.left());
+            if step == 0 {
+                return Err(truncated("a record"));
+            }
+            self.at += step;
+            n -= step;
+        }
+        Ok(())
+    }
+
+    /// `cch` characters, one or two bytes each as `high_byte` says. Where the characters run
+    /// into the next segment, that segment restarts with a flags byte giving their width
+    /// anew ([MS-XLS] 2.5.293).
+    fn chars(&mut self, cch: usize, mut high_byte: bool) -> Result<String> {
+        let mut units = Vec::with_capacity(cch);
+        while units.len() < cch {
+            if self.left() == 0 {
+                self.segment += 1;
+                self.at = 0;
+                if self.segment >= self.segments.len() {
+                    return Err(truncated("a string"));
+                }
+                high_byte = self.u8()? & 0x01 != 0;
+                continue;
+            }
+            units.push(if high_byte {
+                self.u16()?
+            } else {
+                self.u8()? as u16
+            });
+        }
+        Ok(String::from_utf16_lossy(&units))
+    }
+
+    /// `cch` characters preceded by their flags byte — the text a `TXO` carries in the
+    /// `CONTINUE` that follows it.
+    pub fn flagged_chars(&mut self, cch: usize) -> Result<String> {
+        let flags = self.u8()?;
+        self.chars(cch, flags & 0x01 != 0)
+    }
+
+    /// A NUL-terminated UTF-16 string of at most `max_bytes` bytes, the rest of which is
+    /// skipped.
+    pub fn utf16_within(&mut self, max_bytes: usize) -> Result<String> {
+        let mut units = Vec::new();
+        let mut used = 0;
+        while used + 2 <= max_bytes {
+            let unit = self.u16()?;
+            used += 2;
+            if unit == 0 {
+                break;
+            }
+            units.push(unit);
+        }
+        self.skip(max_bytes - used)?;
+        Ok(String::from_utf16_lossy(&units))
+    }
+
+    /// `HyperlinkString` ([MS-OSHARED] 2.3.7.9): a count of UTF-16 units, NUL included.
+    pub fn hyperlink_string(&mut self) -> Result<String> {
+        let count = self.u32()? as usize;
+        self.utf16_within(count * 2)
+    }
+
+    /// `n` bytes, read on across `CONTINUE` boundaries — a byte string restarts with no flags.
+    pub fn bytes(&mut self, n: usize) -> Result<Vec<u8>> {
+        let mut out = Vec::with_capacity(n.min(1 << 16));
+        for _ in 0..n {
+            out.push(self.u8()?);
+        }
+        Ok(out)
+    }
+
+    /// The rest of the record, continuations included.
+    pub fn rest(&mut self) -> Vec<u8> {
+        let mut out = Vec::new();
+        while let Ok(b) = self.u8() {
+            out.push(b);
+        }
+        out
+    }
+
+    /// A byte string with an 8-bit count — BIFF2–BIFF7 text, in the workbook's code page.
+    pub fn byte_string8(&mut self) -> Result<Vec<u8>> {
+        let n = self.u8()? as usize;
+        self.bytes(n)
+    }
+
+    /// A byte string with a 16-bit count — BIFF3–BIFF7 cell text.
+    pub fn byte_string16(&mut self) -> Result<Vec<u8>> {
+        let n = self.u16()? as usize;
+        self.bytes(n)
+    }
+
+    /// `XLUnicodeRichExtendedString` ([MS-XLS] 2.5.293) — the shared string table's entries.
+    pub fn rich_extended_string(&mut self) -> Result<String> {
+        let cch = self.u16()? as usize;
+        let flags = self.u8()?;
+        let runs = if flags & 0x08 != 0 {
+            self.u16()? as usize
+        } else {
+            0
+        };
+        let ext = if flags & 0x04 != 0 {
+            self.u32()? as usize
+        } else {
+            0
+        };
+        let text = self.chars(cch, flags & 0x01 != 0)?;
+        self.skip(runs * 4 + ext)?;
+        Ok(text)
+    }
+
+    /// `XLUnicodeString` ([MS-XLS] 2.5.294): a 16-bit count, a flags byte, the characters.
+    pub fn unicode_string(&mut self) -> Result<String> {
+        let cch = self.u16()? as usize;
+        let flags = self.u8()?;
+        self.chars(cch, flags & 0x01 != 0)
+    }
+
+    /// `ShortXLUnicodeString` ([MS-XLS] 2.5.240): an 8-bit count, a flags byte, the characters.
+    pub fn short_unicode_string(&mut self) -> Result<String> {
+        let cch = self.u8()? as usize;
+        let flags = self.u8()?;
+        self.chars(cch, flags & 0x01 != 0)
+    }
+}
+
+/// Decode an `RkNumber` ([MS-XLS] 2.5.217).
+pub(super) fn rk_value(rk: u32) -> f64 {
+    let value = if rk & 0x02 != 0 {
+        ((rk as i32) >> 2) as f64
+    } else {
+        f64::from_bits(((rk & 0xFFFF_FFFC) as u64) << 32)
+    };
+    if rk & 0x01 != 0 {
+        value / 100.0
+    } else {
+        value
+    }
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/xls/records.rs"]
+mod tests;

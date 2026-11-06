@@ -14,7 +14,7 @@ async fn file_classification_is_available_in_the_main_file_contract_without_hidi
     #[plain_graphql::Object]
     impl Files {
         async fn entries(&self) -> Vec<File> {
-            ["/etc", "/home/person/etc"]
+            ["/etc", "/home/person/etc", "/System", "/Users"]
                 .into_iter()
                 .map(|path| file(&json!({"path":path})))
                 .collect()
@@ -33,7 +33,9 @@ async fn file_classification_is_available_in_the_main_file_contract_without_hidi
         cfg!(any(target_os = "linux", target_os = "android"))
     );
     assert_eq!(value["entries"][1]["isSystem"], false);
-    assert_eq!(value["entries"].as_array().unwrap().len(), 2);
+    assert_eq!(value["entries"][2]["isSystem"], cfg!(target_os = "macos"));
+    assert_eq!(value["entries"][3]["isSystem"], false);
+    assert_eq!(value["entries"].as_array().unwrap().len(), 4);
 }
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {

@@ -11,7 +11,7 @@ pub struct Options {
     pub media_directories: Vec<PathBuf>,
     pub web_root: Option<PathBuf>,
     #[cfg(test)]
-    pub file_index_defaults: Option<plain_rs::features::prefs::file_index::Defaults>,
+    pub file_index_defaults: Option<plain_rs::features::files::index_scope::Defaults>,
 }
 
 pub struct Service {
@@ -45,7 +45,7 @@ impl Service {
                 plain_rs::features::access::AccessFeature::FILE_FEATURES,
             )?;
         }
-        storage::source_directories(&prefs, &options.media_directories)?;
+        storage::configure_index(&core.runtime().db, &options.media_directories)?;
         let log_file =
             plain_rs::infrastructure::platform::system::log::default_log_file(&paths.data_dir);
         plain_rs::infrastructure::platform::system::log::set_file(&log_file)?;
@@ -164,11 +164,7 @@ impl Service {
 }
 
 fn capabilities() -> Vec<String> {
-    let mut capabilities = vec![
-        "FILE_EXPORT".into(),
-        "MEDIA_SCAN".into(),
-        "APP_UPDATES".into(),
-    ];
+    let mut capabilities = vec!["MEDIA_SCAN".into(), "APP_UPDATES".into()];
     capabilities.extend(
         plain_rs::features::services::files::media_action_io::capabilities()
             .iter()
@@ -180,14 +176,11 @@ fn capabilities() -> Vec<String> {
         if !plain_rs::infrastructure::platform::linux::samba::detect_systemd_service_name()
             .is_empty()
         {
-            capabilities.push("LAN_SHARE".into());
+            capabilities.push("SMB_SERVER".into());
         }
         if has_command("lsblk") {
             capabilities.push("DISK_MANAGER".into());
         }
-    }
-    if has_command("libreoffice") || has_command("soffice") {
-        capabilities.push("DOC_PREVIEW".into());
     }
     if login::available() {
         capabilities.push("LOCAL_LOGIN_APPROVAL".into());

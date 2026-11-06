@@ -1,0 +1,343 @@
+//! DOCX styles parsing.
+
+use crate::error::Result;
+use crate::model::HeadingLevel;
+use std::collections::HashMap;
+
+/// Style type (paragraph, character, table, etc.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StyleType {
+    Paragraph,
+    Character,
+    Table,
+    Numbering,
+}
+
+/// A parsed style definition.
+#[derive(Debug, Clone, Default)]
+pub struct Style {
+    /// Style ID (e.g., "Heading1")
+    pub id: String,
+    /// Style name (e.g., "Heading 1")
+    pub name: String,
+    /// Style type
+    pub style_type: Option<StyleType>,
+    /// Based on another style
+    pub based_on: Option<String>,
+    /// Paragraph properties
+    pub paragraph_props: ParagraphProps,
+    /// Run (text) properties
+    pub run_props: RunProps,
+    /// Outline level (for headings)
+    pub outline_level: Option<u8>,
+}
+
+/// Paragraph-level properties from a style.
+#[derive(Debug, Clone, Default)]
+
+pub struct ParagraphProps {
+    pub justification: Option<String>,
+}
+
+/// Run-level (character) properties from a style.
+#[derive(Debug, Clone, Default)]
+pub struct RunProps {
+    pub bold: Option<bool>,
+    pub italic: Option<bool>,
+    pub underline: Option<bool>,
+    pub strike: Option<bool>,
+    pub font_name: Option<String>,
+    pub font_size: Option<u32>,
+    pub color: Option<String>,
+    pub highlight: Option<String>,
+}
+
+impl RunProps {
+    /// Merge with another RunProps (other takes precedence).
+    pub fn merge(&mut self, other: &RunProps) {
+        if other.bold.is_some() {
+            self.bold = other.bold;
+        }
+        if other.italic.is_some() {
+            self.italic = other.italic;
+        }
+        if other.underline.is_some() {
+            self.underline = other.underline;
+        }
+        if other.strike.is_some() {
+            self.strike = other.strike;
+        }
+        if other.font_name.is_some() {
+            self.font_name = other.font_name.clone();
+        }
+        if other.font_size.is_some() {
+            self.font_size = other.font_size;
+        }
+        if other.color.is_some() {
+            self.color = other.color.clone();
+        }
+        if other.highlight.is_some() {
+            self.highlight = other.highlight.clone();
+        }
+    }
+}
+
+/// Collection of styles from styles.xml.
+#[derive(Debug, Clone, Default)]
+pub struct StyleMap {
+    /// Styles by ID
+    pub styles: HashMap<String, Style>,
+    /// Default paragraph style
+    pub default_paragraph: Option<String>,
+    /// Default character style
+    pub default_character: Option<String>,
+}
+
+impl StyleMap {
+    /// Parse styles from XML content.
+    pub fn parse(xml: &str) -> Result<Self> {
+        // Handle empty content
+        if xml.trim().is_empty() {
+            return Ok(Self::default());
+        }
+
+        let mut map = StyleMap::default();
+        let mut reader = crate::decode::reader_for(xml);
+        reader.config_mut().trim_text(true);
+
+        let mut buf = Vec::new();
+        let mut current_style: Option<Style> = None;
+        let mut in_style = false;
+        let mut in_ppr = false;
+        let mut in_rpr = false;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Start(e)) => {
+                    let name = e.name();
+                    match name.as_ref() {
+                        "w:style" => {
+                            let mut style = Style::default();
+                            for attr in e.attributes().flatten() {
+                                match attr.key.as_ref() {
+                                    "w:styleId" => {
+                                        style.id = attr.value.to_string();
+                                    }
+                                    "w:type" => {
+                                        let t = attr.value.as_ref();
+                                        style.style_type = match t {
+                                            "paragraph" => Some(StyleType::Paragraph),
+                                            "character" => Some(StyleType::Character),
+                                            "table" => Some(StyleType::Table),
+                                            "numbering" => Some(StyleType::Numbering),
+                                            _ => None,
+                                        };
+                                    }
+                                    "w:default" => {
+                                        let is_default = attr.value.as_ref() == "1";
+                                        if is_default {
+                                            if let Some(ref style_type) = style.style_type {
+                                                match style_type {
+                                                    StyleType::Paragraph => {
+                                                        map.default_paragraph =
+                                                            Some(style.id.clone());
+                                                    }
+                                                    StyleType::Character => {
+                                                        map.default_character =
+                                                            Some(style.id.clone());
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            current_style = Some(style);
+                            in_style = true;
+                        }
+                        "w:pPr" if in_style => {
+                            in_ppr = true;
+                        }
+                        "w:rPr" if in_style => {
+                            in_rpr = true;
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(quick_xml::events::Event::Empty(e)) => {
+                    let name = e.name();
+                    if let Some(ref mut style) = current_style {
+                        match name.as_ref() {
+                            "w:name" => {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:val" {
+                                        style.name = attr.value.to_string();
+                                    }
+                                }
+                            }
+                            "w:basedOn" => {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:val" {
+                                        style.based_on = Some(attr.value.to_string());
+                                    }
+                                }
+                            }
+                            "w:outlineLvl" if in_ppr => {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:val" {
+                                        let val = attr.value.as_ref();
+                                        style.outline_level = val.parse().ok();
+                                    }
+                                }
+                            }
+                            "w:jc" if in_ppr => {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:val" {
+                                        style.paragraph_props.justification =
+                                            Some(attr.value.to_string());
+                                    }
+                                }
+                            }
+                            "w:b" if in_rpr => {
+                                let val = get_bool_attr(&e, "w:val");
+                                style.run_props.bold = Some(val.unwrap_or(true));
+                            }
+                            "w:i" if in_rpr => {
+                                let val = get_bool_attr(&e, "w:val");
+                                style.run_props.italic = Some(val.unwrap_or(true));
+                            }
+                            "w:u" if in_rpr => {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:val" {
+                                        let val = attr.value.as_ref();
+                                        style.run_props.underline = Some(val != "none");
+                                    }
+                                }
+                            }
+                            "w:strike" if in_rpr => {
+                                let val = get_bool_attr(&e, "w:val");
+                                style.run_props.strike = Some(val.unwrap_or(true));
+                            }
+                            "w:sz" if in_rpr => {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:val" {
+                                        let val = attr.value.as_ref();
+                                        style.run_props.font_size = val.parse().ok();
+                                    }
+                                }
+                            }
+                            "w:color" if in_rpr => {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:val" {
+                                        let val = attr.value.as_ref();
+                                        if val != "auto" {
+                                            style.run_props.color = Some(val.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                            "w:rFonts" if in_rpr => {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:ascii" {
+                                        style.run_props.font_name = Some(attr.value.to_string());
+                                        break;
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                Ok(quick_xml::events::Event::End(e)) => match e.name().as_ref() {
+                    "w:style" => {
+                        if let Some(style) = current_style.take() {
+                            map.styles.insert(style.id.clone(), style);
+                        }
+                        in_style = false;
+                        in_ppr = false;
+                        in_rpr = false;
+                    }
+                    "w:pPr" => {
+                        in_ppr = false;
+                    }
+                    "w:rPr" => {
+                        in_rpr = false;
+                    }
+                    _ => {}
+                },
+                Ok(quick_xml::events::Event::Eof) => break,
+                Err(e) => return Err(e.into()),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        Ok(map)
+    }
+
+    /// Get a style by ID, resolving inheritance.
+    pub fn get_resolved(&self, id: &str) -> Option<Style> {
+        let mut style = self.styles.get(id)?.clone();
+
+        // Resolve inheritance chain (max 10 levels to prevent infinite loops)
+        let mut depth = 0;
+        let mut current_based_on = style.based_on.clone();
+        while let Some(ref base_id) = current_based_on {
+            if depth > 10 {
+                break;
+            }
+            if let Some(base) = self.styles.get(base_id) {
+                // Merge base properties (base first, then override)
+                let mut merged_run = base.run_props.clone();
+                merged_run.merge(&style.run_props);
+                style.run_props = merged_run;
+
+                if style.outline_level.is_none() {
+                    style.outline_level = base.outline_level;
+                }
+
+                current_based_on = base.based_on.clone();
+            } else {
+                break;
+            }
+            depth += 1;
+        }
+
+        Some(style)
+    }
+
+    /// Get the heading level for a style ID.
+    pub fn get_heading_level(&self, style_id: &str) -> HeadingLevel {
+        if let Some(style) = self.get_resolved(style_id) {
+            if let Some(level) = style.outline_level {
+                return HeadingLevel::from_number(level + 1);
+            }
+            // Also check for Title/Subtitle styles
+            let name_lower = style.name.to_lowercase();
+            if name_lower == "title" {
+                return HeadingLevel::H1;
+            }
+            if name_lower == "subtitle" {
+                return HeadingLevel::H2;
+            }
+        }
+        HeadingLevel::None
+    }
+}
+
+/// Helper to get a boolean attribute value.
+fn get_bool_attr(e: &quick_xml::events::BytesStart, key: &str) -> Option<bool> {
+    for attr in e.attributes().flatten() {
+        if attr.key.as_ref() == key {
+            let val = attr.value.as_ref();
+            return Some(val != "0" && val != "false");
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/docx/styles.rs"]
+mod tests;

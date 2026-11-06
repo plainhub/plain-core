@@ -82,7 +82,6 @@ impl MediaActions {
         let ids = crate::features::services::files::catalog::MediaCatalog::new(
             self.db.clone(),
             self.host.clone(),
-            self.prefs.clone(),
         )
         .ids(kind, query, from_trash)
         .await

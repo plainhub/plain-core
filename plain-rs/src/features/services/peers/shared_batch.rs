@@ -207,6 +207,7 @@ async fn execute(state: &CoreRuntime, work: &BlockingWork, run: &Run) -> Result<
             run.intent
                 .link
                 .file_url(&run.intent.url_token, &target.entry.relative_path, false)?;
+        let url = format!("{url}&action=download");
         let result = operation(
             state,
             work,

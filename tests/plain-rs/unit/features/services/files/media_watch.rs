@@ -297,11 +297,11 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
     let root = directory.path();
     std::fs::create_dir_all(root.join("project/src")).unwrap();
     std::fs::create_dir_all(root.join("project/.git/objects")).unwrap();
-    let scope = crate::features::prefs::file_index::Scope {
-        directories: vec![crate::features::prefs::file_index::normalized(root)],
+    let scope = crate::features::files::index_scope::Scope {
+        volumes: Vec::new(),
+        directories: vec![crate::features::files::index_scope::normalized(root)],
         exclusions: Vec::new(),
-        defaults: crate::features::prefs::file_index::Defaults {
-            scan_directories: Vec::new(),
+        defaults: crate::features::files::index_scope::Defaults {
             excluded_directories: Vec::new(),
             excluded_names: vec![".git".into()],
         },
@@ -335,13 +335,13 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
 fn watcher_excluded_event_bursts_do_not_fill_the_watch_queue() {
     let directory = watch_directory_fixture();
     let root = directory.path();
-    let scope = crate::features::prefs::file_index::Scope {
-        directories: vec![crate::features::prefs::file_index::normalized(root)],
-        exclusions: vec![crate::features::prefs::file_index::normalized(
+    let scope = crate::features::files::index_scope::Scope {
+        volumes: Vec::new(),
+        directories: vec![crate::features::files::index_scope::normalized(root)],
+        exclusions: vec![crate::features::files::index_scope::normalized(
             &root.join("build"),
         )],
-        defaults: crate::features::prefs::file_index::Defaults {
-            scan_directories: Vec::new(),
+        defaults: crate::features::files::index_scope::Defaults {
             excluded_directories: Vec::new(),
             excluded_names: vec!["lost+found".into()],
         },
@@ -388,7 +388,6 @@ fn an_inaccessible_watch_root_is_skipped_without_marking_it_watched() {
     assert!(watched.is_empty());
     assert_eq!(watcher.calls, vec![directory.path().to_owned()]);
 }
-
 
 #[test]
 fn git_project_events_are_skipped_without_disabling_other_file_events() {

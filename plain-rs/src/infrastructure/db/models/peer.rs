@@ -73,6 +73,7 @@ impl DPeer {
     }
 
     pub fn file_url(&self, file_id: &str) -> Option<String> {
-        self.base_url().map(|url| format!("{url}/fs?id={file_id}"))
+        self.base_url()
+            .map(|url| format!("{url}/fs?id={file_id}&action=preview"))
     }
 }

@@ -6,7 +6,10 @@ pub(crate) fn init(connection: &Connection) -> rusqlite::Result<()> {
     id TEXT PRIMARY KEY NOT NULL CHECK(length(id)>0),
     identity TEXT NOT NULL UNIQUE CHECK(length(identity)>0),
     path TEXT NOT NULL CHECK(length(path)>0),
-    is_available INTEGER NOT NULL CHECK(is_available IN (0,1))
+    is_available INTEGER NOT NULL CHECK(is_available IN (0,1)),
+    index_mode TEXT NOT NULL DEFAULT 'UNCONFIGURED' CHECK(index_mode IN ('UNCONFIGURED','DISABLED','ALLOWLIST','BLOCKLIST')),
+    included_dirs TEXT NOT NULL DEFAULT '[]',
+    excluded_dirs TEXT NOT NULL DEFAULT '[]'
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS files (

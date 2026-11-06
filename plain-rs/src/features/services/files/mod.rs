@@ -37,6 +37,7 @@ pub mod native_scan;
 
 pub mod archive_listing;
 
+pub mod indexing;
 pub mod scanning;
 
 pub mod indexed;
@@ -76,7 +77,6 @@ pub mod previews;
 pub mod browse;
 
 pub mod catalog_events;
-#[cfg(feature = "runtime-media")]
 pub mod docs_preview;
 pub mod media_catalog_facts;
 pub mod provider_query;

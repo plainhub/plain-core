@@ -105,33 +105,15 @@ async fn platform_query_passes_prepared_conditions_and_only_resolves_parent_when
         }
     });
     assert_eq!(
-        platform(
-            &db,
-            &host,
-            &crate::features::prefs::Prefs::in_memory(),
-            "text:100%",
-            0,
-            10,
-            FileSortBy::NameAsc,
-            false
-        )
-        .await
-        .unwrap(),
+        platform(&db, &host, "text:100%", 0, 10, FileSortBy::NameAsc, false)
+            .await
+            .unwrap(),
         json!([])
     );
     assert_eq!(
-        platform(
-            &db,
-            &host,
-            &crate::features::prefs::Prefs::in_memory(),
-            "parent:/docs",
-            0,
-            0,
-            FileSortBy::NameAsc,
-            true
-        )
-        .await
-        .unwrap(),
+        platform(&db, &host, "parent:/docs", 0, 0, FileSortBy::NameAsc, true)
+            .await
+            .unwrap(),
         json!(3)
     );
     assert_eq!(
@@ -147,7 +129,7 @@ async fn platform_query_passes_prepared_conditions_and_only_resolves_parent_when
 
 #[test]
 fn scope_changes_hide_existing_records_and_preserve_file_identity_and_user_state() {
-    use crate::features::prefs::file_index::{Defaults, Scope};
+    use crate::features::files::index_scope::{Defaults, Scope};
     let dir = tempfile::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     seed(&db, "/docs/private/report.pdf", 10);
@@ -164,10 +146,10 @@ fn scope_changes_hide_existing_records_and_preserve_file_identity_and_user_state
         })
         .unwrap();
     let mut scope = Scope {
+        volumes: Vec::new(),
         directories: vec!["/docs".into()],
         exclusions: vec!["/docs/private".into()],
         defaults: Defaults {
-            scan_directories: vec![],
             excluded_directories: vec![],
             excluded_names: vec![],
         },

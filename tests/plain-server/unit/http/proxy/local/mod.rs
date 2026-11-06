@@ -53,15 +53,15 @@ fn extract_only_pt() {
 
 #[test]
 fn extract_pt_with_other_params() {
-    let p = extract_proxy_params("/fs?id=abc&_pt=https%3A%2F%2F192.0.2.1%3A8443&s=sm");
-    assert_eq!(p.path, "/fs?id=abc&s=sm");
+    let p = extract_proxy_params("/fs?id=abc&_pt=https%3A%2F%2F192.0.2.1%3A8443&size=sm");
+    assert_eq!(p.path, "/fs?id=abc&size=sm");
     assert_eq!(p.pt, "https://192.0.2.1:8443");
 }
 
 #[test]
 fn extract_no_pt_param() {
-    let p = extract_proxy_params("/fs?id=abc&s=sm");
-    assert_eq!(p.path, "/fs?id=abc&s=sm");
+    let p = extract_proxy_params("/fs?id=abc&size=sm");
+    assert_eq!(p.path, "/fs?id=abc&size=sm");
     assert_eq!(p.pt, "");
 }
 
@@ -74,15 +74,15 @@ fn extract_pt_first() {
 
 #[test]
 fn extract_pt_middle() {
-    let p = extract_proxy_params("/fs?id=abc&_pt=https%3A%2F%2F198.51.100.7%3A443&s=sm");
-    assert_eq!(p.path, "/fs?id=abc&s=sm");
+    let p = extract_proxy_params("/fs?id=abc&_pt=https%3A%2F%2F198.51.100.7%3A443&size=sm");
+    assert_eq!(p.path, "/fs?id=abc&size=sm");
     assert_eq!(p.pt, "https://198.51.100.7:443");
 }
 
 #[test]
 fn extract_pt_last() {
-    let p = extract_proxy_params("/fs?id=abc&s=sm&_pt=https%3A%2F%2F198.51.100.7%3A443");
-    assert_eq!(p.path, "/fs?id=abc&s=sm");
+    let p = extract_proxy_params("/fs?id=abc&size=sm&_pt=https%3A%2F%2F198.51.100.7%3A443");
+    assert_eq!(p.path, "/fs?id=abc&size=sm");
     assert_eq!(p.pt, "https://198.51.100.7:443");
 }
 
@@ -110,9 +110,9 @@ fn extract_preserves_base64_plus_and_slash_and_equals() {
     // `=` -> `%3D`. The proxy must pass these percent-triplets through
     // untouched; decoding here would turn `%2B` into a space and break
     // base64 decoding on the device side, surfacing as a 403.
-    let raw = "/fs?id=abc%2Bdef%2Fghi%3D%3D&s=sm&_pt=https%3A%2F%2F203.0.113.9%3A8643";
+    let raw = "/fs?id=abc%2Bdef%2Fghi%3D%3D&size=sm&_pt=https%3A%2F%2F203.0.113.9%3A8643";
     let p = extract_proxy_params(raw);
-    assert_eq!(p.path, "/fs?id=abc%2Bdef%2Fghi%3D%3D&s=sm");
+    assert_eq!(p.path, "/fs?id=abc%2Bdef%2Fghi%3D%3D&size=sm");
     assert_eq!(p.pt, "https://203.0.113.9:8643");
 }
 

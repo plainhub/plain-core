@@ -32,7 +32,7 @@ fn missing_file_starts_empty_and_creates_on_first_set() {
 fn roundtrip_string_and_json_shapes() {
     let (_dir, prefs) = tmp_prefs("roundtrip");
     prefs.set("url_token", "abc123").unwrap();
-    prefs.set("media_source_dirs", vec!["/a", "/b"]).unwrap();
+    prefs.set("dlna_allowed_senders", vec!["/a", "/b"]).unwrap();
     prefs
         .set("samba_settings", serde_json::json!({"enabled": true}))
         .unwrap();
@@ -42,7 +42,7 @@ fn roundtrip_string_and_json_shapes() {
         Some("abc123")
     );
     assert_eq!(
-        prefs.get::<Vec<String>>("media_source_dirs").unwrap(),
+        prefs.get::<Vec<String>>("dlna_allowed_senders").unwrap(),
         Some(vec!["/a".into(), "/b".into()])
     );
     assert_eq!(

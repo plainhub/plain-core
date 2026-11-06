@@ -47,17 +47,42 @@ enum ScanState {
 
 extend type Mutation {
 	pauseMediaScan: Boolean!
+	rebuildFileIndexVolume(id: String!): Boolean!
 	rebuildMediaIndex(root: String!): Boolean!
 	recordMediaPlay(mediaId: ID!, type: MediaDataType!, positionMs: Long!): Boolean!
 	resumeMediaScan: Boolean!
 	saveMediaPlayProgress(mediaId: ID!, type: MediaDataType!, positionMs: Long!): Boolean!
-	setMediaSourceDirs(dirs: [String!]!): Boolean!
+	setFileIndexVolume(id: String!, indexMode: IndexMode!, includedDirs: [String!]!, excludedDirs: [String!]!): Boolean!
 	stopMediaScan: Boolean!
 }
 
 extend type Query {
 	mediaBuckets(type: MediaDataType!): [MediaBucket!]!
 	mediaPlayHistory(query: String!, offset: Int!, limit: Int!): [MediaPlayHistory!]!
-	mediaSourceDirs: [String!]!
+	fileIndexVolumes: [FileIndexVolume!]!
+	fileIndexDefaults: FileIndexDefaults!
 	scanProgress: ScanProgress!
+}
+
+enum IndexMode {
+    UNCONFIGURED
+    DISABLED
+    ALLOWLIST
+    BLOCKLIST
+}
+
+type FileIndexVolume {
+    id: String!
+    path: String!
+    isAvailable: Boolean!
+    indexMode: IndexMode!
+    includedDirs: [String!]!
+    excludedDirs: [String!]!
+}
+
+type FileIndexDefaults {
+    excludedDirs: [String!]!
+    excludedNames: [String!]!
+    excludedPackages: [String!]!
+    excludedUserLibraries: Boolean!
 }

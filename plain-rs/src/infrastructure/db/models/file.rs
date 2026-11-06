@@ -75,12 +75,57 @@ impl FromSql for FileKind {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+pub enum IndexMode {
+    #[default]
+    Unconfigured,
+    Disabled,
+    Allowlist,
+    Blocklist,
+}
+
+impl IndexMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unconfigured => "UNCONFIGURED",
+            Self::Disabled => "DISABLED",
+            Self::Allowlist => "ALLOWLIST",
+            Self::Blocklist => "BLOCKLIST",
+        }
+    }
+}
+impl rusqlite::ToSql for IndexMode {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::Borrowed(ValueRef::Text(
+            self.as_str().as_bytes(),
+        )))
+    }
+}
+impl FromSql for IndexMode {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        match value.as_str()? {
+            "UNCONFIGURED" => Ok(Self::Unconfigured),
+            "DISABLED" => Ok(Self::Disabled),
+            "ALLOWLIST" => Ok(Self::Allowlist),
+            "BLOCKLIST" => Ok(Self::Blocklist),
+            _ => Err(rusqlite::types::FromSqlError::Other(
+                "Invalid index mode".into(),
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct VolumeRow {
     pub id: String,
     pub identity: String,
     pub path: String,
     pub is_available: bool,
+    pub index_mode: IndexMode,
+    pub included_dirs: Vec<String>,
+    pub excluded_dirs: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]

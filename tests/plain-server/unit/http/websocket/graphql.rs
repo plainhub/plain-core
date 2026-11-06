@@ -211,7 +211,8 @@ async fn fs_burst_and_page_cancellation(
     for (id, connection) in ids[..300].iter().zip(&connections) {
         let request = connection
             .get(format!("{origin}/fs"))
-            .query(&[("id", id.as_str()), ("s", "sm")]);
+            .query(&[("action", "preview")])
+            .query(&[("id", id.as_str()), ("size", "sm")]);
         pending.spawn(async move { request.send().await.unwrap() });
     }
     tokio::time::timeout(Duration::from_secs(10), async {
@@ -275,7 +276,8 @@ async fn fs_burst_and_page_cancellation(
     gate.add_permits(workers);
     let next = http
         .get(format!("{origin}/fs"))
-        .query(&[("id", ids[300].as_str()), ("s", "sm")])
+        .query(&[("action", "preview")])
+        .query(&[("id", ids[300].as_str()), ("size", "sm")])
         .send()
         .await
         .unwrap();
@@ -291,7 +293,8 @@ async fn fs_burst_and_page_cancellation(
     for (id, connection) in ids[..300].iter().zip(&connections) {
         let request = connection
             .get(format!("{origin}/fs"))
-            .query(&[("id", id.as_str()), ("s", "sm")]);
+            .query(&[("action", "preview")])
+            .query(&[("id", id.as_str()), ("size", "sm")]);
         complete.spawn(async move {
             let response = request.send().await.unwrap();
             assert_eq!(response.status(), StatusCode::OK);

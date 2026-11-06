@@ -36,16 +36,12 @@ fn photo_snapshot_populates_shared_image_queries_and_preserves_identity() {
             .path,
         rows[0].path
     );
-    let prefs = crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap();
-    let documents = directory.path().join("Documents");
-    std::fs::create_dir(&documents).unwrap();
-    let scope = crate::features::prefs::file_index::Scope::load(
-        &prefs,
+    let scope = crate::features::files::index_scope::Scope::load(
+        &db,
         &directory.path().join("private"),
         &directory.path().join("cache"),
         &[],
-        crate::features::prefs::file_index::Defaults {
-            scan_directories: vec![documents.to_string_lossy().into_owned()],
+        crate::features::files::index_scope::Defaults {
             excluded_directories: vec![],
             excluded_names: vec![],
         },
@@ -132,7 +128,10 @@ fn photo_snapshot_stores_videos_in_the_shared_catalog_without_copying() {
     assert_eq!(videos[0].duration_ms, 1250);
     assert_eq!(videos[0].width, 1920);
     assert_eq!(media_catalog::count(&db, DataType::Image, "").unwrap(), 1);
-    assert_eq!(db.media_resource_path(&videos[0].id).unwrap(), videos[0].path);
+    assert_eq!(
+        db.media_resource_path(&videos[0].id).unwrap(),
+        videos[0].path
+    );
     replace(&db, &assets[..1]).unwrap();
     assert_eq!(media_catalog::count(&db, DataType::Video, "").unwrap(), 0);
 }

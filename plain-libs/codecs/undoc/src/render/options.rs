@@ -1,0 +1,355 @@
+//! Rendering options configuration.
+
+use super::heading_analyzer::HeadingConfig;
+
+/// How to render complex tables.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TableFallback {
+    /// Use Markdown pipe tables.
+    ///
+    /// Merged cells keep their columns: the value sits at the merge's first column and
+    /// the columns it covers render as empty cells. The merge itself is not expressible
+    /// in Markdown, so it is flattened — choose [`Self::Html`] to keep it.
+    #[default]
+    Markdown,
+    /// Render tables as HTML when they contain a merge.
+    ///
+    /// Keeps `colspan`/`rowspan` rather than flattening them, at the cost of emitting
+    /// HTML into the Markdown. Tables without merges still render as pipe tables.
+    Html,
+}
+
+/// Cleanup preset for LLM training data preparation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CleanupPreset {
+    /// Minimal cleanup: only essential normalization
+    Minimal,
+    /// Default: balanced normalization
+    #[default]
+    Default,
+    /// Aggressive: maximum purification
+    Aggressive,
+}
+
+/// Cleanup options for post-processing.
+#[derive(Debug, Clone, Default)]
+pub struct CleanupOptions {
+    /// Normalize Unicode strings (NFC), standardize bullets
+    pub normalize_strings: bool,
+
+    /// Remove headers, footers, page numbers, TOC markers
+    pub clean_lines: bool,
+
+    /// Filter empty paragraphs, orphaned elements
+    pub filter_structure: bool,
+
+    /// Final whitespace normalization
+    pub final_normalize: bool,
+
+    /// Remove Private Use Area characters
+    pub remove_pua: bool,
+
+    /// Preserve YAML frontmatter during cleanup
+    pub preserve_frontmatter: bool,
+}
+
+impl CleanupOptions {
+    /// Create cleanup options from a preset.
+    pub fn from_preset(preset: CleanupPreset) -> Self {
+        match preset {
+            CleanupPreset::Minimal => Self {
+                normalize_strings: true,
+                final_normalize: true,
+                ..Default::default()
+            },
+            CleanupPreset::Default => Self {
+                normalize_strings: true,
+                clean_lines: true,
+                final_normalize: true,
+                preserve_frontmatter: true,
+                ..Default::default()
+            },
+            CleanupPreset::Aggressive => Self {
+                normalize_strings: true,
+                clean_lines: true,
+                filter_structure: true,
+                final_normalize: true,
+                remove_pua: true,
+                preserve_frontmatter: true,
+            },
+        }
+    }
+
+    /// Create minimal cleanup options.
+    pub fn minimal() -> Self {
+        Self::from_preset(CleanupPreset::Minimal)
+    }
+
+    /// Create default cleanup options.
+    pub fn standard() -> Self {
+        Self::from_preset(CleanupPreset::Default)
+    }
+
+    /// Create aggressive cleanup options.
+    pub fn aggressive() -> Self {
+        Self::from_preset(CleanupPreset::Aggressive)
+    }
+}
+
+/// Options for rendering documents.
+#[derive(Debug, Clone)]
+pub struct RenderOptions {
+    /// Prefix for image paths in markdown (e.g., "assets/")
+    pub image_path_prefix: String,
+
+    /// How to handle complex tables
+    pub table_fallback: TableFallback,
+
+    /// Maximum heading level (1-6).
+    /// Default: 4 (Office documents often misuse deep heading levels for visual styling)
+    pub max_heading_level: u8,
+
+    /// Include YAML frontmatter with metadata
+    pub include_frontmatter: bool,
+
+    /// Preserve line breaks within paragraphs
+    pub preserve_line_breaks: bool,
+
+    /// Include empty paragraphs in output
+    pub include_empty_paragraphs: bool,
+
+    /// Character for unordered list markers
+    pub list_marker: char,
+
+    /// Add blank line between paragraphs
+    pub paragraph_spacing: bool,
+
+    /// Escape special Markdown characters
+    pub escape_special_chars: bool,
+
+    /// Cleanup options (None = no cleanup)
+    pub cleanup: Option<CleanupOptions>,
+
+    /// Heading analysis configuration.
+    /// When set, enables sophisticated heading detection with multi-priority analysis.
+    pub heading_config: Option<HeadingConfig>,
+
+    /// How to handle tracked changes (insertions and deletions).
+    pub revision_handling: RevisionHandling,
+
+    /// Strip redundant `**bold**`/`*italic*` from heading text and table
+    /// header cells when the *entire* paragraph is uniformly emphasized
+    /// (i.e. the emphasis is a styling artifact, not author intent).
+    ///
+    /// Partial emphasis (e.g. `Section 2: **Required**`) is always preserved.
+    pub strip_redundant_emphasis_in_headings: bool,
+
+    /// Emit `\n\n---\n\n` for hard page breaks (`<w:br w:type="page"/>` and
+    /// `Block::PageBreak`). Disabled by default — markdown has no page
+    /// concept and these break visual flow.
+    ///
+    /// `Block::SectionBreak` is *not* affected; it remains emitted as a
+    /// horizontal rule because it carries a semantic boundary.
+    pub emit_page_breaks: bool,
+
+    /// Render DOCX section headers/footers as blockquoted lines around the
+    /// document body. Disabled by default because they are typically
+    /// page-chrome and add noise to LLM training data.
+    pub include_headers_footers: bool,
+
+    /// Convert single-row, single-column tables whose entire content is
+    /// emphasized into `> **...**` blockquotes (a callout fallback).
+    /// Off by default — only enable if the corpus is known to use 1×1
+    /// tables exclusively for callouts.
+    pub callout_blockquote: bool,
+
+    /// Style for PPTX slide / XLSX sheet boundary markers.
+    /// DOCX is unaffected regardless of this setting.
+    pub section_markers: SectionMarkerStyle,
+
+    /// Emit `![alt](path)` references for the document's images. On by default.
+    ///
+    /// Turn it off when the caller is not writing the image files: a reference to a
+    /// file nobody wrote is worse than no reference, because the markdown looks
+    /// complete and only fails where it is read.
+    pub include_images: bool,
+}
+
+/// How to handle tracked changes in the output.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum RevisionHandling {
+    /// Accept all changes - show final text (default)
+    #[default]
+    AcceptAll,
+    /// Reject all changes - show original text
+    RejectAll,
+    /// Show both insertions and deletions with markup
+    ShowMarkup,
+}
+
+/// Style for section boundary markers in Markdown output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SectionMarkerStyle {
+    /// No markers (default — preserves existing output unchanged).
+    #[default]
+    None,
+    /// HTML comment inserted before each PPTX slide or XLSX sheet:
+    /// `<!-- slide N: Name -->` / `<!-- sheet N: Name -->`.
+    Comment,
+}
+
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self {
+            image_path_prefix: String::new(),
+            include_images: true,
+            table_fallback: TableFallback::Markdown,
+            max_heading_level: 4,
+            include_frontmatter: false,
+            preserve_line_breaks: false,
+            include_empty_paragraphs: false,
+            list_marker: '-',
+            paragraph_spacing: true,
+            escape_special_chars: true,
+            cleanup: None,
+            heading_config: None,
+            revision_handling: RevisionHandling::AcceptAll,
+            strip_redundant_emphasis_in_headings: true,
+            emit_page_breaks: false,
+            include_headers_footers: false,
+            callout_blockquote: false,
+            section_markers: SectionMarkerStyle::None,
+        }
+    }
+}
+
+impl RenderOptions {
+    /// Create new render options.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the image path prefix for markdown references.
+    pub fn with_image_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.image_path_prefix = prefix.into();
+        self
+    }
+
+    /// Emit image references, or leave them out entirely.
+    pub fn with_images(mut self, include: bool) -> Self {
+        self.include_images = include;
+        self
+    }
+
+    /// Set table fallback mode.
+    pub fn with_table_fallback(mut self, fallback: TableFallback) -> Self {
+        self.table_fallback = fallback;
+        self
+    }
+
+    /// Enable YAML frontmatter.
+    pub fn with_frontmatter(mut self, include: bool) -> Self {
+        self.include_frontmatter = include;
+        self
+    }
+
+    /// Enable cleanup with default options.
+    pub fn with_cleanup(mut self) -> Self {
+        self.cleanup = Some(CleanupOptions::standard());
+        self
+    }
+
+    /// Enable cleanup with specific preset.
+    pub fn with_cleanup_preset(mut self, preset: CleanupPreset) -> Self {
+        self.cleanup = Some(CleanupOptions::from_preset(preset));
+        self
+    }
+
+    /// Enable cleanup with custom options.
+    pub fn with_cleanup_options(mut self, options: CleanupOptions) -> Self {
+        self.cleanup = Some(options);
+        self
+    }
+
+    /// Set maximum heading level.
+    pub fn with_max_heading(mut self, level: u8) -> Self {
+        self.max_heading_level = level.clamp(1, 6);
+        self
+    }
+
+    /// Preserve line breaks within paragraphs.
+    pub fn with_preserve_breaks(mut self, preserve: bool) -> Self {
+        self.preserve_line_breaks = preserve;
+        self
+    }
+
+    /// Enable sophisticated heading analysis with default config.
+    pub fn with_heading_analysis(mut self) -> Self {
+        self.heading_config = Some(HeadingConfig::default());
+        self
+    }
+
+    /// Enable sophisticated heading analysis with custom config.
+    pub fn with_heading_config(mut self, config: HeadingConfig) -> Self {
+        self.heading_config = Some(config);
+        self
+    }
+
+    /// Set how to handle tracked changes (revisions).
+    pub fn with_revision_handling(mut self, handling: RevisionHandling) -> Self {
+        self.revision_handling = handling;
+        self
+    }
+
+    /// Show tracked changes with markup (insertions and deletions visible).
+    pub fn with_show_revisions(mut self) -> Self {
+        self.revision_handling = RevisionHandling::ShowMarkup;
+        self
+    }
+
+    /// Restore the lossless rendering behavior: emit hard page breaks and
+    /// include section headers/footers in the output. Use this when round-
+    /// tripping document layout matters more than reading flow.
+    pub fn lossless() -> Self {
+        Self {
+            emit_page_breaks: true,
+            include_headers_footers: true,
+            ..Self::default()
+        }
+    }
+
+    /// Toggle whether hard page breaks emit a horizontal rule.
+    pub fn with_emit_page_breaks(mut self, enabled: bool) -> Self {
+        self.emit_page_breaks = enabled;
+        self
+    }
+
+    /// Toggle whether DOCX section headers/footers appear in the output.
+    pub fn with_include_headers_footers(mut self, enabled: bool) -> Self {
+        self.include_headers_footers = enabled;
+        self
+    }
+
+    /// Toggle conversion of 1×1 emphasized tables into blockquoted callouts.
+    pub fn with_callout_blockquote(mut self, enabled: bool) -> Self {
+        self.callout_blockquote = enabled;
+        self
+    }
+
+    /// Set the section boundary marker style.
+    pub fn with_section_markers(mut self, style: SectionMarkerStyle) -> Self {
+        self.section_markers = style;
+        self
+    }
+
+    /// Toggle stripping of styling-artifact emphasis in heading text and
+    /// table header cells.
+    pub fn with_strip_redundant_emphasis_in_headings(mut self, enabled: bool) -> Self {
+        self.strip_redundant_emphasis_in_headings = enabled;
+        self
+    }
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/render/options.rs"]
+mod tests;

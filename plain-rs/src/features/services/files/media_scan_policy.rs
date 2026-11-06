@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 pub struct Policy {
     pub cache_directory: PathBuf,
     pub excluded_roots: Vec<String>,
-    pub scope: Option<crate::features::prefs::file_index::Scope>,
+    pub scope: Option<crate::features::files::index_scope::Scope>,
 }
 
 impl Policy {

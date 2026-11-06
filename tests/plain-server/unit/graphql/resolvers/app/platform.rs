@@ -18,7 +18,7 @@ async fn public_samba_settings_and_mutation_use_core_preferences_and_explicit_ho
             let request = requests.recv().await.unwrap();
             assert_eq!(request["method"], method);
             let result = if method == "systemCapabilities" {
-                serde_json::json!(["LAN_SHARE"])
+                serde_json::json!(["SMB_SERVER"])
             } else if method == SYSTEM_SAMBA_APPLY {
                 assert_eq!(request["params"]["settings"]["enabled"], true);
                 assert_eq!(request["params"]["settings"]["shares"][0]["auth"], "Guest");
@@ -187,14 +187,14 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
             "DISK_MANAGER",
         ),
         ("{ appUpdate { currentVersion } }", "APP_UPDATES"),
-        ("{ sambaSettings { enabled } }", "LAN_SHARE"),
+        ("{ sambaSettings { enabled } }", "SMB_SERVER"),
         (
             "mutation { setSambaSettings(input:{enabled:true,shares:[]}) }",
-            "LAN_SHARE",
+            "SMB_SERVER",
         ),
         (
             r#"mutation { setSambaUserPassword(password:"example") }"#,
-            "LAN_SHARE",
+            "SMB_SERVER",
         ),
     ] {
         let directory = tempfile::tempdir().unwrap();

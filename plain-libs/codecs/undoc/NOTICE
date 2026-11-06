@@ -1,0 +1,18 @@
+Derived from undoc 0.27.3, MIT license.
+Source: https://github.com/iyulab/undoc
+Revision: 262efc5c2bd0b8287f7ae8ccd3e5b6f485934e92
+Crates.io archive SHA-256: aa90912626c80b783c5eea8191f275e9583b5779928aeb95ca40cb6fd5a34bea
+
+The inflate, grid, markdown and test-only csv helpers are from unparser-shared
+0.12.0, MIT license, https://github.com/iyulab/unparser-shared
+Revision: d47ac7ef0f07d4fad0e4d77ffe96041d682b7fe9
+Crates.io archive SHA-256: e6c10cbfd80a3a0b11f39fc9b0c5b4cd4560114c50e643ddf115f1e23fbe865d
+
+Local changes: removed FFI, rasterization, JSON/text renderers, optional refinement,
+unused fields and convenience APIs; streaming and CSV helpers retained for upstream
+unit regressions only. Tests moved under tests/unit. Reused workspace ZIP/encoding
+versions and disabled compression encoders. Added bounded input/decompression,
+archive-entry and XML-depth budgets, rejected DTDs and bounded worksheet expansion.
+
+Preserve the included licenses when redistributing. Review upstream security fixes
+against these revisions; local vendoring does not imply security maintenance upstream.

@@ -1,36 +1,33 @@
 use super::*;
 
 #[test]
-fn explicit_directories_are_added_to_platform_defaults_and_persisted() {
-    let prefs = plain_rs::features::prefs::Prefs::in_memory();
+fn explicit_directories_are_persisted_on_the_containing_volume() {
     let directory = tempfile::tempdir().unwrap();
-    let roots = source_directories(&prefs, &[directory.path().to_owned()]).unwrap();
-    assert!(
-        roots.contains(
-            &directory
-                .path()
-                .canonicalize()
-                .unwrap()
-                .to_string_lossy()
-                .into_owned()
-        )
+    let db = plain_rs::infrastructure::db::Db::open(&directory.path().join("index.db")).unwrap();
+    configure_index(&db, &[directory.path().to_owned()]).unwrap();
+    let volumes = db.volumes().unwrap();
+    assert_eq!(volumes.len(), 1);
+    assert_eq!(
+        volumes[0].index_mode,
+        plain_rs::infrastructure::db::IndexMode::Allowlist
     );
-    for root in plain_rs::features::prefs::file_index::defaults().scan_directories {
-        assert!(roots.contains(&root));
-    }
-    assert_eq!(source_directories(&prefs, &[]).unwrap(), roots);
+    let roots = plain_rs::features::files::index_scope::source_directories(&volumes);
+    assert_eq!(
+        roots,
+        vec![plain_rs::features::files::index_scope::normalized(
+            &directory.path().canonicalize().unwrap()
+        )]
+    );
+    configure_index(&db, &[]).unwrap();
+    assert_eq!(db.volumes().unwrap(), volumes);
 }
 
 #[test]
-fn relative_scan_roots_are_rejected_before_saving_preferences() {
-    let prefs = plain_rs::features::prefs::Prefs::in_memory();
-    assert!(source_directories(&prefs, &[PathBuf::from("relative")]).is_err());
-    assert!(
-        prefs
-            .get::<Vec<String>>(plain_rs::features::prefs::pref_keys::MEDIA_SOURCE_DIRS)
-            .unwrap()
-            .is_none()
-    );
+fn relative_scan_roots_are_rejected_before_registering_volumes() {
+    let directory = tempfile::tempdir().unwrap();
+    let db = plain_rs::infrastructure::db::Db::open(&directory.path().join("index.db")).unwrap();
+    assert!(configure_index(&db, &[PathBuf::from("relative")]).is_err());
+    assert!(db.volumes().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -50,16 +47,17 @@ async fn startup_scan_indexes_configured_directories_through_the_headless_host()
     );
     core.runtime()
         .media_scans
-        .set_defaults(plain_rs::features::prefs::file_index::Defaults {
-            scan_directories: Vec::new(),
+        .set_defaults(plain_rs::features::files::index_scope::Defaults {
             excluded_directories: Vec::new(),
             excluded_names: Vec::new(),
         })
         .unwrap();
     let catalog = core.native_media_catalog().unwrap();
-    catalog
-        .set_source_directories(&[source.to_string_lossy().into_owned()])
-        .unwrap();
+    plain_rs::features::services::files::indexing::set_directories(
+        &core.runtime().db,
+        &[source.to_string_lossy().into_owned()],
+    )
+    .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let runtime = Arc::new(crate::host::Host::new(core.clone(), vec![]));
     let runner = tokio::spawn(runtime.run());

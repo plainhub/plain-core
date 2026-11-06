@@ -77,7 +77,7 @@ pub(super) async fn tls() -> (
         }
     })).route("/fs", get(|Query(params): Query<std::collections::HashMap<String, String>>| async move {
         assert!(!params.contains_key("sid"));
-        if let Some(size) = params.get("s") {
+        if let Some(size) = params.get("size") {
             assert_eq!(size, "sm");
         }
         assert!(!params.contains_key("w"));

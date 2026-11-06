@@ -59,7 +59,8 @@ pub async fn run(
         )?;
         let unavailable = match pending.ticket.transport {
             TransportType::Lan => {
-                let url = crate::features::services::peers::peer_address::file_url(&peer, file_id)?;
+                let url =
+                    crate::features::services::peers::peer_address::download_url(&peer, file_id)?;
                 let response = tokio::time::timeout(
                     Duration::from_secs(10),
                     state.lan.client.get(url).header("c-id", &actor).send(),
@@ -84,7 +85,8 @@ pub async fn run(
                 }
             }
             TransportType::Aware => {
-                let url = crate::features::services::peers::peer_address::file_url(&peer, file_id)?;
+                let url =
+                    crate::features::services::peers::peer_address::download_url(&peer, file_id)?;
                 let url = reqwest::Url::parse(&url)?;
                 let path = format!("{}?{}", url.path(), url.query().unwrap_or_default());
                 let response = tokio::time::timeout(
@@ -147,7 +149,13 @@ pub async fn run(
                     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
                     let (status, chunk) =
                         crate::infrastructure::protocols::ble::decode_response(&response)?;
-                    ensure!(status == 200, "BLE file HTTP failure");
+                    if status == 416 {
+                        break;
+                    }
+                    ensure!(
+                        status == 206 || (status == 200 && chunk.is_empty()),
+                        "BLE file HTTP failure"
+                    );
                     ensure!(chunk.len() <= 8192, "Invalid BLE chunk length");
                     write(state, task, &mut file, &mut bytes, &chunk).await?;
                     offset += chunk.len() as u64;

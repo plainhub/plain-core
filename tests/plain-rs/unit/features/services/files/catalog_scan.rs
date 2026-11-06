@@ -13,11 +13,14 @@ async fn watcher_recovery_and_paired_directory_rename_preserve_rebuild_progress(
     let catalog = NativeMediaCatalog::new(state.clone());
     state
         .media_scans
-        .set_defaults(crate::features::prefs::file_index::Defaults {
-            scan_directories: vec![source.to_string_lossy().into_owned()],
-            ..Default::default()
-        })
+        .set_defaults(crate::features::files::index_scope::Defaults::default())
         .unwrap();
+    crate::features::services::files::indexing::set_directories(
+        &catalog.state.db,
+        &[source.to_string_lossy().into_owned()],
+    )
+    .unwrap();
+    catalog.configure_scan_directories(None).unwrap();
     let before = catalog
         .scan_directory(source.to_str().unwrap())
         .await
@@ -418,9 +421,11 @@ async fn directory_scan_cancellation_preserves_basic_facts_before_metadata() {
     let directory = directory_scan_fixture();
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let mut catalog = NativeMediaCatalog::new(core.runtime_state());
-    catalog
-        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
-        .unwrap();
+    crate::features::services::files::indexing::set_directories(
+        &catalog.state.db,
+        &[directory.path().to_string_lossy().into_owned()],
+    )
+    .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let root = directory.path().join("files");
     std::fs::create_dir(&root).unwrap();
@@ -477,9 +482,11 @@ async fn directory_scan_cancellation_after_discovery_preserves_all_basic_facts()
         .remove(0);
     std::fs::remove_file(stale_path).unwrap();
     let mut catalog = NativeMediaCatalog::new(core.runtime_state());
-    catalog
-        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
-        .unwrap();
+    crate::features::services::files::indexing::set_directories(
+        &catalog.state.db,
+        &[directory.path().to_string_lossy().into_owned()],
+    )
+    .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
@@ -524,15 +531,18 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
     }
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let mut catalog = NativeMediaCatalog::new(core.runtime_state());
-    catalog
-        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
-        .unwrap();
+    crate::features::services::files::indexing::set_directories(
+        &catalog.state.db,
+        &[directory.path().to_string_lossy().into_owned()],
+    )
+    .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let sources = roots
         .iter()
         .map(|root| root.to_str().unwrap().to_owned())
         .collect::<Vec<_>>();
-    catalog.set_source_directories(&sources).unwrap();
+    crate::features::services::files::indexing::set_directories(&catalog.state.db, &sources)
+        .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
@@ -570,9 +580,11 @@ async fn source_directory_scan_keeps_one_session_across_roots_and_partial_failur
     );
 
     catalog.read_gate = None;
-    catalog
-        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
-        .unwrap();
+    crate::features::services::files::indexing::set_directories(
+        &catalog.state.db,
+        &[directory.path().to_string_lossy().into_owned()],
+    )
+    .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let result = catalog
         .scan_directories(
@@ -614,13 +626,17 @@ async fn background_source_scan_is_busy_before_the_first_read_and_core_stop_join
     std::fs::write(root.join("document.txt"), b"document").unwrap();
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let mut catalog = NativeMediaCatalog::new(core.runtime_state());
-    catalog
-        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
-        .unwrap();
+    crate::features::services::files::indexing::set_directories(
+        &catalog.state.db,
+        &[directory.path().to_string_lossy().into_owned()],
+    )
+    .unwrap();
     catalog.configure_scan_directories(None).unwrap();
-    catalog
-        .set_source_directories(&[root.to_str().unwrap().to_owned()])
-        .unwrap();
+    crate::features::services::files::indexing::set_directories(
+        &catalog.state.db,
+        &[root.to_str().unwrap().to_owned()],
+    )
+    .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let gate = std::sync::Arc::new((tokio::sync::Notify::new(), tokio::sync::Semaphore::new(0)));
     catalog.read_gate = Some(gate.clone());
@@ -742,7 +758,6 @@ async fn basic_catalog_is_searchable_before_a_blocked_media_probe() {
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
 async fn exclusion_changes_remove_results_and_reinclude_without_touching_originals() {
-    use crate::features::prefs::pref_keys::{FILE_INDEX_EXCLUDED_DIRS, MEDIA_SOURCE_DIRS};
     let directory = directory_scan_fixture();
     let source = directory.path().join("source");
     let private = source.join("private");
@@ -751,14 +766,12 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
     std::fs::write(&original, b"original contents").unwrap();
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
-    state
-        .prefs
-        .set(MEDIA_SOURCE_DIRS, vec![source.to_str().unwrap()])
-        .unwrap();
     let catalog = NativeMediaCatalog::new(state.clone());
-    catalog
-        .set_source_directories(&[directory.path().to_string_lossy().into_owned()])
-        .unwrap();
+    crate::features::services::files::indexing::set_directories(
+        &catalog.state.db,
+        &[directory.path().to_string_lossy().into_owned()],
+    )
+    .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     catalog
         .scan_directory(source.to_str().unwrap())
@@ -778,15 +791,21 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
         .db
         .with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [&id]))
         .unwrap();
-    let preferences =
-        crate::features::services::settings::preferences::Preferences::from_server(&state);
-    preferences
-        .set(
-            FILE_INDEX_EXCLUDED_DIRS,
-            serde_json::json!([private.to_str().unwrap()]),
-        )
-        .await
-        .unwrap();
+    let volume = state.db.volumes().unwrap().remove(0);
+    let included = volume
+        .included_dirs
+        .iter()
+        .map(|dir| crate::features::files::index_scope::absolute_directory(&volume.path, dir))
+        .collect::<Vec<_>>();
+    crate::features::services::files::indexing::set(
+        &state,
+        &volume.id,
+        crate::infrastructure::db::IndexMode::Blocklist,
+        included.clone(),
+        vec![private.to_string_lossy().into_owned()],
+    )
+    .await
+    .unwrap();
     assert_eq!(
         crate::features::services::files::indexed::native(
             &state.db,
@@ -823,10 +842,15 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
         serde_json::json!(0)
     );
     assert_eq!(std::fs::read(&original).unwrap(), b"original contents");
-    preferences
-        .set(FILE_INDEX_EXCLUDED_DIRS, serde_json::json!([]))
-        .await
-        .unwrap();
+    crate::features::services::files::indexing::set(
+        &state,
+        &volume.id,
+        crate::infrastructure::db::IndexMode::Allowlist,
+        included,
+        vec![],
+    )
+    .await
+    .unwrap();
     state.media_scans.wait_background().await.unwrap();
     assert_eq!(
         crate::features::services::files::indexed::native(
@@ -875,9 +899,11 @@ async fn an_unmounted_source_is_a_coverage_gap_and_does_not_retire_catalog_rows(
         Ok("file-missing.rs".into())
     }).unwrap();
     let catalog = NativeMediaCatalog::new(state.clone());
-    catalog
-        .set_source_directories(&[source.to_string_lossy().into_owned()])
-        .unwrap();
+    crate::features::services::files::indexing::set_directories(
+        &catalog.state.db,
+        &[source.to_string_lossy().into_owned()],
+    )
+    .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let result = catalog.scan_source_directories("/").await.unwrap();
     assert_eq!(
@@ -900,7 +926,7 @@ async fn watcher_reconciliation_waits_for_the_active_scan() {
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let catalog = NativeMediaCatalog::new(state.clone());
-    catalog.set_source_directories(&[]).unwrap();
+    crate::features::services::files::indexing::set_directories(&catalog.state.db, &[]).unwrap();
     let active = state.media_scans.begin(0).unwrap();
     let reconcile = catalog.apply_watch_event(notify::Event::new(notify::EventKind::Other));
     tokio::pin!(reconcile);
@@ -1048,8 +1074,7 @@ async fn sdk_mount_initializes_default_index_root_before_startup_scan() {
     state.file_platform.use_sdk_for_test();
     state
         .media_scans
-        .set_defaults(crate::features::prefs::file_index::Defaults {
-            scan_directories: vec![],
+        .set_defaults(crate::features::files::index_scope::Defaults {
             excluded_directories: vec![],
             excluded_names: vec![],
         })
@@ -1130,8 +1155,7 @@ async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying
     state.file_platform.use_sdk_for_test();
     state
         .media_scans
-        .set_defaults(crate::features::prefs::file_index::Defaults {
-            scan_directories: vec![],
+        .set_defaults(crate::features::files::index_scope::Defaults {
             excluded_directories: vec![],
             excluded_names: vec![],
         })
@@ -1215,19 +1239,29 @@ async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
 
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
-    let mut defaults = crate::features::prefs::file_index::defaults();
-    defaults.scan_directories = vec![root.to_string_lossy().into_owned()];
+    let defaults = crate::features::files::index_scope::defaults();
     state.media_scans.set_defaults(defaults).unwrap();
-    state
-        .prefs
-        .set(
-            crate::features::prefs::pref_keys::FILE_INDEX_EXCLUDED_DIRS,
-            vec![root.join("excluded").to_string_lossy().into_owned()],
-        )
-        .unwrap();
     let catalog = NativeMediaCatalog::new(state.clone());
-    catalog
-        .set_source_directories(&[root.to_string_lossy().into_owned()])
+    crate::features::services::files::indexing::set_directories(
+        &catalog.state.db,
+        &[root.to_string_lossy().into_owned()],
+    )
+    .unwrap();
+    let volume = state.db.volumes().unwrap().remove(0);
+    let excluded = root.join("excluded");
+    let relative = excluded
+        .strip_prefix(&volume.path)
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    state
+        .db
+        .set_volume_index(
+            &volume.id,
+            volume.index_mode,
+            &volume.included_dirs,
+            &[relative],
+        )
         .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let mut previous = Vec::new();
@@ -1311,7 +1345,7 @@ async fn watcher_reconciliation_does_not_restart_a_cancelled_scan() {
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let catalog = NativeMediaCatalog::new(state.clone());
-    catalog.set_source_directories(&[]).unwrap();
+    crate::features::services::files::indexing::set_directories(&catalog.state.db, &[]).unwrap();
     let active = state.media_scans.begin(10).unwrap();
     let id = state.media_scans.snapshot().unwrap().unwrap().id;
     let reconcile = catalog.apply_watch_event(notify::Event::new(notify::EventKind::Other));

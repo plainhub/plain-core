@@ -27,3 +27,6 @@ pub mod resource_id;
 
 #[cfg(all(feature = "crypto", any(feature = "chat", feature = "kv")))]
 pub mod resource_link;
+
+#[cfg(feature = "library")]
+pub mod index_scope;

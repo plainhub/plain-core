@@ -83,3 +83,29 @@ fn noble_vector_decrypts_with_the_same_envelope_and_associated_data() {
         serde_json::from_value(vector["resource"].clone()).unwrap()
     );
 }
+
+#[test]
+fn native_reference_input_uses_shared_global_and_session_scopes() {
+    for (input, expected) in [
+        (r#"{"path":"/document.docx"}"#, Scope::Global),
+        (
+            r#"{"path":"fid:item","clientId":"client"}"#,
+            Scope::Session("client".into()),
+        ),
+    ] {
+        let envelope = seal_reference(&[7; 32], input).unwrap();
+        let (scope, payload) = parse(&envelope).unwrap();
+        assert_eq!(scope, expected);
+        let resource = open(&scope, &[7; 32], payload).unwrap();
+        assert_eq!(
+            resource,
+            if matches!(scope, Scope::Global) {
+                Resource::reference("/document.docx")
+            } else {
+                Resource::reference("fid:item")
+            }
+        );
+    }
+    assert!(seal_reference(&[7; 32], r#"{"clientId":"client"}"#).is_err());
+    assert!(seal_reference(&[7; 32], r#"{"path":"/document","clientId":false}"#).is_err());
+}

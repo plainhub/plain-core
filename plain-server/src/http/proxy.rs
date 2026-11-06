@@ -13,14 +13,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
-use serde::Deserialize;
 use std::net::SocketAddr;
-
-#[derive(Deserialize)]
-pub(crate) struct Params {
-    #[serde(default)]
-    id: String,
-}
 
 fn remote_access_allowed(state: &ServerState) -> bool {
     state.prefs.get_or("remote_access", true)
@@ -65,13 +58,13 @@ const SKIPPED: &[&str] = &[
 pub(crate) async fn call(
     State(state): State<ServerState>,
     _remote: ConnectInfo<SocketAddr>,
-    Query(params): Query<Params>,
+    Query(params): Query<crate::http::fs::Parameters>,
     headers: HeaderMap,
 ) -> Response {
     if !remote_access_allowed(&state) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    if params.id.is_empty() {
+    if !params.is_valid() {
         return StatusCode::BAD_REQUEST.into_response();
     }
     let url = match decode_target(&state, &params.id) {
@@ -84,8 +77,41 @@ pub(crate) async fn call(
                 .into_response();
         }
     };
+    let url = match resource_target(&url, &params) {
+        Ok(url) => url,
+        Err(error) => return (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
+    };
     proxy(&url, &headers).await
 }
+fn resource_target(url: &str, parameters: &crate::http::fs::Parameters) -> anyhow::Result<String> {
+    let mut url = reqwest::Url::parse(url)?;
+    anyhow::ensure!(url.path() == "/fs", "File resource URL required");
+    let id = url
+        .query_pairs()
+        .find(|(key, _)| key == "id")
+        .map(|(_, value)| value.into_owned())
+        .ok_or_else(|| anyhow::anyhow!("File resource ID required"))?;
+    url.set_query(None);
+    let mut query = url.query_pairs_mut();
+    query
+        .append_pair("id", &id)
+        .append_pair("action", parameters.action.as_str());
+    if let Some(size) = parameters.size {
+        query.append_pair(
+            "size",
+            match size {
+                plain_rs::features::services::files::content::Size::Small => "sm",
+                plain_rs::features::services::files::content::Size::Large => "lg",
+            },
+        );
+    }
+    if let Some(version) = &parameters.version {
+        query.append_pair("v", version);
+    }
+    drop(query);
+    Ok(url.to_string())
+}
+
 pub(crate) async fn proxy(url: &str, headers: &HeaderMap) -> Response {
     let client = match reqwest::Client::builder().build() {
         Ok(client) => client,
@@ -94,8 +120,15 @@ pub(crate) async fn proxy(url: &str, headers: &HeaderMap) -> Response {
         }
     };
     let mut request = client.get(url);
-    if let Some(agent) = headers.get(header::USER_AGENT) {
-        request = request.header(header::USER_AGENT, agent);
+    for name in [
+        header::USER_AGENT,
+        header::RANGE,
+        header::IF_RANGE,
+        header::IF_NONE_MATCH,
+    ] {
+        if let Some(value) = headers.get(&name) {
+            request = request.header(name, value);
+        }
     }
     let upstream = match request.send().await {
         Ok(response) => response,

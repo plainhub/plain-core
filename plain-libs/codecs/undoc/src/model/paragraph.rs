@@ -1,0 +1,561 @@
+//! Paragraph and text run models.
+
+use serde::{Deserialize, Serialize};
+
+/// Text alignment within a paragraph.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TextAlignment {
+    #[default]
+    Left,
+    Center,
+    Right,
+    Justify,
+}
+
+/// Heading level (h1-h6 or none).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HeadingLevel {
+    #[default]
+    None,
+    H1,
+    H2,
+    H3,
+    H4,
+    H5,
+    H6,
+}
+
+impl HeadingLevel {
+    /// Create a heading level from a number (1-6).
+    pub fn from_number(n: u8) -> Self {
+        match n {
+            1 => HeadingLevel::H1,
+            2 => HeadingLevel::H2,
+            3 => HeadingLevel::H3,
+            4 => HeadingLevel::H4,
+            5 => HeadingLevel::H5,
+            6 => HeadingLevel::H6,
+            _ => HeadingLevel::None,
+        }
+    }
+
+    /// Get the numeric level (0 for none, 1-6 for headings).
+    pub fn level(&self) -> u8 {
+        match self {
+            HeadingLevel::None => 0,
+            HeadingLevel::H1 => 1,
+            HeadingLevel::H2 => 2,
+            HeadingLevel::H3 => 3,
+            HeadingLevel::H4 => 4,
+            HeadingLevel::H5 => 5,
+            HeadingLevel::H6 => 6,
+        }
+    }
+
+    /// Check if this is a heading (not None).
+    pub fn is_heading(&self) -> bool {
+        !matches!(self, HeadingLevel::None)
+    }
+}
+
+/// List type for paragraphs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ListType {
+    #[default]
+    None,
+    /// Unordered (bulleted) list
+    Bullet,
+    /// Ordered (numbered) list
+    Numbered,
+}
+
+/// Revision type for tracked changes support.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RevisionType {
+    /// Normal text (not a tracked change)
+    #[default]
+    None,
+    /// Inserted text (addition)
+    Inserted,
+    /// Deleted text (deletion)
+    Deleted,
+}
+
+/// List information for a paragraph.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ListInfo {
+    /// Type of list
+    pub list_type: ListType,
+    /// Nesting level (0 = top level)
+    pub level: u8,
+    /// Item number (for numbered lists)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub number: Option<u32>,
+    /// The picture that marks each item of a picture-bulleted list: the id of an image
+    /// resource. The list renders as a plain bullet list; this keeps the marker image
+    /// traceable to the items that show it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub marker_image: Option<String>,
+}
+
+/// Text style properties.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TextStyle {
+    /// Bold text
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bold: bool,
+
+    /// Italic text
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub italic: bool,
+
+    /// Underlined text -- underlined by the author, not as part of a hyperlink: a link's
+    /// underline is how it looks as a link (see [`TextStyle::in_link`]).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub underline: bool,
+
+    /// Strikethrough text
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub strikethrough: bool,
+
+    /// Superscript
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub superscript: bool,
+
+    /// Subscript
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub subscript: bool,
+
+    /// Code/monospace font
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub code: bool,
+
+    /// Font name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font: Option<String>,
+
+    /// Font size in half-points (e.g., 24 = 12pt)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u32>,
+
+    /// Text color (hex, e.g., "FF0000")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+
+    /// Background/highlight color
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<String>,
+}
+
+impl TextStyle {
+    /// This style for text that is part of a hyperlink. A link is underlined because it is a
+    /// link -- Word's `Hyperlink` character style, a producer writing the underline on the run,
+    /// a viewer drawing one -- and the link already says so: the underline is not kept as the
+    /// author's emphasis.
+    #[cfg(any(feature = "doc", feature = "docx", feature = "pptx"))]
+    pub(crate) fn in_link(mut self) -> Self {
+        self.underline = false;
+        self
+    }
+}
+
+impl TextStyle {
+    /// Create a new default style.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a bold style.
+    pub fn bold() -> Self {
+        Self {
+            bold: true,
+            ..Default::default()
+        }
+    }
+
+    /// Create an italic style.
+    pub fn italic() -> Self {
+        Self {
+            italic: true,
+            ..Default::default()
+        }
+    }
+
+    /// Check if style has any formatting.
+    pub fn has_formatting(&self) -> bool {
+        self.bold
+            || self.italic
+            || self.underline
+            || self.strikethrough
+            || self.superscript
+            || self.subscript
+            || self.code
+    }
+}
+
+/// A run of text with consistent styling.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TextRun {
+    /// The text content
+    pub text: String,
+
+    /// Text styling
+    #[serde(default, skip_serializing_if = "is_default_style")]
+    pub style: TextStyle,
+
+    /// Hyperlink URL (if this run is a link)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hyperlink: Option<String>,
+
+    /// Whether this run ends with a line break (<w:br/>)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub line_break: bool,
+
+    /// Whether this run ends with a page break (<w:br w:type="page"/>)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub page_break: bool,
+
+    /// Revision type for tracked changes (inserted/deleted)
+    #[serde(default, skip_serializing_if = "is_default_revision")]
+    pub revision: RevisionType,
+
+    /// The label of the footnote or endnote this run refers to, when it is a note reference.
+    /// A reference carries no text of its own; the note it refers to is the
+    /// [`Block::Note`](crate::model::Block::Note) with the same label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+fn is_default_style(style: &TextStyle) -> bool {
+    *style == TextStyle::default()
+}
+
+fn is_default_revision(revision: &RevisionType) -> bool {
+    *revision == RevisionType::None
+}
+
+impl TextRun {
+    /// Create a plain text run with no styling.
+    pub fn plain(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            style: TextStyle::default(),
+            hyperlink: None,
+            line_break: false,
+            page_break: false,
+            revision: RevisionType::None,
+            note: None,
+        }
+    }
+
+    /// A reference to the footnote or endnote labelled `label`.
+    pub fn note_reference(label: impl Into<String>) -> Self {
+        Self {
+            note: Some(label.into()),
+            ..Self::plain("")
+        }
+    }
+
+    /// Create a styled text run.
+    pub fn styled(text: impl Into<String>, style: TextStyle) -> Self {
+        Self {
+            text: text.into(),
+            style,
+            hyperlink: None,
+            line_break: false,
+            page_break: false,
+            revision: RevisionType::None,
+            note: None,
+        }
+    }
+
+    /// Create a hyperlink text run.
+    pub fn link(text: impl Into<String>, url: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            style: TextStyle::default(),
+            hyperlink: Some(url.into()),
+            line_break: false,
+            page_break: false,
+            revision: RevisionType::None,
+            note: None,
+        }
+    }
+
+    /// Check if this run is a hyperlink.
+    pub fn is_link(&self) -> bool {
+        self.hyperlink.is_some()
+    }
+
+    /// Check if this run is empty.
+    pub fn is_empty(&self) -> bool {
+        self.text.is_empty()
+    }
+}
+
+/// An inline image within text.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InlineImage {
+    /// Resource ID for the image
+    pub resource_id: String,
+
+    /// Alt text
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alt_text: Option<String>,
+
+    /// Width in EMUs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+
+    /// Height in EMUs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+}
+
+/// An element within a paragraph (text run or inline image).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ParagraphElement {
+    Text(TextRun),
+    Image(InlineImage),
+}
+
+/// A paragraph of text.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Paragraph {
+    /// Text runs in this paragraph
+    #[serde(default)]
+    pub runs: Vec<TextRun>,
+
+    /// Inline images in this paragraph
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<InlineImage>,
+
+    /// Heading level
+    #[serde(default, skip_serializing_if = "HeadingLevel::is_none")]
+    pub heading: HeadingLevel,
+
+    /// Text alignment
+    #[serde(default, skip_serializing_if = "is_default_alignment")]
+    pub alignment: TextAlignment,
+
+    /// List information
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_info: Option<ListInfo>,
+
+    /// Style ID reference
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style_id: Option<String>,
+
+    /// Style name (human-readable, from styles.xml)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style_name: Option<String>,
+
+    /// Indentation level
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub indent_level: u8,
+}
+
+fn is_default_alignment(a: &TextAlignment) -> bool {
+    *a == TextAlignment::Left
+}
+
+fn is_zero(n: &u8) -> bool {
+    *n == 0
+}
+
+impl HeadingLevel {
+    fn is_none(&self) -> bool {
+        matches!(self, HeadingLevel::None)
+    }
+}
+
+impl Paragraph {
+    /// Create a new empty paragraph.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a paragraph with the given text.
+    pub fn with_text(text: impl Into<String>) -> Self {
+        Self {
+            runs: vec![TextRun::plain(text)],
+            ..Default::default()
+        }
+    }
+
+    /// Create a heading paragraph.
+    pub fn heading(level: HeadingLevel, text: impl Into<String>) -> Self {
+        Self {
+            runs: vec![TextRun::plain(text)],
+            heading: level,
+            ..Default::default()
+        }
+    }
+
+    /// Add a text run to this paragraph.
+    pub fn add_run(&mut self, run: TextRun) {
+        self.runs.push(run);
+    }
+
+    /// Get the plain text content.
+    pub fn plain_text(&self) -> String {
+        let mut text = String::new();
+
+        for run in &self.runs {
+            text.push_str(&run.text);
+            if let Some(label) = &run.note {
+                text.push_str(&format!("[^{label}]"));
+            }
+            if run.line_break {
+                text.push('\n');
+            }
+            if run.page_break {
+                text.push_str("\n---\n");
+            }
+        }
+
+        text
+    }
+
+    /// Check if this paragraph is empty.
+    ///
+    /// A paragraph carrying inline images is never empty, even with no text:
+    /// image-only paragraphs must survive empty-paragraph filtering.
+    pub fn is_empty(&self) -> bool {
+        self.images.is_empty() && (self.runs.is_empty() || self.runs.iter().all(|r| r.is_empty()))
+    }
+
+    /// Check if this paragraph is a heading.
+    pub fn is_heading(&self) -> bool {
+        self.heading.is_heading()
+    }
+
+    /// Check if this paragraph is a list item.
+    pub fn is_list_item(&self) -> bool {
+        self.list_info.is_some()
+    }
+
+    /// Merge consecutive runs with the same style.
+    ///
+    /// This is useful for documents where each character or word is in a separate run
+    /// with the same styling (common in Word documents with letter spacing).
+    ///
+    /// Example: `**시** **험**` becomes `**시험**` after merging.
+    ///
+    /// Smart spacing is applied when merging runs - spaces are added between
+    /// CJK text and ASCII alphanumeric characters, and between ASCII words.
+    pub fn merge_adjacent_runs(&mut self) {
+        if self.runs.len() <= 1 {
+            return;
+        }
+
+        let mut merged: Vec<TextRun> = Vec::with_capacity(self.runs.len());
+
+        for run in self.runs.drain(..) {
+            // Check if we can merge with the last run
+            let should_merge = merged.last().is_some_and(|last: &TextRun| {
+                // Only runs that differ in nothing but their text are one run: same style,
+                // same hyperlink, same tracked change (inserted text joined to plain text
+                // loses its mark), and neither a note reference (its label is not text).
+                // Don't merge if the previous run has a line break (preserve the break)
+                last.style == run.style
+                    && last.hyperlink == run.hyperlink
+                    && last.revision == run.revision
+                    && last.note.is_none()
+                    && run.note.is_none()
+                    && !last.line_break
+                    && !last.page_break
+            });
+
+            if should_merge {
+                // Merge text with the last run, with smart spacing
+                if let Some(last) = merged.last_mut() {
+                    // Check if we need to add a space between the runs
+                    let needs_space = Self::needs_space_between(&last.text, &run.text);
+                    if needs_space {
+                        last.text.push(' ');
+                    }
+                    last.text.push_str(&run.text);
+                    // Preserve line_break from the merged run
+                    if run.line_break {
+                        last.line_break = true;
+                    }
+                    if run.page_break {
+                        last.page_break = true;
+                    }
+                }
+            } else {
+                // Start a new run
+                merged.push(run);
+            }
+        }
+
+        self.runs = merged;
+    }
+
+    /// Determine if a space is needed between two text fragments when merging.
+    fn needs_space_between(prev: &str, next: &str) -> bool {
+        let last_char = match prev.chars().last() {
+            Some(c) => c,
+            None => return false,
+        };
+        let first_char = match next.chars().next() {
+            Some(c) => c,
+            None => return false,
+        };
+
+        // No space needed if either side already has whitespace
+        if last_char.is_whitespace() || first_char.is_whitespace() {
+            return false;
+        }
+
+        // No space before punctuation
+        if matches!(
+            first_char,
+            '.' | ',' | ':' | ';' | '!' | '?' | ')' | ']' | '}' | '"' | '\'' | '…' | '~'
+        ) {
+            return false;
+        }
+
+        // No space after opening brackets/quotes
+        if matches!(last_char, '(' | '[' | '{' | '"' | '\'') {
+            return false;
+        }
+
+        // Same-style runs = same word (artificially split by Word)
+        // This applies to ALL scripts: ASCII, CJK, Hangul, mixed scripts, etc.
+        //
+        // Examples of runs that should NOT have spaces added:
+        // - "DRBD" stored as ["DRB", "D"] → "DRBD"
+        // - "정의" stored as ["정", "의"] → "정의"
+        // - "CJ대한통운" stored as ["C", "J", "대한통운"] → "CJ대한통운" (brand name)
+        //
+        // Key insight: Word splits runs for various reasons (formatting, editing history),
+        // but same-style consecutive runs are ALWAYS part of the same word.
+        // If they were different words, they would have explicit whitespace between them.
+        //
+        // Note: Korean DOES use spaces between words, but those spaces exist in the
+        // source document (with xml:space="preserve"). We don't invent spaces.
+        //
+        // Previously this function added spaces at ASCII↔CJK boundaries, but this was
+        // incorrect for Korean brand names like "CJ대한통운" where the intent is no space.
+        false
+    }
+
+    /// Get a version of this paragraph with merged adjacent runs.
+    ///
+    /// This is a non-mutating version of `merge_adjacent_runs`.
+    pub fn with_merged_runs(&self) -> Self {
+        let mut para = self.clone();
+        para.merge_adjacent_runs();
+        para
+    }
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/model/paragraph.rs"]
+mod tests;

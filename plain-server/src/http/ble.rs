@@ -57,14 +57,17 @@ pub(crate) async fn dispatch(state: ServerState, data: &[u8]) -> Result<Vec<u8>>
             let mut url = reqwest::Url::parse("http://localhost/fs")?;
             url.query_pairs_mut()
                 .append_pair("id", &file_id)
-                .append_pair("offset", &offset.to_string())
-                .append_pair("length", &length.to_string());
+                .append_pair("action", "download");
             (
                 axum::http::Request::builder()
                     .method("GET")
                     .uri(format!("/fs?{}", url.query().unwrap()))
                     .header("c-id", client_id)
-                    .header("c-cid", ""),
+                    .header("c-cid", "")
+                    .header(
+                        axum::http::header::RANGE,
+                        format!("bytes={offset}-{}", offset + u64::from(length) - 1),
+                    ),
                 Vec::new(),
             )
         }

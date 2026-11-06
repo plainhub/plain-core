@@ -58,6 +58,13 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
         url.query_pairs().find(|(key, _)| key == "id").unwrap().1,
         "a +?#%"
     );
+    assert_eq!(
+        url.query_pairs()
+            .find(|(key, _)| key == "action")
+            .unwrap()
+            .1,
+        "download"
+    );
     peer.key = plain_libs::utils::base64::base64_encode(&[8; 32]);
     peers::save(&state.db, &[peer], SaveMode::Update).unwrap();
     assert!(!native.execute(request()).await.errors.is_empty());

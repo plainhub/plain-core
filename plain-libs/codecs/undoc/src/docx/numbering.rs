@@ -1,0 +1,275 @@
+//! DOCX numbering (list) parsing.
+
+use crate::error::Result;
+use crate::model::ListType;
+use std::collections::HashMap;
+
+/// Abstract numbering definition.
+#[derive(Debug, Clone)]
+pub struct AbstractNum {
+    /// Abstract numbering ID
+    pub id: String,
+    /// Levels (0-8)
+    pub levels: Vec<NumLevel>,
+}
+
+/// A numbering level definition.
+#[derive(Debug, Clone)]
+pub struct NumLevel {
+    /// Level index (0-8)
+    pub level: u8,
+    /// Start value
+    pub start: u32,
+    /// Number format (decimal, bullet, lowerLetter, etc.)
+    pub num_fmt: String,
+    /// Level text (e.g., "%1.", "%1.%2.")
+    pub level_text: String,
+}
+
+impl NumLevel {
+    /// Get the list type for this level.
+    pub fn list_type(&self) -> ListType {
+        match self.num_fmt.as_str() {
+            "bullet" => ListType::Bullet,
+            "decimal" | "lowerLetter" | "upperLetter" | "lowerRoman" | "upperRoman" => {
+                ListType::Numbered
+            }
+            _ => ListType::Bullet, // Default to bullet
+        }
+    }
+}
+
+/// Concrete numbering instance.
+#[derive(Debug, Clone)]
+pub struct NumInstance {
+    /// Numbering ID
+
+    /// Abstract numbering ID
+    pub abstract_num_id: String,
+}
+
+/// Collection of numbering definitions.
+#[derive(Debug, Clone, Default)]
+pub struct NumberingMap {
+    /// Abstract numbering definitions
+    pub abstract_nums: HashMap<String, AbstractNum>,
+    /// Numbering instances
+    pub instances: HashMap<String, NumInstance>,
+    /// Current count for each numId+level combination
+    counters: HashMap<(String, u8), u32>,
+    /// Last used level for each numId (for tracking level changes)
+    last_level: HashMap<String, u8>,
+}
+
+impl NumberingMap {
+    /// Parse numbering from XML content.
+    pub fn parse(xml: &str) -> Result<Self> {
+        // Handle empty content
+        if xml.trim().is_empty() {
+            return Ok(Self::default());
+        }
+
+        let mut map = NumberingMap::default();
+        let mut reader = crate::decode::reader_for(xml);
+        reader.config_mut().trim_text(true);
+
+        let mut buf = Vec::new();
+        let mut current_abstract: Option<AbstractNum> = None;
+        let mut current_level: Option<NumLevel> = None;
+        let mut in_abstract_num = false;
+        let mut in_lvl = false;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Start(e)) => match e.name().as_ref() {
+                    "w:abstractNum" => {
+                        let mut abstract_num = AbstractNum {
+                            id: String::new(),
+                            levels: Vec::new(),
+                        };
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:abstractNumId" {
+                                abstract_num.id = attr.value.to_string();
+                            }
+                        }
+                        current_abstract = Some(abstract_num);
+                        in_abstract_num = true;
+                    }
+                    "w:lvl" if in_abstract_num => {
+                        let mut level = NumLevel {
+                            level: 0,
+                            start: 1,
+                            num_fmt: "bullet".to_string(),
+                            level_text: String::new(),
+                        };
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:ilvl" {
+                                let val = attr.value.as_ref();
+                                level.level = val.parse().unwrap_or(0);
+                            }
+                        }
+                        current_level = Some(level);
+                        in_lvl = true;
+                    }
+                    _ => {}
+                },
+                Ok(quick_xml::events::Event::Empty(e)) => {
+                    match e.name().as_ref() {
+                        "w:start" if in_lvl => {
+                            if let Some(ref mut level) = current_level {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:val" {
+                                        let val = attr.value.as_ref();
+                                        level.start = val.parse().unwrap_or(1);
+                                    }
+                                }
+                            }
+                        }
+                        "w:numFmt" if in_lvl => {
+                            if let Some(ref mut level) = current_level {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:val" {
+                                        level.num_fmt = attr.value.to_string();
+                                    }
+                                }
+                            }
+                        }
+                        "w:lvlText" if in_lvl => {
+                            if let Some(ref mut level) = current_level {
+                                for attr in e.attributes().flatten() {
+                                    if attr.key.as_ref() == "w:val" {
+                                        level.level_text = attr.value.to_string();
+                                    }
+                                }
+                            }
+                        }
+                        "w:abstractNumId" => {
+                            // This is in w:num element
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(quick_xml::events::Event::End(e)) => match e.name().as_ref() {
+                    "w:abstractNum" => {
+                        if let Some(abstract_num) = current_abstract.take() {
+                            map.abstract_nums
+                                .insert(abstract_num.id.clone(), abstract_num);
+                        }
+                        in_abstract_num = false;
+                    }
+                    "w:lvl" => {
+                        if let Some(level) = current_level.take() {
+                            if let Some(ref mut abstract_num) = current_abstract {
+                                abstract_num.levels.push(level);
+                            }
+                        }
+                        in_lvl = false;
+                    }
+                    _ => {}
+                },
+                Ok(quick_xml::events::Event::Eof) => break,
+                Err(e) => return Err(e.into()),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        // Parse w:num elements for instances
+        map.parse_num_instances(xml)?;
+
+        Ok(map)
+    }
+
+    /// Parse w:num elements.
+    fn parse_num_instances(&mut self, xml: &str) -> Result<()> {
+        let mut reader = crate::decode::reader_for(xml);
+        reader.config_mut().trim_text(true);
+
+        let mut buf = Vec::new();
+        let mut current_num_id: Option<String> = None;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Start(e)) if e.name().as_ref() == "w:num" => {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == "w:numId" {
+                            current_num_id = Some(attr.value.to_string());
+                        }
+                    }
+                }
+                Ok(quick_xml::events::Event::Empty(e))
+                    if e.name().as_ref() == "w:abstractNumId" =>
+                {
+                    if let Some(ref num_id) = current_num_id {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:val" {
+                                let abstract_id = attr.value.to_string();
+                                self.instances.insert(
+                                    num_id.clone(),
+                                    NumInstance {
+                                        abstract_num_id: abstract_id,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+                Ok(quick_xml::events::Event::End(e)) if e.name().as_ref() == "w:num" => {
+                    current_num_id = None;
+                }
+                Ok(quick_xml::events::Event::Eof) => break,
+                Err(_) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        Ok(())
+    }
+
+    /// Get list info for a paragraph.
+    pub fn get_list_info(&mut self, num_id: &str, level: u8) -> Option<(ListType, u32)> {
+        let instance = self.instances.get(num_id)?;
+        let abstract_num_id = instance.abstract_num_id.clone();
+        let abstract_num = self.abstract_nums.get(&abstract_num_id)?;
+        let num_level = abstract_num.levels.iter().find(|l| l.level == level)?;
+
+        let list_type = num_level.list_type();
+        let start_value = num_level.start;
+
+        // Collect info about deeper levels for potential reset
+        let deeper_levels: Vec<(u8, u32)> = abstract_num
+            .levels
+            .iter()
+            .filter(|l| l.level > level)
+            .map(|l| (l.level, l.start))
+            .collect();
+
+        // Check if we're moving to a parent/sibling level (reset child levels)
+        if let Some(&last_lvl) = self.last_level.get(num_id) {
+            if level <= last_lvl {
+                // Moving to same level or higher (numerically lower level value)
+                // Reset all deeper levels for this numId
+                for (deeper_level, start) in &deeper_levels {
+                    let key = (num_id.to_string(), *deeper_level);
+                    self.counters.insert(key, *start);
+                }
+            }
+        }
+
+        // Update last level
+        self.last_level.insert(num_id.to_string(), level);
+
+        // Get or initialize counter, then increment for next use
+        let key = (num_id.to_string(), level);
+        let counter = self.counters.entry(key).or_insert(start_value);
+        let number = *counter;
+        *counter += 1;
+
+        Some((list_type, number))
+    }
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/docx/numbering.rs"]
+mod tests;

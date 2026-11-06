@@ -58,7 +58,7 @@ struct Job {
 
 #[derive(Default)]
 struct State {
-    defaults: crate::features::prefs::file_index::Defaults,
+    defaults: crate::features::files::index_scope::Defaults,
     job: Option<Job>,
     rebuild_result: Option<Snapshot>,
     closed: bool,
@@ -236,7 +236,7 @@ impl MediaScans {
         Ok(())
     }
 
-    pub fn defaults(&self) -> Result<crate::features::prefs::file_index::Defaults, String> {
+    pub fn defaults(&self) -> Result<crate::features::files::index_scope::Defaults, String> {
         Ok(self
             .state
             .lock()
@@ -247,7 +247,7 @@ impl MediaScans {
 
     pub fn set_defaults(
         &self,
-        defaults: crate::features::prefs::file_index::Defaults,
+        defaults: crate::features::files::index_scope::Defaults,
     ) -> Result<(), String> {
         self.state
             .lock()
@@ -360,7 +360,7 @@ impl MediaScans {
 
     pub fn record_with_scope<T>(
         &self,
-        record: impl FnOnce(Option<&crate::features::prefs::file_index::Scope>) -> Result<T, String>,
+        record: impl FnOnce(Option<&crate::features::files::index_scope::Scope>) -> Result<T, String>,
     ) -> Result<T, String> {
         let guard = self
             .state

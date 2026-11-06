@@ -141,13 +141,7 @@ pub fn authorize_path(state: &CoreRuntime, reference: &str) -> anyhow::Result<()
         .as_ref()
         .map_err(|error| anyhow::anyhow!(error.clone()))?;
     if candidate.starts_with(&cache) {
-        let public = [
-            "image_cache",
-            "video_cache",
-            "preview_pdf",
-            "share_open",
-            "remote_files",
-        ];
+        let public = ["image_cache", "video_cache", "share_open", "remote_files"];
         anyhow::ensure!(
             public
                 .iter()

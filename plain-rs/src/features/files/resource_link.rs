@@ -65,6 +65,22 @@ impl Resource {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReferenceInput {
+    client_id: Option<String>,
+    path: String,
+}
+
+pub fn seal_reference(key: &[u8], payload: &str) -> Result<String> {
+    let input: ReferenceInput = serde_json::from_str(payload)?;
+    let scope = match input.client_id {
+        Some(id) => Scope::Session(id),
+        None => Scope::Global,
+    };
+    seal(&scope, key, &Resource::reference(&input.path))
+}
+
 pub fn parse(envelope: &str) -> Result<(Scope, &str)> {
     ensure!(envelope.len() <= 32768, "Resource URL too long");
     let (mode, rest) = envelope

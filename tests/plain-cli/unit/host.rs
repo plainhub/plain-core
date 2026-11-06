@@ -74,10 +74,6 @@ async fn access_primitives_report_capabilities_and_grants_without_an_app_busines
 async fn native_app_query_uses_startup_data_and_live_capabilities_without_public_listener() {
     let directory = Directory::new();
     let core = Arc::new(ContentServer::open(&directory.0).unwrap());
-    core.native_media_catalog()
-        .unwrap()
-        .set_source_directories(&[])
-        .unwrap();
     let runtime = Arc::new(Host::new(core.clone(), vec!["MEDIA_SCAN".into()]));
     let runner = tokio::spawn(runtime.run());
     let response = core

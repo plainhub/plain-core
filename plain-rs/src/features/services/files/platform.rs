@@ -17,7 +17,6 @@ pub struct FilePlatform {
     pub(super) host: Arc<Host>,
     pub(super) db: Arc<Db>,
     pub recent_files: Arc<crate::features::recent_files::RecentFiles>,
-    prefs: Arc<crate::features::prefs::Prefs>,
     directory: PathBuf,
     cache: PathBuf,
     pub(super) private_roots: std::result::Result<[PathBuf; 2], String>,
@@ -32,11 +31,11 @@ impl FilePlatform {
     pub fn new(
         host: Arc<Host>,
         db: Arc<Db>,
-        prefs: Arc<crate::features::prefs::Prefs>,
         directory: PathBuf,
         cache: PathBuf,
-        #[cfg(not(feature = "runtime-media"))]
-        events: tokio::sync::broadcast::Sender<crate::infrastructure::events::WsEvent>,
+        #[cfg(not(feature = "runtime-media"))] events: tokio::sync::broadcast::Sender<
+            crate::infrastructure::events::WsEvent,
+        >,
         #[cfg(feature = "runtime-media")] scans: Arc<
             crate::features::services::files::media_scans::MediaScans,
         >,
@@ -52,7 +51,6 @@ impl FilePlatform {
             private_roots,
             host,
             db,
-            prefs,
             directory,
             cache,
             #[cfg(not(feature = "runtime-media"))]
@@ -252,14 +250,7 @@ impl FilePlatform {
         let limit = limit.clamp(0, super::browse::SEARCH_RESULT_LIMIT as i32);
         if self.host.uses_system_media_catalog() {
             return crate::features::services::files::indexed::platform(
-                &self.db,
-                &self.host,
-                &self.prefs,
-                &query,
-                offset,
-                limit,
-                sort,
-                count_only,
+                &self.db, &self.host, &query, offset, limit, sort, count_only,
             )
             .await;
         }

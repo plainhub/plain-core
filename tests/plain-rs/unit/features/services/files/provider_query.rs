@@ -499,15 +499,14 @@ fn destructive_doc_queries_must_narrow_beyond_the_provider_defaults() {
 
 #[test]
 fn persisted_exclusions_use_literal_subtree_boundaries_for_provider_rows() {
-    let prefs = crate::features::prefs::Prefs::in_memory();
-    prefs
-        .set(
-            crate::features::prefs::pref_keys::FILE_INDEX_EXCLUDED_DIRS,
-            vec!["/storage/user/private_%"],
-        )
-        .unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let db = Db::open(&directory.path().join("index.db")).unwrap();
+    db.with_conn(|conn| conn.execute(
+        "INSERT INTO volumes(id,identity,path,is_available,index_mode,excluded_dirs) VALUES('test','test','/storage/user',1,'BLOCKLIST',?1)",
+        [serde_json::json!(["private_%"]).to_string()],
+    )).unwrap();
     let mut plan = Plan::default();
-    exclude_directories(&mut plan, &prefs).unwrap();
+    index_scope(&mut plan, &db).unwrap();
     let connection = rusqlite::Connection::open_in_memory().unwrap();
     connection
         .execute("CREATE TABLE entries(_data TEXT)", [])

@@ -12,7 +12,7 @@ pub fn read_files(
     cache: &Path,
     excluded_roots: &[String],
     paths: Vec<String>,
-    scope: Option<&crate::features::prefs::file_index::Scope>,
+    scope: Option<&crate::features::files::index_scope::Scope>,
 ) -> Result<FileReads, String> {
     for path in &paths {
         crate::features::services::files::platform::authorize_native(Path::new(path), false)

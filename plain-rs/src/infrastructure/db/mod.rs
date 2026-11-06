@@ -35,8 +35,9 @@ pub use crate::infrastructure::db::browse::TableColumnMeta;
 #[cfg(feature = "library")]
 pub use models::{
     ArchivedConversationRow, AuditEventRow, ClipboardRow, FavoriteFolderRow, FileKind, FileRow,
-    HISTORY_KEEP, ImageEmbeddingRow, MediaPlayHistoryRow, Playlist, PlaylistItem, PomodoroItemRow,
-    QueueItem, SessionRow, ShareRow, TagRelationRow, TagRow, TrashedMessageRow, VolumeRow,
+    HISTORY_KEEP, ImageEmbeddingRow, IndexMode, MediaPlayHistoryRow, Playlist, PlaylistItem,
+    PomodoroItemRow, QueueItem, SessionRow, ShareRow, TagRelationRow, TagRow, TrashedMessageRow,
+    VolumeRow,
 };
 #[cfg(feature = "chat")]
 pub use models::{DAppFile, DChannel, DChat, DNearbyDeviceCache, DPeer};

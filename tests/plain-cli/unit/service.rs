@@ -28,8 +28,7 @@ async fn service_preserves_explicit_web_access_and_password_across_restart() {
             let service = Service::start(
                 &paths,
                 Options {
-                    file_index_defaults: Some(plain_rs::features::prefs::file_index::Defaults {
-                        scan_directories: Vec::new(),
+                    file_index_defaults: Some(plain_rs::features::files::index_scope::Defaults {
                         excluded_directories: Vec::new(),
                         excluded_names: Vec::new(),
                     }),
@@ -89,8 +88,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
     prefs.set("https_port", 0).unwrap();
     let options = || Options {
         media_directories: vec![source.clone()],
-        file_index_defaults: Some(plain_rs::features::prefs::file_index::Defaults {
-            scan_directories: Vec::new(),
+        file_index_defaults: Some(plain_rs::features::files::index_scope::Defaults {
             excluded_directories: Vec::new(),
             excluded_names: Vec::new(),
         }),

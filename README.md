@@ -162,6 +162,11 @@ cargo test --workspace --locked     # Test Rust functionality in all packages
 cargo run -p plainapp -- run --help  # Build plainapp and show run-command help
 ```
 
+The dev profile uses incremental compilation without optimization for domain services,
+server adapters and the CLI. Reusable components and third-party dependencies retain
+their configured optimization levels. Use release builds for runtime performance measurements.
+Consumer workspaces must configure their own profiles; dependency profiles are not inherited.
+
 ## Generated contracts
 
 Regenerate GraphQL and SQLite artifacts from the current Rust implementation with Node.js and Rust:
@@ -199,7 +204,6 @@ sudo plainapp passwd   # admin password, prompted twice
 cargo build --release --locked -p plainapp
 install -m 0755 target/release/plainapp /usr/local/bin/plainapp
 sudo plainapp install                     # ffmpeg, Samba, Avahi
-sudo plainapp install --with-libreoffice  # add DOC/DOCX preview
 sudo systemctl enable --now plainapp
 ```
 

@@ -163,7 +163,6 @@ async fn provider_delete_uses_two_batch_exchanges_and_no_business_action_on_host
     let platform = super::super::platform::FilePlatform::new(
         host.clone(),
         db,
-        Arc::new(crate::features::prefs::Prefs::in_memory()),
         directory.path().to_path_buf(),
         directory.path().join("cache"),
         #[cfg(not(feature = "runtime-media"))]

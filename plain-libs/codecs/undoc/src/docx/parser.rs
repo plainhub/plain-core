@@ -1,0 +1,1950 @@
+//! DOCX parser implementation.
+
+use std::collections::HashMap;
+
+use crate::charts;
+use crate::container::OoxmlContainer;
+use crate::error::{Error, Result};
+use crate::model::{
+    Block, Cell, CellAlignment, Document, InlineImage, ListInfo, ListType, Metadata, Paragraph,
+    Resource, RevisionType, Row, Section, Table, TextAlignment, TextRun, TextStyle,
+    VerticalAlignment,
+};
+
+use super::numbering::NumberingMap;
+use super::styles::StyleMap;
+
+/// Parser for DOCX (Word) documents.
+pub struct DocxParser {
+    container: OoxmlContainer,
+    styles: StyleMap,
+    numbering: NumberingMap,
+    relationships: crate::container::Relationships,
+    /// Footnote id → plain text content
+    footnotes: HashMap<String, String>,
+    /// Endnote id → plain text content
+    endnotes: HashMap<String, String>,
+}
+
+impl DocxParser {
+    /// Open a DOCX file for parsing.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self> {
+        let container = OoxmlContainer::open(path)?;
+        Self::from_container(container)
+    }
+
+    /// Create a parser from bytes.
+    pub fn from_bytes(data: Vec<u8>) -> Result<Self> {
+        let container = OoxmlContainer::from_bytes(data)?;
+        Self::from_container(container)
+    }
+
+    /// Create a parser from a container.
+    fn from_container(container: OoxmlContainer) -> Result<Self> {
+        // Parse styles — absent is OK, malformed bytes must surface.
+        let styles = match container.read_xml_optional("word/styles.xml")? {
+            Some(xml) => StyleMap::parse(&xml)?,
+            None => StyleMap::default(),
+        };
+
+        // Parse numbering — absent is OK, malformed bytes must surface.
+        let numbering = match container.read_xml_optional("word/numbering.xml")? {
+            Some(xml) => NumberingMap::parse(&xml)?,
+            None => NumberingMap::default(),
+        };
+
+        // Parse document relationships when present.
+        //
+        // Text-only DOCX files can omit document.xml.rels entirely, so keep
+        // extraction best-effort and only use relationships for linked assets
+        // such as images, charts, headers/footers, and hyperlinks.
+        let relationships = container.read_optional_relationships_for_part("word/document.xml")?;
+
+        // Parse footnotes — absent is OK, malformed bytes must surface.
+        let footnotes = match container.read_xml_optional("word/footnotes.xml")? {
+            Some(xml) => parse_notes_xml(&xml, "w:footnote"),
+            None => HashMap::new(),
+        };
+
+        // Parse endnotes — absent is OK, malformed bytes must surface.
+        let endnotes = match container.read_xml_optional("word/endnotes.xml")? {
+            Some(xml) => parse_notes_xml(&xml, "w:endnote"),
+            None => HashMap::new(),
+        };
+
+        Ok(Self {
+            container,
+            styles,
+            numbering,
+            relationships,
+            footnotes,
+            endnotes,
+        })
+    }
+
+    /// Parse the document and return a Document model.
+    pub fn parse(&mut self) -> Result<Document> {
+        let mut doc = Document::new();
+        doc.format = crate::detect::FormatType::Docx;
+
+        // Parse metadata
+        doc.metadata = self.parse_metadata()?;
+
+        // Parse main document content
+        let mut main_section = self.parse_document_xml()?;
+
+        // Parse charts and add as tables for RAG-ready output
+        let chart_tables = self.parse_charts()?;
+        for table in chart_tables {
+            main_section.add_block(Block::Table(table));
+        }
+
+        // Append footnote definitions at end of section
+        if !self.footnotes.is_empty() {
+            let mut ids: Vec<&String> = self.footnotes.keys().collect();
+            ids.sort_by(|a, b| {
+                a.parse::<u64>()
+                    .unwrap_or(u64::MAX)
+                    .cmp(&b.parse::<u64>().unwrap_or(u64::MAX))
+            });
+            for id in ids {
+                if let Some(text) = self.footnotes.get(id) {
+                    main_section.add_block(Block::Note {
+                        label: id.clone(),
+                        content: vec![Paragraph::with_text(text.clone())],
+                    });
+                }
+            }
+        }
+
+        // Append endnote definitions at end of section
+        if !self.endnotes.is_empty() {
+            let mut ids: Vec<&String> = self.endnotes.keys().collect();
+            ids.sort_by(|a, b| {
+                a.parse::<u64>()
+                    .unwrap_or(u64::MAX)
+                    .cmp(&b.parse::<u64>().unwrap_or(u64::MAX))
+            });
+            for id in ids {
+                if let Some(text) = self.endnotes.get(id) {
+                    main_section.add_block(Block::Note {
+                        label: format!("e{id}"),
+                        content: vec![Paragraph::with_text(text.clone())],
+                    });
+                }
+            }
+        }
+
+        // The page background picture (`w:background` with a VML fill) is drawn on every
+        // page; it is referenced from the section, not placed in the text.
+        main_section.background_image = self
+            .container
+            .read_xml_optional("word/document.xml")?
+            .and_then(|xml| crate::drawing::background_picture(&xml))
+            .filter(|id| self.relationships.by_id.contains_key(id));
+
+        doc.add_section(main_section);
+
+        // Extract resources (images)
+        self.extract_resources(&mut doc)?;
+
+        Ok(doc)
+    }
+
+    /// Stream document sections one at a time via a callback.
+    ///
+    /// DOCX has a single logical document but may contain multiple sections via
+    /// page-section breaks.  The entire document is parsed upfront and each
+    /// section is delivered as a [`SectionParsed`](crate::streaming::ParseEvent) event.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(test)]
+    pub fn for_each_section<F>(
+        &mut self,
+        opts: crate::streaming::SectionStreamOptions,
+        f: F,
+    ) -> crate::error::Result<()>
+    where
+        F: FnMut(crate::streaming::ParseEvent<'_>) -> std::ops::ControlFlow<()>,
+    {
+        let metadata = self.parse_metadata()?;
+        crate::streaming::emit_parsed_document(self.parse(), Some(metadata), opts, f)
+    }
+
+    /// Parse document metadata from docProps/core.xml.
+    fn parse_metadata(&self) -> Result<Metadata> {
+        // Use shared metadata parsing from container
+        self.container.parse_core_metadata()
+    }
+
+    /// Parse charts from word/charts/ and convert to tables for RAG-ready output.
+    fn parse_charts(&self) -> Result<Vec<Table>> {
+        let mut tables = Vec::new();
+
+        // Find chart relationships in document.xml.rels
+        for (rel_type, rels) in &self.relationships.by_type {
+            if !rel_type.contains("chart") {
+                continue;
+            }
+
+            for rel in rels {
+                // Resolve chart path relative to document.xml
+                // Target is like "charts/chart1.xml"
+                let chart_path = if rel.target.starts_with('/') {
+                    rel.target[1..].to_string()
+                } else {
+                    format!("word/{}", rel.target)
+                };
+
+                // Read and parse chart XML
+                let chart_xml = self.container.read_xml(&chart_path)?;
+                let chart_data = charts::parse_chart_xml(&chart_xml)?;
+                if !chart_data.is_empty() {
+                    let mut table = chart_data.to_table();
+                    // Add chart title if available
+                    if let Some(ref title) = chart_data.title {
+                        if !title.is_empty() {
+                            if let Some(first_row) = table.rows.first_mut() {
+                                if let Some(first_cell) = first_row.cells.first_mut() {
+                                    let original = first_cell.plain_text();
+                                    first_cell.content.clear();
+                                    first_cell.content.push(Paragraph::with_text(format!(
+                                        "{} ({})",
+                                        original, title
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                    tables.push(table);
+                }
+            }
+        }
+
+        Ok(tables)
+    }
+
+    /// Parse the main document.xml content.
+    fn parse_document_xml(&mut self) -> Result<Section> {
+        let xml = self.container.read_xml("word/document.xml")?;
+        let mut section = Section::new(0);
+
+        let mut reader = crate::decode::reader_for(&xml);
+        // IMPORTANT: Don't trim text - preserve whitespace from xml:space="preserve" elements
+        // This fixes the "DATE OF BIRTH" -> "DATEOFBIRTH" bug (GitHub Issue #2)
+        reader.config_mut().trim_text(false);
+
+        let mut buf = Vec::new();
+        let mut in_body = false;
+        let mut paragraph_xml = String::new();
+        let mut table_xml = String::new();
+        let mut in_paragraph = false;
+        let mut para_depth: u32 = 0; // Track nested w:p depth (for text boxes)
+        let mut table_depth: u32 = 0; // Track nested table depth
+                                      // Every header/footer reference (default / first / even), in document order.
+        let mut header_rids: Vec<String> = Vec::new();
+        let mut footer_rids: Vec<String> = Vec::new();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Start(ref e)) => {
+                    let name = e.name();
+                    match name.as_ref() {
+                        "w:body" => {
+                            in_body = true;
+                        }
+                        "w:p" if in_body && table_depth == 0 && !in_paragraph => {
+                            in_paragraph = true;
+                            paragraph_xml.clear();
+                            paragraph_xml.push_str("<w:p");
+                            for attr in e.attributes().flatten() {
+                                paragraph_xml.push_str(&format!(
+                                    " {}=\"{}\"",
+                                    attr.key.as_ref(),
+                                    attr.value.as_ref()
+                                ));
+                            }
+                            paragraph_xml.push('>');
+                        }
+                        // Only body-level tables enter table mode. A table nested
+                        // inside a text box lives within a paragraph; it must stay
+                        // in paragraph_xml so the text-box path extracts its text,
+                        // otherwise table mode collects an empty shell (cell text is
+                        // captured separately) and emits a spurious empty table.
+                        "w:tbl" if in_body && !in_paragraph => {
+                            if table_depth == 0 {
+                                // Start collecting table XML
+                                table_xml.clear();
+                            }
+                            table_depth += 1;
+                            table_xml.push_str("<w:tbl>");
+                        }
+                        _ => {
+                            if in_paragraph {
+                                // Track nested w:p depth for text boxes
+                                if name.as_ref() == "w:p" {
+                                    para_depth += 1;
+                                }
+                                paragraph_xml.push('<');
+                                paragraph_xml.push_str(name.as_ref());
+                                for attr in e.attributes().flatten() {
+                                    paragraph_xml.push_str(&format!(
+                                        " {}=\"{}\"",
+                                        attr.key.as_ref(),
+                                        attr.value.as_ref()
+                                    ));
+                                }
+                                paragraph_xml.push('>');
+                            } else if table_depth > 0 {
+                                table_xml.push('<');
+                                table_xml.push_str(name.as_ref());
+                                for attr in e.attributes().flatten() {
+                                    table_xml.push_str(&format!(
+                                        " {}=\"{}\"",
+                                        attr.key.as_ref(),
+                                        attr.value.as_ref()
+                                    ));
+                                }
+                                table_xml.push('>');
+                            }
+                        }
+                    }
+                }
+                Ok(quick_xml::events::Event::Empty(ref e)) => {
+                    let name = e.name();
+                    // Header/footer references live inside a w:sectPr, which may be
+                    // either the final body-level sectPr OR a section-break sectPr
+                    // nested in a paragraph's w:pPr. Collect them wherever they
+                    // appear in the body (every type: default/first/even) so
+                    // multi-section documents don't lose every section's
+                    // header/footer text but the last.
+                    if in_body
+                        && table_depth == 0
+                        && matches!(name.as_ref(), "w:headerReference" | "w:footerReference")
+                    {
+                        let mut r_id = String::new();
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "r:id" {
+                                r_id = attr.value.to_string();
+                            }
+                        }
+                        if !r_id.is_empty() {
+                            if name.as_ref() == "w:headerReference" {
+                                header_rids.push(r_id);
+                            } else {
+                                footer_rids.push(r_id);
+                            }
+                        }
+                    } else if in_paragraph {
+                        paragraph_xml.push('<');
+                        paragraph_xml.push_str(name.as_ref());
+                        for attr in e.attributes().flatten() {
+                            paragraph_xml.push_str(&format!(
+                                " {}=\"{}\"",
+                                attr.key.as_ref(),
+                                attr.value.as_ref()
+                            ));
+                        }
+                        paragraph_xml.push_str("/>");
+                    } else if table_depth > 0 {
+                        table_xml.push('<');
+                        table_xml.push_str(name.as_ref());
+                        for attr in e.attributes().flatten() {
+                            table_xml.push_str(&format!(
+                                " {}=\"{}\"",
+                                attr.key.as_ref(),
+                                attr.value.as_ref()
+                            ));
+                        }
+                        table_xml.push_str("/>");
+                    }
+                }
+                Ok(quick_xml::events::Event::Text(ref e)) => {
+                    if in_paragraph {
+                        let text = crate::decode::decode_text_lossy(e);
+                        paragraph_xml.push_str(&escape_xml(&text));
+                    } else if table_depth > 0 {
+                        let text = crate::decode::decode_text_lossy(e);
+                        table_xml.push_str(&escape_xml(&text));
+                    }
+                }
+                // quick-xml 0.40+ emits entity refs as separate events. This buffer
+                // is re-serialized XML that gets parsed a second time, so re-emit
+                // the resolved entity through escape_xml — the second pass then sees
+                // "&amp;" again and decodes it via its own GeneralRef arm.
+                Ok(quick_xml::events::Event::GeneralRef(ref e)) => {
+                    let decoded = crate::decode::resolve_general_ref(e);
+                    if in_paragraph {
+                        paragraph_xml.push_str(&escape_xml(&decoded));
+                    } else if table_depth > 0 {
+                        table_xml.push_str(&escape_xml(&decoded));
+                    }
+                }
+                Ok(quick_xml::events::Event::End(ref e)) => {
+                    let name = e.name();
+                    match name.as_ref() {
+                        "w:body" => {
+                            in_body = false;
+                        }
+                        "w:p" if in_paragraph && table_depth == 0 && para_depth == 0 => {
+                            paragraph_xml.push_str("</w:p>");
+                            // Extract text box paragraphs before parsing the main paragraph
+                            let textbox_paras = self.extract_textbox_paragraphs(&paragraph_xml);
+                            if let Ok(para) = self.parse_paragraph(&paragraph_xml) {
+                                section.add_block(Block::Paragraph(para));
+                            }
+                            // Add text box paragraphs as separate blocks
+                            for tb_para in textbox_paras {
+                                section.add_block(Block::Paragraph(tb_para));
+                            }
+                            in_paragraph = false;
+                        }
+                        "w:tbl" if table_depth > 0 => {
+                            table_xml.push_str("</w:tbl>");
+                            table_depth -= 1;
+                            if table_depth == 0 {
+                                // Finished collecting outermost table - now parse it
+                                if let Ok(table) = self.parse_table(&table_xml) {
+                                    section.add_block(Block::Table(table));
+                                }
+                            }
+                        }
+                        _ => {
+                            if in_paragraph {
+                                // Track nested w:p depth for text boxes
+                                if name.as_ref() == "w:p" {
+                                    para_depth = para_depth.saturating_sub(1);
+                                }
+                                paragraph_xml.push_str("</");
+                                paragraph_xml.push_str(name.as_ref());
+                                paragraph_xml.push('>');
+                            } else if table_depth > 0 {
+                                table_xml.push_str("</");
+                                table_xml.push_str(name.as_ref());
+                                table_xml.push('>');
+                            }
+                        }
+                    }
+                }
+                Ok(quick_xml::events::Event::Eof) => break,
+                Err(e) => {
+                    return Err(Error::xml_parse_with_context(
+                        e.to_string(),
+                        "word/document.xml",
+                    ));
+                }
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        // Resolve and parse header/footer from sectPr references. A single part
+        // can be referenced by multiple section types, so parse each part once
+        // (preserving document order) and merge the paragraphs into one list.
+        section.header = self.resolve_header_footer_parts(&header_rids)?;
+        section.footer = self.resolve_header_footer_parts(&footer_rids)?;
+
+        Ok(section)
+    }
+
+    /// Resolve a relationship ID to a header/footer XML path and parse its paragraphs.
+    ///
+    /// Returns `Ok(None)` when the relationship is absent or the target part is
+    /// missing, but surfaces malformed content (e.g. `Error::Encoding`) so that
+    /// corrupted header/footer parts are not silently dropped.
+    /// Resolve a set of header/footer relationship IDs (in document order) into a
+    /// single merged paragraph list. Duplicate IDs (the same part referenced by
+    /// several section types) are parsed only once. Returns `None` when nothing
+    /// resolves to non-empty content, keeping `section.header/footer` absent.
+    fn resolve_header_footer_parts(&mut self, rids: &[String]) -> Result<Option<Vec<Paragraph>>> {
+        let mut seen = std::collections::HashSet::new();
+        let mut merged: Vec<Paragraph> = Vec::new();
+        for rid in rids {
+            if !seen.insert(rid.as_str()) {
+                continue;
+            }
+            if let Some(paragraphs) = self.parse_header_footer_by_rid(rid)? {
+                merged.extend(paragraphs);
+            }
+        }
+        Ok((!merged.is_empty()).then_some(merged))
+    }
+
+    fn parse_header_footer_by_rid(&mut self, rid: &str) -> Result<Option<Vec<Paragraph>>> {
+        let Some(rel) = self.relationships.get(rid) else {
+            return Ok(None);
+        };
+        let path = OoxmlContainer::resolve_path("word/document.xml", &rel.target);
+        let Some(xml) = self.container.read_xml_optional(&path)? else {
+            return Ok(None);
+        };
+
+        // A header/footer part has its OWN relationships namespace
+        // (e.g. word/_rels/header1.xml.rels), independently numbered from the
+        // body's. Swap them in while parsing so hyperlink/image r:ids resolve
+        // against the correct part and can't collide with document.xml's rIds.
+        let part_rels = self.container.read_optional_relationships_for_part(&path)?;
+        let saved = std::mem::replace(&mut self.relationships, part_rels);
+        let paragraphs = self.parse_header_footer_xml(&xml);
+        self.relationships = saved;
+
+        Ok(Some(paragraphs))
+    }
+
+    /// Parse a header or footer XML part (`w:hdr` / `w:ftr`) into a flat list of
+    /// paragraphs.
+    ///
+    /// Header/footer XML shares the document body's structure, so this reuses the
+    /// same building blocks as the body parser rather than a divergent text-only
+    /// scan: [`Self::parse_paragraph`] for run text and formatting and
+    /// [`Self::extract_textbox_paragraphs`] for text boxes (kept as separate
+    /// paragraphs, matching body behaviour).
+    ///
+    /// The flat header/footer model (`Vec<Paragraph>`) cannot hold table
+    /// structure, so tables are treated transparently: their structural tags
+    /// (`w:tbl`/`w:tr`/`w:tc` and props) are skipped and each cell's paragraphs
+    /// become loose paragraphs in document order. Because tables are transparent
+    /// rather than parsed as a unit, *nested* tables recurse naturally and their
+    /// text is never dropped.
+    fn parse_header_footer_xml(&mut self, xml: &str) -> Vec<Paragraph> {
+        let mut paragraphs = Vec::new();
+        let mut reader = crate::decode::reader_for(xml);
+        // Preserve whitespace (xml:space="preserve"), consistent with the body parser.
+        reader.config_mut().trim_text(false);
+
+        let mut buf = Vec::new();
+        let mut paragraph_xml = String::new();
+        let mut in_paragraph = false;
+        let mut para_depth: u32 = 0; // Nested w:p depth (text boxes)
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Start(ref e)) => {
+                    let name = e.name();
+                    match name.as_ref() {
+                        // A paragraph at any nesting depth (top level or inside a
+                        // table cell). Table wrappers are transparent, so cell
+                        // paragraphs start here just like top-level ones.
+                        "w:p" if !in_paragraph => {
+                            in_paragraph = true;
+                            para_depth = 0;
+                            paragraph_xml.clear();
+                            push_start_tag(&mut paragraph_xml, e);
+                        }
+                        _ => {
+                            if in_paragraph {
+                                if name.as_ref() == "w:p" {
+                                    para_depth += 1;
+                                }
+                                push_start_tag(&mut paragraph_xml, e);
+                            }
+                            // Outside a paragraph, table structural tags are
+                            // ignored (descended into transparently).
+                        }
+                    }
+                }
+                // Content events only matter inside a paragraph; outside one (e.g.
+                // between table cells) they are ignored.
+                Ok(quick_xml::events::Event::Empty(ref e)) if in_paragraph => {
+                    push_empty_tag(&mut paragraph_xml, e);
+                }
+                Ok(quick_xml::events::Event::Text(ref e)) if in_paragraph => {
+                    let text = crate::decode::decode_text_lossy(e);
+                    paragraph_xml.push_str(&escape_xml(&text));
+                }
+                // Re-emit resolved entities through escape_xml; the re-parse of this
+                // buffer decodes them again (mirrors the body parser).
+                Ok(quick_xml::events::Event::GeneralRef(ref e)) if in_paragraph => {
+                    let decoded = crate::decode::resolve_general_ref(e);
+                    paragraph_xml.push_str(&escape_xml(&decoded));
+                }
+                Ok(quick_xml::events::Event::End(ref e)) => {
+                    let name = e.name();
+                    match name.as_ref() {
+                        "w:p" if in_paragraph && para_depth == 0 => {
+                            paragraph_xml.push_str("</w:p>");
+                            // Text boxes are pulled out first, as separate paragraphs.
+                            let textbox_paras = self.extract_textbox_paragraphs(&paragraph_xml);
+                            if let Ok(para) = self.parse_paragraph(&paragraph_xml) {
+                                // Skip blank lines (e.g. spacer paragraphs), but keep
+                                // internal whitespace intact — consistent with the body parser.
+                                if !para.plain_text().trim().is_empty() {
+                                    paragraphs.push(para);
+                                }
+                            }
+                            paragraphs.extend(textbox_paras);
+                            in_paragraph = false;
+                        }
+                        _ => {
+                            if in_paragraph {
+                                if name.as_ref() == "w:p" {
+                                    para_depth = para_depth.saturating_sub(1);
+                                }
+                                push_end_tag(&mut paragraph_xml, name.as_ref());
+                            }
+                        }
+                    }
+                }
+                Ok(quick_xml::events::Event::Eof) => break,
+                Err(_) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        // Header/footer text is auxiliary: it must not enter the document heading
+        // outline (a Heading paragraph style here would otherwise emit a stray `#`
+        // in the rendered header/footer and mislead structure-aware consumers).
+        // Run-level formatting (bold/italic/hyperlinks) is preserved.
+        for para in &mut paragraphs {
+            para.heading = crate::model::HeadingLevel::None;
+        }
+
+        paragraphs
+    }
+
+    /// Parse a single paragraph element.
+    fn parse_paragraph(&mut self, xml: &str) -> Result<Paragraph> {
+        let mut para = Paragraph::new();
+        let mut reader = crate::decode::reader_for(xml);
+        // Don't trim text - preserve whitespace from xml:space="preserve" elements
+        reader.config_mut().trim_text(false);
+
+        let mut buf = Vec::new();
+        let mut in_ppr = false;
+        let mut in_rpr = false;
+        let mut in_run = false;
+        let mut in_text = false; // Track w:t elements (regular text)
+        let mut in_instr_text = false; // Track w:instrText elements (field codes to skip)
+        let mut in_drawing = false; // Track w:drawing elements for images
+        let mut in_pict = false; // Track w:pict/w:object elements for VML images
+        let mut in_ins = false; // Track w:ins elements (tracked changes - insertions)
+        let mut in_del = false; // Track w:del elements (tracked changes - deletions)
+        let mut txbx_content_depth: u32 = 0; // Track w:txbxContent nesting (suppress text capture)
+        let mut mc_fallback_depth: u32 = 0; // Track mc:Fallback nesting (skip entirely)
+                                            // What each run starts from: the paragraph style's run properties, once `w:pStyle` is read.
+        let mut run_base = TextStyle::default();
+        let mut current_style = TextStyle::default();
+        let mut current_hyperlink: Option<String> = None;
+        let mut current_image_alt: Option<String> = None;
+        // The link the text being read is part of: the `w:hyperlink` around it (to an address,
+        // or to a bookmark -- `None`), and the fields open around it (a `HYPERLINK` field's
+        // result is a link too). `in_link` holds for a bookmark link as well, which is not kept
+        // as a link but is still one.
+        let mut link_element: Option<Option<String>> = None;
+        let mut fields: Vec<WordField> = Vec::new();
+        let mut in_link = false;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Start(ref e)) => match e.name().as_ref() {
+                    // Skip mc:Fallback branches to avoid duplicating text box content
+                    "mc:Fallback" => {
+                        mc_fallback_depth += 1;
+                    }
+                    // Track w:txbxContent to suppress text capture (extracted separately)
+                    "w:txbxContent" if mc_fallback_depth == 0 => {
+                        txbx_content_depth += 1;
+                    }
+                    _ if mc_fallback_depth > 0 => {} // Skip everything inside mc:Fallback
+                    _ if txbx_content_depth > 0 => {} // Skip everything inside w:txbxContent
+                    "w:pPr" => in_ppr = true,
+                    "w:rPr" => in_rpr = true,
+                    "w:r" => {
+                        in_run = true;
+                        current_style = run_base.clone();
+                        if in_link {
+                            current_style = current_style.in_link();
+                        }
+                    }
+                    "w:t" => in_text = true,
+                    "w:instrText" => in_instr_text = true,
+                    "w:fldSimple" => {
+                        fields.push(WordField {
+                            instruction: get_attr(e, "w:instr").unwrap_or_default(),
+                            in_result: true,
+                        });
+                        (in_link, current_hyperlink) = link_state(&link_element, &fields);
+                    }
+                    "w:drawing" => {
+                        in_drawing = true;
+                        current_image_alt = None;
+                    }
+                    "w:pict" | "w:object" => in_pict = true,
+                    // A drawing or blip with children arrives as a start tag: a `wp:docPr`
+                    // holding a hyperlink, an `a:blip` holding the extension list that names
+                    // an SVG original or an effects layer. Read them like the empty forms.
+                    "wp:docPr" if in_drawing => {
+                        if let Some(alt) = drawing_description(e) {
+                            current_image_alt = Some(alt);
+                        }
+                    }
+                    "a:blip" if in_drawing => {
+                        para.images.extend(blip_image(e, &current_image_alt));
+                    }
+                    // Tracked changes - insertions
+                    "w:ins" => in_ins = true,
+                    // Tracked changes - deletions
+                    "w:del" => in_del = true,
+                    "w:hyperlink" => {
+                        link_element = Some(
+                            get_attr(e, "r:id")
+                                .and_then(|id| self.relationships.get(&id))
+                                .map(|rel| rel.target.clone()),
+                        );
+                        (in_link, current_hyperlink) = link_state(&link_element, &fields);
+                    }
+                    _ => {}
+                },
+                Ok(quick_xml::events::Event::Empty(ref e)) => match e.name().as_ref() {
+                    _ if mc_fallback_depth > 0 || txbx_content_depth > 0 => {} // Skip
+                    // A complex field: `begin`, its instruction, `separate`, its result, `end`.
+                    "w:fldChar" => {
+                        match get_attr(e, "w:fldCharType").as_deref() {
+                            Some("begin") => fields.push(WordField {
+                                instruction: String::new(),
+                                in_result: false,
+                            }),
+                            Some("separate") => {
+                                if let Some(field) = fields.last_mut() {
+                                    field.in_result = true;
+                                }
+                            }
+                            Some("end") => {
+                                fields.pop();
+                            }
+                            _ => {}
+                        }
+                        (in_link, current_hyperlink) = link_state(&link_element, &fields);
+                    }
+                    "w:pStyle" if in_ppr => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:val" {
+                                let style_id = attr.value.as_ref();
+                                para.style_id = Some(style_id.to_string());
+                                para.heading = self.styles.get_heading_level(style_id);
+                                run_base = paragraph_run_base(&self.styles, style_id);
+                                // Also get style name from StyleMap
+                                if let Some(style) = self.styles.styles.get(style_id) {
+                                    if !style.name.is_empty() {
+                                        para.style_name = Some(style.name.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    "w:jc" if in_ppr => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:val" {
+                                let val = attr.value.as_ref();
+                                para.alignment = match val {
+                                    "center" => TextAlignment::Center,
+                                    "right" => TextAlignment::Right,
+                                    "both" | "distribute" => TextAlignment::Justify,
+                                    _ => TextAlignment::Left,
+                                };
+                            }
+                        }
+                    }
+                    "w:rStyle" if in_rpr => {
+                        if let Some(id) = get_attr(e, "w:val") {
+                            apply_character_style(&self.styles, &id, &mut current_style);
+                        }
+                    }
+                    "w:b" if in_rpr => {
+                        let val = get_bool_attr(e, "w:val");
+                        current_style.bold = val.unwrap_or(true);
+                    }
+                    "w:i" if in_rpr => {
+                        let val = get_bool_attr(e, "w:val");
+                        current_style.italic = val.unwrap_or(true);
+                    }
+                    "w:u" if in_rpr => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:val" {
+                                let val = attr.value.as_ref();
+                                current_style.underline = val != "none";
+                            }
+                        }
+                    }
+                    "w:strike" if in_rpr => {
+                        let val = get_bool_attr(e, "w:val");
+                        current_style.strikethrough = val.unwrap_or(true);
+                    }
+                    "w:vertAlign" if in_rpr => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:val" {
+                                let val = attr.value.as_ref();
+                                match val {
+                                    "superscript" => current_style.superscript = true,
+                                    "subscript" => current_style.subscript = true,
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    "w:sz" if in_rpr => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:val" {
+                                let val = attr.value.as_ref();
+                                current_style.size = val.parse().ok();
+                            }
+                        }
+                    }
+                    "w:color" if in_rpr => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:val" {
+                                let val = attr.value.as_ref();
+                                if val != "auto" {
+                                    current_style.color = Some(val.to_string());
+                                }
+                            }
+                        }
+                    }
+                    "w:highlight" if in_rpr => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:val" {
+                                current_style.highlight = Some(attr.value.to_string());
+                            }
+                        }
+                    }
+                    "w:rFonts" if in_rpr => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:ascii" {
+                                current_style.font = Some(attr.value.to_string());
+                                break;
+                            }
+                        }
+                    }
+                    // Image handling: wp:docPr contains alt text
+                    "wp:docPr" if in_drawing => {
+                        if let Some(alt) = drawing_description(e) {
+                            current_image_alt = Some(alt);
+                        }
+                    }
+                    // Image handling: a:blip contains the image reference
+                    "a:blip" if in_drawing => {
+                        para.images.extend(blip_image(e, &current_image_alt));
+                    }
+                    // VML image handling: v:imagedata references the image part
+                    // A VML shape filled with a picture names the image in `v:fill`; a fill
+                    // without `r:id` is a colour or gradient and shows no image.
+                    "v:imagedata" | "v:fill" if in_pict => {
+                        if let Some(image) = vml_inline_image(e) {
+                            para.images.push(image);
+                        }
+                    }
+                    // Break handling - line break or page break
+                    "w:br" if in_run => {
+                        // Check for break type: page, column, or text wrapping (default)
+                        let mut is_page_break = false;
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:type" {
+                                let break_type = attr.value.as_ref();
+                                is_page_break = break_type == "page";
+                            }
+                        }
+
+                        // Compute current revision type
+                        let current_revision = if in_del {
+                            RevisionType::Deleted
+                        } else if in_ins {
+                            RevisionType::Inserted
+                        } else {
+                            RevisionType::None
+                        };
+
+                        if is_page_break {
+                            // Page break - mark run with page_break flag
+                            if let Some(last_run) = para.runs.last_mut() {
+                                last_run.page_break = true;
+                            } else {
+                                para.runs.push(TextRun {
+                                    text: String::new(),
+                                    style: current_style.clone(),
+                                    hyperlink: None,
+                                    line_break: false,
+                                    page_break: true,
+                                    revision: current_revision,
+                                    note: None,
+                                });
+                            }
+                        } else {
+                            // Line break (text wrapping or column break treated as line break)
+                            if let Some(last_run) = para.runs.last_mut() {
+                                last_run.line_break = true;
+                            } else {
+                                para.runs.push(TextRun {
+                                    text: String::new(),
+                                    style: current_style.clone(),
+                                    hyperlink: None,
+                                    line_break: true,
+                                    page_break: false,
+                                    revision: current_revision,
+                                    note: None,
+                                });
+                            }
+                        }
+                    }
+                    // Tab character handling - convert <w:tab/> to tab character
+                    "w:tab" if in_run => {
+                        let current_revision = if in_del {
+                            RevisionType::Deleted
+                        } else if in_ins {
+                            RevisionType::Inserted
+                        } else {
+                            RevisionType::None
+                        };
+                        para.runs.push(TextRun {
+                            text: "\t".to_string(),
+                            style: current_style.clone(),
+                            hyperlink: current_hyperlink.clone(),
+                            line_break: false,
+                            page_break: false,
+                            revision: current_revision,
+                            note: None,
+                        });
+                    }
+                    // Carriage return handling - convert <w:cr/> to newline
+                    "w:cr" if in_run => {
+                        if let Some(last_run) = para.runs.last_mut() {
+                            last_run.line_break = true;
+                        } else {
+                            let current_revision = if in_del {
+                                RevisionType::Deleted
+                            } else if in_ins {
+                                RevisionType::Inserted
+                            } else {
+                                RevisionType::None
+                            };
+                            para.runs.push(TextRun {
+                                text: String::new(),
+                                style: current_style.clone(),
+                                hyperlink: None,
+                                line_break: true,
+                                page_break: false,
+                                revision: current_revision,
+                                note: None,
+                            });
+                        }
+                    }
+                    // Non-breaking hyphen handling
+                    "w:noBreakHyphen" if in_run => {
+                        let current_revision = if in_del {
+                            RevisionType::Deleted
+                        } else if in_ins {
+                            RevisionType::Inserted
+                        } else {
+                            RevisionType::None
+                        };
+                        para.runs.push(TextRun {
+                            text: "\u{2011}".to_string(), // Non-breaking hyphen Unicode
+                            style: current_style.clone(),
+                            hyperlink: current_hyperlink.clone(),
+                            line_break: false,
+                            page_break: false,
+                            revision: current_revision,
+                            note: None,
+                        });
+                    }
+                    // Soft hyphen handling (optional hyphen, usually invisible)
+                    "w:softHyphen" if in_run => {
+                        let current_revision = if in_del {
+                            RevisionType::Deleted
+                        } else if in_ins {
+                            RevisionType::Inserted
+                        } else {
+                            RevisionType::None
+                        };
+                        para.runs.push(TextRun {
+                            text: "\u{00AD}".to_string(), // Soft hyphen Unicode
+                            style: current_style.clone(),
+                            hyperlink: current_hyperlink.clone(),
+                            line_break: false,
+                            page_break: false,
+                            revision: current_revision,
+                            note: None,
+                        });
+                    }
+                    // Non-breaking space handling
+                    "w:noBreakSpace" if in_run => {
+                        let current_revision = if in_del {
+                            RevisionType::Deleted
+                        } else if in_ins {
+                            RevisionType::Inserted
+                        } else {
+                            RevisionType::None
+                        };
+                        para.runs.push(TextRun {
+                            text: "\u{00A0}".to_string(), // Non-breaking space Unicode
+                            style: current_style.clone(),
+                            hyperlink: current_hyperlink.clone(),
+                            line_break: false,
+                            page_break: false,
+                            revision: current_revision,
+                            note: None,
+                        });
+                    }
+                    // Footnote reference handling
+                    "w:footnoteReference" if in_run => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:id" {
+                                let id = attr.value.to_string();
+                                // Only insert marker if this footnote has content
+                                if self.footnotes.contains_key(&id) {
+                                    para.runs.push(TextRun::note_reference(id));
+                                }
+                            }
+                        }
+                    }
+                    // Endnote reference handling
+                    "w:endnoteReference" if in_run => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == "w:id" {
+                                let id = attr.value.to_string();
+                                // Only insert marker if this endnote has content
+                                if self.endnotes.contains_key(&id) {
+                                    para.runs.push(TextRun::note_reference(format!("e{id}")));
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                },
+                // A field's instruction: read, never shown.
+                Ok(quick_xml::events::Event::Text(ref e))
+                    if in_instr_text && mc_fallback_depth == 0 && txbx_content_depth == 0 =>
+                {
+                    if let Some(field) = fields.last_mut().filter(|f| !f.in_result) {
+                        field
+                            .instruction
+                            .push_str(&crate::decode::decode_text_lossy(e));
+                    }
+                }
+                Ok(quick_xml::events::Event::Text(ref e))
+                    if in_run
+                        && in_text
+                        && !in_instr_text
+                        && mc_fallback_depth == 0
+                        && txbx_content_depth == 0 =>
+                {
+                    // Only extract text from w:t elements, skip w:instrText (field codes)
+                    // Also skip text inside mc:Fallback and w:txbxContent (extracted separately)
+                    let text = crate::decode::decode_text_lossy(e);
+                    if !text.is_empty() {
+                        let current_revision = if in_del {
+                            RevisionType::Deleted
+                        } else if in_ins {
+                            RevisionType::Inserted
+                        } else {
+                            RevisionType::None
+                        };
+                        let run = TextRun {
+                            text,
+                            style: current_style.clone(),
+                            hyperlink: current_hyperlink.clone(),
+                            line_break: false,
+                            page_break: false,
+                            revision: current_revision,
+                            note: None,
+                        };
+                        para.runs.push(run);
+                    }
+                }
+                // quick-xml 0.40+ delivers entity refs separately; mirror the Text
+                // arm so a run like "AT&amp;T" keeps its ampersand. The entity
+                // becomes its own run, which concatenates identically on render.
+                Ok(quick_xml::events::Event::GeneralRef(ref e))
+                    if in_run
+                        && in_text
+                        && !in_instr_text
+                        && mc_fallback_depth == 0
+                        && txbx_content_depth == 0 =>
+                {
+                    let text = crate::decode::resolve_general_ref(e);
+                    if !text.is_empty() {
+                        let current_revision = if in_del {
+                            RevisionType::Deleted
+                        } else if in_ins {
+                            RevisionType::Inserted
+                        } else {
+                            RevisionType::None
+                        };
+                        let run = TextRun {
+                            text,
+                            style: current_style.clone(),
+                            hyperlink: current_hyperlink.clone(),
+                            line_break: false,
+                            page_break: false,
+                            revision: current_revision,
+                            note: None,
+                        };
+                        para.runs.push(run);
+                    }
+                }
+                Ok(quick_xml::events::Event::End(ref e)) => match e.name().as_ref() {
+                    "mc:Fallback" if mc_fallback_depth > 0 => {
+                        mc_fallback_depth -= 1;
+                    }
+                    "w:txbxContent" if txbx_content_depth > 0 => {
+                        txbx_content_depth -= 1;
+                    }
+                    _ if mc_fallback_depth > 0 || txbx_content_depth > 0 => {} // Skip
+                    "w:pPr" => in_ppr = false,
+                    "w:rPr" => {
+                        in_rpr = false;
+                        // After the run's own properties, so an underline they set is the
+                        // link's look too.
+                        if in_run && in_link {
+                            current_style = std::mem::take(&mut current_style).in_link();
+                        }
+                    }
+                    "w:r" => in_run = false,
+                    "w:t" => in_text = false,
+                    "w:instrText" => in_instr_text = false,
+                    "w:hyperlink" => {
+                        link_element = None;
+                        (in_link, current_hyperlink) = link_state(&link_element, &fields);
+                    }
+                    "w:fldSimple" => {
+                        fields.pop();
+                        (in_link, current_hyperlink) = link_state(&link_element, &fields);
+                    }
+                    "w:drawing" => {
+                        in_drawing = false;
+                        current_image_alt = None;
+                    }
+                    "w:pict" | "w:object" => in_pict = false,
+                    "w:ins" => in_ins = false,
+                    "w:del" => in_del = false,
+                    _ => {}
+                },
+                Ok(quick_xml::events::Event::Eof) => break,
+                Err(e) => return Err(Error::xml_parse_with_context(e.to_string(), "paragraph")),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        // Parse numbering (list info)
+        para.list_info = self.parse_list_info(xml);
+
+        Ok(para)
+    }
+
+    /// Extract paragraphs from `w:txbxContent` elements (text boxes/shapes).
+    ///
+    /// Text boxes in DOCX appear inside `w:drawing` or `mc:AlternateContent` elements.
+    /// This method finds all `w:txbxContent` sections (skipping those inside `mc:Fallback`
+    /// to avoid duplication) and parses the inner `<w:p>` elements as regular paragraphs.
+    fn extract_textbox_paragraphs(&mut self, xml: &str) -> Vec<Paragraph> {
+        let mut paragraphs = Vec::new();
+        let mut reader = crate::decode::reader_for(xml);
+        reader.config_mut().trim_text(false);
+
+        let mut buf = Vec::new();
+        let mut mc_fallback_depth: u32 = 0;
+        let mut txbx_content_depth: u32 = 0;
+        let mut in_txbx_para = false;
+        let mut txbx_para_xml = String::new();
+        let mut txbx_para_depth: u32 = 0; // Track nested elements inside the text box <w:p>
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Start(ref e)) => {
+                    let name = e.name();
+                    match name.as_ref() {
+                        "mc:Fallback" => {
+                            mc_fallback_depth += 1;
+                        }
+                        "w:txbxContent" if mc_fallback_depth == 0 => {
+                            txbx_content_depth += 1;
+                        }
+                        "w:p" if txbx_content_depth > 0 && !in_txbx_para => {
+                            in_txbx_para = true;
+                            txbx_para_depth = 0;
+                            txbx_para_xml.clear();
+                            txbx_para_xml.push_str("<w:p");
+                            for attr in e.attributes().flatten() {
+                                txbx_para_xml.push_str(&format!(
+                                    " {}=\"{}\"",
+                                    attr.key.as_ref(),
+                                    attr.value.as_ref()
+                                ));
+                            }
+                            txbx_para_xml.push('>');
+                        }
+                        _ if in_txbx_para => {
+                            txbx_para_depth += 1;
+                            txbx_para_xml.push('<');
+                            txbx_para_xml.push_str(name.as_ref());
+                            for attr in e.attributes().flatten() {
+                                txbx_para_xml.push_str(&format!(
+                                    " {}=\"{}\"",
+                                    attr.key.as_ref(),
+                                    attr.value.as_ref()
+                                ));
+                            }
+                            txbx_para_xml.push('>');
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(quick_xml::events::Event::Empty(ref e)) if in_txbx_para => {
+                    let name = e.name();
+                    txbx_para_xml.push('<');
+                    txbx_para_xml.push_str(name.as_ref());
+                    for attr in e.attributes().flatten() {
+                        txbx_para_xml.push_str(&format!(
+                            " {}=\"{}\"",
+                            attr.key.as_ref(),
+                            attr.value.as_ref()
+                        ));
+                    }
+                    txbx_para_xml.push_str("/>");
+                }
+                Ok(quick_xml::events::Event::Text(ref e)) if in_txbx_para => {
+                    let text = crate::decode::decode_text_lossy(e);
+                    txbx_para_xml.push_str(&escape_xml(&text));
+                }
+                // Re-serialized buffer (parsed a second time): re-emit the resolved
+                // entity through escape_xml so the second pass decodes it again.
+                Ok(quick_xml::events::Event::GeneralRef(ref e)) if in_txbx_para => {
+                    let decoded = crate::decode::resolve_general_ref(e);
+                    txbx_para_xml.push_str(&escape_xml(&decoded));
+                }
+                Ok(quick_xml::events::Event::End(ref e)) => {
+                    let name = e.name();
+                    match name.as_ref() {
+                        "mc:Fallback" if mc_fallback_depth > 0 => {
+                            mc_fallback_depth -= 1;
+                        }
+                        "w:txbxContent" if txbx_content_depth > 0 => {
+                            txbx_content_depth -= 1;
+                        }
+                        "w:p" if in_txbx_para && txbx_para_depth == 0 => {
+                            txbx_para_xml.push_str("</w:p>");
+                            if let Ok(para) = self.parse_paragraph(&txbx_para_xml) {
+                                if !para.plain_text().is_empty() {
+                                    paragraphs.push(para);
+                                }
+                            }
+                            in_txbx_para = false;
+                        }
+                        _ if in_txbx_para => {
+                            txbx_para_depth = txbx_para_depth.saturating_sub(1);
+                            txbx_para_xml.push_str("</");
+                            txbx_para_xml.push_str(name.as_ref());
+                            txbx_para_xml.push('>');
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(quick_xml::events::Event::Eof) => break,
+                Err(_) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        paragraphs
+    }
+
+    /// Parse list info from paragraph XML.
+    fn parse_list_info(&mut self, xml: &str) -> Option<ListInfo> {
+        let mut reader = crate::decode::reader_for(xml);
+        reader.config_mut().trim_text(true);
+
+        let mut buf = Vec::new();
+        let mut num_id: Option<String> = None;
+        let mut level: u8 = 0;
+        let mut in_num_pr = false;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == "w:numPr" => {
+                    in_num_pr = true;
+                }
+                Ok(quick_xml::events::Event::Empty(ref e)) if in_num_pr => {
+                    match e.name().as_ref() {
+                        "w:numId" => {
+                            for attr in e.attributes().flatten() {
+                                if attr.key.as_ref() == "w:val" {
+                                    num_id = Some(attr.value.to_string());
+                                }
+                            }
+                        }
+                        "w:ilvl" => {
+                            for attr in e.attributes().flatten() {
+                                if attr.key.as_ref() == "w:val" {
+                                    let val = attr.value.as_ref();
+                                    level = val.parse().unwrap_or(0);
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == "w:numPr" => {
+                    in_num_pr = false;
+                }
+                Ok(quick_xml::events::Event::Eof) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        if let Some(ref nid) = num_id {
+            if let Some((list_type, number)) = self.numbering.get_list_info(nid, level) {
+                return Some(ListInfo {
+                    list_type,
+                    level,
+                    number: if list_type == ListType::Numbered {
+                        Some(number)
+                    } else {
+                        None
+                    },
+                    marker_image: None,
+                });
+            }
+        }
+
+        None
+    }
+
+    /// Parse a table element.
+
+    /// Parse a table: its rows and cells, each cell's paragraphs read by [`Self::parse_paragraph`]
+    /// -- the same reading the body's paragraphs get, links, tracked changes, notes and all -- and
+    /// its nested tables recursively.
+    fn parse_table(&mut self, xml: &str) -> Result<Table> {
+        let mut table = Table::new();
+        let mut reader = crate::decode::reader_for(xml);
+        // Don't trim text - preserve whitespace from xml:space="preserve" elements
+        reader.config_mut().trim_text(false);
+
+        let mut buf = Vec::new();
+        let mut in_row = false;
+        let mut in_cell = false;
+        let mut current_row: Option<Row> = None;
+        let mut cell_paragraphs: Vec<Paragraph> = Vec::new();
+        let mut cell_nested_tables: Vec<Table> = Vec::new();
+        let mut is_header_row = false;
+        let mut col_span = 1u32;
+        let mut row_span = 1u32;
+        let mut cell_alignment = CellAlignment::Left;
+        let mut in_tc_pr = false; // Track w:tcPr (table cell properties)
+
+        // A cell paragraph's XML, collected whole and handed to the paragraph parser.
+        let mut paragraph_xml = String::new();
+        let mut in_paragraph = false;
+        let mut para_depth: u32 = 0; // Nested w:p depth (text boxes)
+
+        // vMerge rowspan tracking: col_cursor tracks logical column position within current row;
+        // vmerge_origins maps logical_col -> (row_idx, cell_idx) of the origin cell.
+        let mut col_cursor = 0usize;
+        let mut vmerge_origins: HashMap<usize, (usize, usize)> = HashMap::new();
+
+        // Track nested table depth (0 = we're at the main table level)
+        // 1+ = we're inside a nested table and should collect its XML
+        let mut nested_table_depth: u32 = 0;
+        let mut nested_table_xml = String::new();
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(quick_xml::events::Event::Start(ref e)) => {
+                    let name = e.name();
+
+                    // If we're inside a nested table, just collect XML
+                    if nested_table_depth > 0 {
+                        push_start_tag(&mut nested_table_xml, e);
+                        if name.as_ref() == "w:tbl" {
+                            nested_table_depth += 1;
+                        }
+                        continue;
+                    }
+                    if in_paragraph {
+                        if name.as_ref() == "w:p" {
+                            para_depth += 1;
+                        }
+                        push_start_tag(&mut paragraph_xml, e);
+                        continue;
+                    }
+
+                    match name.as_ref() {
+                        "w:tbl" if in_cell => {
+                            // Start collecting nested table
+                            nested_table_depth = 1;
+                            nested_table_xml.clear();
+                            nested_table_xml.push_str("<w:tbl>");
+                        }
+                        "w:tr" => {
+                            in_row = true;
+                            current_row = Some(Row {
+                                cells: Vec::new(),
+                                is_header: false,
+                                height: None,
+                            });
+                            is_header_row = false;
+                        }
+                        "w:tc" => {
+                            in_cell = true;
+                            cell_paragraphs.clear();
+                            cell_nested_tables.clear();
+                            col_span = 1;
+                            row_span = 1;
+                            cell_alignment = CellAlignment::Left;
+                        }
+                        "w:tcPr" if in_cell => {
+                            in_tc_pr = true;
+                        }
+                        "w:p" if in_cell => {
+                            in_paragraph = true;
+                            para_depth = 0;
+                            paragraph_xml.clear();
+                            push_start_tag(&mut paragraph_xml, e);
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(quick_xml::events::Event::Empty(ref e)) => {
+                    let name = e.name();
+
+                    // If we're inside a nested table, just collect XML
+                    if nested_table_depth > 0 {
+                        push_empty_tag(&mut nested_table_xml, e);
+                        continue;
+                    }
+                    if in_paragraph {
+                        push_empty_tag(&mut paragraph_xml, e);
+                        continue;
+                    }
+
+                    match name.as_ref() {
+                        "w:tblHeader" if in_row => {
+                            is_header_row = true;
+                        }
+                        "w:gridSpan" if in_cell => {
+                            if let Some(val) = get_attr(e, "w:val") {
+                                col_span = val.parse().unwrap_or(1);
+                            }
+                        }
+                        "w:vMerge" if in_cell => {
+                            if get_attr(e, "w:val").is_none() {
+                                row_span = 0;
+                            }
+                        }
+                        "w:jc" if in_tc_pr => {
+                            if let Some(val) = get_attr(e, "w:val") {
+                                cell_alignment = match val.as_str() {
+                                    "center" => CellAlignment::Center,
+                                    "right" | "end" => CellAlignment::Right,
+                                    _ => CellAlignment::Left,
+                                };
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(quick_xml::events::Event::Text(ref e)) => {
+                    let text = escape_xml(&crate::decode::decode_text_lossy(e));
+                    if nested_table_depth > 0 {
+                        nested_table_xml.push_str(&text);
+                    } else if in_paragraph {
+                        paragraph_xml.push_str(&text);
+                    }
+                }
+                // quick-xml 0.40+ delivers entity refs separately: re-emit them resolved, and the
+                // re-parse of the collected XML decodes them again.
+                Ok(quick_xml::events::Event::GeneralRef(ref e)) => {
+                    let text = escape_xml(&crate::decode::resolve_general_ref(e));
+                    if nested_table_depth > 0 {
+                        nested_table_xml.push_str(&text);
+                    } else if in_paragraph {
+                        paragraph_xml.push_str(&text);
+                    }
+                }
+                Ok(quick_xml::events::Event::End(ref e)) => {
+                    let name = e.name();
+
+                    // If we're inside a nested table, collect XML and check for end
+                    if nested_table_depth > 0 {
+                        push_end_tag(&mut nested_table_xml, name.as_ref());
+                        if name.as_ref() == "w:tbl" {
+                            nested_table_depth -= 1;
+                            if nested_table_depth == 0 {
+                                // Finished collecting nested table - parse recursively
+                                let nested_xml = std::mem::take(&mut nested_table_xml);
+                                if let Ok(nested_table) = self.parse_table(&nested_xml) {
+                                    cell_nested_tables.push(nested_table);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    if in_paragraph {
+                        if name.as_ref() == "w:p" && para_depth == 0 {
+                            paragraph_xml.push_str("</w:p>");
+                            in_paragraph = false;
+                            // Text boxes are pulled out first, as paragraphs of their own.
+                            let textbox_paras = self.extract_textbox_paragraphs(&paragraph_xml);
+                            if let Ok(mut para) = self.parse_paragraph(&paragraph_xml) {
+                                // A cell's paragraphs are its content, not the document's
+                                // outline: a heading style does not make a heading in a cell.
+                                para.heading = crate::model::HeadingLevel::None;
+                                // Only add non-empty paragraphs, and skip one repeating the
+                                // previous: Word may store a paragraph twice in a cell but
+                                // displays it once.
+                                let is_duplicate = cell_paragraphs
+                                    .last()
+                                    .is_some_and(|last| last.plain_text() == para.plain_text());
+                                if !para.is_empty() && !is_duplicate {
+                                    cell_paragraphs.push(para);
+                                }
+                            }
+                            cell_paragraphs.extend(textbox_paras);
+                        } else {
+                            if name.as_ref() == "w:p" {
+                                para_depth = para_depth.saturating_sub(1);
+                            }
+                            push_end_tag(&mut paragraph_xml, name.as_ref());
+                        }
+                        continue;
+                    }
+
+                    match name.as_ref() {
+                        "w:tr" => {
+                            if let Some(mut row) = current_row.take() {
+                                row.is_header = is_header_row;
+                                table.add_row(row);
+                            }
+                            in_row = false;
+                            col_cursor = 0;
+                        }
+                        "w:tcPr" => {
+                            in_tc_pr = false;
+                        }
+                        "w:tc" => {
+                            if row_span > 0 {
+                                // Use collected paragraphs, or empty paragraph if none
+                                // Deduplicate repeated paragraph blocks within cell
+                                // Word may store the same paragraph block twice but only displays once
+                                let content = if cell_paragraphs.is_empty() {
+                                    vec![Paragraph::new()]
+                                } else {
+                                    let paragraphs = std::mem::take(&mut cell_paragraphs);
+                                    deduplicate_paragraph_block(paragraphs)
+                                };
+                                let cell = Cell {
+                                    content,
+                                    nested_tables: std::mem::take(&mut cell_nested_tables),
+                                    col_span,
+                                    row_span,
+                                    alignment: cell_alignment,
+                                    vertical_alignment: VerticalAlignment::default(),
+                                    is_header: is_header_row,
+                                    background: None,
+                                    background_image: None,
+                                };
+                                // Track as vMerge origin: row_idx = table.rows.len() (index
+                                // the current row will have once pushed in </w:tr> handler)
+                                if let Some(ref row) = current_row {
+                                    vmerge_origins
+                                        .insert(col_cursor, (table.rows.len(), row.cells.len()));
+                                }
+                                if let Some(ref mut row) = current_row {
+                                    row.cells.push(cell);
+                                }
+                            } else {
+                                // Continuation cell: find origin and increment its row_span
+                                if let Some(&(origin_row_idx, origin_cell_idx)) =
+                                    vmerge_origins.get(&col_cursor)
+                                {
+                                    if let Some(row) = table.rows.get_mut(origin_row_idx) {
+                                        if let Some(cell) = row.cells.get_mut(origin_cell_idx) {
+                                            cell.row_span += 1;
+                                        }
+                                    }
+                                }
+                                cell_paragraphs.clear();
+                                cell_nested_tables.clear();
+                            }
+                            col_cursor += col_span as usize;
+                            in_cell = false;
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(quick_xml::events::Event::Eof) => break,
+                Err(e) => return Err(Error::xml_parse_with_context(e.to_string(), "table")),
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        Ok(table)
+    }
+
+    /// Extract embedded resources (images, etc.).
+    ///
+    /// Every image relationship of the main document part is listed, keyed by its
+    /// relationship id, and annotated with what the document's pictures say about it: a
+    /// picture's SVG original or HD Photo layer is a companion of the image it shows, not a
+    /// picture of its own (see [`crate::drawing`]).
+    fn extract_resources(&self, doc: &mut Document) -> Result<()> {
+        const PART: &str = "word/document.xml";
+        let pictures = self
+            .container
+            .read_xml_optional(PART)?
+            .map(|xml| crate::drawing::scan_pictures(&xml))
+            .unwrap_or_default();
+
+        for (id, rel) in &self.relationships.by_id {
+            let is_image = rel.rel_type.contains("/image") || rel.rel_type.ends_with("/hdphoto");
+            if !is_image || rel.external {
+                continue;
+            }
+            let path = OoxmlContainer::resolve_path(PART, &rel.target);
+            let Ok(data) = self.container.read_binary(&path) else {
+                continue;
+            };
+            let mut resource = Resource::from_part(&path, data);
+            if let Some((role, primary)) = pictures.companions.get(id) {
+                resource.role = *role;
+                resource.companion_of = Some(primary.clone());
+            } else {
+                resource.alt_text = pictures.alt_texts.get(id).cloned();
+            }
+            doc.resources.insert(id.clone(), resource);
+        }
+
+        Ok(())
+    }
+
+    /// Get a reference to the container.
+    pub fn container(&self) -> &OoxmlContainer {
+        &self.container
+    }
+}
+
+/// A field open in a paragraph: its instruction, and whether its result is being read.
+struct WordField {
+    instruction: String,
+    in_result: bool,
+}
+
+/// Whether the text being read is part of a link, and the address it is kept with: the
+/// `w:hyperlink` around it -- to an address, or to a bookmark (`None`: a link, not kept as one) --
+/// or else a `HYPERLINK` field whose result it is.
+fn link_state(element: &Option<Option<String>>, fields: &[WordField]) -> (bool, Option<String>) {
+    if let Some(target) = element {
+        return (true, target.clone());
+    }
+    match fields
+        .iter()
+        .rev()
+        .filter(|f| f.in_result)
+        .find_map(|f| crate::fields::hyperlink_target(&f.instruction))
+    {
+        Some(crate::fields::LinkTarget::Address(address)) => (true, Some(address)),
+        Some(crate::fields::LinkTarget::Bookmark(_)) => (true, None),
+        None => (false, None),
+    }
+}
+
+/// Character styles that set text as code: pandoc writes `VerbatimChar`, Word names its
+/// built-in ones `HTML Code`, `HTML Keyboard`, `HTML Sample` and `HTML Typewriter`.
+const CODE_CHARACTER_STYLES: &[&str] = &[
+    "VerbatimChar",
+    "HTMLCode",
+    "HTMLKeyboard",
+    "HTMLSample",
+    "HTMLTypewriter",
+];
+
+/// Apply the character style a run names (`w:rStyle`) to its style: the style's run
+/// properties, inheritance resolved, as the base the run's own properties then override —
+/// `w:rStyle` is the first child of `w:rPr`. A code character style also marks the run as code.
+fn apply_character_style(styles: &StyleMap, id: &str, style: &mut TextStyle) {
+    let Some(resolved) = styles.get_resolved(id) else {
+        return;
+    };
+    apply_run_props(&resolved.run_props, style);
+    let mut chain = Some(id.to_string());
+    let mut depth = 0;
+    while let (Some(current), true) = (chain, depth <= 10) {
+        if CODE_CHARACTER_STYLES.contains(&current.as_str()) {
+            style.code = true;
+            break;
+        }
+        chain = styles.styles.get(&current).and_then(|s| s.based_on.clone());
+        depth += 1;
+    }
+}
+
+/// The formatting every run of a paragraph starts from: the run properties of the paragraph's
+/// style (`w:pStyle`), inheritance resolved. A run's character style and its own properties
+/// are applied over it — the order Word resolves them in.
+fn paragraph_run_base(styles: &StyleMap, id: &str) -> TextStyle {
+    let mut style = TextStyle::default();
+    if let Some(resolved) = styles.get_resolved(id) {
+        apply_run_props(&resolved.run_props, &mut style);
+    }
+    style
+}
+
+/// Set every property `props` states on `style`, leaving the rest as they are.
+fn apply_run_props(props: &crate::docx::styles::RunProps, style: &mut TextStyle) {
+    if let Some(bold) = props.bold {
+        style.bold = bold;
+    }
+    if let Some(italic) = props.italic {
+        style.italic = italic;
+    }
+    if let Some(underline) = props.underline {
+        style.underline = underline;
+    }
+    if let Some(strike) = props.strike {
+        style.strikethrough = strike;
+    }
+    if props.font_name.is_some() {
+        style.font = props.font_name.clone();
+    }
+    if props.font_size.is_some() {
+        style.size = props.font_size;
+    }
+    if props.color.is_some() {
+        style.color = props.color.clone();
+    }
+    if props.highlight.is_some() {
+        style.highlight = props.highlight.clone();
+    }
+}
+
+/// Parse footnotes.xml or endnotes.xml into a map of id → plain text.
+///
+/// `note_tag` should be `"w:footnote"` or `"w:endnote"`.
+/// Entries with `w:type="separator"` or `w:type="continuationSeparator"` are skipped.
+fn parse_notes_xml(xml: &str, note_tag: &str) -> HashMap<String, String> {
+    let mut notes = HashMap::new();
+    let mut reader = crate::decode::reader_for(xml);
+    reader.config_mut().trim_text(false);
+
+    let mut buf = Vec::new();
+    let mut current_id: Option<String> = None;
+    let mut current_text = String::new();
+    let mut in_note = false;
+    let mut in_text = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(quick_xml::events::Event::Start(ref e)) => {
+                if e.name().as_ref() == note_tag {
+                    let mut id = None;
+                    let mut note_type = None;
+                    for attr in e.attributes().flatten() {
+                        match attr.key.as_ref() {
+                            "w:id" => {
+                                id = Some(attr.value.to_string());
+                            }
+                            "w:type" => {
+                                note_type = Some(attr.value.to_string());
+                            }
+                            _ => {}
+                        }
+                    }
+                    // Skip separator and continuationSeparator types
+                    if let Some(ref t) = note_type {
+                        if t == "separator" || t == "continuationSeparator" {
+                            // Don't set in_note, so content is ignored
+                            buf.clear();
+                            continue;
+                        }
+                    }
+                    if let Some(id_val) = id {
+                        in_note = true;
+                        current_id = Some(id_val);
+                        current_text.clear();
+                    }
+                } else if in_note && e.name().as_ref() == "w:t" {
+                    in_text = true;
+                }
+            }
+            Ok(quick_xml::events::Event::Text(ref e)) if in_note && in_text => {
+                current_text.push_str(&crate::decode::decode_text_lossy(e));
+            }
+            Ok(quick_xml::events::Event::GeneralRef(ref e)) if in_note && in_text => {
+                current_text.push_str(&crate::decode::resolve_general_ref(e));
+            }
+            Ok(quick_xml::events::Event::End(ref e)) => {
+                if e.name().as_ref() == note_tag {
+                    if in_note {
+                        if let Some(id) = current_id.take() {
+                            let trimmed = current_text.trim().to_string();
+                            if !trimmed.is_empty() {
+                                notes.insert(id, trimmed);
+                            }
+                        }
+                        in_note = false;
+                    }
+                } else if e.name().as_ref() == "w:t" {
+                    in_text = false;
+                }
+            }
+            Ok(quick_xml::events::Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    notes
+}
+
+/// Build an `InlineImage` from a VML `v:imagedata` or `v:fill` element, if it carries an
+/// `r:id` relationship reference. `o:title` supplies the alt text.
+///
+/// VML appears standalone in legacy documents (typically .doc → .docx
+/// conversions) via `w:pict`, and as the visual representation of embedded
+/// OLE objects via `w:object`. VML inside `mc:Fallback` duplicates the
+/// DrawingML `mc:Choice` and is skipped by the callers' fallback guards.
+fn vml_inline_image(e: &quick_xml::events::BytesStart) -> Option<crate::model::InlineImage> {
+    let mut rel_id = None;
+    let mut title = None;
+    for attr in e.attributes().flatten() {
+        match attr.key.as_ref() {
+            "r:id" => rel_id = Some(attr.value.to_string()),
+            "o:title" => title = Some(crate::decode::attr_value(&attr)),
+            _ => {}
+        }
+    }
+    Some(crate::model::InlineImage {
+        resource_id: rel_id?,
+        alt_text: title,
+        width: None,
+        height: None,
+    })
+}
+
+/// An attribute's value, references resolved (see [`crate::decode::attr_value`]).
+fn get_attr(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
+    e.attributes()
+        .flatten()
+        .find(|attr| attr.key.as_ref() == key)
+        .map(|attr| crate::decode::attr_value(&attr))
+}
+
+/// Helper to get a boolean attribute value.
+fn get_bool_attr(e: &quick_xml::events::BytesStart, key: &str) -> Option<bool> {
+    for attr in e.attributes().flatten() {
+        if attr.key.as_ref() == key {
+            let val = attr.value.as_ref();
+            return Some(val != "0" && val != "false");
+        }
+    }
+    None
+}
+
+/// Append a re-serialized start tag (`<name attr="val">`) to a buffer that will
+/// be parsed a second time. Text/attribute values are already-decoded, so they
+/// are re-escaped here for the re-parse.
+fn push_start_tag(buf: &mut String, e: &quick_xml::events::BytesStart) {
+    buf.push('<');
+    buf.push_str(e.name().as_ref());
+    for attr in e.attributes().flatten() {
+        buf.push_str(&format!(
+            " {}=\"{}\"",
+            attr.key.as_ref(),
+            attr.value.as_ref()
+        ));
+    }
+    buf.push('>');
+}
+
+/// Append a re-serialized empty-element tag (`<name attr="val"/>`) to a buffer.
+fn push_empty_tag(buf: &mut String, e: &quick_xml::events::BytesStart) {
+    buf.push('<');
+    buf.push_str(e.name().as_ref());
+    for attr in e.attributes().flatten() {
+        buf.push_str(&format!(
+            " {}=\"{}\"",
+            attr.key.as_ref(),
+            attr.value.as_ref()
+        ));
+    }
+    buf.push_str("/>");
+}
+
+/// Append a re-serialized end tag (`</name>`) to a buffer.
+fn push_end_tag(buf: &mut String, name: &str) {
+    buf.push_str("</");
+    buf.push_str(name);
+    buf.push('>');
+}
+
+/// Escape XML special characters.
+fn escape_xml(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+/// The description of a drawing (`wp:docPr descr`), if it has a non-blank one.
+fn drawing_description(e: &quick_xml::events::BytesStart<'_>) -> Option<String> {
+    e.attributes()
+        .flatten()
+        .find(|a| a.key.as_ref() == "descr")
+        .map(|a| crate::decode::attr_value(&a))
+        .filter(|d| !d.trim().is_empty())
+}
+
+/// The image an `a:blip` shows: its `r:embed` relationship.
+fn blip_image(e: &quick_xml::events::BytesStart<'_>, alt: &Option<String>) -> Option<InlineImage> {
+    let rel_id = e
+        .attributes()
+        .flatten()
+        .find(|a| a.key.as_ref() == "r:embed")?
+        .value
+        .to_string();
+    Some(InlineImage {
+        resource_id: rel_id,
+        alt_text: alt.clone(),
+        width: None,
+        height: None,
+    })
+}
+
+/// Deduplicate repeated paragraph blocks within a table cell.
+/// Word may store the same paragraph block twice but only displays one.
+/// This function checks if the first half and second half are identical
+/// and returns only the first half if so.
+fn deduplicate_paragraph_block(paragraphs: Vec<Paragraph>) -> Vec<Paragraph> {
+    let len = paragraphs.len();
+    if len < 2 {
+        return paragraphs;
+    }
+
+    // Check if paragraphs form a duplicated block (first half == second half)
+    if len.is_multiple_of(2) {
+        let half = len / 2;
+        let first_half = &paragraphs[..half];
+        let second_half = &paragraphs[half..];
+
+        let is_duplicate = first_half
+            .iter()
+            .zip(second_half.iter())
+            .all(|(a, b)| a.plain_text() == b.plain_text());
+
+        if is_duplicate {
+            return paragraphs.into_iter().take(half).collect();
+        }
+    }
+
+    paragraphs
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/docx/parser.rs"]
+mod tests;

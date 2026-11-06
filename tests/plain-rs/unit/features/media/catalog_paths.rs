@@ -233,7 +233,6 @@ fn every_user_has_the_same_application_and_cloud_document_policy() {
     }
 }
 
-
 #[test]
 fn git_project_roots_cover_worktrees_submodules_and_bare_repositories() {
     let directory = tempfile::tempdir().unwrap();
@@ -333,4 +332,32 @@ fn hidden_files_and_directory_descendants_are_excluded_from_scanning() {
             Some(folder.as_path())
         );
     }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn native_hidden_library_ancestors_do_not_hide_cloud_documents() {
+    let library = Path::new("/Users/profile/Library");
+    let cloud = "/Users/profile/Library/Mobile Documents/com~apple~CloudDocs/photo.jpg";
+    assert!(!hidden_ancestor_excluded(cloud, library, true));
+    assert!(!hidden_ancestor_excluded(
+        "/Users/profile/Library",
+        library,
+        true
+    ));
+    assert!(!hidden_ancestor_excluded(
+        "/Users/profile/Library/Mobile Documents",
+        library,
+        true
+    ));
+    assert!(hidden_ancestor_excluded(
+        "/Users/profile/Library/Caches/photo.jpg",
+        library,
+        true
+    ));
+    assert!(hidden_ancestor_excluded(
+        "/Users/profile/Library/Mobile Documents/com~apple~CloudDocs/.hidden/photo.jpg",
+        Path::new("/Users/profile/Library/Mobile Documents/com~apple~CloudDocs/.hidden"),
+        true
+    ));
 }

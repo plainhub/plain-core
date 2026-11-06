@@ -1,6 +1,7 @@
 use super::types::ScanProgress;
 use crate::server::ServerState;
-use plain_graphql::{Context, Object, Result};
+use plain_graphql::{Context, Object, Result, SimpleObject};
+use plain_rs::infrastructure::db::IndexMode;
 
 use plain_rs::features::services::files::scanning;
 use plain_rs::features::services::files::scanning::Command;
@@ -14,6 +15,13 @@ async fn state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
     {
         return Err("no_permission".into());
     }
+    Ok(state)
+}
+async fn index_state<'a>(ctx: &'a Context<'_>) -> Result<&'a ServerState> {
+    let state = state(ctx).await?;
+    plain_rs::features::services::capabilities::require(&state.host, "MEDIA_SCAN")
+        .await
+        .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     Ok(state)
 }
 #[derive(Default)]
@@ -32,8 +40,52 @@ impl MediaScanQuery {
             error: progress.error,
         })
     }
-    async fn media_source_dirs(&self, ctx: &Context<'_>) -> Result<Vec<String>> {
-        Ok(scanning::directories(state(ctx).await?).await?)
+    async fn file_index_defaults(&self, ctx: &Context<'_>) -> Result<FileIndexDefaults> {
+        let defaults =
+            plain_rs::features::services::files::indexing::defaults(index_state(ctx).await?)?;
+        Ok(FileIndexDefaults {
+            excluded_dirs: defaults.excluded_directories,
+            excluded_names: defaults.excluded_names,
+            excluded_packages: plain_rs::features::media::catalog_paths::MEDIA_PACKAGE_SUFFIXES
+                .iter()
+                .map(|suffix| suffix.to_string())
+                .collect(),
+            excluded_user_libraries: cfg!(target_os = "macos"),
+        })
+    }
+    async fn file_index_volumes(&self, ctx: &Context<'_>) -> Result<Vec<FileIndexVolume>> {
+        let state = index_state(ctx).await?;
+        let volumes = plain_rs::features::services::files::indexing::discover(state).await?;
+        Ok(volumes
+            .into_iter()
+            .filter(|volume| !volume.path.contains("://"))
+            .map(|volume| FileIndexVolume {
+                included_dirs: volume
+                    .included_dirs
+                    .iter()
+                    .map(|dir| {
+                        plain_rs::features::files::index_scope::absolute_directory(
+                            &volume.path,
+                            dir,
+                        )
+                    })
+                    .collect(),
+                excluded_dirs: volume
+                    .excluded_dirs
+                    .iter()
+                    .map(|dir| {
+                        plain_rs::features::files::index_scope::absolute_directory(
+                            &volume.path,
+                            dir,
+                        )
+                    })
+                    .collect(),
+                id: volume.id,
+                path: volume.path,
+                is_available: volume.is_available,
+                index_mode: volume.index_mode,
+            })
+            .collect())
     }
 }
 async fn command(ctx: &Context<'_>, action: Command) -> Result<bool> {
@@ -58,6 +110,9 @@ impl MediaScanMutation {
         )
         .await
     }
+    async fn rebuild_file_index_volume(&self, ctx: &Context<'_>, id: String) -> Result<bool> {
+        command(ctx, Command::RebuildVolume(id)).await
+    }
     async fn pause_media_scan(&self, ctx: &Context<'_>) -> Result<bool> {
         command(ctx, Command::Pause).await
     }
@@ -67,22 +122,44 @@ impl MediaScanMutation {
     async fn stop_media_scan(&self, ctx: &Context<'_>) -> Result<bool> {
         command(ctx, Command::Stop).await
     }
-    async fn set_media_source_dirs(
+    async fn set_file_index_volume(
         &self,
         ctx: &Context<'_>,
-        #[graphql(name = "dirs")] _dirs: Vec<String>,
+        id: String,
+        index_mode: IndexMode,
+        included_dirs: Vec<String>,
+        excluded_dirs: Vec<String>,
     ) -> Result<bool> {
-        command(
-            ctx,
-            Command::SetDirectories(
-                #[cfg(feature = "media")]
-                _dirs,
-            ),
+        plain_rs::features::services::files::indexing::set(
+            index_state(ctx).await?,
+            &id,
+            index_mode,
+            included_dirs,
+            excluded_dirs,
         )
-        .await
+        .await?;
+        Ok(true)
     }
 }
 
 #[cfg(test)]
 #[path = "../../../../../tests/plain-server/unit/graphql/resolvers/media/scan.rs"]
 mod tests;
+
+#[derive(SimpleObject)]
+pub struct FileIndexVolume {
+    pub id: String,
+    pub path: String,
+    pub is_available: bool,
+    pub index_mode: IndexMode,
+    pub included_dirs: Vec<String>,
+    pub excluded_dirs: Vec<String>,
+}
+
+#[derive(SimpleObject)]
+pub struct FileIndexDefaults {
+    pub excluded_dirs: Vec<String>,
+    pub excluded_names: Vec<String>,
+    pub excluded_packages: Vec<String>,
+    pub excluded_user_libraries: bool,
+}

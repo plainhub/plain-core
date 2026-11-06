@@ -8,8 +8,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     let state = core.runtime_state();
     state
         .media_scans
-        .set_defaults(plain_rs::features::prefs::file_index::Defaults {
-            scan_directories: Vec::new(),
+        .set_defaults(plain_rs::features::files::index_scope::Defaults {
             excluded_directories: Vec::new(),
             excluded_names: Vec::new(),
         })
@@ -35,43 +34,73 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     let native = core.native_graphql().unwrap();
     let source = tempfile::tempdir().unwrap();
     let source_path = source.path().canonicalize().unwrap();
-    let set = native
-        .execute(
-            Request::new("mutation($dirs:[String!]!){setMediaSourceDirs(dirs:$dirs)}").variables(
-                plain_graphql::Variables::from_json(
-                    serde_json::json!({"dirs":[source_path.to_str().unwrap()]}),
-                ),
-            ),
-        )
-        .await;
+    let id = state.db.register_volume(&source_path).unwrap();
+    let query = native.execute(Request::new("{ fileIndexVolumes { id path indexMode includedDirs excludedDirs isAvailable } fileIndexDefaults { excludedDirs excludedNames } }")).await;
+    assert!(query.errors.is_empty(), "{:?}", query.errors);
+    let data = query.data.into_json().unwrap();
+    assert!(
+        data["fileIndexDefaults"]["excludedDirs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                plain_rs::features::files::index_scope::normalized(&state.directory)
+            ))
+    );
+    assert!(
+        data["fileIndexDefaults"]["excludedNames"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("node_modules"))
+    );
+    let volume = data["fileIndexVolumes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|volume| volume["id"] == id)
+        .unwrap();
+    assert_eq!(volume["indexMode"], "UNCONFIGURED");
+    state
+        .db
+        .with_conn(|conn| conn.execute("UPDATE volumes SET index_mode='DISABLED'", []))
+        .unwrap();
+    let set = native.execute(Request::new(
+        "mutation($id:String!,$dirs:[String!]!){setFileIndexVolume(id:$id,indexMode:DISABLED,includedDirs:$dirs,excludedDirs:[])}"
+    ).variables(plain_graphql::Variables::from_json(serde_json::json!({"id":id,"dirs":[source_path.to_str().unwrap()]})))).await;
     assert!(set.errors.is_empty(), "{:?}", set.errors);
     state.media_scans.wait_background().await.unwrap();
+    let saved = state
+        .db
+        .volumes()
+        .unwrap()
+        .into_iter()
+        .find(|volume| volume.id == id)
+        .unwrap();
+    assert_eq!(
+        saved.index_mode,
+        plain_rs::infrastructure::db::IndexMode::Disabled
+    );
+    assert_eq!(saved.included_dirs.len(), 1);
     let query = native
-        .execute(Request::new(
-            "{ prefs mediaSourceDirs scanProgress { indexed pending total state error } }",
-        ))
+        .execute(Request::new("{ fileIndexVolumes { id includedDirs } }"))
         .await;
     assert!(query.errors.is_empty(), "{:?}", query.errors);
     let data = query.data.into_json().unwrap();
+    let volume = data["fileIndexVolumes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|volume| volume["id"] == id)
+        .unwrap();
     assert_eq!(
-        data["mediaSourceDirs"],
-        serde_json::json!([source_path.to_str().unwrap()])
-    );
-    assert_eq!(data["scanProgress"]["state"], "IDLE");
-    for key in ["file_index_defaults", "file_index_sources", "file_index_progress"] {
-        assert!(data["prefs"].get(key).is_none(), "{key}");
-    }
-    assert_eq!(
-        core.native_media_catalog()
-            .unwrap()
-            .source_directories()
-            .unwrap(),
-        vec![source_path.to_str().unwrap()]
+        volume["includedDirs"],
+        serde_json::json!([plain_rs::features::files::index_scope::normalized(
+            &source_path
+        )])
     );
     let state = core.runtime_state();
     let remote = crate::graphql::executor::execute_graphql(
         &state.public,
-        Request::new("{ mediaSourceDirs }"),
+        Request::new("{ fileIndexVolumes { id } }"),
         crate::graphql::executor::RequestContext::remote(Some(state.clone())),
     )
     .await;
@@ -92,13 +121,14 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
     let state = core.runtime_state();
     state
         .media_scans
-        .set_defaults(plain_rs::features::prefs::file_index::Defaults {
-            scan_directories: Vec::new(),
+        .set_defaults(plain_rs::features::files::index_scope::Defaults {
             excluded_directories: Vec::new(),
             excluded_names: Vec::new(),
         })
         .unwrap();
-    let request = || Request::new("{ mediaSourceDirs scanProgress { indexed total state } }");
+    let request = || {
+        Request::new("{ fileIndexVolumes { id indexMode } scanProgress { indexed total state } }")
+    };
     let denied = crate::graphql::executor::execute_graphql(
         &state.public,
         request(),
@@ -112,10 +142,6 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
             plain_rs::features::prefs::pref_keys::API_PERMISSIONS,
             vec![super::super::public::STORAGE],
         )
-        .unwrap();
-    core.native_media_catalog()
-        .unwrap()
-        .set_source_directories(&["/media/a".to_string()])
         .unwrap();
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();
@@ -154,7 +180,7 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
     .await;
     assert!(allowed.errors.is_empty(), "{:?}", allowed.errors);
     let data = allowed.data.into_json().unwrap();
-    assert_eq!(data["mediaSourceDirs"], serde_json::json!(["/media/a"]));
+    assert!(data["fileIndexVolumes"].is_array());
     assert_eq!(data["scanProgress"]["state"], "IDLE");
     grants.store(false, std::sync::atomic::Ordering::SeqCst);
     let denied = crate::graphql::executor::execute_graphql(

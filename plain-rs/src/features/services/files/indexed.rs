@@ -10,7 +10,6 @@ use serde_json::{Value, json};
 pub async fn platform(
     db: &Db,
     host: &Host,
-    prefs: &crate::features::prefs::Prefs,
     query: &str,
     offset: i32,
     limit: i32,
@@ -42,7 +41,7 @@ pub async fn platform(
         parent_id.as_deref(),
         query.is_empty(),
     )?;
-    query::exclude_directories(&mut plan, prefs)?;
+    query::index_scope(&mut plan, db)?;
     host.call(
         if count_only {
             "systemFileIndexCount"
@@ -104,7 +103,7 @@ pub fn native(
     for field in &fields {
         match field.name.as_str() {
             "path" | "root_path" => {
-                let root = crate::features::prefs::file_index::normalized(std::path::Path::new(
+                let root = crate::features::files::index_scope::normalized(std::path::Path::new(
                     &field.value,
                 ));
                 anyhow::ensure!(

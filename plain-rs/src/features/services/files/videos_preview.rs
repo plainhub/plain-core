@@ -1,8 +1,8 @@
 //! Video codec probing and browser-playability transcoding.
 //!
 //! Mirrors plain-app `probeVideoCodec` / `transcodeMp4ForBrowser`: the shared
-//! web client probes `/fs?probe=1` for the first video track's codec fourcc
-//! and switches to `/fs?tr=1` on browsers without an HEVC decoder. plain-app
+//! web client probes `/fs?action=probe` for the first video track's codec fourcc
+//! and switches to `/fs?action=transcode` on browsers without an HEVC decoder. plain-app
 //! runs its probe in-process (Android `MediaExtractor`); the equivalent here
 //! is an in-tree ISO-BMFF walker — spawning `ffprobe` cost ~0.5s of CPU on a
 //! weak the box per first view, which dominated video start latency. The

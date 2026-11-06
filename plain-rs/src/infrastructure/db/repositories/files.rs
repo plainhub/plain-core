@@ -133,6 +133,31 @@ pub(crate) fn bind_volume(
             old.path
         } else if old.path.starts_with(candidate) && root_is_current(conn, &id, &old)? {
             let prefix = relative_path(old.path.strip_prefix(candidate).map_err(sql_error)?)?;
+            let (included, excluded): (String, String) = conn.query_row(
+                "SELECT included_dirs,excluded_dirs FROM volumes WHERE id=?1",
+                [&id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            let rebase = |json: &str| -> rusqlite::Result<String> {
+                let directories: Vec<String> = serde_json::from_str(json).map_err(sql_error)?;
+                serde_json::to_string(
+                    &directories
+                        .into_iter()
+                        .map(|path| {
+                            if path.is_empty() {
+                                prefix.clone()
+                            } else {
+                                format!("{prefix}/{path}")
+                            }
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .map_err(sql_error)
+            };
+            conn.execute(
+                "UPDATE volumes SET included_dirs=?1,excluded_dirs=?2 WHERE id=?3",
+                params![rebase(&included)?, rebase(&excluded)?, id],
+            )?;
             conn.execute(
                 "UPDATE files SET path=?1||CASE WHEN path='' THEN '' ELSE '/'||path END,original_path=CASE WHEN original_path IS NULL THEN NULL ELSE ?1||CASE WHEN original_path='' THEN '' ELSE '/'||original_path END END WHERE volume_id=?2",
                 params![prefix,id],
@@ -378,7 +403,7 @@ impl Db {
 
     pub fn update_index_visibility(
         &self,
-        scope: &crate::features::prefs::file_index::Scope,
+        scope: &crate::features::files::index_scope::Scope,
         paths: Option<&[String]>,
     ) -> rusqlite::Result<()> {
         self.with_conn(|connection| {
@@ -511,15 +536,48 @@ impl Db {
             tx.commit()
         })
     }
+    pub fn register_volume(&self, path: &Path) -> rusqlite::Result<String> {
+        let location =
+            volumes::locate(path).map_err(|error| sql_error(error.into_boxed_dyn_error()))?;
+        self.with_conn(|conn| {
+            let tx = conn.unchecked_transaction()?;
+            let (id, _) = bind_volume(&tx, &location)?;
+            tx.commit()?;
+            Ok(id)
+        })
+    }
+
+    pub fn set_volume_index(
+        &self,
+        id: &str,
+        mode: crate::infrastructure::db::IndexMode,
+        included_dirs: &[String],
+        excluded_dirs: &[String],
+    ) -> rusqlite::Result<bool> {
+        let included = serde_json::to_string(included_dirs).map_err(sql_error)?;
+        let excluded = serde_json::to_string(excluded_dirs).map_err(sql_error)?;
+        self.with_conn(|conn| {
+            Ok(conn.execute(
+                "UPDATE volumes SET index_mode=?1,included_dirs=?2,excluded_dirs=?3 WHERE id=?4",
+                params![mode, included, excluded, id],
+            )? != 0)
+        })
+    }
+
     pub fn volumes(&self) -> rusqlite::Result<Vec<VolumeRow>> {
         self.with_conn(|conn| {
-            conn.prepare("SELECT id,identity,path,is_available FROM volumes ORDER BY id")?
+            conn.prepare("SELECT id,identity,path,is_available,index_mode,included_dirs,excluded_dirs FROM volumes ORDER BY path")?
                 .query_map([], |row| {
+                    let path: String = row.get(2)?;
+                    let path = if path.contains("://") { path } else { crate::features::files::index_scope::normalized(Path::new(&path)) };
                     Ok(VolumeRow {
                         id: row.get(0)?,
                         identity: row.get(1)?,
-                        path: row.get(2)?,
+                        path,
                         is_available: row.get(3)?,
+                        index_mode: row.get(4)?,
+                        included_dirs: serde_json::from_str(&row.get::<_, String>(5)?).map_err(sql_error)?,
+                        excluded_dirs: serde_json::from_str(&row.get::<_, String>(6)?).map_err(sql_error)?,
                     })
                 })?
                 .collect()

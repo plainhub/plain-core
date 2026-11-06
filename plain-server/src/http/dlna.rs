@@ -174,6 +174,7 @@ pub(crate) async fn media(
                 &state.resources,
                 &path,
                 state.stop.clone(),
+                request.headers(),
             )
             .await
             {

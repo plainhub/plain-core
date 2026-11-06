@@ -30,9 +30,7 @@ impl CachePaths {
     pub fn app_updates(&self) -> PathBuf {
         self.root.join("updates")
     }
-    pub fn pdf_previews(&self) -> PathBuf {
-        self.root.join("preview_pdf")
-    }
+
     pub fn crash_report_export(&self) -> PathBuf {
         self.root.join("crash_report.txt")
     }

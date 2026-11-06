@@ -125,7 +125,7 @@ async fn incoming_preserves_file_bytes_without_host_bridge() {
     .await
     .unwrap();
     let (status, body) = ble::decode_response(&bytes).unwrap();
-    assert_eq!(status, 200);
+    assert_eq!(status, 206);
     assert_eq!(body, payload);
     assert!(!state.host.connected());
     server.shutdown().await;

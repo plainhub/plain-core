@@ -13,7 +13,6 @@ fn cache_layout_is_independent_of_the_persistent_root() {
     assert_eq!(cache.shared_previews(), cache.root().join("share_open"));
     assert!(cache.shared_previews().is_dir());
     assert_eq!(cache.app_updates(), cache.root().join("updates"));
-    assert_eq!(cache.pdf_previews(), cache.root().join("preview_pdf"));
     assert_eq!(
         cache.crash_report_export(),
         cache.root().join("crash_report.txt")

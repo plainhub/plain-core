@@ -29,53 +29,15 @@ pub async fn host_connected(state: CoreRuntime, generation: u64) -> Result<(), S
     }
     #[cfg(feature = "runtime-media")]
     {
-        let configured = state.media_scans.policy()?.scope.is_some();
-        let mut defaults = state.media_scans.defaults()?;
-        let previous = defaults.scan_directories.clone();
-        if state.file_platform.uses_sdk() {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase")]
-            struct Mount {
-                path: String,
-                drive_type: String,
-            }
-            let mounts: Vec<Mount> = serde_json::from_value(
-                state
-                    .file_platform
-                    .mounts(state.prefs.clone())
-                    .await
-                    .map_err(|error| error.to_string())?,
-            )
-            .map_err(|error| error.to_string())?;
-            if !state.host.is_current(generation) {
-                return Ok(());
-            }
-            defaults.scan_directories = crate::features::prefs::file_index::validate_directories(
-                mounts
-                    .into_iter()
-                    .filter(|mount| mount.drive_type == "INTERNAL_STORAGE")
-                    .map(|mount| mount.path)
-                    .collect(),
-            )?;
-        }
-        if configured && defaults.scan_directories == previous {
-            return Ok(());
-        }
-        if defaults.scan_directories != previous {
-            state.media_scans.set_defaults(defaults)?;
-        }
-        let catalog = NativeMediaCatalog::new(state);
-        catalog.configure_scan_directories(None)?;
-        if cfg!(target_os = "macos")
-            && catalog
-                .state
-                .prefs
-                .get::<Vec<String>>(crate::features::prefs::pref_keys::MEDIA_SOURCE_DIRS)
-                .map_err(|error| error.to_string())?
-                .is_none()
+        let before = state.db.volumes().map_err(|error| error.to_string())?;
+        crate::features::services::files::indexing::discover(&state).await?;
+        if state.media_scans.policy()?.scope.is_some()
+            && before == state.db.volumes().map_err(|error| error.to_string())?
         {
             return Ok(());
         }
+        let catalog = NativeMediaCatalog::new(state);
+        catalog.configure_policy((*catalog.state.media_scans.policy()?).clone())?;
         if !catalog.source_directories()?.is_empty() {
             catalog.start_source_scan("/")?;
         }
@@ -118,17 +80,10 @@ impl NativeMediaCatalog {
 
     pub fn source_directories(&self) -> Result<Vec<String>, String> {
         self.state.native_client_id()?;
-        #[cfg(feature = "runtime-media")]
-        let defaults = self.state.media_scans.defaults()?;
-        #[cfg(not(feature = "runtime-media"))]
-        let defaults = crate::features::prefs::file_index::defaults();
-        crate::features::prefs::file_index::source_directories(&self.state.prefs, &defaults)
-    }
-
-    pub fn set_source_directories(&self, directories: &[String]) -> Result<(), String> {
-        self.state.native_client_id()?;
-        crate::features::prefs::media::set_source_directories(&self.state.prefs, directories)
-            .map_err(|error| error.to_string())
+        let volumes = self.state.db.volumes().map_err(|error| error.to_string())?;
+        Ok(crate::features::files::index_scope::source_directories(
+            &volumes,
+        ))
     }
 
     #[cfg(feature = "runtime-media")]
@@ -251,12 +206,12 @@ impl NativeMediaCatalog {
     }
 
     #[cfg(feature = "runtime-media")]
-    fn configure_policy(
+    pub fn configure_policy(
         &self,
         mut policy: crate::features::services::files::media_scan_policy::Policy,
     ) -> Result<(), String> {
-        let scope = crate::features::prefs::file_index::Scope::load(
-            &self.state.prefs,
+        let scope = crate::features::files::index_scope::Scope::load(
+            &self.state.db,
             &self.state.directory,
             self.state.cache.root(),
             &policy.excluded_roots,
@@ -271,7 +226,7 @@ impl NativeMediaCatalog {
     }
 
     #[cfg(feature = "runtime-media")]
-    pub async fn refresh_scope(&self) -> Result<(), String> {
+    pub async fn refresh_scope(&self, volume_id: &str) -> Result<(), String> {
         self.state
             .media_watch
             .lock()
@@ -282,7 +237,7 @@ impl NativeMediaCatalog {
         self.state.media_scans.wait_idle().await?;
         self.configure_policy((*self.state.media_scans.policy()?).clone())?;
         self.watch_source_directories()?;
-        self.start_source_scan("/")?;
+        self.start_volume_scan(volume_id)?;
         Ok(())
     }
 
@@ -342,6 +297,21 @@ impl NativeMediaCatalog {
         use crate::features::services::files::media_watch::Effect;
         use crate::features::services::files::media_watch::effect_for;
         use notify::event::{EventKind, ModifyKind, RenameMode};
+        let volumes = if matches!(event.kind, EventKind::Other)
+            || event.paths.iter().any(|path| path.is_dir())
+        {
+            crate::features::services::files::indexing::discover(&self.state).await?
+        } else {
+            self.state.db.volumes().map_err(|error| error.to_string())?
+        };
+        let policy = self.state.media_scans.policy()?;
+        if policy
+            .scope
+            .as_ref()
+            .is_some_and(|scope| scope.volumes != volumes)
+        {
+            self.configure_policy((*policy).clone())?;
+        }
         if matches!(event.kind, EventKind::Other) {
             if !self.state.media_scans.wait_idle().await? {
                 return Ok(());
@@ -507,9 +477,39 @@ impl NativeMediaCatalog {
         &self,
         root: &str,
     ) -> Result<crate::features::services::files::media_scans::Snapshot, String> {
+        self.start_scan(
+            self.source_references(root)?,
+            self.state.media_scans.policy()?,
+        )
+    }
+
+    #[cfg(feature = "runtime-media")]
+    pub fn start_volume_scan(
+        &self,
+        id: &str,
+    ) -> Result<Option<crate::features::services::files::media_scans::Snapshot>, String> {
+        let mut policy = (*self.state.media_scans.policy()?).clone();
+        let scope = policy
+            .scope
+            .take()
+            .ok_or("Index scope not configured")?
+            .for_volume(id)?;
+        if scope.directories.is_empty() {
+            return Ok(None);
+        }
+        let references = scope.directories.clone();
+        policy.scope = Some(scope);
+        self.start_scan(references, std::sync::Arc::new(policy))
+            .map(Some)
+    }
+
+    #[cfg(feature = "runtime-media")]
+    fn start_scan(
+        &self,
+        references: Vec<String>,
+        policy: std::sync::Arc<crate::features::services::files::media_scan_policy::Policy>,
+    ) -> Result<crate::features::services::files::media_scans::Snapshot, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|error| error.to_string())?;
-        let references = self.source_references(root)?;
-        let policy = self.state.media_scans.policy()?;
         let session = self.state.media_scans.begin_discovery(Purpose::Rebuild)?;
         let catalog = self.clone();
         self.state
@@ -564,14 +564,16 @@ impl NativeMediaCatalog {
                 .db
                 .refresh_volume_availability()
                 .map_err(|error| error.to_string())?;
-            let unavailable_volumes = self
-                .state
-                .db
-                .volumes()
-                .map_err(|error| error.to_string())?
-                .into_iter()
-                .filter(|volume| !volume.is_available)
-                .map(|volume| std::path::PathBuf::from(volume.path))
+            let volumes = self.state.db.volumes().map_err(|error| error.to_string())?;
+            let unavailable_volumes = volumes
+                .iter()
+                .filter(|volume| {
+                    !volume.is_available
+                        && !volumes
+                            .iter()
+                            .any(|current| current.is_available && current.path == volume.path)
+                })
+                .map(|volume| std::path::PathBuf::from(&volume.path))
                 .collect::<Vec<_>>();
             let mut total_files = 0usize;
             let mut prepared_roots = Vec::new();
@@ -1009,7 +1011,7 @@ impl NativeMediaCatalog {
     fn persist_scan_metadata(
         &self,
         files: &[crate::infrastructure::db::MediaFileMetadataRead],
-        scope: Option<&crate::features::prefs::file_index::Scope>,
+        scope: Option<&crate::features::files::index_scope::Scope>,
     ) -> Result<(), String> {
         let rows = self.persist_file_reads(files, scope)?;
         self.state
@@ -1021,7 +1023,7 @@ impl NativeMediaCatalog {
     fn persist_file_reads(
         &self,
         files: &[crate::infrastructure::db::MediaFileMetadataRead],
-        scope: Option<&crate::features::prefs::file_index::Scope>,
+        scope: Option<&crate::features::files::index_scope::Scope>,
     ) -> Result<Vec<MediaFileRow>, String> {
         self.state.native_client_id()?;
         let rows = self

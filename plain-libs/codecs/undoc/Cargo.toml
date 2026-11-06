@@ -1,0 +1,43 @@
+[package]
+name = "undoc"
+version = "0.27.3"
+edition = "2021"
+rust-version = "1.88"
+license = "MIT"
+build = false
+autotests = false
+autobenches = false
+autoexamples = false
+
+[package.metadata.upstream]
+repository = "https://github.com/iyulab/undoc"
+revision = "262efc5c2bd0b8287f7ae8ccd3e5b6f485934e92"
+archive-sha256 = "aa90912626c80b783c5eea8191f275e9583b5779928aeb95ca40cb6fd5a34bea"
+
+[lib]
+doctest = false
+
+[features]
+default = ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "codepages"]
+doc = []
+docx = []
+xls = []
+xlsx = []
+ppt = []
+pptx = []
+codepages = []
+
+[dependencies]
+cfb = "=0.15.0"
+quick-xml = "=0.42.0"
+unicode-normalization = "=0.1.26"
+unicode-width = "=0.2.3"
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+flate2 = { version = "=1.1.10", default-features = false, features = ["zlib-rs"] }
+encoding_rs = "=0.8.42"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
+serde_json = "1"

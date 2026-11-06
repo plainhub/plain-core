@@ -6,7 +6,7 @@ pub(super) fn render(scope: Scope) -> &'static str {
             "PlainApp server and command-line tools\n\nUsage: plainapp [OPTIONS] <COMMAND>\n\nCommands:\n  install    \n  uninstall  \n  run        \n  passwd     \n  login      \n  update     \n  bench      \n  help       Print this message or the help of the given subcommand(s)\n\nOptions:\n      --data-dir <DATA_DIR>    \n      --cache-dir <CACHE_DIR>  \n  -h, --help                   Print help\n  -V, --version                Print version\n"
         }
         Scope::Install => {
-            "Usage: plainapp install [OPTIONS]\n\nOptions:\n      --with-libreoffice       \n  -h, --help                   Print help\n"
+            "Usage: plainapp install [OPTIONS]\n\nOptions:\n  -h, --help                   Print help\n"
         }
         Scope::Uninstall => {
             "Usage: plainapp uninstall [OPTIONS]\n\nOptions:\n      --data-dir <DATA_DIR>    \n      --keep-config            \n      --keep-data              \n  -h, --help                   Print help\n"

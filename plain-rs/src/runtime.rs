@@ -211,7 +211,6 @@ impl Runtime {
             crate::features::services::files::platform::FilePlatform::new(
                 host.clone(),
                 db.clone(),
-                prefs.clone(),
                 directory.clone(),
                 cache.root().to_owned(),
                 #[cfg(not(feature = "runtime-media"))]

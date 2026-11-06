@@ -261,9 +261,10 @@ pub async fn cache_file(
     ensure!(!entry.is_dir, "Shared preview requires a file");
     let mut url = link.file_url(&url_token, &entry.relative_path, false)?;
     let (name, key) = if thumbnail {
-        url.push_str("&s=sm");
+        url.push_str("&action=preview&size=sm");
         ("thumbnail".to_owned(), Some(json!({"host":link.host,"port":link.port,"shareId":link.shared_id,"token":link.token,"urlToken":url_token,"path":entry.relative_path,"size":entry.size,"thumbnailSize":"sm"}).to_string()))
     } else {
+        url.push_str("&action=download");
         (entry.name, None)
     };
     cache

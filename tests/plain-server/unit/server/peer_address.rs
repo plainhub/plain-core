@@ -48,7 +48,10 @@ async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_
     assert_eq!(parsed.path(), "/fs");
     assert_eq!(
         parsed.query_pairs().collect::<Vec<_>>(),
-        vec![("id".into(), file_id.into())]
+        vec![
+            ("id".into(), file_id.into()),
+            ("action".into(), "download".into())
+        ]
     );
     let old = peer.clone();
     peer.ip = "::1".into();

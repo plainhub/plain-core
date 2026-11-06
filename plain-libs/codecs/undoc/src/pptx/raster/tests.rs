@@ -1,0 +1,1561 @@
+//! Slides assembled part by part and painted at 72 dpi, where one slide point is one pixel:
+//! a slide of 100 × 50 points is a 100 × 50 image, and an EMU position divides by 12,700.
+
+use std::io::{Cursor, Write};
+
+use crate::pptx::PptxParser;
+use crate::raster::SlideRasterOptions;
+
+const NS: &str = r#"xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships""#;
+const REL_NS: &str = "http://schemas.openxmlformats.org/package/2006/relationships";
+const REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+/// EMU for `pt` points.
+fn emu(pt: u32) -> u32 {
+    pt * 12_700
+}
+
+fn rels(items: &[(&str, &str, &str)]) -> String {
+    let body: String = items
+        .iter()
+        .map(|(id, kind, target)| {
+            format!(r#"<Relationship Id="{id}" Type="{REL}/{kind}" Target="{target}"/>"#)
+        })
+        .collect();
+    format!(r#"<?xml version="1.0"?><Relationships xmlns="{REL_NS}">{body}</Relationships>"#)
+}
+
+/// A presentation of one 100 × 50 pt slide whose shape tree is `shapes`, with a layout, a
+/// master (background `master_bg`, which may be empty) and a theme (`accent1` 4472C4).
+pub(crate) fn deck(shapes: &str, master_bg: &str) -> Vec<u8> {
+    deck_with(shapes, master_bg, "")
+}
+
+/// [`deck`], with `layout_shapes` in the layout's shape tree.
+fn deck_with(shapes: &str, master_bg: &str, layout_shapes: &str) -> Vec<u8> {
+    deck_full(shapes, master_bg, layout_shapes, &[], &[])
+}
+
+/// [`deck_with`], with more slide relationships `(id, type, target)` and more parts.
+fn deck_full(
+    shapes: &str,
+    master_bg: &str,
+    layout_shapes: &str,
+    slide_rels: &[(&str, &str, &str)],
+    extra: &[(&str, &[u8])],
+) -> Vec<u8> {
+    deck_parts(
+        shapes,
+        DeckParts {
+            master_bg,
+            layout_shapes,
+            slide_rels,
+            extra,
+            ..DeckParts::default()
+        },
+    )
+}
+
+/// What a test presentation varies beyond its slide's shapes: each part's shapes and
+/// relationships `(id, type, target)`, the master's background, and more parts.
+#[derive(Default)]
+struct DeckParts<'a> {
+    master_bg: &'a str,
+    /// The layout's background, which covers the master's.
+    layout_bg: &'a str,
+    master_shapes: &'a str,
+    layout_shapes: &'a str,
+    slide_rels: &'a [(&'a str, &'a str, &'a str)],
+    layout_rels: &'a [(&'a str, &'a str, &'a str)],
+    master_rels: &'a [(&'a str, &'a str, &'a str)],
+    /// The theme's `fillStyleLst` and `bgFillStyleLst` contents.
+    fill_styles: &'a str,
+    bg_fill_styles: &'a str,
+    /// The `a:tblStyle` elements of `ppt/tableStyles.xml`; none means no such part.
+    table_styles: &'a str,
+    extra: &'a [(&'a str, &'a [u8])],
+}
+
+fn deck_parts(shapes: &str, deck: DeckParts) -> Vec<u8> {
+    let DeckParts {
+        master_bg,
+        layout_bg,
+        master_shapes,
+        layout_shapes,
+        slide_rels,
+        layout_rels,
+        master_rels,
+        fill_styles,
+        bg_fill_styles,
+        table_styles,
+        extra,
+    } = deck;
+    let mut presentation_rels = vec![("rId2", "slide", "slides/slide1.xml")];
+    if !table_styles.is_empty() {
+        presentation_rels.push(("rId3", "tableStyles", "tableStyles.xml"));
+    }
+    let mut slide_rel_list = vec![("rId1", "slideLayout", "../slideLayouts/slideLayout1.xml")];
+    slide_rel_list.extend_from_slice(slide_rels);
+    let mut layout_rel_list = vec![("rId1", "slideMaster", "../slideMasters/slideMaster1.xml")];
+    layout_rel_list.extend_from_slice(layout_rels);
+    let mut master_rel_list = vec![("rId1", "theme", "../theme/theme1.xml")];
+    master_rel_list.extend_from_slice(master_rels);
+    let parts: Vec<(&str, String)> = vec![
+        (
+            "[Content_Types].xml",
+            r#"<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/></Types>"#.to_string(),
+        ),
+        (
+            "_rels/.rels",
+            rels(&[("rId1", "officeDocument", "ppt/presentation.xml")]),
+        ),
+        (
+            "ppt/presentation.xml",
+            format!(
+                r#"<?xml version="1.0"?><p:presentation {NS}><p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst><p:sldSz cx="{}" cy="{}"/></p:presentation>"#,
+                emu(100),
+                emu(50)
+            ),
+        ),
+        (
+            "ppt/_rels/presentation.xml.rels",
+            rels(&presentation_rels),
+        ),
+        (
+            "ppt/slides/slide1.xml",
+            format!(
+                r#"<?xml version="1.0"?><p:sld {NS}><p:cSld><p:spTree><p:nvGrpSpPr/><p:grpSpPr/>{shapes}</p:spTree></p:cSld></p:sld>"#
+            ),
+        ),
+        (
+            "ppt/slides/_rels/slide1.xml.rels",
+            rels(&slide_rel_list),
+        ),
+        (
+            "ppt/slideLayouts/slideLayout1.xml",
+            format!(r#"<?xml version="1.0"?><p:sldLayout {NS}><p:cSld>{layout_bg}<p:spTree><p:nvGrpSpPr/><p:grpSpPr/>{layout_shapes}</p:spTree></p:cSld></p:sldLayout>"#),
+        ),
+        (
+            "ppt/slideLayouts/_rels/slideLayout1.xml.rels",
+            rels(&layout_rel_list),
+        ),
+        (
+            "ppt/slideMasters/slideMaster1.xml",
+            format!(
+                r#"<?xml version="1.0"?><p:sldMaster {NS}><p:cSld>{master_bg}<p:spTree><p:nvGrpSpPr/><p:grpSpPr/>{master_shapes}</p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:sldMaster>"#
+            ),
+        ),
+        (
+            "ppt/slideMasters/_rels/slideMaster1.xml.rels",
+            rels(&master_rel_list),
+        ),
+        (
+            "ppt/theme/theme1.xml",
+            format!(
+                r#"<?xml version="1.0"?><a:theme {NS} name="T"><a:themeElements><a:clrScheme name="C"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme><a:fmtScheme name="F"><a:fillStyleLst>{fill_styles}</a:fillStyleLst><a:lnStyleLst><a:ln w="6350"/><a:ln w="38100"/><a:ln w="19050"/></a:lnStyleLst><a:bgFillStyleLst>{bg_fill_styles}</a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>"#
+            ),
+        ),
+    ];
+    let table_styles_part = format!(
+        r#"<?xml version="1.0"?><a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="">{table_styles}</a:tblStyleLst>"#
+    );
+    let table_styles_parts: Vec<(&str, &[u8])> = if table_styles.is_empty() {
+        Vec::new()
+    } else {
+        vec![("ppt/tableStyles.xml", table_styles_part.as_bytes())]
+    };
+    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for (name, body) in parts {
+        zip.start_file(name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(body.as_bytes()).unwrap();
+    }
+    for (name, body) in extra.iter().chain(&table_styles_parts) {
+        zip.start_file(*name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(body).unwrap();
+    }
+    zip.finish().unwrap().into_inner()
+}
+
+/// A preset shape at `(x, y)` points, `w × h` points, with `props` inside its `spPr` after
+/// the geometry, and `extra` after the `spPr` (a style, a text body).
+pub(crate) fn shape(
+    prst: &str,
+    (x, y, w, h): (u32, u32, u32, u32),
+    xfrm_attrs: &str,
+    props: &str,
+    extra: &str,
+) -> String {
+    format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="S"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm{xfrm_attrs}><a:off x="{}" y="{}"/><a:ext cx="{}" cy="{}"/></a:xfrm><a:prstGeom prst="{prst}"><a:avLst/></a:prstGeom>{props}</p:spPr>{extra}</p:sp>"#,
+        emu(x),
+        emu(y),
+        emu(w),
+        emu(h)
+    )
+}
+
+pub(crate) fn solid(hex: &str) -> String {
+    format!(r#"<a:solidFill><a:srgbClr val="{hex}"/></a:solidFill><a:ln><a:noFill/></a:ln>"#)
+}
+
+fn render(pptx: Vec<u8>) -> crate::raster::RasteredSlide {
+    PptxParser::from_bytes(pptx)
+        .unwrap()
+        .render_slide(
+            0,
+            &SlideRasterOptions {
+                dpi: 72.0,
+                system_fonts: false,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+}
+
+fn pixel(slide: &crate::raster::RasteredSlide, x: u32, y: u32) -> [u8; 3] {
+    let i = ((y * slide.width + x) * 4) as usize;
+    [slide.rgba[i], slide.rgba[i + 1], slide.rgba[i + 2]]
+}
+
+const WHITE: [u8; 3] = [255, 255, 255];
+const RED: [u8; 3] = [255, 0, 0];
+const ACCENT1: [u8; 3] = [0x44, 0x72, 0xC4];
+
+#[test]
+fn a_filled_rectangle_covers_its_place_on_a_white_slide() {
+    let slide = render(deck(
+        &shape("rect", (0, 0, 50, 50), "", &solid("FF0000"), ""),
+        "",
+    ));
+    assert_eq!((slide.width, slide.height), (100, 50));
+    assert_eq!(pixel(&slide, 25, 25), RED);
+    assert_eq!(pixel(&slide, 75, 25), WHITE);
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+    assert!(slide.to_png().starts_with(b"\x89PNG"));
+}
+
+#[test]
+fn scheme_colors_resolve_through_the_color_map_and_theme() {
+    let fill = r#"<a:solidFill><a:schemeClr val="accent1"/></a:solidFill>"#;
+    let slide = render(deck(&shape("rect", (0, 0, 100, 50), "", fill, ""), ""));
+    assert_eq!(pixel(&slide, 50, 25), ACCENT1);
+    // bg1 maps to lt1 (white): a white rectangle on a red master background.
+    let bg =
+        r#"<p:bg><p:bgPr><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></p:bgPr></p:bg>"#;
+    let fill = r#"<a:solidFill><a:schemeClr val="bg1"/></a:solidFill>"#;
+    let slide = render(deck(&shape("rect", (0, 0, 50, 50), "", fill, ""), bg));
+    assert_eq!(pixel(&slide, 25, 25), WHITE);
+    assert_eq!(pixel(&slide, 75, 25), RED);
+}
+
+#[test]
+fn a_color_modifier_changes_the_color() {
+    // accent1 darkened to half its luminance.
+    let fill = r#"<a:solidFill><a:schemeClr val="accent1"><a:lumMod val="50000"/></a:schemeClr></a:solidFill>"#;
+    let slide = render(deck(&shape("rect", (0, 0, 100, 50), "", fill, ""), ""));
+    let [r, g, b] = pixel(&slide, 50, 25);
+    assert!(r < 0x44 && g < 0x72 && b < 0xC4 && b > g, "{:?}", (r, g, b));
+}
+
+/// A right arrow's head reaches the shape's right edge at mid-height only.
+#[test]
+fn a_preset_shape_is_drawn_from_its_geometry() {
+    let slide = render(deck(
+        &shape("rightArrow", (0, 0, 100, 50), "", &solid("FF0000"), ""),
+        "",
+    ));
+    assert_eq!(pixel(&slide, 97, 25), RED, "the tip");
+    assert_eq!(pixel(&slide, 97, 3), WHITE, "beside the tip");
+    assert_eq!(pixel(&slide, 10, 25), RED, "the shaft");
+    assert_eq!(pixel(&slide, 10, 3), WHITE, "above the shaft");
+}
+
+/// A red line 2 pt wide from (10, 20) to (90, 20), with `ends` inside its `a:ln`.
+fn line_with(ends: &str) -> crate::raster::RasteredSlide {
+    let ln = format!(
+        r#"<a:ln w="25400"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>{ends}</a:ln>"#
+    );
+    render(deck(&shape("line", (10, 20, 80, 0), "", &ln, ""), ""))
+}
+
+/// A line's `tailEnd` is drawn at the end of its path: a large triangle is 5 times the line's
+/// width wide and long, its tip on the line's last point.
+#[test]
+fn a_line_end_draws_its_arrowhead() {
+    let plain = line_with("");
+    assert_eq!(pixel(&plain, 50, 20), RED, "the line");
+    assert_eq!(pixel(&plain, 83, 22), WHITE, "no head without an end");
+
+    let arrow = line_with(r#"<a:tailEnd type="triangle" w="lg" len="lg"/>"#);
+    assert_eq!(
+        pixel(&arrow, 83, 22),
+        RED,
+        "inside the triangle, off the line"
+    );
+    assert_eq!(pixel(&arrow, 82, 18), RED, "the other side");
+    assert_eq!(pixel(&arrow, 85, 15), WHITE, "outside the triangle");
+    assert_eq!(pixel(&arrow, 13, 23), WHITE, "no head at the start");
+    assert!(arrow.gaps.is_empty(), "{:?}", arrow.gaps);
+}
+
+/// `headEnd` decorates the first point; each kind has its own shape.
+#[test]
+fn each_line_end_kind_has_its_shape() {
+    // A medium oval (6 × 6 pt) centred on the start.
+    let oval = line_with(r#"<a:headEnd type="oval"/>"#);
+    assert_eq!(pixel(&oval, 10, 21), RED, "the oval, below the line");
+    assert_eq!(pixel(&oval, 10, 25), WHITE, "past the oval");
+
+    // A medium diamond: 6 pt long and wide, centred on the start.
+    let diamond = line_with(r#"<a:headEnd type="diamond"/>"#);
+    assert_eq!(
+        pixel(&diamond, 10, 21),
+        RED,
+        "the diamond, below its centre"
+    );
+    assert_eq!(pixel(&diamond, 7, 17), WHITE, "outside its corner");
+
+    // An open arrow is two strokes: its wing is painted, the space between wings is not.
+    let open = line_with(r#"<a:headEnd type="arrow" w="lg" len="lg"/>"#);
+    assert_eq!(pixel(&open, 15, 22), RED, "a wing");
+    assert_eq!(pixel(&open, 18, 22), WHITE, "between the wing and the line");
+
+    // An unknown or `none` end draws nothing.
+    let none = line_with(r#"<a:headEnd type="none"/>"#);
+    assert_eq!(pixel(&none, 10, 22), WHITE);
+}
+
+/// A filled head ends the line at its base, so the line's square end does not cross the tip.
+#[test]
+fn a_filled_head_shortens_the_line_beneath_it() {
+    let thick = |ends: &str| {
+        let ln = format!(
+            r#"<a:ln w="101600"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>{ends}</a:ln>"#
+        );
+        render(deck(&shape("line", (10, 25, 80, 0), "", &ln, ""), ""))
+    };
+    // An 8 pt line with a small triangle (16 × 16 pt): the tip at x 90 is one point thin; a
+    // line reaching it would paint 4 pt above and below.
+    let arrow = thick(r#"<a:tailEnd type="triangle" w="sm" len="sm"/>"#);
+    assert_eq!(pixel(&arrow, 89, 28), WHITE, "beside the tip");
+    assert_eq!(pixel(&arrow, 76, 28), RED, "the head's body");
+}
+
+#[test]
+fn rotation_turns_a_shape_about_its_centre() {
+    // A 60 × 10 bar centred at (50, 25), turned 90°: now 10 wide and 60 tall (clipped).
+    let slide = render(deck(
+        &shape(
+            "rect",
+            (20, 20, 60, 10),
+            r#" rot="5400000""#,
+            &solid("FF0000"),
+            "",
+        ),
+        "",
+    ));
+    assert_eq!(pixel(&slide, 50, 5), RED);
+    assert_eq!(pixel(&slide, 25, 25), WHITE);
+}
+
+#[test]
+fn a_group_maps_its_children_into_its_place() {
+    // The child space 0..1000 × 0..1000 (EMU) maps onto the group's 50 × 50 pt at (50, 0).
+    let group = format!(
+        r#"<p:grpSp><p:nvGrpSpPr><p:cNvPr id="3" name="G"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="{}" y="0"/><a:ext cx="{}" cy="{}"/><a:chOff x="0" y="0"/><a:chExt cx="1000" cy="1000"/></a:xfrm></p:grpSpPr><p:sp><p:nvSpPr><p:cNvPr id="4" name="C"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="500" cy="1000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>{}</p:spPr></p:sp></p:grpSp>"#,
+        emu(50),
+        emu(50),
+        emu(50),
+        solid("FF0000")
+    );
+    let slide = render(deck(&group, ""));
+    assert_eq!(
+        pixel(&slide, 60, 25),
+        RED,
+        "the child's left half of the group"
+    );
+    assert_eq!(pixel(&slide, 90, 25), WHITE);
+    assert_eq!(pixel(&slide, 25, 25), WHITE);
+}
+
+#[test]
+fn a_shape_without_its_own_fill_takes_its_style_color_and_theme_line_width() {
+    let style = r#"<p:style><a:lnRef idx="2"><a:srgbClr val="00FF00"/></a:lnRef><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef></p:style>"#;
+    let slide = render(deck(&shape("rect", (10, 10, 80, 30), "", "", style), ""));
+    assert_eq!(pixel(&slide, 50, 25), ACCENT1);
+    // lnRef idx 2 is the theme's 3 pt line: green across x 10 ± 1.5.
+    assert_eq!(pixel(&slide, 10, 25), [0, 255, 0]);
+}
+
+#[test]
+fn what_is_not_painted_is_counted() {
+    let text = r#"<p:txBody><a:bodyPr/><a:p><a:r><a:t>Label</a:t></a:r><a:r><a:t>two</a:t></a:r></a:p></p:txBody>"#;
+    let pic = r#"<p:pic><p:nvPicPr><p:cNvPr id="5" name="P"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId9"/></p:blipFill><p:spPr/></p:pic>"#;
+    let chart = r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="6" name="Ch"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"/></a:graphic></p:graphicFrame>"#;
+    let custom = r#"<p:sp><p:nvSpPr><p:cNvPr id="7" name="X"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm><a:custGeom/><a:solidFill><a:srgbClr val="000000"/></a:solidFill></p:spPr></p:sp>"#;
+    let gradient = r#"<a:pattFill prst="pct50"><a:fgClr><a:srgbClr val="FF0000"/></a:fgClr><a:bgClr><a:srgbClr val="0000FF"/></a:bgClr></a:pattFill>"#;
+    let shapes = format!(
+        "{}{pic}{chart}{custom}{}",
+        shape("rect", (0, 0, 10, 10), "", &solid("FF0000"), text),
+        shape("rect", (60, 0, 40, 50), "", gradient, "")
+    );
+    let slide = render(deck(&shapes, ""));
+    let g = slide.gaps;
+    assert_eq!(
+        (
+            g.text_runs,
+            g.images,
+            g.charts,
+            g.shapes,
+            g.approximated_fills
+        ),
+        (2, 1, 1, 1, 1)
+    );
+    assert_eq!(
+        pixel(&slide, 80, 25),
+        RED,
+        "a pattern stands in as its foreground color"
+    );
+}
+
+#[test]
+fn a_slide_index_out_of_range_is_an_error() {
+    let parser = PptxParser::from_bytes(deck("", "")).unwrap();
+    let err = parser
+        .render_slide(1, &SlideRasterOptions::default())
+        .unwrap_err();
+    assert!(
+        matches!(err, crate::Error::SectionOutOfRange { index: 1, count: 1 }),
+        "{err:?}"
+    );
+}
+
+/// A resolution that is not a positive number, or one that would make the slide too large to
+/// allocate, is refused as a rendering failure rather than drawn as a 1 × 1 image.
+#[test]
+fn a_resolution_that_cannot_be_drawn_is_an_error() {
+    let parser = PptxParser::from_bytes(deck("", "")).unwrap();
+    for dpi in [0.0, -72.0, f32::NAN, f32::INFINITY, 1.0e9] {
+        let err = parser
+            .render_slide(
+                0,
+                &SlideRasterOptions {
+                    dpi,
+                    ..Default::default()
+                },
+            )
+            .unwrap_err();
+        assert_eq!(err.kind(), crate::ErrorKind::Render, "{dpi}: {err:?}");
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Text, drawn in the test font (a subset of Noto Sans KR, see tests/fixtures/fonts/README.md)
+
+const TEST_FONT: &[u8] = include_bytes!("../../../tests/fixtures/fonts/UndocTestSans-Regular.ttf");
+
+fn render_text(pptx: Vec<u8>) -> crate::raster::RasteredSlide {
+    PptxParser::from_bytes(pptx)
+        .unwrap()
+        .render_slide(
+            0,
+            &SlideRasterOptions {
+                dpi: 72.0,
+                fonts: vec![TEST_FONT.to_vec()],
+                system_fonts: false,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+}
+
+/// How many pixels in `x0..x1` × `y0..y1` are dark (text drawn in black).
+fn dark(slide: &crate::raster::RasteredSlide, (x0, y0, x1, y1): (u32, u32, u32, u32)) -> usize {
+    (y0..y1)
+        .flat_map(|y| (x0..x1).map(move |x| (x, y)))
+        .filter(|&(x, y)| {
+            let [r, g, b] = pixel(slide, x, y);
+            (r as u32 + g as u32 + b as u32) < 3 * 128
+        })
+        .count()
+}
+
+/// A text box: no fill, no line, the given body properties and paragraphs.
+fn text_box((x, y, w, h): (u32, u32, u32, u32), body_pr: &str, paragraphs: &str) -> String {
+    format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="8" name="T"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="{}" y="{}"/><a:ext cx="{}" cy="{}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr lIns="0" tIns="0" rIns="0" bIns="0"{body_pr}/><a:lstStyle/>{paragraphs}</p:txBody></p:sp>"#,
+        emu(x),
+        emu(y),
+        emu(w),
+        emu(h)
+    )
+}
+
+fn run(text: &str, attrs: &str) -> String {
+    format!(
+        r#"<a:r><a:rPr lang="ko-KR" sz="2000"{attrs}><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:latin typeface="Undoc Test Sans"/><a:ea typeface="Undoc Test Sans"/></a:rPr><a:t>{text}</a:t></a:r>"#
+    )
+}
+
+#[test]
+fn text_is_drawn_inside_its_box_in_the_face_it_asks_for() {
+    let para = format!("<a:p>{}</a:p>", run("한글 AB", ""));
+    let slide = render_text(deck(&text_box((10, 10, 80, 30), "", &para), ""));
+    assert!(dark(&slide, (10, 10, 90, 40)) > 20, "no text drawn");
+    assert_eq!(dark(&slide, (0, 40, 100, 50)), 0, "text below its box");
+    assert_eq!(dark(&slide, (0, 0, 100, 10)), 0, "text above its box");
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+    assert_eq!(slide.substituted_text_runs, 0);
+}
+
+#[test]
+fn a_face_that_is_not_there_is_stood_in_for_and_counted() {
+    let para = r#"<a:p><a:r><a:rPr sz="2000"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:latin typeface="No Such Face"/></a:rPr><a:t>AB</a:t></a:r></a:p>"#;
+    let slide = render_text(deck(&text_box((10, 10, 80, 30), "", para), ""));
+    assert!(dark(&slide, (10, 10, 90, 40)) > 10);
+    assert_eq!(slide.substituted_text_runs, 1);
+    assert_eq!(slide.gaps.text_runs, 0);
+}
+
+#[test]
+fn without_any_face_text_is_a_gap() {
+    let para = format!("<a:p>{}</a:p>", run("AB", ""));
+    let slide = render(deck(&text_box((10, 10, 80, 30), "", &para), ""));
+    assert_eq!(slide.gaps.text_runs, 1);
+    assert_eq!(dark(&slide, (0, 0, 100, 50)), 0);
+}
+
+#[test]
+fn a_long_line_wraps_inside_a_narrow_box() {
+    // Four words at 20 pt in a 40 pt wide box need more than one line.
+    let para = format!("<a:p>{}</a:p>", run("AB AB AB AB", ""));
+    let slide = render_text(deck(&text_box((0, 0, 40, 50), "", &para), ""));
+    assert!(dark(&slide, (0, 0, 40, 22)) > 5, "first line");
+    assert!(dark(&slide, (0, 25, 40, 50)) > 5, "second line");
+    assert_eq!(dark(&slide, (40, 0, 100, 50)), 0, "nothing past the box");
+}
+
+#[test]
+fn centered_text_sits_in_the_middle_of_its_line() {
+    let para = format!(r#"<a:p><a:pPr algn="ctr"/>{}</a:p>"#, run("A", ""));
+    let slide = render_text(deck(&text_box((0, 0, 100, 30), "", &para), ""));
+    assert!(dark(&slide, (40, 0, 60, 30)) > 5);
+    assert_eq!(dark(&slide, (0, 0, 30, 30)), 0);
+}
+
+#[test]
+fn a_bottom_anchored_body_puts_its_text_at_the_bottom() {
+    let para = format!("<a:p>{}</a:p>", run("AB", ""));
+    let slide = render_text(deck(
+        &text_box((0, 0, 100, 50), r#" anchor="b""#, &para),
+        "",
+    ));
+    assert!(dark(&slide, (0, 25, 100, 50)) > 5);
+    assert_eq!(dark(&slide, (0, 0, 100, 20)), 0);
+}
+
+/// A slide placeholder with no position of its own takes its layout's.
+#[test]
+fn a_placeholder_takes_its_position_from_the_layout() {
+    let layout_title = format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="{}"/><a:ext cx="{}" cy="{}"/></a:xfrm></p:spPr><p:txBody><a:bodyPr lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"/><a:lstStyle/><a:p/></p:txBody></p:sp>"#,
+        emu(30),
+        emu(100),
+        emu(20)
+    );
+    let slide_title = format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p>{}</a:p></p:txBody></p:sp>"#,
+        run("AB", "")
+    );
+    let slide = render_text(deck_with(&slide_title, "", &layout_title));
+    assert!(
+        dark(&slide, (0, 30, 100, 50)) > 5,
+        "drawn where the layout puts it"
+    );
+    assert_eq!(dark(&slide, (0, 0, 100, 28)), 0);
+    assert_eq!(slide.gaps.text_runs, 0);
+}
+
+/// A placeholder that names no geometry or fill of its own draws its layout's.
+#[test]
+fn a_placeholder_takes_its_geometry_and_fill_from_the_layout() {
+    let layout_ph = format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="B"/><p:cNvSpPr/><p:nvPr><p:ph idx="1"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{}" cy="{}"/></a:xfrm><a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>{}</p:spPr></p:sp>"#,
+        emu(50),
+        emu(50),
+        solid("FF0000")
+    );
+    let slide_ph = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="B"/><p:cNvSpPr/><p:nvPr><p:ph idx="1"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp>"#;
+    let slide = render(deck_with(slide_ph, "", &layout_ph));
+    assert_eq!(pixel(&slide, 25, 25), RED, "the ellipse's centre");
+    assert_eq!(
+        pixel(&slide, 2, 2),
+        WHITE,
+        "outside the ellipse, inside its box"
+    );
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pictures
+
+/// A PNG of `w × h` pixels, the left half red and the right half blue.
+fn red_blue_png(w: u32, h: u32) -> Vec<u8> {
+    let mut pixmap = tiny_skia::Pixmap::new(w, h).unwrap();
+    pixmap.fill(tiny_skia::Color::from_rgba8(0, 0, 255, 255));
+    let mut paint = tiny_skia::Paint::default();
+    paint.set_color_rgba8(255, 0, 0, 255);
+    pixmap.fill_rect(
+        tiny_skia::Rect::from_xywh(0.0, 0.0, (w / 2) as f32, h as f32).unwrap(),
+        &paint,
+        tiny_skia::Transform::identity(),
+        None,
+    );
+    pixmap.encode_png().unwrap()
+}
+
+fn picture((x, y, w, h): (u32, u32, u32, u32), embed: &str, src_rect: &str) -> String {
+    format!(
+        r#"<p:pic><p:nvPicPr><p:cNvPr id="9" name="Pic"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="{embed}"/>{src_rect}<a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="{}" y="{}"/><a:ext cx="{}" cy="{}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>"#,
+        emu(x),
+        emu(y),
+        emu(w),
+        emu(h)
+    )
+}
+
+const BLUE: [u8; 3] = [0, 0, 255];
+
+#[test]
+fn a_picture_is_stretched_over_its_box() {
+    let png = red_blue_png(40, 20);
+    let pptx = deck_full(
+        &picture((0, 0, 100, 50), "rId5", ""),
+        "",
+        "",
+        &[("rId5", "image", "../media/image1.png")],
+        &[("ppt/media/image1.png", &png)],
+    );
+    let slide = render(pptx);
+    assert_eq!(pixel(&slide, 20, 25), RED);
+    assert_eq!(pixel(&slide, 80, 25), BLUE);
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+}
+
+#[test]
+fn a_picture_is_cropped_by_its_source_rectangle() {
+    // Keep only the right half of the picture: all blue.
+    let png = red_blue_png(40, 20);
+    let pptx = deck_full(
+        &picture((0, 0, 100, 50), "rId5", r#"<a:srcRect l="50000"/>"#),
+        "",
+        "",
+        &[("rId5", "image", "../media/image1.png")],
+        &[("ppt/media/image1.png", &png)],
+    );
+    let slide = render(pptx);
+    assert_eq!(pixel(&slide, 10, 25), BLUE);
+    assert_eq!(pixel(&slide, 90, 25), BLUE);
+}
+
+/// A shape filled with a picture clips the picture to its outline.
+#[test]
+fn a_picture_fill_takes_the_shape_of_its_geometry() {
+    let png = red_blue_png(40, 20);
+    let shape = format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="S"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{}" cy="{}"/></a:xfrm><a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom><a:blipFill><a:blip r:embed="rId5"/><a:stretch><a:fillRect/></a:stretch></a:blipFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>"#,
+        emu(100),
+        emu(50)
+    );
+    let pptx = deck_full(
+        &shape,
+        "",
+        "",
+        &[("rId5", "image", "../media/image1.png")],
+        &[("ppt/media/image1.png", &png)],
+    );
+    let slide = render(pptx);
+    assert_eq!(pixel(&slide, 25, 25), RED);
+    assert_eq!(pixel(&slide, 2, 2), WHITE, "outside the ellipse");
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+}
+
+#[test]
+fn a_picture_in_a_format_not_decoded_is_a_gap() {
+    let pptx = deck_full(
+        &picture((0, 0, 100, 50), "rId5", ""),
+        "",
+        "",
+        &[("rId5", "image", "../media/image1.emf")],
+        &[("ppt/media/image1.emf", b"    not a raster")],
+    );
+    let slide = render(pptx);
+    assert_eq!(slide.gaps.images, 1);
+    assert_eq!(pixel(&slide, 50, 25), WHITE);
+}
+
+#[test]
+fn a_character_bullet_hangs_in_the_indent() {
+    let para = format!(
+        r#"<a:p><a:pPr marL="{}" indent="-{}"><a:buChar char="-"/></a:pPr>{}</a:p>"#,
+        emu(20),
+        emu(20),
+        run("AB", "")
+    );
+    let slide = render_text(deck(&text_box((0, 0, 100, 30), "", &para), ""));
+    assert!(
+        dark(&slide, (0, 0, 15, 30)) > 0,
+        "the bullet, at the left edge"
+    );
+    assert!(dark(&slide, (20, 0, 50, 30)) > 5, "the text, at the margin");
+    assert_eq!(dark(&slide, (15, 0, 20, 30)), 0, "the gap between them");
+}
+
+/// A placeholder that takes its picture fill from its layout, or its master, finds the picture
+/// through that part's relationships: `r:embed` names a relationship of the part it is in.
+#[test]
+fn an_inherited_picture_fill_resolves_in_the_part_it_comes_from() {
+    let png = red_blue_png(40, 20);
+    let filled = |id: u32| {
+        format!(
+            r#"<p:sp><p:nvSpPr><p:cNvPr id="{id}" name="Body"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{}" cy="{}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:blipFill><a:blip r:embed="rId7"/><a:stretch><a:fillRect/></a:stretch></a:blipFill></p:spPr></p:sp>"#,
+            emu(100),
+            emu(50)
+        )
+    };
+    let slide_shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="4" name="Body"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp>"#;
+    // The slide has its own rId7, pointing elsewhere: it must not be the one used.
+    let slide_rels = [("rId7", "image", "../media/missing.png")];
+    let image = [("rId7", "image", "../media/image1.png")];
+    let media: [(&str, &[u8]); 1] = [("ppt/media/image1.png", &png)];
+
+    let (layout_shape, master_shape) = (filled(3), filled(5));
+    let from_layout = DeckParts {
+        layout_shapes: &layout_shape,
+        slide_rels: &slide_rels,
+        layout_rels: &image,
+        extra: &media,
+        ..DeckParts::default()
+    };
+    let from_master = DeckParts {
+        master_shapes: &master_shape,
+        slide_rels: &slide_rels,
+        master_rels: &image,
+        extra: &media,
+        ..DeckParts::default()
+    };
+    for (part, deck) in [("layout", from_layout), ("master", from_master)] {
+        let slide = render(deck_parts(slide_shape, deck));
+        assert_eq!(pixel(&slide, 20, 25), RED, "from the {part}");
+        assert_eq!(pixel(&slide, 80, 25), BLUE, "from the {part}");
+        assert!(slide.gaps.is_empty(), "from the {part}: {:?}", slide.gaps);
+    }
+}
+
+/// A picture the layout or the master draws as a shape of its own — a template's background
+/// art — is painted under the slide, found through that part's relationships.
+#[test]
+fn a_picture_drawn_by_the_layout_or_master_is_painted() {
+    let png = red_blue_png(40, 20);
+    let art = picture((0, 0, 100, 50), "rId7", "");
+    // The slide has its own rId7, pointing elsewhere: it must not be the one used.
+    let slide_rels = [("rId7", "image", "../media/missing.png")];
+    let image = [("rId7", "image", "../media/image1.png")];
+    let media: [(&str, &[u8]); 1] = [("ppt/media/image1.png", &png)];
+    let from_layout = DeckParts {
+        layout_shapes: &art,
+        slide_rels: &slide_rels,
+        layout_rels: &image,
+        extra: &media,
+        ..DeckParts::default()
+    };
+    let from_master = DeckParts {
+        master_shapes: &art,
+        slide_rels: &slide_rels,
+        master_rels: &image,
+        extra: &media,
+        ..DeckParts::default()
+    };
+    for (part, deck) in [("layout", from_layout), ("master", from_master)] {
+        let slide = render(deck_parts("", deck));
+        assert_eq!(pixel(&slide, 20, 25), RED, "from the {part}");
+        assert_eq!(pixel(&slide, 80, 25), BLUE, "from the {part}");
+        assert!(slide.gaps.is_empty(), "from the {part}: {:?}", slide.gaps);
+    }
+}
+
+#[test]
+fn numbers_are_written_in_their_scheme() {
+    use super::autonumber;
+    for (scheme, n, expected) in [
+        ("arabicPeriod", 3, "3."),
+        ("arabicParenR", 10, "10)"),
+        ("arabicParenBoth", 2, "(2)"),
+        ("arabicPlain", 7, "7"),
+        ("alphaLcParenR", 2, "b)"),
+        ("alphaUcPeriod", 26, "Z."),
+        ("alphaUcParenBoth", 28, "(BB)"),
+        ("romanUcPeriod", 14, "XIV."),
+        ("romanLcPlain", 9, "ix"),
+        ("romanLcParenR", 1994, "mcmxciv)"),
+        ("circleNumDbPlain", 3, "\u{2462}"),
+        ("circleNumWdBlackPlain", 12, "\u{24EC}"),
+        ("arabicDbPeriod", 12, "\u{FF11}\u{FF12}\u{FF0E}"),
+        ("ea1JpnKorPlain", 23, "二十三"),
+        ("ea1ChsPeriod", 10, "十、"),
+        ("thaiAlphaPeriod", 4, "4."),
+    ] {
+        assert_eq!(autonumber(scheme, n), expected, "{scheme} {n}");
+    }
+}
+
+/// A number continues its list at the same level; an outer level ends the deeper lists; a
+/// paragraph at the same level without a number, or in another scheme, starts it again.
+#[test]
+fn numbering_follows_its_list() {
+    use super::{Bullet, Numbering};
+    let number = |scheme: &str, start: u32| Bullet::Number {
+        scheme: scheme.into(),
+        start,
+    };
+    let arabic = number("arabicPeriod", 1);
+    let mut n = Numbering::default();
+    assert_eq!(n.next(0, Some(&arabic)), Some(1));
+    assert_eq!(n.next(0, Some(&arabic)), Some(2));
+    assert_eq!(
+        n.next(1, Some(&arabic)),
+        Some(1),
+        "a nested list starts at its start"
+    );
+    assert_eq!(n.next(1, Some(&arabic)), Some(2));
+    assert_eq!(n.next(0, Some(&arabic)), Some(3), "the outer list goes on");
+    assert_eq!(
+        n.next(1, Some(&arabic)),
+        Some(1),
+        "the nested list was ended"
+    );
+    assert_eq!(n.next(0, None), None);
+    assert_eq!(
+        n.next(0, Some(&arabic)),
+        Some(1),
+        "an unnumbered paragraph ends the list"
+    );
+    assert_eq!(
+        n.next(0, Some(&number("alphaLcPeriod", 1))),
+        Some(1),
+        "another scheme"
+    );
+    assert_eq!(
+        n.next(0, Some(&number("arabicPeriod", 5))),
+        Some(5),
+        "startAt"
+    );
+}
+
+/// A numbered paragraph hangs its number in the indent, and the next one's number differs.
+#[test]
+fn a_numbered_bullet_hangs_its_number_in_the_indent() {
+    let para = |text: &str| {
+        format!(
+            r#"<a:p><a:pPr marL="{}" indent="-{}"><a:buAutoNum type="arabicPeriod"/></a:pPr>{}</a:p>"#,
+            emu(30),
+            emu(30),
+            run(text, "")
+        )
+    };
+    let body = format!("{}{}", para("AB"), para("AB"));
+    let slide = render_text(deck(&text_box((0, 0, 100, 50), "", &body), ""));
+    // Each line is about 24 pt tall at 20 pt text; the numbers sit left of x 30.
+    let mark = |y0: u32, y1: u32| {
+        (y0..y1)
+            .flat_map(|y| (0..28).map(move |x| (x, y)))
+            .map(|(x, y)| dark(&slide, (x, y, x + 1, y + 1)))
+            .collect::<Vec<_>>()
+    };
+    let (first, second) = (mark(0, 24), mark(24, 48));
+    assert!(first.iter().sum::<usize>() > 0, "the first number");
+    assert!(second.iter().sum::<usize>() > 0, "the second number");
+    assert_ne!(first, second, "1. and 2. are different marks");
+    assert!(dark(&slide, (30, 0, 60, 24)) > 5, "the text, at the margin");
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+}
+
+/// A picture bullet draws its picture where the bullet goes; one that cannot be decoded is a
+/// gap and the text is still drawn.
+#[test]
+fn a_picture_bullet_draws_its_picture() {
+    let png = red_blue_png(40, 40);
+    let para = |embed: &str| {
+        format!(
+            r#"<a:p><a:pPr marL="{}" indent="-{}"><a:buBlip><a:blip r:embed="{embed}"/></a:buBlip></a:pPr>{}</a:p>"#,
+            emu(30),
+            emu(30),
+            run("AB", "")
+        )
+    };
+    let pptx = deck_full(
+        &text_box((0, 0, 100, 50), "", &para("rId5")),
+        "",
+        "",
+        &[("rId5", "image", "../media/image1.png")],
+        &[("ppt/media/image1.png", &png)],
+    );
+    let slide = render_text(pptx);
+    let colored = (0..24)
+        .flat_map(|y| (0..28).map(move |x| (x, y)))
+        .filter(|&(x, y)| matches!(pixel(&slide, x, y), RED | BLUE))
+        .count();
+    assert!(colored > 20, "the picture, in the indent: {colored} pixels");
+    assert!(dark(&slide, (30, 0, 60, 24)) > 5, "the text");
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+
+    let missing = render_text(deck_full(
+        &text_box((0, 0, 100, 50), "", &para("rId9")),
+        "",
+        "",
+        &[],
+        &[],
+    ));
+    assert_eq!(missing.gaps.images, 1);
+    assert!(
+        dark(&missing, (30, 0, 60, 24)) > 5,
+        "the text is still drawn"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Gradients, theme fill styles and backgrounds
+
+/// A red-to-blue gradient fill with `shape` (`<a:lin …/>` or `<a:path …>`) after its stops.
+fn red_to_blue(shape: &str) -> String {
+    format!(
+        r#"<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst>{shape}</a:gradFill><a:ln><a:noFill/></a:ln>"#
+    )
+}
+
+/// Mostly red (r > b by a margin), mostly blue, or a mix.
+fn redness(slide: &crate::raster::RasteredSlide, x: u32, y: u32) -> i32 {
+    let [r, _, b] = pixel(slide, x, y);
+    r as i32 - b as i32
+}
+
+#[test]
+fn a_linear_gradient_runs_from_its_first_stop_to_its_last() {
+    // Angle 0: left to right across the 100 × 50 slide.
+    let slide = render(deck(
+        &shape(
+            "rect",
+            (0, 0, 100, 50),
+            "",
+            &red_to_blue(r#"<a:lin ang="0"/>"#),
+            "",
+        ),
+        "",
+    ));
+    assert!(redness(&slide, 2, 25) > 200, "the start is red");
+    assert!(redness(&slide, 97, 25) < -200, "the end is blue");
+    assert!(redness(&slide, 50, 25).abs() < 30, "the middle is half way");
+    assert!(
+        slide.gaps.is_empty(),
+        "drawn, not approximated: {:?}",
+        slide.gaps
+    );
+
+    // 90°: top to bottom.
+    let slide = render(deck(
+        &shape(
+            "rect",
+            (0, 0, 100, 50),
+            "",
+            &red_to_blue(r#"<a:lin ang="5400000"/>"#),
+            "",
+        ),
+        "",
+    ));
+    assert!(redness(&slide, 50, 1) > 200, "the top is red");
+    assert!(redness(&slide, 50, 48) < -200, "the bottom is blue");
+}
+
+/// A scaled 45° gradient runs corner to corner of a wide area; unscaled, it is a true 45°.
+#[test]
+fn a_scaled_angle_follows_the_area() {
+    let scaled = render(deck(
+        &shape(
+            "rect",
+            (0, 0, 100, 50),
+            "",
+            &red_to_blue(r#"<a:lin ang="2700000" scaled="1"/>"#),
+            "",
+        ),
+        "",
+    ));
+    // Corner to corner: the other diagonal's corners are both half way.
+    assert!(
+        redness(&scaled, 98, 1).abs() < 40,
+        "{}",
+        redness(&scaled, 98, 1)
+    );
+    assert!(
+        redness(&scaled, 1, 48).abs() < 40,
+        "{}",
+        redness(&scaled, 1, 48)
+    );
+    let unscaled = render(deck(
+        &shape(
+            "rect",
+            (0, 0, 100, 50),
+            "",
+            &red_to_blue(r#"<a:lin ang="2700000"/>"#),
+            "",
+        ),
+        "",
+    ));
+    assert!(
+        redness(&unscaled, 98, 1) < redness(&unscaled, 1, 48) - 40,
+        "at a true 45°, the top right is further along than the bottom left"
+    );
+}
+
+#[test]
+fn a_circular_path_gradient_spreads_from_its_focus() {
+    let centre =
+        r#"<a:path path="circle"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path>"#;
+    let slide = render(deck(
+        &shape("rect", (0, 0, 100, 50), "", &red_to_blue(centre), ""),
+        "",
+    ));
+    assert!(redness(&slide, 50, 25) > 200, "the focus is the first stop");
+    assert!(redness(&slide, 1, 1) < -150, "the corner is the last");
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+
+    // A rectangular path is drawn the same way, and counted as approximated.
+    let rect =
+        r#"<a:path path="rect"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path>"#;
+    let slide = render(deck(
+        &shape("rect", (0, 0, 100, 50), "", &red_to_blue(rect), ""),
+        "",
+    ));
+    assert_eq!(slide.gaps.approximated_fills, 1);
+}
+
+/// A style's `fillRef` names a theme fill style; its `phClr` is the reference's own color.
+#[test]
+fn a_fill_reference_paints_the_theme_style_it_names() {
+    let styles = r#"<a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:gradFill><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:lin ang="0"/></a:gradFill>"#;
+    let styled = |idx: u32| {
+        let style = format!(
+            r#"<p:style><a:lnRef idx="0"><a:srgbClr val="000000"/></a:lnRef><a:fillRef idx="{idx}"><a:srgbClr val="FF0000"/></a:fillRef><a:effectRef idx="0"><a:srgbClr val="000000"/></a:effectRef><a:fontRef idx="minor"><a:srgbClr val="000000"/></a:fontRef></p:style>"#
+        );
+        render(deck_parts(
+            &shape("rect", (0, 0, 100, 50), "", "", &style),
+            DeckParts {
+                fill_styles: styles,
+                ..DeckParts::default()
+            },
+        ))
+    };
+    let solid = styled(1);
+    assert_eq!(
+        pixel(&solid, 50, 25),
+        RED,
+        "the first style, in the reference's color"
+    );
+    let gradient = styled(2);
+    assert!(
+        redness(&gradient, 2, 25) > 200,
+        "the second: a gradient from phClr"
+    );
+    assert!(redness(&gradient, 97, 25) < -200);
+}
+
+/// A background reference names a theme background style (1001 is the first).
+#[test]
+fn a_background_reference_paints_the_theme_style_it_names() {
+    let bg = r#"<p:bg><p:bgRef idx="1001"><a:srgbClr val="FF0000"/></p:bgRef></p:bg>"#;
+    let slide = render(deck_parts(
+        "",
+        DeckParts {
+            master_bg: bg,
+            bg_fill_styles: r#"<a:gradFill><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:lin ang="0"/></a:gradFill>"#,
+            ..DeckParts::default()
+        },
+    ));
+    assert!(redness(&slide, 2, 25) > 200, "phClr, the reference's red");
+    assert!(redness(&slide, 97, 25) < -200, "the style's blue");
+}
+
+/// A picture background is stretched over the slide, found through the relationships of the
+/// part that holds it.
+#[test]
+fn a_picture_background_covers_the_slide() {
+    let png = red_blue_png(40, 20);
+    let bg = r#"<p:bg><p:bgPr><a:blipFill><a:blip r:embed="rId4"/><a:stretch><a:fillRect/></a:stretch></a:blipFill><a:effectLst/></p:bgPr></p:bg>"#;
+    let slide = render(deck_parts(
+        "",
+        DeckParts {
+            master_bg: bg,
+            master_rels: &[("rId4", "image", "../media/bg.png")],
+            extra: &[("ppt/media/bg.png", &png)],
+            ..DeckParts::default()
+        },
+    ));
+    assert_eq!(pixel(&slide, 20, 25), RED);
+    assert_eq!(pixel(&slide, 80, 25), BLUE);
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+}
+
+/// A layout's picture background covers the master's, and is found through the layout's own
+/// relationships — the shape of a template whose design is a picture per layout.
+#[test]
+fn a_layout_picture_background_covers_the_masters() {
+    let png = red_blue_png(40, 20);
+    let bg = |id: &str| {
+        format!(
+            r#"<p:bg><p:bgPr><a:blipFill dpi="0" rotWithShape="1"><a:blip r:embed="{id}" cstate="print"><a:lum/></a:blip><a:srcRect/><a:stretch><a:fillRect/></a:stretch></a:blipFill><a:effectLst/></p:bgPr></p:bg>"#
+        )
+    };
+    let (layout_bg, master_bg) = (bg("rId2"), bg("rId9"));
+    let slide = render(deck_parts(
+        "",
+        DeckParts {
+            layout_bg: &layout_bg,
+            master_bg: &master_bg,
+            layout_rels: &[("rId2", "image", "../media/layout.png")],
+            // The master's picture is not there: painting it would be a gap.
+            master_rels: &[("rId9", "image", "../media/missing.png")],
+            extra: &[("ppt/media/layout.png", &png)],
+            ..DeckParts::default()
+        },
+    ));
+    assert_eq!(pixel(&slide, 20, 25), RED);
+    assert_eq!(pixel(&slide, 80, 25), BLUE);
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Tables
+
+/// A table covering the 100 × 50 slide: columns `cols` points wide, rows 25 points tall, each
+/// row's cells given as `a:tc` elements; `tbl_pr` inside `a:tblPr`.
+fn table(cols: &[u32], rows: &[&str], tbl_pr: &str) -> String {
+    let grid: String = cols
+        .iter()
+        .map(|w| format!(r#"<a:gridCol w="{}"/>"#, emu(*w)))
+        .collect();
+    let trs: String = rows
+        .iter()
+        .map(|cells| format!(r#"<a:tr h="{}">{cells}</a:tr>"#, emu(25)))
+        .collect();
+    format!(
+        r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="4" name="Table"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="0" y="0"/><a:ext cx="{}" cy="{}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr>{tbl_pr}</a:tblPr><a:tblGrid>{grid}</a:tblGrid>{trs}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>"#,
+        emu(cols.iter().sum()),
+        emu(25 * rows.len() as u32)
+    )
+}
+
+/// A cell with `attrs` on `a:tc`, `body` paragraphs, and `pr_attrs` and `props` on and inside
+/// its `a:tcPr`.
+fn cell(attrs: &str, body: &str, pr_attrs: &str, props: &str) -> String {
+    format!(
+        r#"<a:tc{attrs}><a:txBody><a:bodyPr/><a:lstStyle/>{body}</a:txBody><a:tcPr{pr_attrs}>{props}</a:tcPr></a:tc>"#
+    )
+}
+
+fn filled(hex: &str) -> String {
+    format!(r#"<a:solidFill><a:srgbClr val="{hex}"/></a:solidFill>"#)
+}
+
+#[test]
+fn a_table_paints_its_cells_in_their_places() {
+    let row1 = format!(
+        "{}{}",
+        cell("", "<a:p/>", "", &filled("FF0000")),
+        cell("", "<a:p/>", "", &filled("0000FF"))
+    );
+    let row2 = format!(
+        "{}{}",
+        cell("", "<a:p/>", "", &filled("0000FF")),
+        cell("", "<a:p/>", "", &filled("FF0000"))
+    );
+    let slide = render(deck(&table(&[30, 70], &[&row1, &row2], ""), ""));
+    assert_eq!(pixel(&slide, 15, 12), RED, "row 1, column 1");
+    assert_eq!(pixel(&slide, 60, 12), BLUE, "row 1, column 2 starts at 30");
+    assert_eq!(pixel(&slide, 15, 37), BLUE, "row 2, column 1");
+    assert_eq!(pixel(&slide, 60, 37), RED);
+    assert!(
+        slide.gaps.is_empty(),
+        "a table is drawn, not a gap: {:?}",
+        slide.gaps
+    );
+}
+
+/// A cell spanning columns or rows covers them; the cells it covers draw nothing.
+#[test]
+fn a_spanning_cell_covers_the_cells_it_merges() {
+    let across = format!(
+        "{}{}",
+        cell(r#" gridSpan="2""#, "<a:p/>", "", &filled("FF0000")),
+        cell(r#" hMerge="1""#, "<a:p/>", "", &filled("00FF00"))
+    );
+    let plain = format!(
+        "{}{}",
+        cell("", "<a:p/>", "", ""),
+        cell("", "<a:p/>", "", "")
+    );
+    let slide = render(deck(&table(&[50, 50], &[&across, &plain], ""), ""));
+    assert_eq!(
+        pixel(&slide, 75, 12),
+        RED,
+        "the span reaches the second column"
+    );
+
+    let down = format!(
+        "{}{}",
+        cell(r#" rowSpan="2""#, "<a:p/>", "", &filled("0000FF")),
+        cell("", "<a:p/>", "", "")
+    );
+    let covered = format!(
+        "{}{}",
+        cell(r#" vMerge="1""#, "<a:p/>", "", &filled("00FF00")),
+        cell("", "<a:p/>", "", "")
+    );
+    let slide = render(deck(&table(&[50, 50], &[&down, &covered], ""), ""));
+    assert_eq!(
+        pixel(&slide, 25, 37),
+        BLUE,
+        "the span reaches the second row"
+    );
+}
+
+#[test]
+fn cell_borders_are_drawn_on_their_edges() {
+    let ln = r#"<a:lnB w="25400"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:lnB><a:lnR w="25400"><a:noFill/></a:lnR>"#;
+    let row1 = format!(
+        "{}{}",
+        cell("", "<a:p/>", "", ln),
+        cell("", "<a:p/>", "", "")
+    );
+    let row2 = format!(
+        "{}{}",
+        cell("", "<a:p/>", "", ""),
+        cell("", "<a:p/>", "", "")
+    );
+    let slide = render(deck(&table(&[50, 50], &[&row1, &row2], ""), ""));
+    assert_eq!(
+        pixel(&slide, 25, 25),
+        [0, 0, 0],
+        "the bottom border, on the row edge"
+    );
+    assert_eq!(pixel(&slide, 75, 25), WHITE, "not under the next cell");
+    assert_eq!(
+        pixel(&slide, 50, 12),
+        WHITE,
+        "a border with no fill draws nothing"
+    );
+}
+
+/// A cell's text is laid out in it, anchored where its properties say.
+#[test]
+fn cell_text_is_drawn_in_its_cell() {
+    let text = format!("<a:p>{}</a:p>", run("AB", ""));
+    let row = |anchor: &str| {
+        format!(
+            "{}{}",
+            cell("", &text, anchor, ""),
+            cell("", "<a:p/>", "", "")
+        )
+    };
+    let top = render_text(deck(&table(&[50, 50], &[&row(""), &row("")], ""), ""));
+    assert!(
+        dark(&top, (0, 0, 50, 25)) > 5,
+        "the text, in the first cell"
+    );
+    assert_eq!(
+        dark(&top, (50, 0, 100, 50)),
+        0,
+        "nothing in the empty column"
+    );
+
+    // In a 50 pt row, a bottom-anchored line sits lower than a top-anchored one.
+    let tall = |anchor: &str| {
+        let row = format!(
+            "{}{}",
+            cell("", &text, anchor, ""),
+            cell("", "<a:p/>", "", "")
+        );
+        let mut frame = table(&[50, 50], &[&row], "");
+        frame = frame.replace(
+            &format!(r#"h="{}""#, emu(25)),
+            &format!(r#"h="{}""#, emu(50)),
+        );
+        frame.replace(
+            &format!(r#"cy="{}""#, emu(25)),
+            &format!(r#"cy="{}""#, emu(50)),
+        )
+    };
+    let at_top = render_text(deck(&tall(""), ""));
+    let at_bottom = render_text(deck(&tall(r#" anchor="b""#), ""));
+    assert!(dark(&at_top, (0, 0, 50, 25)) > dark(&at_top, (0, 25, 50, 50)));
+    assert!(dark(&at_bottom, (0, 25, 50, 50)) > dark(&at_bottom, (0, 0, 50, 25)));
+}
+
+/// A table style is not applied yet: the table is drawn without it, and counts as approximated.
+#[test]
+fn a_table_style_not_applied_is_counted() {
+    let row = format!(
+        "{}{}",
+        cell("", "<a:p/>", "", ""),
+        cell("", "<a:p/>", "", "")
+    );
+    let slide = render(deck(
+        &table(
+            &[50, 50],
+            &[&row],
+            "<a:tableStyleId>{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}</a:tableStyleId>",
+        ),
+        "",
+    ));
+    assert_eq!(slide.gaps.approximated_fills, 1);
+    assert_eq!(slide.gaps.graphic_frames, 0);
+}
+
+/// A table style whose parts fill: the whole table red, the header row blue, odd body rows
+/// green; borders between rows black; the header's text bold and white.
+const STYLE: &str = r#"<a:tblStyle styleId="{TEST}" styleName="Test"><a:wholeTbl><a:tcTxStyle><a:srgbClr val="000000"/></a:tcTxStyle><a:tcStyle><a:tcBdr><a:insideH><a:ln w="25400"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></a:insideH></a:tcBdr><a:fill><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:fill></a:tcStyle></a:wholeTbl><a:band1H><a:tcStyle><a:tcBdr/><a:fill><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:fill></a:tcStyle></a:band1H><a:firstRow><a:tcTxStyle b="on"><a:srgbClr val="FFFFFF"/></a:tcTxStyle><a:tcStyle><a:tcBdr/><a:fill><a:solidFill><a:srgbClr val="0000FF"/></a:solidFill></a:fill></a:tcStyle></a:firstRow></a:tblStyle>"#;
+
+/// Three rows of two cells (rows 25 pt tall — the slide shows the first two), styled `{TEST}`
+/// with `flags` on `a:tblPr`; `first_cell` stands in for the first row's first cell.
+fn styled_table(flags: &str, first_cell: &str) -> crate::raster::RasteredSlide {
+    let empty = || cell("", "<a:p/>", "", "");
+    let rows: Vec<String> = (0..3)
+        .map(|r| {
+            let first = if r == 0 && !first_cell.is_empty() {
+                first_cell.to_string()
+            } else {
+                empty()
+            };
+            format!("{first}{}", empty())
+        })
+        .collect();
+    let refs: Vec<&str> = rows.iter().map(String::as_str).collect();
+    let frame = table(&[50, 50], &refs, "<a:tableStyleId>{TEST}</a:tableStyleId>")
+        .replace("<a:tblPr>", &format!("<a:tblPr{flags}>"));
+    render_text(deck_parts(
+        &frame,
+        DeckParts {
+            table_styles: STYLE,
+            ..DeckParts::default()
+        },
+    ))
+}
+
+#[test]
+fn a_table_style_fills_each_part() {
+    let slide = styled_table(r#" firstRow="1" bandRow="1""#, "");
+    assert_eq!(pixel(&slide, 25, 10), BLUE, "the header row");
+    assert_eq!(
+        pixel(&slide, 25, 40),
+        [0, 255, 0],
+        "the first body row is band 1"
+    );
+    assert!(
+        slide.gaps.is_empty(),
+        "a defined style is applied: {:?}",
+        slide.gaps
+    );
+
+    // Without the flags, only the whole-table part applies.
+    let plain = styled_table("", "");
+    assert_eq!(pixel(&plain, 25, 10), RED);
+    assert_eq!(pixel(&plain, 25, 40), RED);
+}
+
+/// Between rows a cell's bottom is the style's inside border; at the table's edge it is the
+/// style's bottom border.
+#[test]
+fn a_table_style_draws_the_borders_inside_it() {
+    let slide = styled_table("", "");
+    assert_eq!(
+        pixel(&slide, 25, 25),
+        [0, 0, 0],
+        "insideH, between the rows"
+    );
+    assert_eq!(
+        pixel(&slide, 25, 0),
+        RED,
+        "no top border: the style has none"
+    );
+
+    // A style whose inside border is black and outer bottom red, in a two-row table whose
+    // second row draws no top border of its own: the line between the rows is the first row's
+    // bottom, which must be the inside one.
+    let style = r#"<a:tblStyle styleId="{EDGES}" styleName="Edges"><a:wholeTbl><a:tcStyle><a:tcBdr><a:bottom><a:ln w="25400"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></a:bottom><a:insideH><a:ln w="25400"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></a:insideH></a:tcBdr></a:tcStyle></a:wholeTbl></a:tblStyle>"#;
+    let no_top = r#"<a:lnT><a:noFill/></a:lnT>"#;
+    let row1 = format!(
+        "{}{}",
+        cell("", "<a:p/>", "", ""),
+        cell("", "<a:p/>", "", "")
+    );
+    let row2 = format!(
+        "{}{}",
+        cell("", "<a:p/>", "", no_top),
+        cell("", "<a:p/>", "", no_top)
+    );
+    let slide = render(deck_parts(
+        &table(
+            &[50, 50],
+            &[&row1, &row2],
+            "<a:tableStyleId>{EDGES}</a:tableStyleId>",
+        ),
+        DeckParts {
+            table_styles: style,
+            ..DeckParts::default()
+        },
+    ));
+    assert_eq!(
+        pixel(&slide, 25, 25),
+        [0, 0, 0],
+        "the first row's bottom is inside"
+    );
+    assert_eq!(
+        pixel(&slide, 25, 49),
+        RED,
+        "the second row's bottom is the table's"
+    );
+}
+
+/// A cell's own fill wins over the style's.
+#[test]
+fn a_cell_fill_overrides_the_table_style() {
+    let own = cell("", "<a:p/>", "", &filled("FFFF00"));
+    let slide = styled_table(r#" firstRow="1""#, &own);
+    assert_eq!(pixel(&slide, 25, 10), [255, 255, 0]);
+    assert_eq!(pixel(&slide, 75, 10), BLUE);
+}
+
+/// The header part's text color reaches the cell's text, over the list styles' default.
+#[test]
+fn a_table_style_colors_its_text() {
+    let text = cell("", &format!("<a:p>{}</a:p>", plain_run("AB")), "", "");
+    let slide = styled_table(r#" firstRow="1""#, &text);
+    let white = (0..25)
+        .flat_map(|y| (0..50).map(move |x| (x, y)))
+        .filter(|&(x, y)| pixel(&slide, x, y) == WHITE)
+        .count();
+    assert!(white > 5, "white text on the blue header: {white} pixels");
+}
+
+fn plain_run(text: &str) -> String {
+    format!(
+        r#"<a:r><a:rPr lang="en-US" sz="2000"><a:latin typeface="Undoc Test Sans"/></a:rPr><a:t>{text}</a:t></a:r>"#
+    )
+}
+
+// ---------------------------------------------------------------------------------------------
+// SmartArt
+
+/// A SmartArt graphic frame at (`x`, 0), 50 × 50 pt, whose data part (`rId10`) names its
+/// drawing through `dsp:dataModelExt` (`rId11`).
+fn diagram_frame(x: u32) -> String {
+    format!(
+        r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="5" name="Diagram"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="{}" y="0"/><a:ext cx="{}" cy="{}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram"><dgm:relIds xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" r:dm="rId10" r:lo="rId12" r:qs="rId13" r:cs="rId14"/></a:graphicData></a:graphic></p:graphicFrame>"#,
+        emu(x),
+        emu(50),
+        emu(50)
+    )
+}
+
+const DIAGRAM_DATA: &str = r#"<?xml version="1.0"?><dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><dgm:ptLst/><dgm:extLst><a:ext uri="http://schemas.microsoft.com/office/drawing/2008/diagram"><dsp:dataModelExt xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram" relId="rId11" minVer="http://schemas.openxmlformats.org/drawingml/2006/diagram"/></a:ext></dgm:extLst></dgm:dataModel>"#;
+
+/// A pre-drawn SmartArt part holding one shape: a red 20 × 20 pt square at (10, 10) of the
+/// frame, and a picture-filled one at (30, 30) whose picture is the drawing's own `rId1`.
+fn diagram_drawing() -> String {
+    format!(
+        r#"<?xml version="1.0"?><dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><dsp:spTree><dsp:nvGrpSpPr><dsp:cNvPr id="0" name=""/><dsp:cNvGrpSpPr/></dsp:nvGrpSpPr><dsp:grpSpPr/><dsp:sp modelId="{{1}}"><dsp:nvSpPr><dsp:cNvPr id="0" name=""/><dsp:cNvSpPr/></dsp:nvSpPr><dsp:spPr><a:xfrm><a:off x="{a}" y="{a}"/><a:ext cx="{s}" cy="{s}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></dsp:spPr></dsp:sp><dsp:sp modelId="{{2}}"><dsp:nvSpPr><dsp:cNvPr id="0" name=""/><dsp:cNvSpPr/></dsp:nvSpPr><dsp:spPr><a:xfrm><a:off x="{b}" y="{b}"/><a:ext cx="{s}" cy="{s}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></a:blipFill></dsp:spPr></dsp:sp></dsp:spTree></dsp:drawing>"#,
+        a = emu(10),
+        b = emu(30),
+        s = emu(20)
+    )
+}
+
+/// SmartArt is drawn from the shapes PowerPoint drew for it, placed at its frame; its pictures
+/// come through the drawing part's own relationships.
+#[test]
+fn smartart_is_drawn_from_its_drawing() {
+    let png = red_blue_png(40, 20);
+    let drawing = diagram_drawing();
+    let drawing_rels = rels(&[("rId1", "image", "../media/image1.png")]);
+    let slide_rels = [
+        ("rId10", "diagramData", "../diagrams/data1.xml"),
+        ("rId11", "diagramDrawing", "../diagrams/drawing1.xml"),
+    ];
+    let parts: [(&str, &[u8]); 4] = [
+        ("ppt/diagrams/data1.xml", DIAGRAM_DATA.as_bytes()),
+        ("ppt/diagrams/drawing1.xml", drawing.as_bytes()),
+        (
+            "ppt/diagrams/_rels/drawing1.xml.rels",
+            drawing_rels.as_bytes(),
+        ),
+        ("ppt/media/image1.png", &png),
+    ];
+    let slide = render(deck_full(&diagram_frame(40), "", "", &slide_rels, &parts));
+    assert_eq!(
+        pixel(&slide, 60, 20),
+        RED,
+        "the square, at (10, 10) of the frame at x 40"
+    );
+    assert_eq!(pixel(&slide, 20, 20), WHITE, "nothing left of the frame");
+    assert_eq!(pixel(&slide, 73, 40), RED, "the picture's left half");
+    assert_eq!(pixel(&slide, 87, 40), BLUE, "the picture's right half");
+    assert!(slide.gaps.is_empty(), "{:?}", slide.gaps);
+
+    // Without a drawing part the diagram is not drawn, and counts as such.
+    let slide = render(deck_full(
+        &diagram_frame(40),
+        "",
+        "",
+        &slide_rels[..1],
+        &parts[..1],
+    ));
+    assert_eq!(slide.gaps.graphic_frames, 1);
+}
+
+/// A run's fill colors its text: a gradient is drawn in its first color and counted as
+/// approximated; a run with no fill is not seen.
+#[test]
+fn a_run_fill_colors_its_text() {
+    let fill_run = |fill: &str| {
+        format!(
+            r#"<a:p><a:r><a:rPr lang="en-US" sz="2000">{fill}<a:latin typeface="Undoc Test Sans"/></a:rPr><a:t>AB</a:t></a:r></a:p>"#
+        )
+    };
+    let redish = |slide: &crate::raster::RasteredSlide| {
+        (0..30)
+            .flat_map(|y| (0..50).map(move |x| (x, y)))
+            .filter(|&(x, y)| {
+                let [r, g, b] = pixel(slide, x, y);
+                r > 150 && g < 100 && b < 100
+            })
+            .count()
+    };
+    let gradient = r#"<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:lin ang="0"/></a:gradFill>"#;
+    let slide = render_text(deck(
+        &text_box((0, 0, 100, 30), "", &fill_run(gradient)),
+        "",
+    ));
+    assert!(redish(&slide) > 5, "the text, in the first stop's red");
+    assert_eq!(slide.gaps.approximated_fills, 1);
+
+    let hidden = render_text(deck(
+        &text_box((0, 0, 100, 30), "", &fill_run("<a:noFill/>")),
+        "",
+    ));
+    assert_eq!(
+        dark(&hidden, (0, 0, 100, 30)),
+        0,
+        "a run with no fill is not drawn"
+    );
+    assert!(hidden.gaps.is_empty(), "{:?}", hidden.gaps);
+}

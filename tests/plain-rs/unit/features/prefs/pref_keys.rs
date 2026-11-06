@@ -5,7 +5,7 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
     let groups = [
         (PrefAccess::Default, "dlna device_name feed_auto_refresh feed_auto_refresh_interval feed_auto_refresh_only_wifi
             ai_image_search_enabled ai_image_search_model dlna_allowed_senders dlna_denied_senders
-            clipboard_directions media_source_dirs file_index_excluded_dirs samba_settings dark_theme amoled_dark_theme
+            clipboard_directions samba_settings dark_theme amoled_dark_theme
             pdf_follow_dark_theme locale show_hidden_files feed_font_scale editor_wrap_content
             editor_font_size editor_status_bar desktop_home_features audio_sort_by video_sort_by
             image_sort_by doc_sort_by file_sort_by pkg_sort_by audio_play_mode audio_playback_speed
@@ -49,8 +49,6 @@ fn exported_constants_match_the_registered_keys() {
         DLNA_ALLOWED_SENDERS,
         DLNA_DENIED_SENDERS,
         CLIPBOARD_DIRECTIONS,
-        MEDIA_SOURCE_DIRS,
-        FILE_INDEX_EXCLUDED_DIRS,
         SAMBA_SETTINGS,
         DARK_THEME,
         AMOLED_DARK_THEME,

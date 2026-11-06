@@ -1,4 +1,3 @@
-use plain_rs::features::access::AccessFeature;
 use crate::graphql::types::facts::id;
 use crate::graphql::types::facts::integer;
 use crate::graphql::types::facts::optional_instant;
@@ -6,6 +5,7 @@ use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
 use chrono::{DateTime, Utc};
 use plain_graphql::{Context, Object};
+use plain_rs::features::access::AccessFeature;
 
 use plain_rs::features::enums::DataType;
 use plain_rs::infrastructure::host::bridge::Host;
@@ -173,8 +173,6 @@ pub(crate) async fn catalog(
             ctx.data_unchecked::<Arc<plain_rs::infrastructure::db::Db>>()
                 .clone(),
             ctx.data_unchecked::<Arc<Host>>().clone(),
-            ctx.data_unchecked::<Arc<plain_rs::features::prefs::Prefs>>()
-                .clone(),
         ),
     )
 }

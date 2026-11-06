@@ -79,7 +79,7 @@ fn completed_event(event: Event) -> Option<Event> {
 
 fn enqueue_event(
     send: &tokio::sync::mpsc::Sender<Event>,
-    scope: Option<&crate::features::prefs::file_index::Scope>,
+    scope: Option<&crate::features::files::index_scope::Scope>,
     mut event: Event,
 ) -> Result<(), tokio::sync::mpsc::error::TrySendError<Event>> {
     if !event.need_rescan() {
@@ -111,7 +111,7 @@ impl Drop for WatcherHandle {
 
 pub fn start<F, Pending>(
     roots: &[std::path::PathBuf],
-    scope: Option<crate::features::prefs::file_index::Scope>,
+    scope: Option<crate::features::files::index_scope::Scope>,
     on_event: F,
 ) -> Result<WatcherHandle, String>
 where
@@ -263,11 +263,12 @@ fn watch_tree(
     watcher: &mut dyn Watcher,
     watched: &mut std::collections::BTreeSet<std::path::PathBuf>,
     root: &Path,
-    scope: Option<&crate::features::prefs::file_index::Scope>,
+    scope: Option<&crate::features::files::index_scope::Scope>,
 ) -> Result<(), String> {
     if !root.is_dir()
         || crate::features::media::catalog_paths::scan_excluded_root(root).is_some()
-        || scope.is_some_and(|scope| !scope.contains(root)) {
+        || scope.is_some_and(|scope| !scope.contains(root))
+    {
         return Ok(());
     }
     if cfg!(any(target_os = "macos", target_os = "windows")) {
@@ -287,7 +288,8 @@ fn watch_tree(
     let mut failure = None;
     while let Some(path) = pending.pop() {
         if crate::features::media::catalog_paths::scan_excluded_root(&path).is_some()
-            || scope.is_some_and(|scope| !scope.contains_entry(&path, true)) {
+            || scope.is_some_and(|scope| !scope.contains_entry(&path, true))
+        {
             continue;
         }
         if !watched.contains(&path) {

@@ -10,13 +10,34 @@ use plain_rs::features::services::files::content::Content;
 use plain_rs::features::services::files::content::Options;
 use plain_rs::features::services::files::links;
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Parameters {
+    pub id: String,
+    pub action: content::Action,
+    pub size: Option<content::Size>,
+    #[serde(rename = "v")]
+    pub version: Option<String>,
+}
+
+impl Parameters {
+    pub fn is_valid(&self) -> bool {
+        !self.id.is_empty() && (self.size.is_none() || self.action == content::Action::Preview)
+    }
+}
+
 pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
-    let access_order = state.thumbnails.next_access_order();
-    let request = request.into_parts().0;
-    let query = |key| plain_libs::utils::query::query_get(&request.uri.to_string(), key);
-    let id = query("id").unwrap_or_default();
-    if id.is_empty() {
-        return StatusCode::BAD_REQUEST.into_response();
+    let mut request = request.into_parts().0;
+    let parameters = match axum::extract::Query::<Parameters>::try_from_uri(&request.uri) {
+        Ok(parameters) if parameters.is_valid() => parameters.0,
+        _ => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    let id = parameters.id;
+    if matches!(
+        parameters.action,
+        content::Action::Probe | content::Action::Transcode
+    ) {
+        request.headers.remove(header::RANGE);
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let range = request
@@ -24,29 +45,19 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
         .get(header::RANGE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
-    let size = match query("s").as_deref() {
-        None => None,
-        Some("sm") => Some(content::Size::Small),
-        Some("lg") => Some(content::Size::Large),
-        Some(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
+    let access_order = state.thumbnails.next_access_order();
     let options = Options {
         access_order,
-        download: query("dl").as_deref() == Some("1"),
-        offset: query("offset").and_then(|v| v.parse().ok()),
-        length: query("length").and_then(|v| v.parse().ok()),
-        size,
-        #[cfg(feature = "media")]
-        pdf: query("preview").as_deref() == Some("pdf"),
-        probe: query("probe").as_deref() == Some("1"),
-        transcode: query("tr").as_deref() == Some("1"),
+        action: parameters.action,
+        size: parameters.size,
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        starts_view: range.is_empty()
-            || matches!(
-                plain_libs::utils::http::parse_range_header(range, u64::MAX),
-                plain_libs::utils::http::RangeParse::Full
-                    | plain_libs::utils::http::RangeParse::Partial(0, _)
-            ),
+        starts_view: parameters.action == content::Action::Preview
+            && (range.is_empty()
+                || matches!(
+                    plain_libs::utils::http::parse_range_header(range, u64::MAX),
+                    plain_libs::utils::http::RangeParse::Full
+                        | plain_libs::utils::http::RangeParse::Partial(0, _)
+                )),
     };
     let result = async {
         let file = links::resolve(&state, &id).await?;
@@ -74,15 +85,17 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
             } => {
                 #[cfg(feature = "http_transport")]
                 {
-                    let body = file_response::resource(&state.resources, &path, state.stop.clone())
-                        .await
-                        .map_err(|s| anyhow::anyhow!("Resource stream failed: {s}"))?;
-                    secure(
-                        ([(header::CONTENT_TYPE, "application/octet-stream")], body)
-                            .into_response(),
-                        name.as_deref(),
-                        download,
+                    match file_response::resource(
+                        &state.resources,
+                        &path,
+                        state.stop.clone(),
+                        &request.headers,
                     )
+                    .await
+                    {
+                        Ok(response) => secure(response, name.as_deref(), download),
+                        Err(status) => status.into_response(),
+                    }
                 }
                 #[cfg(not(feature = "http_transport"))]
                 {
@@ -90,11 +103,6 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
                     StatusCode::NOT_FOUND.into_response()
                 }
             }
-            Content::Bytes(bytes) => secure(
-                ([(header::CONTENT_TYPE, "application/octet-stream")], bytes).into_response(),
-                None,
-                false,
-            ),
             Content::Codec(codec) => secure(
                 axum::Json(serde_json::json!({"codec":codec})).into_response(),
                 None,
@@ -113,9 +121,15 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
             ),
             Content::NotFound => StatusCode::NOT_FOUND.into_response(),
             Content::Directory => StatusCode::BAD_REQUEST.into_response(),
-            Content::SliceTooLarge => {
-                (StatusCode::BAD_REQUEST, "range length is too large").into_response()
-            }
+            Content::Markdown { text, name } => secure(
+                (
+                    [(header::CONTENT_TYPE, "text/markdown; charset=utf-8")],
+                    text,
+                )
+                    .into_response(),
+                Some(&name),
+                false,
+            ),
             Content::TranscodingUnavailable => (
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
                 "video transcoding is not available for this file",

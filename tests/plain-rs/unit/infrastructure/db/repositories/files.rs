@@ -233,11 +233,11 @@ fn visibility_batch_uses_path_indexes_instead_of_scanning_unrelated_files() {
         c.execute("INSERT INTO volumes VALUES('v','v','/media',1)", []).unwrap();
         c.execute_batch("WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<10000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) SELECT 'f'||x,'v','images/'||x||'.jpg',x||'.jpg','IMAGE','2026-01-01' FROM n;").unwrap();
     });
-    let scope = crate::features::prefs::file_index::Scope {
+    let scope = crate::features::files::index_scope::Scope {
+        volumes: Vec::new(),
         directories: vec!["/media".into()],
         exclusions: vec!["/media/images/1.jpg".into()],
-        defaults: crate::features::prefs::file_index::Defaults {
-            scan_directories: vec![],
+        defaults: crate::features::files::index_scope::Defaults {
             excluded_directories: vec![],
             excluded_names: vec![],
         },
@@ -294,11 +294,11 @@ fn visibility_subtrees_preserve_missing_trash_boundaries_and_nested_volumes() {
         ('trash','v','a/trash.jpg','trash.jpg','IMAGE','2026',0,1,'2026','outside.jpg'),
         ('neighbor','v','ab/untouched.jpg','untouched.jpg','IMAGE','2026',0,1,NULL,NULL),
         ('nested','nested','child.jpg','child.jpg','IMAGE','2026',0,1,NULL,NULL);")).unwrap();
-    let scope = crate::features::prefs::file_index::Scope {
+    let scope = crate::features::files::index_scope::Scope {
+        volumes: Vec::new(),
         directories: vec!["/media".into()],
         exclusions: vec!["/media/a".into()],
-        defaults: crate::features::prefs::file_index::Defaults {
-            scan_directories: vec![],
+        defaults: crate::features::files::index_scope::Defaults {
             excluded_directories: vec![],
             excluded_names: vec![],
         },
@@ -385,4 +385,35 @@ fn scan_paths_commit_one_transaction_and_roll_back_a_failed_batch() {
         Ok::<_, rusqlite::Error>(())
     })
     .unwrap();
+}
+
+#[test]
+fn volume_index_defaults_and_configuration_survive_rebinding_and_disconnect() {
+    use crate::infrastructure::db::IndexMode;
+    let directory = tempfile::tempdir().unwrap();
+    let db = Db::open(&directory.path().join("index.db")).unwrap();
+    let id = db.register_volume(directory.path()).unwrap();
+    let volume = db.volumes().unwrap().remove(0);
+    assert_eq!(volume.index_mode, IndexMode::Unconfigured);
+    assert!(volume.included_dirs.is_empty());
+    assert!(volume.excluded_dirs.is_empty());
+    db.set_volume_index(
+        &id,
+        IndexMode::Allowlist,
+        &["Photos".into()],
+        &["Cache".into()],
+    )
+    .unwrap();
+    assert_eq!(db.register_volume(directory.path()).unwrap(), id);
+    db.with_conn(|conn| conn.execute("UPDATE volumes SET is_available=0 WHERE id=?1", [&id]))
+        .unwrap();
+    let offline = db.volumes().unwrap().remove(0);
+    assert!(!offline.is_available);
+    assert_eq!(offline.index_mode, IndexMode::Allowlist);
+    assert_eq!(offline.included_dirs, vec!["Photos"]);
+    assert_eq!(offline.excluded_dirs, vec!["Cache"]);
+    assert_eq!(db.register_volume(directory.path()).unwrap(), id);
+    let online = db.volumes().unwrap().remove(0);
+    assert!(online.is_available);
+    assert_eq!(online.included_dirs, offline.included_dirs);
 }
