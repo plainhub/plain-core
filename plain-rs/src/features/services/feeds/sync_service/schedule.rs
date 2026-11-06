@@ -7,7 +7,6 @@ use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use std::time::Duration;
 
-const RESIDENT: &str = "resident";
 const RETRY_SECONDS: i64 = 60;
 
 pub(super) fn retryable(error: &str) -> bool {
@@ -66,203 +65,36 @@ async fn scheduled_feeds(
 fn allowed(only_wifi: bool, network: NetworkType) -> bool {
     network != NetworkType::None && (!only_wifi || network == NetworkType::Wifi)
 }
-async fn queue_due(
-    state: &CoreRuntime,
-    lease: &str,
-) -> Result<Vec<watch::Receiver<FeedSyncState>>> {
-    let _policy = state.feeds.policy_gate.lock().await;
-    let settings = crate::features::prefs::settings::snapshot(&state.prefs)?;
-    if !settings.feed_auto_refresh {
-        state.feeds.apply_auto_policy(false, false);
-    }
-    let (feeds, _) = scheduled_feeds(
-        state.db.clone(),
-        &settings,
-        chrono::Utc::now().timestamp_millis(),
-    )
-    .await?;
-    if feeds.is_empty() {
-        return Ok(Vec::new());
-    }
-    let capabilities = crate::features::services::capabilities::snapshot(&state.host).await?;
-    crate::features::services::capabilities::require_list(&capabilities, "BACKGROUND_WAKE")?;
-    let permitted = allowed(
-        settings.feed_auto_refresh_only_wifi,
-        network::network_type(&state.host)
-            .await
-            .map_err(anyhow::Error::msg)?,
-    );
-    state.feeds.apply_auto_policy(permitted, !permitted);
-    if !permitted {
-        return Ok(Vec::new());
-    }
-    state.feeds.queue_feeds(feeds, Some(lease), false)
-}
-
-#[derive(Clone)]
-pub(super) struct Lease {
-    pub(super) revoke: watch::Sender<bool>,
-    pub(super) done: watch::Sender<bool>,
-}
-
-pub fn grant(state: &CoreRuntime, id: String, deadline_ms: i64, generation: u64) -> Result<()> {
-    ensure!(
-        !id.is_empty() && id.len() <= 128 && id != RESIDENT,
-        "Invalid background execution ID"
-    );
-    ensure!(
-        deadline_ms > chrono::Utc::now().timestamp_millis(),
-        "Background execution already expired"
-    );
-    let lease = register(&state.feeds, &id)?;
-    let remaining = Duration::from_millis(
-        deadline_ms
-            .saturating_sub(chrono::Utc::now().timestamp_millis())
-            .max(0) as u64,
-    );
-    let deadline = tokio::time::Instant::now() + remaining;
-    let state = state.clone();
-    tokio::spawn(async move {
-        let work = async {
-            let mut tasks = queue_due(&state, &id).await?;
-            for task in &mut tasks {
-                while task.borrow().active() {
-                    task.changed().await?;
-                }
-            }
-            Ok(tasks.iter().all(|task| task.borrow().status == "COMPLETED"))
-        };
-        let success = execute_lease(state.feeds.clone(), &id, deadline, lease, work).await;
-        if let Err(error) = state
-            .host
-            .call_current(
-                generation,
-                "systemCompleteBackgroundExecution",
-                serde_json::json!({"id":id,"success":success}),
-            )
-            .await
-        {
-            log::warn!("Background execution completion failed: {error}");
-        }
-    });
-    Ok(())
-}
-
-fn register(service: &SyncService, id: &str) -> Result<Lease> {
-    let runtime = service.state.lock().unwrap();
-    ensure!(!runtime.stopped, "Feed sync stopped");
-    let mut leases = service.leases.lock().unwrap();
-    ensure!(
-        !leases.contains_key(id),
-        "Background execution ID already active"
-    );
-    ensure!(
-        leases.len() < crate::infrastructure::host::bridge::REQUEST_CAPACITY,
-        "Background execution capacity exceeded"
-    );
-    let (revoke, _) = watch::channel(false);
-    let (done, _) = watch::channel(false);
-    let lease = Lease { revoke, done };
-    leases.insert(id.to_owned(), lease.clone());
-    Ok(lease)
-}
-
-async fn execute_lease(
-    service: Arc<SyncService>,
-    id: &str,
-    deadline: tokio::time::Instant,
-    lease: Lease,
-    work: impl std::future::Future<Output = Result<bool>>,
-) -> bool {
-    let mut revoked = lease.revoke.subscribe();
-    let success = tokio::select! {
-        biased;
-        _ = async { if !*revoked.borrow() { let _ = revoked.changed().await; } } => false,
-        _ = tokio::time::sleep_until(deadline) => false,
-        result = work => match result {
-            Ok(success) => success,
-            Err(error) => { log::warn!("Background execution {id} failed: {error}"); false }
-        },
-    };
-    let tasks = service
-        .state
-        .lock()
-        .unwrap()
-        .tasks
-        .values()
-        .filter(|task| task.owners.lock().unwrap().leases.contains(id))
-        .cloned()
-        .collect::<Vec<_>>();
-    service.release_lease(id);
-    for task in tasks {
-        if !*task.cancel.borrow() {
-            continue;
-        }
-        let mut status = task.state.subscribe();
-        while status.borrow().active() {
-            if status.changed().await.is_err() {
-                break;
-            }
-        }
-    }
-    service.leases.lock().unwrap().remove(id);
-    lease.done.send_replace(true);
-    success
-}
-
-pub async fn revoke(state: &CoreRuntime, id: &str) {
-    let lease = state.feeds.leases.lock().unwrap().get(id).cloned();
-    if let Some(lease) = lease {
-        let mut done = lease.done.subscribe();
-        lease.revoke.send_replace(true);
-        while !*done.borrow() {
-            if done.changed().await.is_err() {
-                break;
-            }
-        }
-    }
-}
-
 pub fn start(state: CoreRuntime) {
-    tokio::spawn(async move {
+    let service = state.feeds.clone();
+    let scheduler = tokio::spawn(async move {
         let mut stop = state.stop.clone();
         let mut events = state.events.subscribe();
         let mut network = state.network_revision.subscribe();
         let mut connection = state.host.connection_changes();
-        let mut wake = None;
-        loop {
+        while !*stop.borrow() {
             let mut delay = Duration::from_secs(RETRY_SECONDS as u64);
-            if *stop.borrow() {
-                break;
-            }
             if state.host.connected() {
                 let result = tokio::select! {
                     biased;
                     _ = stop.changed() => break,
                     _ = connection.changed() => {
-                        state.feeds.release_lease(RESIDENT);
-                        for lease in state.feeds.leases.lock().unwrap().values() { lease.revoke.send_replace(true); }
-                        wake = None;
+                        state.feeds.cancel_automatic();
                         continue;
                     },
-                    result = tick(&state, &mut wake) => result,
+                    result = tick(&state) => result,
                 };
                 match result {
                     Ok(next) => delay = next,
                     Err(error) => log::warn!("Feed scheduler: {error}"),
                 }
             } else {
-                state.feeds.release_lease(RESIDENT);
-                for lease in state.feeds.leases.lock().unwrap().values() {
-                    lease.revoke.send_replace(true);
-                }
-                wake = None;
+                state.feeds.cancel_automatic();
             }
             tokio::select! {
                 _ = stop.changed() => break,
                 _ = connection.changed() => {},
                 _ = network.changed() => {},
-                _ = state.feeds.execution_changed.notified() => {},
                 _ = tokio::time::sleep(delay) => {},
                 _ = async {
                     loop {
@@ -275,67 +107,31 @@ pub fn start(state: CoreRuntime) {
                 } => {},
             }
         }
-        state.feeds.release_lease(RESIDENT);
-        for lease in state.feeds.leases.lock().unwrap().values() {
-            lease.revoke.send_replace(true);
-        }
+        state.feeds.cancel_automatic();
     });
+    *service.scheduler.lock().unwrap() = Some(scheduler);
 }
-async fn tick(state: &CoreRuntime, previous_wake: &mut Option<Option<i64>>) -> Result<Duration> {
-    let _policy = state.feeds.policy_gate.lock().await;
+
+async fn tick(state: &CoreRuntime) -> Result<Duration> {
     let settings = crate::features::prefs::settings::snapshot(&state.prefs)?;
     if !settings.feed_auto_refresh {
-        state.feeds.apply_auto_policy(false, false);
+        state.feeds.cancel_automatic();
+        return Ok(Duration::from_secs(RETRY_SECONDS as u64));
     }
     let now = chrono::Utc::now().timestamp_millis();
     let (feeds, earliest) = scheduled_feeds(state.db.clone(), &settings, now).await?;
-    let active_auto = state
-        .feeds
-        .state
-        .lock()
-        .unwrap()
-        .tasks
-        .values()
-        .any(|task| task.state.borrow().active() && !task.owners.lock().unwrap().manual);
-    if earliest.is_none() && previous_wake.is_none() && !active_auto {
-        return Ok(Duration::from_secs(RETRY_SECONDS as u64));
-    }
-    let capabilities = crate::features::services::capabilities::snapshot(&state.host).await?;
-    let supported = |name: &str| capabilities.iter().any(|capability| capability == name);
-    if !supported("BACKGROUND_TIMER") {
-        state.feeds.release_lease(RESIDENT);
-    }
-    if settings.feed_auto_refresh && (!feeds.is_empty() || active_auto) {
-        let permitted = allowed(
-            settings.feed_auto_refresh_only_wifi,
-            network::network_type(&state.host)
-                .await
-                .map_err(anyhow::Error::msg)?,
-        );
-        state.feeds.apply_auto_policy(permitted, !permitted);
-        if permitted && supported("BACKGROUND_TIMER") && !feeds.is_empty() {
-            state.feeds.queue_feeds(feeds, Some(RESIDENT), false)?;
-        }
-    }
-    let wake = earliest.map(|at| {
-        if at > now {
-            return at;
-        }
-        previous_wake
-            .flatten()
-            .filter(|previous| *previous > now)
-            .unwrap_or(now.saturating_add(RETRY_SECONDS * 1000))
-    });
-    if supported("BACKGROUND_WAKE") && previous_wake.as_ref() != Some(&wake) {
-        state
-            .host
-            .call(
-                "systemScheduleBackgroundWake",
-                serde_json::json!({"atMs":wake}),
-            )
+    let permitted = allowed(
+        settings.feed_auto_refresh_only_wifi,
+        network::network_type(&state.host)
             .await
-            .map_err(anyhow::Error::msg)?;
-        *previous_wake = Some(wake);
+            .map_err(anyhow::Error::msg)?,
+    );
+    if permitted {
+        if !feeds.is_empty() {
+            state.feeds.queue_feeds(feeds, false, false)?;
+        }
+    } else {
+        state.feeds.cancel_automatic();
     }
     let delay = earliest
         .filter(|at| *at > now)

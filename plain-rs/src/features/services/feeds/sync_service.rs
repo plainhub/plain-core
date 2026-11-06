@@ -20,15 +20,10 @@ impl FeedSyncState {
         matches!(self.status.as_str(), "QUEUED" | "RUNNING")
     }
 }
-#[derive(Default)]
-struct Owners {
-    manual: bool,
-    leases: BTreeSet<String>,
-}
 struct Task {
     state: watch::Sender<FeedSyncState>,
     cancel: watch::Sender<bool>,
-    owners: Mutex<Owners>,
+    manual: std::sync::atomic::AtomicBool,
 }
 #[derive(Default)]
 struct State {
@@ -53,12 +48,9 @@ pub struct SyncService {
     state: Mutex<State>,
     assets: Option<Arc<crate::features::services::feeds::FeedAssets>>,
     permits: Semaphore,
-    auto_allowed: std::sync::atomic::AtomicBool,
-    policy_gate: tokio::sync::Mutex<()>,
+    scheduler: Mutex<Option<tokio::task::JoinHandle<()>>>,
     revision: std::sync::atomic::AtomicI64,
     notifications: Mutex<bool>,
-    leases: Mutex<BTreeMap<String, schedule::Lease>>,
-    execution_changed: tokio::sync::Notify,
 }
 impl SyncService {
     pub fn new(
@@ -74,18 +66,11 @@ impl SyncService {
             state: Mutex::new(State::default()),
             assets,
             permits: Semaphore::new(16),
-            auto_allowed: std::sync::atomic::AtomicBool::new(false),
-            policy_gate: tokio::sync::Mutex::new(()),
+            scheduler: Mutex::new(None),
             revision: std::sync::atomic::AtomicI64::new(0),
             notifications: Mutex::new(false),
-            leases: Mutex::new(BTreeMap::new()),
-            execution_changed: tokio::sync::Notify::new(),
         })
     }
-    pub fn execution_state_changed(&self) {
-        self.execution_changed.notify_one();
-    }
-
     fn next_revision(&self) -> crate::infrastructure::types::Long {
         crate::infrastructure::types::Long(
             self.revision
@@ -93,16 +78,10 @@ impl SyncService {
                 + 1,
         )
     }
-    fn apply_auto_policy(&self, allowed: bool, cancel_running: bool) {
-        self.auto_allowed
-            .store(allowed, std::sync::atomic::Ordering::SeqCst);
-        if !allowed {
-            for task in self.state.lock().unwrap().tasks.values() {
-                if !task.owners.lock().unwrap().manual
-                    && (cancel_running || task.state.borrow().status == "QUEUED")
-                {
-                    task.cancel.send_replace(true);
-                }
+    fn cancel_automatic(&self) {
+        for task in self.state.lock().unwrap().tasks.values() {
+            if !task.manual.load(std::sync::atomic::Ordering::SeqCst) {
+                task.cancel.send_replace(true);
             }
         }
     }
@@ -178,15 +157,15 @@ impl SyncService {
         } else {
             self.db.feeds_list()?
         };
-        self.queue_feeds(feeds, None, id.is_none())?;
+        self.queue_feeds(feeds, true, id.is_none())?;
         Ok(())
     }
     fn queue_feeds(
         self: &Arc<Self>,
         feeds: Vec<crate::infrastructure::db::notes_feeds::FeedRow>,
-        lease: Option<&str>,
+        manual: bool,
         aggregate: bool,
-    ) -> anyhow::Result<Vec<watch::Receiver<FeedSyncState>>> {
+    ) -> anyhow::Result<()> {
         let mut starts = Vec::new();
         let mut subscriptions = Vec::new();
         let mut state = self.state.lock().unwrap();
@@ -215,13 +194,12 @@ impl SyncService {
                 .get(&feed.id)
                 .filter(|task| task.state.borrow().active())
             {
-                let mut owners = task.owners.lock().unwrap();
-                if let Some(lease) = lease {
-                    owners.leases.insert(lease.to_owned());
-                } else {
-                    owners.manual = true;
+                if manual {
+                    task.manual.store(true, std::sync::atomic::Ordering::SeqCst);
                 }
-                subscriptions.push(task.state.subscribe());
+                if aggregate {
+                    subscriptions.push(task.state.subscribe());
+                }
                 continue;
             }
             let (status, receiver) = watch::channel(FeedSyncState {
@@ -235,13 +213,12 @@ impl SyncService {
             let task = Arc::new(Task {
                 state: status,
                 cancel,
-                owners: Mutex::new(Owners {
-                    manual: lease.is_none(),
-                    leases: lease.into_iter().map(str::to_owned).collect(),
-                }),
+                manual: std::sync::atomic::AtomicBool::new(manual),
             });
             state.tasks.insert(feed.id.clone(), task.clone());
-            subscriptions.push(receiver);
+            if aggregate {
+                subscriptions.push(receiver);
+            }
             starts.push((feed, task));
         }
         let batch = if aggregate {
@@ -270,7 +247,6 @@ impl SyncService {
             let this = self.clone();
             tokio::spawn(async move { this.run(feed, task).await });
         }
-        let waiters = subscriptions.clone();
         if let Some(batch) = batch {
             let this = self.clone();
             tokio::spawn(async move {
@@ -312,7 +288,7 @@ impl SyncService {
                 }
             });
         }
-        Ok(waiters)
+        Ok(())
     }
     async fn run(
         self: Arc<Self>,
@@ -322,42 +298,28 @@ impl SyncService {
         let mut cancel = task.cancel.subscribe();
         let assets = self.assets.as_ref().map(|assets| assets.scoped());
         let work = async {
-            let _permit = match self.permits.acquire().await {
-                Ok(permit) => permit,
-                Err(error) => return Some(Err(error.to_string())),
-            };
-            if !task.owners.lock().unwrap().manual
-                && !self.auto_allowed.load(std::sync::atomic::Ordering::SeqCst)
-            {
-                return None;
-            }
+            let _permit = self.permits.acquire().await.map_err(|error| error.to_string())?;
             let mut state = task.state.borrow().clone();
             state.status = "RUNNING".into();
             state.revision = self.next_revision();
             task.state.send_replace(state);
             self.notify(&[feed.id.clone()], &[]);
-            fetch_with_retry(
-                || async {
-                    crate::features::services::feeds::sync_feed(
-                        &self.db,
-                        &self.events,
-                        &feed,
-                        assets.as_ref(),
-                    )
-                    .await
-                    .map_err(|error| error.to_string())
-                },
-                || {
-                    task.owners.lock().unwrap().manual
-                        || self.auto_allowed.load(std::sync::atomic::Ordering::SeqCst)
-                },
-            )
+            fetch_with_retry(|| async {
+                crate::features::services::feeds::sync_feed(
+                    &self.db,
+                    &self.events,
+                    &feed,
+                    assets.as_ref(),
+                )
+                .await
+                .map_err(|error| error.to_string())
+            })
             .await
         };
         let result = tokio::select! {
             biased;
             _ = async { if !*cancel.borrow() { let _ = cancel.changed().await; } } => None,
-            result = work => result,
+            result = work => Some(result),
         };
         if let Some(assets) = &assets {
             assets.wait_writes().await;
@@ -384,15 +346,6 @@ impl SyncService {
         state.revision = self.next_revision();
         task.state.send_replace(state);
         self.notify(&[feed.id.clone()], &[]);
-    }
-    fn release_lease(&self, lease: &str) {
-        for task in self.state.lock().unwrap().tasks.values() {
-            let mut owners = task.owners.lock().unwrap();
-            owners.leases.remove(lease);
-            if !owners.manual && owners.leases.is_empty() {
-                task.cancel.send_replace(true);
-            }
-        }
     }
     pub async fn delete(self: &Arc<Self>, id: &str) -> anyhow::Result<bool> {
         {
@@ -439,20 +392,19 @@ impl SyncService {
         self.notify(&[], &[id.to_owned()]);
     }
     pub async fn shutdown(&self) {
-        let (tasks, leases) = {
+        let tasks = {
             let mut state = self.state.lock().unwrap();
             state.stopped = true;
-            let leases = self
-                .leases
-                .lock()
-                .unwrap()
-                .values()
-                .cloned()
-                .collect::<Vec<_>>();
-            (state.tasks.values().cloned().collect::<Vec<_>>(), leases)
+            state.tasks.values().cloned().collect::<Vec<_>>()
         };
-        for lease in &leases {
-            lease.revoke.send_replace(true);
+        let scheduler = self.scheduler.lock().unwrap().take();
+        if let Some(scheduler) = scheduler {
+            scheduler.abort();
+            if let Err(error) = scheduler.await {
+                if !error.is_cancelled() {
+                    log::warn!("Feed scheduler shutdown: {error}");
+                }
+            }
         }
         for task in &tasks {
             task.cancel.send_replace(true);
@@ -479,33 +431,19 @@ impl SyncService {
                 }
             }
         }
-        for lease in leases {
-            let mut done = lease.done.subscribe();
-            while !*done.borrow() {
-                if done.changed().await.is_err() {
-                    break;
-                }
-            }
-        }
     }
 }
 
-async fn fetch_with_retry<F>(
-    mut fetch: impl FnMut() -> F,
-    permitted: impl Fn() -> bool,
-) -> Option<Result<(), String>>
+async fn fetch_with_retry<F>(mut fetch: impl FnMut() -> F) -> Result<(), String>
 where
     F: std::future::Future<Output = Result<(), String>>,
 {
     for attempt in 0..3 {
-        if !permitted() {
-            return None;
-        }
         match fetch().await {
             Err(error) if attempt < 2 && schedule::retryable(&error) => {
                 tokio::time::sleep(std::time::Duration::from_secs(2 << attempt)).await
             }
-            result => return Some(result),
+            result => return result,
         }
     }
     unreachable!()

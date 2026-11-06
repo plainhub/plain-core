@@ -44,7 +44,6 @@ pub(super) async fn fixture() -> (
     let (events, receiver) = broadcast::channel(256);
     let host = Arc::new(crate::infrastructure::host::bridge::Host::default());
     let service = SyncService::new(db, events, host, None);
-    service.apply_auto_policy(true, false);
     (dir, service, calls, started, release, server, receiver)
 }
 pub(super) async fn finished(mut receiver: watch::Receiver<FeedSyncState>) -> FeedSyncState {
@@ -105,7 +104,26 @@ async fn shutdown_cancels_owned_fetches_without_late_sync_completion_or_detached
     let receiver = service.state.lock().unwrap().tasks["feed"]
         .state
         .subscribe();
+    struct SchedulerGuard(Arc<AtomicUsize>);
+    impl Drop for SchedulerGuard {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let scheduler_exits = Arc::new(AtomicUsize::new(0));
+    let (scheduler_started, scheduler_ready) = tokio::sync::oneshot::channel();
+    *service.scheduler.lock().unwrap() = Some(tokio::spawn({
+        let scheduler_exits = scheduler_exits.clone();
+        async move {
+            let _guard = SchedulerGuard(scheduler_exits);
+            scheduler_started.send(()).unwrap();
+            std::future::pending::<()>().await;
+        }
+    }));
+    scheduler_ready.await.unwrap();
     service.shutdown().await;
+    assert_eq!(scheduler_exits.load(Ordering::SeqCst), 1);
+    assert!(service.scheduler.lock().unwrap().is_none());
     assert_eq!(finished(receiver).await.status, "CANCELLED");
     assert!(
         service
@@ -173,13 +191,10 @@ async fn transient_fetches_retry_three_times_with_owned_cancellable_delays() {
     let calls = Arc::new(AtomicUsize::new(0));
     let worker = {
         let calls = calls.clone();
-        tokio::spawn(fetch_with_retry(
-            move || {
-                calls.fetch_add(1, Ordering::SeqCst);
-                async { Err("SERVER:503: unavailable".to_owned()) }
-            },
-            || true,
-        ))
+        tokio::spawn(fetch_with_retry(move || {
+            calls.fetch_add(1, Ordering::SeqCst);
+            async { Err("SERVER:503: unavailable".to_owned()) }
+        }))
     };
     tokio::task::yield_now().await;
     assert_eq!(calls.load(Ordering::SeqCst), 1);
@@ -189,40 +204,27 @@ async fn transient_fetches_retry_three_times_with_owned_cancellable_delays() {
     tokio::time::advance(std::time::Duration::from_secs(4)).await;
     assert_eq!(
         worker.await.unwrap(),
-        Some(Err("SERVER:503: unavailable".into()))
+        Err("SERVER:503: unavailable".into())
     );
     assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
 
 #[tokio::test(start_paused = true)]
-async fn cancelling_backoff_or_revoking_policy_prevents_later_fetch_attempts() {
-    for cancel in [false, true] {
-        let calls = Arc::new(AtomicUsize::new(0));
-        let permitted = Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let worker = {
-            let calls = calls.clone();
-            let permitted = permitted.clone();
-            tokio::spawn(fetch_with_retry(
-                move || {
-                    calls.fetch_add(1, Ordering::SeqCst);
-                    async { Err("TIMEOUT: request".to_owned()) }
-                },
-                move || permitted.load(Ordering::SeqCst),
-            ))
-        };
-        tokio::task::yield_now().await;
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
-        if cancel {
-            worker.abort();
-            assert!(worker.await.unwrap_err().is_cancelled());
-        } else {
-            permitted.store(false, Ordering::SeqCst);
-            tokio::time::advance(std::time::Duration::from_secs(2)).await;
-            assert_eq!(worker.await.unwrap(), None);
-        }
-        tokio::time::advance(std::time::Duration::from_secs(100)).await;
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
-    }
+async fn cancelling_backoff_prevents_later_fetch_attempts() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let worker = {
+        let calls = calls.clone();
+        tokio::spawn(fetch_with_retry(move || {
+            calls.fetch_add(1, Ordering::SeqCst);
+            async { Err("TIMEOUT: request".to_owned()) }
+        }))
+    };
+    tokio::task::yield_now().await;
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    worker.abort();
+    assert!(worker.await.unwrap_err().is_cancelled());
+    tokio::time::advance(std::time::Duration::from_secs(100)).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
@@ -233,15 +235,12 @@ async fn permanent_fetch_failures_are_not_retried() {
         "sqlite: invalid data",
     ] {
         let calls = AtomicUsize::new(0);
-        let result = fetch_with_retry(
-            || {
-                calls.fetch_add(1, Ordering::SeqCst);
-                std::future::ready(Err(error.to_owned()))
-            },
-            || true,
-        )
+        let result = fetch_with_retry(|| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            std::future::ready(Err(error.to_owned()))
+        })
         .await;
-        assert_eq!(result, Some(Err(error.to_owned())));
+        assert_eq!(result, Err(error.to_owned()));
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }
@@ -256,12 +255,7 @@ async fn deleting_a_feed_cancels_its_fetch_and_stale_schedule_rows_cannot_restar
     assert!(service.db.feed_get("feed").unwrap().is_none());
     assert!(service.states().is_empty());
     assert!(service.state.lock().unwrap().deleting.is_empty());
-    assert!(
-        service
-            .queue_feeds(vec![stale], Some("late-scheduler"), false)
-            .unwrap()
-            .is_empty()
-    );
+    service.queue_feeds(vec![stale], false, false).unwrap();
     assert!(service.states().is_empty());
     release.add_permits(1);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
@@ -281,12 +275,7 @@ async fn deletion_admission_blocks_manual_and_automatic_queueing_until_cleanup()
         id: "feed",
     };
     service.queue(Some("feed".into())).unwrap();
-    assert!(
-        service
-            .queue_feeds(vec![row], Some("automatic"), false)
-            .unwrap()
-            .is_empty()
-    );
+    service.queue_feeds(vec![row], false, false).unwrap();
     assert!(service.states().is_empty());
     assert_eq!(calls.load(Ordering::SeqCst), 0);
     assert!(service.delete("feed").await.is_err());

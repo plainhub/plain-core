@@ -167,7 +167,6 @@ fn capabilities() -> Vec<String> {
     let mut capabilities = vec![
         "FILE_EXPORT".into(),
         "MEDIA_SCAN".into(),
-        "BACKGROUND_TIMER".into(),
         "APP_UPDATES".into(),
     ];
     capabilities.extend(

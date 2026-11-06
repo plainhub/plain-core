@@ -507,22 +507,16 @@ async fn unsupported_relaunch_never_invokes_the_platform_action() {
 }
 
 #[tokio::test]
-async fn main_app_capabilities_preserve_current_background_execution_opportunities() {
-    for timer in [true, false] {
-        let (_dir, schema) = fixture(move |method, _| {
-            assert_eq!(method, "systemCapabilities");
-            if timer {
-                json!(["BACKGROUND_WAKE", "BACKGROUND_TIMER"])
-            } else {
-                json!(["BACKGROUND_WAKE"])
-            }
-        });
-        let response = schema.execute("{ app { capabilities } }").await;
-        assert!(response.errors.is_empty(), "{:?}", response.errors);
-        let data = response.data.into_json().unwrap();
-        let names = data["app"]["capabilities"].as_array().unwrap();
-        assert!(names.contains(&json!("BACKGROUND_WAKE")));
-        assert_eq!(names.contains(&json!("BACKGROUND_TIMER")), timer);
+async fn feed_scheduling_details_are_not_public_capabilities() {
+    let (_dir, schema) = fixture(|method, _| panic!("unexpected host call {method}"));
+    let response = schema
+        .execute(r#"{ __type(name: "Capability") { enumValues { name } } }"#)
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let names = data["__type"]["enumValues"].as_array().unwrap();
+    for name in ["BACKGROUND_TIMER", "BACKGROUND_WAKE"] {
+        assert!(!names.iter().any(|value| value["name"] == name));
     }
 }
 

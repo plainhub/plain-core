@@ -9,8 +9,6 @@ pub enum Capability {
     BackgroundService,
     SoundMeter,
 
-    BackgroundTimer,
-    BackgroundWake,
     FileExport,
     FileReveal,
     FileClipboard,
@@ -47,8 +45,6 @@ impl Capability {
             "BACKGROUND_SERVICE" => Self::BackgroundService,
             "SOUND_METER" => Self::SoundMeter,
 
-            "BACKGROUND_TIMER" => Self::BackgroundTimer,
-            "BACKGROUND_WAKE" => Self::BackgroundWake,
             "FILE_EXPORT" => Self::FileExport,
             "FILE_REVEAL" => Self::FileReveal,
             "FILE_CLIPBOARD" => Self::FileClipboard,

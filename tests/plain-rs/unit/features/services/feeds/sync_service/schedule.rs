@@ -65,7 +65,7 @@ fn restart_enqueues_one_current_refresh_instead_of_replaying_missed_periods() {
     assert_eq!(next, Some(now + 3_600_000));
 }
 #[test]
-fn disabled_automatic_refresh_produces_no_tasks_or_system_wake() {
+fn disabled_automatic_refresh_produces_no_tasks() {
     let settings = Settings {
         feed_auto_refresh: false,
         ..Default::default()
@@ -122,63 +122,32 @@ fn retry_policy_is_limited_to_transient_failures() {
     }
 }
 #[tokio::test]
-async fn revoking_one_automatic_owner_preserves_other_owners_and_manual_requests() {
+async fn automatic_refreshes_deduplicate_and_manual_requests_survive_automatic_cancellation() {
     for manual in [false, true] {
         let (_dir, service, calls, started, release, server, _events) =
             super::super::tests::fixture().await;
         let feed = service.db.feed_get("feed").unwrap().unwrap();
-        let mut waiters = service
-            .queue_feeds(vec![feed.clone()], Some("first"), false)
-            .unwrap();
+        service.queue_feeds(vec![feed.clone()], false, false).unwrap();
+        let pending = service.state.lock().unwrap().tasks["feed"].state.subscribe();
+        let task_id = pending.borrow().task_id.clone();
         started.acquire().await.unwrap().forget();
+        service.queue_feeds(vec![feed], false, false).unwrap();
+        assert_eq!(service.state.lock().unwrap().tasks["feed"].state.borrow().task_id, task_id);
         if manual {
             service.queue(Some("feed".into())).unwrap();
-        } else {
-            service
-                .queue_feeds(vec![feed], Some("second"), false)
-                .unwrap();
         }
-        service.release_lease("first");
-        assert!(!*service.state.lock().unwrap().tasks["feed"].cancel.borrow());
-        release.add_permits(1);
+        service.cancel_automatic();
+        if manual {
+            release.add_permits(1);
+        }
         assert_eq!(
-            super::super::tests::finished(waiters.pop().unwrap())
-                .await
-                .status,
-            "COMPLETED"
+            super::super::tests::finished(pending).await.status,
+            if manual { "COMPLETED" } else { "CANCELLED" }
         );
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
         service.shutdown().await;
         server.abort();
     }
-}
-#[tokio::test]
-async fn revoking_the_last_automatic_owner_cancels_its_owned_fetch() {
-    let (_dir, service, _calls, started, _release, server, _events) =
-        super::super::tests::fixture().await;
-    let feed = service.db.feed_get("feed").unwrap().unwrap();
-    let mut waiters = service
-        .queue_feeds(vec![feed], Some("only"), false)
-        .unwrap();
-    started.acquire().await.unwrap().forget();
-    service.release_lease("only");
-    assert_eq!(
-        super::super::tests::finished(waiters.pop().unwrap())
-            .await
-            .status,
-        "CANCELLED"
-    );
-    assert!(
-        service
-            .db
-            .feed_get("feed")
-            .unwrap()
-            .unwrap()
-            .last_sync_at
-            .is_none()
-    );
-    service.shutdown().await;
-    server.abort();
 }
 
 #[tokio::test]
@@ -187,14 +156,12 @@ async fn disabling_automatic_dispatch_cancels_queued_work_but_manual_refresh_sti
         super::super::tests::fixture().await;
     let permits = service.permits.acquire_many(16).await.unwrap();
     let feed = service.db.feed_get("feed").unwrap().unwrap();
-    let mut pending = service
-        .queue_feeds(vec![feed], Some("automatic"), false)
-        .unwrap();
-    service.apply_auto_policy(false, false);
+    service.queue_feeds(vec![feed], false, false).unwrap();
+    let pending = service.state.lock().unwrap().tasks["feed"].state.subscribe();
+    service.cancel_automatic();
+    assert!(service.queue(Some("feed".into())).is_err());
     assert_eq!(
-        super::super::tests::finished(pending.pop().unwrap())
-            .await
-            .status,
+        super::super::tests::finished(pending).await.status,
         "CANCELLED"
     );
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
@@ -219,101 +186,21 @@ async fn a_network_policy_change_cancels_only_automatic_fetches() {
         let (_dir, service, _calls, started, release, server, _events) =
             super::super::tests::fixture().await;
         let feed = service.db.feed_get("feed").unwrap().unwrap();
-        let mut pending = service
-            .queue_feeds(vec![feed], Some("automatic"), false)
-            .unwrap();
+        service.queue_feeds(vec![feed], false, false).unwrap();
+        let pending = service.state.lock().unwrap().tasks["feed"].state.subscribe();
         started.acquire().await.unwrap().forget();
         if manual {
             service.queue(Some("feed".into())).unwrap();
         }
-        service.apply_auto_policy(false, true);
+        service.cancel_automatic();
         if manual {
             release.add_permits(1);
         }
         assert_eq!(
-            super::super::tests::finished(pending.pop().unwrap())
-                .await
-                .status,
+            super::super::tests::finished(pending).await.status,
             if manual { "COMPLETED" } else { "CANCELLED" }
         );
         service.shutdown().await;
         server.abort();
     }
-}
-
-#[tokio::test(start_paused = true)]
-async fn execution_deadline_cancels_and_drains_only_its_orphaned_automatic_tasks() {
-    for manual in [false, true] {
-        let (_dir, service, calls, _started, _release, server, _events) =
-            super::super::tests::fixture().await;
-        let permits = service.permits.acquire_many(16).await.unwrap();
-        let feed = service.db.feed_get("feed").unwrap().unwrap();
-        let mut tasks = service
-            .queue_feeds(vec![feed], Some("deadline"), false)
-            .unwrap();
-        if manual {
-            service.queue(Some("feed".into())).unwrap();
-        }
-        let lease = register(&service, "deadline").unwrap();
-        let mut done = lease.done.subscribe();
-        let worker = tokio::spawn({
-            let service = service.clone();
-            async move {
-                execute_lease(
-                    service,
-                    "deadline",
-                    tokio::time::Instant::now() + Duration::from_secs(30),
-                    lease,
-                    std::future::pending::<Result<bool>>(),
-                )
-                .await
-            }
-        });
-        tokio::task::yield_now().await;
-        tokio::time::advance(Duration::from_secs(30)).await;
-        while !*done.borrow() {
-            done.changed().await.unwrap();
-        }
-        assert!(!worker.await.unwrap());
-        assert!(!service.leases.lock().unwrap().contains_key("deadline"));
-        if manual {
-            assert_eq!(tasks[0].borrow().status, "QUEUED");
-        } else {
-            assert_eq!(
-                super::super::tests::finished(tasks.pop().unwrap())
-                    .await
-                    .status,
-                "CANCELLED"
-            );
-        }
-        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
-        service.shutdown().await;
-        drop(permits);
-        server.abort();
-    }
-}
-
-#[tokio::test]
-async fn revocation_before_execution_does_not_poll_work_and_stopped_service_rejects_grants() {
-    let (_dir, service, _calls, _started, _release, server, _events) =
-        super::super::tests::fixture().await;
-    let lease = register(&service, "revoked").unwrap();
-    assert!(register(&service, "revoked").is_err());
-    lease.revoke.send_replace(true);
-    let polled = std::sync::atomic::AtomicUsize::new(0);
-    execute_lease(
-        service.clone(),
-        "revoked",
-        tokio::time::Instant::now() + Duration::from_secs(30),
-        lease,
-        async {
-            polled.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Ok(true)
-        },
-    )
-    .await;
-    assert_eq!(polled.load(std::sync::atomic::Ordering::SeqCst), 0);
-    service.shutdown().await;
-    assert!(register(&service, "after-stop").is_err());
-    server.abort();
 }

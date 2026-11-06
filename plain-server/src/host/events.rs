@@ -211,35 +211,6 @@ impl HostEvents {
         self.state.thumbnails.submit(token, bytes)
     }
 
-    pub fn execution_state_changed(&self) -> Result<(), String> {
-        if !self.state.host.is_current(self.generation) {
-            return Err("host disconnected".into());
-        }
-        self.state.feeds.execution_state_changed();
-        Ok(())
-    }
-
-    pub fn grant_background_execution(&self, id: String, deadline_ms: i64) -> Result<(), String> {
-        if !self.state.host.is_current(self.generation) {
-            return Err("host disconnected".into());
-        }
-        plain_rs::features::services::feeds::sync_service::schedule::grant(
-            &self.state,
-            id,
-            deadline_ms,
-            self.generation,
-        )
-        .map_err(|error| error.to_string())
-    }
-
-    pub async fn revoke_background_execution(&self, id: &str) -> Result<(), String> {
-        if !self.state.host.is_current(self.generation) {
-            return Err("host disconnected".into());
-        }
-        plain_rs::features::services::feeds::sync_service::schedule::revoke(&self.state, id).await;
-        Ok(())
-    }
-
     pub async fn report_pairing_response(&self, payload: String) -> Result<(), String> {
         if !self.state.host.is_current(self.generation) {
             return Err("host disconnected".into());
