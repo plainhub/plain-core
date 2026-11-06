@@ -163,7 +163,7 @@ fn close(code: u16, reason: &'static str) -> Message {
     }))
 }
 fn enabled(state: &ServerState) -> bool {
-    state.prefs.get_or("desktop_access", true)
+    state.prefs.get_or("remote_access", true)
 }
 #[derive(Deserialize)]
 pub(crate) struct Params {
@@ -227,7 +227,7 @@ async fn run(
         let reason = if params.cid.is_empty() {
             "`cid` is missing"
         } else {
-            "desktop_access_disabled"
+            "remote_access_disabled"
         };
         let _ = socket.send(close(1008, reason)).await;
         return;
@@ -304,7 +304,7 @@ async fn run(
                                         (Some("2"), PasswordType::None) => confirmation_channel::ConfirmationMode::DeviceConfirmation,
                                         _ => anyhow::bail!("invalid_login_request"),
                                     };
-                                    anyhow::ensure!(enabled(&state), "desktop_access_disabled");
+                                    anyhow::ensure!(enabled(&state), "remote_access_disabled");
                                     let request = serde_json::from_str::<confirmation_channel::ClientHello>(&text)?;
                                     let device_id = state.prefs.get_or(
                                         plain_rs::features::prefs::pref_keys::CLIENT_ID,
@@ -346,7 +346,7 @@ async fn run(
                     Some(Ok(Message::Text(_) | Message::Pong(_))) => continue,
                     _ => break,
                 };
-                if !enabled(&state) { let _ = socket.send(close(1008,"desktop_access_disabled")).await; break; }
+                if !enabled(&state) { let _ = socket.send(close(1008,"remote_access_disabled")).await; break; }
                 if matches!(params.auth.as_deref(), Some("1" | "2")) {
                     if let Some(request_id) = pending.take() { let _ = crate::http::auth::ws_login::execute(&state, crate::http::auth::ws_login::Request::Cancel { request_id }).await; }
                     let LoginHandshake::Ready(channel) = std::mem::replace(&mut handshake, LoginHandshake::Submitted) else {
@@ -375,7 +375,7 @@ async fn run(
                             continue;
                         },
                         Err(error) => {
-                            let reason = match error.to_string().as_str() { "too_many_login_attempts" => "too_many_login_attempts", "desktop_access_disabled" => "desktop_access_disabled", "login_expired" => "login_expired", _ if params.auth.as_deref() == Some("2") => "invalid_login_request", _ => "invalid_password" };
+                            let reason = match error.to_string().as_str() { "too_many_login_attempts" => "too_many_login_attempts", "remote_access_disabled" => "remote_access_disabled", "login_expired" => "login_expired", _ if params.auth.as_deref() == Some("2") => "invalid_login_request", _ => "invalid_password" };
                             let _ = socket.send(close(1013,reason)).await;
                             break;
                         }

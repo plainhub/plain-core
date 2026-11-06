@@ -34,8 +34,8 @@ struct ZipFilesRequest {
     name: String,
 }
 
-fn desktop_access_allowed(state: &CoreRuntime) -> bool {
-    state.prefs.get_or("desktop_access", true)
+fn remote_access_allowed(state: &CoreRuntime) -> bool {
+    state.prefs.get_or("remote_access", true)
 }
 
 fn decrypt_url_id(state: &CoreRuntime, id: &str) -> Option<String> {
@@ -195,7 +195,7 @@ pub async fn directory(state: &CoreRuntime, id: &str) -> Result<Download, Error>
         );
         return build_download(state, items, &name, None, permit).await;
     }
-    if !desktop_access_allowed(state) {
+    if !remote_access_allowed(state) {
         return Err(Error::Denied("".into()));
     }
     let file = match crate::features::services::files::links::resolve(state, id).await {
@@ -397,7 +397,7 @@ async fn zip_items(
 
 pub async fn files(state: &CoreRuntime, id: &str) -> Result<Download, Error> {
     let permit = state.archives.acquire().ok_or(Error::Busy)?;
-    if !desktop_access_allowed(state) {
+    if !remote_access_allowed(state) {
         return Err(Error::Denied("".into()));
     }
     let Some(plaintext) = decrypt_url_id(state, id) else {

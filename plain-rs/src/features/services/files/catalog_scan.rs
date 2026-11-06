@@ -66,6 +66,16 @@ pub async fn host_connected(state: CoreRuntime, generation: u64) -> Result<(), S
         }
         let catalog = NativeMediaCatalog::new(state);
         catalog.configure_scan_directories(None)?;
+        if cfg!(target_os = "macos")
+            && catalog
+                .state
+                .prefs
+                .get::<Vec<String>>(crate::features::prefs::pref_keys::MEDIA_SOURCE_DIRS)
+                .map_err(|error| error.to_string())?
+                .is_none()
+        {
+            return Ok(());
+        }
         if !catalog.source_directories()?.is_empty() {
             catalog.start_source_scan("/")?;
         }

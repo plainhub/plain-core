@@ -122,7 +122,7 @@ impl Service {
         if guest
             && !self
                 .prefs
-                .get::<bool>(crate::features::prefs::pref_keys::DESKTOP_ACCESS)?
+                .get::<bool>(crate::features::prefs::pref_keys::REMOTE_ACCESS)?
                 .unwrap_or(true)
         {
             return Ok(None);

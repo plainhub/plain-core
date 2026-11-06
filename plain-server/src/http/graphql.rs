@@ -83,7 +83,7 @@ async fn execute(
     if state.authenticated(headers) {
         return run_local(state, body).await;
     }
-    if !state.prefs.get_or("desktop_access", true) {
+    if !state.prefs.get_or("remote_access", true) {
         return Err(StatusCode::NOT_FOUND);
     }
     // The server development bearer. It stands in for a session so the server

@@ -8,7 +8,7 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs.set("background_service_enabled", false).unwrap();
-    prefs.set("desktop_access", false).unwrap();
+    prefs.set("remote_access", false).unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[19; 32]);
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let server = ContentServer::start_http(
@@ -102,7 +102,7 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
             expected
         );
     }
-    prefs.set("desktop_access", true).unwrap();
+    prefs.set("remote_access", true).unwrap();
     assert_eq!(
         client
             .post(format!("http://127.0.0.1:{http}/graphql"))
@@ -291,7 +291,7 @@ async fn every_transport_build_serves_the_main_guest_and_peer_contracts_without_
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("desktop_access", true).unwrap();
+    prefs.set("remote_access", true).unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[3; 32]);
     let server = ContentServer::start(directory.path(), &token, prefs).unwrap();
     let client = reqwest::Client::new();

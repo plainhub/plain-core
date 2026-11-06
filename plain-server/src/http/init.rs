@@ -23,7 +23,7 @@ pub(crate) async fn init(
     if client_id.is_empty() {
         return StatusCode::BAD_REQUEST.into_response();
     }
-    if !state.prefs.get_or("desktop_access", true) {
+    if !state.prefs.get_or("remote_access", true) {
         return StatusCode::FORBIDDEN.into_response();
     }
     let key = plain_rs::features::services::sessions::local_key(&state, client_id).or(

@@ -80,7 +80,7 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     let (_, result) = call(
         first.runtime_state(),
         &headers,
-        r#"mutation{setPref(key:"desktop_access",value:false)}"#,
+        r#"mutation{setPref(key:"remote_access",value:false)}"#,
     )
     .await;
     assert!(result["errors"].is_array(), "{result}");
@@ -91,7 +91,7 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     let native = first.native_graphql().unwrap();
     let disabled = native
         .execute(plain_graphql::Request::new(
-            r#"mutation { setPref(key:"desktop_access",value:false) }"#,
+            r#"mutation { setPref(key:"remote_access",value:false) }"#,
         ))
         .await;
     assert!(disabled.errors.is_empty(), "{:?}", disabled.errors);
@@ -107,7 +107,7 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     let snapshot = native.execute(plain_graphql::Request::new("{prefs}")).await;
     assert!(snapshot.errors.is_empty(), "{:?}", snapshot.errors);
     assert_eq!(
-        snapshot.data.into_json().unwrap()["prefs"]["desktop_access"],
+        snapshot.data.into_json().unwrap()["prefs"]["remote_access"],
         false
     );
     first.shutdown().await;

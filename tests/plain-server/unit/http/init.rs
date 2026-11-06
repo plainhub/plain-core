@@ -38,7 +38,7 @@ async fn init_requires_a_client_id_and_returns_forbidden_when_access_is_disabled
             .status(),
         StatusCode::BAD_REQUEST
     );
-    state.prefs.set("desktop_access", false).unwrap();
+    state.prefs.set("remote_access", false).unwrap();
     let mut headers = HeaderMap::new();
     headers.insert("c-id", "web-client".parse().unwrap());
     assert_eq!(

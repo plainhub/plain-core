@@ -24,7 +24,7 @@ impl Node {
         std::fs::write(
             data.join("prefs.json"),
             json!({
-                "device_name":"Acceptance fixture", "desktop_access":true,
+                "device_name":"Acceptance fixture", "remote_access":true,
             })
             .to_string(),
         )

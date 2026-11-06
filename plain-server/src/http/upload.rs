@@ -51,8 +51,8 @@ fn plain(status: StatusCode, body: impl Into<String>) -> Response {
         .into_response()
 }
 
-fn desktop_access_allowed(state: &ServerState) -> bool {
-    state.prefs.get_or("desktop_access", true)
+fn remote_access_allowed(state: &ServerState) -> bool {
+    state.prefs.get_or("remote_access", true)
 }
 
 /// The session token Rust issued, straight from the `sessions` row.
@@ -183,7 +183,7 @@ pub(crate) async fn upload_tmp_dir(state: &ServerState) -> anyhow::Result<String
 }
 
 pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -> Response {
-    if !desktop_access_allowed(&state) {
+    if !remote_access_allowed(&state) {
         return plain(StatusCode::FORBIDDEN, "forbidden");
     }
     let key = match session_key(&state, request.headers()).await {
@@ -407,7 +407,7 @@ async fn store_app_file(
 }
 
 pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Request) -> Response {
-    if !desktop_access_allowed(&state) {
+    if !remote_access_allowed(&state) {
         return plain(StatusCode::FORBIDDEN, "forbidden");
     }
     let key = match session_key(&state, request.headers()).await {

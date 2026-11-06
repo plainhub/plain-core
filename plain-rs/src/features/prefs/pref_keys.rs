@@ -54,7 +54,7 @@ pref_keys! {
         HTTP_PORT = "http_port",
         HTTPS_PORT = "https_port",
         BACKGROUND_SERVICE_ENABLED = "background_service_enabled",
-        DESKTOP_ACCESS = "desktop_access",
+        REMOTE_ACCESS = "remote_access",
         DEVELOPER_MODE = "developer_mode",
         ALLOW_ANY_HOST = "allow_any_host",
         NEARBY_DISCOVERABLE = "nearby_discoverable",

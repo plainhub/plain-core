@@ -273,7 +273,7 @@ impl Confirmation {
                 Err(error) => {
                     let reason = match error.to_string().as_str() {
                         "login_expired" | "Login confirmation expired" => "login_expired",
-                        "desktop_access_disabled" => "desktop_access_disabled",
+                        "remote_access_disabled" => "remote_access_disabled",
                         "invalid_password" => "invalid_password",
                         _ => "invalid_login_request",
                     };
@@ -467,8 +467,8 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> anyhow::Resul
 pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Result<Value> {
     if matches!(&request, Request::Issue { .. } | Request::Complete { .. }) {
         anyhow::ensure!(
-            state.prefs.get_or("desktop_access", true),
-            "desktop_access_disabled"
+            state.prefs.get_or("remote_access", true),
+            "remote_access_disabled"
         );
     }
     let (pending, request_id) = match request {

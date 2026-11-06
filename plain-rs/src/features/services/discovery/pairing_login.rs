@@ -37,7 +37,7 @@ pub(super) async fn run(
         .send()
         .await
         .map_err(|_| anyhow::anyhow!("failed_connect"))?;
-    ensure!(response.status().is_success(), "desktop_access_disabled");
+    ensure!(response.status().is_success(), "remote_access_disabled");
     let init: Value = serde_json::from_slice(
         &crate::features::services::peers::peer_lan::limited(response, 8192).await?,
     )?;

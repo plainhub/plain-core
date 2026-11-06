@@ -170,7 +170,7 @@ async fn the_access_switch_and_the_method_gate_every_asset() {
     let dir = tempfile::tempdir().unwrap();
     let prefs = plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap();
     prefs
-        .set("desktop_access", serde_json::json!(false))
+        .set("remote_access", serde_json::json!(false))
         .unwrap();
     assert!(
         serve(

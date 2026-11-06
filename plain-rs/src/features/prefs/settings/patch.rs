@@ -12,7 +12,7 @@ pub struct SettingsPatch {
     pub pdf_follow_dark_theme: Option<bool>,
     pub locale: Option<String>,
     pub background_service_enabled: Option<bool>,
-    pub desktop_access: Option<bool>,
+    pub remote_access: Option<bool>,
     pub dlna: Option<bool>,
     pub developer_mode: Option<bool>,
     pub allow_any_host: Option<bool>,

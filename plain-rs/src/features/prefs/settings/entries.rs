@@ -41,7 +41,7 @@ settings_keys! {
     PDF_FOLLOW_DARK_THEME => pdf_follow_dark_theme,
     LOCALE => locale,
     BACKGROUND_SERVICE_ENABLED => background_service_enabled,
-    DESKTOP_ACCESS => desktop_access,
+    REMOTE_ACCESS => remote_access,
     DLNA => dlna,
     DEVELOPER_MODE => developer_mode,
     ALLOW_ANY_HOST => allow_any_host,

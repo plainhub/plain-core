@@ -85,7 +85,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap(),
     );
     prefs.set("background_service_enabled", true).unwrap();
-    prefs.set("desktop_access", true).unwrap();
+    prefs.set("remote_access", true).unwrap();
     prefs.set("login_require_approval", true).unwrap();
     plain_rs::features::prefs::security::set_entry(&prefs, "password", serde_json::json!("secret"))
         .unwrap();
@@ -218,7 +218,7 @@ fn public_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
     let prefs = std::sync::Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("desktop_access", true).unwrap();
+    prefs.set("remote_access", true).unwrap();
     let core = crate::server::ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[4; 32]),

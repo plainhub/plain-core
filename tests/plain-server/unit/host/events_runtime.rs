@@ -321,3 +321,82 @@ async fn aborting_runner_disconnects_session_even_with_retained_handle() {
     drop(session);
     core.stop_core().await;
 }
+
+#[cfg(all(feature = "media", target_os = "macos"))]
+#[tokio::test]
+async fn macos_defers_startup_reads_until_sources_are_explicitly_enabled() {
+    use plain_rs::features::prefs::pref_keys::MEDIA_SOURCE_DIRS;
+    use plain_rs::features::services::files::catalog_scan::{NativeMediaCatalog, host_connected};
+    use plain_rs::features::services::settings::preferences::Preferences;
+
+    let (_directory, core, sources) = filesystem_media_host(false);
+    let state = core.runtime().clone();
+    let roots = vec![sources.to_string_lossy().into_owned()];
+    state.prefs.remove(MEDIA_SOURCE_DIRS).unwrap();
+    state
+        .media_scans
+        .set_defaults(plain_rs::features::prefs::file_index::Defaults {
+            scan_directories: roots.clone(),
+            excluded_directories: Vec::new(),
+            excluded_names: Vec::new(),
+        })
+        .unwrap();
+    let (generation, mut requests) = state.host.connect();
+    let host = state.host.clone();
+    let replies = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            assert_eq!(request["method"], "systemCapabilities");
+            host.reply(
+                generation,
+                json!({
+                    "id": request["id"],
+                    "result": ["MEDIA_SCAN"],
+                }),
+            )
+            .unwrap();
+        }
+    });
+
+    host_connected(state.clone(), generation).await.unwrap();
+    assert!(state.media_scans.snapshot().unwrap().is_none());
+    assert!(state.media_watch.lock().unwrap().is_none());
+    assert!(
+        state
+            .prefs
+            .get::<Vec<String>>(MEDIA_SOURCE_DIRS)
+            .unwrap()
+            .is_none()
+    );
+
+    Preferences::from_server(&state)
+        .set(MEDIA_SOURCE_DIRS, json!(roots))
+        .await
+        .unwrap();
+    state.media_scans.wait_background().await.unwrap();
+    let snapshot = state.media_scans.snapshot().unwrap().unwrap();
+    assert_eq!(
+        snapshot.status,
+        plain_rs::features::services::files::media_scans::Status::Completed
+    );
+    assert!(state.media_watch.lock().unwrap().is_some());
+    let catalog = NativeMediaCatalog::new(state.clone());
+    assert_eq!(
+        catalog
+            .count(plain_rs::features::enums::DataType::Doc)
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        state.prefs.get::<Vec<String>>(MEDIA_SOURCE_DIRS).unwrap(),
+        Some(roots)
+    );
+    host_connected(state.clone(), generation).await.unwrap();
+    assert_eq!(
+        state.media_scans.snapshot().unwrap().unwrap().id,
+        snapshot.id
+    );
+
+    state.host.disconnect(generation);
+    replies.await.unwrap();
+    core.stop_core().await;
+}

@@ -137,7 +137,7 @@ impl<'a> Preferences<'a> {
                     .await
                     .map_err(anyhow::Error::msg)?;
             }
-            if before.desktop_access && !after.desktop_access {
+            if before.remote_access && !after.remote_access {
                 state.clients.close(None);
             }
             if before.dlna != after.dlna {

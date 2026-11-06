@@ -149,7 +149,7 @@ pub(crate) async fn serve(
     if method != Method::GET && method != Method::HEAD {
         return None;
     }
-    if !(prefs.get_or("desktop_access", true)) {
+    if !(prefs.get_or("remote_access", true)) {
         return None;
     }
     let source = match (root, embedded) {

@@ -309,7 +309,7 @@ impl Session {
         if self.origin == RequestOrigin::Local && self.key.is_none() {
             return self.state.native_client_id().ok().as_deref() == Some(self.client.as_str());
         }
-        if !self.state.prefs.get_or("desktop_access", true) {
+        if !self.state.prefs.get_or("remote_access", true) {
             return false;
         }
         let current = plain_rs::features::services::sessions::local_key(&self.state, &self.client)

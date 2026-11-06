@@ -14,7 +14,7 @@ pub(crate) async fn setup(
     Extension(scheme): Extension<ConnectionScheme>,
     Json(request): Json<SetupRequest>,
 ) -> StatusCode {
-    if scheme.0 != "https" || !state.prefs.get_or("desktop_access", true) {
+    if scheme.0 != "https" || !state.prefs.get_or("remote_access", true) {
         return StatusCode::FORBIDDEN;
     }
     let prefs = state.prefs.clone();

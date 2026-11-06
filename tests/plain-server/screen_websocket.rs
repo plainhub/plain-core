@@ -14,7 +14,7 @@ fn public_fixture() -> (
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
-    prefs.set("desktop_access", true).unwrap();
+    prefs.set("remote_access", true).unwrap();
     prefs.set("client_id", "screen-fixture").unwrap();
     let core = ContentServer::start(
         directory.path(),
@@ -392,7 +392,7 @@ async fn screen_rejects_login_modes_missing_clients_invalid_keys_and_disabled_ac
             .unwrap();
         assert!(matches!(message, ClientMessage::Close(_)));
     }
-    prefs.set("desktop_access", false).unwrap();
+    prefs.set("remote_access", false).unwrap();
     let (mut screen, _) = tokio_tungstenite::connect_async(format!(
         "ws://127.0.0.1:{}/screen?cid={client}",
         core.port
@@ -405,7 +405,7 @@ async fn screen_rejects_login_modes_missing_clients_invalid_keys_and_disabled_ac
         .unwrap()
         .unwrap();
     assert!(
-        matches!(message, ClientMessage::Close(Some(frame)) if frame.reason == "desktop_access_disabled")
+        matches!(message, ClientMessage::Close(Some(frame)) if frame.reason == "remote_access_disabled")
     );
     core.shutdown().await;
 }

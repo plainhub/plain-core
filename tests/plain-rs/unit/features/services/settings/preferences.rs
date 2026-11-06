@@ -77,7 +77,7 @@ async fn invalid_generic_values_leave_state_and_events_unchanged() {
     assert!(
         settings
             .set(
-                crate::features::prefs::pref_keys::DESKTOP_ACCESS,
+                crate::features::prefs::pref_keys::REMOTE_ACCESS,
                 serde_json::json!("false")
             )
             .await

@@ -52,7 +52,7 @@ async fn establish(
     state: &ServerState,
     client: String,
 ) -> Result<Connection, String> {
-    if !state.prefs.get_or("desktop_access", true) {
+    if !state.prefs.get_or("remote_access", true) {
         return Err("Access disabled".into());
     }
     let local = plain_rs::features::services::sessions::local_key(state, &client);

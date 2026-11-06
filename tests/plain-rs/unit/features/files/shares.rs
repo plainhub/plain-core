@@ -208,9 +208,9 @@ fn fresh_auth_revocation_expiry_and_disabled_service() {
             .len(),
         32
     );
-    s.prefs.set("desktop_access", false).unwrap();
+    s.prefs.set("remote_access", false).unwrap();
     assert!(s.active(&row.id, true).unwrap().is_none());
-    s.prefs.set("desktop_access", true).unwrap();
+    s.prefs.set("remote_access", true).unwrap();
     s.update(
         &row.id,
         "expired",
@@ -360,11 +360,11 @@ fn guest_access_uses_remote_access_without_requiring_background_service() {
             .set("background_service_enabled", background)
             .unwrap();
         for enabled in [false, true] {
-            service.prefs.set("desktop_access", enabled).unwrap();
+            service.prefs.set("remote_access", enabled).unwrap();
             assert_eq!(service.active(&row.id, true).unwrap().is_some(), enabled);
             assert!(service.active(&row.id, false).unwrap().is_some());
         }
     }
-    service.prefs.set("desktop_access", "invalid").unwrap();
+    service.prefs.set("remote_access", "invalid").unwrap();
     assert!(service.active(&row.id, true).is_err());
 }

@@ -46,8 +46,8 @@ pub fn snapshot(prefs: &Prefs) -> Result<Settings> {
         settings.background_service_enabled =
             serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
     }
-    if let Some(value) = entries.get(keys::DESKTOP_ACCESS) {
-        settings.desktop_access =
+    if let Some(value) = entries.get(keys::REMOTE_ACCESS) {
+        settings.remote_access =
             serde_json::from_value(value.clone()).map_err(PrefsError::Decode)?;
     }
     if let Some(value) = entries.get(keys::DLNA) {
@@ -230,10 +230,10 @@ pub fn patch(prefs: &Prefs, patch: SettingsPatch) -> anyhow::Result<bool> {
                 changed = true;
             }
         }
-        if let Some(value) = patch.desktop_access {
+        if let Some(value) = patch.remote_access {
             let value = serde_json::to_value(value).map_err(PrefsError::Encode)?;
-            if entries.get(keys::DESKTOP_ACCESS) != Some(&value) {
-                entries.insert(keys::DESKTOP_ACCESS.into(), value);
+            if entries.get(keys::REMOTE_ACCESS) != Some(&value) {
+                entries.insert(keys::REMOTE_ACCESS.into(), value);
                 changed = true;
             }
         }

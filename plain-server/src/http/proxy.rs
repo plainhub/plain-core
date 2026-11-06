@@ -22,8 +22,8 @@ pub(crate) struct Params {
     id: String,
 }
 
-fn desktop_access_allowed(state: &ServerState) -> bool {
-    state.prefs.get_or("desktop_access", true)
+fn remote_access_allowed(state: &ServerState) -> bool {
+    state.prefs.get_or("remote_access", true)
 }
 
 /// The decrypted value is handed straight to an outbound client, so accept only
@@ -68,7 +68,7 @@ pub(crate) async fn call(
     Query(params): Query<Params>,
     headers: HeaderMap,
 ) -> Response {
-    if !desktop_access_allowed(&state) {
+    if !remote_access_allowed(&state) {
         return StatusCode::FORBIDDEN.into_response();
     }
     if params.id.is_empty() {
