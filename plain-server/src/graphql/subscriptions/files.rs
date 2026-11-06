@@ -55,6 +55,7 @@ impl FileSubscriptions {
                 root, query, sort_by: sort_by.into(),
                 offset: offset.max(0) as usize,
                 limit: Some(limit.max(0) as usize), count_only: false,
+                count_children: ctx.look_ahead().field("items").field("childCount").exists(),
             },
         ).await.map_err(plain_graphql::Error::new)?;
         if let Some(ready) = ctx.data_opt::<super::session::SubscriptionReady>() {

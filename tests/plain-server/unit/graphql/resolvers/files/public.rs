@@ -141,6 +141,36 @@ async fn a_directory_page_is_read_through_the_shared_filesystem_walk() {
 }
 
 #[tokio::test]
+async fn file_child_counts_follow_aliases_fragments_and_conditional_fields() {
+    let (dir, schema) = fixture(GRANTED);
+    let root = sample_tree(dir.path());
+    let query = format!(
+        r#"query($count: Boolean!) {{
+            entries: files(root:{:?}, offset:0, limit:10, query:"", sortBy:NAME_ASC) {{
+                name ...Counts
+            }}
+        }} fragment Counts on File {{ total: childCount @include(if:$count) }}"#,
+        root.to_string_lossy()
+    );
+    for selected in [false, true] {
+        let response = schema
+            .execute(plain_graphql::Request::new(&query).variables(
+                plain_graphql::Variables::from_json(json!({"count": selected})),
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().unwrap();
+        let child = &data["entries"][0];
+        assert_eq!(child["name"], "nested");
+        if selected {
+            assert_eq!(child["total"], 1);
+        } else {
+            assert!(child.get("total").is_none());
+        }
+    }
+}
+
+#[tokio::test]
 async fn a_file_count_ignores_paging_but_honours_the_query() {
     let (dir, schema) = fixture(GRANTED);
     let root = sample_tree(dir.path());

@@ -1,3 +1,26 @@
+type FileIndexDefaults {
+	excludedDirs: [String!]!
+	excludedNames: [String!]!
+	excludedPackages: [String!]!
+	excludedUserLibraries: Boolean!
+}
+
+type FileIndexVolume {
+	id: String!
+	path: String!
+	isAvailable: Boolean!
+	indexMode: IndexMode!
+	includedDirs: [String!]!
+	excludedDirs: [String!]!
+}
+
+enum IndexMode {
+	UNCONFIGURED
+	DISABLED
+	ALLOWLIST
+	BLOCKLIST
+}
+
 type MediaBucket {
 	size: Long!
 	id: ID!
@@ -57,32 +80,9 @@ extend type Mutation {
 }
 
 extend type Query {
+	fileIndexDefaults: FileIndexDefaults!
+	fileIndexVolumes: [FileIndexVolume!]!
 	mediaBuckets(type: MediaDataType!): [MediaBucket!]!
 	mediaPlayHistory(query: String!, offset: Int!, limit: Int!): [MediaPlayHistory!]!
-	fileIndexVolumes: [FileIndexVolume!]!
-	fileIndexDefaults: FileIndexDefaults!
 	scanProgress: ScanProgress!
-}
-
-enum IndexMode {
-    UNCONFIGURED
-    DISABLED
-    ALLOWLIST
-    BLOCKLIST
-}
-
-type FileIndexVolume {
-    id: String!
-    path: String!
-    isAvailable: Boolean!
-    indexMode: IndexMode!
-    includedDirs: [String!]!
-    excludedDirs: [String!]!
-}
-
-type FileIndexDefaults {
-    excludedDirs: [String!]!
-    excludedNames: [String!]!
-    excludedPackages: [String!]!
-    excludedUserLibraries: Boolean!
 }

@@ -20,6 +20,8 @@ pub struct Request {
     pub offset: usize,
     pub limit: Option<usize>,
     pub count_only: bool,
+    #[serde(default)]
+    pub count_children: bool,
 }
 pub struct Plan {
     pub root: String,
@@ -31,6 +33,7 @@ pub struct Plan {
     offset: usize,
     limit: Option<usize>,
     count_only: bool,
+    count_children: bool,
 }
 #[derive(Clone, Serialize)]
 pub struct Page {
@@ -79,6 +82,7 @@ impl Request {
             offset: self.offset,
             limit: self.limit,
             count_only: self.count_only,
+            count_children: self.count_children,
         })
     }
 }
@@ -160,20 +164,31 @@ impl Plan {
         items.sort_by_cached_key(|item| self.sort_key(item));
     }
     pub fn execute(&self) -> io::Result<Page> {
-        self.walk_inner(None, || false, Instant::now)
+        self.walk_inner(
+            None,
+            || false,
+            Instant::now,
+            crate::filesystem::count_dir_entries,
+        )
     }
     pub fn walk(
         &self,
         mut progress: impl FnMut(Page) -> bool,
         cancelled: impl Fn() -> bool,
     ) -> io::Result<Page> {
-        self.walk_inner(Some(&mut progress), cancelled, Instant::now)
+        self.walk_inner(
+            Some(&mut progress),
+            cancelled,
+            Instant::now,
+            crate::filesystem::count_dir_entries,
+        )
     }
     fn walk_inner(
         &self,
         mut progress: Option<&mut dyn FnMut(Page) -> bool>,
         cancelled: impl Fn() -> bool,
         mut now: impl FnMut() -> Instant,
+        mut count_entries: impl FnMut(&Path, bool) -> io::Result<usize>,
     ) -> io::Result<Page> {
         let root = Path::new(&self.root);
         match fs::metadata(root) {
@@ -320,11 +335,8 @@ impl Plan {
                     "File search cancelled",
                 ));
             }
-            if item.is_dir {
-                item.child_count = match crate::filesystem::count_dir_entries(
-                    Path::new(&item.path),
-                    self.show_hidden,
-                ) {
+            if self.count_children && item.is_dir {
+                item.child_count = match count_entries(Path::new(&item.path), self.show_hidden) {
                     Ok(count) => i32::try_from(count).unwrap_or(i32::MAX),
                     Err(e)
                         if matches!(

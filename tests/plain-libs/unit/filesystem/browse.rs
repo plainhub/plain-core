@@ -7,7 +7,50 @@ fn request(root: &Path, query: &str) -> Request {
         offset: 0,
         limit: None,
         count_only: false,
+        count_children: true,
     }
+}
+
+#[test]
+fn child_directory_reads_follow_the_requested_fields() {
+    let root = tempfile::tempdir().unwrap();
+    let child = root.path().join("Downloads");
+    fs::create_dir(&child).unwrap();
+    fs::write(child.join("document.txt"), b"fixture").unwrap();
+    for selected in [false, true] {
+        let mut query = request(root.path(), "");
+        query.count_children = selected;
+        let mut reads = Vec::new();
+        let page = query
+            .plan()
+            .unwrap()
+            .walk_inner(
+                None,
+                || false,
+                Instant::now,
+                |path, hidden| {
+                    reads.push(path.to_owned());
+                    crate::filesystem::count_dir_entries(path, hidden)
+                },
+            )
+            .unwrap();
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.items[0].name, "Downloads");
+        assert_eq!(
+            reads,
+            if selected {
+                vec![child.clone()]
+            } else {
+                Vec::new()
+            }
+        );
+        assert_eq!(page.items[0].child_count, i32::from(selected));
+    }
+    let mut entered = request(&child, "");
+    entered.count_children = false;
+    let page = entered.plan().unwrap().execute().unwrap();
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].name, "document.txt");
 }
 
 #[test]
@@ -269,6 +312,7 @@ fn progressive_search_limits_snapshots_and_avoids_duplicate_empty_pages() {
             }),
             || false,
             || now,
+            crate::filesystem::count_dir_entries,
         )
         .unwrap();
     assert_eq!(page.count, 1024);
@@ -287,6 +331,7 @@ fn progressive_search_limits_snapshots_and_avoids_duplicate_empty_pages() {
                 ticks += 1;
                 now + Duration::from_millis(ticks * 100)
             },
+            crate::filesystem::count_dir_entries,
         )
         .unwrap();
     assert_eq!(page.count, 1024);

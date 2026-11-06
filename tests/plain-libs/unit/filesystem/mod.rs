@@ -241,6 +241,7 @@ async fn macos_hidden_entries_follow_system_flags_in_lists_counts_and_search() {
             offset: 0,
             limit: None,
             count_only: false,
+            count_children: true,
         }
         .plan()
         .unwrap()

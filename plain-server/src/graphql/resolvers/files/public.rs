@@ -1,4 +1,3 @@
-use plain_rs::features::access::AccessFeature;
 use crate::graphql::resolvers::files::types::AudioFileInfo;
 use crate::graphql::resolvers::files::types::DriveType;
 use crate::graphql::resolvers::files::types::File;
@@ -16,6 +15,7 @@ use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
 use chrono::{DateTime, Utc};
 use plain_graphql::{Context, Enum, Object};
+use plain_rs::features::access::AccessFeature;
 
 use plain_libs::filesystem::SortBy;
 use plain_libs::filesystem::browse::Request;
@@ -109,6 +109,7 @@ impl FilesQuery {
                 offset: offset.max(0) as usize,
                 limit: Some(limit.max(0) as usize),
                 count_only: false,
+                count_children: ctx.look_ahead().field("childCount").exists(),
             },
         )
         .await
@@ -133,6 +134,7 @@ impl FilesQuery {
                 offset: 0,
                 limit: None,
                 count_only: true,
+                count_children: false,
             },
         )
         .await
