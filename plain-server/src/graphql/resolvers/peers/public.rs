@@ -1,9 +1,8 @@
 //! Public peer, SIM and pairing roots.
 
-use plain_rs::features::access::AccessFeature;
-use crate::graphql::resolvers::device::public::device_type as parse_device_type;
 use crate::http::auth::public_gate;
 use plain_graphql::{Context, Enum, InputObject, Object, SimpleObject};
+use plain_rs::features::access::AccessFeature;
 
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::device::types::DeviceType;
@@ -12,13 +11,6 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 pub use plain_rs::features::chat::enums::PeerStatus;
-
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
-pub enum DiscoveryMethod {
-    Lan,
-    Ble,
-    Qr,
-}
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct Peer {
@@ -68,7 +60,7 @@ impl Peer {
                 plain_rs::features::chat::enums::PeerStatus::Channel => PeerStatus::Channel,
             },
             port: row.port.map(i32::from),
-            device_type: parse_device_type(&row.device_type.to_string()),
+            device_type: row.device_type.into(),
             created_at: crate::graphql::types::facts::stored_instant(&row.created_at),
             updated_at: crate::graphql::types::facts::stored_instant(&row.updated_at),
         }
@@ -135,7 +127,7 @@ struct PairingState {
     device_id: Option<plain_graphql::ID>,
     generation: String,
     mode: PairingMode,
-    phase: String,
+    phase: plain_rs::features::services::discovery::pairing_attempts::PairingPhase,
     error: Option<String>,
     verification_code: Option<String>,
 }
@@ -174,7 +166,11 @@ impl PeersQuery {
     }
 
     async fn sims(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Sim>> {
-        public_gate::require(ctx, ctx.data_unchecked::<Arc<Prefs>>(), &[AccessFeature::PhoneNumber])?;
+        public_gate::require(
+            ctx,
+            ctx.data_unchecked::<Arc<Prefs>>(),
+            &[AccessFeature::PhoneNumber],
+        )?;
         let facts = host_call(ctx, "systemSimFacts", json!({})).await?;
         Ok(crate::graphql::types::facts::rows(&facts, |value| Sim {
             id: crate::graphql::types::facts::id(value, "id"),

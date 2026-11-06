@@ -274,7 +274,7 @@ impl MacDnsSdBrowser {
                         port: resolved.port,
                         txt_records: resolved.txt.clone(),
                         ips: ips.clone(),
-                        ipv6: vec![],
+                        ip6s: vec![],
                         complete: resolved.port > 0
                             && !ips.is_empty()
                             && resolved.txt.iter().any(|v| v.starts_with("id=")),
@@ -344,9 +344,9 @@ fn merged_snapshots<'a>(
                 existing.ips.extend(snapshot.ips.iter().cloned());
                 existing.ips.sort();
                 existing.ips.dedup();
-                existing.ipv6.extend(snapshot.ipv6.iter().cloned());
-                existing.ipv6.sort();
-                existing.ipv6.dedup();
+                existing.ip6s.extend(snapshot.ip6s.iter().cloned());
+                existing.ip6s.sort();
+                existing.ip6s.dedup();
                 existing.complete |= snapshot.complete;
             }
             None => {
@@ -382,6 +382,11 @@ fn found_device(
         device_type: value("dv="),
         version: value("ver="),
         platform: value("pf="),
+        remote_access: match value("ra=").as_str() {
+            "1" => Some(true),
+            "0" => Some(false),
+            _ => None,
+        },
     })
 }
 
@@ -632,7 +637,7 @@ mod tests {
             port: 8443,
             txt_records: vec!["id=phone-1".into()],
             ips: vec!["192.168.1.2".into()],
-            ipv6: vec![],
+            ip6s: vec![],
             complete: true,
         };
         let second = MdnsServiceSnapshot {

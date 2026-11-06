@@ -13,7 +13,7 @@ fn session_store_and_authentication_rows_share_one_sqlite_authority() {
         .unwrap();
     let row = db.session_get("browser").unwrap().unwrap();
     assert_eq!(row.token, first.token);
-    assert_eq!(row.r#type, "CUSTOM");
+    assert_eq!(row.r#type, crate::features::sessions::SessionType::Custom);
     assert_eq!(token_key(&row.token).unwrap().len(), 32);
     db.session_delete("browser").unwrap();
     assert!(store.get("browser").unwrap().is_none());
@@ -66,3 +66,27 @@ fn malformed_tokens_cannot_be_saved() {
 }
 
 use std::path::Path;
+
+#[test]
+fn session_types_preserve_storage_and_wire_values() {
+    let db = Db::open(Path::new(":memory:")).unwrap();
+    let store = SessionStore::new(&db);
+    store
+        .upsert(SessionInfo {
+            client_id: "typed".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    for (kind, wire) in [(SessionType::Web, "WEB"), (SessionType::Custom, "CUSTOM")] {
+        let mut row = db.session_get("typed").unwrap().unwrap();
+        row.r#type = kind;
+        db.session_save(&row).unwrap();
+        assert_eq!(db.session_get("typed").unwrap().unwrap().r#type, kind);
+        assert_eq!(serde_json::to_value(kind).unwrap(), wire);
+        assert_eq!(
+            serde_json::from_value::<SessionType>(serde_json::json!(wire)).unwrap(),
+            kind
+        );
+    }
+    assert!(serde_json::from_value::<SessionType>(serde_json::json!("FUTURE_SESSION")).is_err());
+}

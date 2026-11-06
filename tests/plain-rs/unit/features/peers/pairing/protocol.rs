@@ -5,7 +5,7 @@ fn sample_request() -> PairingRequest {
         from_id: "client-a".to_string(),
         from_name: "Mac".to_string(),
         port: 8443,
-        device_type: "COMPUTER".to_string(),
+        device_type: crate::features::chat::enums::DeviceType::Computer,
         ecdh_public_key: "ECDH".to_string(),
         signature_public_key: "SIGPK".to_string(),
         timestamp: 1_700_000_000_000,
@@ -44,7 +44,7 @@ fn response_signature_data_format_is_locked() {
         from_id: "client-b".to_string(),
         to_id: "client-a".to_string(),
         port: 2443,
-        device_type: "PHONE".to_string(),
+        device_type: crate::features::chat::enums::DeviceType::Phone,
         ecdh_public_key: "ECDH2".to_string(),
         signature_public_key: "SIGPK2".to_string(),
         accepted: true,
@@ -81,4 +81,33 @@ fn legacy_unsigned_cancellation_and_unbound_response_are_rejected() {
             .is_err()
     );
     assert!(serde_json::from_value::<PairingResponse>(serde_json::json!({"fromId":"b","toId":"a","port":2443,"deviceType":"PHONE","ecdhPublicKey":"key","signaturePublicKey":"signer","accepted":true,"timestamp":1,"signature":"old"})).is_err());
+}
+
+#[test]
+fn request_device_enums_preserve_wire_and_signature_values() {
+    use crate::features::chat::enums::DeviceType;
+    for kind in [
+        DeviceType::Computer,
+        DeviceType::Phone,
+        DeviceType::Tablet,
+        DeviceType::Tv,
+        DeviceType::Nas,
+        DeviceType::Other,
+        DeviceType::Unknown,
+    ] {
+        let mut request = sample_request();
+        request.device_type = kind;
+        let wire = serde_json::to_value(&request).unwrap();
+        assert_eq!(wire["deviceType"], kind.as_str());
+        let decoded: PairingRequest = serde_json::from_value(wire).unwrap();
+        assert_eq!(decoded.device_type, kind);
+        assert_eq!(decoded.signature_data(), request.signature_data());
+        assert_eq!(
+            request.signature_data().split('|').nth(3).unwrap(),
+            kind.as_str()
+        );
+    }
+    let mut wire = serde_json::to_value(sample_request()).unwrap();
+    wire["deviceType"] = serde_json::json!("FUTURE_DEVICE");
+    assert!(serde_json::from_value::<PairingRequest>(wire).is_err());
 }

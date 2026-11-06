@@ -11,6 +11,18 @@ enum PairingMode {
 	MANAGE
 }
 
+enum PairingPhase {
+	STARTING
+	PASSWORD_REQUIRED
+	AUTHENTICATING
+	PAIRING
+	WAITING_CONFIRMATION
+	COMMITTING
+	SUCCEEDED
+	FAILED
+	CANCELLED
+}
+
 input PairingRequestInput {
 	fromId: ID!
 	fromName: String!
@@ -29,7 +41,7 @@ type PairingState {
 	deviceId: ID
 	generation: String!
 	mode: PairingMode!
-	phase: String!
+	phase: PairingPhase!
 	error: String
 	verificationCode: String
 }
@@ -40,9 +52,9 @@ input PeerRecordInput {
 	ip: String!
 	key: String!
 	publicKey: String!
-	status: String!
+	status: PeerStatus!
 	port: Int
-	deviceType: String!
+	deviceType: DeviceType!
 	token: String!
 	createdAt: Instant!
 	updatedAt: Instant!

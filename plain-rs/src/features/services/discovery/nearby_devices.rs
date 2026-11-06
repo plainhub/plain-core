@@ -41,15 +41,13 @@ impl Context {
         device.validate()?;
         if resident {
             chat_store::nearby::save(&self.db, &device.cache())?;
-            let kind = serde_json::from_value(json!(device.device_type))
-                .unwrap_or(crate::features::chat::enums::DeviceType::Other);
             if chat_store::peers::discovered(
                 &self.db,
                 &device.id,
                 &device.ips,
                 device.port,
                 &device.name,
-                kind,
+                device.device_type,
             )?
             .is_some()
             {
@@ -109,9 +107,9 @@ pub fn snapshot(
             &interfaces
         ));
         device["status"] = json!(if paired.contains(device["id"].as_str().unwrap()) {
-            "PAIRED"
+            crate::features::chat::enums::PeerStatus::Paired
         } else {
-            "UNPAIRED"
+            crate::features::chat::enums::PeerStatus::Unpaired
         });
     }
     Ok(snapshot)
@@ -132,7 +130,7 @@ pub async fn sweep(state: &CoreRuntime) -> anyhow::Result<()> {
                 .device
                 .discovery_methods
                 .iter()
-                .any(|method| method == "LAN")
+                .any(|method| method.is_lan())
         });
     }
     let interfaces = crate::infrastructure::transport::lan::local_interfaces();
@@ -144,7 +142,7 @@ pub async fn sweep(state: &CoreRuntime) -> anyhow::Result<()> {
         let interfaces = &interfaces;
         let results = futures_util::future::join_all(chunk.iter().map(|p| async move {
             let ip = crate::infrastructure::transport::lan::best(&p.device.ips, &interfaces);
-            let alive = p.device.discovery_methods.iter().any(|v| v == "LAN")
+            let alive = p.device.discovery_methods.iter().any(|v| v.is_lan())
                 && !ip.is_empty()
                 && crate::features::discovery::nearby_http::probe(&ip, p.device.port)
                     .await

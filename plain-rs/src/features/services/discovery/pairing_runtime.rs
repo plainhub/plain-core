@@ -1,3 +1,4 @@
+use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::discovery::nearby_http;
 use crate::features::discovery::nearby_http::Message;
 use crate::features::peers::pairing::protocol::PairingCancel;
@@ -7,6 +8,7 @@ use crate::features::peers::pairing::sessions::Target;
 use crate::features::peers::pairing::sessions::Ticket;
 use crate::features::services::discovery::pairing;
 use crate::features::services::discovery::pairing::Device;
+use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::runtime::Runtime as CoreRuntime;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -96,7 +98,7 @@ pub enum Request {
     Start {
         target: Target,
         ips: Vec<String>,
-        methods: Vec<String>,
+        methods: Vec<DiscoveryMethod>,
         ble: bool,
         device: Device,
         generation: Option<String>,
@@ -144,10 +146,13 @@ pub fn failed(state: &CoreRuntime, target: &Target, error: &str, generation: Opt
         result["generation"] = json!(generation);
     }
     if let Some(generation) = generation {
-        state
-            .pairing_runtime
-            .attempts
-            .transition(state, generation, "FAILED", Some(error), None);
+        state.pairing_runtime.attempts.transition(
+            state,
+            generation,
+            PairingPhase::Failed,
+            Some(error),
+            None,
+        );
     }
     event(
         state,
@@ -250,7 +255,7 @@ pub(super) async fn local_device(state: &CoreRuntime) -> anyhow::Result<Device> 
     Ok(Device {
         name: reply.name,
         port: reply.port,
-        device_type: reply.device_type.to_string(),
+        device_type: reply.device_type,
         ips: reply.ips,
         aware_supported: reply.aware_supported,
     })
@@ -259,11 +264,11 @@ pub async fn start_device(
     state: &CoreRuntime,
     target: Target,
     ips: Vec<String>,
-    methods: Vec<String>,
+    methods: Vec<DiscoveryMethod>,
     generation: Option<String>,
 ) -> anyhow::Result<Value> {
-    let ble = if methods.iter().any(|method| method == "BLE")
-        && !(methods.iter().any(|method| method == "LAN") && !ips.is_empty())
+    let ble = if methods.iter().any(|method| *method == DiscoveryMethod::Ble)
+        && !(methods.iter().any(|method| method.is_lan()) && !ips.is_empty())
     {
         state
             .host
@@ -316,7 +321,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
             device,
             generation,
         } => {
-            if methods.iter().any(|m| m == "LAN") && !ips.is_empty() {
+            if methods.iter().any(|m| m.is_lan()) && !ips.is_empty() {
                 Box::pin(execute(
                     state,
                     Request::StartLan {
@@ -327,7 +332,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
                     },
                 ))
                 .await?
-            } else if methods.iter().any(|m| m == "BLE") && ble {
+            } else if methods.iter().any(|m| *m == DiscoveryMethod::Ble) && ble {
                 crate::features::services::discovery::ble_pairing::start(
                     state, target, device, generation,
                 )?
@@ -357,7 +362,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
                         .pairing_runtime
                         .attempts
                         .get(g)
-                        .is_none_or(|s| s.phase == "CANCELLED")
+                        .is_none_or(|s| s.phase == PairingPhase::Cancelled)
                 }) {
                     return Ok(Value::Null);
                 }
@@ -384,7 +389,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
                     state.pairing_runtime.attempts.transition(
                         state,
                         &ticket.generation,
-                        "PAIRING",
+                        PairingPhase::Pairing,
                         None,
                         None,
                     );
@@ -524,7 +529,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
                         state.pairing_runtime.attempts.transition(
                             state,
                             generation,
-                            "SUCCEEDED",
+                            PairingPhase::Succeeded,
                             None,
                             None,
                         );

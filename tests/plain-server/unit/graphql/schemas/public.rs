@@ -817,3 +817,76 @@ async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host
         );
     }
 }
+
+#[test]
+fn closed_fields_keep_named_enums_and_required_wrappers() {
+    let schema = sdl();
+    for (kind, name, field, expected) in [
+        ("type", "NearbyDevice", "deviceType", "DeviceType!"),
+        ("type", "NearbyDevice", "status", "PeerStatus!"),
+        (
+            "type",
+            "NearbyDevice",
+            "discoveryMethods",
+            "[DiscoveryMethod!]!",
+        ),
+        ("type", "Session", "type", "SessionType!"),
+        ("type", "PairingState", "phase", "PairingPhase!"),
+        ("input", "PeerRecordInput", "status", "PeerStatus!"),
+        ("input", "PeerRecordInput", "deviceType", "DeviceType!"),
+        ("type", "PairingRequestNotice", "deviceType", "DeviceType!"),
+        (
+            "type",
+            "ImageModelsUpdate",
+            "status",
+            "ImageSearchStatusType!",
+        ),
+        ("type", "MdnsPacket", "direction", "MdnsPacketDirection!"),
+        ("type", "FeedSyncState", "status", "FeedWorkerStatus!"),
+    ] {
+        let header = format!("{kind} {name} {{");
+        let body = schema
+            .split(header.as_str())
+            .nth(1)
+            .unwrap_or_else(|| panic!("missing {name}"));
+        let prefix = format!("{field}: ");
+        let actual = body
+            .split('}')
+            .next()
+            .unwrap()
+            .lines()
+            .map(str::trim)
+            .find_map(|line| line.strip_prefix(prefix.as_str()))
+            .unwrap_or_else(|| panic!("missing {name}.{field}"));
+        assert_eq!(actual, expected, "{name}.{field}");
+    }
+    for (name, expected) in [
+        ("DeviceType", "COMPUTER PHONE TABLET TV NAS OTHER"),
+        ("PeerStatus", "PAIRED UNPAIRED CHANNEL"),
+        ("DiscoveryMethod", "LAN DNS_SD BLE QR"),
+        ("SessionType", "WEB CUSTOM"),
+        (
+            "PairingPhase",
+            "STARTING PASSWORD_REQUIRED AUTHENTICATING PAIRING WAITING_CONFIRMATION COMMITTING SUCCEEDED FAILED CANCELLED",
+        ),
+        (
+            "ImageSearchStatusType",
+            "UNAVAILABLE DOWNLOADING LOADING READY ERROR",
+        ),
+        ("MdnsPacketDirection", "IN OUT"),
+        (
+            "FeedWorkerStatus",
+            "QUEUED RUNNING CANCELLED COMPLETED ERROR",
+        ),
+    ] {
+        let header = format!("enum {name} {{");
+        let body = schema
+            .split(header.as_str())
+            .nth(1)
+            .unwrap_or_else(|| panic!("missing enum {name}"));
+        let actual: std::collections::BTreeSet<_> =
+            body.split('}').next().unwrap().split_whitespace().collect();
+        let expected: std::collections::BTreeSet<_> = expected.split_whitespace().collect();
+        assert_eq!(actual, expected, "{name}");
+    }
+}

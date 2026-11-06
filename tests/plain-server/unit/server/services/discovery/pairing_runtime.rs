@@ -31,7 +31,7 @@ fn device() -> Device {
     Device {
         name: "Fixture".into(),
         port: 2443,
-        device_type: "PHONE".into(),
+        device_type: plain_rs::features::chat::enums::DeviceType::Phone,
         ips: vec!["127.0.0.1".into()],
         aware_supported: false,
     }
@@ -115,15 +115,23 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
         device_ip: "stale".into(),
         device_port: listeners.https_port,
     };
-    let start = || Request::Start {
-        methods: vec!["LAN".into(), "BLE".into()],
+    let start = |method| Request::Start {
+        methods: vec![
+            method,
+            plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Ble,
+        ],
         ble: true,
         target: target.clone(),
         ips: vec!["invalid".into(), "127.0.0.1".into()],
         device: device(),
         generation: None,
     };
-    let first = execute(&state, start()).await.unwrap();
+    let first = execute(
+        &state,
+        start(plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan),
+    )
+    .await
+    .unwrap();
     assert_eq!(first["sent"], true);
     assert_eq!(first["ticket"]["deviceIp"], "127.0.0.1");
     let Message::PairRequest(request) = received.recv().await.unwrap() else {
@@ -135,7 +143,13 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
         received.recv().await.unwrap(),
         Message::PairVerification(_)
     ));
-    let second = execute(&state, start()).await.unwrap();
+    let second = execute(
+        &state,
+        start(plain_rs::features::discovery::nearby_devices::DiscoveryMethod::DnsSd),
+    )
+    .await
+    .unwrap();
+    assert_eq!(second["sent"], true);
     let _ = received.recv().await.unwrap();
     assert!(matches!(
         received.recv().await.unwrap(),
@@ -174,7 +188,12 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     assert_eq!(cancel.from_id, "local");
     assert!(state.pairing.tickets().is_empty());
     listeners.shutdown().await;
-    let failed = execute(&state, start()).await.unwrap();
+    let failed = execute(
+        &state,
+        start(plain_rs::features::discovery::nearby_devices::DiscoveryMethod::DnsSd),
+    )
+    .await
+    .unwrap();
     assert_eq!(failed["sent"], false);
     assert!(state.pairing.tickets().is_empty());
     server.shutdown().await;

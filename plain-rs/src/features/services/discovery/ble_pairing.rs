@@ -4,6 +4,7 @@ use crate::features::peers::pairing::sessions::Target;
 use crate::features::peers::pairing::sessions::Ticket;
 use crate::features::services::discovery::pairing;
 use crate::features::services::discovery::pairing::Device;
+use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::features::services::discovery::pairing_runtime::event;
 use crate::features::services::discovery::pairing_runtime::failed;
 use crate::features::services::discovery::pairing_runtime::success;
@@ -46,7 +47,7 @@ pub fn start(
                 .pairing_runtime
                 .attempts
                 .get(g)
-                .is_none_or(|s| s.phase == "CANCELLED")
+                .is_none_or(|s| s.phase == PairingPhase::Cancelled)
         }) {
             return Ok(Value::Null);
         }
@@ -137,10 +138,13 @@ async fn run(
     {
         return Err(Cause::Stopped);
     }
-    state
-        .pairing_runtime
-        .attempts
-        .transition(state, &ticket.generation, "PAIRING", None, None);
+    state.pairing_runtime.attempts.transition(
+        state,
+        &ticket.generation,
+        PairingPhase::Pairing,
+        None,
+        None,
+    );
     event(
         state,
         WS_PAIRING_STARTED,
@@ -241,7 +245,7 @@ async fn run(
             state.pairing_runtime.attempts.transition(
                 state,
                 &ticket.generation,
-                "SUCCEEDED",
+                PairingPhase::Succeeded,
                 None,
                 None,
             );

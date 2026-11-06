@@ -1,6 +1,10 @@
 use crate::infrastructure::types::Instant;
 use crate::infrastructure::types::Long;
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(
+    rename_all = "SCREAMING_SNAKE_CASE",
+    from = "crate::features::chat::enums::DeviceType"
+)]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 pub enum DeviceType {
     #[default]
@@ -10,6 +14,20 @@ pub enum DeviceType {
     Tv,
     Nas,
     Other,
+}
+
+impl From<crate::features::chat::enums::DeviceType> for DeviceType {
+    fn from(value: crate::features::chat::enums::DeviceType) -> Self {
+        use crate::features::chat::enums::DeviceType as Kind;
+        match value {
+            Kind::Computer => Self::Computer,
+            Kind::Phone => Self::Phone,
+            Kind::Tablet => Self::Tablet,
+            Kind::Tv => Self::Tv,
+            Kind::Nas => Self::Nas,
+            Kind::Other | Kind::Unknown => Self::Other,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]

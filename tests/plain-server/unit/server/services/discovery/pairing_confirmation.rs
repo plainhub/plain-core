@@ -2,6 +2,7 @@ use plain_libs::utils::base64::base64_encode;
 use plain_rs::features::peers::pairing::sessions::Target;
 use plain_rs::features::services::discovery::pairing;
 use plain_rs::features::services::discovery::pairing_attempts::Mode;
+use plain_rs::features::services::discovery::pairing_attempts::PairingPhase;
 use sha2::Digest;
 use std::sync::Arc;
 
@@ -24,7 +25,7 @@ fn device() -> pairing::Device {
     pairing::Device {
         name: "Fixture".into(),
         port: 2443,
-        device_type: "PHONE".into(),
+        device_type: plain_rs::features::chat::enums::DeviceType::Phone,
         ips: vec![],
         aware_supported: false,
     }
@@ -123,7 +124,7 @@ async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authen
             .get(&attempt.generation)
             .unwrap()
             .phase,
-        "SUCCEEDED"
+        PairingPhase::Succeeded
     );
     assert_eq!(
         plain_rs::infrastructure::db::chat_store::peers::get(&local.db, "remote")

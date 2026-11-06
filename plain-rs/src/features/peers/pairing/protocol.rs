@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::features::peers::pairing::utils::device_type_signature_value;
+use crate::features::chat::enums::DeviceType;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -8,7 +8,7 @@ pub struct PairingRequest {
     pub from_id: String,
     pub from_name: String,
     pub port: u16,
-    pub device_type: String,
+    pub device_type: DeviceType,
     pub ecdh_public_key: String,
     pub signature_public_key: String,
     pub timestamp: i64,
@@ -30,7 +30,7 @@ impl PairingRequest {
             self.from_id,
             self.from_name,
             self.port,
-            device_type_signature_value(&self.device_type),
+            self.device_type.as_str(),
             self.ecdh_public_key,
             self.signature_public_key,
             self.timestamp,
@@ -47,7 +47,7 @@ pub struct PairingResponse {
     pub from_id: String,
     pub to_id: String,
     pub port: u16,
-    pub device_type: String,
+    pub device_type: DeviceType,
     pub ecdh_public_key: String,
     pub signature_public_key: String,
     pub accepted: bool,
@@ -68,7 +68,7 @@ impl PairingResponse {
             self.from_id,
             self.to_id,
             self.port,
-            device_type_signature_value(&self.device_type),
+            self.device_type.as_str(),
             self.ecdh_public_key,
             self.signature_public_key,
             self.accepted,

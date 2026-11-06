@@ -37,7 +37,7 @@ pub fn create(state: &CoreRuntime, name: String) -> anyhow::Result<SessionRow> {
         url_token: plain_libs::crypto::gen_token(),
         client_id: crate::features::client_identity::generate(),
         name,
-        r#type: "CUSTOM".into(),
+        r#type: crate::features::sessions::SessionType::Custom,
         client_ip: String::new(),
         os_name: String::new(),
         os_version: String::new(),

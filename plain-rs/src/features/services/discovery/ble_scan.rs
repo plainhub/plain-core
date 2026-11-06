@@ -22,6 +22,7 @@
 //! reads are decoupled from the `seen` request that schedules them.
 
 use crate::features::discovery::nearby_devices::Device;
+use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::discovery::nearby_scan::Step;
 use crate::features::services::discovery::nearby_devices::Context;
 use crate::infrastructure::db::now_iso;
@@ -125,11 +126,12 @@ async fn run(state: CoreRuntime, pending: Pending) {
         name: reply.name,
         ips: reply.ips,
         port: reply.port,
-        device_type: reply.device_type.as_str().to_string(),
+        device_type: reply.device_type,
         version: reply.version,
         platform: reply.platform,
         last_seen_at: now_iso(),
-        discovery_methods: vec!["BLE".to_string()],
+        remote_access: reply.remote_access,
+        discovery_methods: vec![DiscoveryMethod::Ble],
     };
     if let Err(error) = Context::from(&state).seen(device, true, false) {
         log::debug!("ble publish {} failed: {error}", pending.client_id);

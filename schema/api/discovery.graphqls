@@ -1,3 +1,10 @@
+enum DiscoveryMethod {
+	LAN
+	DNS_SD
+	BLE
+	QR
+}
+
 type MdnsActivity {
 	time: Long!
 	event: String!
@@ -6,7 +13,7 @@ type MdnsActivity {
 
 type MdnsPacket {
 	time: Long!
-	direction: String!
+	direction: MdnsPacketDirection!
 	srcIp: String!
 	srcPort: Int!
 	dstIp: String!
@@ -14,6 +21,11 @@ type MdnsPacket {
 	size: Long!
 	summary: String!
 	detail: String!
+}
+
+enum MdnsPacketDirection {
+	IN
+	OUT
 }
 
 type MdnsService {
@@ -24,7 +36,7 @@ type MdnsService {
 	port: Int!
 	txtRecords: [String!]!
 	ips: [String!]!
-	ipv6: [String!]!
+	ip6s: [String!]!
 	complete: Boolean!
 }
 
@@ -44,13 +56,14 @@ type NearbyDevice {
 	name: String!
 	ips: [String!]!
 	port: Int!
-	deviceType: String!
+	remoteAccess: Boolean
+	deviceType: DeviceType!
 	version: String!
 	platform: String!
 	lastSeen: String!
-	discoveryMethods: [String!]!
+	discoveryMethods: [DiscoveryMethod!]!
 	bestIp: String!
-	status: String!
+	status: PeerStatus!
 }
 
 extend type Mutation {

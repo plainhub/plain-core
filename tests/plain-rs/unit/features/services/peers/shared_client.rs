@@ -19,7 +19,7 @@ fn discovery_selects_complete_matching_records_and_safe_ipv6_urls() {
     let expected = card(443);
     let mut links = vec![];
     let mut seen = HashSet::new();
-    let snapshot = json!({"services":[{"complete":false,"port":8443,"txtRecords":["id=peer"],"ips":["127.0.0.1"]},{"complete":true,"port":8443,"txtRecords":["id=other"],"ips":["127.0.0.1"]},{"complete":true,"port":8443,"txtRecords":["id=peer"],"ips":["127.0.0.1","127.0.0.1"],"ipv6":["::1"]}]});
+    let snapshot = json!({"services":[{"complete":false,"port":8443,"txtRecords":["id=peer"],"ips":["127.0.0.1"]},{"complete":true,"port":8443,"txtRecords":["id=other"],"ips":["127.0.0.1"]},{"complete":true,"port":8443,"txtRecords":["id=peer"],"ips":["127.0.0.1","127.0.0.1"],"ip6s":["::1"]}]});
     discovery_candidates(&mut links, &mut seen, &snapshot, &expected);
     assert_eq!(links.len(), 2);
     assert!(links[1].page_url.starts_with("https://[::1]:8443/"));

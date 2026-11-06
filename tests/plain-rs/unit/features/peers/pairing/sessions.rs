@@ -98,7 +98,7 @@ fn incoming_request() -> crate::features::peers::pairing::protocol::PairingReque
         from_id: "peer".into(),
         from_name: "Fixture".into(),
         port: 2443,
-        device_type: "PHONE".into(),
+        device_type: crate::features::chat::enums::DeviceType::Phone,
         ecdh_public_key: String::new(),
         signature_public_key: "identity".into(),
         timestamp: crate::features::peers::pairing::now_ms(),

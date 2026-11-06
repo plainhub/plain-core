@@ -83,8 +83,8 @@ async fn all_and_single_requests_share_the_same_in_flight_feed_and_only_emit_fee
         .unwrap()
         .subscribe();
     release.add_permits(1);
-    assert_eq!(finished(original).await.status, "COMPLETED");
-    assert_eq!(finished(batch).await.status, "COMPLETED");
+    assert_eq!(finished(original).await.status, FeedWorkerStatus::Completed);
+    assert_eq!(finished(batch).await.status, FeedWorkerStatus::Completed);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     let mut types = Vec::new();
     while let Ok(event) = events.try_recv() {
@@ -124,7 +124,7 @@ async fn shutdown_cancels_owned_fetches_without_late_sync_completion_or_detached
     service.shutdown().await;
     assert_eq!(scheduler_exits.load(Ordering::SeqCst), 1);
     assert!(service.scheduler.lock().unwrap().is_none());
-    assert_eq!(finished(receiver).await.status, "CANCELLED");
+    assert_eq!(finished(receiver).await.status, FeedWorkerStatus::Cancelled);
     assert!(
         service
             .db
@@ -160,14 +160,15 @@ async fn independent_feeds_share_one_global_concurrency_limit() {
     assert_eq!(
         states
             .iter()
-            .filter(|state| state.feed_id.as_str() != "all" && state.status == "RUNNING")
+            .filter(|state| state.feed_id.as_str() != "all"
+                && state.status == FeedWorkerStatus::Running)
             .count(),
         16
     );
     assert_eq!(
         states
             .iter()
-            .filter(|state| state.status == "QUEUED")
+            .filter(|state| state.status == FeedWorkerStatus::Queued)
             .count(),
         2
     );
@@ -178,7 +179,7 @@ async fn independent_feeds_share_one_global_concurrency_limit() {
             .states()
             .iter()
             .filter(|state| state.feed_id.as_str() != "all")
-            .all(|state| state.status == "CANCELLED")
+            .all(|state| state.status == FeedWorkerStatus::Cancelled)
     );
     while let Ok(event) = events.try_recv() {
         assert_ne!(event.event_type, "FEED_SYNC_UPDATED");
@@ -202,10 +203,7 @@ async fn transient_fetches_retry_three_times_with_owned_cancellable_delays() {
     tokio::task::yield_now().await;
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     tokio::time::advance(std::time::Duration::from_secs(4)).await;
-    assert_eq!(
-        worker.await.unwrap(),
-        Err("SERVER:503: unavailable".into())
-    );
+    assert_eq!(worker.await.unwrap(), Err("SERVER:503: unavailable".into()));
     assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
 
@@ -307,7 +305,7 @@ async fn feed_changes_reach_the_host_and_reconnect_recovers_a_full_snapshot() {
         .state
         .subscribe();
     release.add_permits(1);
-    assert_eq!(finished(running).await.status, "COMPLETED");
+    assert_eq!(finished(running).await.status, FeedWorkerStatus::Completed);
     let (replacement, mut restored) = service.host.connect();
     service.notify_snapshot().unwrap();
     let snapshot = restored.recv().await.unwrap();
@@ -325,4 +323,35 @@ async fn feed_changes_reach_the_host_and_reconnect_recovers_a_full_snapshot() {
     }
     service.shutdown().await;
     server.abort();
+}
+
+#[test]
+fn feed_states_keep_enum_wire_names_and_active_boundaries() {
+    for (status, wire, active) in [
+        (FeedWorkerStatus::Queued, "QUEUED", true),
+        (FeedWorkerStatus::Running, "RUNNING", true),
+        (FeedWorkerStatus::Cancelled, "CANCELLED", false),
+        (FeedWorkerStatus::Completed, "COMPLETED", false),
+        (FeedWorkerStatus::Error, "ERROR", false),
+    ] {
+        let state = FeedSyncState {
+            feed_id: "feed".into(),
+            task_id: "task".into(),
+            revision: crate::infrastructure::types::Long(1),
+            status,
+            error: String::new(),
+        };
+        assert_eq!(state.active(), active);
+        let value = serde_json::to_value(&state).unwrap();
+        assert_eq!(value["status"], wire);
+        assert_eq!(
+            serde_json::from_value::<FeedSyncState>(value)
+                .unwrap()
+                .status,
+            status
+        );
+    }
+    assert!(
+        serde_json::from_value::<FeedWorkerStatus>(serde_json::json!("FUTURE_STATUS")).is_err()
+    );
 }

@@ -236,6 +236,7 @@ impl FromStr for DeviceType {
             "TABLET" => Ok(Self::Tablet),
             "COMPUTER" => Ok(Self::Computer),
             "TV" => Ok(Self::Tv),
+            "NAS" => Ok(Self::Nas),
             "OTHER" => Ok(Self::Other),
             "UNKNOWN" => Ok(Self::Unknown),
             _ => Err(format!("Unknown DeviceType: {s}")),

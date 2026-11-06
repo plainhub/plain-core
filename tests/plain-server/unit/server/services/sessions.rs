@@ -105,7 +105,7 @@ async fn web_login_ecdh_encrypted_response_signature_and_token_auth_survive_rest
         issued["token"]
     );
     let row = state.db.session_get("browser").unwrap().unwrap();
-    assert_eq!(row.r#type, "WEB");
+    assert_eq!(row.r#type, plain_rs::features::sessions::SessionType::Web);
     assert_eq!(
         plain_rs::infrastructure::db::Db::open(
             &plain_rs::infrastructure::data_paths::DataPaths::new(dir.path()).database()

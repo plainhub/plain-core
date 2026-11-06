@@ -82,7 +82,7 @@ pub struct ChannelChange {
 #[serde(rename_all = "camelCase")]
 pub struct ImageModelsUpdate {
     pub version: Long,
-    pub status: String,
+    pub status: plain_rs::features::services::images::status::ImageSearchStatusType,
     pub download_progress: i32,
     pub error_message: String,
     pub model_size: Long,
@@ -97,7 +97,7 @@ pub struct PairingRequestNotice {
     pub from_id: ID,
     pub from_name: String,
     pub port: i32,
-    pub device_type: String,
+    pub device_type: plain_rs::features::services::device::types::DeviceType,
     pub ecdh_public_key: String,
     pub signature_public_key: String,
     pub timestamp: Long,
@@ -127,3 +127,7 @@ pub struct PomodoroAction {
     pub today: plain_rs::features::services::pomodoro::PomodoroToday,
     pub completed_state: Option<plain_rs::features::services::pomodoro::PomodoroState>,
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-server/unit/graphql/subscriptions/models.rs"]
+mod tests;

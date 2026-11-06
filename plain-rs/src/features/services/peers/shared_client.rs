@@ -98,7 +98,7 @@ fn discovery_candidates(
         else {
             continue;
         };
-        for key in ["ips", "ipv6"] {
+        for key in ["ips", "ip6s"] {
             for host in service[key]
                 .as_array()
                 .into_iter()

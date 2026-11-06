@@ -13,20 +13,6 @@ pub fn timestamp_ok(ts: i64) -> bool {
     now_ms().abs_diff(ts) <= MAX_TIMESTAMP_DIFF_MS as u64
 }
 
-/// Signature canonicalization for the pairing `deviceType` field.
-/// Identity today (matches the plain-app Kotlin wire format); kept as a
-/// seam so any future normalization happens in exactly one place.
-pub fn device_type_signature_value(wire: &str) -> String {
-    match wire {
-        "COMPUTER" => "COMPUTER".to_string(),
-        "PHONE" => "PHONE".to_string(),
-        "TABLET" => "TABLET".to_string(),
-        "TV" => "TV".to_string(),
-        "OTHER" => "OTHER".to_string(),
-        v => v.to_string(),
-    }
-}
-
 /// Candidate-IP list for a paired peer: the socket sender IP first, then
 /// the advertised IPs (deduplicated, sender excluded).
 pub fn prefer_sender_ip(ips: &[String], sender_ip: &str) -> String {

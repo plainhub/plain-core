@@ -1,3 +1,4 @@
+use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::services::discovery::nearby_devices::Context;
 use crate::infrastructure::protocols::mdns::host_responder;
 use crate::infrastructure::protocols::mdns::service_browser::MdnsServiceBrowser;
@@ -303,13 +304,12 @@ impl Runtime {
                 ips: found.ips.into_iter().chain(found.ipv6).collect(),
                 port: found.port,
                 device_type: serde_json::from_value(json!(found.device_type))
-                    .unwrap_or(crate::features::chat::enums::DeviceType::Other)
-                    .as_str()
-                    .into(),
+                    .unwrap_or(crate::features::chat::enums::DeviceType::Other),
                 version: found.version,
                 platform: found.platform,
                 last_seen_at: crate::infrastructure::db::now_iso(),
-                discovery_methods: vec!["LAN".into()],
+                remote_access: found.remote_access,
+                discovery_methods: vec![DiscoveryMethod::Lan],
             };
             match observer.seen(device, visible.load(Ordering::SeqCst), true) {
                 Ok(true) => {
@@ -371,13 +371,12 @@ impl Runtime {
                             ips: found.ips,
                             port: found.port,
                             device_type: serde_json::from_value(json!(found.device_type))
-                                .unwrap_or(crate::features::chat::enums::DeviceType::Other)
-                                .as_str()
-                                .into(),
+                                .unwrap_or(crate::features::chat::enums::DeviceType::Other),
                             version: found.version,
                             platform: found.platform,
                             last_seen_at: crate::infrastructure::db::now_iso(),
-                            discovery_methods: vec!["LAN".into()],
+                            remote_access: found.remote_access,
+                            discovery_methods: vec![DiscoveryMethod::Lan],
                         };
                         match system_observer.seen(
                             device,

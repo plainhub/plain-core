@@ -133,7 +133,7 @@ type KeyValuePair {
 type Session {
 	clientId: String!
 	clientName: String!
-	type: String!
+	type: SessionType!
 	token: String!
 	urlToken: String!
 	clientIp: String!
@@ -145,6 +145,11 @@ type Session {
 	lastActive: Instant!
 	createdAt: Instant!
 	updatedAt: Instant!
+}
+
+enum SessionType {
+	WEB
+	CUSTOM
 }
 
 type Temperature {

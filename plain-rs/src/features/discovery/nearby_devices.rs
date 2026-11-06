@@ -6,6 +6,22 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+pub enum DiscoveryMethod {
+    Lan,
+    DnsSd,
+    Ble,
+    Qr,
+}
+
+impl DiscoveryMethod {
+    pub fn is_lan(self) -> bool {
+        matches!(self, Self::Lan | Self::DnsSd)
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Device {
@@ -14,13 +30,15 @@ pub struct Device {
     #[serde(default)]
     pub ips: Vec<String>,
     pub port: u16,
-    pub device_type: String,
+    #[serde(default)]
+    pub remote_access: Option<bool>,
+    pub device_type: crate::features::chat::enums::DeviceType,
     pub version: String,
     pub platform: String,
     #[serde(rename = "lastSeen")]
     pub last_seen_at: String,
     #[serde(default)]
-    pub discovery_methods: Vec<String>,
+    pub discovery_methods: Vec<DiscoveryMethod>,
 }
 impl Device {
     pub fn validate(&self) -> Result<()> {
@@ -29,21 +47,13 @@ impl Device {
             "Invalid nearby identity"
         );
         ensure!(
-            self.ips.len() <= 64
-                && !self.discovery_methods.is_empty()
-                && self
-                    .discovery_methods
-                    .iter()
-                    .all(|v| v == "LAN" || v == "BLE" || v == "QR"),
+            self.ips.len() <= 64 && !self.discovery_methods.is_empty(),
             "Invalid nearby facts"
         );
         ensure!(
             chrono::DateTime::parse_from_rfc3339(&self.last_seen_at).is_ok(),
             "Invalid nearby time"
         );
-        serde_json::from_value::<crate::features::chat::enums::DeviceType>(serde_json::json!(
-            self.device_type
-        ))?;
         Ok(())
     }
     pub fn cache(&self) -> crate::infrastructure::db::DNearbyDeviceCache {
@@ -52,7 +62,7 @@ impl Device {
             name: self.name.clone(),
             ips: self.ips.clone(),
             port: self.port,
-            device_type: self.device_type.clone(),
+            device_type: self.device_type,
             version: self.version.clone(),
             platform: self.platform.clone(),
             last_seen_at: self.last_seen_at.clone(),
@@ -146,7 +156,8 @@ impl Devices {
                     version: d.version,
                     platform: d.platform,
                     last_seen_at: d.last_seen_at,
-                    discovery_methods: vec!["LAN".into()],
+                    remote_access: None,
+                    discovery_methods: vec![DiscoveryMethod::Lan],
                 };
                 s.order.push(device.id.clone());
                 s.entries.insert(
@@ -189,7 +200,7 @@ impl Devices {
             let mut methods = old.device.discovery_methods.clone();
             for method in &device.discovery_methods {
                 if !methods.contains(method) {
-                    methods.push(method.clone());
+                    methods.push(*method);
                 }
             }
             device.discovery_methods = methods;

@@ -32,11 +32,14 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
         name: "fixture".into(),
         ips: vec!["127.0.0.1".into()],
         port,
-        device_type: "PHONE".into(),
+        device_type: plain_rs::features::chat::enums::DeviceType::Phone,
         version: "1".into(),
         platform: "test".into(),
         last_seen_at: "1970-01-01T00:00:00.000Z".into(),
-        discovery_methods: vec!["LAN".into()],
+        remote_access: None,
+        discovery_methods: vec![
+            plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan,
+        ],
     };
     for d in [fixture("alive", listeners.https_port), fixture("dead", 1)] {
         Context::from(&state).seen(d, false, true).unwrap();

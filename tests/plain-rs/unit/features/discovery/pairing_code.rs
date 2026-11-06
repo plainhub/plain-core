@@ -9,7 +9,13 @@ fn pairing_code_preserves_identity_and_decodes_utf8_plus_and_repeated_addresses(
     assert_eq!(device.id, "fixture");
     assert_eq!(device.port, 8443);
     assert_eq!(device.device_type, "COMPUTER");
-    assert_eq!(device.discovery_methods, ["LAN", "QR"]);
+    assert_eq!(
+        device.discovery_methods,
+        [
+            crate::features::discovery::nearby_devices::DiscoveryMethod::Lan,
+            crate::features::discovery::nearby_devices::DiscoveryMethod::Qr
+        ]
+    );
     device.validate().unwrap();
 }
 

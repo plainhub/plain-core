@@ -10,7 +10,7 @@ use std::sync::Arc;
 struct Session {
     client_id: String,
     client_name: String,
-    r#type: String,
+    r#type: plain_rs::features::sessions::SessionType,
     #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
     token: String,
     #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]

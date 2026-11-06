@@ -312,42 +312,6 @@ impl FromStr for AppChannelType {
     }
 }
 
-// ── SessionType ───────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Enum)]
-#[graphql(name = "SessionType", rename_items = "SCREAMING_SNAKE_CASE")]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum SessionType {
-    Web,
-    Custom,
-}
-
-impl SessionType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Web => "WEB",
-            Self::Custom => "CUSTOM",
-        }
-    }
-}
-
-impl fmt::Display for SessionType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for SessionType {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "WEB" => Ok(Self::Web),
-            "CUSTOM" => Ok(Self::Custom),
-            _ => Err(format!("Unknown SessionType: {s}")),
-        }
-    }
-}
-
 // ── PackageType ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Enum)]

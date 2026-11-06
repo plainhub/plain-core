@@ -5,6 +5,34 @@ use chrono::{DateTime, Utc};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+pub enum SessionType {
+    Web,
+    Custom,
+}
+
+impl rusqlite::types::ToSql for SessionType {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(rusqlite::types::ToSqlOutput::Borrowed(
+            rusqlite::types::ValueRef::Text(match self {
+                Self::Web => b"WEB",
+                Self::Custom => b"CUSTOM",
+            }),
+        ))
+    }
+}
+impl rusqlite::types::FromSql for SessionType {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        match value.as_str()? {
+            "WEB" => Ok(Self::Web),
+            "CUSTOM" => Ok(Self::Custom),
+            _ => Err(rusqlite::types::FromSqlError::InvalidType),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SessionInfo {
     pub client_id: String,
@@ -93,7 +121,7 @@ impl<'a> SessionStore<'a> {
                 .unwrap_or_default(),
             r#type: existing
                 .map(|row| row.r#type)
-                .unwrap_or_else(|| "CUSTOM".into()),
+                .unwrap_or(SessionType::Custom),
             last_seen_at: Some(info.last_active.to_rfc3339()),
             created_at: info.created_at.to_rfc3339(),
             updated_at: info.updated_at.to_rfc3339(),

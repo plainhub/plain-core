@@ -221,7 +221,7 @@ fn signed_nearby_request() -> (
         from_id: "nearby-peer".into(),
         from_name: "Nearby fixture".into(),
         port: 2443,
-        device_type: "PHONE".into(),
+        device_type: plain_rs::features::chat::enums::DeviceType::Phone,
         ecdh_public_key: plain_libs::utils::base64::base64_encode(
             &plain_libs::crypto::EcdhSession::generate().public_key_bytes,
         ),
@@ -308,7 +308,7 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
                 device: pairing::Device {
                     name: "Local fixture".into(),
                     port: 2443,
-                    device_type: "COMPUTER".into(),
+                    device_type: plain_rs::features::chat::enums::DeviceType::Computer,
                     ips: vec![],
                     aware_supported: false,
                 },

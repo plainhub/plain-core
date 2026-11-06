@@ -15,7 +15,7 @@ fn nearby_cache_survives_reopen_and_preserves_newer_sightings() {
         name: "Phone".into(),
         ips: vec!["203.0.113.2".into()],
         port: 8443,
-        device_type: "PHONE".into(),
+        device_type: crate::features::chat::enums::DeviceType::Phone,
         version: "1".into(),
         platform: "android".into(),
         last_seen_at: "1970-01-01T00:00:00.100Z".into(),

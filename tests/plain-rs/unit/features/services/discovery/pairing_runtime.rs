@@ -41,7 +41,7 @@ fn device() -> Device {
     Device {
         name: "Fixture".into(),
         port: 2443,
-        device_type: "PHONE".into(),
+        device_type: crate::features::chat::enums::DeviceType::Phone,
         ips: vec!["127.0.0.1".into()],
         aware_supported: false,
     }

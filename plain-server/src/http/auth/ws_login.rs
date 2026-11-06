@@ -439,8 +439,8 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> anyhow::Resul
             .unwrap_or_default(),
         r#type: existing
             .as_ref()
-            .map(|row| row.r#type.clone())
-            .unwrap_or_else(|| "WEB".into()),
+            .map(|row| row.r#type)
+            .unwrap_or(plain_rs::features::sessions::SessionType::Web),
         client_ip: request.client_ip.clone(),
         os_name: text(&request.request, "osName"),
         os_version: text(&request.request, "osVersion"),

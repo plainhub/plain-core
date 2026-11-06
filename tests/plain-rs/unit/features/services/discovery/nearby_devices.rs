@@ -22,11 +22,12 @@ async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts(
         name: "Synthetic".into(),
         ips: vec![],
         port: 2443,
-        device_type: "PHONE".into(),
+        device_type: crate::features::chat::enums::DeviceType::Phone,
         version: "1".into(),
         platform: "test".into(),
         last_seen_at: "2026-10-10T00:00:00.000Z".into(),
-        discovery_methods: vec!["BLE".into()],
+        remote_access: None,
+        discovery_methods: vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Ble],
     };
     Context::from(&state)
         .seen(device.clone(), true, false)
@@ -83,11 +84,12 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
         name: "new".into(),
         ips: vec!["192.0.2.2".into()],
         port: 8443,
-        device_type: "COMPUTER".into(),
+        device_type: crate::features::chat::enums::DeviceType::Computer,
         version: "1".into(),
         platform: "test".into(),
         last_seen_at: "2026-10-10T00:00:00.000Z".into(),
-        discovery_methods: vec!["LAN".into()],
+        remote_access: None,
+        discovery_methods: vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Lan],
     };
     let context = Context::from(&state);
     context.seen(device.clone(), false, true).unwrap();
@@ -144,18 +146,25 @@ async fn bluetooth_pause_does_not_preserve_stale_lan_devices() {
         }
     });
     for (id, methods) in [
-        ("expired-lan", vec!["LAN".into()]),
-        ("paused-ble", vec!["BLE".into()]),
+        (
+            "expired-lan",
+            vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Lan],
+        ),
+        (
+            "paused-ble",
+            vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Ble],
+        ),
     ] {
         let device = Device {
             id: id.into(),
             name: id.into(),
             ips: vec![],
             port: 2443,
-            device_type: "PHONE".into(),
+            device_type: crate::features::chat::enums::DeviceType::Phone,
             version: "1".into(),
             platform: "test".into(),
             last_seen_at: "1970-01-01T00:00:00.000Z".into(),
+            remote_access: None,
             discovery_methods: methods,
         };
         chat_store::nearby::save(&state.db, &device.cache()).unwrap();

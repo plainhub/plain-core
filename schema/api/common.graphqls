@@ -105,7 +105,7 @@ type Image implements MediaItem {
 
 type ImageModelsUpdate {
 	version: Long!
-	status: String!
+	status: ImageSearchStatusType!
 	downloadProgress: Int!
 	errorMessage: String!
 	modelSize: Long!
@@ -164,7 +164,7 @@ type PairingRequestNotice {
 	fromId: ID!
 	fromName: String!
 	port: Int!
-	deviceType: String!
+	deviceType: DeviceType!
 	ecdhPublicKey: String!
 	signaturePublicKey: String!
 	timestamp: Long!

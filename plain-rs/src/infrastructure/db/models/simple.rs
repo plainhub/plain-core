@@ -17,7 +17,7 @@ pub struct SessionRow {
     pub url_token: String,
     pub client_id: String,
     pub name: String,
-    pub r#type: String,
+    pub r#type: crate::features::sessions::SessionType,
     pub client_ip: String,
     pub os_name: String,
     pub os_version: String,

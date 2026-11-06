@@ -7,6 +7,7 @@ use crate::features::peers::pairing::{
 use crate::features::services::confirmation_channel::{
     Channel, Client, ConfirmationMode, ServerHandshake,
 };
+use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use plain_libs::utils::base64::base64_encode;
@@ -243,7 +244,7 @@ impl Confirmations {
                 state.pairing_runtime.attempts.transition(
                     state,
                     &ticket.generation,
-                    "WAITING_CONFIRMATION",
+                    PairingPhase::WaitingConfirmation,
                     None,
                     None,
                 );

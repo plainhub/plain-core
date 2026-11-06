@@ -3,6 +3,7 @@ use futures_util::StreamExt;
 use plain_libs::utils::base64::base64_decode;
 use plain_libs::utils::base64::base64_encode;
 use plain_rs::features::services::discovery::pairing_attempts;
+use plain_rs::features::services::discovery::pairing_attempts::PairingPhase;
 use plain_rs::runtime::Runtime as ServerState;
 use serde_json::Value;
 use serde_json::json;
@@ -69,18 +70,18 @@ async fn server() -> (tempfile::TempDir, crate::server::ContentServer, u16) {
 async fn phase(
     state: &ServerState,
     generation: &str,
-    expected: &[&str],
+    expected: &[PairingPhase],
 ) -> pairing_attempts::State {
     let mut events = state.events.subscribe();
     tokio::time::timeout(Duration::from_secs(15), async {
         loop {
             let value = state.pairing_runtime.attempts.get(generation).unwrap();
-            if expected.contains(&value.phase.as_str()) {
+            if expected.contains(&value.phase) {
                 return value;
             }
             assert!(
-                !matches!(value.phase.as_str(), "FAILED" | "CANCELLED"),
-                "{}: {:?}",
+                !matches!(value.phase, PairingPhase::Failed | PairingPhase::Cancelled),
+                "{:?}: {:?}",
                 value.phase,
                 value.error
             );
@@ -138,7 +139,12 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
     assert_eq!(request["request"]["osVersion"], client.os_version);
     assert_eq!(request["request"]["browserVersion"], client.app_version);
 
-    let waiting = phase(&state, &started.generation, &["WAITING_CONFIRMATION"]).await;
+    let waiting = phase(
+        &state,
+        &started.generation,
+        &[PairingPhase::WaitingConfirmation],
+    )
+    .await;
     assert_eq!(
         waiting.verification_code.as_deref(),
         request["request"]["verificationCode"].as_str()
@@ -156,7 +162,7 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
         .confirm_web_login(request["requestId"].as_str().unwrap().into(), true)
         .await
         .unwrap();
-    phase(&state, &started.generation, &["SUCCEEDED"]).await;
+    phase(&state, &started.generation, &[PairingPhase::Succeeded]).await;
     let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
@@ -212,7 +218,12 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
     .await
     .unwrap();
     assert!(initial.device_id.is_none());
-    phase(&state, &initial.generation, &["PASSWORD_REQUIRED"]).await;
+    phase(
+        &state,
+        &initial.generation,
+        &[PairingPhase::PasswordRequired],
+    )
+    .await;
     pairing_attempts::start(
         &state,
         None,
@@ -225,12 +236,17 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
     .await
     .unwrap();
     let request = confirmation(&mut events).await;
-    phase(&state, &initial.generation, &["WAITING_CONFIRMATION"]).await;
+    phase(
+        &state,
+        &initial.generation,
+        &[PairingPhase::WaitingConfirmation],
+    )
+    .await;
     crate::http::auth::ws_login::Confirmation::new(remote_state.clone())
         .decide(&request, true)
         .await
         .unwrap();
-    let finished = phase(&state, &initial.generation, &["SUCCEEDED"]).await;
+    let finished = phase(&state, &initial.generation, &[PairingPhase::Succeeded]).await;
     let completed = events.next("systemWebLoginCompleted").await;
     assert!(completed["request"]["password"].is_null());
     assert!(
@@ -282,7 +298,7 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
     )
     .await
     .unwrap();
-    phase(&state, &again.generation, &["SUCCEEDED"]).await;
+    phase(&state, &again.generation, &[PairingPhase::Succeeded]).await;
     let refreshed = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
         .unwrap();
@@ -339,7 +355,12 @@ async fn no_password_still_requires_remote_approval_and_cancel_prevents_local_co
     .await
     .unwrap();
     let request = confirmation(&mut events).await;
-    phase(&state, &first.generation, &["WAITING_CONFIRMATION"]).await;
+    phase(
+        &state,
+        &first.generation,
+        &[PairingPhase::WaitingConfirmation],
+    )
+    .await;
     assert!(
         pairing_attempts::cancel(&state, &first.generation)
             .await
@@ -365,7 +386,7 @@ async fn no_password_still_requires_remote_approval_and_cancel_prevents_local_co
             .get(&first.generation)
             .unwrap()
             .phase,
-        "CANCELLED"
+        PairingPhase::Cancelled
     );
     local.shutdown().await;
     remote.shutdown().await;
@@ -396,7 +417,7 @@ async fn wrong_password_never_creates_a_local_grant() {
     )
     .await
     .unwrap();
-    let result = phase(&state, &first.generation, &["FAILED"]).await;
+    let result = phase(&state, &first.generation, &[PairingPhase::Failed]).await;
     assert_eq!(result.error.as_deref(), Some("invalid_password"));
     assert!(
         plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
@@ -446,7 +467,7 @@ async fn known_key_mismatch_preserves_existing_grants() {
     )
     .await
     .unwrap();
-    let failed = phase(&state, &first.generation, &["FAILED"]).await;
+    let failed = phase(&state, &first.generation, &[PairingPhase::Failed]).await;
     assert_eq!(failed.error.as_deref(), Some("peer_identity_changed"));
     let peer = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)
         .unwrap()
@@ -488,7 +509,7 @@ async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
         .decide(&request, false)
         .await
         .unwrap();
-    let failed = phase(&state, &initial.generation, &["FAILED"]).await;
+    let failed = phase(&state, &initial.generation, &[PairingPhase::Failed]).await;
     assert_eq!(failed.error.as_deref(), Some("rejected"));
     assert!(
         plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
@@ -507,9 +528,9 @@ async fn remote_rejection_and_native_scope_closure_do_not_save_credentials() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     let generation = data["pairDevice"]["generation"].as_str().unwrap();
-    phase(&state, generation, &["PASSWORD_REQUIRED"]).await;
+    phase(&state, generation, &[PairingPhase::PasswordRequired]).await;
     scope.close();
-    phase(&state, generation, &["CANCELLED"]).await;
+    phase(&state, generation, &[PairingPhase::Cancelled]).await;
     assert!(
         plain_rs::infrastructure::db::chat_store::peers::all(&state.db)
             .unwrap()
@@ -574,7 +595,7 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
         .decide(&request, true)
         .await
         .unwrap();
-    let failed = phase(&state, &initial.generation, &["FAILED"]).await;
+    let failed = phase(&state, &initial.generation, &[PairingPhase::Failed]).await;
     assert_eq!(
         failed.error.as_deref(),
         Some("Failed to save paired device")

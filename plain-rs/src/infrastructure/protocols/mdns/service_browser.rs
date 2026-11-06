@@ -45,6 +45,7 @@ pub struct FoundDevice {
     pub device_type: String,
     pub version: String,
     pub platform: String,
+    pub remote_access: Option<bool>,
 }
 
 /// Immutable mDNS info for one service instance, accumulated across packets.
@@ -254,7 +255,7 @@ impl MdnsServiceBrowser {
                 hostname: instance.target_hostname.clone(),
                 port: instance.port,
                 ips: instance.ips.iter().cloned().collect(),
-                ipv6: instance.addrs_v6.iter().cloned().collect(),
+                ip6s: instance.addrs_v6.iter().cloned().collect(),
                 txt_records: instance.txt_records.clone(),
                 complete: instance.complete(),
             })
@@ -283,7 +284,7 @@ pub struct MdnsServiceSnapshot {
     pub port: u16,
     pub txt_records: Vec<String>,
     pub ips: Vec<String>,
-    pub ipv6: Vec<String>,
+    pub ip6s: Vec<String>,
     pub complete: bool,
 }
 
@@ -685,6 +686,14 @@ fn handle_packet(inner: &Inner, data: &[u8], sender: &str) {
             device_type: instance.device_type,
             version: instance.version,
             platform: instance.platform,
+            remote_access: instance
+                .txt_records
+                .iter()
+                .find_map(|entry| match entry.as_str() {
+                    "ra=1" => Some(true),
+                    "ra=0" => Some(false),
+                    _ => None,
+                }),
         });
     }
 }
@@ -902,9 +911,9 @@ mod tests {
     // A renamed peer withdraws its old instance with a TTL=0 packet; the
     // browser must drop that instance instead of listing the old name forever.
 
+    use crate::infrastructure::protocols::mdns::service_info::PLAINAPP_SERVICE_TYPE as SERVICE_TYPE;
     use plain_libs::protocols::mdns::records::MdnsServiceInfo;
     use plain_libs::protocols::mdns::service_response_builder;
-    use crate::infrastructure::protocols::mdns::service_info::PLAINAPP_SERVICE_TYPE as SERVICE_TYPE;
 
     fn test_service(instance_name: &str, service_type: &str) -> MdnsServiceInfo {
         MdnsServiceInfo {

@@ -22,9 +22,3 @@ fn prefer_sender_ip_puts_sender_first_and_dedupes() {
     assert_eq!(prefer_sender_ip(&ips, "10.0.0.2"), "10.0.0.2");
     assert_eq!(prefer_sender_ip(&[], ""), "");
 }
-
-#[test]
-fn device_type_signature_value_passes_through() {
-    assert_eq!(device_type_signature_value("COMPUTER"), "COMPUTER");
-    assert_eq!(device_type_signature_value("NAS"), "NAS");
-}

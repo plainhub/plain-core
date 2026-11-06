@@ -1,4 +1,5 @@
 use plain_graphql::SimpleObject;
+use plain_rs::features::services::device::types::DeviceType;
 
 #[derive(SimpleObject, Clone, Debug)]
 pub struct NearbyDevice {
@@ -6,13 +7,14 @@ pub struct NearbyDevice {
     pub name: String,
     pub ips: Vec<String>,
     pub port: i32,
-    pub device_type: String,
+    pub remote_access: Option<bool>,
+    pub device_type: DeviceType,
     pub version: String,
     pub platform: String,
     pub last_seen: String,
-    pub discovery_methods: Vec<String>,
+    pub discovery_methods: Vec<plain_rs::features::discovery::nearby_devices::DiscoveryMethod>,
     pub best_ip: String,
-    pub status: String,
+    pub status: plain_rs::features::chat::enums::PeerStatus,
 }
 
 impl NearbyDevice {
@@ -26,13 +28,14 @@ impl NearbyDevice {
             name: device.name,
             ips: device.ips,
             port: device.port as i32,
-            device_type: device.device_type,
+            device_type: device.device_type.into(),
             version: device.version,
             platform: device.platform,
             last_seen: device.last_seen_at,
+            remote_access: device.remote_access,
             discovery_methods: device.discovery_methods,
             best_ip,
-            status: "UNPAIRED".to_string(),
+            status: plain_rs::features::chat::enums::PeerStatus::Unpaired,
         }
     }
 }

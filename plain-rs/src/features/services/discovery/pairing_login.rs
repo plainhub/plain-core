@@ -1,3 +1,4 @@
+use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::features::services::discovery::pairing_attempts::Resolved;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
@@ -67,7 +68,10 @@ pub(super) async fn run(
                     .pairing_runtime
                     .attempts
                     .get(generation)
-                    .is_some_and(|s| !matches!(s.phase.as_str(), "CANCELLED" | "FAILED")),
+                    .is_some_and(|s| !matches!(
+                        s.phase,
+                        PairingPhase::Cancelled | PairingPhase::Failed
+                    )),
                 "cancelled"
             );
             let name = text(&metadata, "deviceName")?;
@@ -87,7 +91,7 @@ pub(super) async fn run(
             state.pairing_runtime.attempts.transition(
                 state,
                 generation,
-                "SUCCEEDED",
+                PairingPhase::Succeeded,
                 None,
                 Some(&saved.id),
             );
@@ -104,7 +108,7 @@ pub(super) async fn run(
                 state.pairing_runtime.attempts.transition(
                     state,
                     generation,
-                    "PASSWORD_REQUIRED",
+                    PairingPhase::PasswordRequired,
                     None,
                     None,
                 );
@@ -143,10 +147,13 @@ pub(super) async fn run(
     url.query_pairs_mut()
         .append_pair("cid", &client_id)
         .append_pair("auth", if password_required { "1" } else { "2" });
-    state
-        .pairing_runtime
-        .attempts
-        .transition(state, generation, "AUTHENTICATING", None, None);
+    state.pairing_runtime.attempts.transition(
+        state,
+        generation,
+        PairingPhase::Authenticating,
+        None,
+        None,
+    );
     let mut socket = crate::features::services::peers::status_socket::connect(url.as_str())
         .await
         .map_err(|_| anyhow::anyhow!("failed_connect_ws"))?;
@@ -224,7 +231,7 @@ pub(super) async fn run(
                     state.pairing_runtime.attempts.transition(
                         state,
                         generation,
-                        "WAITING_CONFIRMATION",
+                        PairingPhase::WaitingConfirmation,
                         None,
                         None,
                     );
@@ -286,7 +293,7 @@ pub(super) async fn run(
             .pairing_runtime
             .attempts
             .get(generation)
-            .is_some_and(|s| !matches!(s.phase.as_str(), "CANCELLED" | "FAILED")),
+            .is_some_and(|s| !matches!(s.phase, PairingPhase::Cancelled | PairingPhase::Failed)),
         "cancelled"
     );
     if let Some(saved) = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)? {
@@ -295,7 +302,7 @@ pub(super) async fn run(
     state.pairing_runtime.attempts.transition(
         state,
         generation,
-        "COMMITTING",
+        PairingPhase::Committing,
         None,
         Some(&remote_id),
     );
@@ -327,7 +334,7 @@ pub(super) async fn run(
     state.pairing_runtime.attempts.transition(
         state,
         generation,
-        "SUCCEEDED",
+        PairingPhase::Succeeded,
         None,
         Some(&remote_id),
     );

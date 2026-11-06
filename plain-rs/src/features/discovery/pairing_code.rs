@@ -1,4 +1,5 @@
 use super::nearby_devices::Device;
+use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use plain_libs::utils::query::percent_decode;
 
 #[derive(Debug, PartialEq, serde::Deserialize)]
@@ -64,11 +65,12 @@ impl Payload {
             name: self.name,
             ips: self.ips,
             port: self.port,
-            device_type: "COMPUTER".into(),
+            device_type: crate::features::chat::enums::DeviceType::Computer,
             version: String::new(),
             platform: String::new(),
             last_seen_at: crate::infrastructure::db::now_iso(),
-            discovery_methods: vec!["LAN".into(), "QR".into()],
+            remote_access: None,
+            discovery_methods: vec![DiscoveryMethod::Lan, DiscoveryMethod::Qr],
         }
     }
 }

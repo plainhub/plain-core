@@ -1064,7 +1064,12 @@ fn joined_iface_list() -> Vec<String> {
 #[doc(hidden)]
 pub fn record_received(socket: &std::net::UdpSocket, src: std::net::SocketAddr, bytes: &[u8]) {
     if let Ok(dst) = socket.local_addr() {
-        crate::infrastructure::protocols::mdns::packet_capture::record("IN", src, dst, bytes);
+        crate::infrastructure::protocols::mdns::packet_capture::record(
+            crate::infrastructure::protocols::mdns::packet_capture::MdnsPacketDirection::In,
+            src,
+            dst,
+            bytes,
+        );
     }
 }
 /// Packet-capture seam, see [`record_received`].
@@ -1078,7 +1083,7 @@ pub fn send_recorded(
     let size = socket.send_to(bytes, dst)?;
     if let Ok(src) = socket.local_addr() {
         crate::infrastructure::protocols::mdns::packet_capture::record(
-            "OUT",
+            crate::infrastructure::protocols::mdns::packet_capture::MdnsPacketDirection::Out,
             src,
             dst,
             &bytes[..size],

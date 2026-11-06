@@ -46,8 +46,16 @@ type FeedSyncState {
 	feedId: ID!
 	taskId: ID!
 	revision: Long!
-	status: String!
+	status: FeedWorkerStatus!
 	error: String!
+}
+
+enum FeedWorkerStatus {
+	QUEUED
+	RUNNING
+	CANCELLED
+	COMPLETED
+	ERROR
 }
 
 extend type Mutation {

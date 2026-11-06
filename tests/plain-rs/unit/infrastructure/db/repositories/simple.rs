@@ -85,7 +85,7 @@ fn session_save_get_and_touch() {
         url_token: "resource-key".into(),
         client_id: "client-1".into(),
         name: "Browser".into(),
-        r#type: "WEB".into(),
+        r#type: crate::features::sessions::SessionType::Web,
         client_ip: "192.168.1.5".into(),
         os_name: "macOS".into(),
         os_version: "15.0".into(),
@@ -99,7 +99,7 @@ fn session_save_get_and_touch() {
     db.session_save(&row).unwrap();
 
     let got = db.session_get("client-1").unwrap().expect("session");
-    assert_eq!(got.r#type, "WEB");
+    assert_eq!(got.r#type, crate::features::sessions::SessionType::Web);
     assert_eq!(got.browser_name, "Chrome");
     assert_eq!(got.url_token, row.url_token);
 
@@ -130,7 +130,7 @@ fn session_list_orders_by_last_active_desc() {
             url_token: "resource-key".into(),
             client_id: id.into(),
             name: id.into(),
-            r#type: "WEB".into(),
+            r#type: crate::features::sessions::SessionType::Web,
             client_ip: "10.0.0.1".into(),
             os_name: String::new(),
             os_version: String::new(),
@@ -344,7 +344,7 @@ fn serialized_field_names_are_snake_case() {
         url_token: "resource-key".into(),
         client_id: "c".into(),
         name: "n".into(),
-        r#type: "WEB".into(),
+        r#type: crate::features::sessions::SessionType::Web,
         client_ip: "1.2.3.4".into(),
         os_name: String::new(),
         os_version: String::new(),
@@ -415,7 +415,7 @@ fn session_cache_row() -> SessionRow {
     SessionRow {
         client_id: "cache-client".into(),
         name: "Browser".into(),
-        r#type: "WEB".into(),
+        r#type: crate::features::sessions::SessionType::Web,
         client_ip: "127.0.0.1".into(),
         os_name: String::new(),
         os_version: String::new(),
@@ -490,12 +490,19 @@ fn session_cache_tracks_mutations_clones_raw_sql_and_rollbacks() {
         clone.session_get(&row.client_id).unwrap().unwrap().token,
         row.token
     );
-    let mut invalid = row.clone();
-    invalid.r#type = "invalid-session-type".into();
-    assert!(db.session_save(&invalid).is_err());
+    let mut invalid = serde_json::to_value(&row).unwrap();
+    invalid["type"] = serde_json::json!("invalid-session-type");
+    assert!(serde_json::from_value::<SessionRow>(invalid).is_err());
+    assert!(
+        db.with_conn(|connection| connection.execute(
+            "UPDATE sessions SET type='invalid-session-type' WHERE client_id=?1",
+            [&row.client_id],
+        ))
+        .is_err()
+    );
     assert_eq!(
         db.session_get(&row.client_id).unwrap().unwrap().r#type,
-        "WEB"
+        crate::features::sessions::SessionType::Web
     );
     db.session_delete(&row.client_id).unwrap();
     assert!(clone.session_get(&row.client_id).unwrap().is_none());

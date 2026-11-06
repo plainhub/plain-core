@@ -219,3 +219,31 @@ async fn retired_client_name_mirroring_is_not_available_through_any_main_transpo
     }
     core.stop_core().await;
 }
+
+#[test]
+fn peer_record_inputs_reject_unknown_status_and_device_types_during_coercion() {
+    use plain_graphql::InputType;
+    let value = json!({
+        "id":"peer", "name":"Fixture", "ip":"127.0.0.1", "key":"key", "publicKey":"public",
+        "status":"PAIRED", "port":8443, "deviceType":"PHONE", "token":"token",
+        "createdAt":"2026-01-01T00:00:00Z", "updatedAt":"2026-01-01T00:00:00Z"
+    });
+    let parse = |value| {
+        <super::PeerRecordInput as InputType>::parse(Some(
+            plain_graphql::Value::from_json(value).unwrap(),
+        ))
+    };
+    for status in ["PAIRED", "UNPAIRED", "CHANNEL"] {
+        for kind in ["COMPUTER", "PHONE", "TABLET", "TV", "NAS", "OTHER"] {
+            let mut valid = value.clone();
+            valid["status"] = json!(status);
+            valid["deviceType"] = json!(kind);
+            assert!(parse(valid).is_ok(), "{status}/{kind}");
+        }
+    }
+    for field in ["status", "deviceType"] {
+        let mut invalid = value.clone();
+        invalid[field] = json!("FUTURE_VALUE");
+        assert!(parse(invalid).is_err(), "{field}");
+    }
+}

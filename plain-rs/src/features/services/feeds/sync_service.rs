@@ -6,18 +6,32 @@ use std::{
 };
 use tokio::sync::{Semaphore, broadcast, watch};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+pub enum FeedWorkerStatus {
+    Queued,
+    Running,
+    Cancelled,
+    Completed,
+    Error,
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize, plain_graphql::SimpleObject)]
 #[serde(rename_all = "camelCase")]
 pub struct FeedSyncState {
     pub feed_id: plain_graphql::ID,
     pub task_id: plain_graphql::ID,
     pub revision: crate::infrastructure::types::Long,
-    pub status: String,
+    pub status: FeedWorkerStatus,
     pub error: String,
 }
 impl FeedSyncState {
     fn active(&self) -> bool {
-        matches!(self.status.as_str(), "QUEUED" | "RUNNING")
+        matches!(
+            self.status,
+            FeedWorkerStatus::Queued | FeedWorkerStatus::Running
+        )
     }
 }
 struct Task {
@@ -206,7 +220,7 @@ impl SyncService {
                 feed_id: feed.id.clone().into(),
                 task_id: uuid::Uuid::new_v4().to_string().into(),
                 revision: self.next_revision(),
-                status: "QUEUED".into(),
+                status: FeedWorkerStatus::Queued,
                 error: String::new(),
             });
             let (cancel, _) = watch::channel(false);
@@ -226,7 +240,7 @@ impl SyncService {
                 feed_id: "all".into(),
                 task_id: uuid::Uuid::new_v4().to_string().into(),
                 revision: self.next_revision(),
-                status: "RUNNING".into(),
+                status: FeedWorkerStatus::Running,
                 error: String::new(),
             });
             state.batch = Some(sender.clone());
@@ -259,20 +273,19 @@ impl SyncService {
                         }
                     }
                     let state = receiver.borrow().clone();
-                    cancelled |= state.status == "CANCELLED";
+                    cancelled |= state.status == FeedWorkerStatus::Cancelled;
                     if !state.error.is_empty() {
                         errors.push(state.error);
                     }
                 }
                 let mut result = batch.borrow().clone();
                 result.status = if cancelled {
-                    "CANCELLED"
+                    FeedWorkerStatus::Cancelled
                 } else if errors.is_empty() {
-                    "COMPLETED"
+                    FeedWorkerStatus::Completed
                 } else {
-                    "ERROR"
-                }
-                .into();
+                    FeedWorkerStatus::Error
+                };
                 result.error = errors.join("\n");
                 result.revision = this.next_revision();
                 batch.send_replace(result.clone());
@@ -298,9 +311,13 @@ impl SyncService {
         let mut cancel = task.cancel.subscribe();
         let assets = self.assets.as_ref().map(|assets| assets.scoped());
         let work = async {
-            let _permit = self.permits.acquire().await.map_err(|error| error.to_string())?;
+            let _permit = self
+                .permits
+                .acquire()
+                .await
+                .map_err(|error| error.to_string())?;
             let mut state = task.state.borrow().clone();
-            state.status = "RUNNING".into();
+            state.status = FeedWorkerStatus::Running;
             state.revision = self.next_revision();
             task.state.send_replace(state);
             self.notify(&[feed.id.clone()], &[]);
@@ -327,7 +344,7 @@ impl SyncService {
         let mut state = task.state.borrow().clone();
         match result {
             None => {
-                state.status = "CANCELLED".into();
+                state.status = FeedWorkerStatus::Cancelled;
                 state.error.clear();
                 let _ = self.events.send(WsEvent::broadcast(
                     "FEEDS_FETCHED",
@@ -335,11 +352,11 @@ impl SyncService {
                 ));
             }
             Some(Ok(())) => {
-                state.status = "COMPLETED".into();
+                state.status = FeedWorkerStatus::Completed;
                 state.error.clear();
             }
             Some(Err(error)) => {
-                state.status = "ERROR".into();
+                state.status = FeedWorkerStatus::Error;
                 state.error = error;
             }
         }

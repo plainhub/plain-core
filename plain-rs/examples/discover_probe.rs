@@ -64,7 +64,7 @@ fn main() {
         for s in snap {
             println!(
                 "   {} complete={} port={} ips={:?} v6={:?}",
-                s.instance_name, s.complete, s.port, s.ips, s.ipv6
+                s.instance_name, s.complete, s.port, s.ips, s.ip6s
             );
         }
     }

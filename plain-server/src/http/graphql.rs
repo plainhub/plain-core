@@ -121,7 +121,7 @@ async fn execute(
             .ok_or(StatusCode::UNAUTHORIZED)?;
         (true, key)
     } else {
-        if session.r#type != "CUSTOM"
+        if session.r#type != plain_rs::features::sessions::SessionType::Custom
             || !valid_custom_bearer(authorization.unwrap(), &session.token)
         {
             return Err(StatusCode::UNAUTHORIZED);

@@ -10,11 +10,19 @@ use std::{
     },
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+pub enum MdnsPacketDirection {
+    In,
+    Out,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PacketLog {
     time: i64,
-    direction: &'static str,
+    direction: MdnsPacketDirection,
     src_ip: String,
     src_port: u16,
     dst_ip: String,
@@ -30,7 +38,7 @@ struct Capture {
 }
 impl Capture {
     fn push(&mut self, row: PacketLog) {
-        let buffer = if row.direction == "IN" {
+        let buffer = if row.direction == MdnsPacketDirection::In {
             &mut self.inbound
         } else {
             &mut self.outbound
@@ -59,7 +67,12 @@ pub fn snapshot() -> (Vec<PacketLog>, Vec<PacketLog>) {
         state.outbound.iter().cloned().collect(),
     )
 }
-pub(crate) fn record(direction: &'static str, src: SocketAddr, dst: SocketAddr, bytes: &[u8]) {
+pub(crate) fn record(
+    direction: MdnsPacketDirection,
+    src: SocketAddr,
+    dst: SocketAddr,
+    bytes: &[u8],
+) {
     if !ENABLED.load(Ordering::SeqCst) {
         return;
     }
@@ -160,34 +173,5 @@ fn decode(bytes: &[u8]) -> (String, String) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn capture_is_bounded_and_decodes_dns_without_global_test_state() {
-        let query = packet_codec::build_ptr_query("_plainapp._tcp.local");
-        let (summary, detail) = decode(&query);
-        assert!(summary.contains("query PTR"));
-        assert!(detail.contains("_plainapp._tcp.local"));
-        let mut state = Capture::default();
-        for direction in ["IN", "OUT"] {
-            for time in 0..60 {
-                state.push(PacketLog {
-                    time,
-                    direction,
-                    src_ip: "127.0.0.1".into(),
-                    src_port: 5353,
-                    dst_ip: "224.0.0.251".into(),
-                    dst_port: 5353,
-                    size: query.len(),
-                    summary: summary.clone(),
-                    detail: detail.clone(),
-                });
-            }
-        }
-        assert_eq!(state.inbound.len(), 50);
-        assert_eq!(state.outbound.len(), 50);
-        assert_eq!(state.inbound.front().unwrap().time, 59);
-        assert_eq!(state.inbound.back().unwrap().time, 10);
-        assert_eq!(decode(&[0xff]).1, "(unparseable)");
-    }
-}
+#[path = "../../../../../tests/plain-rs/unit/infrastructure/protocols/mdns/packet_capture.rs"]
+mod tests;

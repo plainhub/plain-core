@@ -1,3 +1,4 @@
+use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::services::discovery::pairing_runtime;
 use crate::features::services::discovery::pairing_runtime::event;
 use crate::runtime::Runtime as CoreRuntime;
@@ -18,20 +19,38 @@ pub enum Mode {
     Manage,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
+pub enum PairingPhase {
+    Starting,
+    PasswordRequired,
+    Authenticating,
+    Pairing,
+    WaitingConfirmation,
+    Committing,
+    Succeeded,
+    Failed,
+    Cancelled,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct State {
     pub device_id: Option<String>,
     pub generation: String,
     pub mode: Mode,
-    pub phase: String,
+    pub phase: PairingPhase,
     pub error: Option<String>,
     #[serde(default)]
     pub verification_code: Option<String>,
 }
 impl State {
     pub fn terminal(&self) -> bool {
-        matches!(self.phase.as_str(), "SUCCEEDED" | "FAILED" | "CANCELLED")
+        matches!(
+            self.phase,
+            PairingPhase::Succeeded | PairingPhase::Failed | PairingPhase::Cancelled
+        )
     }
 }
 struct Attempt {
@@ -79,7 +98,7 @@ impl Attempts {
                 && ((id.is_some() && a.state.device_id == id) || (host.is_some() && a.host == host))
         }) {
             a.cancel.send_replace(true);
-            a.state.phase = "CANCELLED".into();
+            a.state.phase = PairingPhase::Cancelled;
             a.updated = Instant::now();
             if let Some(state) = context {
                 event(
@@ -104,7 +123,7 @@ impl Attempts {
             device_id: id,
             generation: uuid::Uuid::new_v4().to_string(),
             mode,
-            phase: "STARTING".into(),
+            phase: PairingPhase::Starting,
             error: None,
             verification_code: None,
         };
@@ -148,7 +167,7 @@ impl Attempts {
         &self,
         state: &CoreRuntime,
         generation: &str,
-        phase: &str,
+        phase: PairingPhase,
         error: Option<&str>,
         id: Option<&str>,
     ) -> bool {
@@ -156,7 +175,7 @@ impl Attempts {
         let Some(a) = attempts.get_mut(generation).filter(|a| !a.state.terminal()) else {
             return false;
         };
-        a.state.phase = phase.into();
+        a.state.phase = phase;
         a.state.error = error.map(str::to_owned);
         if let Some(id) = id {
             a.state.device_id = Some(id.into());
@@ -193,7 +212,7 @@ impl Attempts {
                 && !a.state.terminal()
         }) {
             a.cancel.send_replace(true);
-            a.state.phase = "CANCELLED".into();
+            a.state.phase = PairingPhase::Cancelled;
             a.updated = Instant::now();
             if let Some(state) = context {
                 event(
@@ -232,7 +251,7 @@ impl Attempts {
             .get_mut(generation)
             .ok_or_else(|| anyhow::anyhow!("Unknown pairing generation"))?;
         ensure!(
-            a.state.mode == Mode::Manage && a.state.phase == "PASSWORD_REQUIRED",
+            a.state.mode == Mode::Manage && a.state.phase == PairingPhase::PasswordRequired,
             "Pairing is not waiting for a password"
         );
         ensure!(
@@ -244,7 +263,7 @@ impl Attempts {
         a.password
             .try_send(password)
             .map_err(|_| anyhow::anyhow!("Password already submitted"))?;
-        a.state.phase = "AUTHENTICATING".into();
+        a.state.phase = PairingPhase::Authenticating;
         a.updated = Instant::now();
         if let Some(state) = context {
             event(
@@ -261,7 +280,7 @@ impl Attempts {
             .get_mut(generation)
             .filter(|a| !a.state.terminal())?;
         a.cancel.send_replace(true);
-        a.state.phase = "CANCELLED".into();
+        a.state.phase = PairingPhase::Cancelled;
         a.updated = Instant::now();
         event(
             state,
@@ -412,7 +431,7 @@ pub async fn start(
             state.pairing_runtime.attempts.transition(
                 &state,
                 &generation,
-                "FAILED",
+                PairingPhase::Failed,
                 Some(&error.to_string()),
                 None,
             );
@@ -424,7 +443,7 @@ pub async fn start(
 pub(super) struct Resolved {
     pub target: crate::features::peers::pairing::sessions::Target,
     pub ips: Vec<String>,
-    pub methods: Vec<String>,
+    pub methods: Vec<DiscoveryMethod>,
     pub device_type: crate::features::chat::enums::DeviceType,
     pub url: Option<reqwest::Url>,
 }
@@ -466,10 +485,10 @@ fn resolve(
     let mut methods = nearby
         .as_ref()
         .map(|d| d.discovery_methods.clone())
-        .unwrap_or_else(|| vec!["LAN".into()]);
+        .unwrap_or_else(|| vec![DiscoveryMethod::Lan]);
     let device_type = nearby
         .as_ref()
-        .and_then(|d| d.device_type.parse().ok())
+        .map(|d| d.device_type)
         .or_else(|| saved.as_ref().map(|p| p.device_type))
         .unwrap_or(crate::features::chat::enums::DeviceType::Unknown);
     let url = if let Some(host) = host {
@@ -492,7 +511,7 @@ fn resolve(
         );
         ips = vec![url.host_str().unwrap().trim_matches(['[', ']']).to_owned()];
         port = url.port_or_known_default().unwrap();
-        methods = vec!["LAN".into()];
+        methods = vec![DiscoveryMethod::Lan];
         Some(url)
     } else if mode == Mode::Manage {
         let ip = crate::infrastructure::transport::lan::best_host(

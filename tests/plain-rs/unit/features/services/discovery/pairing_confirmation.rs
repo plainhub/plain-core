@@ -9,6 +9,7 @@ use crate::features::peers::pairing::sessions::Target;
 use crate::features::peers::pairing::sessions::Ticket;
 use crate::features::services::discovery::pairing;
 use crate::features::services::discovery::pairing_attempts::Mode;
+use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::utils::base64::base64_encode;
 use sha2::Digest;
@@ -34,7 +35,7 @@ fn device() -> pairing::Device {
     pairing::Device {
         name: "Fixture".into(),
         port: 2443,
-        device_type: "PHONE".into(),
+        device_type: crate::features::chat::enums::DeviceType::Phone,
         ips: vec![],
         aware_supported: false,
     }
@@ -164,7 +165,7 @@ async fn same_code_and_authenticated_confirmation_precede_shared_key_commit() {
             .get(&ticket.generation)
             .unwrap()
             .phase,
-        "WAITING_CONFIRMATION"
+        PairingPhase::WaitingConfirmation
     );
     assert_eq!(code.len(), 9);
     assert!(
@@ -303,7 +304,7 @@ async fn cancelled_and_expired_verifications_do_not_become_ready() {
         from_id: "remote".into(),
         to_id: "local".into(),
         port: 2443,
-        device_type: "PHONE".into(),
+        device_type: crate::features::chat::enums::DeviceType::Phone,
         ecdh_public_key: String::new(),
         signature_public_key: String::new(),
         accepted: true,

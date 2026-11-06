@@ -33,7 +33,7 @@ fn nearby_snapshot(state: &ServerState) -> plain_graphql::Result<Vec<NearbyDevic
         .map(|device| {
             let mut model = NearbyDevice::from_snapshot_device(device);
             if paired.contains(model.id.as_str()) {
-                model.status = "PAIRED".to_owned();
+                model.status = plain_rs::features::chat::enums::PeerStatus::Paired;
             }
             model
         })

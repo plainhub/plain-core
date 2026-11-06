@@ -9,6 +9,16 @@ async fn nearby_snapshot_uses_the_main_contract_without_starting_discovery() {
             .sdl()
             .contains("startDiscovery: Boolean!")
     );
+    let sdl = core.runtime_state().public.sdl();
+    let nearby_type = sdl
+        .split("type NearbyDevice {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert!(nearby_type.contains("deviceType: DeviceType!"));
+    assert!(!nearby_type.contains("deviceType: String!"));
     let stopped = native
         .execute(plain_graphql::Request::new("mutation { stopDiscovery }"))
         .await;
@@ -73,11 +83,11 @@ async fn pairing_code_query_returns_a_lan_ready_model_without_starting_discovery
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let native = core.native_graphql().unwrap();
-    let response = native.execute(plain_graphql::Request::new("{ parsePairingCode(code: \"plainapp://pair?id=fixture&name=Device&ips=192.0.2.1&port=8443\") { id name port discoveryMethods } }")).await;
+    let response = native.execute(plain_graphql::Request::new("{ parsePairingCode(code: \"plainapp://pair?id=fixture&name=Device&ips=192.0.2.1&port=8443\") { id name port deviceType discoveryMethods } }")).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["parsePairingCode"],
-        serde_json::json!({"id":"fixture","name":"Device","port":8443,"discoveryMethods":["LAN","QR"]})
+        serde_json::json!({"id":"fixture","name":"Device","port":8443,"deviceType":"COMPUTER","discoveryMethods":["LAN","QR"]})
     );
     let response = native
         .execute(plain_graphql::Request::new(

@@ -1,4 +1,5 @@
 use super::*;
+use crate::features::services::discovery::pairing_attempts::PairingPhase;
 
 #[test]
 fn continuation_cannot_retarget_or_reuse_a_terminal_attempt() {
@@ -13,7 +14,7 @@ fn continuation_cannot_retarget_or_reuse_a_terminal_attempt() {
         .unwrap();
     {
         let mut entries = attempts.0.lock().unwrap();
-        entries.get_mut(&first.generation).unwrap().state.phase = "PASSWORD_REQUIRED".into();
+        entries.get_mut(&first.generation).unwrap().state.phase = PairingPhase::PasswordRequired;
     }
     for (id, host, mode) in [
         (Some("other"), None, None),
@@ -29,13 +30,19 @@ fn continuation_cannot_retarget_or_reuse_a_terminal_attempt() {
     let (second, _, _) = attempts
         .begin(None, Some("peer".into()), None, Mode::Manage)
         .unwrap();
-    assert_eq!(attempts.get(&first.generation).unwrap().phase, "CANCELLED");
+    assert_eq!(
+        attempts.get(&first.generation).unwrap().phase,
+        PairingPhase::Cancelled
+    );
     assert!(
         attempts
             .submit(None, &first.generation, None, None, None, "secret".into())
             .is_err()
     );
-    assert_eq!(attempts.get(&second.generation).unwrap().phase, "STARTING");
+    assert_eq!(
+        attempts.get(&second.generation).unwrap().phase,
+        PairingPhase::Starting
+    );
     let encoded = serde_json::to_value(attempts.states()).unwrap().to_string();
     assert!(!encoded.contains("secret"));
     assert!(!encoded.contains("example.test"));
@@ -62,7 +69,7 @@ fn attempt_retention_is_bounded_and_preserves_active_work() {
         .get_mut(&generation)
         .unwrap()
         .state
-        .phase = "SUCCEEDED".into();
+        .phase = PairingPhase::Succeeded;
     attempts
         .begin(None, Some("replacement".into()), None, Mode::Manage)
         .unwrap();
@@ -89,4 +96,37 @@ fn authenticating_an_older_manual_address_cannot_replace_a_newer_identity_attemp
             .claim_identity(None, &newer.generation, "peer")
             .is_ok()
     );
+}
+
+#[test]
+fn phases_have_fixed_wire_names_and_terminal_behavior() {
+    for (phase, wire, terminal) in [
+        (PairingPhase::Starting, "STARTING", false),
+        (PairingPhase::PasswordRequired, "PASSWORD_REQUIRED", false),
+        (PairingPhase::Authenticating, "AUTHENTICATING", false),
+        (PairingPhase::Pairing, "PAIRING", false),
+        (
+            PairingPhase::WaitingConfirmation,
+            "WAITING_CONFIRMATION",
+            false,
+        ),
+        (PairingPhase::Committing, "COMMITTING", false),
+        (PairingPhase::Succeeded, "SUCCEEDED", true),
+        (PairingPhase::Failed, "FAILED", true),
+        (PairingPhase::Cancelled, "CANCELLED", true),
+    ] {
+        let state = State {
+            device_id: None,
+            generation: "attempt".into(),
+            mode: Mode::Chat,
+            phase,
+            error: None,
+            verification_code: None,
+        };
+        assert_eq!(state.terminal(), terminal);
+        let value = serde_json::to_value(&state).unwrap();
+        assert_eq!(value["phase"], wire);
+        assert_eq!(serde_json::from_value::<State>(value).unwrap().phase, phase);
+    }
+    assert!(serde_json::from_value::<PairingPhase>(serde_json::json!("FUTURE_PHASE")).is_err());
 }

@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 pub struct Device {
     pub name: String,
     pub port: u16,
-    pub device_type: String,
+    pub device_type: crate::features::chat::enums::DeviceType,
     pub ips: Vec<String>,
     pub aware_supported: bool,
 }
@@ -91,14 +91,12 @@ pub fn validate_response(
         expected,
     ))
 }
-use crate::features::chat::enums::DeviceType;
 use crate::features::peers::pairing::peer_store;
 use crate::features::peers::pairing::peer_store::Facts;
 use crate::features::peers::pairing::protocol::PairingCancel;
 use crate::features::peers::pairing::sessions::Sessions;
 use crate::features::peers::pairing::sessions::Target;
 use crate::infrastructure::db::Db;
-use std::str::FromStr;
 #[cfg(test)]
 pub fn start(prefs: &Prefs, sessions: &Sessions, target: Target, device: Device) -> Result<Value> {
     start_generation(prefs, sessions, target, device, None)
@@ -183,8 +181,7 @@ pub fn complete_checked(
                 name: ticket.target.device_name.clone(),
                 ips,
                 port: response.port,
-                device_type: DeviceType::from_str(&response.device_type)
-                    .unwrap_or(DeviceType::Unknown),
+                device_type: response.device_type,
                 key: plain_libs::utils::base64::base64_encode(&key),
                 public_key: response.signature_public_key,
             },
@@ -226,8 +223,7 @@ pub fn respond(
                 name: request.from_name,
                 ips,
                 port: request.port,
-                device_type: DeviceType::from_str(&request.device_type)
-                    .unwrap_or(DeviceType::Unknown),
+                device_type: request.device_type,
                 key: plain_libs::utils::base64::base64_encode(&key),
                 public_key: request.signature_public_key,
             },

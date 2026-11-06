@@ -1,5 +1,5 @@
 use serde::Serialize;
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Serialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ImageSearchStatusType {

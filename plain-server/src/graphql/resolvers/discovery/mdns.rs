@@ -10,7 +10,7 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 struct MdnsPacket {
     time: Long,
-    direction: String,
+    direction: plain_rs::infrastructure::protocols::mdns::packet_capture::MdnsPacketDirection,
     src_ip: String,
     src_port: i32,
     dst_ip: String,
@@ -30,7 +30,7 @@ struct MdnsService {
     port: i32,
     txt_records: Vec<String>,
     ips: Vec<String>,
-    ipv6: Vec<String>,
+    ip6s: Vec<String>,
     complete: bool,
 }
 
