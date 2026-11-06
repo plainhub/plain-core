@@ -244,13 +244,13 @@ impl Sessions {
     /// it as past `RESPONSE_TIMEOUT`. The expiry worker lives in
     /// plain-server, and `#[cfg(test)]` here cannot reach the private
     /// `started` field from that crate's test binary.
-    #[cfg(feature = "test-seams")]
+    #[cfg(any(test, feature = "test-seams"))]
     pub fn age_for_test(&self, id: &str, by: Duration) {
         if let Some(pending) = self.0.lock().unwrap().get_mut(id) {
             pending.started -= by;
         }
     }
-    #[cfg(feature = "test-seams")]
+    #[cfg(any(test, feature = "test-seams"))]
     pub fn age_incoming_for_test(&self, id: &str, by: Duration) {
         if let Some(incoming) = self.1.lock().unwrap().get_mut(id) {
             incoming.received -= by;
