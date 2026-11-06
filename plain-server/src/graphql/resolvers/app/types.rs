@@ -7,7 +7,6 @@ pub enum Capability {
     Ble,
     WifiAware,
     BackgroundService,
-    LauncherShortcuts,
     SoundMeter,
 
     BackgroundTimer,
@@ -46,7 +45,6 @@ impl Capability {
             "BLE" => Self::Ble,
             "WIFI_AWARE" => Self::WifiAware,
             "BACKGROUND_SERVICE" => Self::BackgroundService,
-            "LAUNCHER_SHORTCUTS" => Self::LauncherShortcuts,
             "SOUND_METER" => Self::SoundMeter,
 
             "BACKGROUND_TIMER" => Self::BackgroundTimer,
