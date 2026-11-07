@@ -33,14 +33,14 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 # which `#[cfg(test)]` cannot reach.
 "test-seams" = ["dep:tempfile", "plain-libs/test-seams"]
 
-"storage-platform" = ["dep:anyhow", "dep:sysinfo", "plain-libs/storage-platform", "plain-libs/volumes"]
+"storage-platform" = ["dep:anyhow", "plain-libs/disk-metrics", "plain-libs/system-metrics", "plain-libs/storage-platform", "plain-libs/volumes"]
 "unix-platform" = ["dep:anyhow", "plain-libs/unix-platform"]
 "linux-system" = ["dep:anyhow"]
 "linux-platform" = ["linux-system", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util", "plain-libs/linux-platform"]
 
 "image-metadata" = ["library", "dep:image"]
-"runtime" = ["dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "dep:sysinfo", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "dep:windows"]
-"runtime-media" = ["runtime", "media", "dep:notify", "tokio/process"]
+"runtime" = ["dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "dep:windows"]
+"runtime-media" = ["runtime", "media", "plain-libs/native-watch", "tokio/process"]
 
 "ai-image-search" = ["plain-libs/ai-image-search"]
 "media" = ["image-metadata", "dep:tempfile", "plain-libs/thumbnails"]
@@ -48,7 +48,6 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 [dependencies]
 undoc = { path = "../plain-libs/codecs/undoc", optional = true }
 plain-libs = { path = "../plain-libs", default-features = false }
-"sysinfo" = { version = "0.32", default-features = false, features = ["disk"], optional = true }
 "tempfile" = { "version" = "3", "optional" = true }
 "reqwest" = { version = "0.12", default-features = false, features = ["stream"], optional = true }
 "sha2" = "0.10"
@@ -80,7 +79,6 @@ plain-graphql = { path = "../plain-graphql", optional = true }
 "hyper-util" = { "version" = "0.1", "features" = ["tokio"], "optional" = true }
 "tokio-rustls" = { "version" = "0.26", "default-features" = false, "features" = ["ring"], "optional" = true }
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"], "optional" = true }
-"notify" = { "version" = "7", "optional" = true }
 
 
 [dev-dependencies]
@@ -105,7 +103,6 @@ name = "ble_uuids"
 required-features = ["ble"]
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]
-sysinfo = { version = "0.32", default-features = false, features = ["system"], optional = true }
 
 [[example]]
 name = "image_search"

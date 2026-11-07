@@ -33,14 +33,14 @@ async fn watcher_recovery_and_paired_directory_rename_preserve_rebuild_progress(
         .file_id;
     let mut progress = state.events.subscribe();
     catalog
-        .apply_watch_event(notify::Event::new(notify::EventKind::Other))
+        .apply_watch_event(plain_libs::file_events::Event::new(plain_libs::file_events::EventKind::Other))
         .await
         .unwrap();
     std::fs::rename(&old, &new).unwrap();
     catalog
         .apply_watch_event(
-            notify::Event::new(notify::EventKind::Modify(notify::event::ModifyKind::Name(
-                notify::event::RenameMode::Both,
+            plain_libs::file_events::Event::new(plain_libs::file_events::EventKind::Modify(plain_libs::file_events::event::ModifyKind::Name(
+                plain_libs::file_events::event::RenameMode::Both,
             )))
             .add_path(old.clone())
             .add_path(new.clone()),
@@ -189,7 +189,7 @@ async fn native_directory_arrival_preserves_foreground_scan_progress() {
 
 #[tokio::test]
 async fn watcher_file_removal_does_not_rescan_its_parent() {
-    use notify::event::{EventKind, ModifyKind, RemoveKind, RenameMode};
+    use plain_libs::file_events::event::{EventKind, ModifyKind, RemoveKind, RenameMode};
     for kind in [
         EventKind::Remove(RemoveKind::File),
         EventKind::Modify(ModifyKind::Name(RenameMode::Any)),
@@ -227,7 +227,7 @@ async fn watcher_file_removal_does_not_rescan_its_parent() {
             std::fs::remove_file(&removed).unwrap();
         }
         catalog
-            .apply_watch_event(notify::Event::new(kind).add_path(removed.clone()))
+            .apply_watch_event(plain_libs::file_events::Event::new(kind).add_path(removed.clone()))
             .await
             .unwrap();
         assert_eq!(
@@ -273,12 +273,12 @@ async fn watcher_file_changes_only_index_the_changed_file() {
     std::fs::write(&sibling, b"unreported").unwrap();
     let changed = source.join("changed.txt");
     for kind in [
-        notify::EventKind::Create(notify::event::CreateKind::File),
-        notify::EventKind::Modify(notify::event::ModifyKind::Any),
+        plain_libs::file_events::EventKind::Create(plain_libs::file_events::event::CreateKind::File),
+        plain_libs::file_events::EventKind::Modify(plain_libs::file_events::event::ModifyKind::Any),
     ] {
         std::fs::write(&changed, b"changed").unwrap();
         catalog
-            .apply_watch_event(notify::Event::new(kind).add_path(changed.clone()))
+            .apply_watch_event(plain_libs::file_events::Event::new(kind).add_path(changed.clone()))
             .await
             .unwrap();
         assert_eq!(state.media_scans.snapshot().unwrap().unwrap().id, scan_id);
@@ -928,7 +928,7 @@ async fn watcher_reconciliation_waits_for_the_active_scan() {
     let catalog = NativeMediaCatalog::new(state.clone());
     crate::features::services::files::indexing::set_directories(&catalog.state.db, &[]).unwrap();
     let active = state.media_scans.begin(0).unwrap();
-    let reconcile = catalog.apply_watch_event(notify::Event::new(notify::EventKind::Other));
+    let reconcile = catalog.apply_watch_event(plain_libs::file_events::Event::new(plain_libs::file_events::EventKind::Other));
     tokio::pin!(reconcile);
     assert!(futures_util::poll!(reconcile.as_mut()).is_pending());
     active.finish(Ok(())).unwrap();
@@ -1394,7 +1394,7 @@ async fn watcher_reconciliation_does_not_restart_a_cancelled_scan() {
     crate::features::services::files::indexing::set_directories(&catalog.state.db, &[]).unwrap();
     let active = state.media_scans.begin(10).unwrap();
     let id = state.media_scans.snapshot().unwrap().unwrap().id;
-    let reconcile = catalog.apply_watch_event(notify::Event::new(notify::EventKind::Other));
+    let reconcile = catalog.apply_watch_event(plain_libs::file_events::Event::new(plain_libs::file_events::EventKind::Other));
     tokio::pin!(reconcile);
     assert!(futures_util::poll!(reconcile.as_mut()).is_pending());
     catalog.cancel_file_scan().unwrap();
@@ -1405,7 +1405,7 @@ async fn watcher_reconciliation_does_not_restart_a_cancelled_scan() {
     assert_eq!(stopped.status, Status::Cancelled);
     let mut progress = state.events.subscribe();
     catalog
-        .apply_watch_event(notify::Event::new(notify::EventKind::Other))
+        .apply_watch_event(plain_libs::file_events::Event::new(plain_libs::file_events::EventKind::Other))
         .await
         .unwrap();
     assert_eq!(

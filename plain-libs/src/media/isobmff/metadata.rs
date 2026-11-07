@@ -97,7 +97,7 @@ fn collect(data: &[u8], fields: &mut HashMap<&'static str, String>, depth: u8) {
                 let Some(value) = child(item.data, b"data").and_then(|data| {
                     if &item.kind == b"gnre" {
                         let code = u16::from_be_bytes(data.get(8..10)?.try_into().ok()?);
-                        return lofty::id3::v1::GENRES
+                        return crate::audio_tags::id3::v1::GENRES
                             .get(usize::from(code).checked_sub(1)?)
                             .map(|name| name.to_string());
                     }

@@ -1,5 +1,4 @@
 // Container extraction and TIFF validation adapted from kamadak-exif 0.6.1; see licenses/kamadak-exif-BSD.txt.
-mod endian;
 mod error;
 mod isobmff;
 mod jpeg;

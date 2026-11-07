@@ -24,9 +24,9 @@
 // SUCH DAMAGE.
 //
 
+use crate::utils::binary::{LittleEndian, ByteOrder};
 use std::io::{BufRead, ErrorKind};
 
-use super::endian::{Endian, LittleEndian};
 use super::error::Error;
 use super::util::{BufReadExt as _, ReadExt as _};
 
@@ -57,7 +57,7 @@ where
     if sig[0..4] != FCC_RIFF || sig[8..12] != FCC_WEBP {
         return Err(Error::InvalidFormat("Not a WebP file"));
     }
-    let mut file_size = LittleEndian::loadu32(&sig, 4) as usize;
+    let mut file_size = LittleEndian::read_u32(&sig[4..]) as usize;
     file_size = file_size
         .checked_sub(4)
         .ok_or(Error::InvalidFormat("Invalid header file size"))?;
@@ -69,7 +69,7 @@ where
             .ok_or(Error::InvalidFormat("Chunk overflowing parent"))?;
         let mut cheader = [0; 8];
         reader.read_exact(&mut cheader)?;
-        let mut size = LittleEndian::loadu32(&cheader, 4) as usize;
+        let mut size = LittleEndian::read_u32(&cheader[4..]) as usize;
         file_size = file_size
             .checked_sub(size)
             .ok_or(Error::InvalidFormat("Chunk overflowing parent"))?;

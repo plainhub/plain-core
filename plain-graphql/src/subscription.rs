@@ -30,7 +30,7 @@ pub(crate) fn collect_subscription_streams<'a, T: SubscriptionType + 'static>(
         if let Selection::Field(field) = &selection.node {
             streams.push(Box::pin({
                 let ctx = ctx.clone();
-                asynk_strim::stream_fn(move |mut yielder| async move {
+                plain_libs::streams::stream_fn(move |mut yielder| async move {
                     let ctx = ctx.with_field(field);
                     let field_name = ctx.item.node.response_key().node.clone();
                     let stream = root.create_field_stream(&ctx);

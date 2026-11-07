@@ -18,14 +18,14 @@ pub fn list() -> Result<Vec<Disk>, String> {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        Ok(sysinfo::Disks::new_with_refreshed_list()
+        Ok(plain_libs::system_metrics::disks()
             .iter()
             .map(|disk| Disk {
-                id: disk.mount_point().to_string_lossy().into_owned(),
-                name: disk.name().to_string_lossy().into_owned(),
-                path: disk.mount_point().to_string_lossy().into_owned(),
-                size_bytes: disk.total_space().min(i64::MAX as u64) as i64,
-                removable: disk.is_removable(),
+                id: disk.mount_point.to_string_lossy().into_owned(),
+                name: disk.name.to_string_lossy().into_owned(),
+                path: disk.mount_point.to_string_lossy().into_owned(),
+                size_bytes: disk.total_bytes.min(i64::MAX as u64) as i64,
+                removable: disk.removable,
                 model: None,
             })
             .collect())

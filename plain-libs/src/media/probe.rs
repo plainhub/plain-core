@@ -1,9 +1,9 @@
 mod id3;
 
-use lofty::config::ParseOptions;
-use lofty::file::{AudioFile, TaggedFileExt};
-use lofty::probe::Probe;
-use lofty::tag::{Accessor, TagType};
+use crate::audio_tags::config::ParseOptions;
+use crate::audio_tags::file::{AudioFile, TaggedFileExt};
+use crate::audio_tags::probe::Probe;
+use crate::audio_tags::tag::{Accessor, TagType};
 use std::{
     fs::File,
     io::{BufReader, Read, Seek, SeekFrom},
@@ -166,7 +166,7 @@ struct TagStrings {
 }
 
 fn tag_strings(
-    tagged_file: &lofty::file::TaggedFile,
+    tagged_file: &crate::audio_tags::file::TaggedFile,
     path: Option<&str>,
     latin1_title_artist: bool,
 ) -> TagStrings {
@@ -227,7 +227,7 @@ fn tag_strings(
             (&mut fields.album, tag.album()),
             (
                 &mut fields.album_artist,
-                tag.get_string(&lofty::tag::ItemKey::AlbumArtist)
+                tag.get_string(&crate::audio_tags::tag::ItemKey::AlbumArtist)
                     .map(std::borrow::Cow::Borrowed),
             ),
         ] {

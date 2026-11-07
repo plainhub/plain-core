@@ -270,7 +270,7 @@ where
     ) -> BoxStream<'static, Response> {
         let schema = self.clone();
         let request = request.into();
-        asynk_strim::stream_fn(|mut yielder| async move {
+        plain_libs::streams::stream_fn(|mut yielder| async move {
             let (env, cache_control) = match prepare_request(
                 request,
                 session_data,

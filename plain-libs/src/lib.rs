@@ -1,3 +1,6 @@
+#[cfg(feature = "peg")]
+extern crate alloc;
+
 #[cfg(feature = "ai-image-search")]
 pub mod ai_image_search;
 #[cfg(feature = "apk")]
@@ -33,3 +36,20 @@ pub mod sqlite;
 #[cfg(all(feature = "apk", any(test, feature = "test-seams")))]
 #[path = "../../tests/plain-libs/support/apk.rs"]
 pub mod test_apk;
+
+pub mod case;
+pub mod assertions;
+pub mod streams;
+#[cfg(feature = "peg")]
+pub mod peg;
+
+#[cfg(feature = "media")]
+pub mod audio_tags;
+#[cfg(feature = "thumbnails")]
+pub mod image_resize;
+#[cfg(feature = "ai-image-search")]
+pub mod tokenizer;
+#[cfg(feature = "native-watch")]
+pub mod file_events;
+#[cfg(any(feature = "disk-metrics", feature = "system-metrics"))]
+pub mod system_metrics;

@@ -3,7 +3,7 @@ use crate::parser::{
     pos::{PositionCalculator, Positioned},
     types::*,
 };
-use pest::{
+use plain_libs::peg::{
     Parser,
     iterators::{Pair, Pairs},
 };

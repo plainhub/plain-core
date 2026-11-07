@@ -248,7 +248,8 @@ fn direct(fields: &[String], directory: &std::path::Path) -> Result<DeviceInfo, 
         }
         #[cfg(not(target_os = "ios"))]
         {
-            info.kernel_version = sysinfo::System::kernel_version().unwrap_or_default();
+            info.kernel_version =
+                plain_libs::system_metrics::System::kernel_version().unwrap_or_default();
         }
     }
     if selected("totalMemory") {
@@ -258,7 +259,7 @@ fn direct(fields: &[String], directory: &std::path::Path) -> Result<DeviceInfo, 
         }
         #[cfg(not(target_os = "ios"))]
         {
-            let mut system = sysinfo::System::new();
+            let mut system = plain_libs::system_metrics::System::new();
             system.refresh_memory();
             info.total_memory = Long(system.total_memory().min(i64::MAX as u64) as i64);
         }
@@ -278,13 +279,9 @@ fn direct(fields: &[String], directory: &std::path::Path) -> Result<DeviceInfo, 
         }
         #[cfg(not(target_os = "android"))]
         {
-            let mut system = sysinfo::System::new();
-            system.refresh_cpu_all();
-            info.cpu_model = system
-                .cpus()
-                .first()
-                .map(|cpu| cpu.brand().to_owned())
-                .filter(|value| !value.is_empty());
+            let mut system = plain_libs::system_metrics::System::new();
+            system.refresh_cpu_model();
+            info.cpu_model = system.cpu_model().map(str::to_owned);
         }
     }
     Ok(info)

@@ -3,7 +3,7 @@ use darling::{
     ast::{Data, Fields},
     util::{Ignored, SpannedValue},
 };
-use heck::{ToLowerCamelCase, ToPascalCase, ToShoutySnakeCase, ToSnakeCase};
+use crate::case::{ToLowerCamelCase, ToPascalCase, ToShoutySnakeCase, ToSnakeCase};
 use syn::{Attribute, Expr, Generics, Ident, Lit, LitBool, Path, Type, Visibility};
 #[derive(FromMeta, Clone)]
 #[darling(default)]

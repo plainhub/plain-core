@@ -24,10 +24,8 @@
 // SUCH DAMAGE.
 //
 
-use super::{
-    endian::{BigEndian, Endian, LittleEndian},
-    error::Error,
-};
+use super::error::Error;
+use crate::utils::binary::{BigEndian, ByteOrder, LittleEndian};
 use std::collections::HashSet;
 
 const TIFF_BE: u16 = 0x4d4d;
@@ -67,7 +65,7 @@ impl Parser {
         if data.len() < 8 {
             return Err(Error::InvalidFormat("Truncated TIFF header"));
         }
-        match BigEndian::loadu16(data, 0) {
+        match BigEndian::read_u16(&data[0..]) {
             TIFF_BE => self.parse_header::<BigEndian>(data),
             TIFF_LE => self.parse_header::<LittleEndian>(data),
             _ => Err(Error::InvalidFormat("Invalid TIFF byte order")),
@@ -76,19 +74,19 @@ impl Parser {
 
     fn parse_header<E>(&mut self, data: &[u8]) -> Result<(), Error>
     where
-        E: Endian,
+        E: ByteOrder,
     {
         // Parse the rest of the header (42 and the IFD offset).
-        if E::loadu16(data, 2) != TIFF_FORTY_TWO {
+        if E::read_u16(&data[2..]) != TIFF_FORTY_TWO {
             return Err(Error::InvalidFormat("Invalid forty two"));
         }
-        let ifd_offset = E::loadu32(data, 4) as usize;
+        let ifd_offset = E::read_u32(&data[4..]) as usize;
         self.parse_body::<E>(data, ifd_offset)
     }
 
     fn parse_body<E>(&mut self, data: &[u8], mut ifd_offset: usize) -> Result<(), Error>
     where
-        E: Endian,
+        E: ByteOrder,
     {
         let mut ifd_count = 0;
         while ifd_offset != 0 {
@@ -106,7 +104,7 @@ impl Parser {
     // Parse IFD [EXIF23 4.6.2].
     fn parse_ifd<E>(&mut self, data: &[u8], mut offset: usize, ctx: Context) -> Result<usize, Error>
     where
-        E: Endian,
+        E: ByteOrder,
     {
         #[cfg(test)]
         {
@@ -116,7 +114,7 @@ impl Parser {
         if data.len() < offset || data.len() - offset < 2 {
             return Err(Error::InvalidFormat("Truncated IFD count"));
         }
-        let count = E::loadu16(data, offset) as usize;
+        let count = E::read_u16(&data[offset..]) as usize;
         offset += 2;
         self.remaining_entries = self
             .remaining_entries
@@ -149,18 +147,18 @@ impl Parser {
         if data.len() - offset < 4 {
             return Err(Error::InvalidFormat("Truncated next IFD offset"));
         }
-        let next_ifd_offset = E::loadu32(data, offset);
+        let next_ifd_offset = E::read_u32(&data[offset..]);
         Ok(next_ifd_offset as usize)
     }
 
     fn parse_ifd_entry<E>(data: &[u8], offset: usize) -> Result<(u16, Entry), Error>
     where
-        E: Endian,
+        E: ByteOrder,
     {
         // The size of entry has been checked in parse_ifd().
-        let tag = E::loadu16(data, offset);
-        let typ = E::loadu16(data, offset + 2);
-        let cnt = E::loadu32(data, offset + 4);
+        let tag = E::read_u16(&data[offset..]);
+        let typ = E::read_u16(&data[offset + 2..]);
+        let cnt = E::read_u32(&data[offset + 4..]);
         let valofs_at = offset + 8;
         let unitlen: usize = match typ {
             1 | 2 | 6 | 7 => 1,
@@ -179,7 +177,7 @@ impl Parser {
                 offset: valofs_at,
             }
         } else {
-            let ofs = E::loadu32(data, valofs_at) as usize;
+            let ofs = E::read_u32(&data[valofs_at..]) as usize;
             if data.len() < ofs || data.len() - ofs < vallen {
                 return Err(Error::InvalidFormat("Truncated field value"));
             }
@@ -194,13 +192,13 @@ impl Parser {
 
     fn parse_child_ifd<E>(&mut self, data: &[u8], pointer: Entry, ctx: Context) -> Result<(), Error>
     where
-        E: Endian,
+        E: ByteOrder,
     {
         let ofs = match (pointer.kind, pointer.count) {
             (_, 0) => return Err(Error::InvalidFormat("Invalid pointer")),
             (1, _) => u32::from(data[pointer.offset]),
-            (3, _) => u32::from(E::loadu16(data, pointer.offset)),
-            (4, _) => E::loadu32(data, pointer.offset),
+            (3, _) => u32::from(E::read_u16(&data[pointer.offset..])),
+            (4, _) => E::read_u32(&data[pointer.offset..]),
             _ => return Err(Error::InvalidFormat("Invalid pointer")),
         } as usize;
         if self.validated_children.contains(&(ofs, ctx)) {

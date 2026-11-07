@@ -25,8 +25,8 @@ pub fn config() -> StartupConfig {
     let (manufacturer, model, os_name, os_version) = (
         String::new(),
         String::new(),
-        sysinfo::System::name().unwrap_or_default(),
-        sysinfo::System::os_version().unwrap_or_default(),
+        plain_libs::system_metrics::System::name().unwrap_or_default(),
+        plain_libs::system_metrics::System::os_version().unwrap_or_default(),
     );
     StartupConfig {
         debug: cfg!(debug_assertions),

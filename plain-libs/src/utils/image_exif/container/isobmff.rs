@@ -26,9 +26,9 @@
 
 use std::io::{BufRead, ErrorKind, Seek, SeekFrom};
 
-use super::endian::{BigEndian, Endian};
 use super::error::Error;
-use super::util::{BufReadExt as _, ReadExt as _, read64};
+use super::util::{BufReadExt as _, ReadExt as _};
+use crate::utils::binary::{BigEndian, ByteOrder, ReadBytesExt};
 
 // Checking "mif1" in the compatible brands should be enough, because
 // the "heic", "heix", "heim", and "heis" files shall include "mif1"
@@ -59,7 +59,7 @@ where
             if buf.len() < 4 {
                 return Err("ExifDataBlock too small".into());
             }
-            let offset = BigEndian::loadu32(&buf, 0) as usize;
+            let offset = BigEndian::read_u32(&buf) as usize;
             if buf.len() - 4 < offset {
                 return Err("Invalid Exif header offset".into());
             }
@@ -132,9 +132,9 @@ where
         }
         let mut buf = [0; 8];
         self.reader.read_exact(&mut buf)?;
-        let size = match BigEndian::loadu32(&buf, 0) {
+        let size = match BigEndian::read_u32(&buf) {
             0 => Some(u64::MAX),
-            1 => read64(&mut self.reader)?.checked_sub(16),
+            1 => self.reader.read_u64::<BigEndian>()?.checked_sub(16),
             x => u64::from(x).checked_sub(8),
         }
         .ok_or("Invalid box size")?;
@@ -173,7 +173,7 @@ where
     fn parse_ftyp(&mut self, mut boxp: BoxSplitter) -> Result<(), Error> {
         let head = boxp.slice(8)?;
         let _major_brand = &head[0..4];
-        let _minor_version = BigEndian::loadu32(&head, 4);
+        let _minor_version = BigEndian::read_u32(&head[4..]);
         while let Ok(compat_brand) = boxp.array4() {
             if HEIF_BRANDS.contains(&compat_brand) {
                 return Ok(());
@@ -424,15 +424,15 @@ impl<'a> BoxSplitter<'a> {
     }
 
     fn uint16(&mut self) -> Result<u16, Error> {
-        self.slice(2).map(|num| BigEndian::loadu16(num, 0))
+        self.slice(2).map(|num| BigEndian::read_u16(num))
     }
 
     fn uint32(&mut self) -> Result<u32, Error> {
-        self.slice(4).map(|num| BigEndian::loadu32(num, 0))
+        self.slice(4).map(|num| BigEndian::read_u32(num))
     }
 
     fn uint64(&mut self) -> Result<u64, Error> {
-        self.slice(8).map(|num| BigEndian::loadu64(num, 0))
+        self.slice(8).map(|num| BigEndian::read_u64(num))
     }
 
     fn array4(&mut self) -> Result<[u8; 4], Error> {

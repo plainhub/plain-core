@@ -1,7 +1,7 @@
-use lofty::file::TaggedFileExt;
-use lofty::picture::{Picture, PictureType};
-use lofty::probe::Probe;
-use lofty::tag::TagType;
+use crate::audio_tags::file::TaggedFileExt;
+use crate::audio_tags::picture::{Picture, PictureType};
+use crate::audio_tags::probe::Probe;
+use crate::audio_tags::tag::TagType;
 use std::path::Path;
 
 pub struct CoverData {
@@ -92,7 +92,7 @@ pub fn extract_embedded_cover_reader(
     }
     reader.seek(std::io::SeekFrom::Start(0)).ok()?;
     let tagged_file = Probe::new(std::io::BufReader::new(reader))
-        .options(lofty::config::ParseOptions::new().read_properties(false))
+        .options(crate::audio_tags::config::ParseOptions::new().read_properties(false))
         .guess_file_type()
         .ok()?
         .read()

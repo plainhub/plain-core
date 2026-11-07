@@ -38,3 +38,5 @@ pub mod xxh64;
 pub mod config;
 
 pub mod write_batch;
+
+pub mod binary;

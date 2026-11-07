@@ -1,20 +1,10 @@
 use super::InterfaceType;
-use std::{
-    collections::HashMap,
-    ffi::{c_char, c_void},
-    io,
-};
+use std::{collections::HashMap, ffi::c_void, io};
 
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
     fn CFArrayGetCount(array: *const c_void) -> isize;
     fn CFArrayGetValueAtIndex(array: *const c_void, index: isize) -> *const c_void;
-    fn CFStringGetCString(
-        string: *const c_void,
-        buffer: *mut c_char,
-        size: isize,
-        encoding: u32,
-    ) -> u8;
     fn CFEqual(a: *const c_void, b: *const c_void) -> u8;
     fn CFRelease(value: *const c_void);
 }
@@ -45,16 +35,9 @@ pub(super) fn interface_types() -> io::Result<HashMap<String, InterfaceType>> {
         if name.is_null() || kind.is_null() {
             continue;
         }
-        let mut buffer = [0; libc::IFNAMSIZ];
-        if unsafe {
-            CFStringGetCString(name, buffer.as_mut_ptr(), buffer.len() as isize, 0x08000100)
-        } == 0
-        {
+        let Some(name) = (unsafe { crate::platform::apple_device::cf_string(name) }) else {
             continue;
-        }
-        let name = unsafe { std::ffi::CStr::from_ptr(buffer.as_ptr()) }
-            .to_string_lossy()
-            .into_owned();
+        };
         let mut if_type = InterfaceType::Unknown;
         for (native, value) in unsafe {
             [

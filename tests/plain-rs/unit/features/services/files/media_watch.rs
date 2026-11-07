@@ -3,7 +3,7 @@
 //! catalog operation.
 
 use super::*;
-use notify::event::{RemoveKind, RenameMode};
+use plain_libs::file_events::event::{RemoveKind, RenameMode};
 
 fn watch_directory_fixture() -> tempfile::TempDir {
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap();
@@ -16,7 +16,7 @@ fn watch_directory_fixture() -> tempfile::TempDir {
 #[test]
 #[cfg(target_os = "linux")]
 fn read_events_and_incomplete_writes_do_not_enter_the_reconciliation_queue() {
-    use notify::event::{AccessKind, AccessMode, CreateKind, DataChange};
+    use plain_libs::file_events::event::{AccessKind, AccessMode, CreateKind, DataChange};
     let (send, mut receive) = tokio::sync::mpsc::channel(1);
     for kind in [
         EventKind::Access(AccessKind::Open(AccessMode::Read)),
@@ -53,23 +53,23 @@ struct DeniedWatcher {
     calls: Vec<std::path::PathBuf>,
 }
 impl Watcher for DeniedWatcher {
-    fn new<F: notify::EventHandler>(_: F, _: notify::Config) -> notify::Result<Self> {
+    fn new<F: plain_libs::file_events::EventHandler>(_: F, _: plain_libs::file_events::Config) -> plain_libs::file_events::Result<Self> {
         Ok(Self::default())
     }
-    fn watch(&mut self, path: &Path, _: RecursiveMode) -> notify::Result<()> {
+    fn watch(&mut self, path: &Path, _: RecursiveMode) -> plain_libs::file_events::Result<()> {
         self.calls.push(path.to_owned());
         if path == self.denied {
-            return Err(notify::Error::io(
+            return Err(plain_libs::file_events::Error::io(
                 std::io::ErrorKind::PermissionDenied.into(),
             ));
         }
         Ok(())
     }
-    fn unwatch(&mut self, _: &Path) -> notify::Result<()> {
+    fn unwatch(&mut self, _: &Path) -> plain_libs::file_events::Result<()> {
         Ok(())
     }
-    fn kind() -> notify::WatcherKind {
-        notify::WatcherKind::NullWatcher
+    fn kind() -> plain_libs::file_events::WatcherKind {
+        plain_libs::file_events::WatcherKind::NullWatcher
     }
 }
 
@@ -106,7 +106,7 @@ fn a_new_media_file_is_indexed() {
     assert_eq!(
         effect_for(
             &path,
-            &EventKind::Create(notify::event::CreateKind::File),
+            &EventKind::Create(plain_libs::file_events::event::CreateKind::File),
             false
         ),
         Effect::Index
@@ -121,7 +121,7 @@ fn a_changed_media_file_is_reindexed() {
     assert_eq!(
         effect_for(
             &path,
-            &EventKind::Modify(notify::event::ModifyKind::Any),
+            &EventKind::Modify(plain_libs::file_events::event::ModifyKind::Any),
             false
         ),
         Effect::Index
@@ -137,7 +137,7 @@ fn ordinary_files_are_catalogued_without_media_probes() {
         assert_eq!(
             effect_for(
                 &path,
-                &EventKind::Create(notify::event::CreateKind::File),
+                &EventKind::Create(plain_libs::file_events::event::CreateKind::File),
                 false
             ),
             Effect::Index,
@@ -154,7 +154,7 @@ fn dotfiles_are_indexed_and_a_nomedia_marker_rescans() {
     assert_eq!(
         effect_for(
             &hidden,
-            &EventKind::Create(notify::event::CreateKind::File),
+            &EventKind::Create(plain_libs::file_events::event::CreateKind::File),
             false
         ),
         Effect::Index
@@ -162,7 +162,7 @@ fn dotfiles_are_indexed_and_a_nomedia_marker_rescans() {
     assert_eq!(
         effect_for(
             &dir.path().join(".nomedia"),
-            &EventKind::Create(notify::event::CreateKind::File),
+            &EventKind::Create(plain_libs::file_events::event::CreateKind::File),
             false
         ),
         Effect::RescanSubtree,
@@ -196,8 +196,8 @@ fn an_excluded_path_is_forgotten_rather_than_indexed() {
     let path = dir.path().join("cached.mp4");
     std::fs::write(&path, b"x").unwrap();
     for kind in [
-        EventKind::Create(notify::event::CreateKind::File),
-        EventKind::Modify(notify::event::ModifyKind::Any),
+        EventKind::Create(plain_libs::file_events::event::CreateKind::File),
+        EventKind::Modify(plain_libs::file_events::event::ModifyKind::Any),
     ] {
         assert_eq!(
             effect_for(&path, &kind, true),
@@ -240,7 +240,7 @@ fn a_directory_arriving_by_create_or_rename_is_scanned() {
     assert_eq!(
         effect_for(
             &new,
-            &EventKind::Create(notify::event::CreateKind::Folder),
+            &EventKind::Create(plain_libs::file_events::event::CreateKind::Folder),
             false
         ),
         Effect::RescanSubtree
@@ -250,7 +250,7 @@ fn a_directory_arriving_by_create_or_rename_is_scanned() {
 #[cfg(target_os = "linux")]
 #[test]
 fn linux_file_writes_only_reach_indexing_after_the_writer_closes() {
-    use notify::event::{AccessKind, AccessMode, CreateKind, DataChange};
+    use plain_libs::file_events::event::{AccessKind, AccessMode, CreateKind, DataChange};
     assert!(completed_event(Event::new(EventKind::Create(CreateKind::File))).is_none());
     assert!(
         completed_event(Event::new(EventKind::Modify(ModifyKind::Data(
@@ -279,18 +279,18 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
     #[derive(Default)]
     struct RecordingWatcher(Vec<(std::path::PathBuf, RecursiveMode)>);
     impl Watcher for RecordingWatcher {
-        fn new<F: notify::EventHandler>(_: F, _: notify::Config) -> notify::Result<Self> {
+        fn new<F: plain_libs::file_events::EventHandler>(_: F, _: plain_libs::file_events::Config) -> plain_libs::file_events::Result<Self> {
             Ok(Self::default())
         }
-        fn watch(&mut self, path: &Path, mode: RecursiveMode) -> notify::Result<()> {
+        fn watch(&mut self, path: &Path, mode: RecursiveMode) -> plain_libs::file_events::Result<()> {
             self.0.push((path.to_owned(), mode));
             Ok(())
         }
-        fn unwatch(&mut self, _: &Path) -> notify::Result<()> {
+        fn unwatch(&mut self, _: &Path) -> plain_libs::file_events::Result<()> {
             Ok(())
         }
-        fn kind() -> notify::WatcherKind {
-            notify::WatcherKind::NullWatcher
+        fn kind() -> plain_libs::file_events::WatcherKind {
+            plain_libs::file_events::WatcherKind::NullWatcher
         }
     }
     let directory = watch_directory_fixture();
@@ -400,11 +400,11 @@ fn git_project_events_are_skipped_without_disabling_other_file_events() {
     let repo = directory.path().join("project");
     std::fs::create_dir_all(repo.join(".git")).unwrap();
     let (send, mut receive) = tokio::sync::mpsc::channel(8);
-    let excluded = Event::new(EventKind::Remove(notify::event::RemoveKind::File))
+    let excluded = Event::new(EventKind::Remove(plain_libs::file_events::event::RemoveKind::File))
         .add_path(repo.join("file.txt"));
     enqueue_event(&send, None, excluded).unwrap();
     assert!(receive.try_recv().is_err());
-    let included = Event::new(EventKind::Remove(notify::event::RemoveKind::File))
+    let included = Event::new(EventKind::Remove(plain_libs::file_events::event::RemoveKind::File))
         .add_path(directory.path().join("report.txt"));
     enqueue_event(&send, None, included.clone()).unwrap();
     assert_eq!(receive.try_recv().unwrap().paths, included.paths);

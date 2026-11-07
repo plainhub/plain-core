@@ -2,7 +2,7 @@
 use crate::parser::types::OperationType;
 use crate::value::Name;
 pub use parse::parse_query;
-use pest::{RuleType, error::LineColLocation};
+use plain_libs::peg::{RuleType, error::LineColLocation};
 pub use pos::{Pos, Positioned};
 use serde::{Serialize, Serializer};
 use std::fmt::{self, Display, Formatter};
@@ -90,8 +90,8 @@ impl Display for Error {
     }
 }
 impl std::error::Error for Error {}
-impl<R: RuleType> From<pest::error::Error<R>> for Error {
-    fn from(err: pest::error::Error<R>) -> Self {
+impl<R: RuleType> From<plain_libs::peg::error::Error<R>> for Error {
+    fn from(err: plain_libs::peg::error::Error<R>) -> Self {
         let (start, end) = match err.line_col {
             LineColLocation::Pos(at) => (at, None),
             LineColLocation::Span(start, end) => (start, Some(end)),

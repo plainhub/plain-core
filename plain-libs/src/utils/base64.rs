@@ -66,7 +66,28 @@ pub fn base64_encode_url_safe(bytes: &[u8]) -> String {
 /// Padding is optional because plenty of producers drop it. A length of
 /// `4n + 1` can never be valid and is rejected.
 pub fn base64_decode_checked(input: &str) -> Result<Vec<u8>, Invalid> {
+    decode_checked(input, false)
+}
+
+pub fn base64_decode_standard(input: &[u8]) -> Result<Vec<u8>, Invalid> {
+    let text = std::str::from_utf8(input).map_err(|error| Invalid {
+        offset: error.valid_up_to(),
+        found: char::from(input[error.valid_up_to()]),
+    })?;
+    decode_checked(text, true)
+}
+
+fn decode_checked(input: &str, standard: bool) -> Result<Vec<u8>, Invalid> {
     let body = input.trim_end_matches('=');
+    if standard {
+        let padding = input.len() - body.len();
+        if input.len() % 4 != 0 || padding > 2 {
+            return Err(Invalid {
+                offset: body.len(),
+                found: '=',
+            });
+        }
+    }
     if let Some(offset) = body.find('=') {
         // Padding only ever belongs at the end.
         return Err(Invalid { offset, found: '=' });
@@ -80,6 +101,9 @@ pub fn base64_decode_checked(input: &str) -> Result<Vec<u8>, Invalid> {
             '0'..='9' => c as u8 - b'0' + 52,
             '+' | '/' | '-' | '_' => {
                 let url_safe = matches!(c, '-' | '_');
+                if standard && url_safe {
+                    return Err(Invalid { offset, found: c });
+                }
                 match tail {
                     Some(seen) if seen != url_safe => {
                         return Err(Invalid { offset, found: c });
@@ -98,6 +122,20 @@ pub fn base64_decode_checked(input: &str) -> Result<Vec<u8>, Invalid> {
             offset: body.len(),
             found: '\0',
         });
+    }
+    if standard {
+        let remaining = symbols.len() % 4;
+        let mask = match remaining {
+            2 => 15,
+            3 => 3,
+            _ => 0,
+        };
+        if mask != 0 && symbols[symbols.len() - 1] & mask != 0 {
+            return Err(Invalid {
+                offset: body.len() - 1,
+                found: input.as_bytes()[body.len() - 1] as char,
+            });
+        }
     }
     let mut out = Vec::with_capacity(symbols.len() * 3 / 4);
     for chunk in symbols.chunks(4) {

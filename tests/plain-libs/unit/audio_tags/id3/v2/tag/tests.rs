@@ -1,0 +1,1199 @@
+use crate::audio_tags::config::{ParseOptions, ParsingMode};
+use crate::audio_tags::id3::v2::header::Id3v2Header;
+use crate::audio_tags::id3::v2::items::PopularimeterFrame;
+use crate::audio_tags::id3::v2::util::pairs::DEFAULT_NUMBER_IN_PAIR;
+use crate::audio_tags::id3::v2::{
+    ChannelInformation, ChannelType, RelativeVolumeAdjustmentFrame, TimestampFrame,
+};
+use crate::audio_tags::picture::MimeType;
+use crate::audio_tags::tag::items::{ENGLISH, Timestamp};
+use crate::audio_tags::tag::utils::read_path;
+
+use super::*;
+
+use std::collections::HashMap;
+
+const COMMENT_FRAME_ID: &str = "COMM";
+
+fn read_tag(path: &str) -> Id3v2Tag {
+    let tag_bytes = read_path(path);
+    read_tag_with_options(
+        &tag_bytes,
+        ParseOptions::new().parsing_mode(ParsingMode::Strict),
+    )
+}
+
+fn read_tag_with_options(bytes: &[u8], parse_options: ParseOptions) -> Id3v2Tag {
+    let mut reader = Cursor::new(bytes);
+
+    let header = Id3v2Header::parse(&mut reader).unwrap();
+    crate::audio_tags::id3::v2::read::parse_id3v2(&mut reader, header, parse_options).unwrap()
+}
+
+#[test]
+fn parse_id3v2() {
+    let mut expected_tag = Id3v2Tag::default();
+
+    let encoding = TextEncoding::Latin1;
+
+    expected_tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TPE1")),
+        encoding,
+        String::from("Bar artist"),
+    )));
+
+    expected_tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TIT2")),
+        encoding,
+        String::from("Foo title"),
+    )));
+
+    expected_tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TALB")),
+        encoding,
+        String::from("Baz album"),
+    )));
+
+    expected_tag.insert(Frame::Comment(CommentFrame::new(
+        encoding,
+        *b"eng",
+        EMPTY_CONTENT_DESCRIPTOR,
+        String::from("Qux comment"),
+    )));
+
+    expected_tag.insert(Frame::Timestamp(TimestampFrame::new(
+        FrameId::Valid(Cow::Borrowed("TDRC")),
+        encoding,
+        Timestamp {
+            year: 1984,
+            ..Timestamp::default()
+        },
+    )));
+
+    expected_tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TRCK")),
+        encoding,
+        String::from("1"),
+    )));
+
+    expected_tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TCON")),
+        encoding,
+        String::from("Classical"),
+    )));
+
+    let parsed_tag = read_tag("tests/tags/assets/id3v2/test.id3v24");
+
+    assert_eq!(expected_tag, parsed_tag);
+}
+
+#[test]
+fn id3v2_to_tag() {
+    let id3v2 = read_tag("tests/tags/assets/id3v2/test.id3v24");
+
+    let tag: Tag = id3v2.into();
+
+    crate::audio_tags::tag::utils::verify_tag(&tag, true, true);
+}
+
+#[test]
+fn tag_to_id3v2() {
+    fn verify_frame(tag: &Id3v2Tag, id: &str, value: &str) {
+        let frame = tag.get(&FrameId::Valid(Cow::Borrowed(id)));
+
+        assert!(frame.is_some());
+
+        let frame = frame.unwrap();
+
+        assert_eq!(
+            frame,
+            &Frame::Text(TextInformationFrame::new(
+                FrameId::Valid(Cow::Borrowed(id)),
+                TextEncoding::UTF8,
+                String::from(value)
+            )),
+        );
+    }
+
+    let tag = crate::audio_tags::tag::utils::create_tag(TagType::Id3v2);
+
+    let id3v2_tag: Id3v2Tag = tag.into();
+
+    verify_frame(&id3v2_tag, "TIT2", "Foo title");
+    verify_frame(&id3v2_tag, "TPE1", "Bar artist");
+    verify_frame(&id3v2_tag, "TALB", "Baz album");
+
+    let frame = id3v2_tag
+        .get(&FrameId::Valid(Cow::Borrowed(COMMENT_FRAME_ID)))
+        .unwrap();
+    assert_eq!(
+        frame,
+        &Frame::Comment(CommentFrame::new(
+            TextEncoding::UTF8,
+            *b"XXX",
+            EMPTY_CONTENT_DESCRIPTOR,
+            String::from("Qux comment"),
+        ))
+    );
+
+    verify_frame(&id3v2_tag, "TRCK", "1");
+    verify_frame(&id3v2_tag, "TCON", "Classical");
+}
+
+fn create_full_test_tag(version: Id3v2Version) -> Id3v2Tag {
+    let mut tag = Id3v2Tag::default();
+    tag.original_version = version;
+
+    let encoding = TextEncoding::UTF16;
+
+    tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TIT2")),
+        encoding,
+        String::from("TempleOS Hymn Risen (Remix)"),
+    )));
+
+    tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TPE1")),
+        encoding,
+        String::from("Dave Eddy"),
+    )));
+
+    tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TRCK")),
+        encoding,
+        String::from("1"),
+    )));
+
+    tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TALB")),
+        encoding,
+        String::from("Summer"),
+    )));
+
+    tag.insert(Frame::Timestamp(TimestampFrame::new(
+        FrameId::Valid(Cow::Borrowed("TDRC")),
+        encoding,
+        Timestamp {
+            year: 2017,
+            ..Timestamp::default()
+        },
+    )));
+
+    tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TCON")),
+        encoding,
+        String::from("Electronic"),
+    )));
+
+    tag.insert(Frame::Text(TextInformationFrame::new(
+        FrameId::Valid(Cow::Borrowed("TLEN")),
+        encoding,
+        String::from("213017"),
+    )));
+
+    tag.insert(Frame::Picture(AttachedPictureFrame::new(
+        TextEncoding::Latin1,
+        Picture {
+            pic_type: PictureType::CoverFront,
+            mime_type: Some(MimeType::Png),
+            description: None,
+            data: read_path("tests/tags/assets/id3v2/test_full_cover.png").into(),
+        },
+    )));
+
+    tag
+}
+
+#[test]
+fn id3v24_full() {
+    let tag = create_full_test_tag(Id3v2Version::V4);
+    let parsed_tag = read_tag("tests/tags/assets/id3v2/test_full.id3v24");
+
+    assert_eq!(tag, parsed_tag);
+}
+
+#[test]
+fn id3v23_full() {
+    let mut tag = create_full_test_tag(Id3v2Version::V3);
+    let mut parsed_tag = read_tag("tests/tags/assets/id3v2/test_full.id3v23");
+
+    // Tags may change order after being read, due to the TDRC conversion
+    tag.frames.sort_by_key(|frame| frame.id_str().to_string());
+    parsed_tag
+        .frames
+        .sort_by_key(|frame| frame.id_str().to_string());
+    assert_eq!(tag, parsed_tag);
+}
+
+#[test]
+fn id3v22_full() {
+    let tag = create_full_test_tag(Id3v2Version::V2);
+    let parsed_tag = read_tag("tests/tags/assets/id3v2/test_full.id3v22");
+
+    assert_eq!(tag, parsed_tag);
+}
+
+#[test]
+fn popm_frame() {
+    let bytes = b"ID3\x04\x00\x00\x00\x00\x00\x1b\
+        POPM\x00\x00\x00\x11\x00\x00\
+        unit\x40x.test\x00\xc4\x00\x00\xff\xff";
+    let parsed_tag =
+        read_tag_with_options(bytes, ParseOptions::new().parsing_mode(ParsingMode::Strict));
+
+    assert_eq!(parsed_tag.frames.len(), 1);
+    let popm_frame = parsed_tag.frames.first().unwrap();
+
+    assert_eq!(popm_frame.id(), &FrameId::Valid(Cow::Borrowed("POPM")));
+    assert_eq!(
+        popm_frame,
+        &Frame::Popularimeter(PopularimeterFrame::new(
+            String::from("unit\x40x.test"),
+            196,
+            65535
+        ))
+    )
+}
+
+#[test]
+fn multi_value_frame_to_tag() {
+    let mut tag = Id3v2Tag::default();
+
+    tag.set_artist(String::from("foo\0bar\0baz"));
+
+    let tag: Tag = tag.into();
+    let collected_artists = tag.get_strings(&ItemKey::TrackArtist).collect::<Vec<_>>();
+    assert_eq!(&collected_artists, &["foo", "bar", "baz"])
+}
+
+#[test]
+fn multi_item_tag_to_id3v2() {
+    let mut tag = Tag::new(TagType::Id3v2);
+
+    tag.push_unchecked(TagItem::new(
+        ItemKey::TrackArtist,
+        ItemValue::Text(String::from("foo")),
+    ));
+    tag.push_unchecked(TagItem::new(
+        ItemKey::TrackArtist,
+        ItemValue::Text(String::from("bar")),
+    ));
+    tag.push_unchecked(TagItem::new(
+        ItemKey::TrackArtist,
+        ItemValue::Text(String::from("baz")),
+    ));
+
+    let tag: Id3v2Tag = tag.into();
+    assert_eq!(tag.artist().as_deref(), Some("foo/bar/baz"))
+}
+
+#[test]
+fn utf16_txxx_with_single_bom() {
+    let _ = read_tag("tests/tags/assets/id3v2/issue_53.id3v24");
+}
+
+#[test]
+fn replaygain_tag_conversion() {
+    let mut tag = Id3v2Tag::default();
+    tag.insert(Frame::UserText(ExtendedTextFrame::new(
+        TextEncoding::UTF8,
+        String::from("REPLAYGAIN_ALBUM_GAIN"),
+        String::from("-10.43 dB"),
+    )));
+
+    let tag: Tag = tag.into();
+
+    assert_eq!(tag.item_count(), 1);
+    assert_eq!(
+        tag.items[0],
+        TagItem::new(
+            ItemKey::ReplayGainAlbumGain,
+            ItemValue::Text(String::from("-10.43 dB"))
+        )
+    );
+}
+
+#[test]
+fn multi_value_roundtrip() {
+    let mut tag = Tag::new(TagType::Id3v2);
+    // 1st: Multi-valued text frames
+    tag.insert_text(ItemKey::TrackArtist, "TrackArtist 1".to_owned());
+    tag.push(TagItem::new(
+        ItemKey::TrackArtist,
+        ItemValue::Text("TrackArtist 2".to_owned()),
+    ));
+    tag.insert_text(ItemKey::AlbumArtist, "AlbumArtist 1".to_owned());
+    tag.push(TagItem::new(
+        ItemKey::AlbumArtist,
+        ItemValue::Text("AlbumArtist 2".to_owned()),
+    ));
+    tag.insert_text(ItemKey::TrackTitle, "TrackTitle 1".to_owned());
+    tag.push(TagItem::new(
+        ItemKey::TrackTitle,
+        ItemValue::Text("TrackTitle 2".to_owned()),
+    ));
+    tag.insert_text(ItemKey::AlbumTitle, "AlbumTitle 1".to_owned());
+    tag.push(TagItem::new(
+        ItemKey::AlbumTitle,
+        ItemValue::Text("AlbumTitle 2".to_owned()),
+    ));
+    tag.insert_text(ItemKey::ContentGroup, "ContentGroup 1".to_owned());
+    tag.push(TagItem::new(
+        ItemKey::ContentGroup,
+        ItemValue::Text("ContentGroup 2".to_owned()),
+    ));
+    tag.insert_text(ItemKey::Genre, "Genre 1".to_owned());
+    tag.push(TagItem::new(
+        ItemKey::Genre,
+        ItemValue::Text("Genre 2".to_owned()),
+    ));
+    tag.insert_text(ItemKey::Mood, "Mood 1".to_owned());
+    tag.push(TagItem::new(
+        ItemKey::Mood,
+        ItemValue::Text("Mood 2".to_owned()),
+    ));
+    tag.insert_text(ItemKey::Composer, "Composer 1".to_owned());
+    tag.push(TagItem::new(
+        ItemKey::Composer,
+        ItemValue::Text("Composer 2".to_owned()),
+    ));
+    tag.insert_text(ItemKey::Conductor, "Conductor 1".to_owned());
+    tag.push(TagItem::new(
+        ItemKey::Conductor,
+        ItemValue::Text("Conductor 2".to_owned()),
+    ));
+    // 2nd: Multi-valued language frames
+    tag.insert_text(ItemKey::Comment, "Comment 1".to_owned());
+    tag.push(TagItem::new(
+        ItemKey::Comment,
+        ItemValue::Text("Comment 2".to_owned()),
+    ));
+    assert_eq!(20, tag.len());
+
+    let id3v2 = Id3v2Tag::from(tag.clone());
+    let (split_remainder, split_tag) = id3v2.split_tag();
+
+    assert_eq!(0, split_remainder.0.len());
+    assert_eq!(tag.len(), split_tag.len());
+    // The ordering of items/frames matters, see above!
+    // TODO: Replace with an unordered comparison.
+    assert_eq!(tag.items, split_tag.items);
+}
+
+#[test]
+fn comments() {
+    let mut tag = Id3v2Tag::default();
+    let encoding = TextEncoding::Latin1;
+    let custom_descriptor = "lofty-rs";
+
+    assert!(tag.comment().is_none());
+
+    // Add an empty comment (which is a valid use case).
+    tag.set_comment(String::new());
+    assert_eq!(Some(Cow::Borrowed("")), tag.comment());
+
+    // Insert a custom comment frame
+    assert!(
+        tag.frames
+            .iter()
+            .find_map(|frame| filter_comment_frame_by_description(frame, custom_descriptor))
+            .is_none()
+    );
+    tag.insert(Frame::Comment(CommentFrame::new(
+        encoding,
+        *b"eng",
+        custom_descriptor.to_owned(),
+        String::from("Qux comment"),
+    )));
+    // Verify that the regular comment still exists
+    assert_eq!(Some(Cow::Borrowed("")), tag.comment());
+    assert_eq!(1, tag.comments().count());
+
+    tag.remove_comment();
+    assert!(tag.comment().is_none());
+
+    // Verify that the comment with the custom descriptor still exists
+    assert!(
+        tag.frames
+            .iter()
+            .find_map(|frame| filter_comment_frame_by_description(frame, custom_descriptor))
+            .is_some()
+    );
+}
+
+#[test]
+fn txxx_wxxx_tag_conversion() {
+    let txxx_frame = Frame::UserText(ExtendedTextFrame::new(
+        TextEncoding::UTF8,
+        String::from("FOO_TEXT_FRAME"),
+        String::from("foo content"),
+    ));
+
+    let wxxx_frame = Frame::UserUrl(ExtendedUrlFrame::new(
+        TextEncoding::UTF8,
+        String::from("BAR_URL_FRAME"),
+        String::from("bar url"),
+    ));
+
+    let mut tag = Id3v2Tag::default();
+
+    tag.insert(txxx_frame.clone());
+    tag.insert(wxxx_frame.clone());
+
+    let tag: Tag = tag.into();
+
+    assert_eq!(tag.item_count(), 2);
+    let expected_items = [
+        TagItem::new(
+            ItemKey::Unknown(String::from("FOO_TEXT_FRAME")),
+            ItemValue::Text(String::from("foo content")),
+        ),
+        TagItem::new(
+            ItemKey::Unknown(String::from("BAR_URL_FRAME")),
+            ItemValue::Locator(String::from("bar url")),
+        ),
+    ];
+    assert!(
+        expected_items
+            .iter()
+            .zip(tag.items())
+            .all(|(expected, actual)| expected == actual)
+    );
+
+    let tag: Id3v2Tag = tag.into();
+
+    assert_eq!(tag.frames.len(), 2);
+    assert_eq!(&tag.frames, &[txxx_frame, wxxx_frame])
+}
+
+#[test]
+fn set_track() {
+    let mut id3v2 = Id3v2Tag::default();
+    let track = 1;
+
+    id3v2.set_track(track);
+
+    assert_eq!(id3v2.track().unwrap(), track);
+    assert!(id3v2.track_total().is_none());
+}
+
+#[test]
+fn set_track_total() {
+    let mut id3v2 = Id3v2Tag::default();
+    let track_total = 2;
+
+    id3v2.set_track_total(track_total);
+
+    assert_eq!(id3v2.track().unwrap(), DEFAULT_NUMBER_IN_PAIR);
+    assert_eq!(id3v2.track_total().unwrap(), track_total);
+}
+
+#[test]
+fn set_track_and_track_total() {
+    let mut id3v2 = Id3v2Tag::default();
+    let track = 1;
+    let track_total = 2;
+
+    id3v2.set_track(track);
+    id3v2.set_track_total(track_total);
+
+    assert_eq!(id3v2.track().unwrap(), track);
+    assert_eq!(id3v2.track_total().unwrap(), track_total);
+}
+
+#[test]
+fn set_track_total_and_track() {
+    let mut id3v2 = Id3v2Tag::default();
+    let track_total = 2;
+    let track = 1;
+
+    id3v2.set_track_total(track_total);
+    id3v2.set_track(track);
+
+    assert_eq!(id3v2.track_total().unwrap(), track_total);
+    assert_eq!(id3v2.track().unwrap(), track);
+}
+
+#[test]
+fn set_disk() {
+    let mut id3v2 = Id3v2Tag::default();
+    let disk = 1;
+
+    id3v2.set_disk(disk);
+
+    assert_eq!(id3v2.disk().unwrap(), disk);
+    assert!(id3v2.disk_total().is_none());
+}
+
+#[test]
+fn set_disk_total() {
+    let mut id3v2 = Id3v2Tag::default();
+    let disk_total = 2;
+
+    id3v2.set_disk_total(disk_total);
+
+    assert_eq!(id3v2.disk().unwrap(), DEFAULT_NUMBER_IN_PAIR);
+    assert_eq!(id3v2.disk_total().unwrap(), disk_total);
+}
+
+#[test]
+fn set_disk_and_disk_total() {
+    let mut id3v2 = Id3v2Tag::default();
+    let disk = 1;
+    let disk_total = 2;
+
+    id3v2.set_disk(disk);
+    id3v2.set_disk_total(disk_total);
+
+    assert_eq!(id3v2.disk().unwrap(), disk);
+    assert_eq!(id3v2.disk_total().unwrap(), disk_total);
+}
+
+#[test]
+fn set_disk_total_and_disk() {
+    let mut id3v2 = Id3v2Tag::default();
+    let disk_total = 2;
+    let disk = 1;
+
+    id3v2.set_disk_total(disk_total);
+    id3v2.set_disk(disk);
+
+    assert_eq!(id3v2.disk_total().unwrap(), disk_total);
+    assert_eq!(id3v2.disk().unwrap(), disk);
+}
+
+#[test]
+fn track_number_tag_to_id3v2() {
+    let track_number = 1;
+
+    let mut tag = Tag::new(TagType::Id3v2);
+
+    tag.push(TagItem::new(
+        ItemKey::TrackNumber,
+        ItemValue::Text(track_number.to_string()),
+    ));
+
+    let tag: Id3v2Tag = tag.into();
+
+    assert_eq!(tag.track().unwrap(), track_number);
+    assert!(tag.track_total().is_none());
+}
+
+#[test]
+fn track_total_tag_to_id3v2() {
+    let track_total = 2;
+
+    let mut tag = Tag::new(TagType::Id3v2);
+
+    tag.push(TagItem::new(
+        ItemKey::TrackTotal,
+        ItemValue::Text(track_total.to_string()),
+    ));
+
+    let tag: Id3v2Tag = tag.into();
+
+    assert_eq!(tag.track().unwrap(), DEFAULT_NUMBER_IN_PAIR);
+    assert_eq!(tag.track_total().unwrap(), track_total);
+}
+
+#[test]
+fn track_number_and_track_total_tag_to_id3v2() {
+    let track_number = 1;
+    let track_total = 2;
+
+    let mut tag = Tag::new(TagType::Id3v2);
+
+    tag.push(TagItem::new(
+        ItemKey::TrackNumber,
+        ItemValue::Text(track_number.to_string()),
+    ));
+
+    tag.push(TagItem::new(
+        ItemKey::TrackTotal,
+        ItemValue::Text(track_total.to_string()),
+    ));
+
+    let tag: Id3v2Tag = tag.into();
+
+    assert_eq!(tag.track().unwrap(), track_number);
+    assert_eq!(tag.track_total().unwrap(), track_total);
+}
+
+#[test]
+fn disk_number_tag_to_id3v2() {
+    let disk_number = 1;
+
+    let mut tag = Tag::new(TagType::Id3v2);
+
+    tag.push(TagItem::new(
+        ItemKey::DiscNumber,
+        ItemValue::Text(disk_number.to_string()),
+    ));
+
+    let tag: Id3v2Tag = tag.into();
+
+    assert_eq!(tag.disk().unwrap(), disk_number);
+    assert!(tag.disk_total().is_none());
+}
+
+#[test]
+fn disk_total_tag_to_id3v2() {
+    let disk_total = 2;
+
+    let mut tag = Tag::new(TagType::Id3v2);
+
+    tag.push(TagItem::new(
+        ItemKey::DiscTotal,
+        ItemValue::Text(disk_total.to_string()),
+    ));
+
+    let tag: Id3v2Tag = tag.into();
+
+    assert_eq!(tag.disk().unwrap(), DEFAULT_NUMBER_IN_PAIR);
+    assert_eq!(tag.disk_total().unwrap(), disk_total);
+}
+
+#[test]
+fn disk_number_and_disk_total_tag_to_id3v2() {
+    let disk_number = 1;
+    let disk_total = 2;
+
+    let mut tag = Tag::new(TagType::Id3v2);
+
+    tag.push(TagItem::new(
+        ItemKey::DiscNumber,
+        ItemValue::Text(disk_number.to_string()),
+    ));
+
+    tag.push(TagItem::new(
+        ItemKey::DiscTotal,
+        ItemValue::Text(disk_total.to_string()),
+    ));
+
+    let tag: Id3v2Tag = tag.into();
+
+    assert_eq!(tag.disk().unwrap(), disk_number);
+    assert_eq!(tag.disk_total().unwrap(), disk_total);
+}
+
+fn create_tag_with_trck_and_tpos_frame(content: &'static str) -> Tag {
+    fn insert_frame(id: &'static str, content: &'static str, tag: &mut Id3v2Tag) {
+        tag.insert(new_text_frame(
+            FrameId::Valid(Cow::Borrowed(id)),
+            content.to_string(),
+        ));
+    }
+
+    let mut tag = Id3v2Tag::default();
+
+    insert_frame("TRCK", content, &mut tag);
+    insert_frame("TPOS", content, &mut tag);
+
+    tag.into()
+}
+
+#[test]
+fn valid_trck_and_tpos_frame() {
+    fn assert_valid(content: &'static str, number: Option<u32>, total: Option<u32>) {
+        let tag = create_tag_with_trck_and_tpos_frame(content);
+
+        assert_eq!(tag.track(), number);
+        assert_eq!(tag.track_total(), total);
+        assert_eq!(tag.disk(), number);
+        assert_eq!(tag.disk_total(), total);
+    }
+
+    assert_valid("0", Some(0), None);
+    assert_valid("1", Some(1), None);
+    assert_valid("0/0", Some(0), Some(0));
+    assert_valid("1/2", Some(1), Some(2));
+    assert_valid("010/011", Some(10), Some(11));
+    assert_valid(" 1/2 ", Some(1), Some(2));
+    assert_valid("1 / 2", Some(1), Some(2));
+}
+
+#[test]
+fn invalid_trck_and_tpos_frame() {
+    fn assert_invalid(content: &'static str) {
+        let tag = create_tag_with_trck_and_tpos_frame(content);
+
+        assert!(tag.track().is_none());
+        assert!(tag.track_total().is_none());
+        assert!(tag.disk().is_none());
+        assert!(tag.disk_total().is_none());
+    }
+
+    assert_invalid("");
+    assert_invalid(" ");
+    assert_invalid("/");
+    assert_invalid("/1");
+    assert_invalid("1/");
+    assert_invalid("a/b");
+    assert_invalid("1/2/3");
+    assert_invalid("1//2");
+    assert_invalid("0x1/0x2");
+}
+
+#[test]
+fn ufid_frame_with_musicbrainz_record_id() {
+    let mut id3v2 = Id3v2Tag::default();
+    let unknown_ufid_frame =
+        UniqueFileIdentifierFrame::new("other".to_owned(), b"0123456789".to_vec());
+    id3v2.insert(Frame::UniqueFileIdentifier(unknown_ufid_frame.clone()));
+    let musicbrainz_recording_id = b"189002e7-3285-4e2e-92a3-7f6c30d407a2";
+    let musicbrainz_recording_id_frame = UniqueFileIdentifierFrame::new(
+        MUSICBRAINZ_UFID_OWNER.to_owned(),
+        musicbrainz_recording_id.to_vec(),
+    );
+    id3v2.insert(Frame::UniqueFileIdentifier(
+        musicbrainz_recording_id_frame.clone(),
+    ));
+    assert_eq!(2, id3v2.len());
+
+    let (split_remainder, split_tag) = id3v2.split_tag();
+    assert_eq!(split_remainder.0.len(), 1);
+    assert_eq!(split_tag.len(), 1);
+    assert_eq!(
+        ItemValue::Text(String::from_utf8(musicbrainz_recording_id.to_vec()).unwrap()),
+        *split_tag
+            .get_items(&ItemKey::MusicBrainzRecordingId)
+            .next()
+            .unwrap()
+            .value()
+    );
+
+    let id3v2 = split_remainder.merge_tag(split_tag);
+    assert_eq!(2, id3v2.len());
+    match &id3v2.frames[..] {
+        [
+            Frame::UniqueFileIdentifier(UniqueFileIdentifierFrame {
+                owner: first_owner,
+                identifier: first_identifier,
+                ..
+            }),
+            Frame::UniqueFileIdentifier(UniqueFileIdentifierFrame {
+                owner: second_owner,
+                identifier: second_identifier,
+                ..
+            }),
+        ] => {
+            assert_eq!(&unknown_ufid_frame.owner, first_owner);
+            assert_eq!(&unknown_ufid_frame.identifier, first_identifier);
+            assert_eq!(&musicbrainz_recording_id_frame.owner, second_owner);
+            assert_eq!(
+                &musicbrainz_recording_id_frame.identifier,
+                second_identifier
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn get_set_user_defined_text() {
+    let description = String::from("FOO_BAR");
+    let content = String::from("Baz!\0Qux!");
+    let description2 = String::from("FOO_BAR_2");
+    let content2 = String::new();
+
+    let mut id3v2 = Id3v2Tag::default();
+    let txxx_frame = Frame::UserText(ExtendedTextFrame::new(
+        TextEncoding::UTF8,
+        description.clone(),
+        content.clone(),
+    ));
+
+    id3v2.insert(txxx_frame.clone());
+
+    // Insert another to verify we can search through multiple
+    let txxx_frame2 = Frame::UserText(ExtendedTextFrame::new(
+        TextEncoding::UTF8,
+        description2.clone(),
+        content2.clone(),
+    ));
+    id3v2.insert(txxx_frame2);
+
+    // We cannot get user defined texts through `get_text`
+    assert!(
+        id3v2
+            .get_text(&FrameId::Valid(Cow::Borrowed("TXXX")))
+            .is_none()
+    );
+
+    assert_eq!(id3v2.get_user_text(description.as_str()), Some(&*content));
+
+    // Wipe the tag
+    id3v2.clear();
+
+    // Same thing process as above, using simplified setter
+    assert!(
+        id3v2
+            .insert_user_text(description.clone(), content.clone())
+            .is_none()
+    );
+    assert!(
+        id3v2
+            .insert_user_text(description2.clone(), content2.clone())
+            .is_none()
+    );
+    assert_eq!(id3v2.get_user_text(description.as_str()), Some(&*content));
+
+    // Remove one frame
+    assert!(id3v2.remove_user_text(&description).is_some());
+    assert!(!id3v2.is_empty());
+
+    // Now clear the remaining item
+    assert!(id3v2.remove_user_text(&description2).is_some());
+    assert!(id3v2.is_empty());
+}
+
+#[test]
+fn read_multiple_composers_should_not_fail_with_bad_frame_length() {
+    // Issue #255
+    let tag = read_tag("tests/tags/assets/id3v2/multiple_composers.id3v24");
+    let mut composers = tag
+        .get_texts(&FrameId::Valid(Cow::Borrowed("TCOM")))
+        .unwrap();
+
+    assert_eq!(composers.next(), Some("A"));
+    assert_eq!(composers.next(), Some("B"));
+    assert_eq!(composers.next(), None)
+}
+
+#[test]
+fn trim_end_nulls_when_reading_frame_content() {
+    // Issue #273
+    // Tag written by mid3v2. All frames contain null-terminated UTF-8 text
+    let tag = read_tag("tests/tags/assets/id3v2/trailing_nulls.id3v24");
+
+    // Verify that each different frame type no longer has null terminator
+    let artist = tag.get_text(&FrameId::Valid(Cow::Borrowed("TPE1")));
+    assert_eq!(artist.unwrap(), "Artist");
+
+    let writer = tag.get_user_text("Writer");
+    assert_eq!(writer.unwrap(), "Writer");
+
+    let lyrics = &tag.unsync_text().next().unwrap().content;
+    assert_eq!(lyrics, "Lyrics to the song");
+
+    let comment = tag.comment().unwrap();
+    assert_eq!(comment, "Comment");
+
+    let url_frame = tag.get(&FrameId::Valid(Cow::Borrowed("WXXX"))).unwrap();
+    let Frame::UserUrl(url) = &url_frame else {
+        panic!("Expected a UserUrl")
+    };
+    assert_eq!(url.content, "https://www.myfanpage.com");
+}
+
+fn id3v2_tag_with_genre(value: &str) -> Id3v2Tag {
+    let mut tag = Id3v2Tag::default();
+    let frame = new_text_frame(GENRE_ID, String::from(value));
+    tag.insert(frame);
+    tag
+}
+
+#[test]
+fn genre_text() {
+    let tag = id3v2_tag_with_genre("Dream Pop");
+    assert_eq!(tag.genre(), Some(Cow::Borrowed("Dream Pop")));
+}
+#[test]
+fn genre_id_brackets() {
+    let tag = id3v2_tag_with_genre("(21)");
+    assert_eq!(tag.genre(), Some(Cow::Borrowed("Ska")));
+}
+
+#[test]
+fn genre_id_numeric() {
+    let tag = id3v2_tag_with_genre("21");
+    assert_eq!(tag.genre(), Some(Cow::Borrowed("Ska")));
+}
+
+#[test]
+fn genre_id_multiple_joined() {
+    let tag = id3v2_tag_with_genre("(51)(39)");
+    assert_eq!(
+        tag.genre(),
+        Some(Cow::Borrowed("Techno-Industrial / Noise"))
+    );
+}
+
+#[test]
+fn genres_id_multiple() {
+    let tag = id3v2_tag_with_genre("(51)(39)");
+    let mut genres = tag.genres().unwrap();
+    assert_eq!(genres.next(), Some("Techno-Industrial"));
+    assert_eq!(genres.next(), Some("Noise"));
+    assert_eq!(genres.next(), None);
+}
+
+#[test]
+fn genres_id_multiple_into_tag() {
+    let id3v2 = id3v2_tag_with_genre("(51)(39)");
+    let tag: Tag = id3v2.into();
+    let mut genres = tag.get_strings(&ItemKey::Genre);
+    assert_eq!(genres.next(), Some("Techno-Industrial"));
+    assert_eq!(genres.next(), Some("Noise"));
+    assert_eq!(genres.next(), None);
+}
+
+#[test]
+fn genres_null_separated() {
+    let tag = id3v2_tag_with_genre("Samba-rock\0MPB\0Funk");
+    let mut genres = tag.genres().unwrap();
+    assert_eq!(genres.next(), Some("Samba-rock"));
+    assert_eq!(genres.next(), Some("MPB"));
+    assert_eq!(genres.next(), Some("Funk"));
+    assert_eq!(genres.next(), None);
+}
+
+#[test]
+fn genres_id_textual_refinement() {
+    let tag = id3v2_tag_with_genre("(4)Eurodisco");
+    let mut genres = tag.genres().unwrap();
+    assert_eq!(genres.next(), Some("Disco"));
+    assert_eq!(genres.next(), Some("Eurodisco"));
+    assert_eq!(genres.next(), None);
+}
+
+#[test]
+fn genres_id_bracketed_refinement() {
+    let tag = id3v2_tag_with_genre("(26)(55)((I think...)");
+    let mut genres = tag.genres().unwrap();
+    assert_eq!(genres.next(), Some("Ambient"));
+    assert_eq!(genres.next(), Some("Dream"));
+    assert_eq!(genres.next(), Some("(I think...)"));
+    assert_eq!(genres.next(), None);
+}
+
+#[test]
+fn genres_id_remix_cover() {
+    let tag = id3v2_tag_with_genre("(0)(RX)(CR)");
+    let mut genres = tag.genres().unwrap();
+    assert_eq!(genres.next(), Some("Blues"));
+    assert_eq!(genres.next(), Some("Remix"));
+    assert_eq!(genres.next(), Some("Cover"));
+    assert_eq!(genres.next(), None);
+}
+
+#[test]
+fn tipl_round_trip() {
+    let mut tag = Id3v2Tag::default();
+    let mut tipl = KeyValueFrame::new(
+        FrameId::Valid(Cow::Borrowed("TIPL")),
+        TextEncoding::UTF8,
+        Vec::new(),
+    );
+
+    // Add all supported keys
+    for (_, key) in TIPL_MAPPINGS {
+        tipl.key_value_pairs
+            .push((String::from(*key), String::from("Serial-ATA")));
+    }
+
+    // Add one unsupported key
+    tipl.key_value_pairs
+        .push((String::from("Foo"), String::from("Bar")));
+
+    tag.insert(Frame::KeyValue(tipl.clone()));
+
+    let (split_remainder, split_tag) = tag.split_tag();
+    assert_eq!(split_remainder.0.len(), 1); // "Foo" is not supported
+    assert_eq!(split_tag.len(), TIPL_MAPPINGS.len()); // All supported keys are present
+
+    for (item_key, _) in TIPL_MAPPINGS {
+        assert_eq!(
+            split_tag
+                .get(item_key)
+                .map(TagItem::value)
+                .and_then(ItemValue::text),
+            Some("Serial-ATA")
+        );
+    }
+
+    let mut id3v2 = split_remainder.merge_tag(split_tag);
+    assert_eq!(id3v2.frames.len(), 1);
+    match &mut id3v2.frames[..] {
+        [Frame::KeyValue(tipl2)] => {
+            // Order will not be the same, so we have to sort first
+            tipl.key_value_pairs.sort();
+            tipl2.key_value_pairs.sort();
+            assert_eq!(tipl, *tipl2);
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn flag_item_conversion() {
+    let mut tag = Tag::new(TagType::Id3v2);
+    tag.insert_text(ItemKey::FlagCompilation, "1".to_owned());
+    tag.insert_text(ItemKey::FlagPodcast, "0".to_owned());
+
+    let tag: Id3v2Tag = tag.into();
+    assert_eq!(
+        tag.get_text(&FrameId::Valid(Cow::Borrowed("TCMP"))),
+        Some("1")
+    );
+    assert_eq!(
+        tag.get_text(&FrameId::Valid(Cow::Borrowed("PCST"))),
+        Some("0")
+    );
+}
+
+#[test]
+fn itunes_advisory_roundtrip() {
+    use crate::audio_tags::mp4::{AdvisoryRating, Ilst};
+
+    let mut tag = Ilst::new();
+    tag.set_advisory_rating(AdvisoryRating::Explicit);
+
+    let tag: Tag = tag.into();
+    let tag: Id3v2Tag = tag.into();
+
+    assert_eq!(tag.frames.len(), 1);
+
+    let frame = tag.get_user_text("ITUNESADVISORY");
+    assert!(frame.is_some());
+    assert_eq!(frame.unwrap(), "1");
+
+    let tag: Tag = tag.into();
+    let tag: Ilst = tag.into();
+
+    assert_eq!(tag.advisory_rating(), Some(AdvisoryRating::Explicit));
+}
+
+#[test]
+fn timestamp_roundtrip() {
+    let mut tag = Id3v2Tag::default();
+    tag.insert(Frame::Timestamp(TimestampFrame::new(
+        FrameId::Valid(Cow::Borrowed("TDRC")),
+        TextEncoding::UTF8,
+        Timestamp {
+            year: 2024,
+            month: Some(6),
+            day: Some(3),
+            hour: Some(14),
+            minute: Some(8),
+            second: Some(49),
+        },
+    )));
+
+    let tag: Tag = tag.into();
+    assert_eq!(tag.len(), 1);
+    assert_eq!(
+        tag.get_string(&ItemKey::RecordingDate),
+        Some("2024-06-03T14:08:49")
+    );
+
+    let tag: Id3v2Tag = tag.into();
+    assert_eq!(tag.frames.len(), 1);
+
+    let frame = tag.frames.first().unwrap();
+    assert_eq!(frame.id(), &FrameId::Valid(Cow::Borrowed("TDRC")));
+    match &frame {
+        Frame::Timestamp(frame) => {
+            assert_eq!(frame.timestamp.year, 2024);
+            assert_eq!(frame.timestamp.month, Some(6));
+            assert_eq!(frame.timestamp.day, Some(3));
+            assert_eq!(frame.timestamp.hour, Some(14));
+            assert_eq!(frame.timestamp.minute, Some(8));
+            assert_eq!(frame.timestamp.second, Some(49));
+        }
+        _ => panic!("Expected a TimestampFrame"),
+    }
+}
+
+#[test]
+fn preserve_comment_lang_description_on_conversion() {
+    let mut tag = Id3v2Tag::new();
+
+    let comment_frame = Frame::Comment(CommentFrame::new(
+        TextEncoding::UTF8,
+        ENGLISH,
+        String::from("Some description"),
+        String::from("Foo comment"),
+    ));
+
+    tag.insert(comment_frame.clone());
+
+    let tag: Tag = tag.into();
+    assert_eq!(tag.len(), 1);
+
+    let tag: Id3v2Tag = tag.into();
+    assert_eq!(tag.len(), 1);
+
+    let frame = tag.get(&FrameId::Valid(Cow::Borrowed("COMM"))).unwrap();
+    match frame {
+        Frame::Comment(comm) => {
+            assert_eq!(comm.language, ENGLISH);
+            assert_eq!(comm.description, "Some description");
+            assert_eq!(comm.content, "Foo comment");
+        }
+        _ => panic!("Expected a CommentFrame"),
+    }
+}
+
+// TODO: Remove this once we have a better solution
+#[test]
+fn hold_back_4_character_txxx_description() {
+    let mut tag = Id3v2Tag::new();
+
+    let _ = tag.insert_user_text(String::from("MODE"), String::from("CBR"));
+
+    let tag: Tag = tag.into();
+    assert_eq!(tag.len(), 0);
+
+    let tag: Id3v2Tag = tag.into();
+    assert_eq!(tag.len(), 1);
+}
+
+#[test]
+fn artists_tag_conversion() {
+    const ARTISTS: &[&str] = &["Foo", "Bar", "Baz"];
+
+    let mut tag = Tag::new(TagType::Id3v2);
+
+    for artist in ARTISTS {
+        tag.push(TagItem::new(
+            ItemKey::TrackArtists,
+            ItemValue::Text((*artist).to_string()),
+        ));
+    }
+
+    let tag: Id3v2Tag = tag.into();
+    let txxx_artists = tag.get_user_text("ARTISTS").unwrap();
+    let id3v2_artists = txxx_artists.split('\0').collect::<Vec<_>>();
+
+    assert_eq!(id3v2_artists, ARTISTS);
+}
+
+#[test]
+fn ensure_frame_skipping_within_bounds() {
+    // This tag has an invalid `TDEN` frame, but it is skippable in BestAttempt/Relaxed parsing mode.
+    // We should be able to continue reading the tag as normal, reaching the other `TDTG` frame.
+
+    let path = "tests/tags/assets/id3v2/skippable_frame_otherwise_valid.id3v24";
+    let tag = read_tag_with_options(
+        &read_path(path),
+        ParseOptions::new().parsing_mode(ParsingMode::BestAttempt),
+    );
+
+    assert_eq!(tag.len(), 1);
+    assert_eq!(
+        tag.get(&FrameId::Valid(Cow::Borrowed("TDTG"))),
+        Some(&Frame::Timestamp(TimestampFrame::new(
+            FrameId::Valid(Cow::Borrowed("TDTG")),
+            TextEncoding::Latin1,
+            Timestamp {
+                year: 2014,
+                month: Some(6),
+                day: Some(10),
+                hour: Some(2),
+                minute: Some(16),
+                second: Some(10),
+            },
+        )))
+    );
+}

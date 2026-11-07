@@ -849,7 +849,6 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
     let catalog = plain_rs::features::services::files::catalog::MediaCatalog::Platform {
         db,
         host,
-        prefs: Arc::new(plain_rs::features::prefs::Prefs::in_memory()),
     };
     let page = plain_rs::features::services::images::search::rows(
         &catalog, models, "cat", "text:cat", 100, 2, "NAME_ASC",

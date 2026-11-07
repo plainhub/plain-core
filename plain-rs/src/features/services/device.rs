@@ -149,9 +149,9 @@ impl Status {
 
 #[cfg(not(target_os = "ios"))]
 fn cpu_usage() -> f64 {
-    let mut system = sysinfo::System::new();
+    let mut system = plain_libs::system_metrics::System::new();
     system.refresh_cpu_usage();
-    std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+    std::thread::sleep(plain_libs::system_metrics::MINIMUM_CPU_UPDATE_INTERVAL);
     system.refresh_cpu_usage();
     f64::from(system.global_cpu_usage()).clamp(0.0, 100.0)
 }
@@ -179,7 +179,7 @@ fn direct(selection: Selection, directory: &std::path::Path) -> Result<DeviceSta
     }
     #[cfg(not(target_os = "ios"))]
     if selection.memory {
-        let mut system = sysinfo::System::new();
+        let mut system = plain_libs::system_metrics::System::new();
         system.refresh_memory();
         status.memory_available = Some(Long(system.available_memory().min(i64::MAX as u64) as i64));
     }
@@ -216,7 +216,7 @@ fn uptime() -> Result<i64, String> {
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn uptime() -> Result<i64, String> {
-    Ok(sysinfo::System::uptime().min(i64::MAX as u64) as i64)
+    Ok(plain_libs::system_metrics::System::uptime().min(i64::MAX as u64) as i64)
 }
 
 #[cfg(unix)]
@@ -265,15 +265,18 @@ fn storage_bytes(directory: &std::path::Path, total: bool) -> Result<i64, String
     let directory = directory
         .canonicalize()
         .map_err(|error| error.to_string())?;
-    let disks = sysinfo::Disks::new_with_refreshed_list();
-    let disk = volume_index(disks.iter().map(|disk| disk.mount_point()), &directory)
-        .and_then(|index| disks.list().get(index));
+    let disks = plain_libs::system_metrics::disks();
+    let disk = volume_index(
+        disks.iter().map(|disk| disk.mount_point.as_path()),
+        &directory,
+    )
+    .and_then(|index| disks.get(index));
     Ok(disk
         .map(|disk| {
             if total {
-                disk.total_space()
+                disk.total_bytes
             } else {
-                disk.available_space()
+                disk.available_bytes
             }
         })
         .unwrap_or(0)

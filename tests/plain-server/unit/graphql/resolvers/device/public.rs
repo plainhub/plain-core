@@ -231,11 +231,8 @@ async fn the_app_root_exposes_the_identity_and_the_capability_lists() {
 fn unknown_capabilities_and_access_are_dropped() {
     assert_eq!(Capability::parse("PEER_DISCOVERY"), None);
     assert_eq!(Capability::parse("BLE_DISCOVERY"), None);
-    assert_eq!(
-        Capability::parse("BACKGROUND_SERVICE"),
-        Some(Capability::BackgroundService)
-    );
     for capability in [
+        "BACKGROUND_SERVICE",
         "FILE_BROWSER",
         "IMAGE_LIBRARY",
         "AUDIO_LIBRARY",

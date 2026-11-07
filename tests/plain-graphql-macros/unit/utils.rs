@@ -32,3 +32,13 @@ fn unused_dynamic_description_expressions_are_rejected() {
         .unwrap();
     assert!(get_rustdoc(&attrs).is_err());
 }
+
+#[test]
+fn crate_paths_preserve_internal_and_explicit_consumer_paths() {
+    let internal = get_crate_path(&None, true);
+    assert_eq!(quote!(#internal).to_string(), "crate");
+    let standard = get_crate_path(&None, false);
+    assert_eq!(quote!(#standard).to_string(), ":: plain_graphql");
+    let explicit = get_crate_path(&Some(syn::parse_quote!(::renamed_graphql)), false);
+    assert_eq!(quote!(#explicit).to_string(), ":: renamed_graphql");
+}

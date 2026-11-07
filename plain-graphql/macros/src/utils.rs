@@ -1,6 +1,5 @@
 use crate::args::{self, Deprecation};
 use darling::FromMeta;
-use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
@@ -31,12 +30,7 @@ pub fn get_crate_path(crate_path: &Option<syn::Path>, internal: bool) -> syn::Pa
     } else if let Some(path) = crate_path {
         path.clone()
     } else {
-        let name = match crate_name("plain-graphql") {
-            Ok(FoundCrate::Name(name)) => name,
-            Ok(FoundCrate::Itself) | Err(_) => "plain_graphql".to_string(),
-        };
-        let ident = Ident::new(&name, Span::call_site());
-        parse_quote! { ::# ident }
+        parse_quote! { ::plain_graphql }
     }
 }
 pub fn generate_guards(crate_name: &syn::Path, expr: &Expr, map_err: TokenStream) -> TokenStream {

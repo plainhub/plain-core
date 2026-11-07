@@ -27,7 +27,7 @@
 use std::io::{BufRead, ErrorKind};
 
 use super::error::Error;
-use super::util::{read8, read16};
+use crate::utils::binary::{BigEndian, ReadBytesExt};
 
 mod marker {
     // The first byte of a marker.
@@ -78,7 +78,7 @@ where
         // Get a marker code.
         let mut code;
         loop {
-            code = read8(reader)?;
+            code = reader.read_u8()?;
             if code != marker::P {
                 break;
             }
@@ -91,7 +91,8 @@ where
             _ => {}
         }
         // Read marker segments.
-        let len = read16(reader)?
+        let len = reader
+            .read_u16::<BigEndian>()?
             .checked_sub(2)
             .ok_or(Error::InvalidFormat("Invalid segment length"))?;
         let mut seg = vec![0; len.into()];

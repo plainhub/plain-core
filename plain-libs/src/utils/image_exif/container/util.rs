@@ -27,32 +27,6 @@
 use std::io;
 use std::io::Read as _;
 
-pub fn read8<R>(reader: &mut R) -> Result<u8, io::Error>
-where
-    R: io::Read,
-{
-    let mut buf = [0u8; 1];
-    reader.read_exact(&mut buf).and(Ok(buf[0]))
-}
-
-pub fn read16<R>(reader: &mut R) -> Result<u16, io::Error>
-where
-    R: io::Read,
-{
-    let mut buf = [0u8; 2];
-    reader.read_exact(&mut buf)?;
-    Ok(u16::from_be_bytes(buf))
-}
-
-pub fn read64<R>(reader: &mut R) -> Result<u64, io::Error>
-where
-    R: io::Read,
-{
-    let mut buf = [0u8; 8];
-    reader.read_exact(&mut buf)?;
-    Ok(u64::from_be_bytes(buf))
-}
-
 pub trait BufReadExt {
     fn discard_exact(&mut self, len: usize) -> io::Result<()>;
     fn is_eof(&mut self) -> io::Result<bool>;

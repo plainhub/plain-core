@@ -52,7 +52,7 @@ pub use resolver_utils::{ContainerType, EnumType, ScalarType};
 pub use response::Response;
 pub use schema::{IntrospectionMode, Schema, SchemaBuilder, SchemaEnv};
 #[doc(hidden)]
-pub use static_assertions_next;
+pub use plain_libs::assertions as static_assertions_next;
 pub use subscription::SubscriptionType;
 pub use types::*;
 pub use validation::{ValidationResult, VisitorContext};

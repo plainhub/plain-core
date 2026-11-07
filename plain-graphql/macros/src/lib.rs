@@ -106,3 +106,6 @@ macro_rules! attribute_type {
 attribute_type!(complex_object, ComplexObject, complex_object);
 attribute_type!(scalar, Scalar, scalar);
 attribute_type!(subscription, Subscription, subscription);
+
+#[path = "../../../plain-libs/src/case/mod.rs"]
+mod case;

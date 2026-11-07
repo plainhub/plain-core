@@ -311,14 +311,14 @@ impl NativeMediaCatalog {
     }
 
     #[cfg(feature = "runtime-media")]
-    async fn apply_watch_event(&self, event: notify::Event) -> Result<(), String> {
+    async fn apply_watch_event(&self, event: plain_libs::file_events::Event) -> Result<(), String> {
         self.state
             .db
             .refresh_volume_availability()
             .map_err(|error| error.to_string())?;
         use crate::features::services::files::media_watch::Effect;
         use crate::features::services::files::media_watch::effect_for;
-        use notify::event::{EventKind, ModifyKind, RenameMode};
+        use plain_libs::file_events::event::{EventKind, ModifyKind, RenameMode};
         let volumes = if matches!(event.kind, EventKind::Other)
             || event.paths.iter().any(|path| path.is_dir())
         {

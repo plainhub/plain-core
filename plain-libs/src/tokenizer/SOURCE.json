@@ -1,0 +1,7 @@
+{
+  "name": "tokenizers",
+  "version": "0.22.2",
+  "repository": "https://github.com/huggingface/tokenizers",
+  "revision": "6573f2c56172bac56f211e77934be3215adef2c2",
+  "archive-sha256-base64": "sjjiLUShU0lSlpD7B71kXPWBSaGx5E1stb0WQf8aYiM="
+}

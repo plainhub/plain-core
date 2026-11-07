@@ -1,6 +1,6 @@
 use super::Rule;
 use crate::parser::Result;
-use pest::iterators::{Pair, Pairs};
+use plain_libs::peg::iterators::{Pair, Pairs};
 pub(super) fn next_if_rule<'a>(pairs: &mut Pairs<'a, Rule>, rule: Rule) -> Option<Pair<'a, Rule>> {
     if pairs.peek().is_some_and(|pair| pair.as_rule() == rule) {
         Some(pairs.next().unwrap())

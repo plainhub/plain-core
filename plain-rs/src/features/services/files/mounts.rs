@@ -16,19 +16,19 @@ pub struct MountFacts {
 }
 
 pub fn list() -> Vec<MountFacts> {
-    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let disks = plain_libs::system_metrics::disks();
     disks
         .iter()
-        .filter(|disk| should_include_mount(disk.mount_point().to_string_lossy().as_ref()))
+        .filter(|disk| should_include_mount(disk.mount_point.to_string_lossy().as_ref()))
         .map(|disk| {
-            let mount_point = disk.mount_point().to_string_lossy().into_owned();
-            let total_bytes = disk.total_space().min(i64::MAX as u64) as i64;
-            let free_bytes = disk.available_space().min(i64::MAX as u64) as i64;
-            let fs_type = disk.file_system().to_string_lossy().into_owned();
+            let mount_point = disk.mount_point.to_string_lossy().into_owned();
+            let total_bytes = disk.total_bytes.min(i64::MAX as u64) as i64;
+            let free_bytes = disk.available_bytes.min(i64::MAX as u64) as i64;
+            let fs_type = disk.file_system.to_string_lossy().into_owned();
             let remote = is_remote_filesystem(&fs_type);
             MountFacts {
                 id: mount_point.clone(),
-                name: disk.name().to_string_lossy().into_owned(),
+                name: disk.name.to_string_lossy().into_owned(),
                 path: mount_point.clone(),
                 mount_point: mount_point.clone(),
                 fs_type,

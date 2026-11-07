@@ -340,7 +340,7 @@ pub fn resize_to(bm: Bitmap, tw: u32, th: u32) -> Bitmap {
 /// Final resample via `fast_image_resize` (pure Rust, SIMD convolution).
 /// Bilinear for small thumbnails, Lanczos3 when quality matters more.
 pub(super) fn fir_resize(bm: Bitmap, tw: u32, th: u32) -> Bitmap {
-    use fast_image_resize::{PixelType, ResizeAlg, ResizeOptions, Resizer};
+    use crate::image_resize::{PixelType, Resizer};
 
     let (w, h) = (bm.width(), bm.height());
     if tw == w && th == h {
@@ -353,18 +353,17 @@ pub(super) fn fir_resize(bm: Bitmap, tw: u32, th: u32) -> Bitmap {
     } else {
         PixelType::U8x3
     };
-    let src = fast_image_resize::images::Image::from_vec_u8(w, h, data, pixel_type)
+    let src = crate::image_resize::images::Image::from_vec_u8(w, h, data, pixel_type)
         .expect("bitmap buffer matches dimensions");
-    let mut dst = fast_image_resize::images::Image::new(tw, th, pixel_type);
+    let mut dst = crate::image_resize::images::Image::new(tw, th, pixel_type);
     let mut resizer = Resizer::new();
     let filter = if tw.max(th) < 200 {
-        fast_image_resize::FilterType::Bilinear
+        crate::image_resize::FilterType::Bilinear
     } else {
-        fast_image_resize::FilterType::Lanczos3
+        crate::image_resize::FilterType::Lanczos3
     };
-    let options = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(filter));
     resizer
-        .resize(&src, &mut dst, &options)
+        .resize(&src, &mut dst, filter)
         .expect("fast_image_resize never fails on valid buffers");
     let out = dst.into_vec();
     if ch == 4 {

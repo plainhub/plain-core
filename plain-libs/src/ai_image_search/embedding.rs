@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
-use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer, TruncationParams};
+use crate::tokenizer::{PaddingParams, PaddingStrategy, Tokenizer, TruncationParams};
 
 pub trait ImageSource: std::io::Read + std::io::Seek {}
 impl<T: std::io::Read + std::io::Seek> ImageSource for T {}

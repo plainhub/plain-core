@@ -1,8 +1,8 @@
 use crate::features::media::catalog_paths::requires_foreground_scan;
 use std::path::Path;
 
-use notify::event::{EventKind, ModifyKind};
-use notify::{Event, RecursiveMode, Watcher};
+use plain_libs::file_events::event::{EventKind, ModifyKind};
+use plain_libs::file_events::{Event, RecursiveMode, Watcher};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Effect {
@@ -63,7 +63,7 @@ fn completed_event(event: Event) -> Option<Event> {
     let mut event = event;
     #[cfg(target_os = "linux")]
     {
-        use notify::event::{AccessKind, AccessMode, CreateKind};
+        use plain_libs::file_events::event::{AccessKind, AccessMode, CreateKind};
         match event.kind {
             EventKind::Create(CreateKind::File) | EventKind::Modify(ModifyKind::Data(_)) => {
                 return None;
@@ -120,7 +120,7 @@ where
     F: Fn(Event) -> Pending + Send + 'static,
     Pending: std::future::Future<Output = Result<(), String>> + Send + 'static,
 {
-    use notify::event::RenameMode;
+    use plain_libs::file_events::event::RenameMode;
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -134,7 +134,7 @@ where
     let wake = changed.clone();
     let event_scope = scope.clone();
     let mut watcher =
-        notify::recommended_watcher(move |result: notify::Result<Event>| match result {
+        plain_libs::file_events::recommended_watcher(move |result: plain_libs::file_events::Result<Event>| match result {
             Ok(event) if event.need_rescan() => {
                 overflow.store(true, Ordering::Release);
                 wake.notify_one();
@@ -183,7 +183,7 @@ where
                             let stale: Vec<_> = watched.iter().filter(|path| path.starts_with(root)).cloned().collect();
                             for path in stale {
                                 if let Err(error) = watcher.unwatch(&path) {
-                                    if !matches!(error.kind, notify::ErrorKind::WatchNotFound | notify::ErrorKind::PathNotFound) { log::warn!("File watch removal: {error}"); }
+                                    if !matches!(error.kind, plain_libs::file_events::ErrorKind::WatchNotFound | plain_libs::file_events::ErrorKind::PathNotFound) { log::warn!("File watch removal: {error}"); }
                                 }
                                 watched.remove(&path);
                             }
@@ -200,7 +200,7 @@ where
                 _ = tokio::time::sleep(Duration::from_secs(5)), if dirty.load(Ordering::Acquire) => None,
                 _ = tokio::time::sleep_until(deadline), if !pending.is_empty() => {
                     let index = pending.iter().position(|(_, end)| *end <= tokio::time::Instant::now());
-                    index.map(|index| { let mut event = pending.remove(index).0; event.kind = EventKind::Remove(notify::event::RemoveKind::Any); event })
+                    index.map(|index| { let mut event = pending.remove(index).0; event.kind = EventKind::Remove(plain_libs::file_events::event::RemoveKind::Any); event })
                 },
                 event = receive.recv() => match event { Some(event) => Some(event), None => return },
             };
@@ -283,7 +283,7 @@ fn watch_tree(
                 Ok(()) => {
                     watched.insert(root.to_owned());
                 }
-                Err(error) if matches!(&error.kind, notify::ErrorKind::Io(error) if error.kind() == std::io::ErrorKind::PermissionDenied) =>
+                Err(error) if matches!(&error.kind, plain_libs::file_events::ErrorKind::Io(error) if error.kind() == std::io::ErrorKind::PermissionDenied) =>
                     {}
                 Err(error) => return Err(error.to_string()),
             }
@@ -305,7 +305,7 @@ fn watch_tree(
                 }
                 Err(error)
                     if matches!(&error.kind,
-                    notify::ErrorKind::Io(error) if matches!(error.kind(), std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound)) =>
+                    plain_libs::file_events::ErrorKind::Io(error) if matches!(error.kind(), std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound)) =>
                 {
                     continue;
                 }

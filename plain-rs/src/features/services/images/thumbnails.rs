@@ -54,7 +54,7 @@ impl Thumbnails {
         plain_libs::media::thumbnails::admission::initialize_with_memory(|| {
             #[cfg(not(target_os = "ios"))]
             {
-                let mut system = sysinfo::System::new();
+                let mut system = plain_libs::system_metrics::System::new();
                 system.refresh_memory();
                 system.total_memory()
             }

@@ -1,0 +1,7 @@
+{
+  "name": "notify",
+  "version": "7.0.0",
+  "repository": "https://github.com/notify-rs/notify.git",
+  "revision": "a18addef1d4dff6f9a54d9234275d2764dffe72a",
+  "archive-sha256": "c533b4c39709f9ba5005d8002048266593c1cfaf3c5f0739d5b8ab0c6c504009"
+}

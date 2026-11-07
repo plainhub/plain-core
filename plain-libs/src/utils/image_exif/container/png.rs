@@ -24,9 +24,9 @@
 // SUCH DAMAGE.
 //
 
+use crate::utils::binary::{BigEndian, ByteOrder};
 use std::io::{BufRead, ErrorKind};
 
-use super::endian::{BigEndian, Endian};
 use super::error::Error;
 use super::util::{BufReadExt as _, ReadExt as _};
 
@@ -66,7 +66,7 @@ where
         }
         let mut lenbuf = [0; 4];
         reader.read_exact(&mut lenbuf)?;
-        let len = BigEndian::loadu32(&lenbuf, 0) as usize;
+        let len = BigEndian::read_u32(&lenbuf) as usize;
         let mut ctype = [0u8; 4];
         reader.read_exact(&mut ctype)?;
         if ctype == EXIF_CHUNK_TYPE {

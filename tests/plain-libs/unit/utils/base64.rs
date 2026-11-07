@@ -65,3 +65,19 @@ fn junk_is_rejected_instead_of_decoding_to_garbage() {
         })
     );
 }
+
+#[test]
+fn standard_decoding_preserves_padding_alphabet_and_unused_bit_checks() {
+    for (text, expected) in [("", ""), ("Zg==", "f"), ("Zm8=", "fo"), ("Zm9v", "foo")] {
+        assert_eq!(
+            base64_decode_standard(text.as_bytes()).unwrap(),
+            expected.as_bytes()
+        );
+    }
+    for text in [
+        "Zg", "Zg=", "Zg===", "Zh==", "Zm9=", "____", "Zm 9v", "Zm=v",
+    ] {
+        assert!(base64_decode_standard(text.as_bytes()).is_err(), "{text}");
+    }
+    assert_eq!(base64_decode_checked("Zg").unwrap(), b"f");
+}

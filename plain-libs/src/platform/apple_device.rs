@@ -4,21 +4,85 @@ unsafe extern "C" {
     fn mach_port_deallocate(task: u32, name: u32) -> i32;
 }
 
+#[link(name = "CoreFoundation", kind = "framework")]
+unsafe extern "C" {
+    fn CFRelease(value: *const std::ffi::c_void);
+    fn CFStringGetLength(value: *const std::ffi::c_void) -> isize;
+    fn CFStringGetMaximumSizeForEncoding(length: isize, encoding: u32) -> isize;
+    fn CFStringGetCString(
+        value: *const std::ffi::c_void,
+        buffer: *mut std::ffi::c_char,
+        size: isize,
+        encoding: u32,
+    ) -> u8;
+}
+
+pub(crate) struct OwnedCF<T = std::ffi::c_void>(std::ptr::NonNull<T>);
+impl<T> OwnedCF<T> {
+    // The pointer must transfer one live Create/Copy reference, released exactly once by this owner.
+    pub(crate) unsafe fn from_owned(pointer: *const T) -> Option<Self> {
+        std::ptr::NonNull::new(pointer.cast_mut()).map(Self)
+    }
+    pub(crate) fn as_ptr(&self) -> *mut T {
+        self.0.as_ptr()
+    }
+}
+impl<T> Drop for OwnedCF<T> {
+    fn drop(&mut self) {
+        unsafe {
+            CFRelease(self.0.as_ptr().cast());
+        }
+    }
+}
+
+// The caller supplies a live, non-null CFStringRef for the duration of this copy.
+pub(crate) unsafe fn cf_string(value: *const std::ffi::c_void) -> Option<String> {
+    const UTF8: u32 = 0x08000100;
+    let size = unsafe { CFStringGetMaximumSizeForEncoding(CFStringGetLength(value), UTF8) };
+    let capacity = size.checked_add(1)?;
+    if capacity <= 0 {
+        return None;
+    }
+    let mut bytes = vec![0u8; capacity as usize];
+    if unsafe { CFStringGetCString(value, bytes.as_mut_ptr().cast(), capacity, UTF8) } == 0 {
+        return None;
+    }
+    std::ffi::CStr::from_bytes_until_nul(&bytes)
+        .ok()?
+        .to_str()
+        .ok()
+        .map(str::to_owned)
+}
+
+pub(crate) struct HostPort(u32);
+impl HostPort {
+    pub(crate) fn new() -> Self {
+        Self(unsafe { mach_host_self() })
+    }
+    pub(crate) fn get(&self) -> u32 {
+        self.0
+    }
+}
+impl Drop for HostPort {
+    fn drop(&mut self) {
+        unsafe {
+            mach_port_deallocate(mach_task_self_, self.0);
+        }
+    }
+}
+
 pub fn cpu_ticks() -> Option<[u32; 4]> {
-    let port = unsafe { mach_host_self() };
+    let port = HostPort::new();
     let mut ticks = [0u32; 4];
     let mut count = libc::HOST_CPU_LOAD_INFO_COUNT;
     let result = unsafe {
         libc::host_statistics(
-            port,
+            port.get(),
             libc::HOST_CPU_LOAD_INFO,
             ticks.as_mut_ptr().cast(),
             &mut count,
         )
     };
-    unsafe {
-        mach_port_deallocate(mach_task_self_, port);
-    }
     (result == 0 && count == libc::HOST_CPU_LOAD_INFO_COUNT).then_some(ticks)
 }
 
@@ -37,6 +101,10 @@ pub fn cpu_usage(previous: Option<[u32; 4]>, current: Option<[u32; 4]>) -> f64 {
 }
 
 pub fn total_memory() -> Result<i64, String> {
+    memory_bytes().map(|bytes| bytes.min(i64::MAX as u64) as i64)
+}
+
+pub(crate) fn memory_bytes() -> Result<u64, String> {
     let mut bytes = 0u64;
     let mut length = std::mem::size_of_val(&bytes);
     let result = unsafe {
@@ -54,7 +122,43 @@ pub fn total_memory() -> Result<i64, String> {
     if length != std::mem::size_of_val(&bytes) {
         return Err("Invalid physical memory size".into());
     }
-    Ok(bytes.min(i64::MAX as u64) as i64)
+    Ok(bytes)
+}
+
+pub(crate) fn sysctl_string(name: &std::ffi::CStr) -> Option<String> {
+    let mut length = 0;
+    if unsafe {
+        libc::sysctlbyname(
+            name.as_ptr(),
+            std::ptr::null_mut(),
+            &mut length,
+            std::ptr::null_mut(),
+            0,
+        )
+    } != 0
+        || length == 0
+    {
+        return None;
+    }
+    let mut bytes = vec![0; length];
+    if unsafe {
+        libc::sysctlbyname(
+            name.as_ptr(),
+            bytes.as_mut_ptr().cast(),
+            &mut length,
+            std::ptr::null_mut(),
+            0,
+        )
+    } != 0
+        || length > bytes.len()
+    {
+        return None;
+    }
+    bytes.truncate(length);
+    if let Some(end) = bytes.iter().position(|byte| *byte == 0) {
+        bytes.truncate(end);
+    }
+    String::from_utf8(bytes).ok()
 }
 
 pub fn kernel_version() -> Result<String, String> {
