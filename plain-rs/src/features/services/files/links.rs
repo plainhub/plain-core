@@ -65,7 +65,19 @@ pub async fn resolve(state: &CoreRuntime, id: &str, kind: ReadKind) -> anyhow::R
         Ok((scope, resource))
     })
     .await??;
-    let media_path = if matches!(resource.r#type, ResourceType::Media) {
+    let kind = if resource.r#type == ResourceType::ForegroundMediaThumbnail {
+        anyhow::ensure!(
+            kind == ReadKind::Thumbnail,
+            "Foreground resource requires thumbnail size"
+        );
+        ReadKind::Original
+    } else {
+        kind
+    };
+    let media_path = if matches!(
+        resource.r#type,
+        ResourceType::Media | ResourceType::ForegroundMediaThumbnail
+    ) {
         state
             .file_platform
             .resource_media_path(&resource.id)
@@ -82,7 +94,10 @@ pub async fn resolve(state: &CoreRuntime, id: &str, kind: ReadKind) -> anyhow::R
         };
         let authorize = matches!(
             resource.r#type,
-            ResourceType::SharedFile | ResourceType::Media | ResourceType::File
+            ResourceType::SharedFile
+                | ResourceType::Media
+                | ResourceType::ForegroundMediaThumbnail
+                | ResourceType::File
         );
         match resource.r#type {
             ResourceType::SharedFile => {
@@ -126,7 +141,7 @@ pub async fn resolve(state: &CoreRuntime, id: &str, kind: ReadKind) -> anyhow::R
                 file.name =
                     crate::features::chat::attachments::app_file_store::display_name(&row, &names);
             }
-            ResourceType::Media => {
+            ResourceType::Media | ResourceType::ForegroundMediaThumbnail => {
                 file.media_id = resource.id;
             }
             ResourceType::File => {

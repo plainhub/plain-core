@@ -27,6 +27,7 @@ impl Scope {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ResourceType {
     Media,
+    ForegroundMediaThumbnail,
     AppFile,
     File,
     PackageIcon,
@@ -60,6 +61,10 @@ impl Resource {
         ensure!(
             matches!(scope, Scope::Share(_)) == (self.r#type == ResourceType::SharedFile),
             "Invalid resource scope"
+        );
+        ensure!(
+            self.r#type != ResourceType::ForegroundMediaThumbnail || matches!(scope, Scope::Global),
+            "Foreground thumbnails require local resource scope"
         );
         Ok(())
     }

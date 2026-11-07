@@ -441,6 +441,73 @@ async fn fs_typed_image_reference_returns_decodable_thumbnail() {
 
 #[cfg(target_os = "macos")]
 #[tokio::test]
+async fn fs_foreground_thumbnail_is_local_and_does_not_enable_passive_reads() {
+    use plain_rs::features::files::resource_link::{self, Resource, ResourceType, Scope};
+    let (_root, core, state, key) = test_state();
+    let files = tempfile::tempdir().unwrap();
+    let library = files.path().join("Fixture.imovielibrary");
+    std::fs::create_dir(&library).unwrap();
+    let path = library.join("video.mp4");
+    std::fs::write(
+        &path,
+        include_bytes!("../../../../plain-rs/testdata/video-h264-high.mp4"),
+    )
+    .unwrap();
+    let row = state
+        .db
+        .record_file_paths(
+            &[path.to_string_lossy().into_owned()],
+            Some(plain_rs::infrastructure::db::FileKind::Video),
+        )
+        .unwrap()
+        .remove(0);
+    let passive = resource_link::seal(
+        &Scope::Global,
+        &key,
+        &Resource {
+            r#type: ResourceType::Media,
+            id: row.id.clone(),
+        },
+    )
+    .unwrap();
+    let foreground = Resource {
+        r#type: ResourceType::ForegroundMediaThumbnail,
+        id: row.id,
+    };
+    let explicit = resource_link::seal(&Scope::Global, &key, &foreground).unwrap();
+    let response = call_fs(
+        &state,
+        &format!("id={explicit}&action=preview&size=sm"),
+        &[],
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "image/jpeg");
+    assert!(image::load_from_memory(&body_bytes(response).await).is_ok());
+    for query in [
+        format!("id={passive}&action=preview&size=sm"),
+        format!("id={explicit}&action=preview"),
+    ] {
+        assert_eq!(
+            call_fs(&state, &query, &[]).await.status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+    let session = plain_rs::features::services::sessions::create(&state, "reader".into()).unwrap();
+    let remote = resource_link::encrypt(
+        &Scope::Session(session.client_id),
+        "fs",
+        &plain_libs::utils::base64::base64_decode(&session.url_token),
+        &serde_json::to_vec(&foreground).unwrap(),
+    )
+    .unwrap();
+    let response = call_fs(&state, &format!("id={remote}&action=preview&size=sm"), &[]).await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    core.stop_core().await;
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
 async fn fs_protected_thumbnail_is_rejected_before_probing_the_source() {
     let (_root, _core, state, key) = test_state();
     let id = file_id(&key, "/Users/example/Documents/thumbnail-fixture.jpg");
