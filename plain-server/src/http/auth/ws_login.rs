@@ -566,7 +566,10 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                 protection,
             };
             let id = uuid::Uuid::new_v4().to_string();
-            if peer_chat_paired(&pending.request)
+            let pairing_requires_approval = peer_chat_paired(&pending.request)
+                && (state.pairing_approval != crate::server::PairingApproval::FollowPasswordLogin
+                    || !matches!(&pending.protection, LoginProtection::Password { .. }));
+            if pairing_requires_approval
                 || state.prefs.get_or(
                     plain_rs::features::prefs::pref_keys::LOGIN_REQUIRE_APPROVAL,
                     true,

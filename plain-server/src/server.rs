@@ -7,6 +7,13 @@ use std::{
 };
 use subtle::ConstantTimeEq;
 use tokio::{sync::watch, task::JoinHandle};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PairingApproval {
+    Required,
+    FollowPasswordLogin,
+}
+
 #[derive(Clone)]
 pub(crate) struct ServerState {
     pub(crate) core: plain_rs::runtime::Runtime,
@@ -22,6 +29,7 @@ pub(crate) struct ServerState {
     pub(crate) subscription_sessions: Arc<crate::graphql::subscriptions::session::Sessions>,
     pub(crate) main_ws: Arc<crate::http::websocket::runtime::Runtime>,
     pub(crate) login_attempts: Arc<std::sync::Mutex<crate::http::auth::ws_login::LoginAttempts>>,
+    pub(crate) pairing_approval: PairingApproval,
     pub(crate) shutdown: Arc<tokio::sync::Mutex<()>>,
 }
 impl std::ops::Deref for ServerState {
@@ -222,6 +230,7 @@ impl ContentServer {
             subscription_sessions,
             main_ws,
             login_attempts,
+            pairing_approval: PairingApproval::Required,
             build_debug: Arc::new(std::sync::atomic::AtomicBool::new(build_debug)),
             web_bundle: Arc::new(std::sync::RwLock::new(Some(Arc::new(
                 crate::http::web_bundle::EmbeddedBundle,
@@ -242,6 +251,15 @@ impl ContentServer {
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn open_with_cache(directory: &Path, cache_directory: &Path) -> Result<Self, String> {
+        Self::open_with_pairing_approval(directory, cache_directory, PairingApproval::Required)
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    pub fn open_with_pairing_approval(
+        directory: &Path,
+        cache_directory: &Path,
+        pairing_approval: PairingApproval,
+    ) -> Result<Self, String> {
         tokio::runtime::Handle::try_current().map_err(|error| error.to_string())?;
         if !directory.is_absolute() {
             return Err("absolute core data directory required".into());
@@ -272,7 +290,9 @@ impl ContentServer {
         let token = plain_libs::crypto::gen_token();
         let mut config = plain_rs::infrastructure::platform::startup::config();
         config.cache_dir = Some(cache_directory.to_string_lossy().into_owned());
-        Self::start_core_with_config(directory, &token, prefs, config)
+        let mut server = Self::start_core_with_config(directory, &token, prefs, config)?;
+        server.state.pairing_approval = pairing_approval;
+        Ok(server)
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]

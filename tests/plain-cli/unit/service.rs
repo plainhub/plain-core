@@ -3,6 +3,96 @@ use plain_rs::features::access::AccessFeature;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[tokio::test]
+async fn management_pairing_with_cli_requires_password_without_second_approval() {
+    use plain_rs::features::services::discovery::pairing_attempts::{self, Mode, PairingPhase};
+    use plain_rs::infrastructure::db::chat_store::peers;
+
+    let root = tempfile::tempdir().unwrap();
+    let start = |name: &str| {
+        let dir = root.path().join(name);
+        async move {
+            let paths = AppPaths {
+                data_dir: dir.join("data"),
+                cache_dir: dir.join("cache"),
+                tls_cert: dir.join("tls.pem"),
+                tls_key: dir.join("tls.key"),
+            };
+            std::fs::create_dir_all(&paths.data_dir).unwrap();
+            let prefs = plain_rs::features::prefs::Prefs::load(
+                &plain_rs::features::prefs::default_path(&paths.data_dir),
+            )
+            .unwrap();
+            prefs.set("http_port", 0).unwrap();
+            prefs.set("https_port", 0).unwrap();
+            plain_rs::features::prefs::security::set_password_login(&prefs, "fixture password")
+                .unwrap();
+            Service::start(&paths, Options::default()).await.unwrap()
+        }
+    };
+    let local = start("local").await;
+    let remote = start("remote").await;
+    let state = local.core.runtime();
+    let remote_state = remote.core.runtime();
+    let local_id = state.native_client_id().unwrap();
+    let remote_id = remote_state.native_client_id().unwrap();
+    let port = remote.core.http_ports().await.unwrap().0;
+
+    for (password, expected) in [
+        ("wrong password", PairingPhase::Failed),
+        ("fixture password", PairingPhase::Succeeded),
+    ] {
+        let attempt = pairing_attempts::start(
+            state,
+            Some(remote_id.clone()),
+            Some(format!("http://127.0.0.1:{port}")),
+            Some(Mode::Manage),
+            Some(password.into()),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                let outcome = state
+                    .pairing_runtime
+                    .attempts
+                    .get(&attempt.generation)
+                    .unwrap();
+                if matches!(
+                    outcome.phase,
+                    PairingPhase::Failed
+                        | PairingPhase::Succeeded
+                        | PairingPhase::WaitingConfirmation
+                ) {
+                    break outcome;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(outcome.phase, expected, "{:?}", outcome.error);
+        let session = remote_state.db.session_get(&local_id).unwrap();
+        let peer = peers::get(&state.db, &remote_id).unwrap();
+        let remote_peer = peers::get(&remote_state.db, &local_id).unwrap();
+        if expected == PairingPhase::Failed {
+            assert_eq!(outcome.error.as_deref(), Some("invalid_password"));
+            assert!(session.is_none());
+            assert!(peer.is_none() && remote_peer.is_none());
+            continue;
+        }
+        let peer = peer.unwrap();
+        let remote_peer = remote_peer.unwrap();
+        assert!(peer.is_paired() && remote_peer.is_paired());
+        assert_eq!(peer.key, remote_peer.key);
+        assert_eq!(peer.token, session.unwrap().token);
+    }
+    local.shutdown().await;
+    remote.shutdown().await;
+}
+
+#[tokio::test]
 async fn service_preserves_explicit_web_access_and_password_across_restart() {
     for configured in [Vec::<String>::new(), vec!["SMS".to_owned()]] {
         let directory = tempfile::tempdir().unwrap();

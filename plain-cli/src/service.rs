@@ -3,7 +3,7 @@ use crate::login_socket as login;
 use crate::storage;
 use anyhow::{Result, anyhow};
 use plain_rs::infrastructure::platform::system::consts::AppPaths;
-use plain_server::server::ContentServer;
+use plain_server::server::{ContentServer, PairingApproval};
 use std::{path::PathBuf, sync::Arc};
 
 #[derive(Default)]
@@ -26,8 +26,12 @@ impl Service {
     pub async fn start(paths: &AppPaths, options: Options) -> Result<Self> {
         crate::bootstrap::initialize_tls();
         let core = Arc::new(
-            ContentServer::open_with_cache(&paths.data_dir, &paths.cache_dir)
-                .map_err(anyhow::Error::msg)?,
+            ContentServer::open_with_pairing_approval(
+                &paths.data_dir,
+                &paths.cache_dir,
+                PairingApproval::FollowPasswordLogin,
+            )
+            .map_err(anyhow::Error::msg)?,
         );
         #[cfg(test)]
         if let Some(defaults) = options.file_index_defaults.clone() {
