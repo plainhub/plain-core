@@ -245,8 +245,14 @@ pub(crate) fn upsert(
         .file_name()
         .and_then(|value| value.to_str())
         .unwrap_or("");
-    let mime =
-        (kind != Some(FileKind::Directory)).then(|| plain_libs::utils::mime::mime_from_ext(name));
+    let mime = (kind != Some(FileKind::Directory)).then(|| {
+        let mime = plain_libs::utils::mime::mime_from_ext(name);
+        if mime == "video/mp2t" && kind == Some(FileKind::File) {
+            "application/octet-stream"
+        } else {
+            mime
+        }
+    });
     if let Some(id) = id {
         let source: String = conn.query_row(
             "SELECT path FROM file_catalog WHERE file_id=?1",

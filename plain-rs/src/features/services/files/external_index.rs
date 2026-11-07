@@ -280,7 +280,7 @@ impl Catalog {
         if metadata.is_dir() {
             self.watcher.add(path)?;
             self.work.directories.push_front(path.to_owned());
-        } else if metadata.is_file() && state.file_platform.indexable(path) {
+        } else if metadata.is_file() && state.file_platform.indexable_type(path).is_some() {
             return Ok(vec![path.to_owned()]);
         }
         Ok(Vec::new())
@@ -311,7 +311,7 @@ impl Catalog {
                 };
                 if kind.is_dir() {
                     self.work.directories.push_back(path);
-                } else if kind.is_file() && state.file_platform.indexable(&path) {
+                } else if kind.is_file() && state.file_platform.indexable_type(&path).is_some() {
                     self.work.files.push_back(path);
                 }
             }
@@ -367,7 +367,7 @@ impl Catalog {
     async fn scan(&mut self, state: &CoreRuntime, mut paths: Vec<PathBuf>) -> Result<()> {
         paths.sort();
         paths.dedup();
-        paths.retain(|path| self.contains(path) && state.file_platform.indexable(path));
+        paths.retain(|path| self.contains(path) && state.file_platform.indexable_type(path).is_some());
         if paths.is_empty() {
             return Ok(());
         }
@@ -476,8 +476,6 @@ impl Catalog {
         let mut destination_paths = Vec::new();
         for (path, row) in &selected {
             let target = destination.join(path.strip_prefix(source)?);
-            let target_kind =
-                crate::features::media::catalog_paths::infer_type(&target.to_string_lossy());
             let expected_kind = match row.media_type {
                 1 => "audio",
                 2 => "video",
@@ -485,7 +483,7 @@ impl Catalog {
                 24 => "doc",
                 _ => "",
             };
-            if state.file_platform.indexable(&target) && target_kind == expected_kind {
+            if state.file_platform.indexable_type(&target) == Some(expected_kind) {
                 moving.push(row.clone());
                 destination_paths.push(target.to_string_lossy().into_owned());
             } else {

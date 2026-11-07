@@ -137,18 +137,17 @@ impl FilePlatform {
                 .any(|parts| parts[0] == "Android" && matches!(parts[1], "data" | "obb"))
     }
 
-    pub fn indexable(&self, path: &Path) -> bool {
-        self.watchable(path)
-            && matches!(
-                crate::features::media::catalog_paths::infer_type(&path.to_string_lossy()),
-                "audio" | "video" | "image" | "doc"
+    pub(super) fn indexable_type(&self, path: &Path) -> Option<&'static str> {
+        let name = path.to_str()?;
+        if !self.watchable(path)
+            || crate::features::media::catalog_paths::is_media_excluded_at(
+                name, &self.directory, &self.cache, &[],
             )
-            && !crate::features::media::catalog_paths::is_media_excluded_at(
-                &path.to_string_lossy(),
-                &self.directory,
-                &self.cache,
-                &[],
-            )
+        {
+            return None;
+        }
+        let kind = crate::features::media::catalog_paths::infer_type(name);
+        (kind != "other").then_some(kind)
     }
 
     pub fn resolve_reference(&self, path: &str) -> Result<String> {

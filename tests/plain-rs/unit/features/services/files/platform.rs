@@ -425,7 +425,7 @@ async fn automatic_indexing_excludes_private_hidden_nomedia_and_app_storage_path
     for name in ["image.png", "song.wav", "clip.mp4", "document.txt"] {
         let path = public.join(name);
         std::fs::write(&path, b"fixture").unwrap();
-        assert!(state.file_platform.indexable(&path), "{name}");
+        assert!(state.file_platform.indexable_type(&path).is_some(), "{name}");
     }
     for path in [
         state.directory.join("private.png"),
@@ -436,10 +436,10 @@ async fn automatic_indexing_excludes_private_hidden_nomedia_and_app_storage_path
         public.join("Android/obb/app/image.png"),
         public.join("archive.zip"),
     ] {
-        assert!(!state.file_platform.indexable(&path), "{}", path.display());
+        assert!(state.file_platform.indexable_type(&path).is_none(), "{}", path.display());
     }
     std::fs::write(public.join(".nomedia"), b"").unwrap();
-    assert!(!state.file_platform.indexable(&public.join("image.png")));
+    assert!(state.file_platform.indexable_type(&public.join("image.png")).is_none());
     assert!(state.file_platform.watchable(&public));
     assert!(
         !state

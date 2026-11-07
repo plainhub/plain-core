@@ -123,10 +123,15 @@ impl Context {
     }
 }
 
-fn layout(bytes: &[u8]) -> Option<(usize, usize)> {
+pub fn transport_stream_layout(reader: impl Read) -> Option<(usize, usize)> {
+    let mut bytes = Vec::with_capacity(1024);
+    reader.take(1024).read_to_end(&mut bytes).ok()?;
     for stride in [188, 192, 204] {
         for offset in 0..stride {
-            if (0..3).all(|index| bytes.get(offset + index * stride) == Some(&0x47)) {
+            if (0..3).all(|index| {
+                let start = offset + index * stride;
+                bytes.get(start..).is_some_and(Packet::has_header)
+            }) {
                 return Some((offset, stride));
             }
         }
@@ -136,9 +141,7 @@ fn layout(bytes: &[u8]) -> Option<(usize, usize)> {
 pub(super) fn video(reader: &mut (impl Read + Seek)) -> Option<VideoInfo> {
     let length = reader.seek(SeekFrom::End(0)).ok()?;
     reader.seek(SeekFrom::Start(0)).ok()?;
-    let mut probe = vec![0; length.min(1024) as usize];
-    reader.read_exact(&mut probe).ok()?;
-    let (offset, stride) = layout(&probe)?;
+    let (offset, stride) = transport_stream_layout(&mut *reader)?;
     reader.seek(SeekFrom::Start(offset as u64)).ok()?;
     let packets = length.checked_sub(offset as u64)?.checked_sub(188)? / stride as u64 + 1;
     let mut reader = BufReader::with_capacity(stride * 32, reader);

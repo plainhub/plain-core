@@ -17,4 +17,5 @@ pub mod thumbnail_limits;
 #[cfg(feature = "thumbnails")]
 pub mod thumbnails;
 mod transport_stream;
+pub use transport_stream::transport_stream_layout;
 pub mod video_info;

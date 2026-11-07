@@ -292,6 +292,62 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
 
 #[cfg(feature = "media")]
 #[tokio::test]
+async fn rescanning_ts_files_keeps_only_transport_streams_in_video_search() {
+    use plain_rs::features::enums::DataType;
+    use plain_rs::features::prefs::settings::FileSortBy;
+    use plain_rs::infrastructure::db::FileKind;
+
+    let directory = directory_scan_fixture();
+    let root = directory.path().join("library");
+    std::fs::create_dir(&root).unwrap();
+    let script = root.join("example.client.ts");
+    std::fs::write(&script, b"export const example = true;\n").unwrap();
+    let video = include_bytes!("../../../../plain-rs/testdata/video-h264.ts");
+    for (stride, offset) in [(188, 0), (192, 4), (204, 0)] {
+        let mut packets = vec![0; stride * (video.len() / 188)];
+        for (index, packet) in video.chunks_exact(188).enumerate() {
+            let start = offset + index * stride;
+            packets[start..start + 188].copy_from_slice(packet);
+        }
+        std::fs::write(root.join(format!("example-{stride}.TS")), packets).unwrap();
+    }
+    std::fs::write(root.join("example-empty.ts"), b"").unwrap();
+    std::fs::write(root.join("example-sync-bytes.ts"), "G".repeat(1024)).unwrap();
+    let core = catalog_test_core(&directory.path().join("core"));
+    let state = core.runtime_state();
+    let catalog = core.native_media_catalog().unwrap();
+    let previous = state
+        .db
+        .record_file_paths(&[script.to_str().unwrap().into()], Some(FileKind::Video))
+        .unwrap()
+        .remove(0);
+
+    catalog
+        .scan_directory(root.to_str().unwrap())
+        .await
+        .unwrap();
+    let hits = catalog
+        .search(DataType::Video, "example", FileSortBy::NameAsc, 10, 0)
+        .unwrap();
+    assert_eq!(
+        hits.iter()
+            .map(|row| std::path::Path::new(&row.path).file_name().unwrap().to_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["example-188.TS", "example-192.TS", "example-204.TS"]
+    );
+    assert_eq!(
+        catalog.count_matching(DataType::Video, "example").unwrap(),
+        3
+    );
+    let script_row = state.db.file(&previous.id).unwrap().unwrap();
+    assert_eq!(script_row.kind, FileKind::File);
+    assert_ne!(script_row.mime_type.as_deref(), Some("video/mp2t"));
+    assert!(!script_row.missing);
+    core.stop_core().await;
+}
+
+#[cfg(feature = "media")]
+#[tokio::test]
 async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reentry() {
     let directory = directory_scan_fixture();
     let core = catalog_test_core(&directory.path().join("core"));

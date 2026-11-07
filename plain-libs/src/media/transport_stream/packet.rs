@@ -9,14 +9,15 @@ pub(super) struct Packet<'a> {
 }
 
 impl<'a> Packet<'a> {
+    pub fn has_header(bytes: &[u8]) -> bool {
+        matches!(bytes, [0x47, flags, _, control, ..] if flags & 0x80 == 0 && control & 0x30 != 0)
+    }
+
     pub fn read(bytes: &'a [u8; 188]) -> Option<Self> {
-        if bytes[0] != 0x47 || bytes[1] & 0x80 != 0 || bytes[3] & 0xc0 != 0 {
+        if !Self::has_header(bytes) || bytes[3] & 0xc0 != 0 {
             return None;
         }
         let control = (bytes[3] >> 4) & 3;
-        if control == 0 {
-            return None;
-        }
         let mut offset = 4;
         let mut discontinuity = false;
         let mut has_pcr = false;

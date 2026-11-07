@@ -773,7 +773,6 @@ impl NativeMediaCatalog {
                         .ok_or("Invalid file path encoding")?
                         .to_owned();
                     let file_count = usize::from(actual.is_file());
-                    let kind = crate::features::media::catalog_paths::infer_type(&path);
                     let data_type = if file_count > 0
                         && !crate::features::media::catalog_paths::is_media_excluded_at(
                             &path,
@@ -781,6 +780,7 @@ impl NativeMediaCatalog {
                             &policy.cache_directory,
                             &policy.excluded_roots,
                         ) {
+                        let kind = crate::features::media::catalog_paths::infer_type(&path);
                         [
                             DataType::Audio,
                             DataType::Video,

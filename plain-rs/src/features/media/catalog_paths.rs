@@ -345,6 +345,18 @@ pub fn infer_type(name: &str) -> &'static str {
     let mime = plain_libs::utils::mime::mime_from_ext(name);
     if mime.starts_with("image/") {
         "image"
+    } else if mime == "video/mp2t" {
+        let path = Path::new(name);
+        if path.is_file()
+            && std::fs::File::open(path)
+                .ok()
+                .and_then(plain_libs::media::transport_stream_layout)
+                .is_some()
+        {
+            "video"
+        } else {
+            "other"
+        }
     } else if mime.starts_with("video/") {
         "video"
     } else if mime.starts_with("audio/") {
