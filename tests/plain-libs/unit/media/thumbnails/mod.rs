@@ -470,16 +470,13 @@ async fn cover_sidecar_thumbnail() {
 }
 
 #[tokio::test]
-async fn progressive_photo_dc_fast_path_end_to_end() {
-    // Real progressive fixture (vips/libjpeg scan script with a trailing
-    // DC refinement scan) must flow through the DC-only path and produce
-    // a correct 1200x800 -> 128x85-ish thumbnail.
+async fn progressive_jpeg_dc_fast_path_end_to_end() {
     let p = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../plain-rs/testdata"))
-        .join("v-photo-prog.jpg");
+        .join("v-synthetic-prog.jpg");
     let spec = spec_for(&p, 128, 128);
     let out = thumbnail(spec.clone()).await.unwrap();
     let ThumbOutcome::Generated(d) = out else {
-        panic!("progressive photo must generate");
+        panic!("progressive JPEG must generate");
     };
     let decoded = image::load_from_memory(&d).unwrap();
     assert_eq!((decoded.width(), decoded.height()), (128, 85));

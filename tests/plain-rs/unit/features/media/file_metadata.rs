@@ -94,7 +94,7 @@ fn accepted_kinds_are_exactly_the_media_index_wire_values() {
 
 #[test]
 fn data_types_outside_the_media_index_are_errors_even_for_a_real_file() {
-    let path = fixture("v-photo-prog.jpg");
+    let path = fixture("v-synthetic-prog.jpg");
     for data_type in [
         DataType::Default,
         DataType::Sms,
@@ -274,11 +274,11 @@ fn doc_row_keeps_real_stat_facts_and_unknown_optional_metadata() {
 
 #[test]
 fn image_row_reads_pixel_dimensions_from_the_image_crate() {
-    let big = read_file_metadata(&fixture("v-photo-prog.jpg"), DataType::Image).unwrap();
+    let big = read_file_metadata(&fixture("v-synthetic-prog.jpg"), DataType::Image).unwrap();
     assert_eq!((big.width, big.height), (1200, 800));
     assert_eq!(big.rotation, 0, "fixture carries no EXIF orientation");
     assert_eq!(big.taken_at, None);
-    assert_eq!(big.title, "v-photo-prog");
+    assert_eq!(big.title, "v-synthetic-prog");
     assert_eq!(big.duration_ms, 0);
 
     let small = read_file_metadata(&fixture("v-prog-gray.jpg"), DataType::Image).unwrap();
@@ -290,7 +290,7 @@ fn image_dimensions_follow_file_contents_instead_of_a_misleading_extension() {
     let dir = tempfile::tempdir().unwrap();
     for name in ["photo.heic", "photo.avif", "photo.bmp", "photo.tiff"] {
         let path = dir.path().join(name);
-        std::fs::copy(fixture("v-photo-prog.jpg"), &path).unwrap();
+        std::fs::copy(fixture("v-synthetic-prog.jpg"), &path).unwrap();
 
         let m = read_file_metadata(&path, DataType::Image).unwrap();
 

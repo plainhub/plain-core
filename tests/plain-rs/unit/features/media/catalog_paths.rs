@@ -56,7 +56,7 @@ fn media_exclusions() {
     assert!(!excl("/home/u/site/dist/icon.svg"));
     assert!(!excl("/home/u/site/BUILD/style.css"));
     assert!(excl(
-        "/Users/alice/Movies/CapCut/User Data/Cache/effect/7408409772950637830/image/blusher.png"
+        "/Users/alice/Movies/Fixture Editor/User Data/Cache/effects/test-effect/preview.png"
     ));
     assert!(excl(
         "/Users/alice/Library/Browser/User Data/GPUCache/image.png"

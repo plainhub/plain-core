@@ -68,12 +68,12 @@ fn parity_grayscale_fixture() {
 }
 
 #[test]
-fn parity_real_photo_fixture_and_skip_stats() {
-    let data = fixture("v-photo-prog.jpg");
+fn parity_synthetic_fixture_and_skip_stats() {
+    let data = fixture("v-synthetic-prog.jpg");
     let mine = decode_dc_only_bytes(&data).unwrap();
     assert_eq!((mine.width(), mine.height()), (150, 100));
     let r = reference_1_8(&data);
-    assert_same(&mine, &r, "photo fixture");
+    assert_same(&mine, &r, "synthetic fixture");
 
     // The AC scans must be accounted as skipped: most of the entropy
     // payload never gets parsed.
@@ -82,7 +82,7 @@ fn parity_real_photo_fixture_and_skip_stats() {
         skipped_bytes > dc_bytes * 2,
         "expected AC skip to dominate: dc={dc_bytes} skipped={skipped_bytes}"
     );
-    println!("photo fixture: dc {dc_bytes} B decoded, {skipped_bytes} B AC skipped");
+    println!("synthetic fixture: dc {dc_bytes} B decoded, {skipped_bytes} B AC skipped");
 }
 
 #[test]
@@ -437,7 +437,7 @@ fn grouped_dc_falls_back_without_consuming_long_codes_stuffing_or_markers() {
 
 #[test]
 fn cropped_dc_reconstruction_matches_the_full_grid_with_chroma_neighbors() {
-    for file in ["v-photo-prog.jpg", "v-prog420.jpg", "v-prog-gray.jpg"] {
+    for file in ["v-synthetic-prog.jpg", "v-prog420.jpg", "v-prog-gray.jpg"] {
         let data = fixture(file);
         for (w, h) in [(1, 1), (3, 7), (9, 4), (1, 19), (20, 1)] {
             let full = reference_1_8(&data);
