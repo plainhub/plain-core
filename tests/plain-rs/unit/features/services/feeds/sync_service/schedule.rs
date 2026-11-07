@@ -127,12 +127,22 @@ async fn automatic_refreshes_deduplicate_and_manual_requests_survive_automatic_c
         let (_dir, service, calls, started, release, server, _events) =
             super::super::tests::fixture().await;
         let feed = service.db.feed_get("feed").unwrap().unwrap();
-        service.queue_feeds(vec![feed.clone()], false, false).unwrap();
-        let pending = service.state.lock().unwrap().tasks["feed"].state.subscribe();
+        service
+            .queue_feeds(vec![feed.clone()], false, false)
+            .unwrap();
+        let pending = service.state.lock().unwrap().tasks["feed"]
+            .state
+            .subscribe();
         let task_id = pending.borrow().task_id.clone();
         started.acquire().await.unwrap().forget();
         service.queue_feeds(vec![feed], false, false).unwrap();
-        assert_eq!(service.state.lock().unwrap().tasks["feed"].state.borrow().task_id, task_id);
+        assert_eq!(
+            service.state.lock().unwrap().tasks["feed"]
+                .state
+                .borrow()
+                .task_id,
+            task_id
+        );
         if manual {
             service.queue(Some("feed".into())).unwrap();
         }
@@ -142,7 +152,11 @@ async fn automatic_refreshes_deduplicate_and_manual_requests_survive_automatic_c
         }
         assert_eq!(
             super::super::tests::finished(pending).await.status,
-            if manual { "COMPLETED" } else { "CANCELLED" }
+            if manual {
+                FeedWorkerStatus::Completed
+            } else {
+                FeedWorkerStatus::Cancelled
+            }
         );
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
         service.shutdown().await;
@@ -157,12 +171,14 @@ async fn disabling_automatic_dispatch_cancels_queued_work_but_manual_refresh_sti
     let permits = service.permits.acquire_many(16).await.unwrap();
     let feed = service.db.feed_get("feed").unwrap().unwrap();
     service.queue_feeds(vec![feed], false, false).unwrap();
-    let pending = service.state.lock().unwrap().tasks["feed"].state.subscribe();
+    let pending = service.state.lock().unwrap().tasks["feed"]
+        .state
+        .subscribe();
     service.cancel_automatic();
     assert!(service.queue(Some("feed".into())).is_err());
     assert_eq!(
         super::super::tests::finished(pending).await.status,
-        "CANCELLED"
+        FeedWorkerStatus::Cancelled
     );
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     drop(permits);
@@ -174,7 +190,7 @@ async fn disabling_automatic_dispatch_cancels_queued_work_but_manual_refresh_sti
     release.add_permits(1);
     assert_eq!(
         super::super::tests::finished(state).await.status,
-        "COMPLETED"
+        FeedWorkerStatus::Completed
     );
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     service.shutdown().await;
@@ -187,7 +203,9 @@ async fn a_network_policy_change_cancels_only_automatic_fetches() {
             super::super::tests::fixture().await;
         let feed = service.db.feed_get("feed").unwrap().unwrap();
         service.queue_feeds(vec![feed], false, false).unwrap();
-        let pending = service.state.lock().unwrap().tasks["feed"].state.subscribe();
+        let pending = service.state.lock().unwrap().tasks["feed"]
+            .state
+            .subscribe();
         started.acquire().await.unwrap().forget();
         if manual {
             service.queue(Some("feed".into())).unwrap();
@@ -198,7 +216,11 @@ async fn a_network_policy_change_cancels_only_automatic_fetches() {
         }
         assert_eq!(
             super::super::tests::finished(pending).await.status,
-            if manual { "COMPLETED" } else { "CANCELLED" }
+            if manual {
+                FeedWorkerStatus::Completed
+            } else {
+                FeedWorkerStatus::Cancelled
+            }
         );
         service.shutdown().await;
         server.abort();

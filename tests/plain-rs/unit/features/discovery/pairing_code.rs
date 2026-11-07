@@ -1,4 +1,5 @@
 use super::*;
+use crate::features::chat::enums::DeviceType;
 
 #[test]
 fn pairing_code_preserves_identity_and_decodes_utf8_plus_and_repeated_addresses() {
@@ -8,7 +9,7 @@ fn pairing_code_preserves_identity_and_decodes_utf8_plus_and_repeated_addresses(
     let device = value.into_device();
     assert_eq!(device.id, "fixture");
     assert_eq!(device.port, 8443);
-    assert_eq!(device.device_type, "COMPUTER");
+    assert_eq!(device.device_type, DeviceType::Computer);
     assert_eq!(
         device.discovery_methods,
         [
