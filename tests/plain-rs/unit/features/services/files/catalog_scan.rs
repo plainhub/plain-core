@@ -1099,7 +1099,7 @@ async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {
 
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
-async fn sdk_mount_initializes_default_index_root_before_startup_scan() {
+async fn sdk_host_restores_the_configured_index_without_scanning_on_startup() {
     use serde_json::json;
     let directory = directory_scan_fixture();
     let documents = directory.path().join("Documents");
@@ -1127,6 +1127,11 @@ async fn sdk_mount_initializes_default_index_root_before_startup_scan() {
         .unwrap()
         .to_string_lossy()
         .into_owned();
+    crate::features::services::files::indexing::set_directories(
+        &state.db,
+        std::slice::from_ref(&expected),
+    )
+    .unwrap();
     let replies = tokio::spawn(async move {
         let mut mount_calls = 0;
         while let Some(request) = requests.recv().await {
@@ -1157,14 +1162,14 @@ async fn sdk_mount_initializes_default_index_root_before_startup_scan() {
             .unwrap(),
         vec![expected]
     );
-    state.media_scans.wait_background().await.unwrap();
-    let snapshot = state.media_scans.snapshot().unwrap().unwrap();
+    assert!(state.media_scans.snapshot().unwrap().is_none());
+    let catalog = NativeMediaCatalog::new(state.clone());
+    let snapshot = catalog.scan_source_directories("/").await.unwrap();
     assert_eq!(
         snapshot.status,
         crate::features::services::files::media_scans::Status::Completed,
         "{snapshot:?}"
     );
-    let catalog = NativeMediaCatalog::new(state.clone());
     for kind in [DataType::Audio, DataType::Video, DataType::Doc] {
         assert_eq!(catalog.count(kind).unwrap(), 1, "{kind:?}");
     }
@@ -1224,6 +1229,7 @@ async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying
         }
     });
     let catalog = NativeMediaCatalog::new(state.clone());
+    host_connected(state.clone(), generation).await.unwrap();
     for indices in [vec![0], vec![0, 1], vec![1]] {
         *grants.lock().unwrap() = indices
             .iter()

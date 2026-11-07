@@ -125,7 +125,7 @@ fn filesystem_media_host(
 
 #[cfg(feature = "media")]
 #[tokio::test]
-async fn connecting_a_filesystem_media_host_indexes_configured_sources_without_host_scan_calls() {
+async fn connecting_a_filesystem_media_host_watches_configured_sources_without_rebuilding() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
@@ -138,6 +138,15 @@ async fn connecting_a_filesystem_media_host_indexes_configured_sources_without_h
         }
     }));
     let catalog = core.native_media_catalog().unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while core.runtime().media_watch.lock().unwrap().is_none() {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(catalog.file_scan_status().unwrap().is_none());
+    catalog.start_source_scan("/").unwrap();
     let indexed = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             if catalog
@@ -188,7 +197,7 @@ async fn connecting_a_filesystem_media_host_indexes_configured_sources_without_h
     runner.await.unwrap().unwrap();
     assert!(
         indexed.is_ok(),
-        "Host startup did not index its configured source"
+        "Explicit rebuild did not index its configured source"
     );
     assert_eq!(source, b"owned source");
 }

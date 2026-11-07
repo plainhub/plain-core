@@ -46,9 +46,11 @@ impl Service {
         plain_rs::features::prefs::security::configure_password_login(&prefs)?;
         let mut permissions = prefs
             .get::<Vec<AccessFeature>>(API_PERMISSIONS)?
-            .unwrap_or_else(|| AccessFeature::FILE_FEATURES.to_vec());
-        if !permissions.contains(&AccessFeature::Files) {
-            permissions.push(AccessFeature::Files);
+            .unwrap_or_default();
+        for feature in AccessFeature::FILE_FEATURES {
+            if !permissions.contains(&feature) {
+                permissions.push(feature);
+            }
         }
         prefs.set(API_PERMISSIONS, permissions)?;
         storage::configure_index(&core.runtime().db, &options.media_directories)?;

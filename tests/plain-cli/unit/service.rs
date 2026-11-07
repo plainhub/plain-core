@@ -93,14 +93,18 @@ async fn management_pairing_with_cli_requires_password_without_second_approval()
 }
 
 #[tokio::test]
-async fn service_grants_remote_files_and_preserves_other_settings_across_restart() {
+async fn service_grants_remote_file_features_and_preserves_other_settings_across_restart() {
+    let defaults = AccessFeature::FILE_FEATURES.as_slice();
     for (configured, expected_access) in [
-        (vec![], vec![AccessFeature::Files]),
+        (vec![], defaults.to_vec()),
         (
             vec![AccessFeature::Sms],
-            vec![AccessFeature::Sms, AccessFeature::Files],
+            [[AccessFeature::Sms].as_slice(), defaults].concat(),
         ),
-        (vec![AccessFeature::Files], vec![AccessFeature::Files]),
+        (
+            vec![AccessFeature::Files],
+            [[AccessFeature::Files].as_slice(), &defaults[..4]].concat(),
+        ),
     ] {
         let directory = tempfile::tempdir().unwrap();
         let paths = AppPaths {
@@ -145,7 +149,7 @@ async fn service_grants_remote_files_and_preserves_other_settings_across_restart
                 .await
                 .unwrap();
             let body = serde_json::json!({
-                "query": "{ app { capabilities access } fileIndexVolumes { id } fileIndexDefaults { excludedDirs } scanProgress { state } }"
+                "query": "{ app { capabilities access } fileIndexVolumes { id } fileIndexDefaults { excludedDirs } scanProgress { state } audios(query:\"\",offset:0,limit:1,sortBy:NAME_ASC) { id } }"
             })
             .to_string();
             let request = format!(
@@ -168,7 +172,7 @@ async fn service_grants_remote_files_and_preserves_other_settings_across_restart
             let result: serde_json::Value = serde_json::from_str(body).unwrap();
             assert!(result["errors"].is_null(), "{result}");
             let data = &result["data"];
-            assert_eq!(data["app"]["access"], serde_json::json!(["FILES"]));
+            assert_eq!(data["app"]["access"], serde_json::json!(defaults));
             assert!(
                 data["app"]["capabilities"]
                     .as_array()
@@ -178,6 +182,7 @@ async fn service_grants_remote_files_and_preserves_other_settings_across_restart
             assert!(data["fileIndexVolumes"].is_array());
             assert!(data["fileIndexDefaults"]["excludedDirs"].is_array());
             assert!(data["scanProgress"]["state"].is_string());
+            assert!(data["audios"].is_array());
             let prefs = service.core.shared_preferences().unwrap();
             assert_eq!(
                 prefs
@@ -258,6 +263,15 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
         catalog.source_directories().unwrap(),
         vec![source.to_string_lossy().into_owned()]
     );
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while service.core.runtime().media_watch.lock().unwrap().is_none() {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(catalog.file_scan_status().unwrap().is_none());
+    catalog.start_source_scan("/").unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         while catalog
             .count(plain_rs::features::enums::DataType::Doc)

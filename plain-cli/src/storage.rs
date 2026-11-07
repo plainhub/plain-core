@@ -31,9 +31,6 @@ pub(crate) fn event_sink(
                     plain_rs::features::services::files::indexing::discover_native(&state)?;
                     catalog.configure_policy((*state.media_scans.policy()?).clone())?;
                     catalog.watch_source_directories()?;
-                    if !catalog.source_directories()?.is_empty() {
-                        catalog.start_source_scan("/")?;
-                    }
                     Ok(())
                 })();
                 if let Err(error) = result {

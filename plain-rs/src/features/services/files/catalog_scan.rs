@@ -13,6 +13,14 @@ use crate::infrastructure::db::MediaFileRow;
 use crate::runtime::Runtime as CoreRuntime;
 
 pub async fn host_connected(state: CoreRuntime, generation: u64) -> Result<(), String> {
+    configure_sources(state, generation, false).await
+}
+
+async fn configure_sources(
+    state: CoreRuntime,
+    generation: u64,
+    scan_new_sources: bool,
+) -> Result<(), String> {
     if state.host.uses_system_media_catalog() {
         return Ok(());
     }
@@ -29,32 +37,42 @@ pub async fn host_connected(state: CoreRuntime, generation: u64) -> Result<(), S
     }
     #[cfg(feature = "runtime-media")]
     {
-        let before = state.db.volumes().map_err(|error| error.to_string())?;
-        crate::features::services::files::indexing::discover(&state).await?;
-        if state.media_scans.policy()?.scope.is_some()
-            && before == state.db.volumes().map_err(|error| error.to_string())?
+        let volumes = crate::features::services::files::indexing::discover(&state).await?;
+        let policy = state.media_scans.policy()?;
+        if policy
+            .scope
+            .as_ref()
+            .is_some_and(|scope| scope.volumes == volumes)
         {
             return Ok(());
         }
         let catalog = NativeMediaCatalog::new(state);
-        catalog.configure_policy((*catalog.state.media_scans.policy()?).clone())?;
-        if !catalog.source_directories()?.is_empty() {
-            catalog.start_scan(
-                catalog.source_references("/")?,
-                catalog.state.media_scans.policy()?,
-                true,
-            )?;
-        }
+        catalog.configure_policy((*policy).clone())?;
         catalog.watch_source_directories()?;
+        if scan_new_sources
+            && let Some(previous) = &policy.scope
+        {
+            let references = catalog
+                .source_directories()?
+                .into_iter()
+                .filter(|path| !previous.directories.contains(path))
+                .collect::<Vec<_>>();
+            if !references.is_empty() {
+                catalog.start_scan(references, catalog.state.media_scans.policy()?, true)?;
+            }
+        }
         Ok(())
     }
     #[cfg(not(feature = "runtime-media"))]
-    Err("MEDIA_SCAN advertised without a scanner implementation".into())
+    {
+        let _ = scan_new_sources;
+        Err("MEDIA_SCAN advertised without a scanner implementation".into())
+    }
 }
 
 pub async fn access_changed(state: CoreRuntime, generation: u64) -> Result<(), String> {
     if state.file_platform.uses_sdk() && !state.host.uses_system_media_catalog() {
-        host_connected(state, generation).await?;
+        configure_sources(state, generation, true).await?;
     }
     Ok(())
 }
