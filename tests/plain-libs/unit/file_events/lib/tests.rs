@@ -7,14 +7,15 @@ use super::*;
 #[test]
 fn integration() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let dir = tempdir()?;
+    let root = dir.path().canonicalize()?;
 
     let (tx, rx) = std::sync::mpsc::channel();
 
     let mut watcher = RecommendedWatcher::new(tx)?;
 
-    watcher.watch(dir.path(), RecursiveMode::Recursive)?;
+    watcher.watch(&root, RecursiveMode::Recursive)?;
 
-    let file_path = dir.path().join("file.txt");
+    let file_path = root.join("file.txt");
     fs::write(&file_path, b"Lorem ipsum")?;
 
     let event = rx

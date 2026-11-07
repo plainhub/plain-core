@@ -1,6 +1,6 @@
 use super::types::ScanProgress;
 use crate::server::ServerState;
-use plain_graphql::{Context, Object, Result, SimpleObject};
+use plain_graphql::{Context, ID, Object, Result, SimpleObject};
 use plain_rs::infrastructure::db::IndexMode;
 
 use plain_rs::features::services::files::scanning;
@@ -80,7 +80,7 @@ impl MediaScanQuery {
                         )
                     })
                     .collect(),
-                id: volume.id,
+                id: volume.id.into(),
                 path: volume.path,
                 is_available: volume.is_available,
                 index_mode: volume.index_mode,
@@ -110,8 +110,8 @@ impl MediaScanMutation {
         )
         .await
     }
-    async fn rebuild_file_index_volume(&self, ctx: &Context<'_>, id: String) -> Result<bool> {
-        command(ctx, Command::RebuildVolume(id)).await
+    async fn rebuild_file_index_volume(&self, ctx: &Context<'_>, id: ID) -> Result<bool> {
+        command(ctx, Command::RebuildVolume(id.into())).await
     }
     async fn pause_media_scan(&self, ctx: &Context<'_>) -> Result<bool> {
         command(ctx, Command::Pause).await
@@ -125,14 +125,14 @@ impl MediaScanMutation {
     async fn set_file_index_volume(
         &self,
         ctx: &Context<'_>,
-        id: String,
+        id: ID,
         index_mode: IndexMode,
         included_dirs: Vec<String>,
         excluded_dirs: Vec<String>,
     ) -> Result<bool> {
         plain_rs::features::services::files::indexing::set(
             index_state(ctx).await?,
-            &id,
+            id.as_ref(),
             index_mode,
             included_dirs,
             excluded_dirs,
@@ -148,7 +148,7 @@ mod tests;
 
 #[derive(SimpleObject)]
 pub struct FileIndexVolume {
-    pub id: String,
+    pub id: ID,
     pub path: String,
     pub is_available: bool,
     pub index_mode: IndexMode,

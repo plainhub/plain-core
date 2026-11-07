@@ -20,7 +20,7 @@ fn resource_resolution_yields_while_the_blocking_executor_is_busy() {
             wait.recv().unwrap();
         });
         started.recv().unwrap();
-        let resolution = resolve(&state, "invalid-resource");
+        let resolution = resolve(&state, "invalid-resource", ReadKind::Original);
         tokio::pin!(resolution);
         let yielded = std::future::poll_fn(|context| {
             Poll::Ready(matches!(resolution.as_mut().poll(context), Poll::Pending))

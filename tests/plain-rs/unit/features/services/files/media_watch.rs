@@ -53,7 +53,7 @@ struct DeniedWatcher {
     calls: Vec<std::path::PathBuf>,
 }
 impl Watcher for DeniedWatcher {
-    fn new<F: plain_libs::file_events::EventHandler>(_: F, _: plain_libs::file_events::Config) -> plain_libs::file_events::Result<Self> {
+    fn new<F: plain_libs::file_events::EventHandler>(_: F) -> plain_libs::file_events::Result<Self> {
         Ok(Self::default())
     }
     fn watch(&mut self, path: &Path, _: RecursiveMode) -> plain_libs::file_events::Result<()> {
@@ -67,9 +67,6 @@ impl Watcher for DeniedWatcher {
     }
     fn unwatch(&mut self, _: &Path) -> plain_libs::file_events::Result<()> {
         Ok(())
-    }
-    fn kind() -> plain_libs::file_events::WatcherKind {
-        plain_libs::file_events::WatcherKind::NullWatcher
     }
 }
 
@@ -279,7 +276,7 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
     #[derive(Default)]
     struct RecordingWatcher(Vec<(std::path::PathBuf, RecursiveMode)>);
     impl Watcher for RecordingWatcher {
-        fn new<F: plain_libs::file_events::EventHandler>(_: F, _: plain_libs::file_events::Config) -> plain_libs::file_events::Result<Self> {
+        fn new<F: plain_libs::file_events::EventHandler>(_: F) -> plain_libs::file_events::Result<Self> {
             Ok(Self::default())
         }
         fn watch(&mut self, path: &Path, mode: RecursiveMode) -> plain_libs::file_events::Result<()> {
@@ -288,9 +285,6 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
         }
         fn unwatch(&mut self, _: &Path) -> plain_libs::file_events::Result<()> {
             Ok(())
-        }
-        fn kind() -> plain_libs::file_events::WatcherKind {
-            plain_libs::file_events::WatcherKind::NullWatcher
         }
     }
     let directory = watch_directory_fixture();

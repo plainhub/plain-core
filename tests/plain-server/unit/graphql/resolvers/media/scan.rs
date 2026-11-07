@@ -10,7 +10,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         .media_scans
         .set_defaults(plain_rs::features::files::index_scope::Defaults {
             excluded_directories: Vec::new(),
-            excluded_names: Vec::new(),
+            excluded_names: plain_rs::features::files::index_scope::defaults().excluded_names,
         })
         .unwrap();
     let host = state.host.clone();
@@ -64,7 +64,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         .with_conn(|conn| conn.execute("UPDATE volumes SET index_mode='DISABLED'", []))
         .unwrap();
     let set = native.execute(Request::new(
-        "mutation($id:String!,$dirs:[String!]!){setFileIndexVolume(id:$id,indexMode:DISABLED,includedDirs:$dirs,excludedDirs:[])}"
+        "mutation($id:ID!,$dirs:[String!]!){setFileIndexVolume(id:$id,indexMode:DISABLED,includedDirs:$dirs,excludedDirs:[])}"
     ).variables(plain_graphql::Variables::from_json(serde_json::json!({"id":id,"dirs":[source_path.to_str().unwrap()]})))).await;
     assert!(set.errors.is_empty(), "{:?}", set.errors);
     state.media_scans.wait_background().await.unwrap();
