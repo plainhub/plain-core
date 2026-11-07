@@ -56,6 +56,10 @@ fn children(
     };
     let mut output = Vec::new();
     while start < end {
+        // QuickTime allows a four-byte zero terminator after visual sample extensions.
+        if end - start == 4 && matches!(parent, b"avc1" | b"hev1" | b"hvc1") {
+            return (bytes(reader, start, 4, 4)? == [0; 4]).then_some(output);
+        }
         let (kind, body, next) = header(reader, start, end)?;
         start = next;
         let length = next - body;

@@ -85,11 +85,10 @@ fn yuv_to_rgb_known_colors() {
 
 #[test]
 fn error_paths_do_not_panic() {
-    // HEVC track: gated at the avc1 check with a clear message.
     let err = plan_keyframe(&testdata("video-h265.mp4")).unwrap_err();
-    assert!(
-        err.to_string().contains("no pure-Rust decoder"),
-        "got: {err}"
+    assert_eq!(
+        err.downcast_ref::<std::io::Error>().map(std::io::Error::kind),
+        Some(std::io::ErrorKind::Unsupported)
     );
     // Garbage bytes with an mp4 extension.
     let tmp = tempfile::tempdir().unwrap();

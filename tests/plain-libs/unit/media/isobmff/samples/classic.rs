@@ -1,6 +1,26 @@
 use super::*;
 
 #[test]
+fn quicktime_visual_description_terminator_preserves_sample_reads() {
+    let color = atom(b"colr", b"nclc\0\x01\0\x01\0\x01");
+    let file_with_suffix = |suffix: &[u8]| {
+        let extensions = [color.as_slice(), suffix].concat();
+        let mut bytes =
+            classic_file_with_description(false, false, description_with_extensions(&extensions));
+        bytes[8..12].copy_from_slice(b"qt  ");
+        bytes[16..20].copy_from_slice(b"qt  ");
+        Cursor::new(bytes)
+    };
+    let mut file = file_with_suffix(&[0; 4]);
+    let track = VideoTrack::read_avc(&mut file).unwrap();
+    assert_eq!(track.read_sample(&mut file, 3, 2).unwrap(), Some(vec![5, 6]));
+
+    for suffix in [&[0; 3][..], &[0; 5], &[0, 0, 0, 1]] {
+        assert!(VideoTrack::read_avc(&mut file_with_suffix(suffix)).is_err());
+    }
+}
+
+#[test]
 fn fixed_variable_sizes_and_both_chunk_offsets_return_the_same_samples() {
     for uniform in [false, true] {
         for co64 in [false, true] {
