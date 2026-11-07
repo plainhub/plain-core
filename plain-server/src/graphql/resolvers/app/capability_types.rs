@@ -1,4 +1,4 @@
-use plain_graphql::{Enum, ID, InputObject, SimpleObject};
+use plain_graphql::{Enum, ID, SimpleObject};
 
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
@@ -55,46 +55,6 @@ pub struct AuditEvent {
     pub message: String,
     pub client_id: Option<String>,
     pub created_at: Instant,
-}
-
-#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
-#[allow(non_camel_case_types)]
-pub enum SambaShareAuth {
-    GUEST,
-    PASSWORD,
-}
-
-#[derive(InputObject, Clone, Debug)]
-pub struct SambaShareInput {
-    pub name: String,
-    pub share_path: String,
-    pub auth: SambaShareAuth,
-    pub read_only: bool,
-}
-
-#[derive(InputObject, Clone, Debug)]
-pub struct SambaSettingsInput {
-    pub enabled: bool,
-    pub shares: Vec<SambaShareInput>,
-}
-
-#[derive(SimpleObject, Clone, Debug)]
-pub struct SambaShare {
-    pub name: String,
-    pub share_path: String,
-    pub auth: SambaShareAuth,
-    pub read_only: bool,
-}
-
-#[derive(SimpleObject, Clone, Debug)]
-pub struct SambaSettings {
-    pub enabled: bool,
-    pub username: String,
-    pub has_password: bool,
-    pub shares: Vec<SambaShare>,
-    pub service_name: String,
-    pub service_active: bool,
-    pub service_enabled: bool,
 }
 
 #[derive(SimpleObject, Clone, Debug)]

@@ -8,9 +8,6 @@ pub(super) fn handles(method: &str) -> bool {
         "systemRelaunchApp"
             | plain_rs::infrastructure::host::commands::SYSTEM_HOSTNAME_SET
             | plain_rs::infrastructure::host::commands::SYSTEM_DISK_FORMAT
-            | plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_SERVICE_FACTS
-            | plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_APPLY
-            | plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_PASSWORD
     )
 }
 
@@ -69,48 +66,6 @@ pub(super) async fn dispatch(
                     client_id,
                 );
                 result
-                    .map(|_| Value::Bool(true))
-                    .map_err(|error| error.to_string())
-            })
-            .await
-            .map_err(|error| error.to_string())?
-        }
-        plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_SERVICE_FACTS => {
-            let facts = tokio::task::spawn_blocking(|| {
-                let status = plain_rs::infrastructure::platform::linux::samba::get_service_status();
-                plain_rs::infrastructure::host::commands::SambaServiceFacts {
-                    name: status.name,
-                    active: status.active,
-                    enabled: status.enabled,
-                }
-            })
-            .await
-            .map_err(|error| error.to_string())?;
-            serde_json::to_value(facts).map_err(|error| error.to_string())
-        }
-        plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_APPLY => {
-            let request: plain_rs::infrastructure::host::commands::SambaApplyRequest =
-                serde_json::from_value(params).map_err(|error| error.to_string())?;
-            let core = core.clone();
-            tokio::task::spawn_blocking(move || {
-                plain_rs::infrastructure::platform::linux::samba::apply(
-                    core.preferences()?,
-                    &request.settings,
-                    "",
-                )
-                .map(|_| Value::Bool(true))
-                .map_err(|error| error.to_string())
-            })
-            .await
-            .map_err(|error| error.to_string())?
-        }
-        plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_PASSWORD => {
-            let request: plain_rs::infrastructure::host::commands::SambaPasswordRequest =
-                serde_json::from_value(params).map_err(|error| error.to_string())?;
-            let core = core.clone();
-            tokio::task::spawn_blocking(move || {
-                core.preferences()?;
-                plain_rs::infrastructure::platform::linux::samba::set_password(&request.password)
                     .map(|_| Value::Bool(true))
                     .map_err(|error| error.to_string())
             })

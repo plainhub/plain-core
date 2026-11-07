@@ -93,8 +93,15 @@ async fn management_pairing_with_cli_requires_password_without_second_approval()
 }
 
 #[tokio::test]
-async fn service_preserves_explicit_web_access_and_password_across_restart() {
-    for configured in [Vec::<String>::new(), vec!["SMS".to_owned()]] {
+async fn service_grants_remote_files_and_preserves_other_settings_across_restart() {
+    for (configured, expected_access) in [
+        (vec![], vec![AccessFeature::Files]),
+        (
+            vec![AccessFeature::Sms],
+            vec![AccessFeature::Sms, AccessFeature::Files],
+        ),
+        (vec![AccessFeature::Files], vec![AccessFeature::Files]),
+    ] {
         let directory = tempfile::tempdir().unwrap();
         let paths = AppPaths {
             data_dir: directory.path().join("data"),
@@ -127,19 +134,62 @@ async fn service_preserves_explicit_web_access_and_password_across_restart() {
             )
             .await
             .unwrap();
+            let session = service
+                .core
+                .native_management()
+                .unwrap()
+                .create_session("Index card fixture".into())
+                .unwrap();
+            let port = service.core.http_ports().await.unwrap().0;
+            let mut connection = tokio::net::TcpStream::connect(("127.0.0.1", port))
+                .await
+                .unwrap();
+            let body = serde_json::json!({
+                "query": "{ app { capabilities access } fileIndexVolumes { id } fileIndexDefaults { excludedDirs } scanProgress { state } }"
+            })
+            .to_string();
+            let request = format!(
+                "POST /graphql HTTP/1.1\r\nHost: localhost\r\nC-ID: {}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                session.client_id,
+                session.token,
+                body.len(),
+            );
+            connection.write_all(request.as_bytes()).await.unwrap();
+            let mut response = String::new();
+            tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                connection.read_to_string(&mut response),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert!(response.starts_with("HTTP/1.1 200"));
+            let (_, body) = response.split_once("\r\n\r\n").unwrap();
+            let result: serde_json::Value = serde_json::from_str(body).unwrap();
+            assert!(result["errors"].is_null(), "{result}");
+            let data = &result["data"];
+            assert_eq!(data["app"]["access"], serde_json::json!(["FILES"]));
+            assert!(
+                data["app"]["capabilities"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&serde_json::json!("MEDIA_SCAN"))
+            );
+            assert!(data["fileIndexVolumes"].is_array());
+            assert!(data["fileIndexDefaults"]["excludedDirs"].is_array());
+            assert!(data["scanProgress"]["state"].is_string());
             let prefs = service.core.shared_preferences().unwrap();
             assert_eq!(
-                prefs.get::<Vec<String>>("api_permissions").unwrap(),
-                Some(configured.clone())
+                prefs
+                    .get::<Vec<AccessFeature>>("api_permissions")
+                    .unwrap()
+                    .as_ref(),
+                Some(&expected_access)
             );
             assert_eq!(
                 plain_rs::features::prefs::security::password_hash(&prefs).unwrap(),
                 password
             );
-            assert!(!plain_rs::features::services::device::access::is_enabled(
-                &prefs,
-                &[AccessFeature::Files]
-            ));
             let current = (
                 prefs.get::<String>("client_id").unwrap(),
                 prefs.get::<String>("url_token").unwrap(),

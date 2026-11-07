@@ -143,7 +143,7 @@ shutdown in `lifecycle.rs`, and restart commands in `control.rs`. There is no
 separate assembly directory or duplicate service container.
 
 `plain-cli/src/service.rs` combines the server with CLI host adapters and local
-approval. Linux mounting, disk formatting and Samba implementations remain in
+approval. Linux mounting and disk formatting implementations remain in
 `plain-rs/src/infrastructure/platform/linux/`. `plain-server` contains no CLI/headless runtime;
 its native APIs and `ContentServer::runtime()` provide the in-process entry points
 used by CLI, desktop and mobile hosts.
@@ -203,7 +203,7 @@ sudo plainapp passwd   # admin password, prompted twice
 ```sh
 cargo build --release --locked -p plainapp
 install -m 0755 target/release/plainapp /usr/local/bin/plainapp
-sudo plainapp install                     # ffmpeg, Samba, Avahi
+sudo plainapp install                     # ffmpeg and Avahi
 sudo systemctl enable --now plainapp
 ```
 

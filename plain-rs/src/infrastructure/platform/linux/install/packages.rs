@@ -1,5 +1,3 @@
-use std::process::Command;
-
 use crate::infrastructure::platform::linux::install::ui;
 
 #[derive(Clone, Debug)]
@@ -44,14 +42,6 @@ fn which(name: &str) -> Option<std::path::PathBuf> {
         }
     }
     None
-}
-
-pub fn exec_capture(cmd: &str, args: &[&str]) -> Option<String> {
-    let out = Command::new(cmd).args(args).output().ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 pub fn ensure_installed(plan: &InstallPlan) {
@@ -171,32 +161,6 @@ pub fn ensure_installed(plan: &InstallPlan) {
         }
         _ => ui::print_note(label, &plan.no_supported_msg),
     }
-}
-
-pub fn ensure_samba_vfs_modules_debian_ubuntu() {
-    if !matches!(detect_pkg_manager(), "apt-get" | "apt") {
-        return;
-    }
-    if !has_cmd("dpkg-query") {
-        return;
-    }
-    let out = match exec_capture("dpkg-query", &["-W", "-f=${Status}", "samba-vfs-modules"]) {
-        Some(s) => s,
-        None => {
-            let _ = ui::run_progress(
-                "Install macOS Samba compatibility",
-                "DEBIAN_FRONTEND=noninteractive apt-get install -y samba-vfs-modules",
-            );
-            return;
-        }
-    };
-    if out.contains("install ok installed") {
-        return;
-    }
-    let _ = ui::run_progress(
-        "Install macOS Samba compatibility",
-        "DEBIAN_FRONTEND=noninteractive apt-get install -y samba-vfs-modules",
-    );
 }
 
 #[cfg(test)]

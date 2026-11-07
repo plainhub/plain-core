@@ -25,7 +25,6 @@ pref_keys! {
         DLNA_ALLOWED_SENDERS = "dlna_allowed_senders",
         DLNA_DENIED_SENDERS = "dlna_denied_senders",
         CLIPBOARD_DIRECTIONS = "clipboard_directions",
-        SAMBA_SETTINGS = "samba_settings",
         DARK_THEME = "dark_theme",
         AMOLED_DARK_THEME = "amoled_dark_theme",
         PDF_FOLLOW_DARK_THEME = "pdf_follow_dark_theme",

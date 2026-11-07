@@ -2,7 +2,6 @@
 pub mod dlna;
 pub mod identity;
 pub mod pref_keys;
-pub mod samba;
 pub mod security;
 pub mod settings;
 pub mod storage;
@@ -186,7 +185,9 @@ impl Prefs {
         let mut stored = self.inner.write().unwrap();
         let mut next = stored.clone();
         let result = update(&mut next)?;
-        if let Some(key) = next.keys().find(|key| pref_keys::access(key).is_none()) {
+        if let Some((key, _)) = next.iter().find(|(key, value)| {
+            pref_keys::access(key).is_none() && stored.get(*key) != Some(*value)
+        }) {
             return Err(PrefsError::UnknownKey(key.clone()));
         }
         if next != *stored {

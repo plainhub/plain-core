@@ -22,7 +22,6 @@ pub enum Capability {
     ScreenMirror,
     Notifications,
     Clipboard,
-    SmbServer,
     DiskManager,
 }
 
@@ -49,7 +48,6 @@ impl Capability {
             "SCREEN_MIRROR" => Self::ScreenMirror,
             "NOTIFICATIONS" => Self::Notifications,
             "CLIPBOARD" => Self::Clipboard,
-            "SMB_SERVER" => Self::SmbServer,
             "DISK_MANAGER" => Self::DiskManager,
             _ => return None,
         })

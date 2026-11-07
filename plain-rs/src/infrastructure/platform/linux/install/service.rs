@@ -39,7 +39,7 @@ pub fn write_service(path: &Path, binary: &str) -> Result<()> {
 
 fn render_service(binary: &str) -> String {
     format!(
-        "[Unit]\nDescription=PlainApp service\nAfter=network-online.target smbd.service\nWants=network-online.target\n\n[Service]\nType=simple\nExecStart={binary} run\nRestart=on-failure\nRestartSec=5\nLimitNOFILE=65536\n\n[Install]\nWantedBy=multi-user.target\n"
+        "[Unit]\nDescription=PlainApp service\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nExecStart={binary} run\nRestart=on-failure\nRestartSec=5\nLimitNOFILE=65536\n\n[Install]\nWantedBy=multi-user.target\n"
     )
 }
 

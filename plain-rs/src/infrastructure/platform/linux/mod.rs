@@ -1,5 +1,4 @@
 #[cfg(all(feature = "linux-platform", unix))]
-pub mod samba;
 
 #[cfg(all(feature = "linux-platform", unix))]
 pub mod mounts;

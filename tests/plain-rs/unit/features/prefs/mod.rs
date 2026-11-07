@@ -34,7 +34,7 @@ fn roundtrip_string_and_json_shapes() {
     prefs.set("url_token", "abc123").unwrap();
     prefs.set("dlna_allowed_senders", vec!["/a", "/b"]).unwrap();
     prefs
-        .set("samba_settings", serde_json::json!({"enabled": true}))
+        .set("volume_alias", serde_json::json!({"enabled": true}))
         .unwrap();
 
     assert_eq!(
@@ -46,7 +46,7 @@ fn roundtrip_string_and_json_shapes() {
         Some(vec!["/a".into(), "/b".into()])
     );
     assert_eq!(
-        prefs.get::<serde_json::Value>("samba_settings").unwrap(),
+        prefs.get::<serde_json::Value>("volume_alias").unwrap(),
         Some(serde_json::json!({"enabled": true}))
     );
 }
@@ -137,7 +137,7 @@ fn reload_sees_previous_writes_and_pretty_prints() {
     let (dir, prefs) = tmp_prefs("reload");
     prefs.set("device_name", "box").unwrap();
     prefs
-        .set("samba_settings", serde_json::json!({"a": 1}))
+        .set("volume_alias", serde_json::json!({"a": 1}))
         .unwrap();
     drop(prefs);
 
@@ -151,8 +151,31 @@ fn reload_sees_previous_writes_and_pretty_prints() {
         Some("box")
     );
     assert_eq!(
-        reloaded.get::<serde_json::Value>("samba_settings").unwrap(),
+        reloaded.get::<serde_json::Value>("volume_alias").unwrap(),
         Some(serde_json::json!({"a": 1}))
+    );
+}
+
+#[test]
+fn retired_preferences_do_not_block_writes_or_become_writable() {
+    let (dir, _) = tmp_prefs("retired");
+    let file = dir.join("prefs.json");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(&file, r#"{"samba_settings":{"enabled":true}}"#).unwrap();
+    let prefs = Prefs::load(&file).unwrap();
+    assert!(prefs.set("device_name", "box").unwrap());
+    assert!(matches!(
+        prefs.set("samba_settings", serde_json::json!({"enabled": false})),
+        Err(PrefsError::UnknownKey(_))
+    ));
+    let reloaded = Prefs::load(&file).unwrap();
+    assert_eq!(
+        reloaded.get::<String>("device_name").unwrap().as_deref(),
+        Some("box")
+    );
+    assert_eq!(
+        reloaded.get::<serde_json::Value>("samba_settings").unwrap(),
+        Some(serde_json::json!({"enabled": true}))
     );
 }
 

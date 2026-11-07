@@ -1,12 +1,10 @@
 use crate::infrastructure::platform::linux::install::packages::InstallPlan;
 use crate::infrastructure::platform::linux::install::packages::ensure_installed;
-use crate::infrastructure::platform::linux::install::packages::ensure_samba_vfs_modules_debian_ubuntu;
 use crate::infrastructure::platform::linux::install::ui;
 
 pub fn install_all_deps() {
     ui::print_section("Installing dependencies");
     install_ffmpeg();
-    install_samba();
     install_avahi();
 }
 
@@ -28,21 +26,6 @@ pub fn install_avahi() {
             "systemctl enable --now avahi-daemon",
         );
     }
-}
-
-pub fn install_samba() {
-    ensure_installed(&InstallPlan {
-        name: "LAN sharing (Samba)".into(),
-        present_any: vec![],
-        present_all: vec!["smbd".into(), "smbpasswd".into()],
-        apt_pkg: "samba".into(),
-        dnf_pkg: "samba".into(),
-        yum_pkg: "samba".into(),
-        pacman_pkg: "samba".into(),
-        apk_pkg: "samba".into(),
-        no_supported_msg: "Couldn't detect a supported package manager to install Samba.".into(),
-    });
-    ensure_samba_vfs_modules_debian_ubuntu();
 }
 
 pub fn install_ffmpeg() {

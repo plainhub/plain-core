@@ -2,6 +2,8 @@ use crate::host::Host;
 use crate::login_socket as login;
 use crate::storage;
 use anyhow::{Result, anyhow};
+use plain_rs::features::access::AccessFeature;
+use plain_rs::features::prefs::pref_keys::API_PERMISSIONS;
 use plain_rs::infrastructure::platform::system::consts::AppPaths;
 use plain_server::server::{ContentServer, PairingApproval};
 use std::{path::PathBuf, sync::Arc};
@@ -42,13 +44,13 @@ impl Service {
         }
         let prefs = core.shared_preferences().map_err(anyhow::Error::msg)?;
         plain_rs::features::prefs::security::configure_password_login(&prefs)?;
-        let permissions = plain_rs::features::prefs::pref_keys::API_PERMISSIONS;
-        if prefs.get::<Vec<String>>(permissions)?.is_none() {
-            prefs.set(
-                permissions,
-                plain_rs::features::access::AccessFeature::FILE_FEATURES,
-            )?;
+        let mut permissions = prefs
+            .get::<Vec<AccessFeature>>(API_PERMISSIONS)?
+            .unwrap_or_else(|| AccessFeature::FILE_FEATURES.to_vec());
+        if !permissions.contains(&AccessFeature::Files) {
+            permissions.push(AccessFeature::Files);
         }
+        prefs.set(API_PERMISSIONS, permissions)?;
         storage::configure_index(&core.runtime().db, &options.media_directories)?;
         let log_file =
             plain_rs::infrastructure::platform::system::log::default_log_file(&paths.data_dir);
@@ -177,11 +179,6 @@ fn capabilities() -> Vec<String> {
     #[cfg(target_os = "linux")]
     {
         capabilities.push("APP_RELAUNCH".into());
-        if !plain_rs::infrastructure::platform::linux::samba::detect_systemd_service_name()
-            .is_empty()
-        {
-            capabilities.push("SMB_SERVER".into());
-        }
         if has_command("lsblk") {
             capabilities.push("DISK_MANAGER".into());
         }

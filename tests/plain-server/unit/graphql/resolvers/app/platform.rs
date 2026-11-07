@@ -1,64 +1,6 @@
 use super::*;
 
 #[tokio::test]
-async fn public_samba_settings_and_mutation_use_core_preferences_and_explicit_host_methods() {
-    let directory = tempfile::tempdir().unwrap();
-    let core = crate::server::ContentServer::open(directory.path()).unwrap();
-    let state = core.runtime_state();
-    let host = state.host.clone();
-    let (generation, mut requests) = host.connect();
-    let provider = tokio::spawn(async move {
-        for method in [
-            "systemCapabilities",
-            SYSTEM_SAMBA_SERVICE_FACTS,
-            "systemCapabilities",
-            SYSTEM_SAMBA_SERVICE_FACTS,
-            SYSTEM_SAMBA_APPLY,
-        ] {
-            let request = requests.recv().await.unwrap();
-            assert_eq!(request["method"], method);
-            let result = if method == "systemCapabilities" {
-                serde_json::json!(["SMB_SERVER"])
-            } else if method == SYSTEM_SAMBA_APPLY {
-                assert_eq!(request["params"]["settings"]["enabled"], true);
-                assert_eq!(request["params"]["settings"]["shares"][0]["auth"], "Guest");
-                serde_json::Value::Bool(true)
-            } else {
-                serde_json::json!({"name":"smbd","active":true,"enabled":true})
-            };
-            host.reply(
-                generation,
-                serde_json::json!({"id":request["id"],"result":result}),
-            )
-            .unwrap();
-        }
-    });
-    let query = core
-        .native_graphql()
-        .unwrap()
-        .execute(plain_graphql::Request::new(
-            "{ sambaSettings { enabled serviceName serviceActive } }",
-        ))
-        .await;
-    assert!(query.errors.is_empty(), "{:?}", query.errors);
-    assert_eq!(
-        query.data.into_json().unwrap()["sambaSettings"]["serviceActive"],
-        true
-    );
-    let result = core.native_graphql().unwrap().execute(plain_graphql::Request::new(
-        r#"mutation { setSambaSettings(input:{enabled:true,shares:[{name:"media",sharePath:"/mnt/media",auth:GUEST,readOnly:true}]}) }"#
-    )).await;
-    assert!(result.errors.is_empty(), "{:?}", result.errors);
-    assert!(
-        plain_rs::features::prefs::samba::get_samba_settings(&state.prefs)
-            .unwrap()
-            .enabled
-    );
-    provider.await.unwrap();
-    core.stop_core().await;
-}
-
-#[tokio::test]
 async fn public_audit_events_read_the_core_database_without_host_or_legacy_store() {
     let directory = tempfile::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
@@ -187,23 +129,11 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
             "DISK_MANAGER",
         ),
         ("{ appUpdate { currentVersion } }", "APP_UPDATES"),
-        ("{ sambaSettings { enabled } }", "SMB_SERVER"),
-        (
-            "mutation { setSambaSettings(input:{enabled:true,shares:[]}) }",
-            "SMB_SERVER",
-        ),
-        (
-            r#"mutation { setSambaUserPassword(password:"example") }"#,
-            "SMB_SERVER",
-        ),
     ] {
         let directory = tempfile::tempdir().unwrap();
         let core = crate::server::ContentServer::open(directory.path()).unwrap();
         let state = core.runtime_state();
-        let before = serde_json::to_value(
-            plain_rs::features::prefs::samba::get_samba_settings(&state.prefs).unwrap(),
-        )
-        .unwrap();
+        let before = state.prefs.entries();
         let (generation, mut requests) = state.host.connect();
         let host = state.host.clone();
         let provider = tokio::spawn(async move {
@@ -224,13 +154,7 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
         );
         let mut requests = provider.await.unwrap();
         assert!(requests.try_recv().is_err());
-        assert_eq!(
-            serde_json::to_value(
-                plain_rs::features::prefs::samba::get_samba_settings(&state.prefs).unwrap()
-            )
-            .unwrap(),
-            before
-        );
+        assert_eq!(state.prefs.entries(), before);
         assert!(state.db.audit_events(0, 10, None).unwrap().is_empty());
         core.stop_core().await;
     }

@@ -39,7 +39,7 @@ async fn enabling_without_http_defers_platform_work_and_retry() {
 }
 
 #[tokio::test]
-async fn receiver_without_samba_still_requires_multicast_permission() {
+async fn receiver_requires_multicast_permission() {
     let directory = tempfile::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();

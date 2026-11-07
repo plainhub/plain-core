@@ -45,7 +45,7 @@ async fn snapshot(core: &ContentServer) -> serde_json::Value {
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
-async fn enabling_receiver_without_samba_uses_the_public_listeners_actual_bound_port() {
+async fn enabling_receiver_uses_the_public_listeners_actual_bound_port() {
     let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
     let directory = tempfile::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();

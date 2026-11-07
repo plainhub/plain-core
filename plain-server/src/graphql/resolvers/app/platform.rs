@@ -1,18 +1,9 @@
 use crate::graphql::resolvers::app::capability_types::Disk;
-use crate::graphql::resolvers::app::capability_types::{
-    SambaSettings, SambaSettingsInput, SambaShare, SambaShareAuth,
-};
 use crate::server::ServerState;
 use plain_graphql::{Context, Object, Result};
 
 use plain_rs::features::services::settings::types::AppUpdate;
 use plain_rs::infrastructure::host::bridge::Host;
-use plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_APPLY;
-use plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_PASSWORD;
-use plain_rs::infrastructure::host::commands::SYSTEM_SAMBA_SERVICE_FACTS;
-use plain_rs::infrastructure::host::commands::SambaApplyRequest;
-use plain_rs::infrastructure::host::commands::SambaPasswordRequest;
-use plain_rs::infrastructure::host::commands::SambaServiceFacts;
 use plain_rs::infrastructure::types::Long;
 use std::sync::Arc;
 
@@ -60,13 +51,6 @@ impl PlatformQuery {
             .collect()
     }
 
-    async fn samba_settings(&self, ctx: &Context<'_>) -> Result<SambaSettings> {
-        let state = ctx.data::<ServerState>()?;
-        let settings = plain_rs::features::prefs::samba::get_samba_settings(&state.prefs)?;
-        let service = samba_service(ctx).await?;
-        Ok(samba_facts(settings, service))
-    }
-
     async fn disks(&self, ctx: &Context<'_>) -> Result<Vec<Disk>> {
         require_capability(ctx, "DISK_MANAGER").await?;
         let disks = tokio::task::spawn_blocking(plain_rs::infrastructure::platform::disks::list)
@@ -98,74 +82,6 @@ async fn require_capability(ctx: &Context<'_>, name: &str) -> Result<()> {
     plain_rs::features::services::capabilities::require(ctx.data::<Arc<Host>>()?, name)
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))
-}
-
-async fn samba_service(ctx: &Context<'_>) -> Result<SambaServiceFacts> {
-    require_capability(ctx, "SMB_SERVER").await?;
-    let value = ctx
-        .data::<Arc<Host>>()?
-        .call(SYSTEM_SAMBA_SERVICE_FACTS, serde_json::json!({}))
-        .await
-        .map_err(plain_graphql::Error::new)?;
-    Ok(serde_json::from_value(value)?)
-}
-
-fn samba_facts(
-    settings: plain_rs::features::prefs::samba::SambaSettings,
-    service: SambaServiceFacts,
-) -> SambaSettings {
-    let (service_name, service_active, service_enabled) = if service.name.is_empty() {
-        (
-            settings.service_name,
-            settings.service_active,
-            settings.service_enabled,
-        )
-    } else {
-        (service.name, service.active, service.enabled)
-    };
-    SambaSettings {
-        enabled: settings.enabled,
-        username: settings.username,
-        has_password: settings.has_password,
-        shares: settings
-            .shares
-            .into_iter()
-            .map(|share| SambaShare {
-                name: share.name,
-                share_path: share.share_path,
-                read_only: share.read_only,
-                auth: match share.auth {
-                    plain_rs::features::prefs::samba::SambaShareAuth::Guest => {
-                        SambaShareAuth::GUEST
-                    }
-                    plain_rs::features::prefs::samba::SambaShareAuth::Password => {
-                        SambaShareAuth::PASSWORD
-                    }
-                },
-            })
-            .collect(),
-        service_name,
-        service_active,
-        service_enabled,
-    }
-}
-
-async fn samba_apply(
-    ctx: &Context<'_>,
-    settings: plain_rs::features::prefs::samba::SambaSettings,
-) -> Result<()> {
-    let value = ctx
-        .data::<Arc<Host>>()?
-        .call(
-            SYSTEM_SAMBA_APPLY,
-            serde_json::to_value(SambaApplyRequest { settings })?,
-        )
-        .await
-        .map_err(plain_graphql::Error::new)?;
-    if value != serde_json::Value::Bool(true) {
-        return Err("Samba apply failed".into());
-    }
-    Ok(())
 }
 
 #[derive(Default)]
@@ -231,63 +147,6 @@ impl PlatformMutation {
     ) -> Result<bool> {
         let state = ctx.data::<ServerState>()?;
         plain_rs::features::prefs::storage::set_alias(&state.prefs, id.as_str(), &alias)?;
-        Ok(true)
-    }
-
-    async fn set_samba_settings(
-        &self,
-        ctx: &Context<'_>,
-        input: SambaSettingsInput,
-    ) -> Result<bool> {
-        let state = ctx.data::<ServerState>()?;
-        samba_service(ctx).await?;
-        let shares = input
-            .shares
-            .into_iter()
-            .map(|share| plain_rs::features::prefs::samba::SambaShare {
-                name: share.name,
-                share_path: share.share_path,
-                read_only: share.read_only,
-                auth: match share.auth {
-                    SambaShareAuth::GUEST => {
-                        plain_rs::features::prefs::samba::SambaShareAuth::Guest
-                    }
-                    SambaShareAuth::PASSWORD => {
-                        plain_rs::features::prefs::samba::SambaShareAuth::Password
-                    }
-                },
-            })
-            .collect();
-        let settings =
-            plain_rs::features::prefs::samba::configure(&state.prefs, input.enabled, shares)
-                .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-        samba_apply(ctx, settings).await?;
-        Ok(true)
-    }
-
-    async fn set_samba_user_password(&self, ctx: &Context<'_>, password: String) -> Result<bool> {
-        require_capability(ctx, "SMB_SERVER").await?;
-        if password.trim().is_empty() {
-            return Err("password required".into());
-        }
-        let state = ctx.data::<ServerState>()?;
-        let mut settings = plain_rs::features::prefs::samba::get_samba_settings(&state.prefs)?;
-        let value = ctx
-            .data::<Arc<Host>>()?
-            .call(
-                SYSTEM_SAMBA_PASSWORD,
-                serde_json::to_value(SambaPasswordRequest { password })?,
-            )
-            .await
-            .map_err(plain_graphql::Error::new)?;
-        if value != serde_json::Value::Bool(true) {
-            return Err("Samba password update failed".into());
-        }
-        settings.has_password = true;
-        plain_rs::features::prefs::samba::set_samba_settings(&state.prefs, &settings)?;
-        if settings.enabled {
-            samba_apply(ctx, settings).await?;
-        }
         Ok(true)
     }
 }
