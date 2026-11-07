@@ -66,7 +66,7 @@ fn concurrent_setup_only_commits_one_password() {
 }
 
 #[test]
-fn fixed_credentials_are_not_replaced_and_mobile_defaults_still_use_owner_approval() {
+fn password_login_disables_approval_without_replacing_credentials_or_other_host_defaults() {
     let directory = tempfile::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     bootstrap(&prefs).unwrap();
@@ -76,9 +76,16 @@ fn fixed_credentials_are_not_replaced_and_mobile_defaults_still_use_owner_approv
     assert!(prefs.get_or(LOGIN_REQUIRE_APPROVAL, true));
     set_password_login(&prefs, "configured-password").unwrap();
     prefs.set(LOGIN_REQUIRE_APPROVAL, true).unwrap();
-    let before = prefs.entries();
+    let mut expected = prefs.entries();
+    expected
+        .iter_mut()
+        .find(|(key, _)| key == LOGIN_REQUIRE_APPROVAL)
+        .unwrap()
+        .1 = json!(false);
     configure_password_login(&prefs).unwrap();
-    assert_eq!(prefs.entries(), before);
+    assert_eq!(prefs.entries(), expected);
+    bootstrap(&prefs).unwrap();
+    assert!(!prefs.get_or(LOGIN_REQUIRE_APPROVAL, true));
 }
 
 #[test]

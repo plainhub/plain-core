@@ -41,14 +41,14 @@ fn write_password_login(map: &mut Map<String, Value>, password: &str) -> Result<
 }
 
 pub fn configure_password_login(prefs: &Prefs) -> Result<()> {
-    if password_type(prefs)? == PasswordType::None {
-        prefs.update(|map| {
+    let needs_setup = password_type(prefs)? == PasswordType::None;
+    prefs.update(|map| {
+        if needs_setup {
             map.remove(PASSWORD);
             put(map, PASSWORD_TYPE, PasswordType::Fixed)?;
-            put(map, LOGIN_REQUIRE_APPROVAL, false)
-        })?;
-    }
-    Ok(())
+        }
+        put(map, LOGIN_REQUIRE_APPROVAL, false)
+    })
 }
 
 pub fn password_setup_required(prefs: &Prefs) -> Result<bool> {
