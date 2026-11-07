@@ -154,7 +154,9 @@ it does not maintain a second set of handlers.
 
 ## Build
 
-Requires Rust 1.99+, Python 3.10+ and a C compiler.
+Requires Rust 1.99+ and a C compiler. Building ONNX Runtime from source requires Python 3.10+.
+
+To build with an already prepared ONNX Runtime, set `PLAIN_ONNX_RUNTIME_DIR` to its artifact directory and `PLAIN_ONNX_RUNTIME_SHA256` to the library digest from a trusted build record. Cargo uses CMake 3.19+ to validate the artifact, target, source recipe and notices without running Python.
 
 ```sh
 cargo check --workspace --locked    # Check all packages for compile errors
