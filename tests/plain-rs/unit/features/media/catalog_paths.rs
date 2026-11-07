@@ -1,5 +1,35 @@
 use super::*;
 
+#[cfg(target_os = "macos")]
+#[test]
+fn automatic_scan_requires_explicit_access_for_protected_macos_locations() {
+    for path in [
+        "/Users/example/Music",
+        "/Users/example/music/Track.mp3",
+        "/Users/example/Documents/report.pdf",
+        "/Users/example/Desktop",
+        "/Users/example/Downloads",
+        "/Users/example/Library/Mobile Documents/com~apple~CloudDocs",
+        "/Volumes/Media/Archive.MUSICLIBRARY/database",
+        "/Users/example/Pictures/Photos.photoslibrary/originals",
+        "/Users/example/Pictures/Photo Booth Library/Pictures",
+        "/Users/example/Movies/iMovie Library.imovielibrary",
+    ] {
+        assert!(requires_foreground_scan(Path::new(path)), "{path}");
+    }
+    for path in [
+        "/",
+        "/Users/example",
+        "/Users/example/Music projects",
+        "/Users/example/Pictures/photo.png",
+        "/Users/example/Pictures/Photo Booth Library notes/photo.png",
+        "/Users/example/work/Documents/report.pdf",
+        "/Volumes/Media/Music/Track.mp3",
+    ] {
+        assert!(!requires_foreground_scan(Path::new(path)), "{path}");
+    }
+}
+
 #[test]
 fn media_exclusions() {
     let data = Path::new("/opt/plainapp/data");

@@ -1,5 +1,23 @@
 use crate::features::files::resource_link::{self, ResourceType, Scope};
+use crate::features::media::catalog_paths::requires_foreground_scan;
 use crate::runtime::Runtime as CoreRuntime;
+use std::path::Path;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ReadKind {
+    Original,
+    Thumbnail,
+}
+
+impl ReadKind {
+    fn check(self, path: &Path) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self != Self::Thumbnail || !requires_foreground_scan(path),
+            "Thumbnail requires explicit file access"
+        );
+        Ok(())
+    }
+}
 
 pub struct File {
     pub path: String,
@@ -38,7 +56,7 @@ pub fn decrypt(state: &CoreRuntime, id: &str, purpose: &str) -> anyhow::Result<V
     resource_link::decrypt(&scope, purpose, &key(state, &scope)?, payload)
 }
 
-pub async fn resolve(state: &CoreRuntime, id: &str) -> anyhow::Result<File> {
+pub async fn resolve(state: &CoreRuntime, id: &str, kind: ReadKind) -> anyhow::Result<File> {
     let owner = state.clone();
     let id = id.to_owned();
     let (scope, resource) = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
@@ -120,7 +138,9 @@ pub async fn resolve(state: &CoreRuntime, id: &str) -> anyhow::Result<File> {
             }
         }
         if authorize {
-            authorize_path(&state, &file.path)?;
+            authorize_path_for_read(&state, &file.path, kind)?;
+        } else {
+            kind.check(Path::new(&file.path))?;
         }
         Ok(file)
     })
@@ -128,13 +148,24 @@ pub async fn resolve(state: &CoreRuntime, id: &str) -> anyhow::Result<File> {
 }
 
 pub fn authorize_path(state: &CoreRuntime, reference: &str) -> anyhow::Result<()> {
+    authorize_path_for_read(state, reference, ReadKind::Original)
+}
+
+fn authorize_path_for_read(
+    state: &CoreRuntime,
+    reference: &str,
+    kind: ReadKind,
+) -> anyhow::Result<()> {
     if reference.starts_with("content://") || reference.starts_with("ph://") {
         return Ok(());
     }
     let path = reference
         .split_once("!zip!/")
         .map_or(reference, |(archive, _)| archive);
-    let candidate = super::platform::paths::canonical(std::path::Path::new(path))?;
+    let path = Path::new(path);
+    kind.check(path)?;
+    let candidate = super::platform::paths::canonical(path)?;
+    kind.check(&candidate)?;
     let [directory, cache] = state
         .file_platform
         .private_roots

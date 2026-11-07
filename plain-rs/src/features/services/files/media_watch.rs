@@ -1,3 +1,4 @@
+use crate::features::media::catalog_paths::requires_foreground_scan;
 use std::path::Path;
 
 use notify::event::{EventKind, ModifyKind};
@@ -87,13 +88,14 @@ fn enqueue_event(
             return Ok(());
         };
         event = completed;
-        if !event.paths.is_empty()
-            && event.paths.iter().all(|path| {
+        if !event.paths.is_empty() {
+            event.paths.retain(|path| !requires_foreground_scan(path));
+            if event.paths.iter().all(|path| {
                 crate::features::media::catalog_paths::scan_excluded_root(path).is_some()
                     || scope.is_some_and(|scope| !scope.contains(path))
-            })
-        {
-            return Ok(());
+            }) {
+                return Ok(());
+            }
         }
     }
     send.try_send(event)
@@ -153,13 +155,17 @@ where
         })
         .map_err(|error| error.to_string())?;
     let mut watched = std::collections::BTreeSet::new();
-    for root in roots {
+    let roots = roots
+        .iter()
+        .filter(|path| !requires_foreground_scan(path))
+        .cloned()
+        .collect::<Vec<_>>();
+    for root in &roots {
         if let Err(error) = watch_tree(&mut watcher, &mut watched, root, scope.as_ref()) {
             log::warn!("File watch source: {error}");
             dirty.store(true, Ordering::Release);
         }
     }
-    let roots = roots.to_vec();
     let task = runtime.spawn(async move {
         let mut root_keys: Vec<_> = roots.iter().map(|root| root_key(root)).collect();
         for error in root_keys.iter().filter_map(|key| key.as_ref().err()) { log::warn!("File watch source: {error}"); }

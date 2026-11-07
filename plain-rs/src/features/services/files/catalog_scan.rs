@@ -39,7 +39,11 @@ pub async fn host_connected(state: CoreRuntime, generation: u64) -> Result<(), S
         let catalog = NativeMediaCatalog::new(state);
         catalog.configure_policy((*catalog.state.media_scans.policy()?).clone())?;
         if !catalog.source_directories()?.is_empty() {
-            catalog.start_source_scan("/")?;
+            catalog.start_scan(
+                catalog.source_references("/")?,
+                catalog.state.media_scans.policy()?,
+                true,
+            )?;
         }
         catalog.watch_source_directories()?;
         Ok(())
@@ -480,6 +484,7 @@ impl NativeMediaCatalog {
         self.start_scan(
             self.source_references(root)?,
             self.state.media_scans.policy()?,
+            false,
         )
     }
 
@@ -499,7 +504,7 @@ impl NativeMediaCatalog {
         }
         let references = scope.directories.clone();
         policy.scope = Some(scope);
-        self.start_scan(references, std::sync::Arc::new(policy))
+        self.start_scan(references, std::sync::Arc::new(policy), false)
             .map(Some)
     }
 
@@ -508,6 +513,7 @@ impl NativeMediaCatalog {
         &self,
         references: Vec<String>,
         policy: std::sync::Arc<crate::features::services::files::media_scan_policy::Policy>,
+        background: bool,
     ) -> Result<crate::features::services::files::media_scans::Snapshot, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|error| error.to_string())?;
         let session = self.state.media_scans.begin_discovery(Purpose::Rebuild)?;
@@ -517,7 +523,7 @@ impl NativeMediaCatalog {
             .spawn(&runtime, session, move |session| {
                 Box::pin(async move {
                     if let Err(error) = catalog
-                        .scan_directory_session(references, policy, session)
+                        .scan_directory_session(references, policy, session, background)
                         .await
                     {
                         log::error!("Media scan task failed: {error}");
@@ -536,7 +542,7 @@ impl NativeMediaCatalog {
         let policy = self.state.media_scans.policy()?;
         let session = self.state.media_scans.begin_discovery(purpose)?;
         let snapshot = self
-            .scan_directory_session(references, policy, session)
+            .scan_directory_session(references, policy, session, purpose == Purpose::Reconcile)
             .await?;
         if purpose == Purpose::Reconcile
             && let Some(error) = &snapshot.error
@@ -552,12 +558,16 @@ impl NativeMediaCatalog {
         references: Vec<String>,
         policy: std::sync::Arc<crate::features::services::files::media_scan_policy::Policy>,
         session: crate::features::services::files::media_scans::Session,
+        background: bool,
     ) -> Result<crate::features::services::files::media_scans::Snapshot, String> {
         let mut cancel = session.cancel.clone();
         let mut stop = self.state.stop.clone();
         let worker_cancel = cancel.clone();
         let worker_stop = stop.clone();
-        use crate::features::services::files::media_scans::CoverageState;
+        use crate::features::{
+            media::catalog_paths::requires_foreground_scan,
+            services::files::media_scans::CoverageState,
+        };
         session.sources(&references)?;
         let result = async {
             self.state
@@ -585,6 +595,11 @@ impl NativeMediaCatalog {
             let mut discovery_failed = false;
             for reference in references {
                 session.wait_running().await?;
+                if background && requires_foreground_scan(std::path::Path::new(&reference)) {
+                    skipped_scan_roots.push(std::path::PathBuf::from(&reference));
+                    session.source_state(&reference, CoverageState::Excluded, None)?;
+                    continue;
+                }
                 if policy
                     .scope
                     .as_ref()
@@ -622,6 +637,11 @@ impl NativeMediaCatalog {
                     }
                 };
                 let canonical_root = match tokio::fs::canonicalize(&root).await {
+                    Ok(path) if background && requires_foreground_scan(&path) => {
+                        skipped_scan_roots.push(path);
+                        session.source_state(&reference, CoverageState::Excluded, None)?;
+                        continue;
+                    }
                     Ok(path) if path.is_dir() => path,
                     Ok(_) => {
                         let error = "Real scan directory required".to_string();
@@ -692,6 +712,7 @@ impl NativeMediaCatalog {
                     root.clone(),
                     directory.clone(),
                     policy.clone(),
+                    background,
                     worker_cancel.clone(),
                     worker_stop.clone(),
                 );
@@ -728,6 +749,7 @@ impl NativeMediaCatalog {
                     canonical_root.clone(),
                     directory.clone(),
                     policy.clone(),
+                    background,
                     worker_cancel.clone(),
                     worker_stop.clone(),
                 );

@@ -31,6 +31,48 @@ const EXCLUDED_DIR_NAMES: &[&str] = &["node_modules"];
 
 const PROFILE_CACHE_NAMES: &[&str] = &["cache", "caches", "gpucache", "code cache", "cachestorage"];
 
+#[cfg(target_os = "macos")]
+pub fn requires_foreground_scan(path: &Path) -> bool {
+    let mut components = path.components();
+    if components
+        .next()
+        .is_some_and(|part| part.as_os_str() == "/")
+        && components
+            .next()
+            .is_some_and(|part| part.as_os_str().eq_ignore_ascii_case("Users"))
+        && components.next().is_some()
+        && let Some(directory) = components.next()
+    {
+        let directory = directory.as_os_str();
+        if ["Desktop", "Documents", "Downloads", "Music"]
+            .iter()
+            .any(|name| directory.eq_ignore_ascii_case(name))
+            || (directory.eq_ignore_ascii_case("Library")
+                && components
+                    .next()
+                    .is_some_and(|part| part.as_os_str().eq_ignore_ascii_case("Mobile Documents")))
+            || (directory.eq_ignore_ascii_case("Pictures")
+                && components.next().is_some_and(|part| {
+                    part.as_os_str().eq_ignore_ascii_case("Photo Booth Library")
+                }))
+        {
+            return true;
+        }
+    }
+    path.ancestors()
+        .filter_map(Path::extension)
+        .any(|extension| {
+            ["musiclibrary", "photoslibrary", "imovielibrary"]
+                .iter()
+                .any(|name| extension.eq_ignore_ascii_case(name))
+        })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn requires_foreground_scan(_path: &Path) -> bool {
+    false
+}
+
 pub fn scan_excluded_root(path: &Path) -> Option<&Path> {
     path.ancestors()
         .find(|ancestor| {

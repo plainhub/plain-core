@@ -994,6 +994,46 @@ async fn scanning_skips_unreadable_directories_and_preserves_their_existing_rows
     core.stop_core().await;
 }
 
+#[cfg(all(target_os = "macos", feature = "runtime-media"))]
+#[tokio::test]
+async fn automatic_scan_leaves_library_packages_untouched_until_an_explicit_scan() {
+    let directory = directory_scan_fixture();
+    let source = directory.path().join("source");
+    let photos = source.join("Archive.photoslibrary");
+    let music = source.join("Archive.musiclibrary");
+    std::fs::create_dir_all(&photos).unwrap();
+    std::fs::create_dir(&music).unwrap();
+    let old = photos.join("existing.rs");
+    let new = music.join("new.rs");
+    let public = source.join("readable.rs");
+    std::fs::write(&old, b"previously indexed").unwrap();
+    std::fs::write(&new, b"requires explicit scan").unwrap();
+    std::fs::write(&public, b"ordinary file").unwrap();
+    let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+    let state = core.runtime_state();
+    let id = state
+        .db
+        .record_file_paths(&[old.to_str().unwrap().into()], None)
+        .unwrap()[0]
+        .id
+        .clone();
+    std::fs::remove_file(&old).unwrap();
+    let catalog = NativeMediaCatalog::new(state.clone());
+    let reference = source.to_str().unwrap();
+    catalog
+        .scan_directories(vec![reference.into()], Purpose::Reconcile)
+        .await
+        .unwrap();
+    assert!(!state.db.file(&id).unwrap().unwrap().missing);
+    assert!(catalog.path_identities(&new).unwrap().is_empty());
+    assert_eq!(catalog.path_identities(&public).unwrap().len(), 1);
+
+    catalog.scan_directory(reference).await.unwrap();
+    assert_eq!(catalog.path_identities(&new).unwrap().len(), 1);
+    assert!(catalog.path_identities(&old).unwrap().is_empty());
+    core.stop_core().await;
+}
+
 #[cfg(all(feature = "runtime-media", feature = "media"))]
 #[tokio::test]
 async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {

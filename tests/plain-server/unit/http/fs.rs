@@ -439,6 +439,23 @@ async fn fs_typed_image_reference_returns_decodable_thumbnail() {
     assert_eq!(body, body_bytes(full_size).await);
 }
 
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn fs_protected_thumbnail_is_rejected_before_probing_the_source() {
+    let (_root, _core, state, key) = test_state();
+    let id = file_id(&key, "/Users/example/Documents/thumbnail-fixture.jpg");
+
+    let response = call_fs(&state, &format!("id={id}&action=preview&size=sm"), &[]).await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(
+        String::from_utf8_lossy(&body_bytes(response).await)
+            .contains("Thumbnail requires explicit file access")
+    );
+
+    let original = call_fs(&state, &format!("id={id}&action=preview"), &[]).await;
+    assert_eq!(original.status(), StatusCode::NOT_FOUND);
+}
+
 #[tokio::test]
 async fn fs_rejects_missing_and_invalid_links_before_reading_files() {
     let (_root, _core, state, _key) = test_state();
