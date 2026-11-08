@@ -88,8 +88,8 @@ plain-server/
 │   │   ├── file_response.rs  Shared file streaming, Range and response headers
 │   │   ├── zip.rs            /zip/dir and /zip/files
 │   │   ├── upload.rs         /upload and /upload_chunk
-│   │   ├── proxy.rs          /proxyfs and proxy transport
-│   │   ├── proxy/local/      Local proxy support
+│   │   ├── managed_proxy.rs  /proxy/{peerId}/*: GraphQL, files, uploads and sockets to known devices
+│   │   ├── managed_proxy/    Raw relay, attachment, upload and socket proxy transports
 │   │   ├── graphql.rs        Main, peer and guest GraphQL HTTP adapters
 │   │   ├── init.rs           /init
 │   │   ├── nearby.rs         /nearby
