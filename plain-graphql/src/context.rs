@@ -9,7 +9,6 @@ use crate::{
     schema::{IntrospectionMode, SchemaEnv},
 };
 use indexmap::IndexMap;
-use rustc_hash::FxHashMap;
 use serde::{
     Serialize,
     ser::{SerializeSeq, Serializer},
@@ -23,9 +22,9 @@ use std::{
 };
 
 #[derive(Default)]
-pub struct Data(FxHashMap<TypeId, Box<dyn Any + Sync + Send>>);
+pub struct Data(HashMap<TypeId, Box<dyn Any + Sync + Send>>);
 impl Deref for Data {
-    type Target = FxHashMap<TypeId, Box<dyn Any + Sync + Send>>;
+    type Target = HashMap<TypeId, Box<dyn Any + Sync + Send>>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
