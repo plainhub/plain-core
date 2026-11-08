@@ -54,7 +54,7 @@ fn delete_selection_matches_the_requested_trash_state() {
 
 #[test]
 fn move_names_consider_existing_files_and_every_other_item_in_the_batch() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let destination = root.join("target");
     for name in ["a", "b", "target"] {
@@ -94,7 +94,7 @@ fn move_names_consider_existing_files_and_every_other_item_in_the_batch() {
 
 #[test]
 fn cross_volume_moves_are_rejected_before_any_sdk_write() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let source_root = root.join("volume");
     let destination = root.join("other");
@@ -156,7 +156,7 @@ fn delete_receipt_requires_a_changed_count_and_an_absent_provider_row() {
 #[tokio::test]
 async fn provider_delete_uses_two_batch_exchanges_and_no_business_action_on_host() {
     use std::sync::Arc;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let host = Arc::new(Host::default());
     let db =
         Arc::new(crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap());

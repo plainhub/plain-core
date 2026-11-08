@@ -5,7 +5,7 @@ use std::path::Path;
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let catalog = core.native_media_catalog().unwrap();
     let paths = [
@@ -88,7 +88,7 @@ async fn existing_media_delete_filters_trash_and_preserves_unselected_files() {
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn image_delete_updates_index_before_any_parent_consumes_the_receipt() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("photo.jpg");
     std::fs::write(&path, b"image").unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
@@ -171,7 +171,7 @@ fn seed_kind(db: &Db, path: &Path, kind: DataType) -> String {
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn native_main_delete_has_no_host_exchange_and_publishes_each_event_once() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state().core;
     let source = directory.path().join("note.txt");
@@ -202,7 +202,7 @@ async fn partial_main_media_actions_invalidate_only_completed_duration_entries()
         (DataType::Audio, "AUDIO", "audio"),
         (DataType::Video, "VIDEO", "video"),
     ] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
         let state = core.runtime_state().core;
         let (_generation, mut requests) = state.host.connect();

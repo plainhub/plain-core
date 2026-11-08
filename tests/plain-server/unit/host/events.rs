@@ -2,7 +2,7 @@ use super::*;
 use crate::server::ContentServer;
 use std::{sync::Arc, time::Duration};
 
-fn server(dir: &tempfile::TempDir) -> ContentServer {
+fn server(dir: &plain_libs::temporary::TempDir) -> ContentServer {
     ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[9; 32]),
@@ -16,7 +16,7 @@ async fn native_events_enforce_direction_and_reconcile_lag() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(&dir);
     let bridge = server.host_events().unwrap();
     let mut public = server.runtime_state().events.subscribe();
@@ -104,7 +104,7 @@ async fn native_requests_reply_and_replacement_cancel_pending_calls() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(&dir);
     let bridge = server.host_events().unwrap();
     let host = server.runtime_state().host.clone();
@@ -166,7 +166,7 @@ async fn replacing_a_host_wakes_a_disconnection_waiter() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(&dir);
     let original = server.host_events().unwrap();
     let mut waiting = Box::pin(original.wait_disconnected());
@@ -193,7 +193,7 @@ async fn replaced_hosts_discard_requests_and_events_already_in_the_queue() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(&dir);
     let original = server.host_events().unwrap();
     server
@@ -218,7 +218,7 @@ async fn raw_ble_advertisements_are_consumed_without_public_rebroadcast() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(&dir);
     let bridge = server.host_events().unwrap();
     let state = server.runtime_state();
@@ -282,7 +282,7 @@ async fn client_request_errors_cannot_overwrite_shared_image_model_state() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = server(&directory);
     let bridge = server.host_events().unwrap();
     let state = server.runtime_state();
@@ -308,7 +308,7 @@ async fn scan_facts_are_validated_and_scoped_to_the_connected_host() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(&dir);
     let old = server.host_events().unwrap();
     let id = uuid::Uuid::from_u128(1).to_string();
@@ -362,7 +362,7 @@ async fn preference_updates_send_only_changed_values_and_skip_unchanged_values()
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let bridge = Arc::new(core.host_events().unwrap());
@@ -407,7 +407,7 @@ async fn failed_preference_delivery_returns_once_and_does_not_replay_the_change(
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let bridge = Arc::new(core.host_events().unwrap());
@@ -451,7 +451,7 @@ async fn preference_read_failure_does_not_replace_the_running_host() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let bridge = core.host_events().unwrap();

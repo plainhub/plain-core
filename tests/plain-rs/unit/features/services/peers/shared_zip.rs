@@ -2,7 +2,7 @@ use super::*;
 use std::io::Read;
 #[test]
 fn zip_roundtrip_validates_names_sources_and_cancellation_and_cleans_temporary() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source");
     std::fs::write(&source, "synthetic 中文").unwrap();
     let item = || Item {
@@ -63,7 +63,7 @@ fn zip_roundtrip_validates_names_sources_and_cancellation_and_cleans_temporary()
 }
 #[test]
 fn archive_preserves_large_files_and_nested_names_without_native_or_http_adapter() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source");
     let expected = vec![7; 256 * 1024];
     std::fs::write(&source, &expected).unwrap();
@@ -91,7 +91,7 @@ fn archive_preserves_large_files_and_nested_names_without_native_or_http_adapter
 }
 #[test]
 fn dropping_zip_owners_cancels_work_and_releases_its_spool() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source");
     std::fs::write(&source, vec![8; 128 * 1024]).unwrap();
     let canceled = Arc::new(AtomicBool::new(false));

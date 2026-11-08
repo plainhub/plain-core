@@ -158,7 +158,7 @@ fn catalog_file(path: &str) -> crate::infrastructure::db::MediaFileMetadata {
 
 #[test]
 fn confirmed_actions_preserve_catalog_identity_and_restore_the_original_path() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let path = |relative: &str| root.join(relative).to_str().unwrap().to_owned();
     let db = test_db("catalog_action_state");
@@ -219,7 +219,7 @@ fn confirmed_actions_preserve_catalog_identity_and_restore_the_original_path() {
 
 #[test]
 fn stale_receipts_and_catalog_sql_failures_do_not_commit_partial_updates() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let path = |relative: &str| root.join(relative).to_str().unwrap().to_owned();
     let db = test_db("catalog_action_atomic");

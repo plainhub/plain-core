@@ -52,7 +52,7 @@ fn non_unicode_paths_are_rejected() {
 #[cfg(not(target_os = "linux"))]
 #[test]
 fn native_volume_resolution_preserves_missing_descendants_and_symlinks() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let missing = directory.path().join("missing").join("file");
     let root = resolve_mount_point(directory.path()).unwrap();
     assert_eq!(resolve_mount_point(&missing).unwrap(), root);

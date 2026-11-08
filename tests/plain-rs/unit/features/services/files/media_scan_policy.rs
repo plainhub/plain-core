@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn loads_real_cache_and_config_exclusions_without_global_path_state() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = directory.path().join("cache");
     let excluded = directory.path().join("excluded");
     let config = directory.path().join("config.toml");
@@ -30,7 +30,7 @@ fn loads_real_cache_and_config_exclusions_without_global_path_state() {
 
 #[test]
 fn refuses_relative_paths_and_configuration_read_failures() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     assert!(Policy::load(Path::new("relative"), None).is_err());
     assert!(Policy::load(directory.path(), Some(Path::new("relative.toml"))).is_err());
     assert!(Policy::load(directory.path(), Some(directory.path())).is_err());

@@ -2,7 +2,7 @@ use super::*;
 use std::sync::Mutex as StdMutex;
 
 struct Fixture {
-    directory: tempfile::TempDir,
+    directory: plain_libs::temporary::TempDir,
     service: Arc<Mutations>,
     host: Arc<Host>,
     generation: u64,
@@ -15,7 +15,7 @@ impl Fixture {
         ids: Vec<String>,
         delete: impl Fn() -> Option<Result<Value, String>> + Send + 'static,
     ) -> Self {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let db = Arc::new(Db::open(&directory.path().join("data.db")).unwrap());
         let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
         let host = Arc::new(Host::default());
@@ -229,7 +229,7 @@ async fn trash_and_restore_change_rust_state_without_a_host_mutation_or_http_cal
 
 #[tokio::test]
 async fn missing_capability_does_not_read_or_mutate_provider_rows() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&directory.path().join("data.db")).unwrap());
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
     let host = Arc::new(Host::default());
@@ -259,7 +259,7 @@ async fn missing_capability_does_not_read_or_mutate_provider_rows() {
 
 #[test]
 fn shadow_trash_counts_duplicates_once_and_preserves_existing_timestamps() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     assert_eq!(
         save_trash(&db, &["1".into(), "mms_2".into(), "1".into()]).unwrap(),

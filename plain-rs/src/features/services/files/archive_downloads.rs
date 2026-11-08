@@ -127,13 +127,13 @@ fn collect_archive_entries(
 }
 
 struct Staging {
-    directory: tempfile::TempDir,
+    directory: plain_libs::temporary::TempDir,
 }
 
 impl Staging {
     fn create(cache: &Path) -> std::io::Result<Self> {
         Ok(Self {
-            directory: tempfile::Builder::new().prefix("zip-").tempdir_in(cache)?,
+            directory: plain_libs::temporary::Builder::new().prefix("zip-").tempdir_in(cache)?,
         })
     }
 

@@ -2,11 +2,11 @@ use super::*;
 use plain_graphql::{EmptySubscription, Schema};
 type Mutations = crate::graphql::resolvers::settings::public::PrefsMutation;
 fn fixture() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     Schema<crate::graphql::resolvers::settings::public::PrefsQuery, Mutations, EmptySubscription>,
     tokio::sync::broadcast::Receiver<WsEvent>,
 ) {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
     let (events, receiver) = broadcast::channel(32);
@@ -25,7 +25,7 @@ fn fixture() -> (
 #[tokio::test]
 async fn adb_token_verification_uses_native_management_and_has_no_graphql_oracle() {
     use crate::graphql::executor::RequestOrigin;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
@@ -67,7 +67,7 @@ async fn adb_token_verification_uses_native_management_and_has_no_graphql_oracle
 }
 #[tokio::test]
 async fn native_preferences_preserve_defaults_and_use_storage_keys() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
@@ -145,7 +145,7 @@ async fn runtime_security_preferences_validate_before_publishing() {
 
 #[tokio::test]
 async fn result_only_user_patch_does_not_read_unselected_system_settings() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
     plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
     prefs

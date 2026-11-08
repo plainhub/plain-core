@@ -135,7 +135,7 @@ async fn file_descriptor_delivery_preserves_extent_and_owns_the_source() {
         metadata,
         json!({"path":"content://fixture/asset","file":true})
     );
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("asset");
     std::fs::write(&path, b"prefixPAYLOADsuffix").unwrap();
     let original = std::fs::File::open(&path).unwrap();
@@ -172,7 +172,7 @@ async fn descriptor_range_rejection_keeps_the_stream_available_for_failure() {
         assert!(
             stream
                 .file(NativeResourceFile {
-                    file: tempfile::tempfile().unwrap(),
+                    file: plain_libs::temporary::tempfile().unwrap(),
                     offset,
                     length
                 })
@@ -210,7 +210,7 @@ async fn cancelling_descriptor_delivery_releases_capacity_without_a_second_reque
     assert!(
         stream
             .file(NativeResourceFile {
-                file: tempfile::tempfile().unwrap(),
+                file: plain_libs::temporary::tempfile().unwrap(),
                 offset: 0,
                 length: 0
             })
@@ -225,7 +225,7 @@ async fn cancelling_descriptor_delivery_releases_capacity_without_a_second_reque
 #[test]
 fn descriptor_unknown_length_is_resolved_without_reading_the_file() {
     use std::io::{Seek, SeekFrom};
-    let mut file = tempfile::tempfile().unwrap();
+    let mut file = plain_libs::temporary::tempfile().unwrap();
     file.set_len(123).unwrap();
     file.seek(SeekFrom::Start(11)).unwrap();
     let mut resource = NativeResourceFile::new(file, 23, -1).unwrap();

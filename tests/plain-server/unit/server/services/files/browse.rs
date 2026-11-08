@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 #[tokio::test]
 async fn existing_file_queries_authorize_effective_parent_and_own_pages_counts_and_zip_filtering() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let root = temp.path().join("allowed");
     std::fs::create_dir(&root).unwrap();
     std::fs::write(root.join("a.txt"), b"1234").unwrap();

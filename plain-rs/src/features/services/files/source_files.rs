@@ -10,14 +10,14 @@ pub async fn stage(
     resources: &NativeResources,
     parent: &Path,
     mut stop: watch::Receiver<bool>,
-) -> Result<tempfile::NamedTempFile, String> {
+) -> Result<plain_libs::temporary::NamedTempFile, String> {
     if *stop.borrow() {
         return Err("File input cancelled".into());
     }
     tokio::fs::create_dir_all(parent)
         .await
         .map_err(|error| error.to_string())?;
-    let temporary = tempfile::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
+    let temporary = plain_libs::temporary::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
     let mut output =
         tokio::fs::File::from_std(temporary.reopen().map_err(|error| error.to_string())?);
     let mut cancelled = stop.clone();

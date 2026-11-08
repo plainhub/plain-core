@@ -40,7 +40,7 @@ fn is_cancelled_error(error: &anyhow::Error) -> bool {
 
 #[test]
 fn visits_each_regular_file_exactly_once_in_a_nested_tree() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let root = dir.path();
     write_file(&root.join("top.txt"), "1");
     write_file(&root.join("a/one.txt"), "2");
@@ -55,7 +55,7 @@ fn visits_each_regular_file_exactly_once_in_a_nested_tree() {
 
 #[test]
 fn a_single_regular_file_may_be_the_root() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let file = dir.path().join("only.txt");
     write_file(&file, "1");
 
@@ -76,7 +76,7 @@ fn a_single_regular_file_may_be_the_root() {
 
 #[test]
 fn an_excluded_root_visits_nothing() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let root = dir.path();
     write_file(&root.join("a/one.txt"), "1");
 
@@ -97,7 +97,7 @@ fn an_excluded_root_visits_nothing() {
 
 #[test]
 fn an_excluded_directory_skips_its_whole_subtree() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let root = dir.path();
     write_file(&root.join("keep.txt"), "1");
     write_file(&root.join("drop/one.txt"), "2");
@@ -120,7 +120,7 @@ fn an_excluded_directory_skips_its_whole_subtree() {
 
 #[test]
 fn a_visit_error_stops_the_walk_and_surfaces() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let root = dir.path();
     write_file(&root.join("boom.txt"), "1");
     write_file(&root.join("a/one.txt"), "2");
@@ -151,7 +151,7 @@ fn a_visit_error_stops_the_walk_and_surfaces() {
 
 #[test]
 fn cancelling_before_the_root_stops_every_visit() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let root = dir.path();
     write_file(&root.join("one.txt"), "1");
 
@@ -173,7 +173,7 @@ fn cancelling_before_the_root_stops_every_visit() {
 
 #[test]
 fn cancelling_during_the_walk_stops_every_further_visit() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let root = dir.path();
     for index in 0..8 {
         write_file(&root.join(format!("file-{index}.txt")), "1");
@@ -199,7 +199,7 @@ fn cancelling_during_the_walk_stops_every_further_visit() {
 
 #[test]
 fn a_missing_root_is_an_error() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let missing = dir.path().join("absent");
 
     assert!(walk_files(&missing, |_| false, || false, |_| Ok(())).is_err());
@@ -213,7 +213,7 @@ fn a_relative_root_is_an_error() {
 #[cfg(unix)]
 #[test]
 fn a_symlink_root_is_an_explicit_error() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let target = dir.path().join("target");
     fs::create_dir_all(&target).unwrap();
     let link = dir.path().join("link");
@@ -227,9 +227,9 @@ fn a_symlink_root_is_an_explicit_error() {
 #[cfg(unix)]
 #[test]
 fn a_symlinked_child_is_never_followed() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let root = dir.path();
-    let outside = tempfile::tempdir().unwrap();
+    let outside = crate::temporary::tempdir().unwrap();
     write_file(&root.join("real/inside.txt"), "1");
     write_file(&outside.path().join("outside.txt"), "2");
     std::os::unix::fs::symlink(outside.path(), root.join("real/link")).unwrap();
@@ -245,7 +245,7 @@ fn a_symlinked_child_is_never_followed() {
 #[cfg(unix)]
 #[test]
 fn a_fifo_is_skipped_silently() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let root = dir.path();
     write_file(&root.join("one.txt"), "1");
     let fifo = root.join("pipe");
@@ -262,7 +262,7 @@ fn a_fifo_is_skipped_silently() {
 #[cfg(unix)]
 #[test]
 fn an_excluded_special_root_is_still_invalid() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("socket");
     let _socket = std::os::unix::net::UnixListener::bind(&path).unwrap();
     let mut visits = 0;
@@ -285,7 +285,7 @@ fn an_excluded_special_root_is_still_invalid() {
 #[test]
 fn unreadable_directories_are_skipped_without_losing_readable_siblings() {
     use std::os::unix::fs::PermissionsExt;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let denied = directory.path().join("denied");
     write_file(&denied.join("nested/private.txt"), "private");
     write_file(&directory.path().join("readable/public.txt"), "public");

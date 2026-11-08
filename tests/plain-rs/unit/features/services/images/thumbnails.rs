@@ -54,8 +54,8 @@ fn request_for(path: &std::path::Path) -> Request {
     }
 }
 
-fn server_with_cache() -> (tempfile::TempDir, ContentServer, std::path::PathBuf) {
-    let dir = tempfile::tempdir().unwrap();
+fn server_with_cache() -> (plain_libs::temporary::TempDir, ContentServer, std::path::PathBuf) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "thumb-fixture").unwrap();
@@ -173,7 +173,7 @@ async fn shutdown_releases_a_pending_sdk_decode_without_waiting_for_the_host_rep
 async fn cancelling_a_started_generation_keeps_its_slot_and_single_flight_until_it_finishes() {
     let (_directory, core, _cache) = server_with_cache();
     let state = core.runtime_state();
-    let source = tempfile::tempdir().unwrap();
+    let source = plain_libs::temporary::tempdir().unwrap();
     let path = source.path().join("image.jpg");
     image::RgbImage::from_pixel(800, 400, image::Rgb([200, 10, 20]))
         .save(&path)
@@ -229,7 +229,7 @@ async fn disconnected_queued_requests_are_removed_without_starting_a_decode() {
     let state = core.runtime_state();
     let workers = state.thumbnails.workers();
     let queued = 300;
-    let source = tempfile::tempdir().unwrap();
+    let source = plain_libs::temporary::tempdir().unwrap();
     let path = source.path().join("image.jpg");
     image::RgbImage::from_pixel(800, 400, image::Rgb([10, 200, 20]))
         .save(&path)
@@ -293,7 +293,7 @@ async fn disconnected_queued_requests_are_removed_without_starting_a_decode() {
 async fn changed_source_during_generation_cannot_publish_an_old_version() {
     let (_directory, core, _cache) = server_with_cache();
     let state = core.runtime_state();
-    let source = tempfile::tempdir().unwrap();
+    let source = plain_libs::temporary::tempdir().unwrap();
     let path = source.path().join("image.jpg");
     image::RgbImage::from_pixel(800, 400, image::Rgb([240, 10, 10]))
         .save(&path)
@@ -721,7 +721,7 @@ async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cach
 #[test]
 fn cached_sdk_png_uses_its_real_extension_and_hot_hits_do_not_read_disk() {
     use std::sync::atomic::Ordering;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let requested = directory.path().join("key.jpg");
     let actual = requested.with_extension("png");
     let bytes = b"\x89PNG\r\n\x1a\nencoded-sdk-output";

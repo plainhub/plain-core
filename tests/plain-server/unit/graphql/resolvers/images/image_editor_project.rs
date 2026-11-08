@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn projects_persist_project_summaries_and_validate_state() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("plain.db");
     let token = plain_libs::utils::base64::base64_encode(&[12; 32]);
     let prefs =
@@ -97,7 +97,7 @@ async fn projects_persist_project_summaries_and_validate_state() {
 
 #[tokio::test]
 async fn binary_delta_does_not_invalidate_content() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[13; 32]);
     let server = ContentServer::start(
         dir.path(),

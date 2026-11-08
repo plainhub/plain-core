@@ -13,7 +13,7 @@ fn server(directory: &std::path::Path) -> ContentServer {
 
 #[tokio::test]
 async fn folder_share_is_created_once_and_same_card_is_sent_to_every_target() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = server(directory.path());
     let state = server.runtime_state();
     let service = Service::new(state.db.clone(), state.prefs.clone());
@@ -64,7 +64,7 @@ async fn folder_share_is_created_once_and_same_card_is_sent_to_every_target() {
 
 #[tokio::test]
 async fn invalid_targets_and_nonfolders_cannot_leave_an_orphan_share() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = server(directory.path());
     let state = server.runtime_state();
     let service = Service::new(state.db.clone(), state.prefs.clone());
@@ -138,7 +138,7 @@ async fn invalid_targets_and_nonfolders_cannot_leave_an_orphan_share() {
 
 #[tokio::test]
 async fn failed_remote_delivery_retains_share_and_successful_local_message() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = server(directory.path());
     let state = server.runtime_state();
     let service = Service::new(state.db.clone(), state.prefs.clone());
@@ -179,7 +179,7 @@ async fn failed_remote_delivery_retains_share_and_successful_local_message() {
 
 #[tokio::test]
 async fn folder_share_and_all_messages_roll_back_when_a_later_message_insert_fails() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = server(directory.path());
     let state = core.runtime_state();
     let service = Service::new(state.db.clone(), state.prefs.clone());
@@ -235,7 +235,7 @@ async fn folder_share_and_all_messages_roll_back_when_a_later_message_insert_fai
 
 #[tokio::test]
 async fn a_committed_folder_share_survives_a_later_delivery_error() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = server(directory.path());
     let state = core.runtime_state();
     let service = Service::new(state.db.clone(), state.prefs.clone());

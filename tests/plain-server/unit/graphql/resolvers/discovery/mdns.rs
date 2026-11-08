@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -78,7 +78,7 @@ fn mdns_snapshot_projection_keeps_packet_timestamps_and_ipv6_without_loss() {
 
 #[tokio::test]
 async fn native_schema_does_not_expose_platform_scan_lifecycle() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -110,7 +110,7 @@ async fn native_schema_does_not_expose_platform_scan_lifecycle() {
 
 #[tokio::test]
 async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
@@ -177,7 +177,7 @@ async fn main_schema_hostname_and_debug_reads_reuse_owned_idle_state() {
 
 #[tokio::test]
 async fn status_and_browser_queries_do_not_collect_packet_capture_snapshots() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let executor = core.native_graphql().unwrap();

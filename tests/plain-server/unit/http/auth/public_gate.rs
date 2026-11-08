@@ -5,7 +5,7 @@ use plain_rs::features::prefs::pref_keys::API_PERMISSIONS;
 use std::sync::Arc;
 
 fn prefs_with(permissions: &[AccessFeature]) -> Arc<Prefs> {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs
         .set(

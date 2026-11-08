@@ -13,7 +13,7 @@ fn converts_office_bytes_to_markdown_without_an_external_tool() {
 
 #[test]
 fn rejects_corrupt_and_missing_input() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("broken.doc");
     assert!(convert(&path).is_err());
     std::fs::write(&path, b"not an office document").unwrap();
@@ -23,7 +23,7 @@ fn rejects_corrupt_and_missing_input() {
 #[tokio::test]
 async fn resource_uris_use_the_native_stream_and_propagate_failures() {
     use serde_json::json;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (generation, mut requests) = state.host.connect();

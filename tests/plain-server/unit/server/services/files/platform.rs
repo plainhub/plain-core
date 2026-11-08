@@ -1,7 +1,7 @@
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn native_recent_files_use_the_owned_preferences_without_media_or_host_dispatch() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let first = directory.path().join("first.txt");
     let last = directory.path().join("last.txt");

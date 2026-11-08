@@ -13,7 +13,7 @@ fn plan_ok(provider: Provider, fields: &[FilterField], dates: &Value) -> anyhow:
 
 #[test]
 fn contact_plans_keep_name_rows_and_empty_tag_ids_match_nothing() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     let parsed = fields(&db, "tag_id:absent").unwrap();
     let result = plan_ok(Provider::Contact, &parsed, &Value::Null).unwrap();
@@ -24,7 +24,7 @@ fn contact_plans_keep_name_rows_and_empty_tag_ids_match_nothing() {
 
 #[test]
 fn contact_and_call_own_disjoint_field_vocabulary() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     // `id` is a contact's own field and no other provider's.
     assert!(
@@ -43,7 +43,7 @@ fn contact_and_call_own_disjoint_field_vocabulary() {
 
 #[test]
 fn the_web_clients_contact_and_call_fields_are_still_accepted() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     let cases: &[(Provider, &[&str])] = &[
         // Mirrors the calls view, `buildNextCallsQ`.
@@ -63,7 +63,7 @@ fn the_web_clients_contact_and_call_fields_are_still_accepted() {
 
 #[test]
 fn unknown_provider_fields_are_named_rather_than_dropped() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let _db = Db::open(&dir.path().join("db")).unwrap();
     // A name neither provider has an arm for. `type` and `id` would not do:
     // each belongs to exactly one of them.
@@ -84,7 +84,7 @@ fn unknown_provider_fields_are_named_rather_than_dropped() {
 
 #[test]
 fn call_duration_and_start_time_bind_only_closed_comparisons() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let _db = Db::open(&dir.path().join("db")).unwrap();
     let filter = |name: &str| {
         vec![FilterField {
@@ -102,7 +102,7 @@ fn call_duration_and_start_time_bind_only_closed_comparisons() {
 
 #[test]
 fn whole_table_sentinels_pass_on_every_provider() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     for (provider, query) in [
         (Provider::Call, "trash:false"),
@@ -151,7 +151,7 @@ fn call_rejects_an_injected_comparison_operator() {
 async fn call_and_contact_reach_a_mutation_with_nothing_selected() {
     use std::sync::Arc;
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("db")).unwrap());
     for (provider, query) in [
         (Provider::Call, "trash:false"),
@@ -175,7 +175,7 @@ async fn call_and_contact_reach_a_mutation_with_nothing_selected() {
 
 #[test]
 fn date_scoped_mutations_need_a_valid_rust_parsed_timestamp() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     assert!(require_narrowing(&db, Provider::Call, "start_time:>=1700000000").is_ok());
     for query in [
@@ -192,7 +192,7 @@ fn date_scoped_mutations_need_a_valid_rust_parsed_timestamp() {
 
 #[test]
 fn ignored_trash_filters_do_not_authorize_contact_or_call_deletion() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("db")).unwrap();
     for provider in [Provider::Contact, Provider::Call] {
         for query in ["all:false", "trash:false", "trash:true"] {

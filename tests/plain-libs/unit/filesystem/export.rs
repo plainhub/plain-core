@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn export_overwrites_only_the_selected_file_and_keeps_same_path_bytes() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let source = root.path().join("source.txt");
     let destination = root.path().join("export.txt");
     let neighbor = root.path().join("neighbor.txt");
@@ -19,7 +19,7 @@ fn export_overwrites_only_the_selected_file_and_keeps_same_path_bytes() {
 
 #[test]
 fn export_creates_the_selected_file_without_renaming_on_collision() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let source = root.path().join("source.txt");
     let destination = root.path().join("export.txt");
     fs::write(&source, b"document").unwrap();
@@ -31,7 +31,7 @@ fn export_creates_the_selected_file_without_renaming_on_collision() {
 
 #[test]
 fn export_rejects_invalid_sources_and_destinations_without_changing_existing_bytes() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let source = root.path().join("source.txt");
     let destination = root.path().join("export.txt");
     fs::write(&source, b"source").unwrap();
@@ -53,7 +53,7 @@ fn export_rejects_invalid_sources_and_destinations_without_changing_existing_byt
 #[cfg(any(unix, windows))]
 #[test]
 fn export_to_a_hard_link_preserves_both_names_and_exact_source_bytes() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let source = root.path().join("source.txt");
     let alias = root.path().join("alias.txt");
     fs::write(&source, b"do not truncate").unwrap();
@@ -66,7 +66,7 @@ fn export_to_a_hard_link_preserves_both_names_and_exact_source_bytes() {
 #[cfg(unix)]
 #[test]
 fn export_through_source_and_destination_symlinks_keeps_source_bytes() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let source = root.path().join("source.txt");
     let alias = root.path().join("alias.txt");
     fs::write(&source, b"document").unwrap();

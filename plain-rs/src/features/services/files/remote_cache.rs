@@ -88,7 +88,7 @@ impl RemoteCache {
         &self,
         raw: &str,
         mut stop: watch::Receiver<bool>,
-    ) -> Result<tempfile::NamedTempFile, String> {
+    ) -> Result<plain_libs::temporary::NamedTempFile, String> {
         if *stop.borrow() {
             return Err("Download cancelled".into());
         }
@@ -179,14 +179,14 @@ async fn write_download<S>(
     directory: &Path,
     expected: Option<u64>,
     stream: S,
-) -> Result<tempfile::NamedTempFile, String>
+) -> Result<plain_libs::temporary::NamedTempFile, String>
 where
     S: Stream<Item = Result<bytes::Bytes, String>> + Send,
 {
     let parent = directory.to_path_buf();
     let temporary = tokio::task::spawn_blocking(move || {
         std::fs::create_dir_all(&parent)?;
-        tempfile::Builder::new()
+        plain_libs::temporary::Builder::new()
             .prefix("remote-")
             .tempfile_in(parent)
     })

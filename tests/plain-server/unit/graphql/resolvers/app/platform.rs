@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn public_audit_events_read_the_core_database_without_host_or_legacy_store() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let id = state
@@ -48,7 +48,7 @@ async fn public_audit_events_read_the_core_database_without_host_or_legacy_store
 
 #[tokio::test]
 async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let host = state.host.clone();
@@ -105,7 +105,7 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
 
 #[tokio::test]
 async fn public_mount_alias_uses_the_same_preferences_as_the_platform_adapter() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let result = core
         .native_graphql()
@@ -130,7 +130,7 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
         ),
         ("{ appUpdate { currentVersion } }", "APP_UPDATES"),
     ] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let core = crate::server::ContentServer::open(directory.path()).unwrap();
         let state = core.runtime_state();
         let before = state.prefs.entries();
@@ -171,7 +171,7 @@ fn hostname_sanitization_is_shared() {
 
 #[tokio::test]
 async fn disk_queries_read_native_rust_after_one_capability_check() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let host = state.host.clone();

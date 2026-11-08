@@ -10,8 +10,8 @@ use serde_json::Value;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
-fn server() -> (tempfile::TempDir, ContentServer, CoreRuntime) {
-    let directory = tempfile::tempdir().unwrap();
+fn server() -> (plain_libs::temporary::TempDir, ContentServer, CoreRuntime) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("system.json")).unwrap(),
     );

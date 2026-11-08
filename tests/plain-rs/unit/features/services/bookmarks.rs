@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn manual_add_validates_the_whole_batch_before_writing_and_keeps_valid_duplicates() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     for invalid in ["http://", "javascript:alert(1)", "file:///owned.txt"] {
         assert!(
@@ -32,7 +32,7 @@ fn manual_add_validates_the_whole_batch_before_writing_and_keeps_valid_duplicate
 
 #[test]
 fn import_keeps_titles_groups_and_existing_rows_and_deduplicates_repeated_files() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let group = bookmark::DBookmarkGroup::new("Saved & 中文");
     bookmark::insert_bookmark_group(&db, &group).unwrap();
@@ -107,7 +107,7 @@ fn import_keeps_titles_groups_and_existing_rows_and_deduplicates_repeated_files(
 
 #[test]
 fn import_rolls_back_bookmarks_and_new_groups_on_storage_failure() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     db.with_conn(|conn| conn.execute_batch("CREATE TRIGGER reject_import BEFORE INSERT ON bookmarks WHEN NEW.url='https://example.com/fail' BEGIN SELECT RAISE(ABORT,'expected import failure'); END;")).unwrap();
     assert!(import_bookmarks(&db, "<DL><DT><H3>New group</H3><DL><DT><A HREF='https://example.com/first'>First</A><DT><A HREF='https://example.com/fail'>Fail</A></DL></DL>").is_err());

@@ -12,7 +12,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 #[tokio::test]
 async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_without_host() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("background_service_enabled", true).unwrap();
@@ -188,8 +188,8 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
             .unwrap();
         (prefs, pk.to_vec())
     }
-    let a_dir = tempfile::tempdir().unwrap();
-    let b_dir = tempfile::tempdir().unwrap();
+    let a_dir = plain_libs::temporary::tempdir().unwrap();
+    let b_dir = plain_libs::temporary::tempdir().unwrap();
     let (a_prefs, a_pk) = configured(a_dir.path(), "a");
     let (b_prefs, b_pk) = configured(b_dir.path(), "b");
     let shared = plain_libs::utils::base64::base64_encode(&[17; 32]);

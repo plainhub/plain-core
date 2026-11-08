@@ -25,8 +25,8 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 
 fn fixture_with(
     handler: impl Fn(&str, Value) -> Value + Send + 'static,
-) -> (tempfile::TempDir, PublicSchema) {
-    let dir = tempfile::tempdir().unwrap();
+) -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
@@ -41,7 +41,7 @@ fn fixture_with(
 
 /// The message reads must not touch the platform: they are the same store
 /// queries the app's own chat list runs.
-fn fixture() -> (tempfile::TempDir, PublicSchema) {
+fn fixture() -> (plain_libs::temporary::TempDir, PublicSchema) {
     fixture_with(|method, _| panic!("unexpected host call {method}"))
 }
 
@@ -222,7 +222,7 @@ async fn the_latest_page_covers_every_conversation() {
 // ── the mutations, which are commands rather than store writes ──────────
 
 #[cfg(feature = "http_transport")]
-fn chat_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
+fn chat_fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
     let (dir, server) = channel_fixture();
     let (key, _) = plain_libs::crypto::ed25519_generate();
     server
@@ -406,8 +406,8 @@ async fn retrying_an_unknown_id_is_an_error() {
 
 // Channel roots execute against the same runtime as the mobile endpoint.
 #[cfg(feature = "http_transport")]
-fn channel_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
-    let dir = tempfile::tempdir().unwrap();
+fn channel_fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();
     let server = crate::server::ContentServer::start(

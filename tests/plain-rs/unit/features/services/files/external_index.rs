@@ -28,7 +28,7 @@ fn recycled_provider_ids_cannot_override_a_different_physical_identity() {
 
 #[test]
 fn directory_move_identity_batch_survives_reopen_without_stale_sources_or_neighbor_changes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let old = PathBuf::from("/media/source/image.png");
     let destination = PathBuf::from("/media/destination/image.png");
     let neighbor = PathBuf::from("/media/source-other/image.png");
@@ -69,7 +69,7 @@ fn directory_move_identity_batch_survives_reopen_without_stale_sources_or_neighb
 
 #[tokio::test]
 async fn disappearance_requires_actual_missing_path_not_a_directory_or_symlink() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     assert!(!missing_path(directory.path()).await.unwrap());
     let path = directory.path().join("removed.png");
     assert!(missing_path(&path).await.unwrap());

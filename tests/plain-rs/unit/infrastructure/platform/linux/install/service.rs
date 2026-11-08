@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn install_updates_existing_unit_to_the_actual_binary() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("system/plainapp.service");
     write_service(&path, "/opt/other/plainapp").unwrap();
     write_service(&path, BINARY_PATH).unwrap();
@@ -14,7 +14,7 @@ fn install_updates_existing_unit_to_the_actual_binary() {
 
 #[test]
 fn service_write_failure_is_returned() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let file = directory.path().join("file");
     std::fs::write(&file, "bytes").unwrap();
     assert!(write_service(&file.join("unit"), BINARY_PATH).is_err());
@@ -23,7 +23,7 @@ fn service_write_failure_is_returned() {
 
 #[test]
 fn restart_moves_the_control_command_to_a_collected_scope_before_restarting() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let script = directory.path().join("systemd-run");
     let arguments = directory.path().join("arguments");
     std::fs::write(
@@ -52,7 +52,7 @@ fn restart_returns_a_rejected_job_as_an_error() {
 
 #[test]
 fn restart_returns_scheduler_spawn_failure() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let mut command = std::process::Command::new(directory.path().join("missing-systemctl"));
     assert!(restart_service(&mut command).is_err());
 }

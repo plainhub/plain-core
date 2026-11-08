@@ -3,7 +3,7 @@ use std::io::{Cursor, Write};
 
 #[tokio::test]
 async fn exported_logs_are_readable_without_authorizing_private_log_sources() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let path = state.logs.path().unwrap();
@@ -108,7 +108,7 @@ fn newest_page_stops_after_one_block() {
 
 #[tokio::test]
 async fn clear_preserves_an_append_handle_and_missing_file_stays_missing() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("plain.log");
     let logs = Logs::new(directory.path());
     logs.set_path(path.clone()).unwrap();
@@ -129,7 +129,7 @@ async fn clear_preserves_an_append_handle_and_missing_file_stays_missing() {
 
 #[test]
 fn missing_log_is_empty_but_read_failures_are_reported() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     assert!(
         read_lines_newest_first(&directory.path().join("missing.log"), None, 0, 10)
             .unwrap()
@@ -140,7 +140,7 @@ fn missing_log_is_empty_but_read_failures_are_reported() {
 
 #[tokio::test]
 async fn storage_management_counts_log_family_and_preserves_the_active_append_handle() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("plain.log");
     let backup = directory.path().join("plain.log.bak");
     let rotated = directory.path().join("plain.log.1");
@@ -196,7 +196,7 @@ async fn storage_management_counts_log_family_and_preserves_the_active_append_ha
 
 #[tokio::test]
 async fn missing_log_family_reports_zero_and_exports_nothing() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let logs = Logs::new(directory.path());
     logs.set_path(directory.path().join("missing/latest.log"))
         .unwrap();
@@ -223,7 +223,7 @@ async fn missing_log_family_reports_zero_and_exports_nothing() {
 
 #[tokio::test]
 async fn rust_logs_are_exported_without_app_logs_and_counted_once_for_a_shared_path() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     paths.initialize_directories().unwrap();
     std::fs::write(paths.rust_log_file(), b"rust").unwrap();
@@ -257,7 +257,7 @@ async fn rust_logs_are_exported_without_app_logs_and_counted_once_for_a_shared_p
 
 #[tokio::test]
 async fn clear_reports_log_directory_errors() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     std::fs::write(directory.path().join("logs"), b"not a directory").unwrap();
     let logs = Logs::new(directory.path());
     assert!(logs.clear().await.is_err());

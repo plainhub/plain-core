@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn main_import_keeps_its_staged_source_until_the_database_commit_before_cache_clear() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core =
         Arc::new(crate::server::ContentServer::open(&directory.path().join("data")).unwrap());
     let state = core.runtime_state().core;

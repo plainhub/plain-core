@@ -74,11 +74,11 @@ struct Waiting(Arc<AtomicBool>);
 fn filesystem_media_host(
     system_catalog: bool,
 ) -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     crate::server::ContentServer,
     std::path::PathBuf,
 ) {
-    let directory = tempfile::Builder::new()
+    let directory = plain_libs::temporary::Builder::new()
         .prefix("media-host-start-")
         .tempdir_in(plain_rs::infrastructure::platform::system::consts::home_directory().unwrap())
         .unwrap();
@@ -278,7 +278,7 @@ async fn serving_handles_callbacks_while_request_waits_and_cancels_on_stop() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let session = Arc::new(core.host_events().unwrap());
     let dropped = Arc::new(AtomicBool::new(false));
@@ -324,7 +324,7 @@ async fn serving_preserves_request_errors_and_old_session_cannot_disconnect_repl
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let session = Arc::new(core.host_events().unwrap());
     let runner = tokio::spawn(session.serve(|method, _params| async move {
@@ -364,7 +364,7 @@ async fn aborting_runner_disconnects_session_even_with_retained_handle() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let session = Arc::new(core.host_events().unwrap());
     let started = Arc::new(tokio::sync::Notify::new());

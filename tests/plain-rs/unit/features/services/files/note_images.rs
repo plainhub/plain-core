@@ -3,7 +3,7 @@ use crate::test_runtime::Core as ContentServer;
 
 #[tokio::test]
 async fn concurrent_imports_do_not_overwrite_each_other_or_leave_temporary_files() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let mut tasks = Vec::new();
@@ -51,7 +51,7 @@ async fn concurrent_imports_do_not_overwrite_each_other_or_leave_temporary_files
 
 #[tokio::test]
 async fn picked_names_remain_inside_the_store_and_failed_input_cleans_staging() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let source = directory.path().join("input");

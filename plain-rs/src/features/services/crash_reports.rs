@@ -41,7 +41,7 @@ pub async fn write(state: &CoreRuntime, report: String) -> Result<String, String
     tokio::task::spawn_blocking(move || {
         std::fs::create_dir_all(path.parent().ok_or("Invalid report directory")?)
             .map_err(|error| error.to_string())?;
-        let mut temporary = tempfile::NamedTempFile::new_in(path.parent().unwrap())
+        let mut temporary = plain_libs::temporary::NamedTempFile::new_in(path.parent().unwrap())
             .map_err(|error| error.to_string())?;
         temporary
             .write_all(body.as_bytes())

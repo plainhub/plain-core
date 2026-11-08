@@ -1,8 +1,8 @@
 use super::*;
 use crate::features::feeds::{count, delete_entries, export_opml, import_opml};
 
-fn database() -> (tempfile::TempDir, Db) {
-    let dir = tempfile::tempdir().unwrap();
+fn database() -> (plain_libs::temporary::TempDir, Db) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     (dir, db)
 }

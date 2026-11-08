@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::sync::Arc;
 #[tokio::test]
 async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let folder = dir.path().join("Shared");
     std::fs::create_dir(&folder).unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());

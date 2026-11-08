@@ -4,7 +4,7 @@ use super::*;
 fn watcher_drop_drains_and_releases_the_native_context() {
     let handler: Arc<Mutex<dyn EventHandler>> = Arc::new(Mutex::new(|_| {}));
     let weak = Arc::downgrade(&handler);
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let mut watcher = FsEventWatcher::from_event_handler(handler).unwrap();
     watcher
         .watch(directory.path(), RecursiveMode::Recursive)
@@ -54,7 +54,7 @@ fn native_context_callbacks_balance_arc_ownership() {
 
 #[test]
 fn deleted_watch_paths_keep_their_canonical_existing_ancestor() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let alias = directory.path().join("alias");
     let actual = directory.path().join("actual");
     std::fs::create_dir(&actual).unwrap();
@@ -81,7 +81,7 @@ fn dropping_a_watcher_on_its_event_queue_defers_release_without_self_waiting() {
         drop(unsafe { Box::from_raw(context.cast::<FsEventWatcher>()) });
     }
     let (tx, rx) = std::sync::mpsc::channel();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let mut watcher = FsEventWatcher::new(Handler(tx)).unwrap();
     watcher
         .watch(directory.path(), RecursiveMode::Recursive)

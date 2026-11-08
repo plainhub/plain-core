@@ -40,7 +40,7 @@ fn publish(directory: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
     }
     std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     let mut temporary =
-        tempfile::NamedTempFile::new_in(directory).map_err(|error| error.to_string())?;
+        plain_libs::temporary::NamedTempFile::new_in(directory).map_err(|error| error.to_string())?;
     temporary
         .write_all(bytes)
         .map_err(|error| error.to_string())?;

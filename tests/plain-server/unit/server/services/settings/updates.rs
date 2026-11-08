@@ -9,7 +9,7 @@ use serde_json::json;
 async fn native_update_check_uses_capabilities_and_skips_network_when_automatic_checks_are_disabled()
  {
     for supported in [true, false] {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = plain_libs::temporary::tempdir().unwrap();
         let core = ContentServer::open(dir.path()).unwrap();
         let state = core.runtime_state().core;
         state.prefs.set(AUTO_CHECK_UPDATE, false).unwrap();
@@ -49,7 +49,7 @@ async fn native_update_check_uses_capabilities_and_skips_network_when_automatic_
 
 #[tokio::test]
 async fn main_settings_derive_update_availability_from_current_version_and_skip() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(dir.path()).unwrap();
     let state = core.runtime_state().core;
     let (_generation, mut requests) = state.host.connect();
@@ -66,7 +66,7 @@ async fn main_settings_derive_update_availability_from_current_version_and_skip(
 #[tokio::test]
 async fn main_update_snapshot_reuses_cached_result_and_projects_release_without_host_business_calls()
  {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(dir.path()).unwrap();
     let state = core.runtime_state().core;
     update(&state, json!({"latestRelease":{"version":"999.0.0","name":"Release name","url":"https://example.com/releases/latest","publishedAt":"2026-01-02T03:04:05.000Z"}})).unwrap();

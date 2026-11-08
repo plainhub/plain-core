@@ -12,8 +12,8 @@ use serde_json::json;
 use std::time::Duration;
 use tokio::sync::watch;
 
-async fn fixture() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
-    let directory = tempfile::tempdir().unwrap();
+async fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer, ServerState) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
@@ -27,7 +27,7 @@ async fn fixture() -> (tempfile::TempDir, crate::server::ContentServer, ServerSt
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn actual_management_socket_authenticates_and_relays_only_decrypted_native_events() {
-    let remote_directory = tempfile::tempdir().unwrap();
+    let remote_directory = plain_libs::temporary::tempdir().unwrap();
     let remote = crate::server::ContentServer::open_with_cache(
         &remote_directory.path().join("data"),
         &remote_directory.path().join("cache"),
@@ -72,7 +72,7 @@ async fn actual_management_socket_authenticates_and_relays_only_decrypted_native
     remote_state.prefs.set("http_port", 0).unwrap();
     remote_state.prefs.set("https_port", 0).unwrap();
     let (_, tls_port) = remote.start_configured_public().await.unwrap();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let data = directory.path().join("data");
     std::fs::create_dir_all(&data).unwrap();
     let prefs =
@@ -147,7 +147,7 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
                 .unwrap()
         });
     }
-    let remote_directory = tempfile::tempdir().unwrap();
+    let remote_directory = plain_libs::temporary::tempdir().unwrap();
     let remote = crate::server::ContentServer::open_with_cache(
         &remote_directory.path().join("data"),
         &remote_directory.path().join("cache"),

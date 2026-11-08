@@ -3,7 +3,7 @@ use crate::test_runtime::Core as ContentServer;
 
 #[tokio::test]
 async fn renderer_state_is_sent_to_the_host_without_a_broadcast_event() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),

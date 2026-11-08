@@ -71,7 +71,7 @@ fn cache_identity_includes_operation_size_and_full_modification_time() {
 }
 #[tokio::test]
 async fn ordinary_files_and_long_videos_do_not_probe_capabilities_or_encode() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let runtime = Runtime::new(dir.path().join("core/cache"));
     let file = dir.path().join("source.mp4");
     for (codec, duration, operation) in [
@@ -96,7 +96,7 @@ async fn ordinary_files_and_long_videos_do_not_probe_capabilities_or_encode() {
 }
 #[tokio::test]
 async fn missing_capability_never_enters_the_encoder() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let file = dir.path().join("source.mp4");
     std::fs::write(&file, movie(b"hvc1", 3000, false)).unwrap();
     let runtime = Runtime::new(dir.path().join("core/cache"));
@@ -116,7 +116,7 @@ async fn missing_capability_never_enters_the_encoder() {
 }
 #[tokio::test]
 async fn concurrent_requests_encode_once_and_reuse_the_same_committed_bytes() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let file = dir.path().join("source.mp4");
     std::fs::write(&file, movie(b"hvc1", 3000, false)).unwrap();
     let runtime = Runtime::new(dir.path().join("core/cache"));
@@ -150,7 +150,7 @@ async fn concurrent_requests_encode_once_and_reuse_the_same_committed_bytes() {
 }
 #[tokio::test]
 async fn remux_drops_metadata_by_selecting_the_remux_primitive_once() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let file = dir.path().join("source.mp4");
     std::fs::write(&file, movie(b"avc1", 3000, true)).unwrap();
     let runtime = Runtime::new(dir.path().join("core/cache"));
@@ -173,7 +173,7 @@ async fn remux_drops_metadata_by_selecting_the_remux_primitive_once() {
 
 #[tokio::test]
 async fn metadata_removal_uses_shared_rust_without_a_platform_encoder() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let input = directory.path().join("metadata.mp4");
     let source = movie(b"avc1", 3000, true);
     std::fs::write(&input, &source).unwrap();
@@ -207,7 +207,7 @@ fn remux_support_does_not_depend_on_an_installed_encoder() {
 
 #[tokio::test]
 async fn cancellation_retains_the_temporary_output_until_the_worker_exits() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("owned.mp4");
     std::fs::write(&path, b"reserved").unwrap();
     let output = Arc::new(Output(path.clone()));
@@ -235,7 +235,7 @@ async fn cancellation_retains_the_temporary_output_until_the_worker_exits() {
 }
 #[tokio::test]
 async fn replaced_sources_and_encoder_failures_never_publish_partial_cache_entries() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let file = dir.path().join("source.mp4");
     let data = movie(b"hvc1", 3000, false);
     std::fs::write(&file, &data).unwrap();
@@ -287,7 +287,7 @@ async fn replaced_sources_and_encoder_failures_never_publish_partial_cache_entri
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 #[tokio::test]
 async fn native_hev1_conversion_caches_the_result_and_cleans_intermediates() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.mp4");
     let bytes = include_bytes!("../../../../../../plain-rs/testdata/video-h265.mp4");
     std::fs::write(&source, bytes).unwrap();

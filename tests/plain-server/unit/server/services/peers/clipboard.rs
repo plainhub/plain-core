@@ -16,7 +16,7 @@ use std::time::Duration;
 use tokio::sync::watch;
 
 async fn fixture() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     ContentServer,
     ContentServer,
     ServerState,
@@ -27,7 +27,7 @@ async fn fixture() -> (
     Arc<AtomicBool>,
     tokio::task::JoinHandle<()>,
 ) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let remote = ContentServer::open_with_cache(
         &directory.path().join("remote/data"),
         &directory.path().join("remote/cache"),

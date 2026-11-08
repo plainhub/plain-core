@@ -68,7 +68,7 @@ fn engine_report(params: &Value) -> Value {
 
 const GRANTED: &str = r#"["AUDIO"]"#;
 
-fn fixture() -> (tempfile::TempDir, PublicSchema) {
+fn fixture() -> (plain_libs::temporary::TempDir, PublicSchema) {
     fixture_with(GRANTED, |method, params| match method {
         "syntheticAudioTracks" => json!(
             params["paths"]
@@ -92,8 +92,8 @@ fn fixture() -> (tempfile::TempDir, PublicSchema) {
 fn fixture_with(
     permissions: &str,
     handler: impl Fn(&str, Value) -> Value + Send + 'static,
-) -> (tempfile::TempDir, PublicSchema) {
-    let dir = tempfile::tempdir().unwrap();
+) -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs
         .set(
@@ -936,7 +936,7 @@ impl AlbumArtFixture {
 
 #[tokio::test]
 async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
     let uri = "content://media/external/audio/albumart/17";
     let schema = plain_graphql::Schema::build(

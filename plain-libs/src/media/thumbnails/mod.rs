@@ -591,7 +591,7 @@ pub fn write_thumb_cache(cache_path: &std::path::Path, data: &[u8]) -> std::io::
         std::fs::create_dir_all(parent)?;
     }
     let dir = cache_path.parent().unwrap_or(std::path::Path::new("."));
-    let mut tmp = tempfile::Builder::new().suffix(".tmp").tempfile_in(dir)?;
+    let mut tmp = crate::temporary::Builder::new().suffix(".tmp").tempfile_in(dir)?;
     tmp.write_all(data)?;
     tmp.persist(cache_path)?;
     Ok(())

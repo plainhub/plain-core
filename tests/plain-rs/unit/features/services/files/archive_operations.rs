@@ -20,7 +20,7 @@ fn archive(path: &Path, name: &str, bytes: &[u8]) {
 
 #[test]
 fn directory_round_trip_preserves_structure_bytes_and_modified_time() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source");
     std::fs::create_dir_all(source.join("empty")).unwrap();
     std::fs::create_dir_all(source.join("nested")).unwrap();
@@ -66,7 +66,7 @@ fn directory_round_trip_preserves_structure_bytes_and_modified_time() {
 
 #[test]
 fn archive_destinations_never_overwrite_existing_files_or_directories() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let file = directory.path().join("source.txt");
     std::fs::write(&file, b"source").unwrap();
     let target = directory.path().join("packed.zip");
@@ -94,7 +94,7 @@ fn archive_destinations_never_overwrite_existing_files_or_directories() {
 
 #[test]
 fn traversal_is_rejected_before_creating_an_output_directory() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.zip");
     archive(&source, "../escape.txt", b"bad");
     let target = directory.path().join("out");
@@ -111,7 +111,7 @@ fn traversal_is_rejected_before_creating_an_output_directory() {
 
 #[test]
 fn corrupted_archive_removes_all_new_outputs() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.zip");
     archive(&source, "note.txt", b"unique corruptible payload");
     let mut bytes = std::fs::read(&source).unwrap();
@@ -138,7 +138,7 @@ fn cancellation_during_chunk_copy_removes_the_reserved_file() {
             Ok(3)
         }
     }
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("partial.zip");
     let (_sender, stop, cancelled) = running_state();
     let (output, mut file) = reserve(&path, false).unwrap();
@@ -158,7 +158,7 @@ fn cancellation_during_chunk_copy_removes_the_reserved_file() {
 
 #[test]
 fn a_stopped_core_does_not_create_archive_outputs() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let (sender, stop, cancelled) = running_state();
     sender.send_replace(true);
     assert!(
@@ -175,7 +175,7 @@ fn a_stopped_core_does_not_create_archive_outputs() {
 
 #[test]
 fn an_archive_inside_its_source_uses_the_snapshot_before_output_creation() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source");
     std::fs::create_dir(&source).unwrap();
     std::fs::write(source.join("note.txt"), b"source bytes").unwrap();
@@ -199,7 +199,7 @@ fn an_archive_inside_its_source_uses_the_snapshot_before_output_creation() {
 #[cfg(unix)]
 #[test]
 fn links_preserve_the_alias_name_and_can_reference_the_same_target_twice() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source");
     let real = directory.path().join("real");
     std::fs::create_dir(&source).unwrap();
@@ -243,7 +243,7 @@ fn links_preserve_the_alias_name_and_can_reference_the_same_target_twice() {
 #[cfg(unix)]
 #[test]
 fn a_directory_link_cycle_is_rejected_before_reserving_output() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source");
     std::fs::create_dir(&source).unwrap();
     std::os::unix::fs::symlink(&source, source.join("cycle")).unwrap();
@@ -264,7 +264,7 @@ fn a_directory_link_cycle_is_rejected_before_reserving_output() {
 #[cfg(unix)]
 #[test]
 fn a_literal_backslash_filename_round_trips_on_filesystems_that_support_it() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("note\\name.txt");
     std::fs::write(&source, b"literal filename").unwrap();
     let (_sender, stop, cancelled) = running_state();
@@ -287,7 +287,7 @@ fn a_literal_backslash_filename_round_trips_on_filesystems_that_support_it() {
 
 #[tokio::test]
 async fn named_internal_archives_reject_invalid_aliases_and_stop_before_creating_output() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("log");
     std::fs::write(&source, b"log bytes").unwrap();
     let output = directory.path().join("output/logs.zip");
@@ -329,7 +329,7 @@ async fn named_internal_archives_reject_invalid_aliases_and_stop_before_creating
 #[test]
 fn special_entries_are_rejected_before_output_reservation() {
     for mode in [0o120777u32, 0o010644, 0o020600, 0o060600, 0o140600] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let source = directory.path().join("source.zip");
         archive(&source, "entry", b"../neighbor.txt");
         let mut bytes = std::fs::read(&source).unwrap();
@@ -359,7 +359,7 @@ fn special_entries_are_rejected_before_output_reservation() {
 fn extraction_does_not_restore_privileged_archive_permissions() {
     use std::os::unix::fs::PermissionsExt;
 
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.zip");
     archive(&source, "entry", b"plain file");
     let mut bytes = std::fs::read(&source).unwrap();

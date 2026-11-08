@@ -29,8 +29,8 @@ fn all_platforms_derive_one_layout_from_the_data_root() {
 #[test]
 fn fixed_directories_cannot_redirect_application_io() {
     for child in ["note-images", "audio", "logs"] {
-        let directory = tempfile::tempdir().unwrap();
-        let external = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
+        let external = plain_libs::temporary::tempdir().unwrap();
         let paths = DataPaths::new(directory.path());
         let link = directory.path().join(child);
         std::fs::create_dir_all(link.parent().unwrap()).unwrap();

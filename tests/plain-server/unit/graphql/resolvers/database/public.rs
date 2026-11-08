@@ -2,8 +2,8 @@ use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use serde_json::Value;
 use serde_json::json;
-fn fixture() -> (tempfile::TempDir, PublicSchema) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = plain_rs::infrastructure::data_paths::DataPaths::new(dir.path()).database();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(

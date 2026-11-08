@@ -136,8 +136,8 @@ type LoginSocket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 #[cfg(feature = "http_transport")]
-async fn passwordless_server() -> (tempfile::TempDir, crate::server::ContentServer, u16) {
-    let directory = tempfile::tempdir().unwrap();
+async fn passwordless_server() -> (plain_libs::temporary::TempDir, crate::server::ContentServer, u16) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = server.runtime_state();
     state.prefs.set("password_type", "NONE").unwrap();
@@ -762,7 +762,7 @@ fn password_protection(
 
 #[tokio::test]
 async fn password_login_requires_setup_and_the_configured_password() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = server.runtime_state();
     let security = &state.prefs;
@@ -1027,7 +1027,7 @@ async fn a_signed_hello_does_not_extend_the_initial_exchange_deadline() {
 #[tokio::test]
 async fn password_login_verifies_the_salted_record_and_rejects_reusable_stored_values() {
     use plain_rs::features::prefs::security;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = server.runtime_state();
     security::set_password_login(&state.prefs, "owned-password").unwrap();

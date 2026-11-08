@@ -1,6 +1,6 @@
 use super::*;
-fn fixture() -> (tempfile::TempDir, Prefs) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, Prefs) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     (dir, prefs)
 }

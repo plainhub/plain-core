@@ -14,7 +14,7 @@ fn value(kind: &str, id: &str, path: &str, duration_ms: i64) -> Duration {
 
 #[test]
 fn durations_survive_reopening_and_keep_exact_units_and_typed_ids() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     {
         let cache = DurationCache::new(directory.path());
         cache
@@ -56,7 +56,7 @@ fn durations_survive_reopening_and_keep_exact_units_and_typed_ids() {
 
 #[test]
 fn path_invalidation_respects_directory_boundaries_and_other_prefixes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = DurationCache::new(directory.path());
     cache
         .save(value("audio", "removed", "/root/song", 10))
@@ -86,7 +86,7 @@ fn path_invalidation_respects_directory_boundaries_and_other_prefixes() {
 
 #[test]
 fn invalid_entries_do_not_replace_valid_cache() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = DurationCache::new(directory.path());
     cache.save(value("audio", "one", "/file", 100)).unwrap();
     for invalid in [
@@ -107,14 +107,14 @@ fn invalid_entries_do_not_replace_valid_cache() {
 
 #[test]
 fn malformed_cache_is_reported_and_open_failure_is_not_an_empty_list() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db =
         Db::open(&crate::infrastructure::data_paths::DataPaths::new(directory.path()).database())
             .unwrap();
     db.insert(format!("{PREFIX}audio:bad"), "invalid JSON")
         .unwrap();
     assert!(DurationCache::new(directory.path()).all().is_err());
-    let blocked = tempfile::tempdir().unwrap();
+    let blocked = plain_libs::temporary::tempdir().unwrap();
     std::fs::write(
         crate::infrastructure::data_paths::DataPaths::new(blocked.path()).database(),
         b"file",
@@ -140,7 +140,7 @@ fn fresh_sqlite_schema_has_no_duration_cache_table() {
 
 #[test]
 fn matching_requires_the_same_kind_path_size_and_provider_second() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = DurationCache::new(directory.path());
     cache
         .save(value("video", "same", "/video", 5_000_000_001))
@@ -170,7 +170,7 @@ fn matching_requires_the_same_kind_path_size_and_provider_second() {
 
 #[test]
 fn removal_and_path_invalidation_prevent_inflight_probes_from_resurrecting_entries() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = DurationCache::new(directory.path());
     let first = cache.revision();
     cache.remove("audio", &["deleted".into()]).unwrap();
@@ -200,7 +200,7 @@ fn removal_and_path_invalidation_prevent_inflight_probes_from_resurrecting_entri
 
 #[test]
 fn unrelated_removals_cancel_pending_probes_without_committing_or_flushing() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let store = Arc::new(LazyDb::new(
         crate::infrastructure::data_paths::DataPaths::new(directory.path()).database(),
     ));
@@ -245,7 +245,7 @@ fn unrelated_removals_cancel_pending_probes_without_committing_or_flushing() {
 
 #[test]
 fn duration_probes_are_visible_in_memory_and_commit_fifty_one_entries_once() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let store = Arc::new(LazyDb::new(
         crate::infrastructure::data_paths::DataPaths::new(directory.path()).database(),
     ));
@@ -285,7 +285,7 @@ fn duration_probes_are_visible_in_memory_and_commit_fifty_one_entries_once() {
 
 #[test]
 fn pending_duration_invalidation_cannot_be_resurrected_by_a_later_flush() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = DurationCache::new(directory.path());
     cache
         .save(value("audio", "gone", "/root/gone", 10))
@@ -311,7 +311,7 @@ fn pending_duration_invalidation_cannot_be_resurrected_by_a_later_flush() {
 
 #[test]
 fn duration_write_failures_retain_the_latest_pending_values_without_resurrecting_removals() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let store = Arc::new(LazyDb::new(
         crate::infrastructure::data_paths::DataPaths::new(directory.path()).database(),
     ));

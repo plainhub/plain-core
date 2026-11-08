@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn photo_resource_uris_use_the_sdk_resource_stream_instead_of_filesystem_reads() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let path = "ph://asset/L0/001";

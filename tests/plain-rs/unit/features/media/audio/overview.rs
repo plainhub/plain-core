@@ -182,7 +182,7 @@ fn native_database(path: &std::path::Path) -> Db {
 
 #[test]
 fn native_history_and_catalog_share_one_snapshot_during_external_writes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("db");
     let db = native_database(&path);
     let writer = rusqlite::Connection::open(&path).unwrap();
@@ -215,7 +215,7 @@ fn native_history_and_catalog_share_one_snapshot_during_external_writes() {
 
 #[test]
 fn native_scan_covers_more_than_a_page_and_excludes_trash_and_other_media() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = native_database(&directory.path().join("db"));
     db.with_conn(|connection| -> rusqlite::Result<()> {
         let transaction = connection.unchecked_transaction()?;

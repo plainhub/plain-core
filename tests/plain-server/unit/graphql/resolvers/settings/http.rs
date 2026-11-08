@@ -9,8 +9,8 @@ use plain_rs::features::prefs::Prefs;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-fn device() -> (tempfile::TempDir, ContentServer, HeaderMap) {
-    let dir = tempfile::tempdir().unwrap();
+fn device() -> (plain_libs::temporary::TempDir, ContentServer, HeaderMap) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
     let server = ContentServer::start(

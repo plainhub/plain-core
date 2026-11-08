@@ -148,7 +148,7 @@ fn raw_build_milliseconds_and_soc_fallback_map_in_rust() {
 
 #[tokio::test]
 async fn fixed_device_information_is_reused_and_storage_remains_live() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let host = Host::default();
     let mut fixed = direct(&[], directory.path()).unwrap();
     fixed.app_version = "startup-version".into();

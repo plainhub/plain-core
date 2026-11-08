@@ -4,7 +4,7 @@ use serde_json::json;
 async fn conversation_reads_prepare_once_in_background_and_skip_searches_and_pages() {
     use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
     use std::sync::Arc;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );

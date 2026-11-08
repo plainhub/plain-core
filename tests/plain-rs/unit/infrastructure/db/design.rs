@@ -63,7 +63,7 @@ fn installed_schema_matches_generated_definitions() {
 
 #[test]
 fn current_track_reopens_from_kv_without_playback_progress() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("db");
     let db = Db::open(&path).unwrap();
     let id = register(&db);

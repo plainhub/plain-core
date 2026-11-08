@@ -58,7 +58,7 @@ impl DocParser {
 
     /// Parse the document.
     pub fn parse(&mut self) -> Result<Document> {
-        let mut container = cfb::CompoundFile::open(Cursor::new(&self.data[..]))
+        let mut container = plain_libs::compound_file::CompoundFile::open(Cursor::new(&self.data[..]))
             .map_err(|e| Error::InvalidData(format!("Word document: unreadable container: {e}")))?;
         let word_document = read_stream(&mut container, "/WordDocument")?;
         match fib::parse(&word_document)? {
@@ -72,7 +72,7 @@ impl DocParser {
     /// heading styles) and the character formatting Markdown carries. Its notes, headers and
     /// pictures are not read.
     fn parse_word6(
-        mut container: cfb::CompoundFile<Cursor<&[u8]>>,
+        mut container: plain_libs::compound_file::CompoundFile<Cursor<&[u8]>>,
         word_document: Vec<u8>,
         fib: fib::Word6Fib,
     ) -> Result<Document> {
@@ -105,7 +105,7 @@ impl DocParser {
     }
 
     fn parse_word97(
-        mut container: cfb::CompoundFile<Cursor<&[u8]>>,
+        mut container: plain_libs::compound_file::CompoundFile<Cursor<&[u8]>>,
         word_document: Vec<u8>,
         fib: fib::Fib,
     ) -> Result<Document> {
@@ -189,7 +189,7 @@ impl DocParser {
     }
 }
 
-fn read_stream(container: &mut cfb::CompoundFile<Cursor<&[u8]>>, name: &str) -> Result<Vec<u8>> {
+fn read_stream(container: &mut plain_libs::compound_file::CompoundFile<Cursor<&[u8]>>, name: &str) -> Result<Vec<u8>> {
     let stream = container.open_stream(name).map_err(|_| {
         Error::InvalidData(format!(
             "Word document: the {} stream is missing",

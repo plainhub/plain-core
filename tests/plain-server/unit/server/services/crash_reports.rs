@@ -11,8 +11,8 @@ fn request(report: &str) -> plain_graphql::Request {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn native_report_uses_owned_cache_fixed_metadata_and_only_the_latest_200_log_lines() {
-    let directory = tempfile::tempdir().unwrap();
-    let external_cache = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let external_cache = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(directory.path(), external_cache.path()).unwrap();
     let state = core.runtime_state();
     let paths = plain_rs::infrastructure::data_paths::DataPaths::new(directory.path());
@@ -75,8 +75,8 @@ async fn native_report_uses_owned_cache_fixed_metadata_and_only_the_latest_200_l
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn empty_logs_do_not_add_a_section_and_remote_requests_cannot_create_a_report() {
-    let directory = tempfile::tempdir().unwrap();
-    let external_cache = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let external_cache = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(directory.path(), external_cache.path()).unwrap();
     let state = core.runtime_state();
     state
@@ -106,8 +106,8 @@ async fn empty_logs_do_not_add_a_section_and_remote_requests_cannot_create_a_rep
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn publication_failure_is_reported_and_cleans_its_temporary_file() {
-    let directory = tempfile::tempdir().unwrap();
-    let external_cache = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let external_cache = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(directory.path(), external_cache.path()).unwrap();
     let state = core.runtime_state();
     state

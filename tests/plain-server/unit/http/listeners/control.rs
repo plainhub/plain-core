@@ -42,7 +42,7 @@ async fn complete(runtime: &Runtime) -> HttpServerState {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn restart_service_acknowledges_before_the_shutdown_lock_and_rejects_duplicates() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let lock = state.shutdown.lock().await;
@@ -63,7 +63,7 @@ async fn restart_service_acknowledges_before_the_shutdown_lock_and_rejects_dupli
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn native_restart_returns_final_ports_and_the_public_health_endpoint_is_ready() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let management = core.native_management().unwrap();
     let result = management
@@ -92,7 +92,7 @@ async fn native_restart_returns_final_ports_and_the_public_health_endpoint_is_re
 
 #[tokio::test]
 async fn remote_and_invalid_restart_requests_never_start_a_runtime_operation() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let remote = crate::graphql::executor::execute_graphql(
@@ -122,7 +122,7 @@ async fn remote_and_invalid_restart_requests_never_start_a_runtime_operation() {
 
 #[tokio::test]
 async fn listener_failure_is_reported_to_the_host_with_current_status() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (generation, mut requests) = state.host.connect();
@@ -161,7 +161,7 @@ async fn native_restart_waiter_rejects_a_replaced_operation() {
 }
 #[tokio::test]
 async fn state_changes_before_host_attachment_are_delivered_as_the_initial_snapshot() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let before = state

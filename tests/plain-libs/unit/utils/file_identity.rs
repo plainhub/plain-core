@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn physical_identity_survives_rename_and_content_changes() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let original = root.path().join("original.txt");
     let moved = root.path().join("moved.txt");
     std::fs::write(&original, b"before").unwrap();
@@ -15,7 +15,7 @@ fn physical_identity_survives_rename_and_content_changes() {
 
 #[test]
 fn hard_links_are_the_same_file_but_independent_copies_are_not() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let original = root.path().join("original.txt");
     let linked = root.path().join("linked.txt");
     let copied = root.path().join("copied.txt");
@@ -29,7 +29,7 @@ fn hard_links_are_the_same_file_but_independent_copies_are_not() {
 
 #[test]
 fn missing_sources_are_errors_without_creating_any_files() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let missing = root.path().join("missing.txt");
     assert_eq!(key(&missing).unwrap_err().kind(), io::ErrorKind::NotFound);
     assert!(!missing.exists());

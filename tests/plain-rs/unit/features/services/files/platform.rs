@@ -3,7 +3,7 @@ use serde_json::json;
 
 #[test]
 fn native_read_access_rechecks_real_targets_and_rejects_missing_or_relative_paths() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let file = temp.path().join("file");
     std::fs::write(&file, b"bytes").unwrap();
     assert!(authorize_native(&file, false).is_ok());
@@ -22,7 +22,7 @@ fn native_read_access_rechecks_real_targets_and_rejects_missing_or_relative_path
 
 #[tokio::test]
 async fn sdk_file_access_without_a_system_media_catalog_records_portable_file_metadata() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = crate::test_runtime::public_directory();
     let path = source.path().join("document.txt");
     std::fs::write(&path, b"owned catalog document").unwrap();
@@ -75,7 +75,7 @@ async fn sdk_recents(
     volumes: serde_json::Value,
     provider_rows: serde_json::Value,
 ) -> (Result<Vec<serde_json::Value>>, Vec<String>) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let host = Arc::new(Host::with_startup_config(config).unwrap());
@@ -146,7 +146,7 @@ async fn sdk_catalog_reuses_startup_metadata_and_queries_only_provider_rows() {
 
 #[tokio::test]
 async fn sdk_filesystem_scan_runs_in_rust_without_provider_or_per_file_host_calls() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     std::fs::write(dir.path().join("file.txt"), b"sample").unwrap();
     let (result, calls) = sdk_recents(
         crate::infrastructure::host::startup::StartupConfig {
@@ -197,7 +197,7 @@ async fn sdk_without_a_catalog_requires_a_primary_storage_directory() {
 
 #[tokio::test]
 async fn thumbnail_cache_opens_the_file_without_sdk_requests_and_rechecks_access() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state.file_platform.use_sdk_for_test();
@@ -240,7 +240,7 @@ async fn thumbnail_cache_opens_the_file_without_sdk_requests_and_rechecks_access
 #[tokio::test]
 async fn thumbnail_cache_rechecks_current_os_read_permissions() {
     use std::os::unix::fs::PermissionsExt;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state.file_platform.use_sdk_for_test();
@@ -271,7 +271,7 @@ async fn thumbnail_cache_rechecks_current_os_read_permissions() {
 
 #[tokio::test]
 async fn metadata_authorization_batches_sdk_paths_without_requiring_existing_files() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     state.file_platform.use_sdk_for_test();
@@ -321,7 +321,7 @@ async fn metadata_authorization_batches_sdk_paths_without_requiring_existing_fil
 
 #[tokio::test]
 async fn sdk_private_paths_skip_host_and_external_task_batches_sample_one_live_grant() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(&temp.path().join("core")).unwrap();
     let state = core.runtime_state();
     state.file_platform.use_sdk_for_test();
@@ -417,7 +417,7 @@ async fn automatic_indexing_excludes_private_hidden_nomedia_and_app_storage_path
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    let directory = tempfile::Builder::new()
+    let directory = plain_libs::temporary::Builder::new()
         .prefix("external-index-")
         .tempdir_in(home)
         .unwrap();
@@ -459,7 +459,7 @@ async fn media_resource_lookup_uses_zero_sql_and_tracks_committed_changes() {
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let id=state.db.with_conn(|connection|{
@@ -553,7 +553,7 @@ async fn media_resource_lookup_uses_zero_sql_and_tracks_committed_changes() {
 
 #[tokio::test]
 async fn identity_receipts_exclude_unavailable_volume_aliases() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state.db.with_conn(|connection| connection.execute_batch(

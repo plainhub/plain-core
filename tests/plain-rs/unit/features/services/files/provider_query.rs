@@ -211,7 +211,7 @@ fn mediastore_plans_only_name_columns_its_strict_grammar_accepts() {
 /// the matching `intentionally_ignored` arm fails here by name.
 #[test]
 fn every_field_the_web_client_can_emit_is_still_accepted() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     let cases: &[(Provider, &[&str], &str)] = &[
         // hooks/search.ts buildQ + hooks/header-search-query.ts buildNextMediaQ,
@@ -368,7 +368,7 @@ fn unknown_fields_are_refused_instead_of_dropped() {
 /// the guard is guarding a fiction.
 #[tokio::test]
 async fn a_query_that_builds_no_clause_is_the_one_the_destructive_path_refuses() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
 
     // The same field name, two providers, opposite answers: `type` is a Call
@@ -443,7 +443,7 @@ fn all_file_media_providers_bind_size_filters_to_the_provider_column() {
 
 #[test]
 fn call_date_filters_are_resolved_by_rust_without_a_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let input = params(
         &db,
@@ -473,7 +473,7 @@ fn call_date_filters_are_resolved_by_rust_without_a_host() {
 
 #[test]
 fn destructive_doc_queries_must_narrow_beyond_the_provider_defaults() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("db")).unwrap();
     for query in [
         "all:false",
@@ -499,7 +499,7 @@ fn destructive_doc_queries_must_narrow_beyond_the_provider_defaults() {
 
 #[test]
 fn persisted_exclusions_use_literal_subtree_boundaries_for_provider_rows() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("index.db")).unwrap();
     db.with_conn(|conn| conn.execute(
         "INSERT INTO volumes(id,identity,path,is_available,index_mode,excluded_dirs) VALUES('test','test','/storage/user',1,'BLOCKLIST',?1)",

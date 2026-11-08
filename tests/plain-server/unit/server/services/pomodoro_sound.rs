@@ -2,7 +2,7 @@ use crate::server::ContentServer;
 
 #[tokio::test]
 async fn native_import_replaces_sound_in_the_owned_layout_without_host_calls() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();

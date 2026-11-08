@@ -4,7 +4,7 @@ use crate::test_runtime::Core as ContentServer;
 #[tokio::test]
 async fn deleting_an_indexed_image_publishes_its_library_type_and_preserves_its_neighbor() {
     use crate::features::enums::DataType;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     let catalog =
@@ -191,7 +191,7 @@ async fn deletion_cleans_catalog_without_reindexing_missing_files_and_repeat_is_
 
 #[tokio::test]
 async fn public_rename_rejects_traversal_and_keeps_the_original_file() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     let source = directory.path().join("source");

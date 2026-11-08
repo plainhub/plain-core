@@ -414,7 +414,7 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
 #[tokio::test]
 async fn public_schema_pomodoro_roots_execute() {
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema = build(
@@ -570,7 +570,7 @@ fn base_type(ty: &str) -> String {
 #[tokio::test]
 async fn no_root_field_fails_for_unregistered_schema_data() {
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let probe_prefs = prefs.clone();
@@ -735,7 +735,7 @@ fn media_types_preserve_the_shared_interface() {
 #[tokio::test]
 async fn deployed_schema_exposes_platform_fields_and_subscriptions_on_every_host() {
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
     let schema = build(

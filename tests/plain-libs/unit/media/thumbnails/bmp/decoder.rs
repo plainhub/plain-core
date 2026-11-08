@@ -183,7 +183,7 @@ fn malformed_headers_and_every_truncation_return_errors_without_panics() {
 #[tokio::test]
 async fn duplicate_bmp_requests_generate_once_and_share_cached_bytes() {
     use crate::media::thumbnails::{self, ThumbOutcome, ThumbSpec};
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("batch.bmp");
     let bytes = fixtures::expanded("rgb24.bmp", 1025, 769, false);
     std::fs::write(&path, &bytes).unwrap();
@@ -221,7 +221,7 @@ async fn duplicate_bmp_requests_generate_once_and_share_cached_bytes() {
 
 #[tokio::test]
 async fn bmp_preview_cache_preserves_formats_alpha_and_real_file_extensions() {
-    let cache = tempfile::tempdir().unwrap();
+    let cache = crate::temporary::tempdir().unwrap();
     for &(name, alpha) in fixtures::FORMATS {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../plain-rs/testdata/bmp")

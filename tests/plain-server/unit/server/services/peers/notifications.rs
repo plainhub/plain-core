@@ -118,7 +118,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     };
-    let remote_dir = tempfile::tempdir().unwrap();
+    let remote_dir = plain_libs::temporary::tempdir().unwrap();
     let remote = ContentServer::open_with_cache(
         &remote_dir.path().join("data"),
         &remote_dir.path().join("cache"),
@@ -246,7 +246,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
             });
         }
     });
-    let local_dir = tempfile::tempdir().unwrap();
+    let local_dir = plain_libs::temporary::tempdir().unwrap();
     let local = ContentServer::open_with_cache(
         &local_dir.path().join("data"),
         &local_dir.path().join("cache"),

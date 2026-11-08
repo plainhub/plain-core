@@ -45,8 +45,8 @@ impl ConfirmationCallbacks {
 }
 
 #[cfg(feature = "http_transport")]
-async fn server() -> (tempfile::TempDir, crate::server::ContentServer, u16) {
-    let directory = tempfile::tempdir().unwrap();
+async fn server() -> (plain_libs::temporary::TempDir, crate::server::ContentServer, u16) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = crate::server::ContentServer::open(directory.path()).unwrap();
     server
         .runtime_state()

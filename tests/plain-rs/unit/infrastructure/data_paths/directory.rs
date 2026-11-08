@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn a_data_directory_is_initialized_once_and_remains_locked_for_the_process() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let first = DataDirectory::open(directory.path(), &directory.path().join("cache")).unwrap();
     let second =
         DataDirectory::open(&directory.path().join("."), &directory.path().join("cache")).unwrap();
@@ -37,7 +37,7 @@ fn a_data_directory_is_initialized_once_and_remains_locked_for_the_process() {
 
 #[test]
 fn invalid_fixed_directory_prevents_store_initialization() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     std::fs::write(paths.audio(), b"file in place of directory").unwrap();
     assert!(DataDirectory::open(directory.path(), &directory.path().join("cache")).is_err());
@@ -51,7 +51,7 @@ fn invalid_fixed_directory_prevents_store_initialization() {
 }
 #[test]
 fn invalid_pending_restore_prevents_store_initialization() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     std::fs::write(paths.pending_restore(), b"invalid marker").unwrap();
     assert!(DataDirectory::open(directory.path(), &directory.path().join("cache")).is_err());
@@ -61,7 +61,7 @@ fn invalid_pending_restore_prevents_store_initialization() {
 }
 #[test]
 fn existing_lock_ownership_prevents_restore_application() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     let lock = std::fs::OpenOptions::new()
         .read(true)

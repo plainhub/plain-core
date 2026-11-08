@@ -4,8 +4,8 @@ use plain_rs::runtime::Runtime as ServerState;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-fn fixture() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer, ServerState) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();

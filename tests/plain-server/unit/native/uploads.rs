@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn bounded_native_chunk_preserves_bytes_in_one_completed_chunk_file() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let (stop, receiver) = watch::channel(false);
     let uploads = NativeUploads::new(
         Arc::new(UploadChunks::new(directory.path().to_owned())),
@@ -27,7 +27,7 @@ async fn bounded_native_chunk_preserves_bytes_in_one_completed_chunk_file() {
 
 #[tokio::test]
 async fn empty_native_chunk_is_a_completed_zero_length_file() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let (_stop, receiver) = watch::channel(false);
     let uploads = NativeUploads::new(
         Arc::new(UploadChunks::new(directory.path().to_owned())),
@@ -44,7 +44,7 @@ async fn empty_native_chunk_is_a_completed_zero_length_file() {
 
 #[tokio::test]
 async fn oversized_native_chunk_is_rejected_before_creating_any_files() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let (_stop, receiver) = watch::channel(false);
     let uploads = NativeUploads::new(
         Arc::new(UploadChunks::new(directory.path().to_owned())),

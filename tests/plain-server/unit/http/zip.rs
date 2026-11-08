@@ -16,7 +16,7 @@ fn download_names_are_percent_encoded() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn encrypted_media_download_resolves_selection_and_preserves_each_basename_and_byte() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
@@ -78,7 +78,7 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
 #[tokio::test]
 async fn shared_directory_download_preserves_empty_directories_and_excludes_outside_links() {
     for with_file in [false, true] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
         let state = core.runtime_state();
         let (_generation, mut requests) = state.host.connect();

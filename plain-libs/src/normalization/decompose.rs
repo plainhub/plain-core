@@ -7,17 +7,19 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use super::Character;
 use smallvec::SmallVec;
 use std::iter::Fuse;
 use std::ops::Range;
 
 enum DecompositionType {
     Canonical,
+    #[cfg(feature = "ai-image-search")]
     Compatible,
 }
 
 /// External iterator for a string decomposition's characters.
-pub(super) struct Decompositions<I> {
+pub(super) struct Decompositions<I, A: Character, const MODERN: bool> {
     kind: DecompositionType,
     iter: Fuse<I>,
 
@@ -29,12 +31,14 @@ pub(super) struct Decompositions<I> {
     // 2) "Ready" characters which are sorted and ready to emit on demand;
     // 3) A "pending" block which stills needs more characters for us to be able
     //    to sort in canonical order and is not safe to emit.
-    buffer: SmallVec<[(u8, char, isize); 4]>,
+    buffer: SmallVec<[A::Entry; 4]>,
     ready: Range<usize>,
 }
 
 #[inline]
-pub(super) fn new_canonical<I: Iterator<Item = char>>(iter: I) -> Decompositions<I> {
+pub(super) fn new_canonical<I: Iterator<Item = char>, A: Character, const MODERN: bool>(
+    iter: I,
+) -> Decompositions<I, A, MODERN> {
     Decompositions {
         kind: self::DecompositionType::Canonical,
         iter: iter.fuse(),
@@ -44,7 +48,10 @@ pub(super) fn new_canonical<I: Iterator<Item = char>>(iter: I) -> Decompositions
 }
 
 #[inline]
-pub(super) fn new_compatible<I: Iterator<Item = char>>(iter: I) -> Decompositions<I> {
+#[cfg(feature = "ai-image-search")]
+pub(super) fn new_compatible<I: Iterator<Item = char>>(
+    iter: I,
+) -> Decompositions<I, (char, isize), false> {
     Decompositions {
         kind: self::DecompositionType::Compatible,
         iter: iter.fuse(),
@@ -53,23 +60,26 @@ pub(super) fn new_compatible<I: Iterator<Item = char>>(iter: I) -> Decomposition
     }
 }
 
-impl<I> Decompositions<I> {
+impl<I, A: Character, const MODERN: bool> Decompositions<I, A, MODERN> {
     #[inline]
     fn push_back(&mut self, ch: char, first: bool) {
-        let class = super::lookups::canonical_combining_class(ch);
+        let class = super::lookups::canonical_combining_class::<MODERN>(ch);
 
         if class == 0 {
             self.sort_pending();
         }
 
-        self.buffer.push((class, ch, if first { 0 } else { 1 }));
+        self.buffer.push(A::entry(class, ch, first));
+        if MODERN && class == 0 {
+            self.ready.end = self.buffer.len();
+        }
     }
 
     #[inline]
     fn sort_pending(&mut self) {
         // NB: `sort_by_key` is stable, so it will preserve the original text's
         // order within a combining class.
-        self.buffer[self.ready.end..].sort_by_key(|k| k.0);
+        self.buffer[self.ready.end..].sort_by_key(A::class);
         self.ready.end = self.buffer.len();
     }
 
@@ -96,20 +106,23 @@ impl<I> Decompositions<I> {
     }
 }
 
-impl<I: Iterator<Item = char>> Iterator for Decompositions<I> {
-    type Item = (char, isize);
+impl<I: Iterator<Item = char>, A: Character, const MODERN: bool> Iterator
+    for Decompositions<I, A, MODERN>
+{
+    type Item = A;
 
     #[inline]
-    fn next(&mut self) -> Option<(char, isize)> {
+    fn next(&mut self) -> Option<A> {
         while self.ready.end == 0 {
             match (self.iter.next(), &self.kind) {
                 (Some(ch), &DecompositionType::Canonical) => {
                     let mut first = true;
-                    super::normalize::decompose_canonical(ch, |d| {
+                    super::normalize::decompose_canonical::<_, MODERN>(ch, |d| {
                         self.push_back(d, first);
                         first = false;
                     });
                 }
+                #[cfg(feature = "ai-image-search")]
                 (Some(ch), &DecompositionType::Compatible) => {
                     let mut first = true;
                     super::normalize::decompose_compatible(ch, |d| {
@@ -143,9 +156,9 @@ impl<I: Iterator<Item = char>> Iterator for Decompositions<I> {
         // This less-than-obviously-safe implementation is chosen for performance,
         // minimizing the number & complexity of branches in `next` in the common
         // case of buffering then unbuffering a single character with each call.
-        let (_, ch, size) = self.buffer[self.ready.start];
+        let item = A::item(self.buffer[self.ready.start]);
         self.increment_next_ready();
-        Some((ch, size))
+        Some(item)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

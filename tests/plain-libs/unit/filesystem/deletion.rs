@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn destructive_path_validation_rejects_dot_targets_before_any_filesystem_operation() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let preserved = directory.path().join("preserved.txt");
     fs::write(&preserved, b"owned fixture").unwrap();
     assert!(validate(&preserved).is_ok());
@@ -37,8 +37,8 @@ fn windows_backslash_and_mixed_separator_dot_targets_are_rejected() {
 }
 #[test]
 fn receipts_include_only_physically_removed_nodes_without_following_symlinks() {
-    let temp = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
+    let outside = crate::temporary::tempdir().unwrap();
     let root = temp.path().join("root");
     fs::create_dir_all(root.join("nested")).unwrap();
     fs::write(root.join("nested/file"), b"synthetic").unwrap();
@@ -58,7 +58,7 @@ fn receipts_include_only_physically_removed_nodes_without_following_symlinks() {
 }
 #[test]
 fn changed_nodes_remain_failed_and_do_not_erase_receipts_for_other_successes() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     let root = temp.path().join("root");
     fs::create_dir(&root).unwrap();
     let blocked = root.join("blocked");
@@ -88,7 +88,7 @@ fn changed_nodes_remain_failed_and_do_not_erase_receipts_for_other_successes() {
 
 #[test]
 fn plan_does_not_remove_replaced_file() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let path = dir.path().join("original");
     std::fs::write(&path, "old").unwrap();
     let plan = super::Plan::inspect(&path).unwrap();

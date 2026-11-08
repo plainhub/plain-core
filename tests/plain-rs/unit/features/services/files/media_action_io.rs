@@ -39,7 +39,7 @@ fn scans() -> Arc<super::super::media_scans::MediaScans> {
 
 #[test]
 fn native_move_runs_one_commit_after_the_physical_move_and_preserves_collisions() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source_dir = directory.path().join("source");
     let target = directory.path().join("target");
     std::fs::create_dir(&source_dir).unwrap();
@@ -117,7 +117,7 @@ fn native_move_runs_one_commit_after_the_physical_move_and_preserves_collisions(
 #[cfg(feature = "runtime-media")]
 #[test]
 fn a_closed_scanner_refuses_physical_work_and_commit() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("note.txt");
     std::fs::write(&path, b"document").unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
@@ -146,7 +146,7 @@ fn a_closed_scanner_refuses_physical_work_and_commit() {
 
 #[test]
 fn invalid_provider_receipts_never_reach_shared_cleanup() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let operation = Operation {
         kind: DataType::Doc,
@@ -172,7 +172,7 @@ fn invalid_provider_receipts_never_reach_shared_cleanup() {
 
 #[test]
 fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let good_path = directory.path().join("good.wav");
     let blocked = directory.path().join("blocked");
@@ -244,7 +244,7 @@ fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row()
 
 #[test]
 fn wrong_media_type_and_corrupt_catalog_rows_never_delete_source_files() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let path = directory.path().join("note.txt");
     std::fs::write(&path, b"document").unwrap();

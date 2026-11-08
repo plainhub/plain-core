@@ -75,8 +75,8 @@ async fn tls() -> (u16, tokio::task::JoinHandle<()>, Arc<Notify>, Arc<Notify>) {
     });
     (port, task, started, released)
 }
-fn fixture() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
-    let directory = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer, ServerState) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );

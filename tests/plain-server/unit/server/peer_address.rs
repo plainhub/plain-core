@@ -4,7 +4,7 @@ use serde_json::json;
 #[tokio::test]
 async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_identity_without_host()
  {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = crate::server::ContentServer::open(dir.path()).unwrap();
     let state = server.runtime_state();
     let mut peer = DPeer::new(

@@ -6,7 +6,7 @@ fn package(id: &str, name: &str, kind: &str, size: i64, time: &str) -> Value {
 }
 #[test]
 fn packages_filter_certificates_types_and_page_after_sorting() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db.sqlite")).unwrap();
     let facts = vec![
         package("a", "Zeta", "USER", 5, "2026-10-05T00:00:00.000Z"),
@@ -32,7 +32,7 @@ fn packages_filter_certificates_types_and_page_after_sorting() {
 
 #[test]
 fn names_use_shared_pinyin_in_both_directions_and_keep_equal_names_stable() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db.sqlite")).unwrap();
     let facts = vec![
         package("z", "照片", "USER", 0, ""),

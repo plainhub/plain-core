@@ -24,7 +24,7 @@ fn metadata() -> crate::infrastructure::db::MediaFileMetadata {
 
 #[tokio::test]
 async fn native_catalog_reads_rows_counts_ids_and_buckets_without_a_host() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let stored = db.record_media_files(&[metadata()]).unwrap();
     let catalog = MediaCatalog::new(db, Arc::new(Host::default()));
@@ -104,7 +104,7 @@ async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
         }
         methods
     });
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let catalog = MediaCatalog::new(db, host);
     let rows = catalog
@@ -148,7 +148,7 @@ fn sampled_media_revisions_are_canonical_and_reject_malformed_volumes() {
 
 #[tokio::test]
 async fn semantic_image_candidates_intersect_platform_ids_and_keep_non_text_filters() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let tag = crate::features::tags::create_tag(&db, DataType::Image.kind(), "selected").unwrap();
     crate::features::tags::add_relations(&db, &[(tag.id.clone(), "2".into())]).unwrap();
@@ -215,7 +215,7 @@ async fn semantic_image_candidates_intersect_platform_ids_and_keep_non_text_filt
 
 #[tokio::test]
 async fn document_extensions_read_only_bounded_path_pages() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&directory.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();

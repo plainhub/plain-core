@@ -3,7 +3,7 @@ use super::*;
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn app_and_remote_access_share_listeners_without_background_service() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -120,7 +120,7 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn configured_public_uses_core_settings_and_keeps_listeners_on_tls_preflight_error() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let response = core
         .native_graphql()
@@ -177,8 +177,8 @@ async fn configured_public_uses_core_settings_and_keeps_listeners_on_tls_preflig
 #[tokio::test]
 async fn core_startup_persists_complete_identity_and_only_rotates_url_token_on_recreation() {
     use plain_rs::features::prefs::pref_keys::*;
-    let directory = tempfile::tempdir().unwrap();
-    let cache = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(directory.path(), cache.path()).unwrap();
     let prefs = core.state.prefs.clone();
     let first = prefs.entries();
@@ -238,7 +238,7 @@ async fn core_startup_persists_complete_identity_and_only_rotates_url_token_on_r
 #[tokio::test]
 async fn core_startup_propagates_system_initialization_failure_without_publishing_partial_secrets()
 {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("prefs.json");
     let prefs = Arc::new(plain_rs::features::prefs::Prefs::load(&path).unwrap());
     prefs.set("dev_token", "existing").unwrap();
@@ -269,7 +269,7 @@ async fn core_startup_propagates_system_initialization_failure_without_publishin
 #[cfg(feature = "core")]
 #[tokio::test]
 async fn shell_preferences_share_the_core_owner() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let shell = core.shared_preferences().unwrap();
     assert!(Arc::ptr_eq(&shell, &core.state.prefs));
@@ -287,7 +287,7 @@ async fn shell_preferences_share_the_core_owner() {
 
 #[tokio::test]
 async fn every_transport_build_serves_the_main_guest_and_peer_contracts_without_private_routes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -373,7 +373,7 @@ async fn startup_device_name_initialization_is_shared_and_preserves_user_changes
         (Some(" \t"), "Startup Name"),
         (Some("Chosen Name"), "Chosen Name"),
     ] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let prefs = Arc::new(
             plain_rs::features::prefs::Prefs::load(
                 &plain_rs::infrastructure::data_paths::DataPaths::new(directory.path()).prefs(),
@@ -428,7 +428,7 @@ async fn embedded_web_assets_survive_cache_clear_without_extraction() {
             }
         }
     }
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let data = directory.path().join("data");
     let cache = directory.path().join("cache");
     let server = ContentServer::open_with_cache(&data, &cache).unwrap();
@@ -488,7 +488,7 @@ async fn embedded_web_assets_survive_cache_clear_without_extraction() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn app_certificate_fingerprint_describes_the_active_listener() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let api = core.native_graphql().unwrap();
     let read = || async {

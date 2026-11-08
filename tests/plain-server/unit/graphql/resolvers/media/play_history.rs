@@ -5,8 +5,8 @@ use plain_rs::features::{enums::DataType, prefs::Prefs};
 use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::{Value, json};
 
-fn fixture(permissions: &[&str]) -> (tempfile::TempDir, Arc<Db>, PublicSchema) {
-    let directory = tempfile::tempdir().unwrap();
+fn fixture(permissions: &[&str]) -> (plain_libs::temporary::TempDir, Arc<Db>, PublicSchema) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", permissions).unwrap();
     let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());

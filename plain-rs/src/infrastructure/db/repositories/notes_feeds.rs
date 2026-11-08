@@ -150,11 +150,11 @@ fn query_filter(
             "today" if !notes && field.value == "true" => {
                 clauses.push("published_at>=?".to_string());
                 values.push(Value::Text(
-                    chrono::Local::now()
+                    plain_libs::local_time::Local::now()
                         .date_naive()
                         .and_hms_opt(0, 0, 0)
                         .unwrap()
-                        .and_local_timezone(chrono::Local)
+                        .and_local_timezone(plain_libs::local_time::Local)
                         .earliest()
                         .unwrap()
                         .with_timezone(&chrono::Utc)

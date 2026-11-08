@@ -4,8 +4,8 @@ use std::{
     time::{Duration as TimeDuration, UNIX_EPOCH},
 };
 
-fn fixture(provider_catalog: bool, mp4: bool) -> (tempfile::TempDir, Arc<Runtime>, Value) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture(provider_catalog: bool, mp4: bool) -> (plain_libs::temporary::TempDir, Arc<Runtime>, Value) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("sample.mp4");
     let data = if mp4 {
         let mut header = vec![0u8; 12];

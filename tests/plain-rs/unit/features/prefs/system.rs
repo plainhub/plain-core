@@ -1,7 +1,7 @@
 use crate::features::access::AccessFeature;
 use super::*;
-fn fixture() -> (tempfile::TempDir, Prefs) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, Prefs) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     (dir, prefs)
 }
@@ -92,7 +92,7 @@ fn runtime_preferences_use_shared_defaults_and_persist_only_system_values() {
 
 #[test]
 fn key_value_settings_validate_protected_fields_and_patch_permissions_atomically() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     bootstrap(&prefs).unwrap();
     let before = prefs.entries();

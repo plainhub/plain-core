@@ -1,0 +1,7 @@
+{
+  "name": "iana-time-zone",
+  "version": "0.1.65",
+  "repository": "https://github.com/strawlab/iana-time-zone",
+  "revision": "3726968181ae67d95c8de2f750a95b9c703ae4c8",
+  "archive-sha256": "e31bc9ad994ba00e440a8aa5c9ef0ec67d5cb5e5cb0cc7f8b744a35b389cc470"
+}

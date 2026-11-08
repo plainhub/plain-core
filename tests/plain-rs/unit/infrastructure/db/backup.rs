@@ -1,8 +1,8 @@
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-fn temporary() -> tempfile::TempDir {
-    tempfile::Builder::new()
+fn temporary() -> plain_libs::temporary::TempDir {
+    plain_libs::temporary::Builder::new()
         .prefix("plain-db-backup-")
         .tempdir()
         .unwrap()

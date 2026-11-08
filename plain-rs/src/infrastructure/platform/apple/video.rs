@@ -63,7 +63,7 @@ pub fn transcode(source: &Path, destination: &Path, cancelled: &AtomicBool) -> R
         .as_deref()
         == Some("hev1")
     {
-        let mut temporary = tempfile::Builder::new().suffix(".mp4").tempfile_in(
+        let mut temporary = plain_libs::temporary::Builder::new().suffix(".mp4").tempfile_in(
             destination
                 .parent()
                 .context("Missing video output directory")?,

@@ -3,7 +3,7 @@ use serde_json::json;
 
 #[tokio::test]
 async fn receiver_preserves_state_rules_and_refuses_operations_after_stop() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let management = core.native_management().unwrap();
@@ -47,7 +47,7 @@ async fn snapshot(core: &ContentServer) -> serde_json::Value {
 #[tokio::test]
 async fn enabling_receiver_uses_the_public_listeners_actual_bound_port() {
     let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (http, _) = core

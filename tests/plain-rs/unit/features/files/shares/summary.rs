@@ -10,7 +10,7 @@ fn root(path: &std::path::Path) -> Root {
 
 #[test]
 fn single_directory_counts_visible_children_without_walking_directories() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     fs::write(dir.path().join("visible"), b"abc").unwrap();
     fs::write(dir.path().join(".hidden"), b"hidden").unwrap();
     fs::create_dir(dir.path().join("nested")).unwrap();
@@ -26,7 +26,7 @@ fn single_directory_counts_visible_children_without_walking_directories() {
 
 #[test]
 fn multiple_roots_count_files_and_directories_without_expanding_them() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let nested = dir.path().join("nested");
     fs::create_dir(&nested).unwrap();
     fs::write(nested.join("child"), b"not counted").unwrap();
@@ -43,7 +43,7 @@ fn multiple_roots_count_files_and_directories_without_expanding_them() {
 
 #[test]
 fn large_files_preserve_64_bit_sizes_and_missing_roots_count_without_bytes() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let file = dir.path().join("large");
     fs::File::create(&file)
         .unwrap()

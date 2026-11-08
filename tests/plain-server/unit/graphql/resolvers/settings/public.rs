@@ -24,8 +24,8 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 
 fn fixture(
     handler: impl Fn(&str, Value) -> Value + Send + 'static,
-) -> (tempfile::TempDir, PublicSchema) {
-    let dir = tempfile::tempdir().unwrap();
+) -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
@@ -40,7 +40,7 @@ fn fixture(
 
 #[tokio::test]
 async fn reads_come_from_the_rust_store() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
@@ -211,7 +211,7 @@ fn only_registered_keys_are_writable_for_each_origin() {
 #[cfg(feature = "core")]
 #[tokio::test]
 async fn saved_data_uses_kv_and_drafts_are_scoped_to_the_full_target() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let schema = core.native_graphql().unwrap();
     for (key, value) in [
@@ -293,7 +293,7 @@ async fn remote_tools_receive_effective_app_home_features_without_local_settings
 
 #[tokio::test]
 async fn file_index_configuration_is_not_stored_in_preferences() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::in_memory());
     let host = Arc::new(Host::default());
     let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());

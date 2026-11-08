@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 
 #[tokio::test]
 async fn listener_port_requires_an_active_public_server() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state.http_server.started((45123, 45124));
@@ -24,7 +24,7 @@ async fn listener_port_requires_an_active_public_server() {
 
 #[tokio::test]
 async fn enabling_without_http_defers_platform_work_and_retry() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (_, mut requests) = state.host.connect();
@@ -40,7 +40,7 @@ async fn enabling_without_http_defers_platform_work_and_retry() {
 
 #[tokio::test]
 async fn receiver_requires_multicast_permission() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let host = state.host.clone();

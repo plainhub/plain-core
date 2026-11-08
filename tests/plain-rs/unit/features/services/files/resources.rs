@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn animation_detection_never_exchanges_with_the_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("animation.gif");
     std::fs::write(&path, b"GIF89a\0\0").unwrap();
     let host = Host::default();
@@ -20,7 +20,7 @@ async fn animation_detection_never_exchanges_with_the_host() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn native_app_paths_and_format_helpers_are_direct_and_do_not_restore_retired_commands() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let host = Arc::new(Host::default());
     let (_generation, mut requests) = host.connect();
     let db =

@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::Arc;
-fn fixture(id: &str) -> (tempfile::TempDir, crate::test_runtime::Core) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::test_runtime::Core) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let (key, _public) = plain_libs::crypto::ed25519_generate();

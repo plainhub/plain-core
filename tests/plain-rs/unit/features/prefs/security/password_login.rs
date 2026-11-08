@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn pending_password_setup_survives_security_bootstrap() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     prefs.set(PASSWORD_TYPE, PasswordType::Fixed).unwrap();
     prefs.set(PASSWORD, "").unwrap();
@@ -12,7 +12,7 @@ fn pending_password_setup_survives_security_bootstrap() {
 
 #[test]
 fn password_login_starts_with_setup_then_preserves_the_configured_credential() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     bootstrap(&prefs).unwrap();
     let identity = prefs.get::<String>(CLIENT_ID).unwrap();
@@ -42,7 +42,7 @@ fn password_login_starts_with_setup_then_preserves_the_configured_credential() {
 
 #[test]
 fn concurrent_setup_only_commits_one_password() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     bootstrap(&prefs).unwrap();
     configure_password_login(&prefs).unwrap();
@@ -67,7 +67,7 @@ fn concurrent_setup_only_commits_one_password() {
 
 #[test]
 fn password_login_disables_approval_without_replacing_credentials_or_other_host_defaults() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     bootstrap(&prefs).unwrap();
     assert_eq!(password_type(&prefs).unwrap(), PasswordType::None);
@@ -90,7 +90,7 @@ fn password_login_disables_approval_without_replacing_credentials_or_other_host_
 
 #[test]
 fn startup_replaces_existing_plaintext_without_rehashing_a_stored_verifier() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     prefs.set(PASSWORD, "existing-fixture-password").unwrap();
     prefs.set(PASSWORD_TYPE, PasswordType::Fixed).unwrap();
@@ -106,7 +106,7 @@ fn startup_replaces_existing_plaintext_without_rehashing_a_stored_verifier() {
 
 #[test]
 fn setup_accepts_only_client_digests_and_never_stores_the_digest() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     configure_password_login(&prefs).unwrap();
     for invalid in ["", "plaintext-password", "ABCDEF"] {

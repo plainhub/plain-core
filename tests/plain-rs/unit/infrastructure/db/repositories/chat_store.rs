@@ -135,7 +135,7 @@ fn checked_chat_storage_is_atomic_literal_and_preserves_unrelated_conversations_
 }
 #[test]
 fn nearby_cache_keeps_newest_facts_and_all_records_survive_reopening() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let path = temp.path().join("db");
     let db = Db::open(&path).unwrap();
     let mut item = DNearbyDeviceCache {

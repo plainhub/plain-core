@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn main_share_content_uses_saved_roots_identity_and_live_port() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let server = ContentServer::start(
@@ -63,7 +63,7 @@ async fn main_share_content_uses_saved_roots_identity_and_live_port() {
 
 #[tokio::test]
 async fn main_folder_share_and_batch_chat_use_shared_services_without_host_calls() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::start(
         directory.path(),
         &plain_libs::utils::base64::base64_encode(&[7; 32]),

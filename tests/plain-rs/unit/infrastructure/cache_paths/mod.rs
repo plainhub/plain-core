@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn cache_layout_is_independent_of_the_persistent_root() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let data = directory.path().join("data");
     std::fs::create_dir(&data).unwrap();
     let cache = CachePaths::new(&directory.path().join("system-cache"));
@@ -22,7 +22,7 @@ fn cache_layout_is_independent_of_the_persistent_root() {
 
 #[test]
 fn shared_preview_initialization_preserves_an_existing_file_and_rejects_it() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let data = directory.path().join("data");
     std::fs::create_dir(&data).unwrap();
     let cache = CachePaths::new(&directory.path().join("cache"));
@@ -37,7 +37,7 @@ fn shared_preview_initialization_preserves_an_existing_file_and_rejects_it() {
 
 #[test]
 fn disposable_cache_cannot_contain_persistent_application_files() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let data = directory.path().join("data");
     std::fs::create_dir(&data).unwrap();
     for root in [directory.path(), data.as_path()] {
@@ -53,7 +53,7 @@ fn disposable_cache_cannot_contain_persistent_application_files() {
 #[cfg(unix)]
 #[test]
 fn cache_overlap_and_sdk_links_are_rejected_after_path_resolution() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let data = directory.path().join("data");
     std::fs::create_dir(&data).unwrap();
     let alias = directory.path().join("alias");

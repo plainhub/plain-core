@@ -15,14 +15,19 @@ pub mod file_walk;
 pub mod filesystem;
 #[cfg(feature = "media")]
 pub mod media;
+#[cfg(any(feature = "ai-image-search", feature = "document-nfc"))]
+pub mod normalization;
 #[cfg(feature = "phone")]
 pub mod phone;
 pub mod platform;
+#[cfg(feature = "time")]
+pub mod local_time;
 #[cfg(feature = "regex")]
 pub mod regex;
 #[cfg(feature = "tls")]
 pub mod tls;
 pub mod utils;
+pub mod temporary;
 
 #[cfg(any(test, feature = "test-seams"))]
 #[path = "../../tests/plain-libs/support/tempdirs.rs"]
@@ -39,6 +44,8 @@ pub mod sqlite;
 #[path = "../../tests/plain-libs/support/apk.rs"]
 pub mod test_apk;
 
+#[cfg(feature = "compound-file")]
+pub mod compound_file;
 pub mod case;
 pub mod assertions;
 pub mod streams;

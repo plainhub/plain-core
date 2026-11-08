@@ -22,7 +22,7 @@ async fn execute(server: &ContentServer, document: String) -> Value {
 }
 #[tokio::test]
 async fn local_messages_edit_forward_and_clear_through_native_executor() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(dir.path());
     let state = server.runtime_state();
     let mut events = state.events.subscribe();
@@ -96,7 +96,7 @@ async fn local_messages_edit_forward_and_clear_through_native_executor() {
 }
 #[tokio::test]
 async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(dir.path());
     let state = server.runtime_state();
     let source = dir.path().join("fixture.txt");
@@ -152,7 +152,7 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
 }
 #[tokio::test]
 async fn long_text_files_and_invalid_targets_use_the_same_message_lifecycle() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(dir.path());
     let text = "😀".repeat(1100);
     let result = execute(
@@ -180,7 +180,7 @@ async fn long_text_files_and_invalid_targets_use_the_same_message_lifecycle() {
 
 #[tokio::test]
 async fn retry_returns_pending_before_platform_transport_completes() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(dir.path());
     let (kp, pk) = plain_libs::crypto::ed25519_generate();
     let state = server.runtime_state();
@@ -262,7 +262,7 @@ async fn retry_returns_pending_before_platform_transport_completes() {
 
 #[tokio::test]
 async fn batch_forward_uses_current_content_and_owns_each_creation_event() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(dir.path());
     let state = server.runtime_state();
     let source = execute(

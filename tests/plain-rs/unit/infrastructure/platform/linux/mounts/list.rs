@@ -14,7 +14,7 @@ fn block_usage_preserves_available_blocks_and_rejects_unrepresentable_sizes() {
 #[cfg(target_os = "linux")]
 #[test]
 fn statfs_usage_reads_native_statistics_and_reports_invalid_paths() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let (total, used, free) = statfs_usage(directory.path().to_str().unwrap()).unwrap();
     assert!(total > 0);
     assert_eq!(total, used + free);

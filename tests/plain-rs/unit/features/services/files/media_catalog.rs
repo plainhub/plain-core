@@ -25,7 +25,7 @@ fn file(data_type: DataType, path: &str, title: &str, size_bytes: i64) -> MediaF
 
 #[test]
 fn rows_and_count_share_literal_filters_and_stable_pagination() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     db.record_media_files(&[
         file(DataType::Audio, "/audio/one.mp3", "100% Song", 30),
@@ -55,7 +55,7 @@ fn rows_and_count_share_literal_filters_and_stable_pagination() {
 
 #[test]
 fn document_filters_and_explicit_trash_selection_use_current_catalog() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let created = db
         .record_media_files(&[
@@ -85,7 +85,7 @@ fn document_filters_and_explicit_trash_selection_use_current_catalog() {
 
 #[test]
 fn bucket_items_use_shared_visibility_and_original_folder_names() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let mut older = file(
         DataType::Image,
@@ -138,7 +138,7 @@ fn bucket_items_use_shared_visibility_and_original_folder_names() {
 
 #[test]
 fn document_bucket_items_keep_the_same_nonempty_document_filter_as_rows() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     db.record_media_files(&[
         file(DataType::Doc, "/docs/readme.txt", "Readme", 5),
@@ -153,7 +153,7 @@ fn document_bucket_items_keep_the_same_nonempty_document_filter_as_rows() {
 
 #[test]
 fn action_ids_share_filters_and_explicit_from_trash_overrides_the_query_mode() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let created = db
         .record_media_files(&[
@@ -187,7 +187,7 @@ fn action_ids_share_filters_and_explicit_from_trash_overrides_the_query_mode() {
 
 #[test]
 fn bulk_selection_includes_every_row_beyond_ten_thousand_and_deduplicates_ids() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let rows = db
         .record_media_files(
@@ -226,7 +226,7 @@ fn bulk_selection_includes_every_row_beyond_ten_thousand_and_deduplicates_ids() 
 
 #[test]
 fn document_extensions_keep_filters_and_combine_extension_case() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     db.record_media_files(&[
         file(DataType::Doc, "/documents/report.PDF", "Report", 30),
@@ -251,7 +251,7 @@ fn counting_one_media_kind_does_not_scan_unrelated_files() {
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     db.with_conn(|connection|{
         connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('media-count','media-count','/media-count',1)",[]).unwrap();

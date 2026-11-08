@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn import_reserves_temporary_file_before_writing_and_cleans_up_on_failure() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let data = b"exclusive temporary import";
     let strong = bytes_to_hex(&Sha256::digest(data));
@@ -289,7 +289,7 @@ fn display_name_falls_back_to_mime_extension() {
 
 #[test]
 fn concurrent_imports_and_releases_keep_other_owners_files() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let results = std::thread::scope(|scope| {
         let tasks = (0..16)
@@ -320,7 +320,7 @@ fn concurrent_imports_and_releases_keep_other_owners_files() {
 
 #[test]
 fn failed_database_changes_restore_files_and_counts() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     db.with_conn(|conn| conn.execute_batch("CREATE TRIGGER fail_insert BEFORE INSERT ON app_files BEGIN SELECT RAISE(ABORT,'test'); END;")).unwrap();
     assert!(import_bytes(&db, dir.path(), b"new file", "text/plain").is_err());
@@ -346,8 +346,8 @@ fn failed_database_changes_restore_files_and_counts() {
 #[cfg(unix)]
 #[test]
 fn store_rejects_symlink_escape_before_creating_paths() {
-    let dir = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let outside = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     std::os::unix::fs::symlink(outside.path(), dir.path().join("files")).unwrap();
     assert!(import_bytes(&db, dir.path(), b"attachment", "text/plain").is_err());

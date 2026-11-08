@@ -78,7 +78,7 @@ pub async fn prepare(
     let directory = directory.to_path_buf();
     let temporary = tokio::task::spawn_blocking(move || {
         std::fs::create_dir_all(&directory)?;
-        tempfile::tempfile_in(directory)
+        plain_libs::temporary::tempfile_in(directory)
     })
     .await
     .map_err(|error| error.to_string())?

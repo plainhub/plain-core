@@ -4,8 +4,8 @@ use serde_json::{Value, json};
 const TOKEN: &str = "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=";
 
 #[cfg(feature = "http_transport")]
-fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
         plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap(),
     );
@@ -47,7 +47,7 @@ fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
 }
 
 #[cfg(feature = "http_transport")]
-async fn public_fixture() -> (tempfile::TempDir, crate::server::ContentServer, u16) {
+async fn public_fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer, u16) {
     let (dir, server) = fixture();
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (http, _) = server

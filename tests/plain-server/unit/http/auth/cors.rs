@@ -34,7 +34,7 @@ async fn preflight(
 
 #[tokio::test]
 async fn cors_uses_actual_scheme_authority_and_safe_preflight_headers() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     core.set_build_debug(false);
     let response = preflight(&core, "https://device.local", "https").await;
@@ -71,7 +71,7 @@ async fn cors_uses_actual_scheme_authority_and_safe_preflight_headers() {
 
 #[tokio::test]
 async fn cross_origin_access_follows_current_shared_preferences_or_debug_configuration() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     for (any_host, debug, allowed) in [
         (false, false, false),
@@ -105,7 +105,7 @@ async fn cross_origin_access_follows_current_shared_preferences_or_debug_configu
 
 #[tokio::test]
 async fn http2_same_origin_uses_uri_authority_without_host_header() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     core.set_build_debug(false);
     let router = Router::new()

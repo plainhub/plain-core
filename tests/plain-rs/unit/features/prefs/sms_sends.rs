@@ -6,7 +6,7 @@ use std::sync::{
 
 #[test]
 fn multipart_success_waits_for_all_distinct_parts_and_keeps_correlation() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Db::open(&directory.path().join("plain.db")).unwrap();
     register(&prefs, "send-a".into(), Some("request-a".into()), 2, 100).unwrap();
     register(&prefs, "send-b".into(), Some("request-b".into()), 1, 100).unwrap();
@@ -55,7 +55,7 @@ fn multipart_success_waits_for_all_distinct_parts_and_keeps_correlation() {
 
 #[test]
 fn partial_state_and_terminal_outbox_survive_reopen_and_expire_once() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("plain.db");
     {
         let prefs = Db::open(&path).unwrap();
@@ -90,7 +90,7 @@ fn partial_state_and_terminal_outbox_survive_reopen_and_expire_once() {
 
 #[test]
 fn concurrent_part_callbacks_commit_one_terminal_result() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Db::open(&directory.path().join("plain.db")).unwrap());
     register(&prefs, "send".into(), None, 16, 100).unwrap();
     let results = AtomicUsize::new(0);

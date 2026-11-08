@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn archive_replaces_date_and_rejects_invalid_input_without_changing_existing_record() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db.sqlite")).unwrap();
     archive(&db, "thread", "2026-10-05T01:00:00.000Z").unwrap();
     archive(&db, "thread", "2026-10-05T10:00:00.000+08:00").unwrap();

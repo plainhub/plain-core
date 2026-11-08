@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[tokio::test]
 async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
         crate::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap(),
     );
@@ -59,7 +59,7 @@ async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts(
 
 #[tokio::test]
 async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visibility_inference() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = server.runtime_state();
     let mut peer = crate::infrastructure::db::DPeer::new(
@@ -129,7 +129,7 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
 
 #[tokio::test]
 async fn bluetooth_pause_does_not_preserve_stale_lan_devices() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = server.runtime_state();
     let (generation, mut requests) = state.host.connect();

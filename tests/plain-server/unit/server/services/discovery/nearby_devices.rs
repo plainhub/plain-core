@@ -6,7 +6,7 @@ use serde_json::json;
 #[tokio::test]
 async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
     use std::sync::Arc;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("client_id", "local").unwrap();

@@ -60,7 +60,7 @@ async fn completion_between_state_read_and_wait_is_not_lost() {
 
 #[tokio::test]
 async fn destructive_path_batches_validate_every_target_before_touching_any_file_or_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state.file_platform.use_sdk_for_test();
@@ -90,7 +90,7 @@ async fn destructive_path_batches_validate_every_target_before_touching_any_file
 
 async fn whole_selection_preflight_case(sdk: bool) {
     for kind in [FileTaskType::Copy, FileTaskType::Move] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let core = ContentServer::open(&directory.path().join("core")).unwrap();
         let state = core.runtime_state();
         if sdk {

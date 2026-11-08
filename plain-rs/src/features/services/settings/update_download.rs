@@ -387,7 +387,7 @@ async fn save_stream<B: AsRef<[u8]>>(
         std::fs::symlink_metadata(&root)?.file_type().is_dir(),
         "Invalid update cache directory"
     );
-    let staging = tempfile::Builder::new()
+    let staging = plain_libs::temporary::Builder::new()
         .prefix(".download-")
         .tempdir_in(&root)?;
     let mut stop = state.stop.clone();

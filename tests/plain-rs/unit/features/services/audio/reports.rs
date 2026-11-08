@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn completion_fact_dispatches_once_and_never_rebroadcasts_the_platform_event() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[9; 32]),
@@ -79,7 +79,7 @@ async fn completion_fact_dispatches_once_and_never_rebroadcasts_the_platform_eve
 
 #[tokio::test]
 async fn an_acknowledged_start_notifies_the_library_once_without_echoing_the_sdk_fact() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[9; 32]),

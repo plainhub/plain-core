@@ -3,7 +3,7 @@ use super::*;
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn setup_route_uses_the_real_listener_scheme_and_persists_across_restart() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     plain_rs::features::prefs::security::configure_password_login(&state.prefs).unwrap();
@@ -64,7 +64,7 @@ async fn setup_route_uses_the_real_listener_scheme_and_persists_across_restart()
 
 #[tokio::test]
 async fn password_setup_requires_tls_and_cannot_replace_an_existing_password() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     plain_rs::features::prefs::security::configure_password_login(&state.prefs).unwrap();

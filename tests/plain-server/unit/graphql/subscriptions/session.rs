@@ -3,7 +3,7 @@ use crate::server::ContentServer;
 
 #[tokio::test]
 async fn search_waits_for_capacity_and_cancellation_releases_a_blocked_send() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::open(directory.path()).unwrap();
     let executor = server.native_graphql().unwrap();
     let handle = executor.open_subscriptions(Default::default()).unwrap();
@@ -48,7 +48,7 @@ async fn search_waits_for_capacity_and_cancellation_releases_a_blocked_send() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn stopping_http_preserves_native_subscriptions_and_closes_remote_subscriptions() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::open(directory.path()).unwrap();
     let executor = server.native_graphql().unwrap();
     let handle = executor.open_subscriptions(Default::default()).unwrap();
@@ -80,7 +80,7 @@ async fn stopping_http_preserves_native_subscriptions_and_closes_remote_subscrip
 
 #[tokio::test]
 async fn scan_events_wait_for_capacity_without_closing_the_connection_or_blocking_heartbeat() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::open(directory.path()).unwrap();
     let executor = server.native_graphql().unwrap();
     let handle = executor.open_subscriptions(Default::default()).unwrap();
@@ -133,7 +133,7 @@ async fn scan_events_wait_for_capacity_without_closing_the_connection_or_blockin
 
 #[tokio::test]
 async fn closing_a_session_releases_a_blocked_event_producer() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::open(directory.path()).unwrap();
     let executor = server.native_graphql().unwrap();
     let handle = executor.open_subscriptions(Default::default()).unwrap();

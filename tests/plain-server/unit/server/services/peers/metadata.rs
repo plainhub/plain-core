@@ -18,13 +18,13 @@ use tokio::sync::Notify;
 use tokio::sync::watch;
 
 async fn fixture() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     ContentServer,
     ServerState,
     DPeer,
     Identity,
 ) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
@@ -56,7 +56,7 @@ async fn fixture() -> (
 #[tokio::test]
 async fn encrypted_app_observations_work_without_notification_support_and_cannot_outlive_credentials()
  {
-    let remote_dir = tempfile::tempdir().unwrap();
+    let remote_dir = plain_libs::temporary::tempdir().unwrap();
     let remote = ContentServer::open_with_cache(
         &remote_dir.path().join("data"),
         &remote_dir.path().join("cache"),

@@ -8,7 +8,7 @@ use std::sync::{
 
 #[tokio::test]
 async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("plain.db");
     let token = plain_libs::utils::base64::base64_encode(&[10; 32]);
     let prefs =
@@ -285,7 +285,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
 
 #[tokio::test]
 async fn delete_bookmark_group_emits_stored_rows_after_database_changes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[19; 32]);
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),

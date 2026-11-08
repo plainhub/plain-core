@@ -18,7 +18,7 @@ fn bucket_path_layout() {
 
 #[tokio::test]
 async fn unicode_trash_search_preserves_case_folding_before_paging() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let trash = store(directory.path());
     let paths = [
         directory.path().join("Ωmega.txt"),
@@ -49,7 +49,7 @@ async fn unicode_trash_search_preserves_case_folding_before_paging() {
 
 #[tokio::test]
 async fn trash_and_restore_preserve_file_identity_favorite_and_text_store() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let trash = store(directory.path());
     let path = directory.path().join("report.txt");
     std::fs::write(&path, b"restore").unwrap();
@@ -98,7 +98,7 @@ async fn trash_and_restore_preserve_file_identity_favorite_and_text_store() {
 
 #[tokio::test]
 async fn permanent_deletion_waits_for_filesystem_success() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let trash = store(directory.path());
     let path = directory.path().join("report.txt");
     std::fs::write(&path, b"deleted").unwrap();
@@ -127,7 +127,7 @@ async fn permanent_deletion_waits_for_filesystem_success() {
 
 #[tokio::test]
 async fn trash_lists_only_the_directory_root_and_restores_descendant_ids() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let trash = store(directory.path());
     let root = directory.path().join("folder");
     std::fs::create_dir(&root).unwrap();
@@ -200,7 +200,7 @@ fn volume_trash_failures_other_than_access_do_not_silently_select_another_root()
 #[cfg(unix)]
 #[test]
 fn a_symlink_cannot_replace_an_owned_trash_root() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let other = directory.path().join("other");
     std::fs::create_dir(&other).unwrap();
     std::os::unix::fs::symlink(&other, directory.path().join(".plain-trash")).unwrap();
@@ -216,7 +216,7 @@ fn a_symlink_cannot_replace_an_owned_trash_root() {
 #[cfg(unix)]
 #[test]
 fn nested_trash_symlinks_are_rejected_before_creating_any_outside_directories() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let root = directory.path().join(".plain-trash");
     let outside = directory.path().join("outside");
     std::fs::create_dir(&root).unwrap();

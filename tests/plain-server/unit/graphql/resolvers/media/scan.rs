@@ -3,7 +3,7 @@ use plain_graphql::Request;
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn native_media_controls_share_the_main_contract_and_remote_permissions() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state
@@ -32,7 +32,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         }
     });
     let native = core.native_graphql().unwrap();
-    let source = tempfile::tempdir().unwrap();
+    let source = plain_libs::temporary::tempdir().unwrap();
     let source_path = source.path().canonicalize().unwrap();
     let id = state.db.register_volume(&source_path).unwrap();
     let query = native.execute(Request::new("{ fileIndexVolumes { id path indexMode includedDirs excludedDirs isAvailable } fileIndexDefaults { excludedDirs excludedNames } }")).await;
@@ -116,7 +116,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state

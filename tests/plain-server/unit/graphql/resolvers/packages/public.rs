@@ -24,8 +24,8 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
     });
 }
 
-fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema, Arc<Prefs>) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture(permissions: Value) -> (plain_libs::temporary::TempDir, PublicSchema, Arc<Prefs>) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", permissions).unwrap();
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());

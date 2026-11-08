@@ -37,7 +37,7 @@ fn malformed_memory_values_are_skipped_and_byte_conversion_saturates() {
 #[cfg(not(target_os = "android"))]
 #[test]
 fn release_file_parsing_preserves_version_fallback() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let release = directory.path().join("os-release");
     let fallback = directory.path().join("lsb-release");
     std::fs::write(&release, "NAME=Example OS\nVERSION_ID=42\n").unwrap();

@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::decompose::Decompositions;
+use super::{Character, decompose::Decompositions};
 use smallvec::SmallVec;
 
 enum RecompositionState {
@@ -18,16 +18,18 @@ enum RecompositionState {
 }
 
 /// External iterator for a string recomposition's characters.
-pub(super) struct Recompositions<I> {
-    iter: Decompositions<I>,
+pub(super) struct Recompositions<I, A: Character, const MODERN: bool> {
+    iter: Decompositions<I, A, MODERN>,
     state: RecompositionState,
-    buffer: SmallVec<[(char, isize); 4]>,
-    composee: Option<(char, isize)>,
+    buffer: SmallVec<[A; 4]>,
+    composee: Option<A>,
     last_ccc: Option<u8>,
 }
 
 #[inline]
-pub(super) fn new_canonical<I: Iterator<Item = char>>(iter: I) -> Recompositions<I> {
+pub(super) fn new_canonical<I: Iterator<Item = char>, A: Character, const MODERN: bool>(
+    iter: I,
+) -> Recompositions<I, A, MODERN> {
     Recompositions {
         iter: super::decompose::new_canonical(iter),
         state: self::RecompositionState::Composing,
@@ -38,7 +40,10 @@ pub(super) fn new_canonical<I: Iterator<Item = char>>(iter: I) -> Recompositions
 }
 
 #[inline]
-pub(super) fn new_compatible<I: Iterator<Item = char>>(iter: I) -> Recompositions<I> {
+#[cfg(feature = "ai-image-search")]
+pub(super) fn new_compatible<I: Iterator<Item = char>>(
+    iter: I,
+) -> Recompositions<I, (char, isize), false> {
     Recompositions {
         iter: super::decompose::new_compatible(iter),
         state: self::RecompositionState::Composing,
@@ -48,40 +53,43 @@ pub(super) fn new_compatible<I: Iterator<Item = char>>(iter: I) -> Recomposition
     }
 }
 
-impl<I: Iterator<Item = char>> Iterator for Recompositions<I> {
-    type Item = (char, isize);
+impl<I: Iterator<Item = char>, A: Character, const MODERN: bool> Iterator
+    for Recompositions<I, A, MODERN>
+{
+    type Item = A;
 
     #[inline]
-    fn next(&mut self) -> Option<(char, isize)> {
+    fn next(&mut self) -> Option<A> {
         use self::RecompositionState::*;
 
         loop {
             match self.state {
                 Composing => {
-                    for (ch, change) in self.iter.by_ref() {
-                        let ch_class = super::lookups::canonical_combining_class(ch);
+                    for item in self.iter.by_ref() {
+                        let ch = item.character();
+                        let ch_class = super::lookups::canonical_combining_class::<MODERN>(ch);
                         let k = match self.composee {
                             None => {
                                 if ch_class != 0 {
-                                    return Some((ch, change));
+                                    return Some(item);
                                 }
-                                self.composee = Some((ch, change));
+                                self.composee = Some(item);
                                 continue;
                             }
                             Some(k) => k,
                         };
                         match self.last_ccc {
-                            None => match super::normalize::compose(k.0, ch) {
+                            None => match super::normalize::compose::<MODERN>(k.character(), ch) {
                                 Some(r) => {
-                                    self.composee = Some((r, k.1 + change - 1));
+                                    self.composee = Some(k.merge(item, r));
                                     continue;
                                 }
                                 None => {
                                     if ch_class == 0 {
-                                        self.composee = Some((ch, change));
+                                        self.composee = Some(item);
                                         return Some(k);
                                     }
-                                    self.buffer.push((ch, change));
+                                    self.buffer.push(item);
                                     self.last_ccc = Some(ch_class);
                                 }
                             },
@@ -89,22 +97,22 @@ impl<I: Iterator<Item = char>> Iterator for Recompositions<I> {
                                 if l_class >= ch_class {
                                     // `ch` is blocked from `composee`
                                     if ch_class == 0 {
-                                        self.composee = Some((ch, change));
+                                        self.composee = Some(item);
                                         self.last_ccc = None;
                                         self.state = Purging(0);
                                         return Some(k);
                                     }
-                                    self.buffer.push((ch, change));
+                                    self.buffer.push(item);
                                     self.last_ccc = Some(ch_class);
                                     continue;
                                 }
-                                match super::normalize::compose(k.0, ch) {
+                                match super::normalize::compose::<MODERN>(k.character(), ch) {
                                     Some(r) => {
-                                        self.composee = Some((r, k.1 + change - 1));
+                                        self.composee = Some(k.merge(item, r));
                                         continue;
                                     }
                                     None => {
-                                        self.buffer.push((ch, change));
+                                        self.buffer.push(item);
                                         self.last_ccc = Some(ch_class);
                                     }
                                 }

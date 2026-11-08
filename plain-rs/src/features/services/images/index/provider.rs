@@ -98,7 +98,7 @@ impl ImageProvider {
                                 .seek(SeekFrom::Start(0))
                                 .map_err(|error| error.to_string())?;
                             std::fs::create_dir_all(&cache).map_err(|error| error.to_string())?;
-                            let mut temporary = tempfile::NamedTempFile::new_in(cache)
+                            let mut temporary = plain_libs::temporary::NamedTempFile::new_in(cache)
                                 .map_err(|error| error.to_string())?;
                             std::io::copy(reader, &mut temporary)
                                 .map_err(|error| error.to_string())?;
@@ -122,7 +122,7 @@ impl ImageProvider {
         }
         std::fs::create_dir_all(&self.cache)
             .map_err(|error| DomainError::Other(error.to_string()))?;
-        let output = tempfile::NamedTempFile::new_in(&self.cache)
+        let output = plain_libs::temporary::NamedTempFile::new_in(&self.cache)
             .map_err(|error| DomainError::Other(error.to_string()))?;
         let source = staged
             .as_ref()

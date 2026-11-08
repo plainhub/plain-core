@@ -73,7 +73,7 @@ fn custom_resolver() {
     let global_options = GlobalOptions::new().use_custom_resolvers(true);
     crate::audio_tags::config::apply_global_options(global_options);
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let path = dir.path().join("fixture.myfile");
     std::fs::write(&path, b"myfile").unwrap();
     let read = crate::audio_tags::read_from_path(&path).unwrap();

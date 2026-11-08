@@ -175,9 +175,9 @@ impl PptParser {
     /// Parse the presentation: one section per slide, in presentation order, with the
     /// slide's text as paragraphs and its notes as the section's notes.
     pub fn parse(&mut self) -> Result<Document> {
-        let mut container = cfb::CompoundFile::open(IoCursor::new(&self.data[..]))
+        let mut container = plain_libs::compound_file::CompoundFile::open(IoCursor::new(&self.data[..]))
             .map_err(|e| invalid(format!("unreadable container: {e}")))?;
-        let read = |container: &mut cfb::CompoundFile<IoCursor<&[u8]>>, name: &str| {
+        let read = |container: &mut plain_libs::compound_file::CompoundFile<IoCursor<&[u8]>>, name: &str| {
             let input = container
                 .open_stream(name)
                 .map_err(|e| Error::InvalidData(format!("PowerPoint stream: {e}")))?;

@@ -63,7 +63,7 @@ fn native_catalog_ids_do_not_select_the_sdk_thumbnail_route() {
 ))]
 #[tokio::test]
 async fn core_only_thumbnail_preserves_aspect_without_host_requests_or_output_tokens() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("image.png");
     image::RgbImage::from_pixel(8, 4, image::Rgb([200, 100, 50]))
         .save(&path)
@@ -95,7 +95,7 @@ async fn core_only_thumbnail_preserves_aspect_without_host_requests_or_output_to
 #[cfg(not(feature = "runtime-media"))]
 #[tokio::test]
 async fn core_only_thumbnail_applies_exif_orientation_before_sizing() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("rotated.jpg");
     let image = image::RgbImage::from_pixel(3, 2, image::Rgb([200, 100, 50]));
     let mut jpeg = Vec::new();
@@ -126,7 +126,7 @@ async fn core_only_thumbnail_applies_exif_orientation_before_sizing() {
 
 #[tokio::test]
 async fn native_png_thumbnail_retains_transparent_and_partial_alpha() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("transparent.png");
     image::RgbaImage::from_fn(768, 768, |x, _| {
         image::Rgba([40, 90, 150, if x < 384 { 0 } else { 128 }])
@@ -152,7 +152,7 @@ async fn native_png_thumbnail_retains_transparent_and_partial_alpha() {
 
 #[tokio::test]
 async fn native_image_fit_preserves_aspect_without_enlarging_small_images() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("small.png");
     image::RgbImage::from_pixel(8, 4, image::Rgb([200, 100, 50]))
         .save(&path)

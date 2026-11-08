@@ -25,7 +25,7 @@ impl Engine for Fake {
 }
 #[test]
 fn commands_preserve_resume_and_repeat_one_only_applies_to_completion() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     let mut engine = Fake {
@@ -63,7 +63,7 @@ fn commands_preserve_resume_and_repeat_one_only_applies_to_completion() {
 
 #[test]
 fn restarting_the_core_plays_the_remembered_track_from_zero() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("db");
     let prefs = std::sync::Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let db = Db::open(&path).unwrap();
@@ -102,7 +102,7 @@ fn restarting_the_core_plays_the_remembered_track_from_zero() {
 
 #[test]
 fn path_playback_is_temporary_and_never_enqueues_or_fabricates_an_id() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("db");
     let db = Db::open(&path).unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
@@ -128,7 +128,7 @@ fn path_playback_is_temporary_and_never_enqueues_or_fabricates_an_id() {
 
 #[test]
 fn completion_checks_path_revision_and_duplicates_before_advancing_the_queue() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     let mut engine = Fake {

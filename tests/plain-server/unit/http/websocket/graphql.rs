@@ -9,7 +9,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         .lock()
         .await;
     tokio::time::timeout(Duration::from_secs(30), async {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let server = crate::server::ContentServer::open(directory.path()).unwrap();
         let state = server.runtime_state();
         state.prefs.set(plain_rs::features::prefs::pref_keys::API_PERMISSIONS, vec!["FILES"]).unwrap();
@@ -181,7 +181,7 @@ async fn fs_burst_and_page_cancellation(
         .build()
         .unwrap();
     let origin = format!("https://localhost:{port}");
-    let source = tempfile::tempdir().unwrap();
+    let source = plain_libs::temporary::tempdir().unwrap();
     let original = source.path().join("original.jpg");
     image::RgbImage::from_fn(800, 600, |x, y| {
         image::Rgb([(x % 220) as u8, (y % 220) as u8, 60])

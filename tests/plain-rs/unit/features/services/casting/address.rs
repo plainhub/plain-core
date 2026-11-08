@@ -13,7 +13,7 @@ fn cast_http_addresses_preserve_default_port_and_validate_bound_ports() {
 
 #[tokio::test]
 async fn configured_device_names_need_no_network_or_host_facts() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state

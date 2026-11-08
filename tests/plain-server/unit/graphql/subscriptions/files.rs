@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 
 #[tokio::test]
 async fn native_directory_search_streams_unindexed_files_in_excluded_directories_and_finishes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("node_modules");
     std::fs::create_dir(&source).unwrap();
     for index in 0..300 {
@@ -60,7 +60,7 @@ async fn native_directory_search_streams_unindexed_files_in_excluded_directories
 
 #[tokio::test]
 async fn large_search_keeps_frames_bounded_and_waits_for_a_slow_reader() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source");
     std::fs::create_dir(&source).unwrap();
     for index in 0..10000 {

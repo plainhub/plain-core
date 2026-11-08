@@ -4,7 +4,7 @@ use std::io::{Cursor, Read};
 #[tokio::test]
 async fn streamed_archives_preserve_many_entries_and_repeated_source_bytes() {
     for count in [2, 129] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let archives = Archives::new(crate::infrastructure::cache_paths::CachePaths::new(
             &directory.path().join("cache"),
         ));
@@ -60,7 +60,7 @@ fn malformed_names_fail_before_sources_are_read_or_staging_is_created() {
         ".",
         "nul\0name",
     ] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let staging = directory.path().join("staging");
         let missing = directory.path().join("missing-source");
         let error = build_archive(
@@ -79,7 +79,7 @@ fn malformed_names_fail_before_sources_are_read_or_staging_is_created() {
 
 #[tokio::test]
 async fn unnamed_media_entries_use_the_source_basename() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("original.txt");
     std::fs::write(&path, b"original bytes").unwrap();
     let archives = Archives::new(crate::infrastructure::cache_paths::CachePaths::new(
@@ -110,7 +110,7 @@ async fn unnamed_media_entries_use_the_source_basename() {
 
 #[tokio::test]
 async fn archive_preview_is_readable_without_exposing_private_archive_staging() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(&directory.path().join("data")).unwrap();
     let state = core.runtime_state();
     let source = directory.path().join("owned.zip");

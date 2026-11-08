@@ -296,7 +296,7 @@ fn a_large_unused_chunk_does_not_consume_the_resource_read_budget() {
     data.extend(0x7777u16.to_le_bytes());
     data.extend(8u16.to_le_bytes());
     data.extend((64u32 * 1024 * 1024 + 8).to_le_bytes());
-    let mut file = tempfile::tempfile().unwrap();
+    let mut file = crate::temporary::tempfile().unwrap();
     file.write_all(&data).unwrap();
     file.set_len(size as u64).unwrap();
     let reader = ResourceReader::new(file).unwrap();

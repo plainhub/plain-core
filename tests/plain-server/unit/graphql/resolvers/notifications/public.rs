@@ -24,8 +24,8 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
     });
 }
 
-fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture(permissions: Value) -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", permissions).unwrap();
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
@@ -164,7 +164,7 @@ async fn reply_notification_rejects_a_negative_index_without_calling_the_host() 
 
 #[test]
 fn reported_notifications_keep_permission_filtering_and_project_public_events() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     let (events, mut receiver) = tokio::sync::broadcast::channel(8);
     let facts = |kind: &str| {
@@ -196,7 +196,7 @@ fn reported_notifications_keep_permission_filtering_and_project_public_events() 
 
 #[test]
 fn sms_refresh_hints_follow_notification_permissions_filters_and_event_kinds() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     let (events, mut receiver) = tokio::sync::broadcast::channel(8);
     let facts = |kind: &str, app: &str| {

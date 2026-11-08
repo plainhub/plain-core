@@ -1,6 +1,6 @@
 use std::{fs, time::Duration};
 
-use tempfile::tempdir;
+use crate::temporary::tempdir;
 
 use super::*;
 

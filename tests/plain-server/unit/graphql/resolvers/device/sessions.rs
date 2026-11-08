@@ -4,8 +4,8 @@ use crate::server::ContentServer;
 use plain_graphql::Request;
 use plain_rs::features::sessions::SessionStore;
 
-fn fixture() -> (tempfile::TempDir, ContentServer) {
-    let directory = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::open(directory.path()).unwrap();
     let state = server.runtime_state();
     state.prefs.set("background_service_enabled", true).unwrap();

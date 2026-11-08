@@ -333,7 +333,7 @@ async fn headless_dispatch_rejects_the_retired_image_metadata_operation() {
 
 #[tokio::test]
 async fn audio_queue_uses_the_registered_host_and_keeps_unindexed_playback_temporary() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let indexed = directory.path().join("indexed.mp3");
     let raw = directory.path().join("raw.mp3");
     let fixture = std::path::Path::new(concat!(

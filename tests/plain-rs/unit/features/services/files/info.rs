@@ -57,7 +57,7 @@ async fn unsupported_video_returns_null_and_local_images_use_rust_without_host_m
     let host = Arc::new(Host::default());
     let (_generation, mut requests) = host.connect();
     let info = Info::sdk(host);
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let video = directory.path().join("unsupported.mp4");
     std::fs::write(&video, b"unsupported container").unwrap();
     assert!(
@@ -88,7 +88,7 @@ async fn unsupported_video_returns_null_and_local_images_use_rust_without_host_m
 async fn sdk_images_with_supported_headers_skip_host_metadata_calls() {
     let host = Arc::new(Host::default());
     let (_generation, mut requests) = host.connect();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("sample.png");
     image::RgbImage::new(3, 2).save(&path).unwrap();
     let facts = Info::sdk(host)
@@ -101,7 +101,7 @@ async fn sdk_images_with_supported_headers_skip_host_metadata_calls() {
 }
 #[tokio::test]
 async fn distant_tiff_fields_are_served_by_rust_without_sdk_metadata_fallback() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("distant.tiff");
     let bytes = distant_tiff_bytes();
     std::fs::write(&path, bytes).unwrap();
@@ -141,7 +141,7 @@ fn distant_tiff_bytes() -> Vec<u8> {
 
 #[tokio::test]
 async fn opaque_image_descriptors_use_logical_ranges_and_the_same_rust_exif_path() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let bytes = distant_tiff_bytes();
     let source = directory.path().join("resource");
     let mut wrapped = b"private-prefix".to_vec();
@@ -204,7 +204,7 @@ async fn nonseekable_opaque_image_streams_are_prepared_in_rust_and_cleaned_after
         io::Write,
         os::{fd::OwnedFd, unix::net::UnixStream},
     };
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("image.png");
     image::RgbImage::new(3, 2).save(&source).unwrap();
     let bytes = std::fs::read(source).unwrap();
@@ -301,7 +301,7 @@ async fn sdk_audio_details_parse_container_duration_and_raw_location_without_met
         bytes.extend(data);
         bytes
     }
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("recording.m4a");
     let raw = "+12.345678-123.456789/";
     let mut location = (raw.len() as u16).to_be_bytes().to_vec();
@@ -336,7 +336,7 @@ async fn sdk_audio_details_parse_container_duration_and_raw_location_without_met
 
 #[tokio::test]
 async fn sdk_aac_and_amr_details_use_the_shared_rust_duration_reader() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let mut aac = vec![0; 16];
     aac[..7].copy_from_slice(&[0xff, 0xf1, 0x4c, 0x80, 0x02, 0x1f, 0xfc]);
     let mut amr = b"#!AMR-WB\n".to_vec();
@@ -364,7 +364,7 @@ async fn sdk_aac_and_amr_details_use_the_shared_rust_duration_reader() {
 
 #[tokio::test]
 async fn unknown_audio_details_remain_nullable_without_restoring_a_host_parser() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("unknown.audio");
     std::fs::write(&path, b"unknown container").unwrap();
     let host = Arc::new(Host::default());
@@ -446,7 +446,7 @@ async fn opaque_video_details_use_one_owned_descriptor_without_sdk_metadata_or_s
 }
 
 async fn assert_owned_video_info(name: &str, width: i64, height: i64, duration: i64) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let bytes = std::fs::read(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../plain-rs/testdata")

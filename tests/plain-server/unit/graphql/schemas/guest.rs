@@ -2,7 +2,7 @@ use super::*;
 use crate::server::ContentServer;
 #[tokio::test]
 async fn shared_file_rows_read_metadata_directly_without_host_dispatch() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let folder = directory.path().join("Shared");
     std::fs::create_dir(&folder).unwrap();
     std::fs::write(folder.join("note.txt"), b"shared content").unwrap();

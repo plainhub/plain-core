@@ -1,7 +1,7 @@
 use super::*;
 
-fn fixture() -> (tempfile::TempDir, Db) {
-    let root = tempfile::tempdir().unwrap();
+fn fixture() -> (crate::temporary::TempDir, Db) {
+    let root = crate::temporary::tempdir().unwrap();
     let database = Db::open(&root.path().join("plain.db")).unwrap();
     (root, database)
 }
@@ -207,7 +207,7 @@ fn injected_failure_keeps_batch_and_json_writes_uncommitted() {
 
 #[test]
 fn lazy_open_creates_a_database_file_only_on_first_use_and_shares_its_handle() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let path = root.path().join("plain.db");
     let lazy = LazyDb::new(path.clone());
     assert!(!path.exists());

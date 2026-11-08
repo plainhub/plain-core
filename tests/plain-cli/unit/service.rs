@@ -7,7 +7,7 @@ async fn management_pairing_with_cli_requires_password_without_second_approval()
     use plain_rs::features::services::discovery::pairing_attempts::{self, Mode, PairingPhase};
     use plain_rs::infrastructure::db::chat_store::peers;
 
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let start = |name: &str| {
         let dir = root.path().join(name);
         async move {
@@ -106,7 +106,7 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
             [[AccessFeature::Files].as_slice(), &defaults[..4]].concat(),
         ),
     ] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let paths = AppPaths {
             data_dir: directory.path().join("data"),
             cache_dir: directory.path().join("cache"),
@@ -211,7 +211,7 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
 #[tokio::test]
 async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_shutdown_or_failure()
 {
-    let directory = tempfile::Builder::new()
+    let directory = plain_libs::temporary::Builder::new()
         .prefix("cli-service-")
         .tempdir_in(plain_rs::infrastructure::platform::system::consts::home_directory().unwrap())
         .unwrap();

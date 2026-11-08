@@ -7648,6 +7648,7 @@ pub(super) const CANONICAL_DECOMPOSED_KV: &[(u32, &'static [char])] = &[
     (0x2f818, &['\u{51A4}']),
 ];
 
+#[cfg(feature = "ai-image-search")]
 pub(super) const COMPATIBILITY_DECOMPOSED_SALT: &[u16] = &[
     0x0,
     0x0,
@@ -11328,6 +11329,7 @@ pub(super) const COMPATIBILITY_DECOMPOSED_SALT: &[u16] = &[
     0x1,
     0x0,
 ];
+#[cfg(feature = "ai-image-search")]
 pub(super) const COMPATIBILITY_DECOMPOSED_KV: &[(u32, &'static [char])] = &[
     (0x2f1f, &['\u{571F}']),
     (0x1d430, &['\u{0077}']),
@@ -15009,6 +15011,7 @@ pub(super) const COMPATIBILITY_DECOMPOSED_KV: &[(u32, &'static [char])] = &[
     (0x1d5f5, &['\u{0068}']),
 ];
 
+#[cfg(feature = "ai-image-search")]
 pub(super) const COMBINING_MARK_SALT: &[u16] = &[
     0x0,
     0x2,
@@ -17108,6 +17111,7 @@ pub(super) const COMBINING_MARK_SALT: &[u16] = &[
     0x3,
     0x0,
 ];
+#[cfg(feature = "ai-image-search")]
 pub(super) const COMBINING_MARK_KV: &[u32] = &[
     0x1a6c,
     0x115dd,

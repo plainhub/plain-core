@@ -9,29 +9,30 @@
 // except according to those terms.
 
 //! Functions for computing canonical and compatible decompositions for Unicode characters.
-use super::lookups::{
-    canonical_fully_decomposed, compatibility_fully_decomposed, composition_table,
-};
+#[cfg(feature = "ai-image-search")]
+use super::lookups::compatibility_fully_decomposed;
+use super::lookups::{canonical_fully_decomposed, composition_table};
 use std::char;
 
 /// Compute canonical Unicode decomposition for character.
 /// See [Unicode Standard Annex #15](http://www.unicode.org/reports/tr15/)
 /// for more information.
 #[inline]
-pub(super) fn decompose_canonical<F>(c: char, emit_char: F)
+pub(super) fn decompose_canonical<F, const MODERN: bool>(c: char, emit_char: F)
 where
     F: FnMut(char),
 {
-    decompose(c, canonical_fully_decomposed, emit_char)
+    decompose(c, canonical_fully_decomposed::<MODERN>, emit_char)
 }
 
 /// Compute canonical or compatible Unicode decomposition for character.
 /// See [Unicode Standard Annex #15](http://www.unicode.org/reports/tr15/)
 /// for more information.
 #[inline]
+#[cfg(feature = "ai-image-search")]
 pub(super) fn decompose_compatible<F: FnMut(char)>(c: char, emit_char: F) {
     let decompose_char =
-        |c| compatibility_fully_decomposed(c).or_else(|| canonical_fully_decomposed(c));
+        |c| compatibility_fully_decomposed(c).or_else(|| canonical_fully_decomposed::<false>(c));
     decompose(c, decompose_char, emit_char)
 }
 
@@ -67,8 +68,8 @@ where
 /// Compose two characters into a single character, if possible.
 /// See [Unicode Standard Annex #15](http://www.unicode.org/reports/tr15/)
 /// for more information.
-pub(super) fn compose(a: char, b: char) -> Option<char> {
-    compose_hangul(a, b).or_else(|| composition_table(a, b))
+pub(super) fn compose<const MODERN: bool>(a: char, b: char) -> Option<char> {
+    compose_hangul(a, b).or_else(|| composition_table::<MODERN>(a, b))
 }
 
 // Constants from Unicode 9.0.0 Section 3.12 Conjoining Jamo Behavior

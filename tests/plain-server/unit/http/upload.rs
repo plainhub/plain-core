@@ -72,7 +72,7 @@ async fn multipart_upload(
 #[tokio::test]
 async fn multipart_regular_upload_streams_without_host_preserves_replacements_and_validates_parts()
 {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -164,7 +164,7 @@ async fn multipart_regular_upload_streams_without_host_preserves_replacements_an
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_directory() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[8; 32]);
     let prefs = std::sync::Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),

@@ -65,7 +65,7 @@ fn streaming_is_selected_only_when_the_layout_and_reduction_are_supported() {
 #[test]
 #[ignore]
 fn batch_thumbnail_benchmark() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("batch.bmp");
     std::fs::write(&path, expanded("rgb24.bmp", 4096, 3072, false)).unwrap();
     let decode = |streaming: bool| {

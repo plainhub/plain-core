@@ -14,7 +14,7 @@ fn server() -> ReadDirectoryChangesServer {
 
 #[test]
 fn repeated_registration_drains_the_old_request_before_releasing_it() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let mut server = server();
     let path = directory.path().to_path_buf();
     server.add_watch(path.clone(), true).unwrap();
@@ -30,7 +30,7 @@ fn repeated_registration_drains_the_old_request_before_releasing_it() {
 
 #[test]
 fn failed_native_submission_releases_request_without_waiting_for_a_callback() {
-    let file = tempfile::NamedTempFile::new().unwrap();
+    let file = crate::temporary::NamedTempFile::new().unwrap();
     let state = Rc::new(WatchState {
         handle: File::open(file.path()).unwrap(),
         dir: file.path().to_path_buf(),
@@ -59,7 +59,7 @@ fn completion_pointer_addresses_the_request_prefix_and_buffer_is_aligned() {
 fn dropping_the_controller_joins_and_releases_the_handler() {
     let handler: Arc<Mutex<dyn EventHandler>> = Arc::new(Mutex::new(|_| {}));
     let weak = Arc::downgrade(&handler);
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let mut watcher = ReadDirectoryChangesWatcher::create(handler).unwrap();
     watcher
         .watch(directory.path(), RecursiveMode::Recursive)
@@ -72,7 +72,7 @@ fn dropping_the_controller_joins_and_releases_the_handler() {
 fn stopping_consumes_successful_or_aborted_completions_without_rearming() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     for error in [0, ERROR_OPERATION_ABORTED] {
-        let file = tempfile::NamedTempFile::new().unwrap();
+        let file = crate::temporary::NamedTempFile::new().unwrap();
         let state = Rc::new(WatchState {
             handle: File::open(file.path()).unwrap(),
             dir: file.path().to_path_buf(),

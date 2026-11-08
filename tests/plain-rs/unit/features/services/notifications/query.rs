@@ -3,7 +3,7 @@ use serde_json::json;
 
 #[test]
 fn notifications_apply_preferences_literal_text_and_instant_order() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     prefs
         .set(

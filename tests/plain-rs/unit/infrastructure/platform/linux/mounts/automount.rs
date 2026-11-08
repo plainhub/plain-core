@@ -244,7 +244,7 @@ fn inhibition_is_released_after_error_and_nested_guards() {
 
 #[tokio::test]
 async fn watcher_shutdown_reaps_the_monitor_without_output() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let store = Arc::new(Db::open(&directory.path().join("kv")).unwrap());
     let events: EventSink = Arc::new(|_, _| panic!("no mount should run"));
     let child = tokio::process::Command::new("sleep")
@@ -267,7 +267,7 @@ async fn watcher_shutdown_reaps_the_monitor_without_output() {
 
 #[tokio::test]
 async fn monitor_exit_is_reported_as_a_failure() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let store = Arc::new(Db::open(&directory.path().join("kv")).unwrap());
     let events: EventSink = Arc::new(|_, _| panic!("no mount should run"));
     let child = tokio::process::Command::new("true")

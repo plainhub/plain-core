@@ -12,14 +12,14 @@ description = "Reusable cryptography, media, file, format and native components"
 "default" = ["crypto"]
 "crypto" = ["dep:chacha20poly1305", "dep:p256", "dep:ed25519-dalek", "dep:pbkdf2"]
 "tls" = ["dep:rcgen", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
-"time" = ["dep:chrono"]
+"time" = ["dep:chrono", "dep:core-foundation-sys"]
 "sqlite" = ["time", "dep:rusqlite"]
 "html" = []
 "regex" = ["dep:regex-automata", "dep:regex-syntax"]
 "phone" = ["regex", "dep:flate2", "dep:serde_json"]
 "phone-batch" = ["phone", "tokio/rt"]
 "media" = ["time", "dep:anyhow", "dep:encoding_rs", "dep:flate2"]
-"thumbnails" = ["dep:tiff", "dep:heic-rs", "dep:rav1d", "media", "crypto", "dep:image", "dep:tempfile", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util", "dep:thiserror"]
+"thumbnails" = ["dep:tiff", "dep:heic-rs", "dep:rav1d", "media", "crypto", "dep:image", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util", "dep:thiserror"]
 "filesystem" = ["time", "tokio/fs", "tokio/rt", "tokio/time"]
 "watch" = ["filesystem", "tokio/net"]
 "apk" = ["dep:anyhow", "dep:zip"]
@@ -31,7 +31,9 @@ description = "Reusable cryptography, media, file, format and native components"
 "storage-platform" = ["volumes"]
 "linux-platform" = ["storage-platform", "dep:serde_json"]
 "ai-image-search" = ["dep:image", "dep:serde_json", "dep:cc", "dep:aho-corasick", "regex", "regex-automata/dfa", "regex-automata/nfa", "regex-automata/perf", "dep:thiserror", "dep:smallvec"]
-"test-seams" = ["dep:tempfile"]
+"test-seams" = []
+"document-nfc" = ["dep:smallvec"]
+"compound-file" = ["dep:fnv"]
 
 "peg" = ["dep:memchr"]
 
@@ -42,6 +44,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "system-metrics" = ["dep:windows"]
 
 [dependencies]
+"fnv" = { version = "=1.0.7", optional = true }
 "axum" = { version = "0.7", default-features = false, optional = true }
 "tokio-rustls" = { version = "0.26", default-features = false, optional = true }
 "hyper" = { version = "1", optional = true }
@@ -57,13 +60,12 @@ description = "Reusable cryptography, media, file, format and native components"
 "pbkdf2" = { version = "=0.13.0", default-features = false, features = ["sha2"], optional = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util", "sync"] }
 "anyhow" = { "version" = "1", "optional" = true }
-"chrono" = { "version" = "0.4", "features" = ["serde"], "optional" = true }
+"chrono" = { "version" = "0.4", "default-features" = false, "features" = ["serde", "now", "oldtime", "wasmbind"], "optional" = true }
 "rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "backup", "cache"], "optional" = true }
 "flate2" = { version = "1", optional = true }
 "serde_json" = { "version" = "1", "optional" = true }
 "encoding_rs" = { "version" = "=0.8.42", "optional" = true }
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"], "optional" = true }
-"tempfile" = { "version" = "3", "optional" = true }
 "jpeg-decoder" = { version = "0.3", default-features = false, optional = true }
 "rusty_h264-decoder" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
 "rusty_h264-common" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
@@ -103,7 +105,6 @@ description = "Reusable cryptography, media, file, format and native components"
 [dev-dependencies]
 "flate2" = "=1.1.10"
 "weezl" = "=0.1.12"
-"tempfile" = "3"
 "serde_json" = "1"
 "tokio" = { version = "1", features = ["full", "test-util"] }
 "jpeg-decoder" = { version = "0.3", default-features = false, features = ["platform_independent"] }

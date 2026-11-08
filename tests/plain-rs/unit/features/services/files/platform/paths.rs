@@ -33,7 +33,7 @@ fn android_write_policy_retains_protected_roots_and_component_boundaries() {
 
 #[test]
 fn private_classification_resolves_missing_paths_and_parent_components() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let root = temp.path().canonicalize().unwrap();
     let data = root.join("data");
     let cache = root.join("cache");
@@ -60,7 +60,7 @@ fn private_classification_resolves_missing_paths_and_parent_components() {
 #[cfg(unix)]
 #[test]
 fn symlinks_cannot_disguise_external_paths_as_private_or_bypass_parent_resolution() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let root = temp.path().canonicalize().unwrap();
     let data = root.join("data");
     let cache = root.join("cache");

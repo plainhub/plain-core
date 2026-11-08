@@ -55,7 +55,7 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
     });
 }
 
-fn fixture(permissions: &str) -> (tempfile::TempDir, PublicSchema) {
+fn fixture(permissions: &str) -> (plain_libs::temporary::TempDir, PublicSchema) {
     fixture_with(permissions, |method, params| match method {
         "systemAccessFacts" => {
             assert_eq!(params["features"], json!(["FILES"]));
@@ -68,8 +68,8 @@ fn fixture(permissions: &str) -> (tempfile::TempDir, PublicSchema) {
 fn fixture_with(
     permissions: &str,
     handler: impl Fn(&str, Value) -> Value + Send + 'static,
-) -> (tempfile::TempDir, PublicSchema) {
-    let dir = tempfile::tempdir().unwrap();
+) -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs
         .set(
@@ -417,7 +417,7 @@ async fn mounts_and_favorites_need_no_storage_grant() {
 /// serves the public schema.
 #[tokio::test]
 async fn favorite_folders_are_read_from_the_rust_store() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
@@ -614,7 +614,7 @@ async fn video_details_and_stat_only_aliases_use_rust_without_whole_host_metadat
 
 #[tokio::test]
 async fn native_main_image_info_reads_directly_without_media_host_dispatch() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let (_generation, mut requests) = core.runtime_state().host.connect();
     let path = directory.path().join("photo.png");
@@ -632,7 +632,7 @@ async fn native_main_image_info_reads_directly_without_media_host_dispatch() {
 
 #[tokio::test]
 async fn batched_file_paths_use_native_rust_data_without_platform_requests() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();
@@ -669,7 +669,7 @@ async fn batched_file_paths_use_native_rust_data_without_platform_requests() {
 
 #[tokio::test]
 async fn native_file_actions_resolve_registered_attachments_without_graphql() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     let source = directory.path().join("document.txt");
@@ -730,7 +730,7 @@ async fn native_file_actions_resolve_registered_attachments_without_graphql() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn native_main_audio_info_uses_shared_rust_parsing_without_the_media_feature_or_a_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let path = directory.path().join("audio.mp3");
     std::fs::copy(

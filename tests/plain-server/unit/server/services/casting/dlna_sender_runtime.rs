@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 #[tokio::test]
 async fn queue_mutations_preserve_duplicates_and_order_through_the_main_schema() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = crate::server::ContentServer::open(dir.path()).unwrap();
     let native = server.native_graphql().unwrap();
     for path in ["a.mp3", "b.mp3", "a.mp3"] {
@@ -88,7 +88,7 @@ async fn sender_controls_use_soap_and_release_the_original_subscription() {
     let renderer = tokio::spawn(async move {
         axum::serve(listener, router).await.unwrap();
     });
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     let server = crate::server::ContentServer::start(

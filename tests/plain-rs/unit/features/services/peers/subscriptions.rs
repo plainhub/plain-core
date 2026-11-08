@@ -19,7 +19,7 @@ fn target(peer: &DPeer) -> PeerSubscriptionTarget {
 }
 #[tokio::test]
 async fn rejects_missing_unpaired_chat_only_and_changed_signing_identity_before_connecting() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::open(directory.path()).unwrap();
     let state = server.runtime_state();
     let mut peer = fixture_peer();
@@ -41,7 +41,7 @@ async fn rejects_missing_unpaired_chat_only_and_changed_signing_identity_before_
 }
 #[tokio::test]
 async fn chat_rekey_preserves_management_but_unpair_revokes_and_close_releases_pending_read() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::open(directory.path()).unwrap();
     let state = server.runtime_state();
     let peer = fixture_peer();

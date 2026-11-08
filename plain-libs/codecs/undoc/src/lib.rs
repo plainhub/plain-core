@@ -144,3 +144,7 @@ mod grid;
 mod markdown;
 
 pub mod limits;
+
+#[cfg(test)]
+#[path = "../tests/unit/cfb_fixture.rs"]
+mod cfb_fixture;

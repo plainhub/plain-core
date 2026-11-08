@@ -16,8 +16,8 @@ use sha2::Digest;
 use std::sync::Arc;
 use std::time::Instant;
 
-fn fixture(id: &str) -> (tempfile::TempDir, crate::test_runtime::Core) {
-    let directory = tempfile::tempdir().unwrap();
+fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::test_runtime::Core) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("system.json")).unwrap(),
     );

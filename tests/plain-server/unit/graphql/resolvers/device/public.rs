@@ -37,8 +37,8 @@ fn permission_sample(params: Value, grants: &[&str]) -> Value {
 
 fn fixture(
     handler: impl Fn(&str, Value) -> Value + Send + 'static,
-) -> (tempfile::TempDir, PublicSchema) {
-    let dir = tempfile::tempdir().unwrap();
+) -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
     prefs.set("client_id", "c1").unwrap();
@@ -328,7 +328,7 @@ async fn discovery_commands_use_the_shared_runtime_and_platform_multicast_lease(
     let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("client_id", "discovery-test").unwrap();
     let server = crate::server::ContentServer::start(

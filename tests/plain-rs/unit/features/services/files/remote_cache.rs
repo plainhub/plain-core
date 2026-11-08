@@ -62,7 +62,7 @@ fn destinations_preserve_safe_extensions_and_scope_stable_cache_keys_to_the_orig
 
 #[tokio::test]
 async fn concurrent_cached_downloads_fetch_once_and_publish_complete_bytes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = RemoteCache::new(directory.path().to_path_buf());
     let calls = AtomicUsize::new(0);
     let fetch = || async {
@@ -102,7 +102,7 @@ async fn concurrent_cached_downloads_fetch_once_and_publish_complete_bytes() {
 
 #[tokio::test]
 async fn failed_and_truncated_downloads_publish_nothing_and_release_admission() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = RemoteCache::new(directory.path().to_path_buf());
     for (expected, chunks) in [
         (Some(6), vec![Ok(bytes::Bytes::from_static(b"short"))]),
@@ -134,7 +134,7 @@ async fn failed_and_truncated_downloads_publish_nothing_and_release_admission() 
 
 #[tokio::test]
 async fn cancellation_removes_partial_bytes_and_releases_the_cache_key() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = Arc::new(RemoteCache::new(directory.path().to_path_buf()));
     let (started, running) = tokio::sync::oneshot::channel();
     let path = directory.path().to_path_buf();
@@ -184,7 +184,7 @@ async fn cancellation_removes_partial_bytes_and_releases_the_cache_key() {
 
 #[test]
 fn cache_location_uses_the_supplied_cache_root_without_a_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = RemoteCache::new(directory.path().to_path_buf());
     assert_eq!(cache.directory(), directory.path().join("remote_files"));
 }

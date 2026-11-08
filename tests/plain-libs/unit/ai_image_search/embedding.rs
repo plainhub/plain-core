@@ -6,7 +6,7 @@ use crate::ai_image_search::preprocess;
 
 #[test]
 fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let engine = Engine::open(directory.path().into(), fixture(directory.path())).unwrap();
     let path = directory.path().join("photo.png");
     image::RgbImage::from_pixel(64, 64, image::Rgb([128, 64, 32]))
@@ -33,7 +33,7 @@ fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
 }
 #[test]
 fn encoder_context_lives_until_the_last_session_and_can_be_reopened() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let manifest = fixture(directory.path());
     let engine = Engine::open(directory.path().into(), manifest.clone()).unwrap();
     let context = Arc::downgrade(&engine.context);
@@ -48,7 +48,7 @@ fn encoder_context_lives_until_the_last_session_and_can_be_reopened() {
 
 #[test]
 fn packages_reject_corruption_wrong_shapes_and_path_traversal() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let mut manifest = fixture(directory.path());
     manifest.files[0].name = "../image.onnx".into();
     assert!(manifest.validate().is_err());
@@ -75,7 +75,7 @@ fn packages_reject_corruption_wrong_shapes_and_path_traversal() {
 }
 #[test]
 fn external_tensor_files_are_rejected_before_loading() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("external.onnx");
     std::fs::write(&path, [0x3a, 4, 0x2a, 2, 0x6a, 0]).unwrap();
     assert!(
@@ -97,7 +97,7 @@ fn normalization_handles_extreme_floats_and_rejects_invalid_embeddings() {
 }
 #[test]
 fn preprocessing_uses_manifest_normalization_and_skips_tiny_images() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let config = test_fixture::preprocess();
     let path = directory.path().join("photo.png");
     image::RgbImage::from_pixel(64, 64, image::Rgb([255, 0, 128]))
@@ -114,7 +114,7 @@ fn preprocessing_uses_manifest_normalization_and_skips_tiny_images() {
 
 #[test]
 fn manifest_reader_bounds_input_before_parsing() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     fixture(directory.path());
     let path = directory.path().join("manifest.json");
     assert!(Manifest::read(&path).is_ok());

@@ -7,7 +7,7 @@ async fn closed_native_page_cancels_its_pending_main_schema_request_before_radio
     let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -76,7 +76,7 @@ async fn closing_an_old_native_scope_does_not_close_a_new_page_scope() {
 
 #[tokio::test]
 async fn native_subscription_delivers_without_an_http_listener() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -129,7 +129,7 @@ async fn native_subscription_delivers_without_an_http_listener() {
 
 #[tokio::test]
 async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_active() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -205,7 +205,7 @@ async fn pending_multicast_requests_remain_independent_until_permission_is_grant
     let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let first = ContentServer::open(&directory.path().join("first")).unwrap();
     let second = ContentServer::open(&directory.path().join("second")).unwrap();
     let first_state = first.runtime_state();

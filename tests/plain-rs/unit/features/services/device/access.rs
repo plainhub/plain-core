@@ -2,7 +2,7 @@ use super::*;
 use serde_json::Value;
 #[test]
 fn feature_grants_are_independent() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     prefs.set(API_PERMISSIONS, vec!["FILES", "IMAGES"]).unwrap();
     assert!(is_enabled(&prefs, &[AccessFeature::Files, AccessFeature::Images]));
@@ -12,7 +12,7 @@ fn feature_grants_are_independent() {
 }
 #[test]
 fn platform_permission_names_do_not_grant_features() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     prefs
         .set(API_PERMISSIONS, vec!["WRITE_EXTERNAL_STORAGE", "READ_SMS"])

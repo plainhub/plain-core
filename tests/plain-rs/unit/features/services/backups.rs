@@ -3,7 +3,7 @@ use std::io::Read;
 
 #[tokio::test]
 async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host_calls() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     let prefs = Arc::new(Prefs::load(&paths.prefs()).unwrap());
     prefs.set("device_name", "Backup fixture").unwrap();
@@ -47,7 +47,7 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
     assert!(names.iter().all(|name| !name.contains("cache/")
         && !name.ends_with("-wal")
         && !name.ends_with("-shm")));
-    let restored = tempfile::tempdir().unwrap();
+    let restored = plain_libs::temporary::tempdir().unwrap();
     zip.extract(restored.path()).unwrap();
     let snapshot = rusqlite::Connection::open(restored.path().join("files/plain.db")).unwrap();
     assert_eq!(
@@ -80,7 +80,7 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
 }
 #[test]
 fn cancellation_removes_staging_and_keeps_source_data() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     let prefs = Prefs::load(&paths.prefs()).unwrap();
     let db = Db::open(&paths.database()).unwrap();
@@ -98,8 +98,8 @@ fn cancellation_removes_staging_and_keeps_source_data() {
 #[cfg(unix)]
 #[test]
 fn enumeration_excludes_symlinks_and_rejects_sources_outside_the_root() {
-    let directory = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let outside = plain_libs::temporary::tempdir().unwrap();
     std::fs::write(outside.path().join("private"), b"outside").unwrap();
     std::os::unix::fs::symlink(outside.path(), directory.path().join("link")).unwrap();
     std::fs::write(directory.path().join("inside"), b"inside").unwrap();

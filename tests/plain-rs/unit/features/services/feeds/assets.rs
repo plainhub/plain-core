@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn cancelled_imports_are_drained_and_release_only_their_own_reference() {
     for reused in [false, true] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let db = Arc::new(Db::open(&directory.path().join("feeds.db")).unwrap());
         let assets = Arc::new(FeedAssets::new(db.clone(), directory.path().to_owned()));
         let existing = reused.then(|| {
@@ -63,7 +63,7 @@ async fn cancelled_imports_are_drained_and_release_only_their_own_reference() {
 
 #[tokio::test]
 async fn accepted_imports_retain_their_file_and_failed_imports_release_the_write_scope() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&directory.path().join("feeds.db")).unwrap());
     let assets = FeedAssets::new(db.clone(), directory.path().to_owned());
     let path = assets

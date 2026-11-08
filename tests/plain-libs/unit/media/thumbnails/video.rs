@@ -91,7 +91,7 @@ fn error_paths_do_not_panic() {
         Some(std::io::ErrorKind::Unsupported)
     );
     // Garbage bytes with an mp4 extension.
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::temporary::tempdir().unwrap();
     let garbage = tmp.path().join("garbage.mp4");
     std::fs::write(&garbage, b"definitely not an mp4 file at all....").unwrap();
     assert!(plan_keyframe(garbage.to_str().unwrap()).is_err());

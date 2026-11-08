@@ -257,7 +257,7 @@ fn audio_track_from_path_stem() {
 
 #[test]
 fn mode_defaults_to_repeat_and_roundtrips() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         crate::features::prefs::Prefs::load(&crate::features::prefs::default_path(dir.path()))
             .unwrap();
@@ -304,7 +304,7 @@ fn state_survives_reopen() {
 
 #[test]
 fn milliseconds_survive_restart_without_persisting_album_snapshots() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("audio.db");
     let db = crate::infrastructure::db::Db::open(&path).unwrap();
     let pl = create_playlist(&db, "Precise").unwrap();
@@ -708,7 +708,7 @@ fn an_empty_audio_queue_does_not_visit_non_audio_files() {
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap();
     db.with_conn(|connection|{
         connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('queue-count','queue-count','/queue-count',1)",[]).unwrap();
@@ -742,7 +742,7 @@ fn a_nonempty_audio_queue_count_does_not_visit_other_file_kinds() {
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap();
     db.with_conn(|connection|{
         connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('queue-member-count','queue-member-count','/queue-member-count',1)",[]).unwrap();

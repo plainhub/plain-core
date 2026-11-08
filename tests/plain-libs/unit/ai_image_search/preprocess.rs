@@ -3,7 +3,7 @@ use std::io::Cursor;
 
 #[test]
 fn path_and_reader_preprocessing_produce_identical_tensors() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("photo.png");
     image::RgbImage::from_fn(96, 80, |x, y| image::Rgb([x as u8, y as u8, (x + y) as u8]))
         .save(&path)
@@ -26,7 +26,7 @@ fn path_and_reader_preprocessing_produce_identical_tensors() {
 #[test]
 fn reader_preprocessing_keeps_tiny_and_unsupported_images_out_of_model_execution() {
     let config = crate::ai_image_search::models::test_fixture::preprocess();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("tiny.png");
     image::RgbImage::new(32, 32).save(&path).unwrap();
     assert!(

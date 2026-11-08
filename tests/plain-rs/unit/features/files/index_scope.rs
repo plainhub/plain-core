@@ -163,7 +163,7 @@ fn path_validation_rejects_relative_roots_and_retains_offline_absolute_roots() {
 #[cfg(any(feature = "library", feature = "filesystem", feature = "chat"))]
 #[test]
 fn directory_walk_skips_excluded_subtrees_before_visiting_them() {
-    let fixture = tempfile::Builder::new()
+    let fixture = plain_libs::temporary::Builder::new()
         .prefix("index-scope-")
         .tempdir()
         .unwrap();
@@ -226,7 +226,7 @@ fn directory_walk_skips_excluded_subtrees_before_visiting_them() {
 #[cfg(any(feature = "library", feature = "filesystem", feature = "chat"))]
 #[test]
 fn plain_trash_is_pruned_while_regular_trash_remains_indexable() {
-    let fixture = tempfile::Builder::new()
+    let fixture = plain_libs::temporary::Builder::new()
         .prefix("trash-scope-")
         .tempdir()
         .unwrap();
@@ -293,7 +293,7 @@ fn excluded_names_apply_to_directories_and_preserve_same_named_regular_files() {
 
 #[test]
 fn directory_settings_reject_files_and_parent_traversal_but_allow_offline_sources() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let file = directory.path().join("file.txt");
     std::fs::write(&file, b"original").unwrap();
     assert!(validate_directories(vec![file.to_string_lossy().into_owned()]).is_err());

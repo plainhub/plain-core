@@ -5,8 +5,8 @@ use axum::extract::Request;
 use axum::http::{HeaderName, StatusCode, header};
 use axum::response::Response;
 
-fn test_state() -> (tempfile::TempDir, ContentServer, ServerState, Vec<u8>) {
-    let directory = tempfile::tempdir().unwrap();
+fn test_state() -> (plain_libs::temporary::TempDir, ContentServer, ServerState, Vec<u8>) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
@@ -22,8 +22,8 @@ fn file_id(key: &[u8], path: &str) -> String {
     .unwrap()
 }
 
-fn temp_bin(key: &[u8]) -> (tempfile::TempDir, String) {
-    let dir = tempfile::tempdir().unwrap();
+fn temp_bin(key: &[u8]) -> (plain_libs::temporary::TempDir, String) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("movie.bin");
     std::fs::write(&path, b"0123456789").unwrap();
     (dir, file_id(key, &path.to_string_lossy()))
@@ -52,7 +52,7 @@ fn range_header(v: &str) -> (&'static HeaderName, &str) {
 #[tokio::test]
 async fn fs_icons_return_original_bytes_for_all_preview_sizes() {
     let (_root, _core, state, key) = test_state();
-    let files = tempfile::tempdir().unwrap();
+    let files = plain_libs::temporary::tempdir().unwrap();
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../assets/web/favicon.ico"
@@ -99,7 +99,7 @@ async fn fs_icons_return_original_bytes_for_all_preview_sizes() {
 async fn fs_animated_png_preserves_frames_for_both_extensions_and_preview_sizes() {
     use image::AnimationDecoder;
     let (_root, _core, state, key) = test_state();
-    let files = tempfile::tempdir().unwrap();
+    let files = plain_libs::temporary::tempdir().unwrap();
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../plain-rs/testdata/two-frame.apng"
@@ -139,7 +139,7 @@ async fn fs_animated_png_preserves_frames_for_both_extensions_and_preview_sizes(
 #[tokio::test]
 async fn fs_bmp_previews_decode_and_downloads_keep_original_bytes() {
     let (_root, _core, state, key) = test_state();
-    let files = tempfile::tempdir().unwrap();
+    let files = plain_libs::temporary::tempdir().unwrap();
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../plain-rs/testdata/bmp/rgb24.bmp"
@@ -178,7 +178,7 @@ async fn fs_bmp_previews_decode_and_downloads_keep_original_bytes() {
 #[tokio::test]
 async fn fs_bmp_alpha_survives_uncropped_previews_and_cached_requests() {
     let (_root, _core, state, key) = test_state();
-    let files = tempfile::tempdir().unwrap();
+    let files = plain_libs::temporary::tempdir().unwrap();
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../plain-rs/testdata/bmp/alpha32.bmp"
@@ -380,7 +380,7 @@ async fn fs_serves_fid_uris_from_app_file_store() {
 #[tokio::test]
 async fn fs_typed_attachment_and_file_references_keep_downloads_and_ranges() {
     let (_root, _core, state, key) = test_state();
-    let files = tempfile::tempdir().unwrap();
+    let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("preview.txt");
     std::fs::write(&path, b"fid-payload-bytes").unwrap();
     let imported = plain_rs::features::chat::attachments::app_file_store::import_bytes(
@@ -444,7 +444,7 @@ async fn fs_typed_image_reference_returns_decodable_thumbnail() {
 async fn fs_foreground_thumbnail_is_local_and_does_not_enable_passive_reads() {
     use plain_rs::features::files::resource_link::{self, Resource, ResourceType, Scope};
     let (_root, core, state, key) = test_state();
-    let files = tempfile::tempdir().unwrap();
+    let files = plain_libs::temporary::tempdir().unwrap();
     let library = files.path().join("Fixture.imovielibrary");
     std::fs::create_dir(&library).unwrap();
     let path = library.join("video.mp4");
@@ -578,7 +578,7 @@ async fn fs_download_ranges_preserve_original_bytes_and_reject_retired_slice_par
 #[tokio::test]
 async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion() {
     let (_root, _core, state, _key) = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("shared.txt");
     std::fs::write(&path, b"shared-payload").unwrap();
     let shares =
@@ -627,7 +627,7 @@ async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion(
 #[tokio::test]
 async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
     let (_root, _core, state, key) = test_state();
-    let images = tempfile::tempdir().unwrap();
+    let images = plain_libs::temporary::tempdir().unwrap();
     let path = images.path().join("preview.png");
     image::RgbImage::new(64, 32).save(&path).unwrap();
     let original = std::fs::read(&path).unwrap();
@@ -657,7 +657,7 @@ async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
 #[tokio::test]
 async fn session_urls_revoke_new_requests_without_cancelling_started_transfers() {
     use plain_rs::features::files::resource_link::{self, Resource, Scope};
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let data = directory.path().join("data");
     std::fs::create_dir(&data).unwrap();
     let prefs = std::sync::Arc::new(
@@ -790,7 +790,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
 #[ignore]
 async fn fs_thumbnail_latency_benchmark() {
     let (_root, core, _state, key) = test_state();
-    let source = tempfile::tempdir().unwrap();
+    let source = plain_libs::temporary::tempdir().unwrap();
     let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let pem = String::from_utf8(certificate_pem).unwrap();
     let (_, port) = core
@@ -866,7 +866,7 @@ async fn fs_thumbnail_latency_benchmark() {
 #[tokio::test]
 async fn fs_300_cached_thumbnails_do_not_write_recent_files() {
     let (_root, core, state, key) = test_state();
-    let files = tempfile::tempdir().unwrap();
+    let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("thumbnail.jpg");
     std::fs::write(
         &path,
@@ -928,7 +928,7 @@ async fn fs_300_cached_thumbnails_do_not_write_recent_files() {
 async fn fs_serves_300_authenticated_media_hits_with_the_sqlite_connection_held() {
     use plain_rs::features::files::resource_link::{self, Resource, ResourceType, Scope};
     let (_root, core, state, _) = test_state();
-    let files = tempfile::tempdir().unwrap();
+    let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("image.jpg");
     std::fs::write(
         &path,
@@ -996,7 +996,7 @@ async fn fs_serves_300_authenticated_media_hits_with_the_sqlite_connection_held(
 #[tokio::test]
 async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_invalid_values() {
     let (_root, core, state, key) = test_state();
-    let files = tempfile::tempdir().unwrap();
+    let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("sizes.jpg");
     image::RgbImage::from_fn(1600, 1200, |x, y| {
         image::Rgb([(x % 251) as u8, (y % 239) as u8, 90])
@@ -1024,7 +1024,7 @@ async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_inval
 #[tokio::test]
 async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
     let (_root, core, state, key) = test_state();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("transparent.png");
     image::RgbaImage::from_pixel(1200, 900, image::Rgba([40, 90, 150, 128]))
         .save(&path)
@@ -1055,7 +1055,7 @@ async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
 #[tokio::test]
 async fn fs_tiff_avif_heic_and_heif_share_thumbnails_preserve_alpha_and_download_originals() {
     let (_root, core, state, key) = test_state();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     for (extension, fixture, mime) in [
         ("tiff", "alpha.tiff", "image/tiff"),
         ("avif", "alpha.avif", "image/avif"),
@@ -1127,7 +1127,7 @@ async fn fs_tiff_avif_heic_and_heif_share_thumbnails_preserve_alpha_and_download
 #[tokio::test]
 async fn fs_small_browser_images_keep_dimensions_and_original_bytes_for_both_sizes() {
     let (_root, core, state, key) = test_state();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     for (extension, mime) in [
         ("jpg", "image/jpeg"),
         ("png", "image/png"),
@@ -1162,7 +1162,7 @@ async fn fs_small_browser_images_keep_dimensions_and_original_bytes_for_both_siz
 #[tokio::test]
 async fn fs_large_still_formats_preserve_aspect_ratio_for_both_preview_sizes() {
     let (_root, core, state, key) = test_state();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     for (extension, fixture) in [
         ("tiff", "grid.tiff"),
         ("avif", "grid.avif"),
@@ -1196,7 +1196,7 @@ async fn fs_large_still_formats_preserve_aspect_ratio_for_both_preview_sizes() {
 #[tokio::test]
 async fn fs_document_preview_returns_markdown_and_preserves_original_downloads() {
     let (_root, _core, state, key) = test_state();
-    let files = tempfile::tempdir().unwrap();
+    let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("preview.docx");
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -1277,7 +1277,7 @@ async fn fs_native_resource_ranges_use_the_provider_file_window() {
     let metadata: serde_json::Value =
         serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
     assert_eq!(metadata, serde_json::json!({"path":resource,"file":true}));
-    let mut file = tempfile::tempfile().unwrap();
+    let mut file = plain_libs::temporary::tempfile().unwrap();
     std::io::Write::write_all(&mut file, b"PREFIX0123456789SUFFIX").unwrap();
     stream
         .file(

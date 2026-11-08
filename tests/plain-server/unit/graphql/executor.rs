@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn quoted_enum_literals_are_rejected_before_local_or_remote_mutations_execute() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("auto_check_update", true).unwrap();
@@ -34,7 +34,7 @@ async fn quoted_enum_literals_are_rejected_before_local_or_remote_mutations_exec
 
 #[tokio::test]
 async fn local_and_remote_execute_the_same_envelope_and_preserve_errors() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", vec!["AUDIO"]).unwrap();
@@ -146,7 +146,7 @@ fn cache_only_and_task_owned_mutations_skip_the_generic_content_broadcast() {
 
 #[tokio::test]
 async fn backup_uses_native_management_and_has_no_remote_graphql_entry() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(
             directory.path(),
@@ -247,7 +247,7 @@ fn timer_controls_do_not_invalidate_unrelated_domains() {
 
 #[tokio::test]
 async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (generation, mut requests) = state.host.connect();

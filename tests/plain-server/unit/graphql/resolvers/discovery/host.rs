@@ -1,6 +1,6 @@
 #[tokio::test]
 async fn nearby_snapshot_uses_the_main_contract_without_starting_discovery() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let native = core.native_graphql().unwrap();
     assert!(
@@ -59,7 +59,7 @@ async fn nearby_snapshot_uses_the_main_contract_without_starting_discovery() {
 
 #[tokio::test]
 async fn is_discovering_reports_the_manual_scan_loop() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let native = core.native_graphql().unwrap();
     let selection = "{ isDiscovering }";
@@ -80,7 +80,7 @@ async fn is_discovering_reports_the_manual_scan_loop() {
 
 #[tokio::test]
 async fn pairing_code_query_returns_a_lan_ready_model_without_starting_discovery() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let native = core.native_graphql().unwrap();
     let response = native.execute(plain_graphql::Request::new("{ parsePairingCode(code: \"plainapp://pair?id=fixture&name=Device&ips=192.0.2.1&port=8443\") { id name port deviceType discoveryMethods } }")).await;

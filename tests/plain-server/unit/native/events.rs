@@ -5,12 +5,12 @@ use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 const KEY: [u8; 32] = [7; 32];
 
 fn fixture() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     ContentServer,
     NativeEventStream,
     NativeRequestScope,
 ) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),

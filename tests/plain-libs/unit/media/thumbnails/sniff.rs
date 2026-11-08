@@ -191,7 +191,7 @@ fn real_webp_encoder_outputs_keep_dimensions_and_transparency_flags() {
             );
             #[cfg(feature = "filesystem")]
             {
-                let directory = tempfile::tempdir().unwrap();
+                let directory = crate::temporary::tempdir().unwrap();
                 let path = directory.path().join("static.webp");
                 std::fs::write(&path, input).unwrap();
                 assert!(!crate::filesystem::image_format::is_animated_image_or_svg(

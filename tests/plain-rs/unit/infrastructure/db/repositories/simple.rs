@@ -530,7 +530,7 @@ fn session_cache_loads_persisted_rows_and_keeps_unchanged_lookups_in_memory() {
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("plain.db");
     let row = session_cache_row();
     let db = crate::infrastructure::db::Db::open(&path).unwrap();

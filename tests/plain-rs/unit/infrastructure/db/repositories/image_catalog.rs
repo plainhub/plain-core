@@ -84,7 +84,7 @@ fn catalog_writes_invalidate_revision_but_embedding_writes_do_not_invalidate_the
 
 #[test]
 fn commits_from_another_connection_invalidate_before_more_rows_or_pruning_are_accepted() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("catalog.db");
     let db = Db::open(&path).unwrap();
     db.with_conn(|connection| add(connection, "1", 3, false));

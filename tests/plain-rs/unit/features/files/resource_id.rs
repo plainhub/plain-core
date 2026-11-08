@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn path_from_file_id_accepts_typed_global_paths_and_rejects_other_scopes() {
     use crate::features::files::resource_link::{self, Resource, Scope};
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = crate::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap();
     prefs
         .set(

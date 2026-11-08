@@ -73,7 +73,7 @@ fn scratch(name: &str) -> PathBuf {
 
 #[test]
 fn every_request_stages_into_its_own_directory() {
-    let cache = tempfile::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     let first = Staging::create(cache.path()).unwrap();
     let second = Staging::create(cache.path()).unwrap();
     assert_eq!(first.directory.path().parent(), Some(cache.path()));
@@ -97,7 +97,7 @@ fn every_request_stages_into_its_own_directory() {
 
 #[test]
 fn a_request_with_many_entries_keeps_them_apart() {
-    let cache = tempfile::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     let staging = Staging::create(cache.path()).unwrap();
     std::fs::write(staging.entry_path(0), b"one").unwrap();
     std::fs::write(staging.entry_path(1), b"two").unwrap();
@@ -108,7 +108,7 @@ fn a_request_with_many_entries_keeps_them_apart() {
 
 #[test]
 fn staged_entries_disappear_when_the_request_ends() {
-    let cache = tempfile::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     let staging = Staging::create(cache.path()).unwrap();
     std::fs::write(staging.entry_path(0), b"payload").unwrap();
     let directory = staging.directory.path().to_owned();
@@ -127,7 +127,7 @@ fn archive_entries_are_extracted_into_the_request_directory() {
     let dir = scratch("extract");
     let archive = dir.join("pack.zip");
     write_archive(&archive, &[("a.txt", b"alpha"), ("sub/b.txt", b"beta")]);
-    let cache = tempfile::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     let staging = Staging::create(cache.path()).unwrap();
     let mut items = Vec::new();
 
@@ -155,7 +155,7 @@ fn an_unreadable_archive_leaves_no_staged_files_behind() {
     let dir = scratch("broken");
     let archive = dir.join("broken.zip");
     std::fs::write(&archive, b"not a zip at all").unwrap();
-    let cache = tempfile::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     let staging = Staging::create(cache.path()).unwrap();
     let directory = staging.directory.path().to_owned();
     let mut items = Vec::new();

@@ -51,7 +51,7 @@ fn merges_methods_and_ips_with_monotonic_event_throttle() {
 }
 #[test]
 fn stale_probe_cannot_remove_a_new_sighting_or_new_cached_version() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = crate::infrastructure::db::Db::open(&dir.path().join("test.db")).unwrap();
     let devices = Devices::default();
     devices.scanning(true, false, vec![]).unwrap();
@@ -98,7 +98,7 @@ fn stale_probe_cannot_remove_a_new_sighting_or_new_cached_version() {
 }
 #[test]
 fn stopped_scan_cannot_apply_pending_verdict_and_registry_is_bounded() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = crate::infrastructure::db::Db::open(&dir.path().join("test.db")).unwrap();
     let devices = Devices::default();
     devices.scanning(true, false, vec![]).unwrap();
@@ -133,7 +133,7 @@ fn stopped_scan_cannot_apply_pending_verdict_and_registry_is_bounded() {
 
 #[test]
 fn merged_ble_timestamp_still_allows_checked_lan_cache_cleanup() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = crate::infrastructure::db::Db::open(&dir.path().join("test.db")).unwrap();
     let devices = Devices::default();
     devices.scanning(true, false, vec![]).unwrap();
@@ -160,7 +160,7 @@ fn merged_ble_timestamp_still_allows_checked_lan_cache_cleanup() {
 #[test]
 fn device_types_preserve_wire_names_and_cache_values() {
     use crate::features::chat::enums::DeviceType;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = crate::infrastructure::db::Db::open(&directory.path().join("nearby.db")).unwrap();
     for kind in [
         DeviceType::Phone,

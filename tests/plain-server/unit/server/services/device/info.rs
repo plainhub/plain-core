@@ -2,7 +2,7 @@
 async fn main_device_fields_keep_alias_fragment_and_nested_type_behavior_without_host_calls() {
     let host = Arc::new(Host::default());
     let (_generation, mut requests) = host.connect();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(
         plain_rs::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap(),
     );

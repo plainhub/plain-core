@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn password_command_writes_shared_system_credentials() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     set_password(
         directory.path(),
         &directory.path().join("cache"),

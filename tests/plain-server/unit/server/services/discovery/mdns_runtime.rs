@@ -12,7 +12,7 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
         .lock()
         .await;
     use std::sync::atomic::AtomicBool;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "fixture-mdns-root").unwrap();

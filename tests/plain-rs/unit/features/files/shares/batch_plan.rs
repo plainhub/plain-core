@@ -165,7 +165,7 @@ fn directory_depth_and_file_count_are_bounded() {
 
 #[test]
 fn selected_directories_accept_native_absolute_paths_without_a_unix_prefix_assumption() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().to_str().unwrap();
     assert!(directory.path().is_absolute());
     let mut walker = Walker::new(
@@ -195,7 +195,7 @@ fn selected_directories_accept_native_absolute_paths_without_a_unix_prefix_assum
 
 #[test]
 fn public_file_download_resolves_its_absolute_write_directory() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let downloads = root.path().join("Downloads").join("PlainApp");
     let downloads = downloads.to_str().unwrap();
     let mut walker = Walker::new(

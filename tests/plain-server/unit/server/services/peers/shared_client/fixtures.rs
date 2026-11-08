@@ -4,8 +4,8 @@ use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::messages;
 use serde_json::json;
 
-pub(super) fn root() -> (tempfile::TempDir, ContentServer, String) {
-    let dir = tempfile::tempdir().unwrap();
+pub(super) fn root() -> (plain_libs::temporary::TempDir, ContentServer, String) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "local").unwrap();

@@ -38,7 +38,7 @@ fn predict_scaled_matches_decoder_on_real_images() {
 
 #[test]
 fn jpeg_scaled_decodes_smaller_and_correct() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::temporary::tempdir().unwrap();
     let p = tmp.path().join("src.jpg");
     write_test_jpeg(&p, 1024, 768);
     let bm = jpeg_scaled(&p, 256, 256).unwrap();
@@ -74,7 +74,7 @@ fn jpeg_scaled_decodes_smaller_and_correct() {
 
 #[test]
 fn jpeg_scaled_grayscale() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::temporary::tempdir().unwrap();
     let p = tmp.path().join("gray.jpg");
     let img = image::GrayImage::from_fn(512, 512, |x, _| image::Luma([(x % 256) as u8]));
     img.save_with_format(&p, image::ImageFormat::Jpeg).unwrap();
@@ -86,7 +86,7 @@ fn jpeg_scaled_grayscale() {
 #[test]
 fn jpeg_scaled_upscale_request_falls_back_to_full() {
     // Request bigger than source: scale() must not blow up.
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::temporary::tempdir().unwrap();
     let p = tmp.path().join("tiny.jpg");
     write_test_jpeg(&p, 64, 48);
     let bm = jpeg_scaled(&p, 512, 512).unwrap();
@@ -95,7 +95,7 @@ fn jpeg_scaled_upscale_request_falls_back_to_full() {
 
 #[test]
 fn image_full_png_webp() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::temporary::tempdir().unwrap();
     let png = tmp.path().join("t.png");
     image::RgbaImage::from_fn(100, 80, |x, y| image::Rgba([x as u8, y as u8, 55, 255]))
         .save_with_format(&png, image::ImageFormat::Png)
@@ -114,7 +114,7 @@ fn image_full_png_webp() {
 
 #[test]
 fn image_from_bytes_and_errors() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::temporary::tempdir().unwrap();
     let p = tmp.path().join("x.jpg");
     write_test_jpeg(&p, 32, 32);
     let bytes = std::fs::read(&p).unwrap();
@@ -139,7 +139,7 @@ fn image_from_bytes_and_errors() {
 
 #[test]
 fn corrupt_file_on_disk_errors_cleanly() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::temporary::tempdir().unwrap();
     let p = tmp.path().join("corrupt.jpg");
     write_test_jpeg(&p, 128, 128);
     let mut bytes = std::fs::read(&p).unwrap();
@@ -191,7 +191,7 @@ fn jpeg_entropy_reads_consume_the_buffer_before_refilling() {
 
 #[test]
 fn file_entropy_reader_preserves_scaled_pixels_across_refills() {
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::temporary::tempdir().unwrap();
     let path = tmp.path().join("original.jpg");
     write_test_jpeg(&path, 1024, 768);
     let data = std::fs::read(&path).unwrap();

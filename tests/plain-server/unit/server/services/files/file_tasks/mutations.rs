@@ -39,7 +39,7 @@ fn relation(core: &ContentServer, tag: &str) -> Option<String> {
 
 #[tokio::test]
 async fn strict_native_rename_and_delete_rebind_and_clean_generic_file_references_without_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state().core;
     let (_generation, mut requests) = state.host.connect();
@@ -163,7 +163,7 @@ async fn native_rename_and_delete_follow_actual_catalog_identities() {
     let home = std::env::var_os("HOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    let directory = tempfile::Builder::new()
+    let directory = plain_libs::temporary::Builder::new()
         .prefix("plain-files-")
         .tempdir_in(home)
         .unwrap();
@@ -225,7 +225,7 @@ async fn native_rename_and_delete_follow_actual_catalog_identities() {
 #[tokio::test]
 async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_request_owner_without_host()
  {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state().core;
     let (_generation, mut requests) = state.host.connect();
@@ -323,7 +323,7 @@ async fn named_copy_creates_parents_and_explicit_copy_overwrite_keeps_the_reques
 
 #[tokio::test]
 async fn main_batch_delete_validates_all_paths_before_effects_and_counts_actual_roots_once() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&temp.path().join("core")).unwrap();
     let state = core.runtime_state().core;
     let (_generation, mut host_requests) = state.host.connect();
@@ -367,7 +367,7 @@ async fn main_batch_delete_validates_all_paths_before_effects_and_counts_actual_
 
 #[tokio::test]
 async fn named_copy_preserves_existing_files_and_returns_each_actual_collision_destination() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state().core;
     let (_generation, mut requests) = state.host.connect();
@@ -405,7 +405,7 @@ async fn named_copy_preserves_existing_files_and_returns_each_actual_collision_d
 
 #[tokio::test]
 async fn named_copy_does_not_treat_an_existing_named_directory_as_the_destination_container() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state().core;
     let (_generation, mut requests) = state.host.connect();

@@ -3,7 +3,7 @@ use crate::server::ContentServer;
 #[tokio::test]
 async fn every_runtime_uses_the_current_schema_and_the_same_persisted_identity_keys_and_file_token()
 {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let first = ContentServer::open(directory.path()).unwrap();
     let state = first.runtime_state();
     for table in [

@@ -226,7 +226,7 @@ fn incoming_requests_cancel_once_and_only_current_invitation_can_be_answered() {
 
 #[test]
 fn a_captured_response_cannot_consume_or_overwrite_a_replacement_attempt() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let a = prefs(directory.path(), "a");
     let b = prefs(directory.path(), "b");
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();

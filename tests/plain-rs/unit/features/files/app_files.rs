@@ -19,7 +19,7 @@ fn store_with_import(dir: &Path, contents: &[u8]) -> (Arc<Db>, Arc<FileStore>, S
 
 #[test]
 fn resolve_returns_the_stored_file_for_its_own_suffix() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let (_, store, _, relative) = store_with_import(dir.path(), b"payload");
 
     let suffix = relative.file_name().unwrap().to_str().unwrap();
@@ -29,7 +29,7 @@ fn resolve_returns_the_stored_file_for_its_own_suffix() {
 
 #[test]
 fn resolve_rejects_anything_that_is_not_a_stored_suffix() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let (_, store, id, _) = store_with_import(dir.path(), b"payload");
 
     for rejected in ["../../secret", &id, "", "not-a-hash.bin"] {
@@ -42,7 +42,7 @@ fn resolve_rejects_anything_that_is_not_a_stored_suffix() {
 
 #[test]
 fn resolve_rejects_a_suffix_that_does_not_match_the_stored_name() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let (_, store, id, _) = store_with_import(dir.path(), b"payload");
 
     // A well-formed hash naming a row's real extension but not its file name
@@ -54,7 +54,7 @@ fn resolve_rejects_a_suffix_that_does_not_match_the_stored_name() {
 
 #[test]
 fn stored_paths_are_owned_by_the_file_store_without_requiring_the_file_to_exist() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(Path::new(":memory:")).unwrap());
     let store = FileStore::new(db, directory.path().to_path_buf());
     assert_eq!(

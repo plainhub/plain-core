@@ -27,7 +27,7 @@ fn probe_duration_secs_reads_mvhd_for_video_only_mp4() {
 #[test]
 fn probe_duration_secs_garbage_and_missing_are_zero() {
     assert_eq!(probe_duration_secs("/nonexistent/x.mp4"), None);
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let p = dir.path().join("x.mp4");
     std::fs::write(&p, b"not an mp4 at all").unwrap();
     assert_eq!(probe_duration_secs(p.to_str().unwrap()), None);
@@ -64,7 +64,7 @@ fn mvhd_payload_v1(timescale: u32, duration: u64) -> Vec<u8> {
 }
 
 fn duration_from_moov(moov: &[u8]) -> Option<u32> {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("fixture.mp4");
     std::fs::write(&path, box_bytes(b"moov", moov)).unwrap();
     mp4_duration_secs(path.to_str().unwrap())
@@ -125,7 +125,7 @@ fn probe_media_audio_gets_duration_and_tags() {
 
 #[test]
 fn id3v1_gbk_requires_filename_confirmation_and_preserves_western_tags() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let audio = std::fs::read(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-untagged.mp3"),
     )
@@ -179,7 +179,7 @@ fn id3v1_gbk_requires_filename_confirmation_and_preserves_western_tags() {
 
 #[test]
 fn legacy_id3v1_encodings_require_matching_filename() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let audio = std::fs::read(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-untagged.mp3"),
     )
@@ -267,7 +267,7 @@ fn id3v1_utf8_recovers_non_latin_text_without_reinterpreting_western_or_invalid_
 
 #[test]
 fn id3v2_tags_keep_priority_over_filename_confirmed_id3v1() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("歌手-歌曲.mp3");
     let mut audio = std::fs::read(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-tagged.mp3"),
@@ -288,7 +288,7 @@ fn id3v2_tags_keep_priority_over_filename_confirmed_id3v1() {
 
 #[test]
 fn id3v2_gbk_requires_single_byte_frames_and_filename_confirmation() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let audio = std::fs::read(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-untagged.mp3"),
     )
@@ -410,7 +410,7 @@ fn probe_media_missing_file_is_all_zeros() {
 
 #[test]
 fn container_zero_duration_is_available_while_probe_failure_is_unknown() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("zero.m4a");
     let moov = box_bytes(b"moov", &box_bytes(b"mvhd", &mvhd_payload_v0(1000, 0)));
     std::fs::write(&path, moov).unwrap();
@@ -441,7 +441,7 @@ fn duration_reader_identifies_content_and_keeps_descriptor_ranges_isolated() {
             .unwrap();
     let duration = probe_duration_reader(&mut reader).unwrap();
     assert_eq!(duration / 1000, 4);
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("audio-without-extension");
     std::fs::write(&path, fixture).unwrap();
     assert_eq!(
@@ -526,7 +526,7 @@ fn audio_tag_reader_sniffs_content_within_the_owned_descriptor_range() {
     assert_eq!(facts.title, "Hydrate Title");
     assert_eq!(facts.artist, "Hydrate Artist");
     assert!(facts.duration_ms > 0);
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("wrong-extension.bin");
     std::fs::write(&path, bytes).unwrap();
     let local = probe_media(path.to_str().unwrap(), "audio");

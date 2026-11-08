@@ -21,7 +21,7 @@ fn bundle(entries: &[(&str, Vec<u8>)]) -> Cursor<Vec<u8>> {
 }
 #[test]
 fn bundle_selection_uses_rust_metadata_and_keeps_staging_until_consumed() {
-    let cache = tempfile::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     let archive = bundle(&[
         ("base.apk", apk("com.example.package", None)),
         (
@@ -49,7 +49,7 @@ fn bundle_selection_uses_rust_metadata_and_keeps_staging_until_consumed() {
 }
 #[test]
 fn standalone_and_nonlocal_single_apks_use_a_session_before_temporary_cleanup() {
-    let cache = tempfile::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     let archive = bundle(&[
         ("standalones/base-x86.apk", apk("com.example.other", None)),
         (
@@ -79,7 +79,7 @@ fn standalone_and_nonlocal_single_apks_use_a_session_before_temporary_cleanup() 
 }
 #[test]
 fn ordinary_local_apk_reuses_its_source_without_staging() {
-    let cache = tempfile::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     let path = cache.path().join("source.apk");
     std::fs::write(&path, apk("com.example.package", None)).unwrap();
     let prepared = prepare(
@@ -97,7 +97,7 @@ fn ordinary_local_apk_reuses_its_source_without_staging() {
 }
 #[test]
 fn unsafe_names_mismatched_splits_and_empty_bundles_fail_and_remove_staging() {
-    let cache = tempfile::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     for archive in [
         bundle(&[("../base.apk", apk("com.example.package", None))]),
         bundle(&[

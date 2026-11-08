@@ -4,7 +4,7 @@ use crate::features::media::audio::queue::AudioTrack;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::error::DomainResult;
 pub fn test_db(tag: &str) -> Db {
-    let dir = tempfile::Builder::new()
+    let dir = plain_libs::temporary::Builder::new()
         .prefix(&format!("plain-rs-library-{tag}-"))
         .tempdir()
         .unwrap();

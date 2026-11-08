@@ -1,13 +1,13 @@
 use super::*;
 
 struct Bundle {
-    dir: tempfile::TempDir,
+    dir: plain_libs::temporary::TempDir,
     root: PathBuf,
     outside: PathBuf,
 }
 
 fn bundle() -> Bundle {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let root = dir.path().join("bundle");
     let outside = dir.path().join("outside");
     std::fs::create_dir_all(root.join("assets")).unwrap();
@@ -58,7 +58,7 @@ async fn get_from(
     bundle: Option<&SharedWebBundle>,
     path: &str,
 ) -> Option<Response> {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap();
     serve(&prefs, root, bundle, &Method::GET, path).await
 }
@@ -167,7 +167,7 @@ async fn a_rejected_path_is_not_served_as_a_client_route() {
 #[tokio::test]
 async fn the_access_switch_and_the_method_gate_every_asset() {
     let bundle = bundle();
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap();
     prefs
         .set("remote_access", serde_json::json!(false))

@@ -3,7 +3,7 @@ const KEY: &str = "recent_files";
 
 #[test]
 fn recent_files_deduplicate_move_to_front_and_bound_the_list() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = plain_libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     prefs
         .set_json(
@@ -25,7 +25,7 @@ fn recent_files_deduplicate_move_to_front_and_bound_the_list() {
 
 #[test]
 fn concurrent_recent_updates_preserve_every_distinct_entry() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = plain_libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     let start = std::sync::Barrier::new(16);
     std::thread::scope(|scope| {
@@ -51,7 +51,7 @@ fn concurrent_recent_updates_preserve_every_distinct_entry() {
 
 #[test]
 fn invalid_recent_state_is_reported_without_replacing_it() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = plain_libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     prefs.set_json(KEY, "invalid").unwrap();
     assert!(list(&prefs, 10).is_err());

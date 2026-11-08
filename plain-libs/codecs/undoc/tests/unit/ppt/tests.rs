@@ -159,16 +159,7 @@ fn build(slides: &[Slide], encrypted: bool) -> Vec<u8> {
     user.extend([0u8; 8]);
     let current_user = record(0, 0, 0x0FF6, &user);
 
-    let mut cfb = cfb::CompoundFile::create(std::io::Cursor::new(Vec::new())).unwrap();
-    for (name, data) in [
-        ("/Current User", &current_user),
-        ("/PowerPoint Document", &stream),
-    ] {
-        let mut s = cfb.create_stream(name).unwrap();
-        std::io::Write::write_all(&mut s, data).unwrap();
-    }
-    cfb.flush().unwrap();
-    cfb.into_inner().into_inner()
+    crate::cfb_fixture::compound([("/Current User", current_user.as_slice()), ("/PowerPoint Document", stream.as_slice())])
 }
 
 fn texts(section: &crate::Section) -> Vec<(String, HeadingLevel)> {

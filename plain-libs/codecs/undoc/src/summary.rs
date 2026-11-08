@@ -29,7 +29,7 @@ const PID_APP_NAME: u32 = 18;
 
 /// Read a container's summary properties. Absent or unreadable properties leave the metadata
 /// empty: they describe the document, they are never a reason not to read it.
-pub(crate) fn read<F: Read + Seek>(container: &mut cfb::CompoundFile<F>) -> Metadata {
+pub(crate) fn read<F: Read + Seek>(container: &mut plain_libs::compound_file::CompoundFile<F>) -> Metadata {
     let mut data = Vec::new();
     let read = container
         .open_stream(STREAM)

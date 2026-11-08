@@ -3,8 +3,8 @@ use plain_rs::infrastructure::cache::*;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn cache_settings_execute_the_main_contract_without_platform_operations() {
-    let directory = tempfile::tempdir().unwrap();
-    let external_cache = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let external_cache = plain_libs::temporary::tempdir().unwrap();
     let server =
         crate::server::ContentServer::open_with_cache(directory.path(), external_cache.path())
             .unwrap();

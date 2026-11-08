@@ -6,8 +6,8 @@ use plain_rs::features::services::discovery::pairing_attempts::PairingPhase;
 use sha2::Digest;
 use std::sync::Arc;
 
-fn fixture(id: &str) -> (tempfile::TempDir, crate::server::ContentServer) {
-    let directory = tempfile::tempdir().unwrap();
+fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("system.json")).unwrap(),
     );

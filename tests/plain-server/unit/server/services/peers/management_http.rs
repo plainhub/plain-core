@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 #[tokio::test]
 async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
-    let remote_dir = tempfile::tempdir().unwrap();
+    let remote_dir = plain_libs::temporary::tempdir().unwrap();
     let remote = ContentServer::open(remote_dir.path()).unwrap();
     let remote_state = remote.runtime_state().core;
     remote_state.prefs.set("device_name", "First name").unwrap();
@@ -60,7 +60,7 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
             .await
             .unwrap();
     });
-    let local_dir = tempfile::tempdir().unwrap();
+    let local_dir = plain_libs::temporary::tempdir().unwrap();
     let local = ContentServer::open(local_dir.path()).unwrap();
     let key = plain_libs::utils::base64::base64_decode(&session.token);
     let url = reqwest::Url::parse(&format!("https://127.0.0.1:{proxy_port}")).unwrap();

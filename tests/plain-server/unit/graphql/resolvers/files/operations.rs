@@ -25,7 +25,7 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
     });
 }
 
-fn fixture(permissions: &str) -> (tempfile::TempDir, PublicSchema) {
+fn fixture(permissions: &str) -> (plain_libs::temporary::TempDir, PublicSchema) {
     fixture_with(permissions, |method, _| match method {
         "systemAccessFacts" => json!({ "granted": { "FILES": true } }),
         other => panic!("unexpected host call {other}"),
@@ -35,8 +35,8 @@ fn fixture(permissions: &str) -> (tempfile::TempDir, PublicSchema) {
 fn fixture_with(
     permissions: &str,
     handler: impl Fn(&str, Value) -> Value + Send + 'static,
-) -> (tempfile::TempDir, PublicSchema) {
-    let dir = tempfile::tempdir().unwrap();
+) -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs
         .set(
@@ -344,7 +344,7 @@ async fn a_blank_media_query_is_refused_before_the_platform() {
     }
 }
 
-fn upload_fixture() -> (tempfile::TempDir, PublicSchema, std::path::PathBuf) {
+fn upload_fixture() -> (plain_libs::temporary::TempDir, PublicSchema, std::path::PathBuf) {
     let (dir, schema) = fixture_with(GRANTED, |method, _| match method {
         "systemAccessFacts" => json!({"granted":{"FILES":true}}),
         other => panic!("Unexpected platform primitive: {other}"),
@@ -626,7 +626,7 @@ fn merge_results_preserve_status_output_size_and_failure() {
 
 #[tokio::test]
 async fn main_upload_resume_query_observes_only_completed_native_byte_streams() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();

@@ -16,9 +16,9 @@ fn ble_associations_match_signature_and_cleanup_without_consuming_replacements()
     assert!(runtime.take("peer", "second").is_none());
 }
 
-fn fixture(id: &str) -> (tempfile::TempDir, crate::test_runtime::Core) {
+fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::test_runtime::Core) {
     use std::sync::Arc;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     let (key, _public) = plain_libs::crypto::ed25519_generate();

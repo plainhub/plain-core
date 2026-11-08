@@ -1,7 +1,7 @@
 use super::*;
 
-fn recent() -> (tempfile::TempDir, Arc<Db>, RecentFiles) {
-    let root = tempfile::tempdir().unwrap();
+fn recent() -> (plain_libs::temporary::TempDir, Arc<Db>, RecentFiles) {
+    let root = plain_libs::temporary::tempdir().unwrap();
     let store = Arc::new(Db::open(&root.path().join("plain.db")).unwrap());
     let recent = RecentFiles::new(store.clone());
     (root, store, recent)

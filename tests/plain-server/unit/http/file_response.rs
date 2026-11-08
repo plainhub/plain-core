@@ -38,7 +38,7 @@ fn conditional_thumbnail_response_releases_its_shared_buffer() {
 
 #[tokio::test]
 async fn temporary_output_survives_until_the_response_body_is_consumed_or_cancelled() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     for consume in [true, false] {
         let path = dir.path().join("preview.png");
         std::fs::write(&path, b"preview-output").unwrap();
@@ -59,7 +59,7 @@ async fn temporary_output_survives_until_the_response_body_is_consumed_or_cancel
 
 #[tokio::test]
 async fn temporary_range_responses_keep_range_headers_and_remove_the_output() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("preview.png");
     std::fs::write(&path, b"0123456789").unwrap();
     let mut headers = HeaderMap::new();
@@ -102,7 +102,7 @@ async fn original_thumbnail_bytes_keep_their_mime_and_conditional_response() {
 
 #[tokio::test]
 async fn mutable_file_responses_require_revalidation_and_preserve_full_and_range_bytes() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("preview.wav");
     for bytes in [b"broken-bytes", b"fixed--bytes"] {
         std::fs::write(&path, bytes).unwrap();

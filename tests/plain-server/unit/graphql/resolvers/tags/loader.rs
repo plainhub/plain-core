@@ -1,8 +1,8 @@
 use super::*;
 use std::sync::atomic::Ordering;
 
-fn fixture() -> (tempfile::TempDir, Arc<TagsLoader>) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, Arc<TagsLoader>) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     (dir, new(db))
 }

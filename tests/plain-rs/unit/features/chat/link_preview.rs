@@ -2,8 +2,8 @@ use super::*;
 use crate::features::chat::attachments::app_file_store::chat_deletion;
 use crate::features::chat::attachments::app_file_store::import_preview_image;
 use serde_json::json;
-fn fixture() -> (tempfile::TempDir, Db) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, Db) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let mut row=DChat::new("me","local","",&json!({"type":"TEXT","metadata":"preserve","value":{"text":"https://a.example https://b.example","linkPreviews":[]}}).to_string());
     row.id = "message".into();

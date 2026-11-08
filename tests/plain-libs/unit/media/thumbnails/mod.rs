@@ -4,7 +4,7 @@ fn cache_dir() -> std::path::PathBuf {
     static CACHE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     CACHE
         .get_or_init(|| {
-            let directory = tempfile::tempdir().unwrap();
+            let directory = crate::temporary::tempdir().unwrap();
             let path = directory.path().to_path_buf();
             crate::test_tempdirs::retain(directory);
             path
@@ -18,7 +18,7 @@ async fn thumbnail(spec: ThumbSpec) -> Result<ThumbOutcome> {
 
 #[tokio::test]
 async fn render_keeps_the_encoded_cache_allocation() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let path = dir.path().join("shared.jpg");
     write_jpeg(&path, 640, 480);
     let first = render(path.to_str().unwrap(), 128, 128, true, dir.path())
@@ -79,11 +79,11 @@ fn spec_for(path: &std::path::Path, w: u32, h: u32) -> ThumbSpec {
     )
 }
 
-fn fresh_dir(_tag: &str) -> tempfile::TempDir {
+fn fresh_dir(_tag: &str) -> crate::temporary::TempDir {
     // Under $HOME (macOS temp lives under /var/folders which the media
     // scan would exclude; irrelevant here, but consistent with the rest
     // of the suite).
-    tempfile::tempdir().unwrap()
+    crate::temporary::tempdir().unwrap()
 }
 
 #[test]
@@ -528,7 +528,7 @@ async fn video_thumbnail_end_to_end_and_cache_hit() {
     assert_eq!(generations_for(&key), before);
 
     // Non-MP4 / undecodable containers must Err (→ 204 upstream), not panic.
-    let tmp = tempfile::tempdir().unwrap();
+    let tmp = crate::temporary::tempdir().unwrap();
     let mkv = tmp.path().join("clip.mkv");
     std::fs::write(&mkv, b"matroska-ish garbage").unwrap();
     assert!(thumbnail(spec_for(&mkv, 128, 128)).await.is_err());
@@ -594,7 +594,7 @@ async fn real_photos_end_to_end() {
 
 #[tokio::test]
 async fn explicit_cache_directories_keep_native_runtimes_independent() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let source = directory.path().join("image.jpg");
     write_jpeg(&source, 160, 100);
     let spec = spec_for(&source, 40, 40);
@@ -628,9 +628,9 @@ async fn explicit_cache_directories_keep_native_runtimes_independent() {
 
 #[tokio::test]
 async fn explicit_cache_roots_keep_independent_files_for_the_same_source() {
-    let source = tempfile::tempdir().unwrap();
-    let first = tempfile::tempdir().unwrap();
-    let second = tempfile::tempdir().unwrap();
+    let source = crate::temporary::tempdir().unwrap();
+    let first = crate::temporary::tempdir().unwrap();
+    let second = crate::temporary::tempdir().unwrap();
     let path = source.path().join("photo.jpg");
     write_jpeg(&path, 1200, 600);
     let spec = spec_for(&path, 120, 120);
@@ -665,7 +665,7 @@ async fn explicit_cache_roots_keep_independent_files_for_the_same_source() {
 
 #[tokio::test]
 async fn render_fit_cache_changes_when_source_changes_within_the_same_second() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("source.jpg");
     let base = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
     for (nanos, color) in [(100, [240, 10, 10]), (200, [10, 240, 10])] {
@@ -699,7 +699,7 @@ async fn render_fit_cache_changes_when_source_changes_within_the_same_second() {
 #[tokio::test]
 #[ignore]
 async fn thumbnail_latency_benchmark() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("photo.jpg");
     write_jpeg(&path, 4000, 3000);
     let mut cold = Vec::new();
@@ -763,7 +763,7 @@ fn jpeg_with_preview(path: &std::path::Path, preview_color: [u8; 3]) {
 
 #[tokio::test]
 async fn sufficiently_large_embedded_preview_is_used_without_decoding_the_original() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("image.jpg");
     image::RgbImage::from_pixel(1280, 960, image::Rgb([240, 10, 10]))
         .save(&path)
@@ -783,7 +783,7 @@ async fn sufficiently_large_embedded_preview_is_used_without_decoding_the_origin
 
 #[tokio::test]
 async fn fit_disk_cache_contains_the_final_output_without_a_second_encode() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("image.jpg");
     write_jpeg(&path, 800, 400);
     let mut spec = spec_for(&path, 128, 128);
@@ -838,7 +838,7 @@ async fn fit_disk_cache_contains_the_final_output_without_a_second_encode() {
 
 #[tokio::test]
 async fn decoded_pixels_and_output_buffers_are_admitted_before_allocating_them() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("oversized.png");
     let mut bytes = vec![0; 24];
     bytes[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
@@ -900,7 +900,7 @@ fn dc_input_memory_is_charged_only_for_the_full_jpeg_read_path() {
 
 #[tokio::test]
 async fn png_thumbnails_keep_transparency_and_share_fit_cache_for_both_crop_flags() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("alpha.png");
     image::RgbaImage::from_fn(768, 768, |x, _| {
         image::Rgba([
@@ -955,7 +955,7 @@ async fn png_thumbnails_keep_transparency_and_share_fit_cache_for_both_crop_flag
 }
 
 async fn check_still_format_thumbnail(name: &str, fixture: &[u8]) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let source = directory.path().join(name);
     std::fs::write(&source, fixture).unwrap();
     let cache = directory.path().join("cache");
@@ -1038,7 +1038,7 @@ async fn new_still_format_heif_thumbnail_coalesces_batch_requests() {
 
 #[tokio::test]
 async fn concurrent_disk_cache_hits_share_the_encoded_storage_without_decoding() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let source = directory.path().join("image.jpg");
     write_jpeg(&source, 800, 600);
     let spec = spec_for(&source, 128, 128);
@@ -1087,7 +1087,7 @@ async fn concurrent_disk_cache_hits_share_the_encoded_storage_without_decoding()
 
 #[tokio::test]
 async fn transparent_webp_uses_the_shared_aspect_fit_and_alpha_output() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("transparent.webp");
     let image = image::RgbaImage::from_pixel(1024, 768, image::Rgba([40, 90, 150, 128]));
     let mut input = std::io::Cursor::new(Vec::new());

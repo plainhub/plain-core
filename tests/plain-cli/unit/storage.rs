@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn explicit_directories_are_persisted_on_the_containing_volume() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = plain_rs::infrastructure::db::Db::open(&directory.path().join("index.db")).unwrap();
     configure_index(&db, &[directory.path().to_owned()]).unwrap();
     let volumes = db.volumes().unwrap();
@@ -24,7 +24,7 @@ fn explicit_directories_are_persisted_on_the_containing_volume() {
 
 #[test]
 fn relative_scan_roots_are_rejected_before_registering_volumes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = plain_rs::infrastructure::db::Db::open(&directory.path().join("index.db")).unwrap();
     assert!(configure_index(&db, &[PathBuf::from("relative")]).is_err());
     assert!(db.volumes().unwrap().is_empty());
@@ -35,7 +35,7 @@ async fn startup_scan_indexes_configured_directories_through_the_headless_host()
     use plain_rs::features::services::files::media_scans::Status;
     use std::sync::Arc;
     let home = plain_rs::infrastructure::platform::system::consts::home_directory().unwrap();
-    let directory = tempfile::Builder::new()
+    let directory = plain_libs::temporary::Builder::new()
         .prefix("scan-check-")
         .tempdir_in(home)
         .unwrap();

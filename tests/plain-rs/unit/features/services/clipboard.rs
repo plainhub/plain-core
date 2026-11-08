@@ -3,7 +3,7 @@ use crate::test_runtime::Core as ContentServer;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-fn start(dir: &tempfile::TempDir) -> (ContentServer, String, Arc<crate::features::prefs::Prefs>) {
+fn start(dir: &plain_libs::temporary::TempDir) -> (ContentServer, String, Arc<crate::features::prefs::Prefs>) {
     let token = plain_libs::utils::base64::base64_encode(&[9; 32]);
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
@@ -17,7 +17,7 @@ fn start(dir: &tempfile::TempDir) -> (ContentServer, String, Arc<crate::features
 
 #[tokio::test]
 async fn reports_recheck_permission_deduplicate_and_publish_only_nonsensitive_text() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let (server, _, prefs) = start(&dir);
     let state = server.runtime_state();
     let mut events = state.events.subscribe();
@@ -61,7 +61,7 @@ async fn reports_recheck_permission_deduplicate_and_publish_only_nonsensitive_te
 #[tokio::test]
 async fn local_captures_coalesce_duplicates_and_sensitive_or_historical_changes_invalidate_pending_pushes()
  {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let (server, _, prefs) = start(&directory);
     let state = server.runtime_state();
     let mut changes = state.clipboard_changes.subscribe();

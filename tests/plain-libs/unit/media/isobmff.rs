@@ -7,7 +7,7 @@ fn atom(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
     result
 }
 fn probe(data: &[u8]) -> Option<i64> {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("fixture.mp4");
     std::fs::write(&path, data).unwrap();
     mp4_milliseconds(&path)
@@ -167,7 +167,7 @@ fn codec_track(codec: Option<&[u8; 4]>, handler: &[u8; 4]) -> Vec<u8> {
 }
 #[test]
 fn track_probe_reads_video_codecs_and_metadata_tracks_without_confusing_audio() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     let path = dir.path().join("codec.mp4");
     for codec in [*b"avc1", *b"hvc1", *b"hev1"] {
         for metadata in [false, true] {
@@ -209,7 +209,7 @@ fn descriptor_asset_duration_reads_only_the_declared_region() {
     let prefix = atom(b"moov", &atom(b"mvhd", &time(1000, 9999)));
     let movie = atom(b"moov", &atom(b"mvhd", &time(1000, 3211)));
     let suffix = atom(b"moov", &atom(b"mvhd", &time(1000, 8888)));
-    let mut file = tempfile::tempfile().unwrap();
+    let mut file = crate::temporary::tempfile().unwrap();
     use std::io::Write;
     file.write_all(&[prefix.clone(), movie.clone(), suffix].concat())
         .unwrap();
@@ -236,7 +236,7 @@ fn fragmented_descriptor_asset_restarts_at_the_declared_offset() {
         fragment(1, Some(1000), &[1234, 2345], true),
     ]
     .concat();
-    let mut file = tempfile::tempfile().unwrap();
+    let mut file = crate::temporary::tempfile().unwrap();
     use std::io::Write;
     file.write_all(&[prefix.as_slice(), movie.as_slice()].concat())
         .unwrap();
@@ -249,7 +249,7 @@ fn fragmented_descriptor_asset_restarts_at_the_declared_offset() {
 #[test]
 fn extended_header_never_reads_past_the_asset_boundary() {
     use std::io::Write;
-    let mut file = tempfile::tempfile().unwrap();
+    let mut file = crate::temporary::tempfile().unwrap();
     file.write_all(
         &[
             1u32.to_be_bytes().as_slice(),

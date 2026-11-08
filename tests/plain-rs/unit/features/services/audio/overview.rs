@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[tokio::test]
 async fn sdk_summary_batches_the_full_catalog_without_metadata_or_per_row_host_calls() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
@@ -49,7 +49,7 @@ async fn malformed_or_repeated_catalog_pages_fail_instead_of_returning_partial_t
         json!([{"id":"one","path":"/one"},{"id":"one","path":"/one"}]),
         json!([{"id":"","path":"/one"}]),
     ] {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = plain_libs::temporary::tempdir().unwrap();
         let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
         let host = Arc::new(Host::default());
         let (generation, mut requests) = host.connect();
@@ -71,7 +71,7 @@ async fn malformed_or_repeated_catalog_pages_fail_instead_of_returning_partial_t
 
 #[tokio::test]
 async fn native_summary_streams_the_full_database_and_projects_selected_rows_only() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());
     db.with_conn(|connection| connection.execute_batch(
         "INSERT INTO volumes(id,identity,path,is_available) VALUES(1,'TEST','/music',1); WITH RECURSIVE entries(n) AS (VALUES(0) UNION ALL SELECT n+1 FROM entries WHERE n<1099)
@@ -102,7 +102,7 @@ fn sdk_revision(version: &str, generation: i64) -> Value {
 
 #[tokio::test]
 async fn sdk_changed_page_is_discarded_and_summary_restarts_from_zero() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
@@ -148,7 +148,7 @@ async fn sdk_changed_page_is_discarded_and_summary_restarts_from_zero() {
 #[tokio::test]
 async fn sdk_changes_inside_queries_or_version_resets_have_bounded_retries() {
     for reset in [false, true] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let db = Arc::new(Db::open(&directory.path().join("db")).unwrap());
         let host = Arc::new(Host::default());
         let (generation, mut requests) = host.connect();

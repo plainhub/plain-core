@@ -3,7 +3,7 @@ use std::{future::Future, task::Poll};
 
 #[tokio::test]
 async fn resource_ranges_span_bounded_reads_and_preserve_exact_file_bytes() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let path = root.path().join("fixture.bin");
     let bytes = (0..MAX_RESOURCE_READ_BYTES * 3 + 17)
         .map(|i| (i % 251) as u8)
@@ -25,7 +25,7 @@ async fn resource_ranges_span_bounded_reads_and_preserve_exact_file_bytes() {
 
 #[tokio::test]
 async fn another_scope_cannot_read_or_close_a_resource_and_owner_close_is_isolated() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let path = root.path().join("fixture.txt");
     std::fs::write(&path, b"document").unwrap();
     let registry = NativeResourceRegistry::default();
@@ -64,7 +64,7 @@ async fn another_scope_cannot_read_or_close_a_resource_and_owner_close_is_isolat
 
 #[tokio::test]
 async fn empty_ranges_limits_and_closed_handles_are_checked_before_reading() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let path = root.path().join("empty.txt");
     std::fs::write(&path, b"").unwrap();
     let registry = NativeResourceRegistry::default();
@@ -88,7 +88,7 @@ async fn empty_ranges_limits_and_closed_handles_are_checked_before_reading() {
 
 #[tokio::test]
 async fn closing_the_scope_interrupts_a_read_waiting_for_the_file_lock() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let path = root.path().join("fixture.txt");
     std::fs::write(&path, b"document").unwrap();
     let registry = NativeResourceRegistry::default();
@@ -117,7 +117,7 @@ async fn closing_the_scope_interrupts_a_read_waiting_for_the_file_lock() {
 
 #[tokio::test]
 async fn registry_drop_invalidates_held_resources_without_deleting_the_file() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let path = root.path().join("fixture.txt");
     std::fs::write(&path, b"document").unwrap();
     let registry = NativeResourceRegistry::default();
@@ -131,7 +131,7 @@ async fn registry_drop_invalidates_held_resources_without_deleting_the_file() {
 
 #[tokio::test]
 async fn absent_files_and_directories_do_not_register_resource_handles() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let registry = NativeResourceRegistry::default();
     let scope = NativeRequestScope::default();
     assert!(registry.open(&scope, root.path()).await.is_err());
@@ -146,7 +146,7 @@ async fn absent_files_and_directories_do_not_register_resource_handles() {
 
 #[test]
 fn a_scope_closed_during_file_open_cannot_register_a_late_handle() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let path = root.path().join("fixture.txt");
     std::fs::write(&path, b"document").unwrap();
     let runtime = tokio::runtime::Builder::new_current_thread()

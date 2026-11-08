@@ -18,7 +18,7 @@ fn csv_preserves_field_values_and_quotes() {
 
 #[test]
 fn json_and_csv_archives_do_not_overwrite_a_batch_with_the_same_timestamp() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let messages = vec![message()];
     write(directory.path(), &messages, 1_750_000_000_000).unwrap();
     write(directory.path(), &messages, 1_750_000_000_000).unwrap();
@@ -42,7 +42,7 @@ fn json_and_csv_archives_do_not_overwrite_a_batch_with_the_same_timestamp() {
 
 #[test]
 fn retention_removes_only_owned_archives_strictly_older_than_thirty_days() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let now = 1_750_000_000_000;
     let cutoff = u64::try_from(now - RETENTION_MS).unwrap();
     for (name, age) in [

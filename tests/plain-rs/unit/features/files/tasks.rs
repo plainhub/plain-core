@@ -38,7 +38,7 @@ async fn terminal(service: &Service, cid: &str, id: &str) -> FileTask {
 async fn owned_services_execute_multi_op_copy_and_directory_move_with_exact_cumulative_progress() {
     let events = Arc::new(Recorder::default());
     let service = Service::new(events.clone());
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let a = temp.path().join("a");
     let b = temp.path().join("b");
     std::fs::write(&a, vec![7; 200_000]).unwrap();
@@ -108,7 +108,7 @@ async fn owned_services_execute_multi_op_copy_and_directory_move_with_exact_cumu
 async fn bounded_admission_never_records_a_rejected_task() {
     let events = Arc::new(Recorder::default());
     let service = Service::new(events.clone());
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let mut admitted = 0;
     loop {
         match service.create(
@@ -165,7 +165,7 @@ impl Hooks for ScanFailure {
 #[tokio::test]
 async fn completed_operations_keep_resolved_collision_paths_when_native_scan_fails() {
     let service = Service::with_hooks(Arc::new(Recorder::default()), Arc::new(ScanFailure));
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let source = temp.path().join("source");
     let target = temp.path().join("copy.txt");
     std::fs::write(&source, b"synthetic").unwrap();
@@ -220,7 +220,7 @@ async fn permission_revoked_after_measurement_prevents_physical_execution() {
             0,
         ))),
     );
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let source = temp.path().join("source");
     let target = temp.path().join("target");
     std::fs::write(&source, b"synthetic").unwrap();
@@ -243,7 +243,7 @@ async fn permission_revoked_after_measurement_prevents_physical_execution() {
 #[tokio::test]
 async fn special_files_fail_without_blocking_the_worker() {
     let service = Service::new(Arc::new(Recorder::default()));
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let source = temp.path().join("socket");
     let _socket = std::os::unix::net::UnixListener::bind(&source).unwrap();
     let target = temp.path().join("target");
@@ -263,7 +263,7 @@ async fn special_files_fail_without_blocking_the_worker() {
 
 #[tokio::test]
 async fn tasks_are_lost_when_the_service_is_recreated_and_failures_are_not_retried() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let source = temp.path().join("source");
     let target = temp.path().join("target");
     std::fs::write(&source, b"synthetic").unwrap();
@@ -305,7 +305,7 @@ async fn tasks_are_lost_when_the_service_is_recreated_and_failures_are_not_retri
 #[tokio::test]
 async fn invalid_sources_fail_and_later_tasks_still_run() {
     let service = Service::new(Arc::new(Recorder::default()));
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let absent = temp.path().join("absent");
     let target = temp.path().join("target");
     let task = service
@@ -342,7 +342,7 @@ async fn invalid_sources_fail_and_later_tasks_still_run() {
 #[tokio::test]
 async fn rename_uses_the_exact_target_and_does_not_choose_a_collision_name() {
     let service = Service::new(Arc::new(Recorder::default()));
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let source = temp.path().join("source");
     let target = temp.path().join("target");
     std::fs::write(&source, b"source").unwrap();
@@ -390,7 +390,7 @@ impl Hooks for FailSecondCompletion {
 }
 #[tokio::test]
 async fn failed_postprocessing_preserves_partial_results_and_stops_remaining_operations() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let hooks = Arc::new(FailSecondCompletion(std::sync::atomic::AtomicUsize::new(0)));
     let service = Service::with_hooks(Arc::new(Recorder::default()), hooks.clone());
     let mut operations = Vec::new();

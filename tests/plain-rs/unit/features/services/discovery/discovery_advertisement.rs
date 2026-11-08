@@ -22,7 +22,7 @@ fn core_with_host(directory: &std::path::Path) -> (crate::test_runtime::Core, Co
 
 #[tokio::test]
 async fn native_advertisements_use_current_preferences_without_host_calls() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let (core, state) = core_with_host(directory.path());
     let (generation, mut requests) = state.host.connect();
     let first = execute(&state, Request::Reply {}).await.unwrap();

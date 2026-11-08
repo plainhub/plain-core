@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn host_transport_preserves_signed_wire_and_requires_an_actual_receipt() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "self").unwrap();

@@ -209,7 +209,7 @@ fn grid_admission_counts_the_canvas_once_and_fits_the_shared_budget() {
     drop(ctx);
     bytes[offset + 4..offset + 8].copy_from_slice(&4032_u32.to_be_bytes());
     bytes[offset + 8..offset + 12].copy_from_slice(&3024_u32.to_be_bytes());
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("metadata.heic");
     std::fs::write(&path, bytes).unwrap();
     let facts = probe(&path, ImageKind::Heif).unwrap();
@@ -248,7 +248,7 @@ fn av1_dimensions_must_match_container_ispe() {
 
 #[test]
 fn coded_tile_admission_prices_every_padded_item_once() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("grid.heic");
     let bytes = fixture("grid.heic");
     let ctx = Context::open(&bytes).unwrap();

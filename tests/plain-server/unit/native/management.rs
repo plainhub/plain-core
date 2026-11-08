@@ -2,7 +2,7 @@ use crate::graphql::executor::{RequestContext, execute_graphql};
 
 #[tokio::test]
 async fn retired_management_roots_are_unavailable_to_local_and_authenticated_remote_graphql() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
@@ -173,7 +173,7 @@ async fn retired_management_roots_are_unavailable_to_local_and_authenticated_rem
 
 #[tokio::test]
 async fn native_management_handles_reject_every_operation_after_core_shutdown() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
@@ -255,7 +255,7 @@ async fn native_management_handles_reject_every_operation_after_core_shutdown() 
 
 #[tokio::test]
 async fn native_preference_reads_and_notification_changes_preserve_shared_state_and_events() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),
@@ -324,7 +324,7 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn native_certificate_rotation_uses_the_server_identity_and_invalid_import_preserves_it() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),

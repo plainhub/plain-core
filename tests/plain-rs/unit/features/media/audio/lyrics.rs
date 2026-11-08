@@ -8,7 +8,7 @@ fn sidecar_selection_uses_the_filename_extension_and_bounded_lossy_utf8() {
         ("song.with.dots.mp3", "song.with.dots.lrc"),
         (".song", ".song.lrc"),
     ] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let album = directory.path().join("album.v1");
         std::fs::create_dir(&album).unwrap();
         let path = album.join(name);
@@ -255,7 +255,7 @@ fn file_path_extraction_roundtrips() {
     header.extend_from_slice(&syncsafe(frame.len()));
     header.extend_from_slice(&frame);
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let p = dir.path().join("song.mp3");
     std::fs::write(&p, &header).unwrap();
     assert_eq!(extract_lyrics_from_path(p.to_str().unwrap()), "file lyrics");

@@ -141,7 +141,7 @@ fn text_filters_match_current_metadata_and_respect_negation() {
 
 #[test]
 fn video_progress_preserves_exact_milliseconds_after_restart_and_uses_inclusive_time_boundaries() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("db");
     let db = Db::open(&path).unwrap();
     assert!(save(&db, DataType::Video, " ", 12).is_err());

@@ -2,7 +2,7 @@ use super::*;
 use std::io::Cursor;
 
 fn archive() -> Vec<u8> {
-    let source = tempfile::tempdir().unwrap();
+    let source = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(source.path());
     let prefs = Arc::new(crate::features::prefs::Prefs::load(&paths.prefs()).unwrap());
     crate::features::prefs::identity::ensure_identity(&prefs);
@@ -76,7 +76,7 @@ fn assert_restored(directory: &Path) {
 }
 #[test]
 fn staging_keeps_live_stores_untouched_and_startup_replaces_closed_stores() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     let prefs = Arc::new(crate::features::prefs::Prefs::load(&paths.prefs()).unwrap());
     prefs.set("device_name", "live device").unwrap();
@@ -104,7 +104,7 @@ fn staging_keeps_live_stores_untouched_and_startup_replaces_closed_stores() {
     drop(prefs);
     std::fs::write(directory.path().join("plain.db-wal"), b"stale WAL").unwrap();
     std::fs::write(directory.path().join("plain.db-shm"), b"stale SHM").unwrap();
-    let cache = tempfile::tempdir().unwrap();
+    let cache = plain_libs::temporary::tempdir().unwrap();
     std::fs::write(cache.path().join("stale"), b"stale cache").unwrap();
     let _lease = crate::infrastructure::data_paths::directory::DataDirectory::open(
         directory.path(),
@@ -119,7 +119,7 @@ fn staging_keeps_live_stores_untouched_and_startup_replaces_closed_stores() {
 }
 #[test]
 fn startup_resumes_after_completed_and_interrupted_entry_swaps() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     prepare(archive(), directory.path()).unwrap();
     let pending = pending(directory.path());
     let stage = directory.path().join(&pending.staging);
@@ -153,7 +153,7 @@ fn invalid_backup_paths_duplicates_and_missing_stores_never_publish_a_restore() 
         vec!["files/same", "files/same/"],
         vec!["files/plain.db"],
     ] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
         for name in names {
             zip.start_file(name, zip::write::SimpleFileOptions::default())
@@ -167,7 +167,7 @@ fn invalid_backup_paths_duplicates_and_missing_stores_never_publish_a_restore() 
 }
 #[test]
 fn cancelled_and_competing_restores_preserve_the_published_snapshot() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let bytes = archive();
     let (_stop, stopped) = watch::channel(false);
     assert!(
@@ -189,7 +189,7 @@ fn cancelled_and_competing_restores_preserve_the_published_snapshot() {
 }
 #[test]
 fn invalid_restore_plan_does_not_replace_current_data() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     prepare(archive(), directory.path()).unwrap();
     let mut marker = pending(directory.path());
     marker.entries.push("../outside".into());
@@ -208,8 +208,8 @@ fn invalid_restore_plan_does_not_replace_current_data() {
 #[cfg(unix)]
 #[test]
 fn staged_symbolic_links_are_rejected_before_any_target_is_changed() {
-    let directory = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let outside = plain_libs::temporary::tempdir().unwrap();
     prepare(archive(), directory.path()).unwrap();
     let marker = pending(directory.path());
     std::os::unix::fs::symlink(
@@ -227,8 +227,8 @@ fn staged_symbolic_links_are_rejected_before_any_target_is_changed() {
 #[tokio::test]
 async fn uri_restore_reads_one_bounded_descriptor_without_copying_the_archive_to_cache() {
     for uri in ["content://backup/current", "ph://backup/current"] {
-        let directory = tempfile::tempdir().unwrap();
-        let source = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
+        let source = plain_libs::temporary::tempdir().unwrap();
         let bytes = archive();
         let path = source.path().join("wrapped-backup");
         let mut wrapped = b"unrelated-prefix".to_vec();

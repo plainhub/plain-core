@@ -93,7 +93,7 @@ fn runtime(directory: &std::path::Path, host: Arc<Host>) -> Arc<Runtime> {
 #[tokio::test]
 async fn provider_attachments_use_one_mime_primitive_and_preserve_stream_bytes() {
     for mime in [json!(" image/png "), json!(""), Value::Null] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let host = Arc::new(Host::default());
         let (generation, mut requests) = host.connect();
         let resources =
@@ -149,7 +149,7 @@ async fn failed_or_invalid_mime_facts_do_not_open_or_copy_provider_attachments()
         json!({"error":"Provider permission denied"}),
         json!({"result":42}),
     ] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let host = Arc::new(Host::default());
         let (generation, mut requests) = host.connect();
         let resources =
@@ -179,7 +179,7 @@ async fn failed_or_invalid_mime_facts_do_not_open_or_copy_provider_attachments()
 
 #[tokio::test]
 async fn local_attachments_copy_directly_without_any_host_request() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let host = Arc::new(Host::default());
     let (_generation, mut requests) = host.connect();
     let runtime = runtime(directory.path(), host);

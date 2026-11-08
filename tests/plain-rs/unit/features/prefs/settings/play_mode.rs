@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn explicit_modes_are_persisted_and_used_by_the_shared_queue() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("prefs");
     let prefs = crate::features::prefs::Prefs::load(&path).unwrap();
     for mode in [
@@ -30,7 +30,7 @@ fn explicit_modes_are_persisted_and_used_by_the_shared_queue() {
 
 #[test]
 fn malformed_stored_modes_are_rejected_without_overwriting_them() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = crate::features::prefs::Prefs::load(&dir.path().join("prefs")).unwrap();
     prefs
         .set(crate::features::prefs::pref_keys::AUDIO_PLAY_MODE, 99)

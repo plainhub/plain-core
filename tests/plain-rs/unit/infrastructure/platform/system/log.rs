@@ -260,7 +260,7 @@ fn set_file_creates_missing_parent_dirs() {
 
 #[test]
 fn rotation_bounds_files_and_keeps_only_the_previous_file() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("rust.log");
     let backup = directory.path().join("rust.log.bak");
     let mut sink = Sink {
@@ -284,7 +284,7 @@ fn rotation_bounds_files_and_keeps_only_the_previous_file() {
 
 #[test]
 fn oversized_utf8_record_is_truncated_and_writes_continue_after_clear() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("rust.log");
     let mut sink = Sink {
         path: path.clone(),
@@ -307,7 +307,7 @@ fn oversized_utf8_record_is_truncated_and_writes_continue_after_clear() {
 
 #[test]
 fn rotation_failure_is_reported_and_keeps_the_current_file() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("rust.log");
     std::fs::write(&path, vec![b'a'; 128]).unwrap();
     std::fs::create_dir(directory.path().join("rust.log.bak")).unwrap();
@@ -325,6 +325,6 @@ fn rotation_failure_is_reported_and_keeps_the_current_file() {
 #[test]
 fn file_open_failure_is_returned_to_startup() {
     let _seq = SINK_SEQ.lock().unwrap();
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     assert!(init_file(directory.path(), "info").is_err());
 }

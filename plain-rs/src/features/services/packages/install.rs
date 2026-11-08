@@ -19,12 +19,12 @@ struct Prepared {
     package_name: String,
     files: Vec<PathBuf>,
     session: bool,
-    _staging: Option<tempfile::TempDir>,
+    _staging: Option<plain_libs::temporary::TempDir>,
 }
-fn temporary(cache: &Path) -> Result<tempfile::TempDir> {
+fn temporary(cache: &Path) -> Result<plain_libs::temporary::TempDir> {
     let directory = cache.join("packages");
     std::fs::create_dir_all(&directory)?;
-    Ok(tempfile::Builder::new()
+    Ok(plain_libs::temporary::Builder::new()
         .prefix("install-")
         .tempdir_in(directory)?)
 }

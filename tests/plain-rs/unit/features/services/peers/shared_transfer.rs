@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn failed_file_creation_preserves_existing_content() {
     let work = BlockingWork::default();
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let path = root.path().join("existing");
     std::fs::write(&path, b"keep existing content").unwrap();
     assert!(create_file(&work, path.clone()).await.is_err());
@@ -13,7 +13,7 @@ async fn failed_file_creation_preserves_existing_content() {
 #[tokio::test]
 async fn created_file_is_removed_only_when_its_guard_is_dropped() {
     let work = BlockingWork::default();
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let path = root.path().join("owned");
     let (mut file, temporary) = create_file(&work, path.clone()).await.unwrap();
     file.write_all(b"owned content").await.unwrap();
@@ -32,7 +32,7 @@ fn canceled_queued_file_creation_cannot_leave_a_partial_file() {
         .build()
         .unwrap();
     let work = BlockingWork::default();
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let path = root.path().join(".shared-fixture.part");
     runtime.block_on(async {
         let (started, ready) = tokio::sync::oneshot::channel();
@@ -73,7 +73,7 @@ fn progress_batches_chunks_but_always_reports_the_exact_final_size() {
 }
 #[test]
 fn temporary_guard_removes_partial_file_and_generation_paths_cannot_escape_root() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let path = root.path().join("partial");
     std::fs::write(&path, b"partial").unwrap();
     drop(Temporary(path.clone()));
@@ -87,7 +87,7 @@ fn temporary_guard_removes_partial_file_and_generation_paths_cannot_escape_root(
 }
 #[tokio::test]
 async fn cleanup_removes_only_the_owned_generation_and_is_repeatable() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let generation = uuid::Uuid::new_v4().to_string();
     let owned = directory(root.path(), &generation).unwrap();
     tokio::fs::create_dir_all(&owned).await.unwrap();

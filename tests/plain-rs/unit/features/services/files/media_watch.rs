@@ -5,9 +5,9 @@
 use super::*;
 use plain_libs::file_events::event::{RemoveKind, RenameMode};
 
-fn watch_directory_fixture() -> tempfile::TempDir {
+fn watch_directory_fixture() -> plain_libs::temporary::TempDir {
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap();
-    tempfile::Builder::new()
+    plain_libs::temporary::Builder::new()
         .prefix("media-watch-")
         .tempdir_in(home)
         .unwrap()
@@ -73,7 +73,7 @@ impl Watcher for DeniedWatcher {
 #[test]
 #[cfg(target_os = "linux")]
 fn an_inaccessible_watch_descendant_is_skipped_before_descending() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let denied = directory.path().join("denied");
     let nested = denied.join("nested");
     let readable = directory.path().join("readable");
@@ -97,7 +97,7 @@ fn an_inaccessible_watch_descendant_is_skipped_before_descending() {
 
 #[test]
 fn a_new_media_file_is_indexed() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("clip.mp4");
     std::fs::write(&path, b"x").unwrap();
     assert_eq!(
@@ -112,7 +112,7 @@ fn a_new_media_file_is_indexed() {
 
 #[test]
 fn a_changed_media_file_is_reindexed() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("song.mp3");
     std::fs::write(&path, b"x").unwrap();
     assert_eq!(
@@ -127,7 +127,7 @@ fn a_changed_media_file_is_reindexed() {
 
 #[test]
 fn ordinary_files_are_catalogued_without_media_probes() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     for name in ["notes.txt.bak.tmp", "archive.zip"] {
         let path = dir.path().join(name);
         std::fs::write(&path, b"x").unwrap();
@@ -145,7 +145,7 @@ fn ordinary_files_are_catalogued_without_media_probes() {
 
 #[test]
 fn dotfiles_are_indexed_and_a_nomedia_marker_rescans() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let hidden = dir.path().join(".hidden.mp4");
     std::fs::write(&hidden, b"x").unwrap();
     assert_eq!(
@@ -169,7 +169,7 @@ fn dotfiles_are_indexed_and_a_nomedia_marker_rescans() {
 
 #[test]
 fn removed_files_and_directories_are_forgotten() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let file = dir.path().join("gone.mp4");
     std::fs::write(&file, b"x").unwrap();
     assert_eq!(
@@ -189,7 +189,7 @@ fn removed_files_and_directories_are_forgotten() {
 
 #[test]
 fn an_excluded_path_is_forgotten_rather_than_indexed() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("cached.mp4");
     std::fs::write(&path, b"x").unwrap();
     for kind in [
@@ -206,7 +206,7 @@ fn an_excluded_path_is_forgotten_rather_than_indexed() {
 
 #[test]
 fn a_rename_forgets_the_old_path_and_indexes_the_current_file() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let old = dir.path().join("old.mp4");
     let new = dir.path().join("new.mp4");
     std::fs::write(&old, b"x").unwrap();
@@ -226,7 +226,7 @@ fn a_rename_forgets_the_old_path_and_indexes_the_current_file() {
 
 #[test]
 fn a_directory_arriving_by_create_or_rename_is_scanned() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let old = root.path().join("old");
     let new = root.path().join("new");
     std::fs::create_dir(&old).unwrap();
@@ -386,7 +386,7 @@ fn an_inaccessible_watch_root_is_skipped_without_marking_it_watched() {
 #[test]
 fn git_project_events_are_skipped_without_disabling_other_file_events() {
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap();
-    let directory = tempfile::Builder::new()
+    let directory = plain_libs::temporary::Builder::new()
         .prefix("watch-scope-")
         .tempdir_in(home)
         .unwrap();

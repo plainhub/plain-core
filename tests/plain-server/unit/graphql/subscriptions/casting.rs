@@ -27,7 +27,7 @@ async fn snapshot(executor: &NativeGraphqlExecutor, handle: u64) -> Value {
 
 #[tokio::test]
 async fn query_and_subscription_share_sender_state_without_starting_scan_or_changing_it() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::open(directory.path()).unwrap();
     let state = server.runtime_state();
     let executor = server.native_graphql().unwrap();

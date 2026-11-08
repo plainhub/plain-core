@@ -28,7 +28,7 @@ async fn database_contention_yields_before_waiting_for_feed_schedule_rows() {
 }
 
 fn feed(last: Option<&str>) -> FeedRow {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("feeds.db")).unwrap();
     let mut feed = db
         .feed_save(

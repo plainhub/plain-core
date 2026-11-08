@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 #[test]
 fn default_shared_download_layout_uses_startup_root_without_another_host_call() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let host = crate::infrastructure::host::bridge::Host::with_startup_config(
         crate::infrastructure::host::startup::StartupConfig {
             downloads_dir: root.path().to_str().unwrap().into(),
@@ -30,7 +30,7 @@ fn default_shared_download_layout_uses_startup_root_without_another_host_call() 
 
 #[test]
 fn invalid_default_download_roots_fail_without_replacing_an_explicit_target() {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     for value in ["", "relative", "bad\0path"] {
         let host = crate::infrastructure::host::bridge::Host::with_startup_config(
             crate::infrastructure::host::startup::StartupConfig {
@@ -47,8 +47,8 @@ fn invalid_default_download_roots_fail_without_replacing_an_explicit_target() {
         assert!(downloads_directory(&host, "relative").is_err());
     }
 }
-fn fixture() -> (tempfile::TempDir, crate::test_runtime::Core, CoreRuntime) {
-    let directory = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core, CoreRuntime) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );

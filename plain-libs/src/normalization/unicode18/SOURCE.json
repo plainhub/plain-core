@@ -1,0 +1,8 @@
+{
+  "name": "unicode-normalization",
+  "version": "0.1.26",
+  "repository": "https://github.com/unicode-rs/unicode-normalization",
+  "revision": "16c9597b73ec5b6b8ed55f4249a5ac854892544c",
+  "archive-sha256": "75cd3fb03d5288b3ba9a1ee103ac7e9cbb59f0b03d64f8ddfcc04dd42758a85d",
+  "unicode-version": "18.0.0"
+}

@@ -1,7 +1,7 @@
 use super::*;
 #[tokio::test]
 async fn out_of_order_chunks_merge_by_index_and_success_removes_chunks() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let chunks = temp.path().join("chunks");
     tokio::fs::create_dir(&chunks).await.unwrap();
     tokio::fs::write(chunks.join("chunk_1"), b"def")
@@ -29,7 +29,7 @@ async fn out_of_order_chunks_merge_by_index_and_success_removes_chunks() {
 }
 #[tokio::test]
 async fn missing_chunk_preserves_chunks_and_never_replaces_destination() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let chunks = temp.path().join("chunks");
     tokio::fs::create_dir(&chunks).await.unwrap();
     tokio::fs::write(chunks.join("chunk_0"), b"abc")
@@ -56,7 +56,7 @@ async fn missing_chunk_preserves_chunks_and_never_replaces_destination() {
 }
 #[tokio::test]
 async fn size_mismatch_discards_stale_chunks_without_changing_target() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let chunks = temp.path().join("chunks");
     tokio::fs::create_dir(&chunks).await.unwrap();
     tokio::fs::write(chunks.join("chunk_0"), b"abc")
@@ -94,7 +94,7 @@ fn chunk_ids_cannot_escape_the_upload_directory() {
 #[tokio::test]
 async fn completion_failures_keep_the_committed_file_and_report_failure_once_without_retry() {
     use std::sync::atomic::{AtomicUsize, Ordering};
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db =
         Arc::new(crate::infrastructure::db::Db::open(&directory.path().join("plain.db")).unwrap());
     let store = FileStore::new(db, directory.path().into());
@@ -168,7 +168,7 @@ async fn completion_failures_keep_the_committed_file_and_report_failure_once_wit
 
 #[tokio::test]
 async fn saved_chunks_are_listed_in_numeric_order_with_sizes_and_reject_invalid_identity() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     assert!(list(directory.path(), "missing").await.unwrap().is_empty());
     for (index, bytes) in [
         (2, b"!".as_slice()),
@@ -200,7 +200,7 @@ async fn saved_chunks_are_listed_in_numeric_order_with_sizes_and_reject_invalid_
 #[tokio::test]
 async fn replacement_and_unique_merge_commits_preserve_the_correct_existing_files() {
     for replace in [false, true] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let chunks = directory.path().join("chunks");
         save_chunk(&chunks, "upload", 0, b"fresh").await.unwrap();
         let target = directory.path().join("report.txt");
@@ -236,7 +236,7 @@ async fn replacement_and_unique_merge_commits_preserve_the_correct_existing_file
 
 #[test]
 fn a_collision_after_merge_destination_selection_never_overwrites_the_other_writer() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let original = directory.path().join("report.txt");
     let selected = plain_libs::utils::unique_path::unique_sibling(&original).unwrap();
     let staged = directory.path().join("staged");
@@ -251,7 +251,7 @@ fn a_collision_after_merge_destination_selection_never_overwrites_the_other_writ
 
 #[tokio::test]
 async fn empty_chunk_atomically_replaces_existing_file_without_losing_raw_byte_support() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let chunks = directory.path().join("chunks");
     tokio::fs::create_dir(&chunks).await.unwrap();
     tokio::fs::write(chunks.join("chunk_0"), []).await.unwrap();
@@ -275,7 +275,7 @@ async fn empty_chunk_atomically_replaces_existing_file_without_losing_raw_byte_s
 
 #[tokio::test]
 async fn resource_commit_receives_complete_bytes_and_staging_is_removed_afterward() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let chunks = directory.path().join("chunks");
     tokio::fs::create_dir(&chunks).await.unwrap();
     tokio::fs::write(chunks.join("chunk_0"), [0, 255])
@@ -311,7 +311,7 @@ async fn resource_commit_receives_complete_bytes_and_staging_is_removed_afterwar
 
 #[tokio::test]
 async fn incomplete_upload_never_opens_a_writable_resource() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     tokio::fs::write(directory.path().join("chunk_0"), [1])
         .await
         .unwrap();
@@ -326,7 +326,7 @@ async fn incomplete_upload_never_opens_a_writable_resource() {
 
 #[tokio::test]
 async fn resource_failure_removes_merged_staging_and_preserves_input_chunks_for_retry() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     tokio::fs::write(directory.path().join("chunk_0"), [1, 255])
         .await
         .unwrap();

@@ -136,7 +136,7 @@ async fn native_battery_selection_requires_no_host_and_no_cpu_sample() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn storage_uses_the_owned_data_volume_and_never_falls_back_to_other_disks() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let missing = directory.path().join("missing-volume");
     let host = Host::default();
     let status = Status::new(missing.clone(), &host);

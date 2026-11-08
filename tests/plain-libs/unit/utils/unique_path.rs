@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn unused_names_stay_unchanged_including_existing_numeric_suffixes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     for name in ["a.txt", "a (7).txt", "README", ".gitignore", "报告.txt"] {
         let target = directory.path().join(name);
         assert_eq!(unique_sibling(&target).unwrap(), target);
@@ -11,7 +11,7 @@ fn unused_names_stay_unchanged_including_existing_numeric_suffixes() {
 
 #[test]
 fn collisions_use_flat_parenthesized_counters_and_keep_every_existing_file() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     for name in ["a.txt", "a (1).txt"] {
         std::fs::write(directory.path().join(name), name).unwrap();
     }
@@ -33,7 +33,7 @@ fn collisions_use_flat_parenthesized_counters_and_keep_every_existing_file() {
 
 #[test]
 fn suffixes_preserve_dotfiles_extensionless_unicode_and_the_last_extension() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     for (name, expected) in [
         ("README", "README (1)"),
         (".gitignore", ".gitignore (1)"),
@@ -52,7 +52,7 @@ fn suffixes_preserve_dotfiles_extensionless_unicode_and_the_last_extension() {
 
 #[test]
 fn reservations_are_shared_with_filesystem_collisions_and_count_as_occupied_once() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let original = directory.path().join("a.txt");
     let reserved = directory.path().join("a (1).txt");
     assert_eq!(
@@ -63,7 +63,7 @@ fn reservations_are_shared_with_filesystem_collisions_and_count_as_occupied_once
 
 #[test]
 fn directory_names_follow_the_same_rule() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let target = directory.path().join("folder");
     std::fs::create_dir(&target).unwrap();
     assert_eq!(
@@ -75,7 +75,7 @@ fn directory_names_follow_the_same_rule() {
 #[cfg(unix)]
 #[test]
 fn dangling_symlinks_are_occupied_and_directory_lookup_errors_are_reported() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let target = directory.path().join("link");
     std::os::unix::fs::symlink(directory.path().join("missing"), &target).unwrap();
     assert_eq!(

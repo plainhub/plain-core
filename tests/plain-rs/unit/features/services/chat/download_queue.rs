@@ -2,8 +2,8 @@ use crate::runtime::Runtime as CoreRuntime;
 use serde_json::json;
 use std::sync::Arc;
 
-fn fixture() -> (tempfile::TempDir, crate::test_runtime::Core, CoreRuntime) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core, CoreRuntime) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();

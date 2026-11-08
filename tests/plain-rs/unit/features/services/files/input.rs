@@ -20,7 +20,7 @@ fn bytes(mut input: NativeResourceFile) -> Vec<u8> {
 
 #[tokio::test]
 async fn ordinary_asset_keeps_its_descriptor_and_does_not_create_a_temporary_directory() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("source");
     std::fs::write(&path, b"prefixPAYLOADsuffix").unwrap();
     let file = std::fs::File::open(path).unwrap();
@@ -45,13 +45,13 @@ async fn ordinary_asset_keeps_its_descriptor_and_does_not_create_a_temporary_dir
 
 #[tokio::test]
 async fn cancellation_before_input_preparation_creates_nothing() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let cache = dir.path().join("never-created");
     let (stop, stopped) = stopped();
     stop.send_replace(true);
     assert!(
         prepare(
-            NativeResourceFile::new(tempfile::tempfile().unwrap(), 0, 0).unwrap(),
+            NativeResourceFile::new(plain_libs::temporary::tempfile().unwrap(), 0, 0).unwrap(),
             &cache,
             stopped
         )
@@ -77,7 +77,7 @@ fn pipe() -> (std::fs::File, std::fs::File) {
 #[cfg(unix)]
 #[tokio::test]
 async fn unknown_length_pipe_is_materialized_and_rewound_by_rust() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let (read, mut write) = pipe();
     let source = NativeResourceFile::new(read, 0, -1).unwrap();
     assert_eq!(source.length, -1);
@@ -95,7 +95,7 @@ async fn unknown_length_pipe_is_materialized_and_rewound_by_rust() {
 #[cfg(unix)]
 #[tokio::test]
 async fn pipe_asset_skips_prefix_and_does_not_consume_the_suffix() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let (read, mut write) = pipe();
     let mut remainder = read.try_clone().unwrap();
     write.write_all(b"prefixPAYLOADtail").unwrap();
@@ -113,7 +113,7 @@ async fn pipe_asset_skips_prefix_and_does_not_consume_the_suffix() {
 #[cfg(unix)]
 #[tokio::test]
 async fn incomplete_pipe_assets_fail_and_leave_no_temporary_path() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     for (offset, length) in [(0, 7), (7, -1)] {
         let (read, mut write) = pipe();
         write.write_all(b"short").unwrap();
@@ -141,7 +141,7 @@ fn cancellation_retires_a_queued_temporary_allocation_before_returning() {
         .build()
         .unwrap();
     runtime.block_on(async {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = plain_libs::temporary::tempdir().unwrap();
         let (read, _write) = pipe();
         let (stop, stopped) = stopped();
         let (release, blocked) = std::sync::mpsc::channel();
@@ -170,7 +170,7 @@ fn cancellation_retires_a_queued_temporary_allocation_before_returning() {
 #[cfg(unix)]
 #[tokio::test]
 async fn stop_interrupts_a_pipe_without_waiting_for_its_producer_to_close() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let (read, _write) = pipe();
     let (stop, stopped) = stopped();
     let preparing = prepare(

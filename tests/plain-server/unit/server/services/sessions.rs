@@ -10,8 +10,8 @@ use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
 
-fn fixture() -> (tempfile::TempDir, ContentServer) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("background_service_enabled", true).unwrap();

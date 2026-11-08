@@ -32,7 +32,7 @@ fn png_animation_detection_seeks_over_metadata_without_reading_pixels() {
 
 #[test]
 fn png_animation_detection_preserves_both_extensions_and_skips_metadata() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let animated = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../plain-rs/testdata/two-frame.apng"
@@ -59,7 +59,7 @@ fn png_animation_detection_preserves_both_extensions_and_skips_metadata() {
 
 #[test]
 fn shared_header_detection_preserves_animated_and_static_container_rules() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     assert!(is_animated_image_or_svg(&directory.path().join("logo.svg")));
     assert!(!is_animated_image_or_svg(
         &directory.path().join("photo.png")
@@ -80,7 +80,7 @@ fn shared_header_detection_preserves_animated_and_static_container_rules() {
 
 #[test]
 fn animated_header_matrix_covers_removed_app_parser_cases() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("sample.heic");
     for (bytes, expected) in [
         (b"GIF87a".to_vec(), true),
@@ -103,7 +103,7 @@ fn animated_header_matrix_covers_removed_app_parser_cases() {
 
 #[test]
 fn isobmff_sequences_are_recognized_by_major_and_compatible_brands() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     for extension in ["avif", "AVIF", "heic", "heif"] {
         let path = directory.path().join(format!("sequence.{extension}"));
         for brand in [b"avis", b"msf1", b"hevc", b"hevx"] {
@@ -161,7 +161,7 @@ fn webp_header_bytes(flags: u8) -> Vec<u8> {
 
 #[test]
 fn webp_animation_uses_extended_flags_and_rejects_every_incomplete_header() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("image.webp");
     for (flags, animated) in [(0, false), (0x10, false), (0x02, true), (0x12, true)] {
         let bytes = webp_header_bytes(flags);

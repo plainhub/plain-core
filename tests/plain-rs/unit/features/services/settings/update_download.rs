@@ -20,8 +20,8 @@ fn progress_is_bounded_without_overflow_and_unknown_lengths_do_not_invent_progre
     }
 }
 
-fn setup() -> (tempfile::TempDir, ContentServer, CoreRuntime, Identity) {
-    let dir = tempfile::tempdir().unwrap();
+fn setup() -> (plain_libs::temporary::TempDir, ContentServer, CoreRuntime, Identity) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(&dir.path().join("data"), &dir.path().join("cache"))
         .unwrap();
     let state = core.runtime_state();

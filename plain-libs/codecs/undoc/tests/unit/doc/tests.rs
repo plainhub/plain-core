@@ -333,17 +333,11 @@ fn build(paras: &[Para], opts: Options) -> Vec<u8> {
     wd[fkp_at..fkp_at + 512].copy_from_slice(&page);
     wd[chpx_at..chpx_at + 512].copy_from_slice(&chpx_page);
 
-    let mut container = cfb::CompoundFile::create(std::io::Cursor::new(Vec::new())).unwrap();
     let mut streams = vec![("/WordDocument", wd), ("/1Table", table)];
     if let Some(data) = opts.data {
         streams.push(("/Data", data));
     }
-    for (name, data) in &streams {
-        let mut stream = container.create_stream(name).unwrap();
-        std::io::Write::write_all(&mut stream, data).unwrap();
-    }
-    container.flush().unwrap();
-    container.into_inner().into_inner()
+    crate::cfb_fixture::compound(streams.iter().map(|(name, data)| (*name, data.as_slice())))
 }
 
 fn parse(paras: &[Para], opts: Options) -> crate::Result<crate::Document> {
@@ -608,12 +602,7 @@ fn build_word6_with(
         wd[0x64..0x68].copy_from_slice(&(stsh.len() as u32).to_le_bytes());
     }
 
-    let mut container = cfb::CompoundFile::create(std::io::Cursor::new(Vec::new())).unwrap();
-    let mut stream = container.create_stream("/WordDocument").unwrap();
-    std::io::Write::write_all(&mut stream, &wd).unwrap();
-    drop(stream);
-    container.flush().unwrap();
-    container.into_inner().into_inner()
+    crate::cfb_fixture::compound([("/WordDocument", wd.as_slice())])
 }
 
 fn word6_paragraphs(bytes: Vec<u8>) -> Vec<String> {

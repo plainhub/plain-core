@@ -28,9 +28,8 @@ pptx = []
 codepages = []
 
 [dependencies]
-cfb = "=0.15.0"
 quick-xml = "=0.42.0"
-unicode-normalization = "=0.1.26"
+plain-libs = { path = "../..", features = ["compound-file", "document-nfc"] }
 zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 flate2 = { version = "=1.1.10", default-features = false, features = ["zlib-rs"] }
 encoding_rs = "=0.8.42"
@@ -38,5 +37,4 @@ serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 
 [dev-dependencies]
-tempfile = "3"
 serde_json = "1"

@@ -95,7 +95,7 @@ fn decoded_frames(path: &Path) -> (usize, f64, f64, i64, i32) {
 
 #[test]
 fn native_conversion_preserves_frames_dimensions_duration_and_source() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     for (name, bytes) in [("h264", H264), ("hevc", HEVC)] {
         let source = directory.path().join(format!("{name}.mp4"));
         let destination = directory.path().join(format!("{name}-output.mp4"));
@@ -120,7 +120,7 @@ fn native_conversion_preserves_frames_dimensions_duration_and_source() {
 
 #[test]
 fn hev1_conversion_uses_validated_hvc1_without_changing_the_original() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.mp4");
     let destination = directory.path().join("output.mp4");
     fs::write(&source, HEV1).unwrap();
@@ -147,7 +147,7 @@ fn hev1_conversion_uses_validated_hvc1_without_changing_the_original() {
 
 #[test]
 fn invalid_hev1_configuration_leaves_no_intermediate_or_output_changes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.mp4");
     let destination = directory.path().join("output.mp4");
     let mut bytes = HEV1.to_vec();
@@ -163,7 +163,7 @@ fn invalid_hev1_configuration_leaves_no_intermediate_or_output_changes() {
 
 #[test]
 fn cancellation_and_invalid_input_preserve_the_reserved_destination() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.mp4");
     let destination = directory.path().join("output.mp4");
     fs::write(&source, H264).unwrap();
@@ -179,7 +179,7 @@ fn cancellation_and_invalid_input_preserve_the_reserved_destination() {
 #[test]
 #[ignore = "Offline native video throughput benchmark"]
 fn native_video_throughput() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = match std::env::var_os("PLAIN_VIDEO_BENCH_INPUT") {
         Some(path) => std::path::PathBuf::from(path),
         None => {

@@ -82,7 +82,7 @@ async fn browser_login(
 
 #[tokio::test]
 async fn local_approval_socket_controls_real_passwordless_browser_sessions() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime();
     state.prefs.set("password_type", "NONE").unwrap();

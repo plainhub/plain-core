@@ -25,7 +25,7 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 }
 
 /// `granted` is the platform's runtime answer for WRITE_EXTERNAL_STORAGE.
-fn fixture(permissions: &str, granted: bool) -> (tempfile::TempDir, PublicSchema) {
+fn fixture(permissions: &str, granted: bool) -> (plain_libs::temporary::TempDir, PublicSchema) {
     fixture_with(permissions, granted, move |method, params| match method {
         "systemAccessFacts" => access_sample(&params, granted),
         other => panic!("unexpected host call {other}"),
@@ -36,7 +36,7 @@ fn fixture_with(
     permissions: &str,
     granted: bool,
     handler: impl Fn(&str, Value) -> Value + Send + 'static,
-) -> (tempfile::TempDir, PublicSchema) {
+) -> (plain_libs::temporary::TempDir, PublicSchema) {
     let (dir, schema, _) = fixture_seeded(permissions, granted, |_| {}, handler);
     (dir, schema)
 }
@@ -46,8 +46,8 @@ fn fixture_seeded(
     granted: bool,
     seed: impl FnOnce(&Db),
     handler: impl Fn(&str, Value) -> Value + Send + 'static,
-) -> (tempfile::TempDir, PublicSchema, Arc<Db>) {
-    let dir = tempfile::tempdir().unwrap();
+) -> (plain_libs::temporary::TempDir, PublicSchema, Arc<Db>) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs
         .set(

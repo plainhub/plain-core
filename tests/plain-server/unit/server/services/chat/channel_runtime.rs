@@ -9,9 +9,9 @@ use serde_json::Value;
 use serde_json::json;
 
 #[cfg(feature = "http_transport")]
-fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
+fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
     use std::sync::Arc;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     let (key, _public) = plain_libs::crypto::ed25519_generate();

@@ -10,13 +10,13 @@ use serde_json::json;
 use tokio::sync::watch;
 
 async fn fixture() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     ContentServer,
     CoreRuntime,
     DPeer,
     Identity,
 ) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),

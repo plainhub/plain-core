@@ -26,7 +26,7 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
         .build()
         .unwrap();
     let url = format!("http://fixture.example:{}/", addr.port());
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let mut row = crate::infrastructure::db::DChat::new(
         "me",

@@ -20,8 +20,8 @@ fn peer() -> DPeer {
     p.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     p
 }
-fn state() -> (tempfile::TempDir, crate::server::ContentServer, ServerState) {
-    let dir = tempfile::tempdir().unwrap();
+fn state() -> (plain_libs::temporary::TempDir, crate::server::ContentServer, ServerState) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();
@@ -81,7 +81,7 @@ async fn host_transport_snapshots_follow_current_routes_and_reconnect() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state().core;
     let mut first = peer();

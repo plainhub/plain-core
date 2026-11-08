@@ -2,7 +2,7 @@ use crate::server::ContentServer;
 
 #[tokio::test]
 async fn native_import_preserves_image_bytes_and_resolves_duplicate_names_in_rust() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let source = directory.path().join("source.png");

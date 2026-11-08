@@ -329,7 +329,7 @@ fn stored_resource_tables_read_referenced_values_without_buffering_unused_chunks
     let padding = 64 * 1024 * 1024;
     let total = table.len() + 8 + padding;
     table[4..8].copy_from_slice(&(total as u32).to_le_bytes());
-    let mut writer = zip::ZipWriter::new(tempfile::tempfile().unwrap());
+    let mut writer = zip::ZipWriter::new(crate::temporary::tempfile().unwrap());
     let options =
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     writer.start_file("AndroidManifest.xml", options).unwrap();

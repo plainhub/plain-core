@@ -13,7 +13,7 @@ fn request(root: &Path, query: &str) -> Request {
 
 #[test]
 fn child_directory_reads_follow_the_requested_fields() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let child = root.path().join("Downloads");
     fs::create_dir(&child).unwrap();
     fs::write(child.join("document.txt"), b"fixture").unwrap();
@@ -55,7 +55,7 @@ fn child_directory_reads_follow_the_requested_fields() {
 
 #[test]
 fn literal_name_queries_preserve_text_without_injecting_filters() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     for (text, query) in [
         ("white space", r"text:=white\ space"),
         ("field:colon", "text:=field:colon"),
@@ -90,7 +90,7 @@ fn literal_name_queries_preserve_text_without_injecting_filters() {
 }
 #[test]
 fn browse_owns_recursive_filters_hidden_counts_order_and_pages() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     let root = temp.path();
     fs::create_dir(root.join("NeedleDir")).unwrap();
     fs::create_dir(root.join(".hidden")).unwrap();
@@ -175,8 +175,8 @@ fn browse_owns_recursive_filters_hidden_counts_order_and_pages() {
 }
 #[test]
 fn browse_does_not_follow_recursive_symlink_cycles_or_escape_the_root() {
-    let temp = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
+    let outside = crate::temporary::tempdir().unwrap();
     fs::write(outside.path().join("needle-secret"), b"outside").unwrap();
     #[cfg(unix)]
     {
@@ -205,7 +205,7 @@ fn browse_does_not_follow_recursive_symlink_cycles_or_escape_the_root() {
 
 #[test]
 fn progressive_search_keeps_exact_counts_and_sorted_pages_and_cancels_before_more_reads() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     fs::create_dir(root.path().join("node_modules")).unwrap();
     for index in 0..300 {
         fs::write(
@@ -277,7 +277,7 @@ fn progressive_search_keeps_exact_counts_and_sorted_pages_and_cancels_before_mor
 #[test]
 fn recursive_search_skips_denied_children_but_rejects_a_denied_root() {
     use std::os::unix::fs::PermissionsExt;
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let denied = root.path().join("denied");
     fs::create_dir(&denied).unwrap();
     fs::write(denied.join("needle-private"), b"private").unwrap();
@@ -297,7 +297,7 @@ fn recursive_search_skips_denied_children_but_rejects_a_denied_root() {
 
 #[test]
 fn progressive_search_limits_snapshots_and_avoids_duplicate_empty_pages() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     for index in 0..1024 {
         fs::write(root.path().join(format!("needle-{index:04}")), b"fixture").unwrap();
     }
@@ -340,7 +340,7 @@ fn progressive_search_limits_snapshots_and_avoids_duplicate_empty_pages() {
 
 #[test]
 fn no_match_search_emits_no_repeated_empty_snapshots() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     for index in 0..512 {
         fs::write(root.path().join(format!("file-{index:04}")), b"fixture").unwrap();
     }
@@ -355,7 +355,7 @@ fn no_match_search_emits_no_repeated_empty_snapshots() {
 #[test]
 #[ignore]
 fn large_directory_search_measurements() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     for branch in 0..100 {
         let directory = root.path().join(format!("branch-{branch:03}"));
         fs::create_dir(&directory).unwrap();

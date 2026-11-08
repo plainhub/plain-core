@@ -112,7 +112,7 @@ fn oversized_and_malformed_contact_input_is_rejected() {
 
 #[tokio::test]
 async fn creation_resolves_the_account_before_any_provider_write() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     prefs.set("api_permissions", json!(["CONTACTS"])).unwrap();
     let host = std::sync::Arc::new(Host::default());

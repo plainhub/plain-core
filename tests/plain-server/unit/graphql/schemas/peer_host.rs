@@ -43,7 +43,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     use plain_rs::infrastructure::db::chat_store::peers;
     use std::sync::Arc;
     use tokio_tungstenite::tungstenite::Message;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("background_service_enabled", true).unwrap();

@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch;
 
-fn setup() -> (tempfile::TempDir, ContentServer, ServerState) {
-    let dir = tempfile::tempdir().unwrap();
+fn setup() -> (plain_libs::temporary::TempDir, ContentServer, ServerState) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open_with_cache(&dir.path().join("data"), &dir.path().join("cache"))
         .unwrap();
     let state = core.runtime_state();

@@ -4,12 +4,12 @@ use std::{future::Future, task::Poll};
 use tokio::sync::watch;
 
 fn fixture() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     watch::Sender<bool>,
     NativeUploads,
     UploadWriters,
 ) {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let (stop, receiver) = watch::channel(false);
     let uploads = NativeUploads::new(
         Arc::new(UploadChunks::new(root.path().to_owned())),

@@ -11,7 +11,7 @@ async fn graphql(core: &ContentServer, query: &str, variables: Value) -> plain_g
 
 #[tokio::test]
 async fn main_writes_preserve_utf8_metadata_and_refuse_overwrite_or_invalid_paths_without_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state().core;
     let (_generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
@@ -56,7 +56,7 @@ async fn main_writes_preserve_utf8_metadata_and_refuse_overwrite_or_invalid_path
 #[tokio::test]
 async fn shared_preview_export_recreates_the_rust_directory_after_cache_clear_without_platform_operations()
  {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state().core;
     let (_generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
@@ -83,7 +83,7 @@ async fn shared_preview_export_recreates_the_rust_directory_after_cache_clear_wi
 
 #[tokio::test]
 async fn text_export_replaces_only_the_selected_file_with_exact_captured_bytes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state().core;
     let (_generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);

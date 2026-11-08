@@ -3,8 +3,8 @@ use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::infrastructure::db::Db;
 use serde_json::{Value, json};
 
-fn fixture(permissions: Value) -> (tempfile::TempDir, PublicSchema, Arc<Db>) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture(permissions: Value) -> (plain_libs::temporary::TempDir, PublicSchema, Arc<Db>) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", permissions).unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
@@ -112,8 +112,8 @@ async fn clipboard_id_selection_deletes_only_selected_rows() {
     }
 }
 
-fn write_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
-    let dir = tempfile::tempdir().unwrap();
+fn write_fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("api_permissions", json!(["CLIPBOARD"])).unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[9; 32]);

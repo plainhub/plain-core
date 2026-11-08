@@ -89,7 +89,7 @@ async fn stopping_a_network_restart_cancels_its_in_progress_work() {
 async fn receiver_starts_without_http_and_retries_when_platform_permissions_change() {
     use std::sync::atomic::{AtomicBool, AtomicUsize};
     let _runtime = TEST_LOCK.lock().await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -157,7 +157,7 @@ async fn receiver_starts_without_http_and_retries_when_platform_permissions_chan
 #[tokio::test]
 async fn discovery_requests_multicast_permission_without_querying_capabilities() {
     let _runtime = TEST_LOCK.lock().await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[17; 32]);
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
@@ -191,7 +191,7 @@ async fn discovery_requests_multicast_permission_without_querying_capabilities()
 #[tokio::test]
 async fn inactive_runtime_cleanup_and_updates_do_not_request_platform_capabilities() {
     use futures_util::FutureExt;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
@@ -217,7 +217,7 @@ async fn inactive_runtime_cleanup_and_updates_do_not_request_platform_capabiliti
 async fn refused_or_cancelled_multicast_grants_release_the_next_acquisition() {
     let _runtime = TEST_LOCK.lock().await;
     for (cancelled, reuse_runtime) in [(false, false), (true, false), (true, true)] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let core = crate::test_runtime::Core::open(directory.path()).unwrap();
         let state = core.runtime_state();
         state.prefs.set("client_id", "fixture-mdns-grant").unwrap();
@@ -299,7 +299,7 @@ async fn refused_or_cancelled_multicast_grants_release_the_next_acquisition() {
 #[tokio::test]
 async fn cancelled_multicast_release_leaves_the_next_runtime_available() {
     let _runtime = TEST_LOCK.lock().await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state
@@ -357,7 +357,7 @@ async fn cancelled_multicast_release_leaves_the_next_runtime_available() {
 #[tokio::test]
 async fn dropping_a_tokio_runtime_releases_its_granted_owner_and_multicast_lease() {
     let _runtime = TEST_LOCK.lock().await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state
@@ -442,7 +442,7 @@ async fn dropping_a_tokio_runtime_releases_its_granted_owner_and_multicast_lease
 #[tokio::test]
 async fn concurrent_permission_grants_keep_the_winning_owner_and_release_only_the_loser() {
     let _runtime = TEST_LOCK.lock().await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state

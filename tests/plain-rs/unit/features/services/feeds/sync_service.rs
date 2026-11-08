@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Semaphore;
 
 pub(super) async fn fixture() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     Arc<SyncService>,
     Arc<AtomicUsize>,
     Arc<Semaphore>,
@@ -12,7 +12,7 @@ pub(super) async fn fixture() -> (
     tokio::task::JoinHandle<()>,
     broadcast::Receiver<WsEvent>,
 ) {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("feeds.db")).unwrap());
     let calls = Arc::new(AtomicUsize::new(0));
     let started = Arc::new(Semaphore::new(0));

@@ -9,7 +9,7 @@ use std::{
 
 #[test]
 fn long_application_roots_have_private_sockets_and_do_not_change_process_cwd() {
-    let temporary = tempfile::tempdir().unwrap();
+    let temporary = crate::temporary::tempdir().unwrap();
     let root = temporary.path().join("long-".repeat(30));
     fs::create_dir(&root).unwrap();
     let before = std::env::current_dir().unwrap();
@@ -44,7 +44,7 @@ fn long_application_roots_have_private_sockets_and_do_not_change_process_cwd() {
 
 #[test]
 fn canonical_aliases_share_one_namespace_and_other_roots_do_not() {
-    let temporary = tempfile::tempdir().unwrap();
+    let temporary = crate::temporary::tempdir().unwrap();
     let root = temporary.path().join("data");
     let other = temporary.path().join("other");
     fs::create_dir(&root).unwrap();
@@ -57,7 +57,7 @@ fn canonical_aliases_share_one_namespace_and_other_roots_do_not() {
 
 #[test]
 fn replaced_files_are_never_removed_by_socket_cleanup() {
-    let temporary = tempfile::tempdir().unwrap();
+    let temporary = crate::temporary::tempdir().unwrap();
     let directory = SocketDirectory::open(temporary.path()).unwrap();
     let path = directory.socket_path();
     let listener = UnixListener::bind(&path).unwrap();
@@ -74,7 +74,7 @@ fn replaced_files_are_never_removed_by_socket_cleanup() {
 
 #[test]
 fn socket_symlinks_and_unsafe_directory_permissions_are_rejected_without_changes() {
-    let temporary = tempfile::tempdir().unwrap();
+    let temporary = crate::temporary::tempdir().unwrap();
     let directory = SocketDirectory::open(temporary.path()).unwrap();
     let path = directory.socket_path();
     let target = temporary.path().join("preserved");
@@ -95,7 +95,7 @@ fn socket_symlinks_and_unsafe_directory_permissions_are_rejected_without_changes
 
 #[test]
 fn a_changed_socket_cannot_be_removed_with_a_stale_inode() {
-    let temporary = tempfile::tempdir().unwrap();
+    let temporary = crate::temporary::tempdir().unwrap();
     let directory = SocketDirectory::open(temporary.path()).unwrap();
     let path = directory.socket_path();
     let listener = UnixListener::bind(&path).unwrap();

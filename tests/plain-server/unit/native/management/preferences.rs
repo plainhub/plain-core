@@ -4,7 +4,7 @@ use crate::server::ContentServer;
 async fn startup_loads_published_integer_enums_and_returns_names_to_the_app() {
     use plain_rs::features::prefs::{Prefs, pref_keys as keys};
 
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = plain_rs::features::prefs::default_path(directory.path());
     let prefs = Prefs::load(&path).unwrap();
     let expected = [
@@ -32,7 +32,7 @@ async fn startup_loads_published_integer_enums_and_returns_names_to_the_app() {
 
 #[tokio::test]
 async fn native_resets_keep_identity_and_publish_once_per_change() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let management = core.native_management().unwrap();
@@ -70,7 +70,7 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
 
 #[tokio::test]
 async fn native_notification_actions_validate_and_preserve_change_events() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let management = core.native_management().unwrap();
@@ -109,7 +109,7 @@ async fn native_notification_actions_validate_and_preserve_change_events() {
 
 #[tokio::test]
 async fn native_scan_history_preserves_order_and_scoped_deletion() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let management = core.native_management().unwrap();
     assert!(management.scan_history().unwrap().is_empty());
@@ -165,7 +165,7 @@ fn preference_updates(
 
 #[tokio::test]
 async fn native_preference_writes_share_validation_and_commit_notifications() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let management = core.native_management().unwrap();
@@ -218,7 +218,7 @@ async fn native_preference_writes_share_validation_and_commit_notifications() {
 
 #[tokio::test]
 async fn keyed_native_reads_observe_committed_writes_and_reject_private_or_unknown_keys() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let management = core.native_management().unwrap();
     assert_eq!(
@@ -256,7 +256,7 @@ async fn keyed_native_reads_observe_committed_writes_and_reject_private_or_unkno
 #[tokio::test]
 async fn derived_native_keys_are_readable_but_not_writable() {
     use plain_rs::features::prefs::pref_keys as keys;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let management = core.native_management().unwrap();
@@ -281,7 +281,7 @@ async fn derived_native_keys_are_readable_but_not_writable() {
 async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
     use plain_rs::features::prefs::pref_keys as keys;
     use serde_json::json;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let management = core.native_management().unwrap();
@@ -353,7 +353,7 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
 async fn derived_native_reads_use_only_their_current_dependencies() {
     use plain_rs::features::prefs::pref_keys as keys;
     use serde_json::json;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let management = core.native_management().unwrap();

@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn writes_preserve_existing_files_and_report_real_failures() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     let dir = temp.path().join("parent/child");
     Operation::CreateDirectory {
         path: dir.to_str().unwrap().into(),

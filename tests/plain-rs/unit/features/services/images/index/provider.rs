@@ -31,7 +31,7 @@ impl ImageEncoder for Encoder {
 }
 
 async fn resource_image(decode: bool, fail: bool, available: bool) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("photo");
     std::fs::write(&source, b"outsideraw-imageoutside").unwrap();
     let cache = directory.path().join("cache");

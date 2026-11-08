@@ -123,7 +123,7 @@ fn rejects_truncated_and_overflowing_der() {
 
 #[test]
 fn configured_pem_identity_is_shared_by_restart_and_certificate_rotation() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let certificate = directory.path().join("cert.pem");
     let key = directory.path().join("key.pem");
     let source = IdentitySource::Pem {
@@ -142,7 +142,7 @@ fn configured_pem_identity_is_shared_by_restart_and_certificate_rotation() {
 
 #[test]
 fn pkcs12_import_persists_a_matching_identity_and_failed_import_preserves_it() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let sources = [
         IdentitySource::Json(directory.path().join("identity.json")),
         IdentitySource::Pem {

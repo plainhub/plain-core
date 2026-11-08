@@ -25,3 +25,5 @@ pub mod volumes;
 
 #[cfg(feature = "peg")]
 pub(crate) mod stack_space;
+
+pub(crate) mod rename;

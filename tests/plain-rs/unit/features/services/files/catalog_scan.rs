@@ -673,7 +673,7 @@ async fn background_source_scan_is_busy_before_the_first_read_and_core_stop_join
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
 async fn native_catalog_records_and_removal_publish_one_typed_change_per_batch() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("song.mp3");
     std::fs::write(&path, b"unrecognized audio bytes").unwrap();
     let path = path.canonicalize().unwrap();
@@ -704,11 +704,11 @@ async fn native_catalog_records_and_removal_publish_one_typed_change_per_batch()
     core.stop_core().await;
 }
 
-fn directory_scan_fixture() -> tempfile::TempDir {
+fn directory_scan_fixture() -> plain_libs::temporary::TempDir {
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    tempfile::Builder::new()
+    plain_libs::temporary::Builder::new()
         .prefix("media-scan-")
         .tempdir_in(home)
         .unwrap()
@@ -917,7 +917,7 @@ async fn an_unmounted_source_is_a_coverage_gap_and_does_not_retire_catalog_rows(
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
 async fn watcher_reconciliation_waits_for_the_active_scan() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let catalog = NativeMediaCatalog::new(state.clone());
@@ -1038,7 +1038,7 @@ async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {
     image::RgbaImage::from_pixel(768, 768, image::Rgba([40, 90, 150, 128]))
         .save(&path)
         .unwrap();
-    let data = tempfile::tempdir().unwrap();
+    let data = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(data.path()).unwrap();
     let state = core.runtime_state();
     let catalog = NativeMediaCatalog::new(state.clone());
@@ -1364,7 +1364,7 @@ async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
 #[tokio::test]
 async fn watcher_reconciliation_does_not_restart_a_cancelled_scan() {
     use crate::features::services::files::media_scans::Status;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let catalog = NativeMediaCatalog::new(state.clone());

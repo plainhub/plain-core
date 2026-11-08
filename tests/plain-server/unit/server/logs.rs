@@ -2,7 +2,7 @@ use std::{io::Read, path::PathBuf};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn native_main_uses_the_shared_default_path_without_host_requests() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let path = plain_rs::infrastructure::data_paths::DataPaths::new(directory.path()).log_file();
     assert_eq!(core.log_file().unwrap(), path);
@@ -33,7 +33,7 @@ async fn native_main_uses_the_shared_default_path_without_host_requests() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn native_main_uses_the_injected_logger_path_without_host_requests() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let path = directory.path().join("plain.log");
     std::fs::write(&path, b"INFO old\nERROR current\n").unwrap();
@@ -61,7 +61,7 @@ async fn native_main_uses_the_injected_logger_path_without_host_requests() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn main_log_export_and_clear_cover_app_and_rust_log_families() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let path = directory.path().join("plain.log");
     let backup = directory.path().join("plain.log.bak");

@@ -1,7 +1,7 @@
 #[tokio::test]
 async fn main_mutation_and_resource_store_share_one_runtime_and_keep_other_runtimes_isolated() {
-    let first = tempfile::tempdir().unwrap();
-    let second = tempfile::tempdir().unwrap();
+    let first = plain_libs::temporary::tempdir().unwrap();
+    let second = plain_libs::temporary::tempdir().unwrap();
     let first = crate::server::ContentServer::open(first.path()).unwrap();
     let second = crate::server::ContentServer::open(second.path()).unwrap();
     let response = first

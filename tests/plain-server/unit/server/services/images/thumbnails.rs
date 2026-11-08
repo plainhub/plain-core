@@ -48,8 +48,8 @@ fn write_image(path: &std::path::Path, width: u32, height: u32) {
     .unwrap();
 }
 
-fn server_with_cache() -> (tempfile::TempDir, ContentServer, std::path::PathBuf) {
-    let dir = tempfile::tempdir().unwrap();
+fn server_with_cache() -> (plain_libs::temporary::TempDir, ContentServer, std::path::PathBuf) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "thumb-fixture").unwrap();

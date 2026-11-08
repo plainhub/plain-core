@@ -17,7 +17,7 @@ fn pending(state: &CoreRuntime, owner: u64, id: &str) -> Pending {
 
 #[tokio::test]
 async fn inactive_and_replaced_scans_do_not_request_platform_reads() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (owner, mut requests) = crate::test_support::HostRequests::connect(&state.host);
@@ -39,7 +39,7 @@ async fn inactive_and_replaced_scans_do_not_request_platform_reads() {
 
 #[tokio::test]
 async fn stopping_cancels_the_active_read_and_discards_the_rest_of_the_queue() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let mut state = core.runtime_state();
     state.ble_scan = std::sync::Arc::new(Runtime::default());
@@ -73,7 +73,7 @@ async fn stopping_cancels_the_active_read_and_discards_the_rest_of_the_queue() {
 
 #[tokio::test]
 async fn already_stopped_worker_discards_queued_reads_without_touching_the_platform() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let mut state = core.runtime_state();
     state.ble_scan = std::sync::Arc::new(Runtime::default());
@@ -96,7 +96,7 @@ async fn scheduled_read_supplies_canonical_request_and_checks_reply_identity() {
         "706c6169-2d74-8e53-9a16-f08b62c591d3",
         "706c6169-b903-841f-a6ce-32d75908f4ab",
     ] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let core = crate::test_runtime::Core::open(directory.path()).unwrap();
         let state = core.runtime_state();
         let (owner, mut requests) = crate::test_support::HostRequests::connect(&state.host);

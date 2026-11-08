@@ -11,7 +11,7 @@ fn item(id: &str) -> Item {
 
 #[test]
 fn first_observation_seeds_history_without_writing_and_reload_preserves_deduplication() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("prefs.json");
     let prefs = Prefs::load(&path).unwrap();
     let store_path = directory.path().join("plain.db");
@@ -32,7 +32,7 @@ fn first_observation_seeds_history_without_writing_and_reload_preserves_deduplic
 
 #[test]
 fn directions_and_sensitive_items_do_not_advance_the_applied_marker() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     let store = plain_libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     assert!(!prepare(&prefs, &store, "peer", &item("baseline")).unwrap());
@@ -70,7 +70,7 @@ fn directions_and_sensitive_items_do_not_advance_the_applied_marker() {
 
 #[test]
 fn invalid_text_and_identity_never_change_persisted_state() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     let store = plain_libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     for invalid in [
@@ -91,7 +91,7 @@ fn invalid_text_and_identity_never_change_persisted_state() {
 
 #[test]
 fn failed_marker_persistence_does_not_claim_success_or_lose_other_peers() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     let store = plain_libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     assert!(!prepare(&prefs, &store, "peer", &item("old")).unwrap());
@@ -106,7 +106,7 @@ fn failed_marker_persistence_does_not_claim_success_or_lose_other_peers() {
 
 #[test]
 fn invalid_persisted_markers_do_not_claim_success_or_lose_other_peers() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     let store = plain_libs::kv::Db::open(&directory.path().join("plain.db")).unwrap();
     assert!(!prepare(&prefs, &store, "peer", &item("old")).unwrap());
@@ -122,7 +122,7 @@ fn invalid_persisted_markers_do_not_claim_success_or_lose_other_peers() {
 
 #[test]
 fn sending_is_explicit_and_does_not_inherit_the_default_receive_direction() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     assert!(!sends(&prefs, "peer").unwrap());
     assert!(receives(&prefs, "peer").unwrap());

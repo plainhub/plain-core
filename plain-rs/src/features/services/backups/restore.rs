@@ -164,7 +164,7 @@ fn stage_reader(
     if exists(&paths.pending_restore())? {
         return Err("A restore is already pending".into());
     }
-    let staging = tempfile::Builder::new()
+    let staging = plain_libs::temporary::Builder::new()
         .prefix(STAGING_PREFIX)
         .tempdir_in(directory)
         .map_err(|error| error.to_string())?;
@@ -224,7 +224,7 @@ fn stage_reader(
             .to_owned(),
         entries: entries.into_iter().collect(),
     };
-    let mut marker = tempfile::Builder::new()
+    let mut marker = plain_libs::temporary::Builder::new()
         .prefix(".restore-marker-")
         .tempfile_in(directory)
         .map_err(|error| error.to_string())?;

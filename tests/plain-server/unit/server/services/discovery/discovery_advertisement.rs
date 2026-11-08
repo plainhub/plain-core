@@ -26,7 +26,7 @@ async fn first_start_advertises_the_persisted_generated_mdns_name() {
     let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let (core, state) = core_with_host(directory.path());
     let hostname = plain_rs::features::prefs::security::snapshot(&state.prefs)
         .unwrap()

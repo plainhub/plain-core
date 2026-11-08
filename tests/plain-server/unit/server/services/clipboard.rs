@@ -7,7 +7,7 @@ async fn platform_callbacks_before_write_reply_do_not_republish_received_text() 
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let (server, _, _) = start(&directory);
     let state = server.runtime_state().core;
     let bridge = Arc::new(server.host_events().unwrap());
@@ -97,7 +97,7 @@ async fn call(port: u16, token: &str, query: &str) -> Value {
 }
 
 fn start(
-    dir: &tempfile::TempDir,
+    dir: &plain_libs::temporary::TempDir,
 ) -> (ContentServer, String, Arc<plain_rs::features::prefs::Prefs>) {
     let token = plain_libs::utils::base64::base64_encode(&[9; 32]);
     let prefs =
@@ -115,7 +115,7 @@ async fn native_report_http_search_delete_and_restart_share_one_clipboard() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let (server, token, prefs) = start(&dir);
     let bridge = server.host_events().unwrap();
     let mut events = server.runtime_state().core.events.subscribe();

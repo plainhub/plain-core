@@ -268,7 +268,8 @@ pub fn pack_entries(
             let modified = std::fs::metadata(&path)
                 .and_then(|metadata| metadata.modified())
                 .map_err(|error| error.to_string())?;
-            let date: chrono::DateTime<chrono::Local> = modified.into();
+            let date = chrono::DateTime::<chrono::Utc>::from(modified)
+                .with_timezone(&plain_libs::local_time::Local);
             let options = match zip::DateTime::from_date_and_time(
                 date.year() as u16,
                 date.month() as u8,
@@ -385,7 +386,7 @@ pub fn unpack_files(
                     u32::from(date.second()),
                 )
             })
-            .and_then(|time| chrono::Local.from_local_datetime(&time).earliest())
+            .and_then(|time| plain_libs::local_time::Local.from_local_datetime(&time).earliest())
             .filter(|time| time.timestamp() > 0)
             {
                 file.set_modified(std::time::SystemTime::from(time))

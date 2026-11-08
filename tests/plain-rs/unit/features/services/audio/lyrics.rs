@@ -17,7 +17,7 @@ fn id3() -> Vec<u8> {
 
 #[tokio::test]
 async fn playback_lyrics_choose_sidecars_in_rust_without_platform_requests() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("song+name.mp3");
     let sidecar = directory.path().join("song+name.lrc");
     std::fs::write(&path, id3()).unwrap();
@@ -60,7 +60,7 @@ async fn playback_lyrics_choose_sidecars_in_rust_without_platform_requests() {
 
 #[tokio::test]
 async fn ordinary_files_and_file_uris_use_the_shared_parser_without_resources() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("song+name.mp3");
     std::fs::write(&path, id3()).unwrap();
     assert_eq!(

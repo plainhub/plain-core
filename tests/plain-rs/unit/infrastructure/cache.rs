@@ -3,7 +3,7 @@ use super::*;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn native_cache_accounting_and_clear_preserve_application_data_without_host_requests() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     let cache = CachePaths::new(&directory.path().join("cache"));
     paths.initialize_directories().unwrap();
@@ -46,7 +46,7 @@ async fn native_cache_accounting_and_clear_preserve_application_data_without_hos
 
 #[test]
 fn portable_file_cleanup_leaves_sdk_indexes_to_their_owner() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = CachePaths::new(&directory.path().join("cache"));
     for path in [cache.image_cache(), cache.video_cache()] {
         std::fs::create_dir_all(&path).unwrap();
@@ -61,8 +61,8 @@ fn portable_file_cleanup_leaves_sdk_indexes_to_their_owner() {
 #[cfg(unix)]
 #[tokio::test]
 async fn cache_links_never_count_or_delete_external_files() {
-    let directory = tempfile::tempdir().unwrap();
-    let external = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let external = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     let cache = CachePaths::new(&directory.path().join("cache"));
     paths.initialize_directories().unwrap();
@@ -98,7 +98,7 @@ async fn cache_links_never_count_or_delete_external_files() {
 
 #[test]
 fn absent_cache_is_empty_and_existing_invalid_roots_fail() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = CachePaths::new(&directory.path().join("cache"));
     assert_eq!(size(&cache).unwrap(), 0);
     clear_files(&cache, None).unwrap();
@@ -110,7 +110,7 @@ fn absent_cache_is_empty_and_existing_invalid_roots_fail() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::test]
 async fn simultaneous_cache_clears_are_idempotent() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = CachePaths::new(&directory.path().join("cache"));
     for path in [
         cache.image_cache(),
@@ -129,7 +129,7 @@ async fn simultaneous_cache_clears_are_idempotent() {
 
 #[test]
 fn cache_byte_counts_preserve_64_bit_width_without_reading_contents() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory.path());
     let cache = CachePaths::new(&directory.path().join("cache"));
     paths.initialize_directories().unwrap();
@@ -142,7 +142,7 @@ fn cache_byte_counts_preserve_64_bit_width_without_reading_contents() {
 
 #[test]
 fn portable_cache_clear_retains_only_the_active_tree_and_its_ancestors() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let cache = CachePaths::new(&dir.path().join("cache"));
     let active = cache.root().join("retained").join("active");
     fs_create_cache_file(&active.join("assets/app.js"), b"keep");
@@ -174,8 +174,8 @@ fn fs_create_cache_file(path: &std::path::Path, bytes: &[u8]) {
 #[cfg(unix)]
 #[test]
 fn retained_asset_cleanup_unlinks_sibling_links_without_traversing_them() {
-    let dir = tempfile::tempdir().unwrap();
-    let external = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let external = plain_libs::temporary::tempdir().unwrap();
     let cache = CachePaths::new(&dir.path().join("cache"));
     let active = cache.root().join("retained").join("active");
     fs_create_cache_file(&active.join("index.html"), b"active");

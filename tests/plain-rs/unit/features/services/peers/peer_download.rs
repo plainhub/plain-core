@@ -5,12 +5,12 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 fn fixture() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     crate::infrastructure::db::Db,
     Queue,
     Ticket,
 ) {
-    let root = tempfile::tempdir().unwrap();
+    let root = plain_libs::temporary::tempdir().unwrap();
     let db = crate::infrastructure::db::Db::open(&root.path().join("plain.db")).unwrap();
     let peer = crate::infrastructure::db::DPeer::new(
         "peer",

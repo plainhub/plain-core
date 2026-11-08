@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn sysfs_wireless_and_cellular_facts_override_generic_ethernet_types() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let path = root.path().join("test0");
     std::fs::create_dir(&path).unwrap();
     std::fs::write(path.join("type"), "1\n").unwrap();
@@ -24,7 +24,7 @@ fn sysfs_wireless_and_cellular_facts_override_generic_ethernet_types() {
 
 #[test]
 fn missing_sysfs_keeps_known_mobile_interface_conventions_and_unknown_devices() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     for name in ["wwan0", "wwp0s1", "rmnet_data0", "ccmni0"] {
         assert_eq!(read_type(root.path(), name), InterfaceType::Cellular);
     }
@@ -37,7 +37,7 @@ fn missing_sysfs_keeps_known_mobile_interface_conventions_and_unknown_devices() 
 
 #[test]
 fn sysfs_types_keep_ppp_tunnels_and_unknown_values_distinct() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::temporary::tempdir().unwrap();
     let path = root.path().join("test0");
     std::fs::create_dir(&path).unwrap();
     for (value, expected) in [

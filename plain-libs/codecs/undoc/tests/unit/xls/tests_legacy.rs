@@ -25,12 +25,7 @@ fn parse(data: Vec<u8>) -> crate::Result<crate::Document> {
 }
 
 fn in_book_stream(stream: &[u8]) -> Vec<u8> {
-    let mut container = cfb::CompoundFile::create(std::io::Cursor::new(Vec::new())).unwrap();
-    let mut s = container.create_stream("/Book").unwrap();
-    std::io::Write::write_all(&mut s, stream).unwrap();
-    drop(s);
-    container.flush().unwrap();
-    container.into_inner().into_inner()
+    crate::cfb_fixture::compound([("/Book", stream)])
 }
 
 // ---------------------------------------------------------------------------------------------

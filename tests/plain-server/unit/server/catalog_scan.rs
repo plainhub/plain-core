@@ -13,7 +13,7 @@ fn catalog_test_core(directory: &std::path::Path) -> crate::server::ContentServe
 
 #[tokio::test]
 async fn catalog_is_created_from_core_and_stopped_handles_reject_access() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = catalog_test_core(directory.path());
     let catalog = core.native_media_catalog().unwrap();
     assert_eq!(
@@ -161,11 +161,11 @@ async fn rescan_with_failed_probe_retains_current_known_metadata_without_host_ro
 }
 
 #[cfg(feature = "media")]
-fn directory_scan_fixture() -> tempfile::TempDir {
+fn directory_scan_fixture() -> plain_libs::temporary::TempDir {
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    tempfile::Builder::new()
+    plain_libs::temporary::Builder::new()
         .prefix("media-scan-")
         .tempdir_in(home)
         .unwrap()
@@ -452,7 +452,7 @@ async fn completion_scan_reports_read_failures_instead_of_partial_success() {
 
 #[tokio::test]
 async fn source_directories_use_volume_configuration_and_reject_stopped_handles() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = catalog_test_core(directory.path());
     let catalog = core.native_media_catalog().unwrap();
     let clone = catalog.clone();
@@ -492,7 +492,7 @@ async fn source_directories_use_volume_configuration_and_reject_stopped_handles(
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn the_watcher_stops_with_the_core_and_rejects_after_it() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = catalog_test_core(directory.path());
     let source = directory.path().join("media");
     std::fs::create_dir_all(&source).unwrap();
@@ -535,7 +535,7 @@ async fn the_watcher_stops_with_the_core_and_rejects_after_it() {
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn filesystem_watch_events_from_an_os_thread_update_the_shared_catalog() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = crate::test_support::public_directory();
     let core = catalog_test_core(directory.path());
     let catalog = core.native_media_catalog().unwrap();

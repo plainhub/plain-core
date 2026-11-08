@@ -238,12 +238,7 @@ fn build(book: Book) -> Vec<u8> {
         rec(&mut stream, 0x000A, &[]);
     }
 
-    let mut container = cfb::CompoundFile::create(std::io::Cursor::new(Vec::new())).unwrap();
-    let mut s = container.create_stream("/Workbook").unwrap();
-    std::io::Write::write_all(&mut s, &stream).unwrap();
-    drop(s);
-    container.flush().unwrap();
-    container.into_inner().into_inner()
+    crate::cfb_fixture::compound([("/Workbook", stream.as_slice())])
 }
 
 fn parse(book: Book) -> crate::Result<crate::Document> {

@@ -135,7 +135,7 @@ async fn native_full_and_selected_indexing_use_local_catalog_and_encoder_without
             )
         }
     }
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
     let supported = directory.path().join("supported.png");
     let unsupported = directory.path().join("unsupported.image");

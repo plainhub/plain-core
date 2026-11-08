@@ -37,7 +37,7 @@ fn windows_extended_paths_use_the_same_frame_as_volume_roots() {
 
 #[test]
 fn a_native_location_has_a_stable_volume_and_normalizes_missing_entry_paths() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let file = directory.path().join("file.txt");
     std::fs::write(&file, b"file").unwrap();
     let before = locate(&file).unwrap();

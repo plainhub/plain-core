@@ -11,13 +11,13 @@ fn api_token_bearer_requires_the_exact_second_header_token() {
 }
 
 fn contract_schema() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     crate::test_support::schema::SchemaFixture,
 ) {
     use plain_rs::features::prefs::Prefs;
     use plain_rs::infrastructure::db::Db;
     use std::sync::Arc;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
     let (events, _) = tokio::sync::broadcast::channel(16);
@@ -120,7 +120,7 @@ async fn an_unknown_field_is_reported_as_a_graphql_error() {
 /// ways because there is no session key to encrypt with.
 #[tokio::test]
 async fn the_development_bearer_only_admits_the_exact_configured_token() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
 
     // Unset: no bearer of any kind opens the development path.
@@ -156,7 +156,7 @@ async fn the_development_bearer_only_admits_the_exact_configured_token() {
 
 #[tokio::test]
 async fn native_identity_without_the_private_transport_token_cannot_claim_local_origin() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let mut headers = HeaderMap::new();

@@ -211,7 +211,7 @@ fn classify_container_magic<R: Read + Seek>(reader: &mut R) -> Result<Option<For
 /// an unrecognised CFB, are reported as unsupported — naming the format where the directory
 /// shows which it is, which is what the header proved.
 fn classify_cfb_container<R: Read + Seek>(reader: &mut R) -> Result<FormatType> {
-    let container = match cfb::CompoundFile::open(reader) {
+    let container = match plain_libs::compound_file::CompoundFile::open(reader) {
         Ok(container) => container,
         // A CFB header whose directory will not parse. Still an Office container, still
         // unopenable; guessing which kind would claim more than was established.

@@ -1,9 +1,9 @@
 use super::*;
 use crate::infrastructure::db::chat_store::channels;
 
-fn fixture() -> (tempfile::TempDir, crate::test_runtime::Core) {
+fn fixture() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core) {
     use std::sync::Arc;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     let (key, _public) = plain_libs::crypto::ed25519_generate();

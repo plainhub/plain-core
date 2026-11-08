@@ -66,7 +66,7 @@ fn native_unindexed_files_are_probed_for_tags_without_creating_persistent_media_
 async fn uri_audio_tags_use_one_bounded_descriptor_without_sdk_metadata_or_staging() {
     use serde_json::json;
     use std::sync::Arc;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let bytes = std::fs::read(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../plain-rs/testdata/audio-tagged.mp3"
@@ -124,7 +124,7 @@ async fn uri_audio_tags_use_one_bounded_descriptor_without_sdk_metadata_or_stagi
 
 #[test]
 fn file_uri_preserves_the_reference_but_uses_the_decoded_filename_for_missing_tags() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("untagged song.mp3");
     std::fs::copy(
         concat!(

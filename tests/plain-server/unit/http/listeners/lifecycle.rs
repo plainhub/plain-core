@@ -42,7 +42,7 @@ async fn start(server: &ContentServer) -> (u16, u16) {
 
 #[tokio::test]
 async fn loopback_and_public_listeners_serve_the_same_health_endpoint() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[9; 32]);
     let server = server(directory.path(), &token);
     let client = plain_libs::protocols::http_client::builder().build().unwrap();
@@ -80,7 +80,7 @@ async fn loopback_and_public_listeners_serve_the_same_health_endpoint() {
 
 #[tokio::test]
 async fn listener_failure_cleans_up_and_notifies_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[10; 32]);
     let server = server(directory.path(), &token);
     let ports = start(&server).await;
@@ -134,7 +134,7 @@ async fn listener_failure_cleans_up_and_notifies_host() {
 
 #[tokio::test]
 async fn stale_failure_cannot_stop_a_new_listener() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[11; 32]);
     let server = server(directory.path(), &token);
     start(&server).await;
@@ -174,7 +174,7 @@ async fn stale_failure_cannot_stop_a_new_listener() {
 
 #[tokio::test]
 async fn dropping_core_releases_public_listeners() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[12; 32]);
     let server = server(directory.path(), &token);
     let ports = start(&server).await;
@@ -198,7 +198,7 @@ async fn dropping_core_releases_public_listeners() {
 
 #[tokio::test]
 async fn health_works_without_a_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[14; 32]);
     let server = server(directory.path(), &token);
     let (port, _) = start(&server).await;

@@ -4,7 +4,7 @@ mod fixtures;
 
 #[test]
 fn next_previous_and_repeat_one_share_selection_without_a_player_command() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = fixtures::test_db("selection");
     let prefs = Prefs::load(&dir.path().join("prefs")).unwrap();
     fixtures::indexed_enqueue(
@@ -64,7 +64,7 @@ fn next_previous_and_repeat_one_share_selection_without_a_player_command() {
 
 #[test]
 fn stale_and_duplicate_completions_have_no_selection_or_metadata_effect() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = fixtures::test_db("stale-selection");
     let prefs = Prefs::load(&dir.path().join("prefs")).unwrap();
     fixtures::indexed_enqueue(&db, &[AudioTrack::from_path_stem("one")], false).unwrap();
@@ -119,7 +119,7 @@ fn stale_and_duplicate_completions_have_no_selection_or_metadata_effect() {
 
 #[test]
 fn shuffle_excludes_the_current_track_and_empty_queues_do_not_fabricate_tracks() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = fixtures::test_db("shuffle-selection");
     let prefs = Prefs::load(&dir.path().join("prefs")).unwrap();
     let initial = playback::snapshot(&db).unwrap();
@@ -153,7 +153,7 @@ fn shuffle_excludes_the_current_track_and_empty_queues_do_not_fabricate_tracks()
 
 #[test]
 fn explicit_shuffle_selection_avoids_current_track_without_changing_the_saved_play_mode() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = fixtures::test_db("explicit-shuffle");
     let prefs = Prefs::load(&dir.path().join("prefs")).unwrap();
     fixtures::indexed_enqueue(

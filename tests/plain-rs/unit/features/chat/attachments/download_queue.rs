@@ -1,6 +1,6 @@
 use super::*;
-fn fixture(count: usize) -> (tempfile::TempDir, Db, Queue) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture(count: usize) -> (plain_libs::temporary::TempDir, Db, Queue) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let peer = DPeer::new(
         "peer",

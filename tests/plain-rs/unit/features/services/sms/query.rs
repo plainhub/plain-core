@@ -22,12 +22,12 @@ fn archived_conversation_search_matches_address_and_snippet_case_insensitively()
     ));
 }
 
-fn db(dir: &tempfile::TempDir) -> Db {
+fn db(dir: &plain_libs::temporary::TempDir) -> Db {
     Db::open(&dir.path().join("db")).unwrap()
 }
 #[test]
 fn sms_mms_plans_partition_ids_literal_text_trash_and_archive_boundaries() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = db(&dir);
     db.archived_conversation_save(&crate::infrastructure::db::ArchivedConversationRow {
         conversation_id: "4".into(),
@@ -88,7 +88,7 @@ fn merged_messages_sort_real_instants_then_page_and_resolve_blank_addresses() {
 /// `1=1` — so a misspelt filter covered the whole table.
 #[test]
 fn a_destructive_query_that_builds_no_clause_is_refused() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
 
     // Every spelling of "names nothing that narrows": a misspelt field, the
@@ -183,7 +183,7 @@ async fn the_ids_request_refuses_a_whole_table_selection_before_asking_the_platf
         });
     }
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     let host = Arc::new(Host::default());
     stub(host.clone(), vec!["1".to_owned(), "2".to_owned()]);
@@ -299,7 +299,7 @@ fn mms_page_uses_raw_parts_for_body_attachments_and_address_fallback() {
 
 #[test]
 fn query_trash_selector_applies_to_sms_and_mms_even_for_internal_all_reads() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = db(&dir);
     db.trashed_message_save_many(&[
         crate::infrastructure::db::TrashedMessageRow {

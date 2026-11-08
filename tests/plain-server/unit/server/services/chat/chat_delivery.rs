@@ -11,7 +11,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
     use plain_rs::features::chat::enums::{ChatStatus, PeerStatus};
     use plain_rs::infrastructure::transport::router::{Outcome, TransportType};
     use std::sync::atomic::{AtomicUsize, Ordering};
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", "self").unwrap();

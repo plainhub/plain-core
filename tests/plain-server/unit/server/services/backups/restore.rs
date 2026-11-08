@@ -2,7 +2,7 @@ use plain_rs::features::services::backups::test_fixture::archive;
 
 #[tokio::test]
 async fn native_restore_stages_without_overwriting_the_running_database() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let archive_path = directory.path().join("selected-backup.zip");
     std::fs::write(&archive_path, archive()).unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();

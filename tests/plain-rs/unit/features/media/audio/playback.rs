@@ -16,7 +16,7 @@ fn in_memory_databases_have_independent_playback_state() {
 
 #[test]
 fn recreated_runtime_rejects_reports_from_the_previous_engine_session() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("db");
     let db = Db::open(&path).unwrap();
     indexed_current(&db, "one").unwrap();
@@ -31,7 +31,7 @@ fn recreated_runtime_rejects_reports_from_the_previous_engine_session() {
 
 #[test]
 fn reopening_remembers_only_the_current_track_and_preserves_queue_and_history() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("db");
     let db = Db::open(&path).unwrap();
     let track = audio_queue::AudioTrack::from_path_stem("one");
@@ -92,7 +92,7 @@ fn reopening_remembers_only_the_current_track_and_preserves_queue_and_history() 
 
 #[test]
 fn failed_database_commit_restores_current_track_row_and_runtime() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     indexed_current(&db, "one").unwrap();
     let before = seek(&db, 123).unwrap();
@@ -113,7 +113,7 @@ fn failed_database_commit_restores_current_track_row_and_runtime() {
 
 #[test]
 fn failed_current_media_write_keeps_the_source_and_runtime_unchanged() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     indexed_current(&db, "one").unwrap();
     let before = seek(&db, 123).unwrap();
@@ -130,7 +130,7 @@ fn failed_current_media_write_keeps_the_source_and_runtime_unchanged() {
 }
 #[test]
 fn stale_reports_cannot_overwrite_seek_or_returned_track() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("db");
     let db = Db::open(&path).unwrap();
     indexed_current(&db, "one").unwrap();
@@ -153,7 +153,7 @@ fn stale_reports_cannot_overwrite_seek_or_returned_track() {
 }
 #[test]
 fn current_and_progress_reset_are_atomic() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     indexed_current(&db, "one").unwrap();
     audio_queue::save_audio_current(&db, "one").unwrap();
@@ -173,7 +173,7 @@ fn current_and_progress_reset_are_atomic() {
 
 #[test]
 fn playback_start_is_once_per_revision_and_failed_history_write_can_retry() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     let track = audio_queue::AudioTrack::from_path_stem("one");
     register_audio(&db, &track);
@@ -201,7 +201,7 @@ fn playback_start_is_once_per_revision_and_failed_history_write_can_retry() {
 
 #[test]
 fn buffered_start_survives_pause_resume_and_seek_but_not_track_replacement() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("db")).unwrap();
     let track = audio_queue::AudioTrack::from_path_stem("one");
     register_audio(&db, &track);

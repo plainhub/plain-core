@@ -16,7 +16,7 @@ fn command_rejects_missing_fields_and_unknown_actions() {
 
 #[tokio::test]
 async fn multicast_lease_is_reused_only_within_the_same_host_generation() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (generation, mut requests) = state.host.connect();
@@ -74,7 +74,7 @@ async fn multicast_lease_is_reused_only_within_the_same_host_generation() {
 
 #[tokio::test]
 async fn sender_updates_deliver_versioned_host_snapshots_without_internal_session_fields() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = crate::test_runtime::Core::open(dir.path()).unwrap();
     let state = server.runtime_state();
     let (generation, mut requests) = state.host.connect();
@@ -101,7 +101,7 @@ async fn sender_updates_deliver_versioned_host_snapshots_without_internal_sessio
 
 #[tokio::test]
 async fn saturated_host_receives_latest_sender_snapshot() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let server = crate::test_runtime::Core::open(dir.path()).unwrap();
     let state = server.runtime_state();
     let (generation, mut requests) = state.host.connect();

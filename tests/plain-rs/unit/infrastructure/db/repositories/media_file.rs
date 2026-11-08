@@ -24,7 +24,7 @@ fn metadata(path: &str) -> MediaFileMetadata {
 
 #[test]
 fn rescanning_preserves_identity_created_time_and_business_flags() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let mut file = metadata("/photos/one.jpg");
     let original = db.record_media_files(&[file.clone()]).unwrap().remove(0);
@@ -56,7 +56,7 @@ fn rescanning_preserves_identity_created_time_and_business_flags() {
 
 #[test]
 fn batches_rollback_on_invalid_metadata_and_one_file_has_one_current_kind() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let first = metadata("/photos/one.jpg");
     let mut invalid = metadata("/photos/two.jpg");
@@ -80,7 +80,7 @@ fn batches_rollback_on_invalid_metadata_and_one_file_has_one_current_kind() {
 
 #[test]
 fn unavailable_probe_fields_preserve_current_metadata_but_successful_empty_values_clear_it() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let mut known = metadata("/photos/one.jpg");
     known.artist = "Artist".into();
@@ -137,7 +137,7 @@ fn unavailable_probe_fields_preserve_current_metadata_but_successful_empty_value
 
 #[test]
 fn availability_aware_batches_are_atomic_and_new_unknown_files_are_not_hidden() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
     let original = db
         .record_media_files(&[metadata("/photos/one.jpg")])
@@ -182,7 +182,7 @@ fn availability_aware_batches_are_atomic_and_new_unknown_files_are_not_hidden() 
 
 #[test]
 fn forgetting_returns_the_exact_committed_types_and_retains_the_count_contract() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("data.db")).unwrap();
     let image = metadata("/shared");
     let mut audio = image.clone();
@@ -198,7 +198,7 @@ fn forgetting_returns_the_exact_committed_types_and_retains_the_count_contract()
 
 #[test]
 fn forgetting_a_directory_removes_descendants_and_preserves_prefix_neighbors() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("data.db")).unwrap();
     let root = directory.path().join("album%_");
     let nested = root.join("nested/photo.jpg");
@@ -232,7 +232,7 @@ fn forgetting_a_directory_removes_descendants_and_preserves_prefix_neighbors() {
 
 #[test]
 fn native_album_grouping_survives_failed_probes_and_clears_removed_album_tags() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("data.db")).unwrap();
     let mut one = metadata("/album/one.mp3");
     one.data_type = DataType::Audio;
@@ -286,7 +286,7 @@ fn observed_file(path: &std::path::Path, identity: &str) -> MediaFileMetadataRea
 
 #[test]
 fn filesystem_rename_preserves_file_identity_flags_and_both_tag_kinds() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.jpg");
     let destination = directory.path().join("destination.jpg");
     std::fs::write(&source, b"owned image").unwrap();
@@ -334,7 +334,7 @@ fn filesystem_rename_preserves_file_identity_flags_and_both_tag_kinds() {
 
 #[test]
 fn live_hard_links_and_ambiguous_missing_links_never_steal_another_file_id() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.jpg");
     let linked = directory.path().join("linked.jpg");
     let remaining = directory.path().join("remaining.jpg");
@@ -363,7 +363,7 @@ fn live_hard_links_and_ambiguous_missing_links_never_steal_another_file_id() {
 
 #[test]
 fn content_replacement_gets_a_new_id_and_unknown_metadata_preserves_its_identity() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.jpg");
     std::fs::write(&source, b"before").unwrap();
     let db = Db::open(&directory.path().join("plain.db")).unwrap();
@@ -392,7 +392,7 @@ fn content_replacement_gets_a_new_id_and_unknown_metadata_preserves_its_identity
 
 #[test]
 fn file_generation_qualifies_relocation_across_media_kind_changes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("source.jpg");
     let destination = directory.path().join("replacement.jpg");
     std::fs::write(&source, b"original").unwrap();

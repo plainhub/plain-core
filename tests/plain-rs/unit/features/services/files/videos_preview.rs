@@ -50,8 +50,8 @@ fn trak_with(handler: &[u8; 4], entry_fourcc: &str) -> Vec<u8> {
 
 /// Write `flat` to a temp file; keep the returned TempDir alive for as
 /// long as the path is used (it removes the file when dropped).
-fn write_temp(flat: &[u8]) -> (tempfile::TempDir, std::path::PathBuf) {
-    let dir = tempfile::tempdir().unwrap();
+fn write_temp(flat: &[u8]) -> (plain_libs::temporary::TempDir, std::path::PathBuf) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("probe.mp4");
     std::fs::write(&path, flat).unwrap();
     (dir, path)
@@ -183,7 +183,7 @@ async fn iso_bmff_probe_never_spawns_ffprobe() {
 #[tokio::test]
 async fn non_iso_container_falls_back_to_ffprobe() {
     // Garbage bytes: the walker declines, the injected fallback answers.
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let p = dir.path().join("video.mkv");
     std::fs::write(&p, b"definitely not an iso-bmff container").unwrap();
     let codec = probe_with_fallback(&p.to_string_lossy(), |_: String| async {

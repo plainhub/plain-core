@@ -3,14 +3,14 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 fn fixture() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     crate::test_runtime::Core,
     CoreRuntime,
     Arc<Runtime>,
     u64,
     mpsc::Receiver<serde_json::Value>,
 ) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         crate::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );

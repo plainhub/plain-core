@@ -30,7 +30,7 @@ fn batching_preserves_order_and_resolves_each_distinct_value_once_including_fail
 }
 #[test]
 fn aliases_use_the_owned_data_directory_and_reject_escapes_without_a_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db =
         std::sync::Arc::new(crate::infrastructure::db::Db::open(Path::new(":memory:")).unwrap());
     assert_eq!(
@@ -60,7 +60,7 @@ fn aliases_use_the_owned_data_directory_and_reject_escapes_without_a_host() {
 
 #[test]
 fn ordinary_relative_references_use_the_core_directory_instead_of_the_process_directory() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db =
         std::sync::Arc::new(crate::infrastructure::db::Db::open(Path::new(":memory:")).unwrap());
     assert_eq!(

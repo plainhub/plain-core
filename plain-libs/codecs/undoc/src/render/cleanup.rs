@@ -4,7 +4,6 @@
 //! LLM training data preparation.
 
 use super::options::CleanupOptions;
-use unicode_normalization::UnicodeNormalization;
 
 /// Clean text according to the provided options.
 pub fn clean_text(text: &str, options: &CleanupOptions) -> String {
@@ -73,7 +72,7 @@ fn split_frontmatter(text: &str) -> (Option<&str>, &str) {
 
 /// Normalize Unicode strings to NFC form and standardize common elements.
 fn normalize_unicode(text: &str) -> String {
-    let normalized: String = text.nfc().collect();
+    let normalized = plain_libs::normalization::nfc_text(text);
 
     // Standardize bullets and dashes
     normalized

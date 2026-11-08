@@ -5,8 +5,8 @@ use plain_rs::features::services::casting::receiver::types::PendingCastRequest;
 use serde_json::json;
 use std::sync::Arc;
 
-fn fixture() -> (tempfile::TempDir, ContentServer) {
-    let directory = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );

@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 #[tokio::test]
 async fn stat_authorizes_the_resolved_path_once_and_rejects_invalid_references_before_host_access()
 {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let directory = temp.path().join("core");
     let server = ContentServer::open(&directory).unwrap();
     let state = server.runtime_state();

@@ -98,12 +98,12 @@ fn snapshot(
     directory: &Path,
     roots: &Roots,
     cancelled: impl Fn() -> bool,
-) -> Result<(tempfile::TempDir, Vec<(PathBuf, String)>), String> {
+) -> Result<(plain_libs::temporary::TempDir, Vec<(PathBuf, String)>), String> {
     if cancelled() {
         return Err("Backup cancelled".into());
     }
     std::fs::create_dir_all(&roots.cache).map_err(|error| error.to_string())?;
-    let staging = tempfile::Builder::new()
+    let staging = plain_libs::temporary::Builder::new()
         .prefix("backup-")
         .tempdir_in(&roots.cache)
         .map_err(|error| error.to_string())?;
@@ -198,7 +198,7 @@ pub mod test_fixture {
     };
 
     pub fn archive() -> Vec<u8> {
-        let source = tempfile::tempdir().unwrap();
+        let source = plain_libs::temporary::tempdir().unwrap();
         let paths = crate::infrastructure::data_paths::DataPaths::new(source.path());
         let prefs = Arc::new(crate::features::prefs::Prefs::load(&paths.prefs()).unwrap());
         crate::features::prefs::identity::ensure_identity(&prefs);

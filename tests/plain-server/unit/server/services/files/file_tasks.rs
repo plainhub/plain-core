@@ -32,7 +32,7 @@ fn find_task(response: &Value, id: &str) -> Value {
 }
 #[tokio::test]
 async fn main_tasks_track_resolved_paths_and_gate_sdk_execution_on_platform_authorization() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[12; 32]);
     let db_path = temp.path().join("core/tasks.db");
     let server = ContentServer::start_with_config(
@@ -161,7 +161,7 @@ async fn main_tasks_track_resolved_paths_and_gate_sdk_execution_on_platform_auth
 }
 
 async fn media_move_case(missing_destination: bool) {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let base = temp.path().canonicalize().unwrap();
     let source = base.join("source");
     std::fs::create_dir(&source).unwrap();
@@ -415,7 +415,7 @@ async fn missing_native_destination_keeps_metadata_and_reports_actual_completed_
 
 #[tokio::test]
 async fn main_create_task_can_wait_for_completion_and_returns_partial_failure_receipts() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = plain_libs::temporary::tempdir().unwrap();
     let server = ContentServer::open(&temp.path().join("core")).unwrap();
     let state = server.runtime_state().core;
     let (_generation, mut requests) = state.host.connect();

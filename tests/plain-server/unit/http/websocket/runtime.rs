@@ -80,7 +80,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     use futures_util::SinkExt;
     use sha2::Digest;
     use tokio_tungstenite::tungstenite::Message as ClientMessage;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
         plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap(),
     );
@@ -214,8 +214,8 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     consumer.await.unwrap();
 }
 
-fn public_fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
-    let directory = tempfile::tempdir().unwrap();
+fn public_fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -473,7 +473,7 @@ async fn host_replacement_restores_only_authenticated_online_clients() {
     let _discovery = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
         .lock()
         .await;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let session = state

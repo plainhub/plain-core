@@ -1,0 +1,7 @@
+{
+  "name": "cfb",
+  "version": "0.15.0",
+  "repository": "https://github.com/mdsteele/rust-cfb",
+  "revision": "e4b57666649b2ade90c1656ddae822181dd121e4",
+  "archive-sha256": "0f13298d9178622b7916ec5d01d470425c04273c8ed07e87b1c38b34c4f4612b"
+}

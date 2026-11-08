@@ -12,7 +12,7 @@ fn start_receipt_requires_actual_boolean_and_no_errors() {
 async fn scan_reads_aware_flags_from_discover_and_checks_full_advertised_identity() {
     let id = "706c6169-2d74-8e53-9a16-f08b62c591d3";
     for reply_id in [id, "706c6169-b903-841f-a6ce-32d75908f4ab"] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let core = crate::test_runtime::Core::open(directory.path()).unwrap();
         let state = core.runtime_state();
         let (owner, mut requests) = crate::test_support::HostRequests::connect(&state.host);

@@ -28,8 +28,8 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 
 fn fixture_with(
     handler: impl Fn(&str, Value) -> Value + Send + 'static,
-) -> (tempfile::TempDir, PublicSchema) {
-    let dir = tempfile::tempdir().unwrap();
+) -> (plain_libs::temporary::TempDir, PublicSchema) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs.set("client_id", "actor").unwrap();
     prefs.set("api_permissions", vec!["PHONE_NUMBER"]).unwrap();
@@ -80,7 +80,7 @@ async fn query(schema: &PublicSchema, document: &str) -> Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
-fn fixture() -> (tempfile::TempDir, PublicSchema) {
+fn fixture() -> (plain_libs::temporary::TempDir, PublicSchema) {
     fixture_with(|method, _| match method {
         "peerTransportCapabilities" => json!([]),
         "systemSimFacts" => json!([
@@ -242,7 +242,7 @@ async fn pairing_rejects_caller_supplied_discovery_metadata() {
 
 #[tokio::test]
 async fn main_identity_rename_and_pairing_code_use_shared_preferences_and_refuse_stopped_core() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let _state = core.runtime_state();
     let executor = core.native_graphql().unwrap();

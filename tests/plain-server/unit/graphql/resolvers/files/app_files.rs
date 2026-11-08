@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn file_import_dedupe_release_and_restart_use_core_storage() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[14; 32]);
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap());
@@ -109,7 +109,7 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
 
 #[tokio::test]
 async fn remote_import_requires_storage_authorization_before_reading_or_deleting_a_source() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     state
@@ -157,7 +157,7 @@ async fn remote_import_requires_storage_authorization_before_reading_or_deleting
 
 #[tokio::test]
 async fn main_schema_import_accepts_platform_bytes_without_app_managed_paths() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let schema = core.native_graphql().unwrap();

@@ -5,7 +5,7 @@ use serde_json::json;
 #[tokio::test]
 async fn interrupted_platform_read_preserves_the_previous_sound_and_removes_temporary_files() {
     for outcome in ["failure", "cancel", "finish"] {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let core = ContentServer::open(directory.path()).unwrap();
         let state = core.runtime_state();
         let destination =
@@ -54,7 +54,7 @@ async fn interrupted_platform_read_preserves_the_previous_sound_and_removes_temp
 
 #[tokio::test]
 async fn invalid_or_stopped_sources_do_not_replace_sound() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let source = directory.path().join("selected");

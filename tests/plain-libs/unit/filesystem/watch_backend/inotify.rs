@@ -63,7 +63,7 @@ async fn queued_descendant_events_follow_directory_moves_and_overflow_requests_r
 #[tokio::test]
 async fn real_filesystem_events_wait_for_close_and_keep_complete_bytes() {
     use std::io::Write;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let mut watcher = Watcher::open().unwrap();
     watcher.add(directory.path()).unwrap();
     let path = directory.path().join("image.png");

@@ -2,7 +2,7 @@ use crate::server::ContentServer;
 
 #[tokio::test]
 async fn native_reconnect_preserves_content_events_and_needs_no_host_request() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let (_generation, mut requests) = state.host.connect();

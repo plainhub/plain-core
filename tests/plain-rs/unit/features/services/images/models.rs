@@ -21,7 +21,7 @@ async fn settled(runtime: &Runtime) {
 }
 #[tokio::test]
 async fn failed_replacement_preserves_active_package_index_and_search() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let incoming = directory.path().join("ai_models/incoming");
     let original = plain_libs::ai_image_search::models::test_fixture::fixture(&incoming);
     let photo = directory.path().join("photo.png");
@@ -141,7 +141,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
 
 #[tokio::test]
 async fn catalog_changes_share_one_cancellable_timer_and_do_not_retain_the_runtime() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
@@ -202,7 +202,7 @@ async fn catalog_changes_share_one_cancellable_timer_and_do_not_retain_the_runti
 
 #[tokio::test]
 async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_download() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     plain_libs::ai_image_search::models::test_fixture::fixture(
         &directory.path().join("ai_models/imported"),
     );
@@ -277,7 +277,7 @@ async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_do
 
 #[tokio::test]
 async fn native_model_restore_and_shutdown_do_not_request_sdk_observers_or_catalogs() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     plain_libs::ai_image_search::models::test_fixture::fixture(
         &directory.path().join("ai_models/imported"),
     );
@@ -319,11 +319,11 @@ async fn native_model_restore_and_shutdown_do_not_request_sdk_observers_or_catal
 }
 
 fn projection_runtime() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     Arc<Runtime>,
     tokio::sync::broadcast::Receiver<WsEvent>,
 ) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let host = Arc::new(Host::default());
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
@@ -413,7 +413,7 @@ async fn idle_model_runtime_does_not_poll_snapshots_and_index_events_project_wit
 
 #[tokio::test]
 async fn initial_snapshot_is_published_before_the_core_is_returned_to_consumers() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let initial = state.image_models.snapshot();

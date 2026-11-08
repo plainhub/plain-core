@@ -1,8 +1,8 @@
 use std::sync::Mutex;
 
-static RETAINED: Mutex<Vec<tempfile::TempDir>> = Mutex::new(Vec::new());
+static RETAINED: Mutex<Vec<crate::temporary::TempDir>> = Mutex::new(Vec::new());
 
-pub fn retain(dir: tempfile::TempDir) {
+pub fn retain(dir: crate::temporary::TempDir) {
     static REGISTERED: std::sync::Once = std::sync::Once::new();
     REGISTERED.call_once(|| unsafe {
         libc::atexit(clear);

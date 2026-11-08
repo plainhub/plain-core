@@ -28,7 +28,7 @@ fn seed(db: &Db, path: &str, size: i64) {
 
 #[test]
 fn native_search_uses_indexed_names_literal_filters_parent_and_matching_counts() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     seed(&db, "/docs/100%.pdf", 30);
     seed(&db, "/docs/other.pdf", 10);
@@ -66,7 +66,7 @@ fn native_search_uses_indexed_names_literal_filters_parent_and_matching_counts()
 
 #[tokio::test]
 async fn platform_query_passes_prepared_conditions_and_only_resolves_parent_when_present() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let host = Arc::new(Host::default());
     let (generation, mut requests) = host.connect();
@@ -130,7 +130,7 @@ async fn platform_query_passes_prepared_conditions_and_only_resolves_parent_when
 #[test]
 fn scope_changes_hide_existing_records_and_preserve_file_identity_and_user_state() {
     use crate::features::files::index_scope::{Defaults, Scope};
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     seed(&db, "/docs/private/report.pdf", 10);
     seed(&db, "/docs/private-notes/report.pdf", 20);
@@ -198,7 +198,7 @@ fn scope_changes_hide_existing_records_and_preserve_file_identity_and_user_state
 
 #[test]
 fn indexed_search_combines_subtree_kind_and_modification_time() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     seed(&db, "/docs/child/report.pdf", 10);
     seed(&db, "/docs-other/report.pdf", 20);

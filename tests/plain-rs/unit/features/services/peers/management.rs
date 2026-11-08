@@ -18,8 +18,8 @@ fn peer() -> DPeer {
     peer
 }
 
-async fn fixture() -> (tempfile::TempDir, crate::test_runtime::Core, CoreRuntime) {
-    let directory = tempfile::tempdir().unwrap();
+async fn fixture() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core, CoreRuntime) {
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open_with_cache(
         &directory.path().join("data"),
         &directory.path().join("cache"),

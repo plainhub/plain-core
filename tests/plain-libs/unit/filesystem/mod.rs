@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn checked_listing_preserves_order_pagination_and_missing_directory_errors() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     std::fs::create_dir(temp.path().join("z-dir")).unwrap();
     std::fs::write(temp.path().join("a.txt"), b"synthetic").unwrap();
     std::fs::write(temp.path().join(".hidden"), b"synthetic").unwrap();
@@ -32,7 +32,7 @@ async fn checked_listing_preserves_order_pagination_and_missing_directory_errors
 }
 #[tokio::test]
 async fn real_copy_and_move_preserve_existing_destination_and_return_actual_path() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     let source = temp.path().join("synthetic.bin");
     let destination = temp.path().join("out");
     std::fs::write(&source, b"source").unwrap();
@@ -58,7 +58,7 @@ async fn real_copy_and_move_preserve_existing_destination_and_return_actual_path
 }
 #[tokio::test]
 async fn cross_device_pipeline_streams_a_complete_file_and_removes_source() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     let source = temp.path().join("source");
     let destination = temp.path().join("destination");
     let mut file = std::fs::File::create(&source).unwrap();
@@ -73,7 +73,7 @@ async fn cross_device_pipeline_streams_a_complete_file_and_removes_source() {
 }
 #[tokio::test]
 async fn failed_copy_keeps_source_and_existing_destination() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     let source = temp.path().join("source");
     let destination = temp.path().join("destination");
     std::fs::write(&source, b"source").unwrap();
@@ -85,7 +85,7 @@ async fn failed_copy_keeps_source_and_existing_destination() {
 #[cfg(unix)]
 #[tokio::test]
 async fn source_hardlink_or_symlink_directory_alias_cannot_be_overwritten() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     let source = temp.path().join("source");
     let alias = temp.path().join("alias");
     std::fs::write(&source, b"source").unwrap();
@@ -110,7 +110,7 @@ async fn source_hardlink_or_symlink_directory_alias_cannot_be_overwritten() {
 #[cfg(unix)]
 #[tokio::test]
 async fn atomic_no_replace_does_not_clobber_an_existing_file_or_directory() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     for directory in [false, true] {
         let source = temp.path().join(if directory {
             "source-dir"
@@ -143,7 +143,7 @@ async fn atomic_no_replace_does_not_clobber_an_existing_file_or_directory() {
 #[cfg(unix)]
 #[test]
 fn unique_names_preserve_dangling_links_and_surface_non_directory_ancestors() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     let target = temp.path().join("dangling");
     std::os::unix::fs::symlink(temp.path().join("absent"), &target).unwrap();
     assert_eq!(
@@ -158,7 +158,7 @@ fn unique_names_preserve_dangling_links_and_surface_non_directory_ancestors() {
 #[cfg(unix)]
 #[tokio::test]
 async fn copying_a_dangling_symlink_preserves_the_link_itself() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     let source = temp.path().join("source-link");
     let missing = temp.path().join("missing-target");
     std::os::unix::fs::symlink(&missing, &source).unwrap();
@@ -176,7 +176,7 @@ async fn copying_a_dangling_symlink_preserves_the_link_itself() {
 
 #[tokio::test]
 async fn rename_preserves_existing_targets_and_only_changes_a_leaf_name() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = crate::temporary::tempdir().unwrap();
     let source = temp.path().join("source");
     let destination = temp.path().join("destination");
     std::fs::write(&source, b"source").unwrap();
@@ -192,7 +192,7 @@ async fn rename_preserves_existing_targets_and_only_changes_a_leaf_name() {
 
 #[test]
 fn directory_counts_work_on_host_platform() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     std::fs::write(dir.path().join("visible.txt"), b"a").unwrap();
     std::fs::write(dir.path().join(".hidden.txt"), b"b").unwrap();
     assert_eq!(count_dir_entries(dir.path(), false).unwrap(), 1);
@@ -207,7 +207,7 @@ async fn macos_hidden_entries_follow_system_flags_in_lists_counts_and_search() {
     unsafe extern "C" {
         fn lchflags(path: *const libc::c_char, flags: u32) -> libc::c_int;
     }
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::temporary::tempdir().unwrap();
     let root = directory.path();
     for name in ["visible-dir", "hidden-dir"] {
         std::fs::create_dir(root.join(name)).unwrap();

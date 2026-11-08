@@ -72,7 +72,7 @@ fn open_creates_every_table_once() {
     // must be unique: this file is mounted as `db::tests`,
     // `db::chat_tests` and `db::library_tests` in one binary, and all
     // three run concurrently.
-    let dir = tempfile::Builder::new()
+    let dir = plain_libs::temporary::Builder::new()
         .prefix("plain-rs-library-reopen2-")
         .tempdir()
         .unwrap();

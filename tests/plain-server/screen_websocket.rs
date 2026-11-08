@@ -6,11 +6,11 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 
 fn public_fixture() -> (
-    tempfile::TempDir,
+    plain_libs::temporary::TempDir,
     ContentServer,
     Arc<plain_rs::features::prefs::Prefs>,
 ) {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );

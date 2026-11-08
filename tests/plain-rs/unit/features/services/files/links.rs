@@ -10,7 +10,7 @@ fn resource_resolution_yields_while_the_blocking_executor_is_busy() {
         .build()
         .unwrap();
     runtime.block_on(async {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let core = crate::test_runtime::Core::open(directory.path()).unwrap();
         let state = core.runtime_state();
         let (ready, started) = std::sync::mpsc::sync_channel(0);

@@ -13,12 +13,12 @@ struct Node {
     pairing_changes: plain_server::graphql::subscriptions::session::SubscriptionSession,
     scope: NativeRequestScope,
     port: u16,
-    _directory: tempfile::TempDir,
+    _directory: plain_libs::temporary::TempDir,
 }
 
 impl Node {
     async fn start() -> Self {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = plain_libs::temporary::tempdir().unwrap();
         let data = directory.path().join("data");
         std::fs::create_dir(&data).unwrap();
         std::fs::write(

@@ -1,6 +1,6 @@
 use super::*;
-fn fixture() -> (tempfile::TempDir, Arc<Service>) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture() -> (plain_libs::temporary::TempDir, Arc<Service>) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&dir.path().join("db")).unwrap());
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     prefs

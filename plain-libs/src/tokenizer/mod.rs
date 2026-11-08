@@ -4,7 +4,7 @@
 pub mod utils;
 pub mod decoders;
 mod graphemes;
-mod normalization;
+pub(crate) use crate::normalization;
 pub mod models;
 pub mod normalizers;
 pub mod pre_tokenizers;

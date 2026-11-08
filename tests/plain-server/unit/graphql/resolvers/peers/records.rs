@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_file_urls() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
@@ -90,7 +90,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
 
 #[tokio::test]
 async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let executor = core.native_graphql().unwrap();
@@ -160,7 +160,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
 
 #[tokio::test]
 async fn remote_requests_cannot_access_or_change_local_login_sessions() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state
@@ -197,7 +197,7 @@ async fn remote_requests_cannot_access_or_change_local_login_sessions() {
 
 #[tokio::test]
 async fn retired_client_name_mirroring_is_not_available_through_any_main_transport() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let document = r#"mutation{updatePeerName(id:"peer",name:"untrusted")}"#;

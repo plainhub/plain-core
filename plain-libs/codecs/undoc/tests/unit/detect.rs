@@ -120,13 +120,7 @@ fn cfb_with_unreadable_directory() -> Vec<u8> {
 
 /// Build a CFB container holding the named root streams, and nothing else.
 fn cfb_with_streams(names: &[&str]) -> Vec<u8> {
-    let mut container =
-        cfb::CompoundFile::create(std::io::Cursor::new(Vec::new())).expect("create CFB container");
-    for name in names {
-        container.create_stream(name).expect("create stream");
-    }
-    container.flush().expect("flush CFB container");
-    container.into_inner().into_inner()
+    crate::cfb_fixture::compound(names.iter().map(|&name| (name, &[][..])))
 }
 
 /// The distinction this branch exists for. Both files carry the CFB header, and the
@@ -292,7 +286,7 @@ fn test_detects_each_format_from_its_content_type() {
 /// The path-based entry point reads the same bytes from disk.
 #[test]
 fn test_detects_format_from_a_file_on_disk() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("deck.pptx");
     std::fs::write(&path, package("ppt/presentation.xml", PPTX_CONTENT_TYPE)).unwrap();
 

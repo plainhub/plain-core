@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn generator_sorts_keys_tracks_nested_assets_and_excludes_hidden_files() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let root = dir.path().join("bundle");
     fs::create_dir_all(root.join("assets")).unwrap();
     fs::create_dir(root.join(".private")).unwrap();
@@ -29,7 +29,7 @@ fn generator_sorts_keys_tracks_nested_assets_and_excludes_hidden_files() {
 
 #[test]
 fn explicit_missing_or_incomplete_bundles_fail_instead_of_silently_omitting_the_ui() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let root = dir.path().join("bundle");
     let output = dir.path().join("generated.rs");
     assert!(generate(&root, &output, true).is_err());
@@ -50,7 +50,7 @@ fn explicit_missing_or_incomplete_bundles_fail_instead_of_silently_omitting_the_
 #[cfg(unix)]
 #[test]
 fn generator_rejects_symbolic_links_to_external_files_and_directories() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let root = dir.path().join("bundle");
     fs::create_dir(&root).unwrap();
     fs::write(root.join("index.html"), b"shell").unwrap();
@@ -71,7 +71,7 @@ fn generator_rejects_symbolic_links_to_external_files_and_directories() {
 
 #[test]
 fn canonical_icons_override_generated_copies_and_survive_missing_optional_web_output() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let web = dir.path().join("web_dist");
     let icons = dir.path().join("assets/ficons");
     fs::create_dir_all(web.join("ficons")).unwrap();

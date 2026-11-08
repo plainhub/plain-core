@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn file_paths_are_relative_and_preserve_user_state() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("你好.txt");
     std::fs::write(&path, b"hello").unwrap();
     let db = Db::open(Path::new(":memory:")).unwrap();
@@ -70,7 +70,7 @@ fn literal_name_search_handles_short_chinese_symbols_and_fts_syntax() {
 
 #[test]
 fn remount_changes_only_the_volume_root_and_preserves_file_id_and_relative_path() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(Path::new(":memory:")).unwrap();
     let old = directory.path().join("old");
     let new = directory.path().join("new");
@@ -124,7 +124,7 @@ fn remount_changes_only_the_volume_root_and_preserves_file_id_and_relative_path(
 
 #[test]
 fn missing_files_keep_business_state_and_reappear_with_the_same_strong_identity() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("report.txt");
     std::fs::write(&path, b"data").unwrap();
     let db = Db::open(Path::new(":memory:")).unwrap();
@@ -153,7 +153,7 @@ fn missing_files_keep_business_state_and_reappear_with_the_same_strong_identity(
 
 #[test]
 fn interrupted_rename_finishes_in_sql_on_reopen_without_another_filesystem_move() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db_path = directory.path().join("plain.db");
     let path = directory.path().join("before.txt");
     let destination = directory.path().join("after.txt");
@@ -184,7 +184,7 @@ fn interrupted_rename_finishes_in_sql_on_reopen_without_another_filesystem_move(
 
 #[test]
 fn interrupted_rename_does_not_attach_user_state_to_a_replacement_at_the_destination() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db_path = directory.path().join("plain.db");
     let source = directory.path().join("source.txt");
     let target = directory.path().join("target.txt");
@@ -345,7 +345,7 @@ fn visibility_subtrees_preserve_missing_trash_boundaries_and_nested_volumes() {
 #[cfg(feature = "chat")]
 #[test]
 fn scan_paths_commit_one_transaction_and_roll_back_a_failed_batch() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let paths = (0..300)
         .map(|index| {
             let path = directory.path().join(format!("{index}.rs"));
@@ -390,7 +390,7 @@ fn scan_paths_commit_one_transaction_and_roll_back_a_failed_batch() {
 #[test]
 fn volume_index_defaults_and_configuration_survive_rebinding_and_disconnect() {
     use crate::infrastructure::db::IndexMode;
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("index.db")).unwrap();
     let id = db.register_volume(directory.path()).unwrap();
     let volume = db.volumes().unwrap().remove(0);

@@ -110,11 +110,11 @@ impl Service {
         }) * 60
     }
     fn initial_runtime(settings: &PomodoroSettings, now: DateTime<Utc>) -> anyhow::Result<Runtime> {
-        let today = now.with_timezone(&chrono::Local).date_naive();
+        let today = now.with_timezone(&plain_libs::local_time::Local).date_naive();
         let day_start = today
             .and_hms_opt(0, 0, 0)
             .unwrap()
-            .and_local_timezone(chrono::Local)
+            .and_local_timezone(plain_libs::local_time::Local)
             .earliest()
             .ok_or_else(|| anyhow::anyhow!("invalid local day"))?
             .with_timezone(&Utc);
@@ -350,12 +350,12 @@ impl Service {
         })
     }
     fn until_next_day(now: DateTime<Utc>) -> std::time::Duration {
-        let local = now.with_timezone(&chrono::Local);
+        let local = now.with_timezone(&plain_libs::local_time::Local);
         local
             .date_naive()
             .succ_opt()
             .and_then(|day| day.and_hms_opt(0, 0, 0))
-            .and_then(|date| date.and_local_timezone(chrono::Local).earliest())
+            .and_then(|date| date.and_local_timezone(plain_libs::local_time::Local).earliest())
             .and_then(|date| (date.with_timezone(&Utc) - now).to_std().ok())
             .filter(|delay| !delay.is_zero())
             .unwrap_or(std::time::Duration::from_secs(60))

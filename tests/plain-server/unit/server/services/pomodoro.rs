@@ -6,12 +6,12 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 struct Fixture {
-    _directory: tempfile::TempDir,
+    _directory: plain_libs::temporary::TempDir,
     prefs: Arc<Prefs>,
 }
 
 fn fixture() -> Fixture {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
     let mut settings = plain_rs::features::prefs::settings::Settings::default().pomodoro_settings;
     for (key, value) in [
@@ -98,7 +98,7 @@ async fn server_assembly_runs_the_timer_and_main_controls_share_its_statistics()
         json!({"pomodoroToday":{"completedCount":1,"state":"SHORT_BREAK","isRunning":false}})
     );
     let date = Utc::now()
-        .with_timezone(&chrono::Local)
+        .with_timezone(&plain_libs::local_time::Local)
         .date_naive()
         .to_string();
     let row = state.db.pomodoro_get_by_date(&date).unwrap().unwrap();

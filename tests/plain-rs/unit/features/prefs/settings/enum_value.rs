@@ -3,7 +3,7 @@ use serde_json::json;
 
 #[test]
 fn published_integer_preferences_decode_to_current_names_without_rewriting_storage() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("prefs.json");
     let prefs = Prefs::load(&path).unwrap();
     let themes: &[&str] = &["USE_DEVICE_THEME", "ON", "OFF"];

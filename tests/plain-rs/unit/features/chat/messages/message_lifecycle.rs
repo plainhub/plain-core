@@ -234,8 +234,8 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
     .unwrap();
 }
 
-fn attachment_fixture() -> (tempfile::TempDir, Db, app_file_store::ImportResult) {
-    let dir = tempfile::tempdir().unwrap();
+fn attachment_fixture() -> (plain_libs::temporary::TempDir, Db, app_file_store::ImportResult) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let file =
         app_file_store::import_bytes(&db, dir.path(), b"synthetic owned attachment", "text/plain")

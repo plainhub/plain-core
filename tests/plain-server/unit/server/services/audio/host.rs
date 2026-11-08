@@ -2,7 +2,7 @@ use plain_rs::features::media::audio::{playback, queue};
 
 #[tokio::test]
 async fn native_host_lifetime_restores_position_and_invalidates_reports_once_per_generation() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state().core;
     let track = queue::AudioTrack::from_path_stem("/owned/track.mp3");

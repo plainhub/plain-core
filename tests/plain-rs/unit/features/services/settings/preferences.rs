@@ -3,7 +3,7 @@ use crate::features::prefs::settings::SettingsPatch;
 
 #[tokio::test]
 async fn generic_writes_typed_patches_and_removal_share_derived_events() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     let (events, mut receiver) = broadcast::channel(16);
     let settings = Preferences {
@@ -55,7 +55,7 @@ async fn generic_writes_typed_patches_and_removal_share_derived_events() {
 
 #[tokio::test]
 async fn invalid_generic_values_leave_state_and_events_unchanged() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     let (events, mut receiver) = broadcast::channel(16);
     let settings = Preferences {

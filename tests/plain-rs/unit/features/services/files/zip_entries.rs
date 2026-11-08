@@ -3,7 +3,7 @@ use std::io::Write;
 
 #[test]
 fn archive_entry_bytes_are_exact_and_repeated_reads_do_not_replace_the_cache() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let archive = directory.path().join("files.zip");
     let mut zip = zip::ZipWriter::new(File::create(&archive).unwrap());
     zip.start_file("nested/note.txt", zip::write::SimpleFileOptions::default())
@@ -43,7 +43,7 @@ fn write_entry(archive: &Path, name: &str, bytes: &[u8]) {
 
 #[test]
 fn changed_archive_replaces_the_preview_identity_and_preserves_old_bytes() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let archive = directory.path().join("source.zip");
     let cache = directory.path().join("cache");
     let reference = format!("{}!zip!/note.txt", archive.display());
@@ -58,7 +58,7 @@ fn changed_archive_replaces_the_preview_identity_and_preserves_old_bytes() {
 
 #[test]
 fn leading_slash_entries_and_preview_paths_keep_app_compatibility() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let archive = directory.path().join("source.zip");
     let cache = directory.path().join("cache");
     write_entry(&archive, "/nested/note.txt", b"preview");
@@ -80,7 +80,7 @@ fn leading_slash_entries_and_preview_paths_keep_app_compatibility() {
 
 #[test]
 fn corrupt_entry_never_commits_or_leaves_a_partial_cache_file() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let archive = directory.path().join("source.zip");
     let cache = directory.path().join("cache");
     write_entry(&archive, "note.txt", b"unique-content-for-crc-check");

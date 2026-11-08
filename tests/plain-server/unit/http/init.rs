@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn fixed_password_without_a_secret_requires_initial_setup() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     state.prefs.set("password_type", "FIXED").unwrap();
@@ -28,7 +28,7 @@ async fn fixed_password_without_a_secret_requires_initial_setup() {
 
 #[tokio::test]
 async fn init_requires_a_client_id_and_returns_forbidden_when_access_is_disabled() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let remote = ConnectInfo("127.0.0.1:12345".parse().unwrap());
@@ -53,7 +53,7 @@ async fn init_requires_a_client_id_and_returns_forbidden_when_access_is_disabled
 #[tokio::test]
 async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_replacing_the_password()
  {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let id = state.native_client_id().unwrap();
@@ -98,7 +98,7 @@ async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_re
 
 #[tokio::test]
 async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_explicit_state() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     plain_rs::features::prefs::security::set_entry(

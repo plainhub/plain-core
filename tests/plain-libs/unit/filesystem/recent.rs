@@ -16,7 +16,7 @@ fn write(root: &Path, name: &str, seconds: u64) {
 
 #[test]
 fn selects_newest_files_across_directories_with_a_fixed_limit() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     for index in 0..150 {
         write(dir.path(), &format!("nested/{index:03}.txt"), index);
     }
@@ -35,7 +35,7 @@ fn selects_newest_files_across_directories_with_a_fixed_limit() {
 
 #[test]
 fn equal_timestamps_have_a_repeatable_path_order_and_zero_is_empty() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     write(dir.path(), "a", 10);
     write(dir.path(), "b", 10);
     write(dir.path(), "c", 10);
@@ -49,7 +49,7 @@ fn equal_timestamps_have_a_repeatable_path_order_and_zero_is_empty() {
 #[cfg(unix)]
 #[test]
 fn file_links_use_target_metadata_and_directory_cycles_are_not_followed() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::temporary::tempdir().unwrap();
     write(dir.path(), "target", 10);
     std::os::unix::fs::symlink(dir.path().join("target"), dir.path().join("alias")).unwrap();
     std::os::unix::fs::symlink(dir.path(), dir.path().join("cycle")).unwrap();

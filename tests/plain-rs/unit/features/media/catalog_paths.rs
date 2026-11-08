@@ -265,7 +265,7 @@ fn every_user_has_the_same_application_and_cloud_document_policy() {
 
 #[test]
 fn git_project_roots_cover_worktrees_submodules_and_bare_repositories() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let root = directory.path();
     for name in [
         "regular/.git",
@@ -301,7 +301,7 @@ fn git_project_roots_cover_worktrees_submodules_and_bare_repositories() {
 #[test]
 fn hidden_files_and_directory_descendants_are_excluded_from_scanning() {
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap();
-    let directory = tempfile::Builder::new()
+    let directory = plain_libs::temporary::Builder::new()
         .prefix("scan-hidden-")
         .tempdir_in(home)
         .unwrap();

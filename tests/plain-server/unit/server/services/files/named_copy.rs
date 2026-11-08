@@ -36,7 +36,7 @@ async fn resource_request(
 #[tokio::test]
 async fn provider_failure_never_publishes_partial_output_and_releases_staging() {
     for succeeds in [true, false] {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = plain_libs::temporary::tempdir().unwrap();
         let core = Arc::new(ContentServer::open(&dir.path().join("data")).unwrap());
         let state = core.runtime_state();
         let (generation, mut requests) = state.host.connect();
@@ -92,7 +92,7 @@ async fn provider_failure_never_publishes_partial_output_and_releases_staging() 
 
 #[tokio::test]
 async fn cache_clear_waits_for_owned_copy_after_the_graphql_waiter_is_cancelled() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let core = Arc::new(ContentServer::open(&dir.path().join("data")).unwrap());
     let state = core.runtime_state();
     let (generation, mut requests) = state.host.connect();
@@ -154,7 +154,7 @@ async fn invalid_destinations_are_rejected_before_provider_reads_or_network_work
     let server = tokio::spawn(async move {
         axum::serve(listener, routes).await.unwrap();
     });
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&dir.path().join("data")).unwrap();
     let state = core.runtime_state();
     let (generation, mut requests) = state.host.connect();
@@ -213,7 +213,7 @@ async fn remote_copy_follows_redirects_fetches_fresh_bytes_and_leaves_no_output_
     let server = tokio::spawn(async move {
         axum::serve(listener, routes).await.unwrap();
     });
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&dir.path().join("data")).unwrap();
     let target = dir.path().join("exports");
     for (suffix, expected) in [("", b"bytes-0".as_slice()), (" (1)", b"bytes-1".as_slice())] {
@@ -280,7 +280,7 @@ async fn public_url_copy_rejects_untrusted_tls_even_after_a_peer_cache_client_wa
             .await
             .unwrap();
     });
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&dir.path().join("data")).unwrap();
     let state = core.runtime_state();
     let url = format!("https://localhost:{port}/file");
@@ -301,7 +301,7 @@ async fn public_url_copy_rejects_untrusted_tls_even_after_a_peer_cache_client_wa
 
 #[tokio::test]
 async fn native_provider_uri_copy_is_not_exposed_to_remote_filesystem_callers() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&dir.path().join("data")).unwrap();
     let state = core.runtime_state();
     state
@@ -336,7 +336,7 @@ async fn native_provider_uri_copy_is_not_exposed_to_remote_filesystem_callers() 
 
 #[tokio::test]
 async fn copies_logical_image_references_without_changing_the_source() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let data = dir.path().join("data");
     let core = ContentServer::open(&data).unwrap();
     let source = data.join("note-images/source.png");

@@ -2,7 +2,7 @@ use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 #[tokio::test]
 async fn schedule_caps_jobs_cancels_outdated_work_and_reruns_latest_request() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
     let active = Arc::new(AtomicUsize::new(0));
     let max = Arc::new(AtomicUsize::new(0));

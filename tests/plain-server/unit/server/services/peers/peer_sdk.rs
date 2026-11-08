@@ -10,8 +10,8 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-fn root(id: &str) -> (tempfile::TempDir, ContentServer, Vec<u8>, String) {
-    let dir = tempfile::tempdir().unwrap();
+fn root(id: &str) -> (plain_libs::temporary::TempDir, ContentServer, Vec<u8>, String) {
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
     prefs.set("client_id", id).unwrap();

@@ -2,12 +2,12 @@ use super::*;
 use serde_json::{Value, json};
 
 struct Fixture {
-    _directory: tempfile::TempDir,
+    _directory: plain_libs::temporary::TempDir,
     service: Arc<Service>,
 }
 
 fn fixture() -> Fixture {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Arc::new(Db::open(&directory.path().join("plain.db")).unwrap());
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
     let mut settings = crate::features::prefs::settings::Settings::default().pomodoro_settings;
@@ -32,7 +32,7 @@ fn noon(day: u32) -> DateTime<Utc> {
         .unwrap()
         .and_hms_opt(12, 0, 0)
         .unwrap()
-        .and_local_timezone(chrono::Local)
+        .and_local_timezone(plain_libs::local_time::Local)
         .earliest()
         .unwrap()
         .with_timezone(&Utc)

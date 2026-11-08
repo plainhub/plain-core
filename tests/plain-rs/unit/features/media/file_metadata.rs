@@ -18,7 +18,7 @@ fn read_file_metadata_with_availability(
 
 #[test]
 fn an_external_image_decoder_receives_the_rewound_file_only_when_header_dimensions_are_missing() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("image.other");
     std::fs::write(&path, b"external image codec fixture").unwrap();
     let calls = std::cell::Cell::new(0);
@@ -137,7 +137,7 @@ fn audio_row_carries_probe_tags_and_real_stat_facts() {
 
 #[test]
 fn audio_row_uses_filename_confirmed_gbk_id3v1_tags() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("歌手-歌曲.mp3");
     let mut audio = std::fs::read(fixture("audio-untagged.mp3")).unwrap();
     let mut tag = [0u8; 128];
@@ -228,7 +228,7 @@ fn video_catalog_dimensions_use_shared_container_readers_without_an_image_decode
 
 #[test]
 fn unreadable_video_metadata_remains_unknown_without_invented_dimensions() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("broken.mp4");
     std::fs::write(&path, b"not a video").unwrap();
     let read = super::read(&path, DataType::Video, |_| {
@@ -287,7 +287,7 @@ fn image_row_reads_pixel_dimensions_from_the_image_crate() {
 
 #[test]
 fn image_dimensions_follow_file_contents_instead_of_a_misleading_extension() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     for name in ["photo.heic", "photo.avif", "photo.bmp", "photo.tiff"] {
         let path = dir.path().join(name);
         std::fs::copy(fixture("v-synthetic-prog.jpg"), &path).unwrap();
@@ -307,7 +307,7 @@ fn image_dimensions_follow_file_contents_instead_of_a_misleading_extension() {
 
 #[test]
 fn missing_path_and_directory_are_errors() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     assert!(
         read_file_metadata(&dir.path().join("nope.jpg"), DataType::Image).is_err(),
         "missing file"
@@ -330,7 +330,7 @@ fn paths_that_are_not_utf8_are_errors() {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join(OsStr::from_bytes(b"bad-\xFF-name.jpg"));
     let error = read_file_metadata(&path, DataType::Image).unwrap_err();
     assert!(error.to_string().contains("not valid UTF-8"));
@@ -341,7 +341,7 @@ fn paths_that_are_not_utf8_are_errors() {
 fn an_unreadable_directory_is_an_error() {
     use std::os::unix::fs::{MetadataExt as _, PermissionsExt};
 
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     if dir.path().metadata().unwrap().uid() == 0 {
         return;
     }
@@ -359,7 +359,7 @@ fn an_unreadable_directory_is_an_error() {
 
 #[test]
 fn reading_facts_writes_nothing_and_repeats_identically() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = plain_libs::temporary::tempdir().unwrap();
     let files = [
         ("audio-tagged.mp3", DataType::Audio),
         ("video-h265.mp4", DataType::Video),
@@ -392,7 +392,7 @@ fn reading_facts_writes_nothing_and_repeats_identically() {
 
 #[test]
 fn probe_availability_keeps_unknown_distinct_from_valid_untagged_audio() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let damaged = directory.path().join("damaged.mp3");
     std::fs::write(&damaged, b"unrecognized audio bytes").unwrap();
     let unknown = read_file_metadata_with_availability(&damaged, DataType::Audio).unwrap();
@@ -409,7 +409,7 @@ fn probe_availability_keeps_unknown_distinct_from_valid_untagged_audio() {
 
 #[test]
 fn unsupported_image_metadata_stays_visible_without_reporting_unknown_fields_as_available() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("unknown.heic");
     std::fs::write(&path, b"unsupported image header").unwrap();
     let facts = read_file_metadata_with_availability(&path, DataType::Image).unwrap();
@@ -460,7 +460,7 @@ fn distant_image_metadata(orientation: u16) -> Vec<u8> {
 
 #[test]
 fn indexed_images_use_shared_seekable_exif_dates_and_rotation_without_swapping_raw_dimensions() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     for (orientation, rotation, available) in
         [(0, 0, false), (1, 0, true), (5, 0, true), (6, 90, true)]
     {
@@ -520,7 +520,7 @@ fn indexed_image_metadata_seeks_to_distant_fields_without_reading_the_pixel_payl
 
 #[test]
 fn video_row_keeps_fractional_milliseconds_from_the_single_probe() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("sample.mp4");
     let mut time = vec![0; 12];
     time.extend(1000u32.to_be_bytes());

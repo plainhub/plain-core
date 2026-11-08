@@ -31,7 +31,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 # Exposes test-only seams (e.g. mdns host_responder packet-capture
 # helpers, the tempdir registry) to dependent crates' test binaries,
 # which `#[cfg(test)]` cannot reach.
-"test-seams" = ["dep:tempfile", "plain-libs/test-seams"]
+"test-seams" = ["plain-libs/test-seams"]
 
 "storage-platform" = ["dep:anyhow", "plain-libs/disk-metrics", "plain-libs/system-metrics", "plain-libs/storage-platform", "plain-libs/volumes"]
 "unix-platform" = ["dep:anyhow", "plain-libs/unix-platform"]
@@ -39,16 +39,15 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "linux-platform" = ["linux-system", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util", "plain-libs/linux-platform"]
 
 "image-metadata" = ["library", "dep:image"]
-"runtime" = ["dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/__rustls-tls", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "dep:windows"]
+"runtime" = ["dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/__rustls-tls", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "dep:windows"]
 "runtime-media" = ["runtime", "media", "plain-libs/native-watch", "tokio/process"]
 
 "ai-image-search" = ["plain-libs/ai-image-search"]
-"media" = ["image-metadata", "dep:tempfile", "plain-libs/thumbnails"]
+"media" = ["image-metadata", "plain-libs/thumbnails"]
 
 [dependencies]
 undoc = { path = "../plain-libs/codecs/undoc", optional = true }
 plain-libs = { path = "../plain-libs", default-features = false }
-"tempfile" = { "version" = "3", "optional" = true }
 "reqwest" = { version = "0.12", default-features = false, features = ["stream"], optional = true }
 "sha2" = "0.10"
 "hmac" = { "version" = "0.13", "optional" = true }
@@ -61,7 +60,7 @@ plain-libs = { path = "../plain-libs", default-features = false }
 "serde_json" = { "version" = "1", "optional" = true }
 "rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "backup", "cache"], "optional" = true }
 "anyhow" = { "version" = "1", "optional" = true }
-"chrono" = { "version" = "0.4", "features" = ["serde"], "optional" = true }
+"chrono" = { "version" = "0.4", "default-features" = false, "features" = ["serde", "now", "oldtime", "wasmbind"], "optional" = true }
 "libc" = "0.2"
 "bytes" = "1"
 "futures-core" = "0.3"
@@ -86,7 +85,6 @@ plain-libs = { path = "../plain-libs", default-features = false, features = ["te
 "axum" = { "version" = "0.7", "default-features" = false, "features" = ["multipart", "json", "query", "tokio", "http1"] }
 "serde_json" = "1"
 "tokio" = { "version" = "1", "features" = ["full", "test-util"] }
-"tempfile" = "3"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = { "version" = "0.22", "optional" = true }
