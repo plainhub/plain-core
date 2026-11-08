@@ -1,17 +1,13 @@
 // Adapted from sysinfo 0.32.1; see SOURCE.json and LICENSE.
 
+use crate::platform::windows::metrics::{
+    ERROR_MORE_DATA, GetTickCount64, GlobalMemoryStatusEx, HKEY_LOCAL_MACHINE, Handle, KEY_READ,
+    MemoryStatus, REG_DWORD, REG_EXPAND_SZ, REG_SZ, RegCloseKey, RegOpenKeyExW, RegQueryValueExW,
+};
 use crate::system_metrics::sys::cpu::*;
+use std::ptr::{null, null_mut};
 use std::time::Duration;
 use std::{ffi::OsStr, mem::size_of, os::windows::ffi::OsStrExt};
-use windows::Win32::Foundation;
-use windows::Win32::System::Registry::{
-    HKEY, HKEY_LOCAL_MACHINE, KEY_READ, REG_DWORD, REG_EXPAND_SZ, REG_NONE, REG_SZ, REG_VALUE_TYPE,
-    RegCloseKey, RegOpenKeyExW, RegQueryValueExW,
-};
-use windows::Win32::System::SystemInformation::{
-    GetTickCount64, GlobalMemoryStatusEx, MEMORYSTATUSEX,
-};
-use windows::core::PCWSTR;
 
 pub const MINIMUM_CPU_UPDATE_INTERVAL: Duration = Duration::from_millis(200);
 const WINDOWS_ELEVEN_BUILD_NUMBER: u32 = 22000;
@@ -22,7 +18,7 @@ fn utf16_str<S: AsRef<OsStr> + ?Sized>(text: &S) -> Vec<u16> {
         .collect::<Vec<_>>()
 }
 
-pub(crate) fn get_reg_string_value(hkey: HKEY, path: &str, field_name: &str) -> Option<String> {
+pub(crate) fn get_reg_string_value(hkey: Handle, path: &str, field_name: &str) -> Option<String> {
     let path = utf16_str(path);
     let field = utf16_str(field_name);
     let key = unsafe { RegKey::open(hkey, &path) }?;
@@ -33,7 +29,7 @@ pub(crate) fn get_reg_string_value(hkey: HKEY, path: &str, field_name: &str) -> 
             Ok(kind) if kind == REG_SZ || kind == REG_EXPAND_SZ => {
                 return registry_string(bytes.get(..length as usize)?);
             }
-            Err(error) if error.code() == Foundation::ERROR_MORE_DATA.to_hresult() => {
+            Err(error) if error == ERROR_MORE_DATA => {
                 bytes.resize(length as usize, 0);
             }
             _ => return None,
@@ -54,7 +50,7 @@ fn registry_string(bytes: &[u8]) -> Option<String> {
     )
 }
 
-pub(crate) fn get_reg_value_u32(hkey: HKEY, path: &str, field_name: &str) -> Option<[u8; 4]> {
+pub(crate) fn get_reg_value_u32(hkey: Handle, path: &str, field_name: &str) -> Option<[u8; 4]> {
     let path = utf16_str(path);
     let field = utf16_str(field_name);
     let key = unsafe { RegKey::open(hkey, &path) }?;
@@ -64,23 +60,13 @@ pub(crate) fn get_reg_value_u32(hkey: HKEY, path: &str, field_name: &str) -> Opt
     (kind == REG_DWORD && length == 4).then_some(bytes)
 }
 
-struct RegKey(HKEY);
+struct RegKey(Handle);
 
 impl RegKey {
-    unsafe fn open(hkey: HKEY, path: &[u16]) -> Option<Self> {
-        let mut new_hkey = Default::default();
-        if RegOpenKeyExW(
-            hkey,
-            PCWSTR::from_raw(path.as_ptr()),
-            0,
-            KEY_READ,
-            &mut new_hkey,
-        )
-        .is_err()
-        {
-            return None;
-        }
-        Some(Self(new_hkey))
+    unsafe fn open(hkey: Handle, path: &[u16]) -> Option<Self> {
+        let mut key = null_mut();
+        (unsafe { RegOpenKeyExW(hkey, path.as_ptr(), 0, KEY_READ, &mut key) } == 0)
+            .then(|| Self(key))
     }
 
     unsafe fn get_value(
@@ -88,19 +74,19 @@ impl RegKey {
         field_name: &[u16],
         buf: &mut [u8],
         buf_len: &mut u32,
-    ) -> windows::core::Result<REG_VALUE_TYPE> {
-        let mut buf_type = REG_NONE;
-
-        RegQueryValueExW(
-            self.0,
-            PCWSTR::from_raw(field_name.as_ptr()),
-            None,
-            Some(&mut buf_type),
-            Some(buf.as_mut_ptr()),
-            Some(buf_len),
-        )
-        .ok()
-        .map(|()| buf_type)
+    ) -> Result<u32, i32> {
+        let mut kind = 0;
+        let status = unsafe {
+            RegQueryValueExW(
+                self.0,
+                field_name.as_ptr(),
+                null(),
+                &mut kind,
+                buf.as_mut_ptr(),
+                buf_len,
+            )
+        };
+        if status == 0 { Ok(kind) } else { Err(status) }
     }
 }
 
@@ -130,11 +116,11 @@ impl SystemInner {
     }
 
     pub(crate) fn refresh_memory(&mut self) {
-        let mut info = MEMORYSTATUSEX::default();
-        info.dwLength = size_of::<MEMORYSTATUSEX>() as _;
+        let mut info = MemoryStatus::default();
+        info.length = size_of::<MemoryStatus>() as _;
         let _result = unsafe { GlobalMemoryStatusEx(&mut info) };
-        self.mem_total = info.ullTotalPhys;
-        self.mem_available = info.ullAvailPhys;
+        self.mem_total = info.total_physical;
+        self.mem_available = info.available_physical;
     }
 
     pub(crate) fn refresh_cpu(&mut self, sample_usage: bool) {

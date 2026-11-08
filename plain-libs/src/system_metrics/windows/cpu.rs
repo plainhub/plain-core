@@ -1,11 +1,10 @@
 // Take a look at the license at the top of the repository in the LICENSE file.
 
-use windows::Win32::Foundation::ERROR_SUCCESS;
-use windows::Win32::System::Performance::{
-    PDH_FMT_COUNTERVALUE, PDH_FMT_DOUBLE, PdhAddEnglishCounterW, PdhCloseQuery,
-    PdhCollectQueryData, PdhGetFormattedCounterValue, PdhOpenQueryA, PdhRemoveCounter,
+use crate::platform::windows::metrics::{
+    FormattedCounter, PDH_FMT_DOUBLE, PdhAddEnglishCounterW, PdhCloseQuery, PdhCollectQueryData,
+    PdhGetFormattedCounterValue, PdhOpenQueryA, PdhRemoveCounter,
 };
-use windows::core::{PCSTR, PCWSTR};
+use std::ptr::{null, null_mut};
 
 pub(crate) struct Query {
     handle: isize,
@@ -26,7 +25,7 @@ impl Drop for Query {
 impl Query {
     pub(crate) fn new() -> Option<Self> {
         let mut handle = 0;
-        if unsafe { PdhOpenQueryA(PCSTR::null(), 0, &mut handle) } != ERROR_SUCCESS.0 {
+        if unsafe { PdhOpenQueryA(null(), 0, &mut handle) } != 0 {
             sysinfo_debug!("Cannot open CPU performance query");
             return None;
         }
@@ -36,10 +35,7 @@ impl Query {
             .chain(Some(0))
             .collect();
         let mut counter = 0;
-        if unsafe {
-            PdhAddEnglishCounterW(handle, PCWSTR::from_raw(path.as_ptr()), 0, &mut counter)
-        } != ERROR_SUCCESS.0
-        {
+        if unsafe { PdhAddEnglishCounterW(handle, path.as_ptr(), 0, &mut counter) } != 0 {
             sysinfo_debug!("Cannot add CPU idle counter");
             return None;
         }
@@ -48,28 +44,29 @@ impl Query {
     }
 
     pub(crate) fn sample_idle(&self) -> Option<f32> {
-        if unsafe { PdhCollectQueryData(self.handle) } != ERROR_SUCCESS.0 {
+        if unsafe { PdhCollectQueryData(self.handle) } != 0 {
             sysinfo_debug!("Cannot collect CPU performance data");
             return None;
         }
-        let mut value = PDH_FMT_COUNTERVALUE::default();
-        if unsafe { PdhGetFormattedCounterValue(self.counter, PDH_FMT_DOUBLE, None, &mut value) }
-            != ERROR_SUCCESS.0
+        let mut value = FormattedCounter::default();
+        if unsafe {
+            PdhGetFormattedCounterValue(self.counter, PDH_FMT_DOUBLE, null_mut(), &mut value)
+        } != 0
         {
             sysinfo_debug!("Cannot format CPU idle counter");
             return None;
         }
-        unsafe { counter_value(&value) }
+        counter_value(&value)
     }
 }
 
 // PDH_CSTATUS_VALID_DATA (0) and PDH_CSTATUS_NEW_DATA (1) are the two successful data statuses.
-unsafe fn counter_value(value: &PDH_FMT_COUNTERVALUE) -> Option<f32> {
-    if !matches!(value.CStatus, 0 | 1) {
-        sysinfo_debug!("Invalid CPU idle counter status: {}", value.CStatus);
+fn counter_value(value: &FormattedCounter) -> Option<f32> {
+    if !matches!(value.status, 0 | 1) {
+        sysinfo_debug!("Invalid CPU idle counter status: {}", value.status);
         return None;
     }
-    Some(unsafe { value.Anonymous.doubleValue } as f32)
+    Some(value.double as f32)
 }
 
 pub(crate) struct CpusWrapper {
@@ -109,7 +106,7 @@ fn read_cpu_model() -> String {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     {
         cpu_brand(|leaf| {
-            let data = unsafe { __cpuid(leaf) };
+            let data = __cpuid(leaf);
             [data.eax, data.ebx, data.ecx, data.edx]
         })
     }

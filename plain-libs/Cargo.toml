@@ -11,7 +11,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "file-walk" = ["dep:anyhow"]
 "default" = ["crypto"]
 "crypto" = ["dep:chacha20poly1305", "dep:p256", "dep:ed25519-dalek", "dep:pbkdf2"]
-"tls" = ["dep:rcgen", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
+"tls" = ["dep:ring", "dep:x509-cert", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
 "time" = ["dep:chrono", "dep:core-foundation-sys"]
 "sqlite" = ["time", "dep:rusqlite"]
 "html" = []
@@ -37,11 +37,12 @@ description = "Reusable cryptography, media, file, format and native components"
 
 "peg" = ["dep:memchr"]
 
-"native-watch" = ["dep:bitflags", "dep:mio", "dep:walkdir", "dep:windows-sys"]
+"native-watch" = ["dep:bitflags", "dep:mio", "dep:windows-sys"]
 
-"disk-metrics" = ["dep:core-foundation-sys", "dep:windows"]
+"disk-metrics" = ["dep:core-foundation-sys"]
 
-"system-metrics" = ["dep:windows"]
+"system-metrics" = []
+"windows-video" = ["media"]
 
 [dependencies]
 "fnv" = { version = "=1.0.7", optional = true }
@@ -72,7 +73,8 @@ description = "Reusable cryptography, media, file, format and native components"
 "chacha20poly1305" = { "version" = "0.10", "optional" = true }
 "p256" = { "version" = "0.14", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
 "ed25519-dalek" = { "version" = "2", "optional" = true }
-"rcgen" = { "version" = "0.13", "default-features" = false, "features" = ["ring"], "optional" = true }
+"ring" = { version = "=0.17.14", optional = true }
+"x509-cert" = { version = "=0.3.0", default-features = false, optional = true }
 "der" = { version = "0.8", features = ["std", "derive"], optional = true }
 "pkcs12" = { version = "=0.2.0-pre.0", default-features = false, features = ["kdf"], optional = true }
 "pkcs5" = { version = "0.8", features = ["alloc", "pbes2"], optional = true }
@@ -97,7 +99,6 @@ description = "Reusable cryptography, media, file, format and native components"
 "memchr" = { "version" = "=2.8.3", "optional" = true }
 "thiserror" = { "version" = "=2.0.21", "optional" = true, "features" = [] }
 "smallvec" = { "version" = "=1.16.2", "optional" = true }
-"walkdir" = { "version" = "=2.5.0", "optional" = true }
 
 [build-dependencies]
 "cc" = { version = "1", optional = true }
@@ -120,7 +121,6 @@ description = "Reusable cryptography, media, file, format and native components"
 
 [target."cfg(windows)".dependencies]
 "windows-sys" = { "version" = "=0.52.0", "features" = ["Win32_System_Threading", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_WindowsProgramming", "Win32_System_IO"], "optional" = true }
-"windows" = { "path" = "../vendor/native/windows", "version" = "=0.57.0", "default-features" = false, "features" = ["Win32_Foundation", "Win32_System_Performance", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_Storage_FileSystem", "Win32_System_WindowsProgramming"], "optional" = true }
 
 [target."cfg(any(target_os = \"macos\", target_os = \"ios\"))".dependencies]
 "core-foundation-sys" = { "version" = "=0.8.7", "optional" = true }

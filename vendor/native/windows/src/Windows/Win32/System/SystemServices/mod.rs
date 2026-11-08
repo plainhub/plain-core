@@ -1,1 +1,0 @@
-pub const FILE_READ_ONLY_VOLUME: u32 = 524288u32;

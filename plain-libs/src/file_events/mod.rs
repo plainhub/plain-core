@@ -8,6 +8,8 @@ pub mod event;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub(crate) mod inotify;
 mod recursive_mode;
+#[cfg(all(unix, any(not(target_os = "macos"), test)))]
+mod watch_tree;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub type RecommendedWatcher = inotify::INotifyWatcher;
 #[cfg(target_os = "macos")]

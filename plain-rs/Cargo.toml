@@ -10,7 +10,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "default" = ["crypto"]
 "crypto" = ["plain-libs/crypto"]
 "ble" = ["dep:anyhow"]
-"ble-native" = ["ble", "chat", "dep:serde_json", "dep:jni"]
+"ble-native" = ["ble", "chat", "dep:serde_json"]
 "mdns" = ["dep:socket2"]
 "tls" = ["plain-libs/tls"]
 "chat" = ["rusqlite/hooks", "crypto", "mdns", "events", "dep:chrono", "dep:anyhow", "dep:serde_json", "dep:rusqlite", "sqlite_browse", "tokio/sync", "tokio/rt", "tokio/fs", "tokio/time", "plain-libs/time", "plain-libs/sqlite", "plain-libs/file-walk", "plain-libs/kv"]
@@ -39,7 +39,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "linux-platform" = ["linux-system", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util", "plain-libs/linux-platform"]
 
 "image-metadata" = ["library", "dep:image"]
-"runtime" = ["dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/__rustls-tls", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "dep:windows"]
+"runtime" = ["dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/__rustls-tls", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "plain-libs/windows-video"]
 "runtime-media" = ["runtime", "media", "plain-libs/native-watch", "tokio/process"]
 
 "ai-image-search" = ["plain-libs/ai-image-search"]
@@ -86,9 +86,6 @@ plain-libs = { path = "../plain-libs", default-features = false, features = ["te
 "serde_json" = "1"
 "tokio" = { "version" = "1", "features" = ["full", "test-util"] }
 
-[target.'cfg(target_os = "android")'.dependencies]
-jni = { "version" = "0.22", "optional" = true }
-
 [[example]]
 name = "discover_probe"
 required-features = ["mdns"]
@@ -117,6 +114,3 @@ objc2-core-video = { path = "../vendor/native/objc2-core-video", version = "=0.3
 block2 = { path = "../vendor/native/block2", version = "=0.6.2", default-features = false, optional = true, features = ["std"] }
 
 dispatch2 = { path = "../vendor/native/dispatch2", version = "=0.3.1", default-features = false, optional = true, features = ["alloc", "objc2"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-windows = { path = "../vendor/native/windows", version = "=0.57.0", default-features = false, optional = true, features = ["Win32_Foundation", "Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant"] }

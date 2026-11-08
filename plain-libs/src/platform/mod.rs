@@ -8,8 +8,12 @@ pub mod download_directory;
     any(feature = "watch", feature = "native-watch")
 ))]
 pub(crate) mod inotify;
+#[cfg(target_os = "android")]
+pub mod jni_byte_array;
 #[cfg(windows)]
 pub mod known_folders;
+#[cfg(windows)]
+pub mod windows;
 #[cfg(feature = "linux-platform")]
 pub mod linux;
 #[cfg(any(target_os = "linux", target_os = "macos"))]

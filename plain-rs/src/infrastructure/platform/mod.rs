@@ -31,5 +31,4 @@ pub mod version;
 pub mod video;
 
 #[cfg(all(feature = "runtime", target_os = "windows"))]
-#[path = "windows/video.rs"]
-pub mod video;
+pub use plain_libs::platform::windows::media_foundation as video;

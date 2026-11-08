@@ -1,4 +1,5 @@
 use super::event::*;
+use super::watch_tree::WatchTree;
 use super::{Error, EventHandler, RecursiveMode, Result, Watcher};
 use crate::file_events::{Receiver, Sender, unbounded};
 use std::collections::HashMap;
@@ -9,7 +10,6 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
-use walkdir::WalkDir;
 
 const KQUEUE: mio::Token = mio::Token(0);
 const MESSAGE: mio::Token = mio::Token(1);
@@ -275,8 +275,8 @@ impl EventLoop {
                 .map_err(|error| Error::io(error).add_path(path))
         };
         if recursive {
-            for entry in WalkDir::new(path).follow_links(true) {
-                files.push(open(entry.map_err(map_walkdir_error)?.into_path())?);
+            for entry in WatchTree::new(path) {
+                files.push(open(entry?.path)?);
             }
         } else {
             files.push(open(path)?);
@@ -332,15 +332,6 @@ impl EventLoop {
             self.watches.retain(|watch, _| !watch.starts_with(&path));
         }
         Ok(())
-    }
-}
-
-fn map_walkdir_error(e: walkdir::Error) -> Error {
-    if e.io_error().is_some() {
-        // save to unwrap otherwise we whouldn't be in this branch
-        Error::io(e.into_io_error().unwrap())
-    } else {
-        Error::generic(&e.to_string())
     }
 }
 

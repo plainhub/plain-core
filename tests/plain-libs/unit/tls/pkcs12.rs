@@ -336,23 +336,8 @@ fn scrypt_decrypts_and_rejects_excessive_cost_before_allocation() {
 
 #[test]
 fn imports_legacy_certificate_names_and_rejects_trailing_certificate_data() {
-    use rcgen::{
-        BmpString, CertificateParams, DistinguishedName, DnType, DnValue, KeyPair, UniversalString,
-    };
-
-    let mut params = CertificateParams::new(vec!["fixture.test".into()]).unwrap();
-    params.distinguished_name = DistinguishedName::new();
-    params.distinguished_name.push(
-        DnType::CommonName,
-        DnValue::UniversalString(UniversalString::try_from("A").unwrap()),
-    );
-    params.distinguished_name.push(
-        DnType::OrganizationName,
-        DnValue::BmpString(BmpString::try_from("組").unwrap()),
-    );
-    let key = KeyPair::generate().unwrap();
-    let leaf = params.self_signed(&key).unwrap().der().to_vec();
-    let key_der = key.serialize_der();
+    let leaf = fixture("legacy-name-certificate.der");
+    let key_der = fixture("legacy-name-private-key.der");
     let display = "CN=00000041, O=組";
     assert_eq!(
         certificate::names(&leaf).unwrap(),

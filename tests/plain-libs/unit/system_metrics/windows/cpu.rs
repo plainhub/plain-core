@@ -1,5 +1,4 @@
 use super::*;
-use windows::Win32::System::Performance::PDH_FMT_COUNTERVALUE_0;
 
 #[test]
 fn cpu_brand_reads_only_the_three_brand_leaves() {
@@ -38,11 +37,11 @@ fn cpu_brand_does_not_query_unsupported_leaves() {
 #[test]
 fn formatted_counter_requires_successful_data_status() {
     for status in [0, 1, 0xC0000BBA, u32::MAX] {
-        let value = PDH_FMT_COUNTERVALUE {
-            CStatus: status,
-            Anonymous: PDH_FMT_COUNTERVALUE_0 { doubleValue: 73.25 },
+        let value = FormattedCounter {
+            status,
+            double: 73.25,
         };
         let expected = if status <= 1 { Some(73.25) } else { None };
-        assert_eq!(unsafe { counter_value(&value) }, expected);
+        assert_eq!(counter_value(&value), expected);
     }
 }

@@ -193,95 +193,95 @@ pub unsafe extern "C" fn plain_ble_buffer_free(buffer: Buffer) {
 #[cfg(target_os = "android")]
 mod android {
     use super::*;
-    use jni::{
-        EnvUnowned,
-        errors::ThrowRuntimeExAndDefault,
-        objects::{JByteArray, JObject},
-        sys::{jboolean, jbyteArray, jint, jlong},
-    };
+    use plain_libs::platform::jni_byte_array::{EnvPtr, Object, with_env};
+    use std::ptr;
+
     #[unsafe(no_mangle)]
-    pub extern "system" fn Java_com_ismartcoding_plain_rust_bridge_RustBleBridge_encoderNative(
-        mut env: EnvUnowned<'_>,
-        _: JObject<'_>,
-        data: JByteArray<'_>,
-        id: jint,
-        response: jboolean,
-        limit: jint,
-    ) -> jlong {
-        env.with_env(|env| -> jni::errors::Result<jlong> {
-            let bytes = env.convert_byte_array(&data)?;
-            match encoder(id as u32, response, limit as u32, &bytes) {
-                Ok(handle) => Ok(handle as jlong),
-                Err(e) => {
-                    env.throw_new(
-                        jni::jni_str!("java/lang/IllegalStateException"),
-                        jni::strings::JNIString::from(e),
-                    )?;
-                    Ok(0)
+    unsafe extern "system" fn Java_com_ismartcoding_plain_rust_bridge_RustBleBridge_encoderNative(
+        env: EnvPtr,
+        _: Object,
+        data: Object,
+        id: i32,
+        response: u8,
+        limit: i32,
+    ) -> i64 {
+        unsafe {
+            with_env(env, |env| {
+                let Some(bytes) = env.read(data) else {
+                    return 0;
+                };
+                match encoder(id as u32, response != 0, limit as u32, &bytes) {
+                    Ok(handle) => handle as i64,
+                    Err(error) => {
+                        env.illegal_state(&error);
+                        0
+                    }
                 }
-            }
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
+            })
+        }
     }
+
     #[unsafe(no_mangle)]
-    pub extern "system" fn Java_com_ismartcoding_plain_rust_bridge_RustBleBridge_newNative(
-        _: EnvUnowned<'_>,
-        _: JObject<'_>,
-    ) -> jlong {
-        plain_ble_new() as jlong
+    extern "system" fn Java_com_ismartcoding_plain_rust_bridge_RustBleBridge_newNative(
+        _: EnvPtr,
+        _: Object,
+    ) -> i64 {
+        plain_ble_new() as i64
     }
+
     #[unsafe(no_mangle)]
-    pub extern "system" fn Java_com_ismartcoding_plain_rust_bridge_RustBleBridge_freeNative(
-        _: EnvUnowned<'_>,
-        _: JObject<'_>,
-        handle: jlong,
+    extern "system" fn Java_com_ismartcoding_plain_rust_bridge_RustBleBridge_freeNative(
+        _: EnvPtr,
+        _: Object,
+        handle: i64,
     ) {
         plain_ble_free(handle as u64);
     }
+
     #[unsafe(no_mangle)]
-    pub extern "system" fn Java_com_ismartcoding_plain_rust_bridge_RustBleBridge_infoNative(
-        _: EnvUnowned<'_>,
-        _: JObject<'_>,
-        handle: jlong,
-    ) -> jlong {
-        plain_ble_info(handle as u64) as jlong
+    extern "system" fn Java_com_ismartcoding_plain_rust_bridge_RustBleBridge_infoNative(
+        _: EnvPtr,
+        _: Object,
+        handle: i64,
+    ) -> i64 {
+        plain_ble_info(handle as u64) as i64
     }
+
     #[unsafe(no_mangle)]
-    pub extern "system" fn Java_com_ismartcoding_plain_rust_bridge_RustBleBridge_callNative(
-        mut env: EnvUnowned<'_>,
-        _: JObject<'_>,
-        action: jint,
-        handle: jlong,
-        id: jint,
-        sequence: jint,
-        limit: jint,
-        response: jboolean,
-        data: JByteArray<'_>,
-    ) -> jbyteArray {
-        env.with_env(|env| -> jni::errors::Result<_> {
-            let data = env.convert_byte_array(&data)?;
-            match call(
-                action,
-                handle as u64,
-                id as u32,
-                sequence as u32,
-                limit as u32,
-                response,
-                &data,
-            ) {
-                Ok(Some(bytes)) => env.byte_array_from_slice(&bytes),
-                Ok(None) => Ok(JByteArray::null()),
-                Err(error) => {
-                    env.throw_new(
-                        jni::jni_str!("java/lang/IllegalStateException"),
-                        jni::strings::JNIString::from(error),
-                    )?;
-                    Ok(JByteArray::null())
+    unsafe extern "system" fn Java_com_ismartcoding_plain_rust_bridge_RustBleBridge_callNative(
+        env: EnvPtr,
+        _: Object,
+        action: i32,
+        handle: i64,
+        id: i32,
+        sequence: i32,
+        limit: i32,
+        response: u8,
+        data: Object,
+    ) -> Object {
+        unsafe {
+            with_env(env, |env| {
+                let Some(data) = env.read(data) else {
+                    return ptr::null_mut();
+                };
+                match call(
+                    action,
+                    handle as u64,
+                    id as u32,
+                    sequence as u32,
+                    limit as u32,
+                    response != 0,
+                    &data,
+                ) {
+                    Ok(Some(bytes)) => env.write(&bytes),
+                    Ok(None) => ptr::null_mut(),
+                    Err(error) => {
+                        env.illegal_state(&error);
+                        ptr::null_mut()
+                    }
                 }
-            }
-        })
-        .resolve::<ThrowRuntimeExAndDefault>()
-        .into_raw()
+            })
+        }
     }
 }
 

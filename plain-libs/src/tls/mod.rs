@@ -1,24 +1,13 @@
-//! Self-signed TLS certificate management for the local HTTPS servers.
-//!
-//! Shared by plain-desktop (`local/tls.rs`) and the server (`cmd/run.rs`):
-//! load `cert.pem` / `key.pem` from disk if both exist, otherwise generate
-//! a self-signed certificate via `rcgen` and persist it. PEM bytes are
-//! returned so each project can build its own TLS acceptor (desktop:
-//! tokio-rustls, nas: axum-server / rustls) — the acceptor wiring is
-//! deliberately NOT shared.
-
 use std::io;
 use std::path::Path;
 
-use rcgen::{CertifiedKey, generate_simple_self_signed};
-
 /// Ensure a self-signed certificate + key exist at `cert_path` / `key_path`.
 /// If both files exist they are returned as-is; otherwise a new self-signed
-/// certificate (EC P-256, per rcgen default) with the given subject alt
+/// certificate (EC P-256) with the given subject alt
 /// names is generated and written. Returns `(cert_pem, key_pem)` bytes.
 ///
 /// `san_names` entries may be DNS names (`"localhost"`) or IP addresses
-/// (`"127.0.0.1"`) — rcgen detects IPs automatically.
+/// (`"127.0.0.1"`) — IP addresses are detected automatically.
 pub fn ensure_self_signed_pem(
     cert_path: &Path,
     key_path: &Path,
@@ -52,11 +41,10 @@ pub fn ensure_self_signed_pem(
 }
 
 pub fn generate_pem(san_names: &[String]) -> io::Result<(Vec<u8>, Vec<u8>)> {
-    let CertifiedKey { cert, key_pair } =
-        generate_simple_self_signed(san_names.to_vec()).map_err(io::Error::other)?;
+    let (cert, key) = self_signed::generate(san_names)?;
     Ok((
-        pem(b"CERTIFICATE", cert.der().as_ref(), b"\r\n"),
-        pem(b"PRIVATE KEY", key_pair.serialized_der(), b"\r\n"),
+        pem(b"CERTIFICATE", &cert, b"\r\n"),
+        pem(b"PRIVATE KEY", key.as_ref(), b"\r\n"),
     ))
 }
 
@@ -90,6 +78,7 @@ pub fn decode_pkcs12(bytes: &[u8], password: &str) -> Result<(Vec<u8>, Vec<u8>),
 }
 
 mod pkcs12;
+mod self_signed;
 
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/tls/mod.rs"]

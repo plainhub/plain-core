@@ -1,4 +1,5 @@
 use super::event::*;
+use super::watch_tree::WatchTree;
 use super::{Error, ErrorKind, EventHandler, RecursiveMode, Result, Watcher};
 use crate::file_events::{Receiver, Sender, unbounded};
 use crate::platform::inotify::{self, RawEvent};
@@ -9,7 +10,6 @@ use std::os::fd::{AsRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
-use walkdir::WalkDir;
 
 const INOTIFY: mio::Token = mio::Token(0);
 const MESSAGE: mio::Token = mio::Token(1);
@@ -368,13 +368,11 @@ impl EventLoop {
             return self.add_single_watch(path, false, true);
         }
 
-        for entry in WalkDir::new(path)
-            .follow_links(true)
-            .into_iter()
-            .filter_map(filter_dir)
-        {
-            self.add_single_watch(entry.path().to_path_buf(), is_recursive, watch_self)?;
-            watch_self = false;
+        for entry in WatchTree::new(path).flatten() {
+            if entry.metadata().is_ok_and(|metadata| metadata.is_dir()) {
+                self.add_single_watch(entry.path, is_recursive, watch_self)?;
+                watch_self = false;
+            }
         }
 
         Ok(())
@@ -472,17 +470,6 @@ impl EventLoop {
         }
         Ok(())
     }
-}
-
-fn filter_dir(e: walkdir::Result<walkdir::DirEntry>) -> Option<walkdir::DirEntry> {
-    if let Ok(e) = e {
-        if let Ok(metadata) = e.metadata() {
-            if metadata.is_dir() {
-                return Some(e);
-            }
-        }
-    }
-    None
 }
 
 impl INotifyWatcher {
