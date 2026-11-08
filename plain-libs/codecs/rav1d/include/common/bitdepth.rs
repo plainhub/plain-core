@@ -382,11 +382,11 @@ pub type LeftPixelRow2px<Pixel> = [Pixel; 2];
 ///
 /// That is, it statically selects which [`BitDepth`] `fn`
 /// (i.e., `bpc8` or `bpc16`) to return based on `$BD:ty`,
-/// declares it inline* with `$decl_fn:path`, and then returns it.
+/// declares it inline with `$( $decl_fn:ident )::+`, and then returns it.
 ///
 /// # Args
 ///
-/// * `$decl_fn:path` (optional):
+/// * `$decl_fn`:
 ///     A path to a macro that, given a `fn $fn_name:ident`,
 ///     declares and returns an `extern "C" fn`
 ///     with the appropriate signature for this `fn`.
@@ -394,17 +394,12 @@ pub type LeftPixelRow2px<Pixel> = [Pixel; 2];
 ///     where the `mod` is defined by [`wrap_fn_ptr!`],
 ///     but it doesn't have to be.
 ///
-///     \* If omitted, this defaults to [`fn_identity`],
-///     which returns the `fn` given without declaring one inline.
-///     This should be used when the `fn` you are selecting
-///     is already declared elsewhere.
-///
 /// * `$BD:ty`:
 ///     A `<BD: `[`BitDepth`]`>` generic type parameter.
 ///     [`BPC::BPC8`] results in `bpc8` and
 ///     [`BPC::BPC16`] results in `bpc16`.
 ///
-/// * `$name:ident`:
+/// * `$name:ident` or `$name:expr`:
 ///     The inner name of the asm `fn` to be declared and evaluated to.
 ///     This excludes the `dav1d_` prefix and the `_bpc{8,16}_$asm` suffix.
 ///
@@ -434,22 +429,16 @@ pub type LeftPixelRow2px<Pixel> = [Pixel; 2];
     not(any(target_arch = "riscv64", target_arch = "riscv32"))
 ))]
 macro_rules! bd_fn {
-    ($decl_fn:path, $BD:ty, $name:ident, $asm:ident) => {{
-        use paste::paste;
+    ($( $decl_fn:ident )::+, $BD:ty, $name:ident, $asm:ident) => {
+        bd_fn!($($decl_fn)::+, $BD, stringify!($name), $asm)
+    };
+    ($( $decl_fn:ident )::+, $BD:ty, $name:expr, $asm:ident) => {{
         use $crate::include::common::bitdepth::BPC;
 
-        paste! {
-            match $BD::BPC {
-                BPC::BPC8 => $decl_fn!(fn [<dav1d_ $name _8bpc_ $asm>]),
-                BPC::BPC16 => $decl_fn!(fn [<dav1d_ $name _16bpc_ $asm>]),
-            }
+        match <$BD>::BPC {
+            BPC::BPC8 => $crate::include::common::bitdepth::bpc_fn!($($decl_fn)::+, 8 bpc, $name, $asm),
+            BPC::BPC16 => $crate::include::common::bitdepth::bpc_fn!($($decl_fn)::+, 16 bpc, $name, $asm),
         }
-    }};
-
-    ($BD:ty, $name:ident, $asm:ident) => {{
-        use $crate::include::common::bitdepth::fn_identity;
-
-        bd_fn!(fn_identity, $BD, $name, $asm)
     }};
 }
 
@@ -459,27 +448,14 @@ macro_rules! bd_fn {
 /// based on `$bpc:literal bpc` instead of `$BD:ty`.
 #[cfg(all(
     feature = "asm",
-    any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64")
+    not(any(target_arch = "riscv64", target_arch = "riscv32"))
 ))]
 macro_rules! bpc_fn {
-    ($bpc:literal bpc, $name:ident, $asm:ident) => {{
-        use $crate::include::common::bitdepth::fn_identity;
-
-        bpc_fn!(fn_identity, $bpc bpc, $name, $asm)
-    }};
-
-    ($decl_fn:path, $bpc:literal bpc, $name:ident, $asm:ident) => {{
-        use paste::paste;
-
-        paste! {
-            $decl_fn!(fn [<dav1d_ $name _ $bpc bpc_ $asm>])
-        }
-    }};
-}
-
-macro_rules! fn_identity {
-    (fn $name:ident) => {
-        $name
+    ($( $decl_fn:ident )::+, $bpc:literal bpc, $name:ident, $asm:ident) => {
+        bpc_fn!($($decl_fn)::+, $bpc bpc, stringify!($name), $asm)
+    };
+    ($( $decl_fn:ident )::+, $bpc:literal bpc, $name:expr, $asm:ident) => {
+        $($decl_fn)::+!(#[link_name = concat!("dav1d_", $name, "_", $bpc, "bpc_", stringify!($asm))] fn symbol)
     };
 }
 
@@ -491,6 +467,6 @@ pub(crate) use bd_fn;
 
 #[cfg(all(
     feature = "asm",
-    any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64")
+    not(any(target_arch = "riscv64", target_arch = "riscv32"))
 ))]
 pub(crate) use bpc_fn;

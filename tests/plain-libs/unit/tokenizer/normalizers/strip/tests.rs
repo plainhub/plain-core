@@ -2,12 +2,11 @@ use super::*;
 use crate::tokenizer::normalizer::NormalizedString;
 use crate::tokenizer::normalizers::Lowercase;
 use crate::tokenizer::normalizers::NFKD;
-use unicode_normalization_alignments::UnicodeNormalization;
 
 #[test]
 fn test_strip_accents() {
     // Unicode combining char
-    let original: String = "Me llamó".nfkd().map(|(c, _)| c).collect();
+    let original = "Me llamo\u{301}";
     let normalized = "Me llamo";
     assert_ne!(original, normalized);
     let mut n = NormalizedString::from(original);
@@ -23,7 +22,7 @@ fn test_strip_accents() {
     assert_eq!(&n.get(), &normalized);
 
     // Does not change chinese
-    let original: String = "这很简单".nfkd().map(|(c, _)| c).collect();
+    let original = "这很简单";
     let normalized = "这很简单";
     assert_eq!(original, normalized);
     let mut n = NormalizedString::from(original);

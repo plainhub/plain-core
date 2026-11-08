@@ -20,32 +20,31 @@ use std::path::Path;
 
 // Exports
 pub use accessor::Accessor;
+pub(crate) use accessor::text_accessors;
 pub use item::{ItemKey, ItemValue, TagItem};
 pub use split_merge_tag::{MergeTag, SplitTag};
 pub use tag_ext::TagExt;
 pub use tag_type::TagType;
 
 macro_rules! impl_accessor {
-	($($item_key:ident => $name:tt),+) => {
-		paste::paste! {
-			$(
-				fn $name(&self) -> Option<Cow<'_, str>> {
-					if let Some(ItemValue::Text(txt)) = self.get(&ItemKey::$item_key).map(TagItem::value) {
-						return Some(Cow::Borrowed(txt))
-					}
-
-					None
+	($($item_key:ident => $name:ident, $set:ident, $remove:ident),+) => {
+		$(
+			fn $name(&self) -> Option<Cow<'_, str>> {
+				if let Some(ItemValue::Text(txt)) = self.get(&ItemKey::$item_key).map(TagItem::value) {
+					return Some(Cow::Borrowed(txt))
 				}
 
-				fn [<set_ $name>](&mut self, value: String) {
-					self.insert(TagItem::new(ItemKey::$item_key, ItemValue::Text(value)));
-				}
+				None
+			}
 
-				fn [<remove_ $name>](&mut self) {
-					self.retain(|i| i.item_key != ItemKey::$item_key)
-				}
-			)+
-		}
+			fn $set(&mut self, value: String) {
+				self.insert(TagItem::new(ItemKey::$item_key, ItemValue::Text(value)));
+			}
+
+			fn $remove(&mut self) {
+				self.retain(|i| i.item_key != ItemKey::$item_key)
+			}
+		)+
 	}
 }
 
@@ -73,11 +72,11 @@ pub(crate) fn try_parse_year(input: &str) -> Option<u32> {
 
 impl Accessor for Tag {
     impl_accessor!(
-        TrackArtist => artist,
-        TrackTitle  => title,
-        AlbumTitle  => album,
-        Genre       => genre,
-        Comment     => comment
+        TrackArtist => artist, set_artist, remove_artist,
+        TrackTitle  => title, set_title, remove_title,
+        AlbumTitle  => album, set_album, remove_album,
+        Genre       => genre, set_genre, remove_genre,
+        Comment     => comment, set_comment, remove_comment
     );
 
     fn track(&self) -> Option<u32> {

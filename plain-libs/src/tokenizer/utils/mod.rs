@@ -50,44 +50,41 @@ macro_rules! impl_serde_type{
         ),*$(,)+
     }
     ) => {
-        paste::paste!{
-            $(#[$meta])*
-            #[derive(Serialize, Deserialize)]
-            #[serde(tag = "type", from = $struct_name "Deserializer")]
-            $vis struct $struct_name{
-                $(
-                    $(#[$field_meta])*
-                    $field_vis $field_name : $field_type,
-                )*
-            }
+        $(#[$meta])*
+        #[derive(Serialize)]
+        #[serde(tag = "type")]
+        $vis struct $struct_name {
+            $(
+                $(#[$field_meta])*
+                $field_vis $field_name: $field_type,
+            )*
+        }
 
-            $(#[$meta])*
-            #[derive(Deserialize)]
-            #[serde(tag = "type", remote = $struct_name "")]
-            struct [<$struct_name Def>]{
-                $(
-                    $(#[$field_meta])*
-                    $field_vis $field_name : $field_type,
-                )*
-            }
-
-            #[derive(Deserialize)]
-            enum [<$struct_name Type>] {
-                $struct_name,
-            }
-
-            #[derive(Deserialize)]
-            struct [<$struct_name Deserializer>] {
-
-                r#type: [<$struct_name Type>],
-                #[serde(flatten, with = $struct_name "Def")]
-                r#struct: $struct_name,
-            }
-
-            impl std::convert::From<[<$struct_name Deserializer>]> for $struct_name {
-                fn from(v: [<$struct_name Deserializer>]) -> Self {
-                    v.r#struct
+        impl<'de> serde::Deserialize<'de> for $struct_name {
+            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+                #[derive(serde::Deserialize)]
+                enum ComponentType {
+                    $struct_name,
                 }
+
+                #[derive(serde::Deserialize)]
+                struct Fields {
+                    $(
+                        $(#[$field_meta])*
+                        $field_name: $field_type,
+                    )*
+                }
+
+                #[derive(serde::Deserialize)]
+                struct Component {
+                    #[serde(rename = "type")]
+                    _type: ComponentType,
+                    #[serde(flatten)]
+                    fields: Fields,
+                }
+
+                let Component { fields, .. } = serde::Deserialize::deserialize(deserializer)?;
+                Ok(Self { $($field_name: fields.$field_name,)* })
             }
         }
     };

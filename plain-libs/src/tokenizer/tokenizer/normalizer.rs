@@ -1,7 +1,7 @@
 use crate::tokenizer::pattern::Pattern;
 use crate::tokenizer::{Offsets, Result};
 use std::ops::{Bound, RangeBounds};
-use unicode_normalization_alignments::UnicodeNormalization;
+use crate::tokenizer::normalization;
 
 use serde::{Deserialize, Serialize};
 
@@ -375,22 +375,22 @@ impl NormalizedString {
     }
 
     pub fn nfd(&mut self) -> &mut Self {
-        self.transform(self.get().to_owned().nfd(), 0);
+        self.transform(normalization::nfd(&self.get().to_owned()), 0);
         self
     }
 
     pub fn nfkd(&mut self) -> &mut Self {
-        self.transform(self.get().to_owned().nfkd(), 0);
+        self.transform(normalization::nfkd(&self.get().to_owned()), 0);
         self
     }
 
     pub fn nfc(&mut self) -> &mut Self {
-        self.transform(self.get().to_owned().nfc(), 0);
+        self.transform(normalization::nfc(&self.get().to_owned()), 0);
         self
     }
 
     pub fn nfkc(&mut self) -> &mut Self {
-        self.transform(self.get().to_owned().nfkc(), 0);
+        self.transform(normalization::nfkc(&self.get().to_owned()), 0);
         self
     }
 

@@ -50,29 +50,27 @@ fn remove_separators_from_frame_text(value: &str, version: Id3v2Version) -> Cow<
 }
 
 macro_rules! impl_accessor {
-	($($name:ident => $id:literal;)+) => {
-		paste::paste! {
-			$(
-				fn $name(&self) -> Option<Cow<'_, str>> {
-					if let Some(value) = self.get_text(&[<$name:upper _ID>]) {
-						return Some(remove_separators_from_frame_text(value, self.original_version));
-					}
-
-					None
+	($($name:ident, $set:ident, $remove:ident => $id:ident;)+) => {
+		$(
+			fn $name(&self) -> Option<Cow<'_, str>> {
+				if let Some(value) = self.get_text(&$id) {
+					return Some(remove_separators_from_frame_text(value, self.original_version));
 				}
 
-				fn [<set_ $name>](&mut self, value: String) {
-					self.insert(new_text_frame(
-						[<$name:upper _ID>],
-						value,
-					));
-				}
+				None
+			}
 
-				fn [<remove_ $name>](&mut self) {
-					let _ = self.remove(&[<$name:upper _ID>]);
-				}
-			)+
-		}
+			fn $set(&mut self, value: String) {
+				self.insert(new_text_frame(
+					$id,
+					value,
+				));
+			}
+
+			fn $remove(&mut self) {
+				let _ = self.remove(&$id);
+			}
+		)+
 	}
 }
 
@@ -510,9 +508,9 @@ pub(super) const ATTACHED_PICTURE_ID: FrameId<'static> = FrameId::Valid(Cow::Bor
 
 impl Accessor for Id3v2Tag {
     impl_accessor!(
-        title  => "TIT2";
-        artist => "TPE1";
-        album  => "TALB";
+        title, set_title, remove_title => TITLE_ID;
+        artist, set_artist, remove_artist => ARTIST_ID;
+        album, set_album, remove_album => ALBUM_ID;
     );
 
     fn track(&self) -> Option<u32> {

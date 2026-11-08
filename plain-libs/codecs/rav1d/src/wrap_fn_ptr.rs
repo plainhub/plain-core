@@ -27,7 +27,7 @@
 ///     as the check is moved to inside the `fn` call.
 ///
 /// * `decl_fn!`:
-///     A macro that, given a `fn $fn_name:ident`,
+///     A macro that, given a `fn $fn_name:ident` and optional linker symbol,
 ///     declares an `extern "C" fn` with the `fn` signature provided.
 ///     This macro can and is meant to be used with [`bd_fn!`].
 ///
@@ -84,8 +84,12 @@ macro_rules! wrap_fn_ptr {
             #[cfg(feature = "asm")]
 
             macro_rules! decl_fn {
-                (fn $fn_name:ident) => {{
+                (fn $fn_name:ident) => {
+                    self::$name::decl_fn!(#[link_name = stringify!($fn_name)] fn $fn_name)
+                };
+                (#[link_name = $symbol:expr] fn $fn_name:ident) => {{
                     extern "C" {
+                        #[link_name = $symbol]
                         fn $fn_name($($arg_name: $arg_ty,)*) -> $return_ty;
                     }
 

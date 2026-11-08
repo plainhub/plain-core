@@ -31,5 +31,4 @@ doctest = false
 "cfg-if" = { version = "=1.0.5" }
 "libc" = { version = "=0.2.189" }
 "parking_lot" = { version = "=0.12.5" }
-"paste" = { version = "=1.0.15" }
 "zerocopy" = { path = "../zerocopy", features = ["derive"] }

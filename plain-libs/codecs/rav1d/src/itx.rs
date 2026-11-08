@@ -353,28 +353,20 @@ fn inv_txfm_add_wht_wht_4x4_rust<BD: BitDepth>(
 ))]
 macro_rules! assign_itx_fn {
     ($c:ident, $BD:ty, $w:literal, $h:literal, $type:ident, $type_enum:ident, $ext:ident) => {{
-        use paste::paste;
-
         let tx = TxfmSize::from_wh($w, $h) as usize;
 
-        paste! {
-            $c.itxfm_add[tx][$type_enum as usize]
-                = bd_fn!(itxfm::decl_fn, BD, [< inv_txfm_add_ $type _ $w x $h >], $ext);
-        }
+        $c.itxfm_add[tx][$type_enum as usize]
+            = bd_fn!(itxfm::decl_fn, BD, concat!("inv_txfm_add_", stringify!($type), "_", $w, "x", $h), $ext);
     }};
 }
 
 #[cfg(all(feature = "asm", any(target_arch = "x86", target_arch = "x86_64")))]
 macro_rules! assign_itx_bpc_fn {
     ($c:ident, $w:literal, $h:literal, $type:ident, $type_enum:ident, $bpc:literal bpc, $ext:ident) => {{
-        use paste::paste;
-
         let tx = TxfmSize::from_wh($w, $h) as usize;
 
-        paste! {
-            $c.itxfm_add[tx][$type_enum as usize]
-                = bpc_fn!(itxfm::decl_fn, $bpc bpc, [< inv_txfm_add_ $type _ $w x $h >], $ext);
-        }
+        $c.itxfm_add[tx][$type_enum as usize]
+            = bpc_fn!(itxfm::decl_fn, $bpc bpc, concat!("inv_txfm_add_", stringify!($type), "_", $w, "x", $h), $ext);
     }};
 }
 

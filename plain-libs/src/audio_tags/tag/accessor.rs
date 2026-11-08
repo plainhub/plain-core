@@ -1,83 +1,46 @@
 use std::borrow::Cow;
 
-// This defines the `Accessor` trait, used to define unified getters/setters for commonly
-// accessed tag values.
-//
-// Usage:
-//
-// accessor_trait! {
-//     [field_name]<type>
-// }
-//
-// * `field_name` is the name of the method to access the field. If a name consists of multiple segments,
-// such as `track_number`, they should be separated by spaces like so: [track number]<type>.
-//
-// * `type` is the return type for `Accessor::field_name`. By default, this type will also be used
-// in the setter.
-//
-// An owned type can also be specified for the setter:
-//
-// accessor_trait! {
-//     field_name<type, owned_type>
-// }
 macro_rules! accessor_trait {
-	($([$($name:tt)+] < $($ty:ty),+ >),+ $(,)?) => {
-
-		pub trait Accessor {
-			$(
-				accessor_trait! { @GETTER [$($name)+] $($ty),+ }
-
-				accessor_trait! { @SETTER [$($name)+] $($ty),+ }
-
-				accessor_trait! { @REMOVE [$($name)+] $($ty),+ }
-			)+
-		}
-	};
-	(@GETTER [$($name:tt)+] $ty:ty $(, $_ty:tt)?) => {
-		accessor_trait! { @GET_METHOD [$($name)+] Option<$ty> }
-	};
-	(@SETTER [$($name:tt)+] $_ty:ty, $owned_ty:tt) => {
-		accessor_trait! { @SETTER [$($name)+] $owned_ty }
-	};
-	(@SETTER [$($name:tt)+] $ty:ty) => {
-		accessor_trait! { @SET_METHOD  [$($name)+] $ty }
-	};
-	(@REMOVE [$($name:tt)+] $_ty:ty, $owned_ty:tt) => {
-		accessor_trait! { @REMOVE [$($name)+] $owned_ty }
-	};
-	(@REMOVE [$($name:tt)+] $ty:ty) => {
-		accessor_trait! { @REMOVE_METHOD [$($name)+], $ty }
-	};
-	(@GET_METHOD [$name:tt $($other:tt)*] Option<$ret_ty:ty>) => {
-		paste::paste! {
-
-			fn [<
-				$name $(_ $other)*
-			>] (&self) -> Option<$ret_ty> { None }
-		}
-	};
-	(@SET_METHOD [$name:tt $($other:tt)*] $owned_ty:ty) => {
-		paste::paste! {
-
-			fn [<
-				set_ $name $(_ $other)*
-			>] (&mut self , _value: $owned_ty) {}
-		}
-	};
-	(@REMOVE_METHOD [$name:tt $($other:tt)*], $ty:ty) => {
-		paste::paste! {
-
-			fn [<
-				remove_ $name $(_ $other)*
-			>] (&mut self) {}
-		}
-	};
+    ($($get:ident, $set:ident, $remove:ident: $value:ty => $owned:ty;)+) => {
+        pub trait Accessor {
+            $(
+                fn $get(&self) -> Option<$value> { None }
+                fn $set(&mut self, _value: $owned) {}
+                fn $remove(&mut self) {}
+            )+
+        }
+    };
 }
 
 accessor_trait! {
-    [artist]<Cow<'_, str>, String>, [title      ]<Cow<'_, str>, String>,
-    [album ]<Cow<'_, str>, String>, [genre      ]<Cow<'_, str>, String>,
-    [track ]<u32>,                  [track total]<u32>,
-    [disk  ]<u32>,                  [disk total ]<u32>,
-    [year  ]<u32>,                  [comment    ]<Cow<'_, str>, String>,
+    artist, set_artist, remove_artist: Cow<'_, str> => String;
+    title, set_title, remove_title: Cow<'_, str> => String;
+    album, set_album, remove_album: Cow<'_, str> => String;
+    genre, set_genre, remove_genre: Cow<'_, str> => String;
+    track, set_track, remove_track: u32 => u32;
+    track_total, set_track_total, remove_track_total: u32 => u32;
+    disk, set_disk, remove_disk: u32 => u32;
+    disk_total, set_disk_total, remove_disk_total: u32 => u32;
+    year, set_year, remove_year: u32 => u32;
+    comment, set_comment, remove_comment: Cow<'_, str> => String;
 }
+
+macro_rules! text_accessors {
+	($($name:ident, $set:ident, $remove:ident => $key:literal;)+) => {
+		$(
+			fn $name(&self) -> Option<Cow<'_, str>> {
+				self.get($key).map(Cow::Borrowed)
+			}
+
+			fn $set(&mut self, value: String) {
+				self.insert(String::from($key), value)
+			}
+
+			fn $remove(&mut self) {
+				let _ = self.remove($key);
+			}
+		)+
+	}
+}
+
+pub(crate) use text_accessors;

@@ -28,33 +28,31 @@ pub(crate) use first_key;
 // Keys should appear in order of popularity.
 macro_rules! gen_map {
 	($(#[$meta:meta])? $NAME:ident; $($($key:literal)|+ => $variant:ident),+) => {
-		paste::paste! {
-			$(#[$meta])?
+		$(#[$meta])?
 
-			struct $NAME;
+		struct $NAME;
 
-			$(#[$meta])?
-			impl $NAME {
-				pub(crate) fn get_item_key(&self, key: &str) -> Option<ItemKey> {
-					static INSTANCE: std::sync::OnceLock<HashMap<&'static str, ItemKey>> = std::sync::OnceLock::new();
-					INSTANCE.get_or_init(|| {
-						let mut map = HashMap::new();
+		$(#[$meta])?
+		impl $NAME {
+			pub(crate) fn get_item_key(&self, key: &str) -> Option<ItemKey> {
+				static INSTANCE: std::sync::OnceLock<HashMap<&'static str, ItemKey>> = std::sync::OnceLock::new();
+				INSTANCE.get_or_init(|| {
+					let mut map = HashMap::new();
+					$(
 						$(
-							$(
-								map.insert($key, ItemKey::$variant);
-							)+
+							map.insert($key, ItemKey::$variant);
 						)+
-						map
-					}).iter().find(|(k, _)| k.eq_ignore_ascii_case(key)).map(|(_, v)| v.clone())
-				}
+					)+
+					map
+				}).iter().find(|(k, _)| k.eq_ignore_ascii_case(key)).map(|(_, v)| v.clone())
+			}
 
-				pub(crate) fn get_key(&self, item_key: &ItemKey) -> Option<&str> {
-					match item_key {
-						$(
-							ItemKey::$variant => Some(first_key!($($key)|*)),
-						)+
-						_ => None
-					}
+			pub(crate) fn get_key(&self, item_key: &ItemKey) -> Option<&str> {
+				match item_key {
+					$(
+						ItemKey::$variant => Some(first_key!($($key)|*)),
+					)+
+					_ => None
 				}
 			}
 		}

@@ -1631,12 +1631,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "paste"
-version = "1.0.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
-
-[[package]]
 name = "pbkdf2"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1771,7 +1765,6 @@ dependencies = [
  "memchr",
  "mio",
  "p256",
- "paste",
  "pbkdf2",
  "pkcs12",
  "pkcs5",
@@ -1792,13 +1785,13 @@ dependencies = [
  "sha1",
  "sha2 0.10.9",
  "sha2 0.11.0",
+ "smallvec",
  "tempfile",
  "thiserror",
  "tiff",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
- "unicode-normalization-alignments",
  "walkdir",
  "weezl",
  "windows",
@@ -2068,7 +2061,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "parking_lot",
- "paste",
  "zerocopy",
 ]
 
@@ -2884,15 +2876,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75cd3fb03d5288b3ba9a1ee103ac7e9cbb59f0b03d64f8ddfcc04dd42758a85d"
 dependencies = [
  "tinyvec",
-]
-
-[[package]]
-name = "unicode-normalization-alignments"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43f613e4fa046e69818dd287fdc4bc78175ff20331479dab6e1b0f98d57062de"
-dependencies = [
- "smallvec",
 ]
 
 [[package]]

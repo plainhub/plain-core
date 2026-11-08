@@ -5,7 +5,6 @@ use crate::src::const_fn::const_for;
 use crate::src::const_fn::const_min;
 use crate::src::levels::BlockSize;
 use crate::src::levels::InterIntraPredMode;
-use paste::paste;
 use std::cmp::Ordering;
 
 crate::src::enum_map::enum_values! {
@@ -387,27 +386,25 @@ pub static dav1d_wedge_masks: [[[[&'static [u8]; 16]; 2]; 3]; BlockSize::COUNT] 
     let mut masks = [[[[&[] as &'static [u8]; 16]; 2]; 3]; BlockSize::COUNT];
 
     macro_rules! fill {
-        ($w:literal x $h:literal, $signs:expr) => {{
+        ($w:literal x $h:literal, $size:ident, $signs:expr) => {{
             static WEDGE_MASKS: WedgeMasks<
                 { $w * $h },
                 { ($w / 2) * $h },
                 { ($w / 2) * ($h / 2) },
             > = WedgeMasks::fill2d_16x2($w, $h, &master, wedge_codebook_16.get($w, $h), $signs);
-            paste! {
-                masks[[<Bs $w x $h>] as usize] = WEDGE_MASKS.slice();
-            }
+            masks[$size as usize] = WEDGE_MASKS.slice();
         }};
     }
 
-    fill!(32 x 32, 0x7bfb);
-    fill!(32 x 16, 0x7beb);
-    fill!(32 x  8, 0x6beb);
-    fill!(16 x 32, 0x7beb);
-    fill!(16 x 16, 0x7bfb);
-    fill!(16 x  8, 0x7beb);
-    fill!( 8 x 32, 0x7aeb);
-    fill!( 8 x 16, 0x7beb);
-    fill!( 8 x  8, 0x7bfb);
+    fill!(32 x 32, Bs32x32, 0x7bfb);
+    fill!(32 x 16, Bs32x16, 0x7beb);
+    fill!(32 x 8, Bs32x8, 0x6beb);
+    fill!(16 x 32, Bs16x32, 0x7beb);
+    fill!(16 x 16, Bs16x16, 0x7bfb);
+    fill!(16 x 8, Bs16x8, 0x7beb);
+    fill!(8 x 32, Bs8x32, 0x7aeb);
+    fill!(8 x 16, Bs8x16, 0x7beb);
+    fill!(8 x 8, Bs8x8, 0x7bfb);
 
     masks
 };
@@ -472,12 +469,10 @@ pub static dav1d_ii_masks: [[[&'static [u8]; InterIntraPredMode::COUNT]; 3]; Blo
     macro_rules! set {
         ($h:literal x $w:literal) => {{
             let mut a = [&[] as &'static [u8]; InterIntraPredMode::COUNT];
-            paste! {
-                a[Dc as usize] = &ii_dc_mask.0;
-                a[Vert as usize] = &II_NONDC_MASK_4X4.0[Vert as usize - 1];
-                a[Hor as usize] = &II_NONDC_MASK_4X4.0[Hor as usize - 1];
-                a[Smooth as usize] = &II_NONDC_MASK_4X4.0[Smooth as usize - 1];
-            }
+            a[Dc as usize] = &ii_dc_mask.0;
+            a[Vert as usize] = &II_NONDC_MASK_4X4.0[Vert as usize - 1];
+            a[Hor as usize] = &II_NONDC_MASK_4X4.0[Hor as usize - 1];
+            a[Smooth as usize] = &II_NONDC_MASK_4X4.0[Smooth as usize - 1];
             a
         }};
         ([$($h:literal x $w:literal),*]) => {

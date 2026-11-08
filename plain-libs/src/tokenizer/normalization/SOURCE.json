@@ -1,0 +1,8 @@
+{
+  "name": "unicode-normalization-alignments",
+  "version": "0.1.12",
+  "repository": "https://github.com/n1t0/unicode-normalization",
+  "revision": "9ca696060d7bedd591f903b6285c29abaab716fa",
+  "archive-sha256": "43f613e4fa046e69818dd287fdc4bc78175ff20331479dab6e1b0f98d57062de",
+  "unicode-version": "9.0.0"
+}

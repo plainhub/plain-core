@@ -1,3 +1,4 @@
+use crate::audio_tags::tag::text_accessors;
 use crate::audio_tags::error::{LoftyError, Result};
 use crate::audio_tags::file::FileType;
 use crate::audio_tags::macros::err;
@@ -14,25 +15,6 @@ use std::io::Write;
 use std::ops::Deref;
 
 
-macro_rules! impl_accessor {
-	($($name:ident => $key:literal;)+) => {
-		paste::paste! {
-			$(
-				fn $name(&self) -> Option<Cow<'_, str>> {
-					self.get($key).map(Cow::Borrowed)
-				}
-
-				fn [<set_ $name>](&mut self, value: String) {
-					self.insert(String::from($key), value)
-				}
-
-				fn [<remove_ $name>](&mut self) {
-					let _ = self.remove($key);
-				}
-			)+
-		}
-	}
-}
 
 #[derive(Default, PartialEq, Eq, Debug, Clone)]
 pub struct VorbisComments {
@@ -132,12 +114,12 @@ impl OggPictureStorage for VorbisComments {
 }
 
 impl Accessor for VorbisComments {
-    impl_accessor!(
-        artist  => "ARTIST";
-        title   => "TITLE";
-        album   => "ALBUM";
-        genre   => "GENRE";
-        comment => "COMMENT";
+    text_accessors!(
+        artist, set_artist, remove_artist => "ARTIST";
+        title, set_title, remove_title => "TITLE";
+        album, set_album, remove_album => "ALBUM";
+        genre, set_genre, remove_genre => "GENRE";
+        comment, set_comment, remove_comment => "COMMENT";
     );
 
     fn track(&self) -> Option<u32> {

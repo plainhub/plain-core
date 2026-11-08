@@ -1,3 +1,4 @@
+use crate::audio_tags::tag::text_accessors;
 pub(super) mod read;
 
 use crate::audio_tags::error::{LoftyError, Result};
@@ -9,25 +10,6 @@ use std::borrow::Cow;
 use std::io::Write;
 
 
-macro_rules! impl_accessor {
-	($($name:ident => $key:literal;)+) => {
-		paste::paste! {
-			$(
-				fn $name(&self) -> Option<Cow<'_, str>> {
-					self.get($key).map(Cow::Borrowed)
-				}
-
-				fn [<set_ $name>](&mut self, value: String) {
-					self.insert(String::from($key), value)
-				}
-
-				fn [<remove_ $name>](&mut self) {
-					let _ = self.remove($key);
-				}
-			)+
-		}
-	}
-}
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct RiffInfoList {
@@ -71,12 +53,12 @@ impl RiffInfoList {
 }
 
 impl Accessor for RiffInfoList {
-    impl_accessor!(
-        artist  => "IART";
-        title   => "INAM";
-        album   => "IPRD";
-        genre   => "IGNR";
-        comment => "ICMT";
+    text_accessors!(
+        artist, set_artist, remove_artist => "IART";
+        title, set_title, remove_title => "INAM";
+        album, set_album, remove_album => "IPRD";
+        genre, set_genre, remove_genre => "IGNR";
+        comment, set_comment, remove_comment => "ICMT";
     );
 
     fn track(&self) -> Option<u32> {

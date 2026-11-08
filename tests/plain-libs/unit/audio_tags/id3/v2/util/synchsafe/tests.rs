@@ -47,33 +47,35 @@ fn unsynchronized_stream_should_not_replace_unrelated() {
 use crate::audio_tags::id3::v2::util::synchsafe::{SynchsafeInteger, UnsynchronizedStream};
 use std::io::{Cursor, Read};
 macro_rules! synchsafe_integer_tests {
-		(
-			$($int:ty => {
-				synch: $original:literal, $new:literal;
-				unsynch: $original_unsync:literal, $new_unsynch:literal;
-				widen: $original_widen:literal, $new_widen:literal;
-			});+
-		) => {
-			$(
-				paste::paste! {
-					#[test]
-					fn [<$int _synch>]() {
-						assert_eq!($original.synch().unwrap(), $new);
-					}
+    (
+        $($int:ident => {
+            synch: $original:literal, $new:literal;
+            unsynch: $original_unsync:literal, $new_unsynch:literal;
+            widen: $original_widen:literal, $new_widen:literal;
+        });+
+    ) => {
+        $(
+            mod $int {
+                use super::SynchsafeInteger;
 
-					#[test]
-					fn [<$int _unsynch>]() {
-						assert_eq!($original_unsync.unsynch(), $new_unsynch);
-					}
+                #[test]
+                fn synch() {
+                    assert_eq!($original.synch().unwrap(), $new);
+                }
 
-					#[test]
-					fn [<$int _widen>]() {
-						assert_eq!($original_widen.widening_synch(), $new_widen);
-					}
-				}
-			)+
-		};
-	}
+                #[test]
+                fn unsynch() {
+                    assert_eq!($original_unsync.unsynch(), $new_unsynch);
+                }
+
+                #[test]
+                fn widen() {
+                    assert_eq!($original_widen.widening_synch(), $new_widen);
+                }
+            }
+        )+
+    };
+}
 
 synchsafe_integer_tests! {
     u8 => {

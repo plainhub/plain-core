@@ -1,6 +1,6 @@
+use crate::tokenizer::normalization::is_combining_mark;
 use crate::tokenizer::tokenizer::{NormalizedString, Normalizer, Result};
 use serde::{Deserialize, Serialize};
-use unicode_normalization_alignments::char::is_combining_mark;
 
 #[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]

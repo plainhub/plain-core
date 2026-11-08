@@ -10,26 +10,24 @@ use std::path::Path;
 
 
 macro_rules! impl_accessor {
-	($($name:ident,)+) => {
-		paste::paste! {
-			$(
-				fn $name(&self) -> Option<Cow<'_, str>> {
-					if let Some(item) = self.$name.as_deref() {
-						return Some(Cow::Borrowed(item));
-					}
-
-					None
+	($($name:ident, $set:ident, $remove:ident;)+) => {
+		$(
+			fn $name(&self) -> Option<Cow<'_, str>> {
+				if let Some(item) = self.$name.as_deref() {
+					return Some(Cow::Borrowed(item));
 				}
 
-				fn [<set_ $name>](&mut self, value: String) {
-					self.$name = Some(value)
-				}
+				None
+			}
 
-				fn [<remove_ $name>](&mut self) {
-					self.$name = None
-				}
-			)+
-		}
+			fn $set(&mut self, value: String) {
+				self.$name = Some(value)
+			}
+
+			fn $remove(&mut self) {
+				self.$name = None
+			}
+		)+
 	}
 }
 
@@ -57,7 +55,7 @@ impl Id3v1Tag {
 }
 
 impl Accessor for Id3v1Tag {
-    impl_accessor!(title, artist, album,);
+    impl_accessor!(title, set_title, remove_title; artist, set_artist, remove_artist; album, set_album, remove_album;);
 
     fn genre(&self) -> Option<Cow<'_, str>> {
         if let Some(g) = self.genre {

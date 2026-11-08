@@ -33,45 +33,40 @@ const ADVISORY_RATING: AtomIdent<'_> = AtomIdent::Fourcc(*b"rtng");
 const COVR: AtomIdent<'_> = AtomIdent::Fourcc(*b"covr");
 
 macro_rules! impl_accessor {
-	($($name:ident => $const:ident;)+) => {
-		paste::paste! {
-			$(
-				fn $name(&self) -> Option<Cow<'_, str>> {
-					if let Some(atom) = self.get(&$const) {
-						if let Some(AtomData::UTF8(val) | AtomData::UTF16(val)) = atom.data().next() {
-							return Some(Cow::Borrowed(val));
-						}
+	($($name:ident, $set:ident, $remove:ident => $const:ident;)+) => {
+		$(
+			fn $name(&self) -> Option<Cow<'_, str>> {
+				if let Some(atom) = self.get(&$const) {
+					if let Some(AtomData::UTF8(val) | AtomData::UTF16(val)) = atom.data().next() {
+						return Some(Cow::Borrowed(val));
 					}
-
-					None
 				}
 
-				fn [<set_ $name>](&mut self, value: String) {
-					self.replace_atom(Atom {
-						ident: $const,
-						data: AtomDataStorage::Single(AtomData::UTF8(value)),
-					})
-				}
+				None
+			}
 
-				fn [<remove_ $name>](&mut self) {
-					let _ = self.remove(&$const);
-				}
-			)+
-		}
+			fn $set(&mut self, value: String) {
+				self.replace_atom(Atom {
+					ident: $const,
+					data: AtomDataStorage::Single(AtomData::UTF8(value)),
+				})
+			}
+
+			fn $remove(&mut self) {
+				let _ = self.remove(&$const);
+			}
+		)+
 	}
 }
 
 macro_rules! impl_flag_accessors {
-	($($name:ident ($ident:ident)),+ $(,)?) => {
-		$(
-			paste::paste! {
-
-				pub fn [<is_ $name:lower>](&self) -> bool {
-					self.get_flag(&constants::flags::$name).unwrap_or(false)
-				}
-			}
-		)+
-	};
+    ($($method:ident => $flag:ident),+ $(,)?) => {
+        $(
+            pub fn $method(&self) -> bool {
+                self.get_flag(&constants::flags::$flag).unwrap_or(false)
+            }
+        )+
+    };
 }
 
 #[derive(Default, PartialEq, Debug, Clone)]
@@ -200,11 +195,11 @@ impl Ilst {
     }
 
     impl_flag_accessors!(
-        PODCAST(pcst),
-        GAPLESS(pgap),
-        SHOW_WORK(shwm),
-        HD_VIDEO(hdvd),
-        COMPILATION(cpil)
+        is_podcast => PODCAST,
+        is_gapless => GAPLESS,
+        is_show_work => SHOW_WORK,
+        is_hd_video => HD_VIDEO,
+        is_compilation => COMPILATION
     );
 
     pub fn advisory_rating(&self) -> Option<AdvisoryRating> {
@@ -269,11 +264,11 @@ impl IntoIterator for Ilst {
 
 impl Accessor for Ilst {
     impl_accessor!(
-        artist  => ARTIST;
-        title   => TITLE;
-        album   => ALBUM;
-        genre   => GENRE;
-        comment => COMMENT;
+        artist, set_artist, remove_artist => ARTIST;
+        title, set_title, remove_title => TITLE;
+        album, set_album, remove_album => ALBUM;
+        genre, set_genre, remove_genre => GENRE;
+        comment, set_comment, remove_comment => COMMENT;
     );
 
     fn track(&self) -> Option<u32> {

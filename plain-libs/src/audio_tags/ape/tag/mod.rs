@@ -16,36 +16,34 @@ use std::ops::Deref;
 
 
 macro_rules! impl_accessor {
-	($($name:ident => $($key:literal)|+;)+) => {
-		paste::paste! {
-			$(
-				fn $name(&self) -> Option<Cow<'_, str>> {
-					$(
-						if let Some(i) = self.get($key) {
-							if let ItemValue::Text(val) = i.value() {
-								return Some(Cow::Borrowed(val));
-							}
+	($($name:ident, $set:ident, $remove:ident => $($key:literal)|+;)+) => {
+		$(
+			fn $name(&self) -> Option<Cow<'_, str>> {
+				$(
+					if let Some(i) = self.get($key) {
+						if let ItemValue::Text(val) = i.value() {
+							return Some(Cow::Borrowed(val));
 						}
-					)+
+					}
+				)+
 
-					None
-				}
+				None
+			}
 
-				fn [<set_ $name>](&mut self, value: String) {
-					self.insert(ApeItem {
-						read_only: false,
-						key: String::from(crate::audio_tags::tag::item::first_key!($($key)|*)),
-						value: ItemValue::Text(value)
-					})
-				}
+			fn $set(&mut self, value: String) {
+				self.insert(ApeItem {
+					read_only: false,
+					key: String::from(crate::audio_tags::tag::item::first_key!($($key)|*)),
+					value: ItemValue::Text(value)
+				})
+			}
 
-				fn [<remove_ $name>](&mut self) {
-					$(
-						self.remove($key);
-					)+
-				}
-			)+
-		}
+			fn $remove(&mut self) {
+				$(
+					self.remove($key);
+				)+
+			}
+		)+
 	}
 }
 
@@ -145,11 +143,11 @@ impl<'a> IntoIterator for &'a ApeTag {
 
 impl Accessor for ApeTag {
     impl_accessor!(
-        artist  => "Artist";
-        title   => "Title";
-        album   => "Album";
-        genre   => "GENRE";
-        comment => "Comment";
+        artist, set_artist, remove_artist => "Artist";
+        title, set_title, remove_title => "Title";
+        album, set_album, remove_album => "Album";
+        genre, set_genre, remove_genre => "GENRE";
+        comment, set_comment, remove_comment => "Comment";
     );
 
     fn track(&self) -> Option<u32> {
