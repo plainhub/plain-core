@@ -42,6 +42,53 @@ struct Connection {
     key: Vec<u8>,
     ack: Vec<u8>,
 }
+
+pub(crate) async fn handshake(
+    socket: &mut WebSocket,
+    state: &ServerState,
+    client: &str,
+    key: &[u8],
+) -> Result<(graphql::Stream, Vec<u8>), String> {
+    let first = tokio::time::timeout(Duration::from_secs(10), socket.next())
+        .await
+        .map_err(|_| "Handshake timeout")?
+        .ok_or("Socket closed")?
+        .map_err(|error| error.to_string())?;
+    let Message::Binary(init_frame) = first else {
+        return Err("Encrypted handshake required".into());
+    };
+    let plain = graphql::open_init(key, client, &init_frame).ok_or("Invalid handshake")?;
+    let init: Init = serde_json::from_slice(&plain).map_err(|error| error.to_string())?;
+    if init.client_nonce.len() != 64
+        || !init
+            .client_nonce
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err("Invalid nonce".into());
+    }
+    state
+        .main_replay
+        .admit(
+            client,
+            &format!("{}|{}|", init.timestamp_millis, init.client_nonce),
+            chrono::Utc::now().timestamp_millis(),
+        )
+        .map_err(|_| "Invalid handshake")?;
+    let ack = Ack {
+        server_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(32)),
+    };
+    let ack_frame = graphql::seal_ack(
+        key,
+        client,
+        &init_frame,
+        &serde_json::to_vec(&ack).map_err(|error| error.to_string())?,
+    )
+    .ok_or("Invalid acknowledgement")?;
+    let stream = graphql::Stream::new(client, &init_frame, &ack_frame, Role::Server)
+        .ok_or("Invalid binding")?;
+    Ok((stream, ack_frame))
+}
 async fn establish(
     socket: &mut WebSocket,
     state: &ServerState,
@@ -59,44 +106,7 @@ async fn establish(
                 .flatten()
         })
         .ok_or("Session unavailable")?;
-    let first = tokio::time::timeout(Duration::from_secs(10), socket.next())
-        .await
-        .map_err(|_| "Handshake timeout")?
-        .ok_or("Socket closed")?
-        .map_err(|error| error.to_string())?;
-    let Message::Binary(init_frame) = first else {
-        return Err("Encrypted handshake required".into());
-    };
-    let plain = graphql::open_init(&key, &client, &init_frame).ok_or("Invalid handshake")?;
-    let init: Init = serde_json::from_slice(&plain).map_err(|error| error.to_string())?;
-    if init.client_nonce.len() != 64
-        || !init
-            .client_nonce
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit())
-    {
-        return Err("Invalid nonce".into());
-    }
-    state
-        .main_replay
-        .admit(
-            &client,
-            &format!("{}|{}|", init.timestamp_millis, init.client_nonce),
-            chrono::Utc::now().timestamp_millis(),
-        )
-        .map_err(|_| "Invalid handshake")?;
-    let ack = Ack {
-        server_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(32)),
-    };
-    let ack_frame = graphql::seal_ack(
-        &key,
-        &client,
-        &init_frame,
-        &serde_json::to_vec(&ack).map_err(|error| error.to_string())?,
-    )
-    .ok_or("Invalid acknowledgement")?;
-    let stream = graphql::Stream::new(&client, &init_frame, &ack_frame, Role::Server)
-        .ok_or("Invalid binding")?;
+    let (stream, ack_frame) = handshake(socket, state, &client, &key).await?;
     let context = if local.is_some() {
         RequestContext::authenticated_local(state.clone(), client.clone())
     } else {

@@ -33,6 +33,10 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
         _ => return StatusCode::BAD_REQUEST.into_response(),
     };
     let id = parameters.id;
+    let managed = match super::managed_proxy::forwarded_resource(&state, &request, &id) {
+        Ok(managed) => managed,
+        Err(status) => return status.into_response(),
+    };
     if matches!(
         parameters.action,
         content::Action::Probe | content::Action::Transcode
@@ -144,13 +148,14 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
         Ok::<_, anyhow::Error>(response)
     }
     .await;
-    result.unwrap_or_else(|error| {
+    let response = result.unwrap_or_else(|error| {
         (
             StatusCode::FORBIDDEN,
             format!("File is expired or does not exist. {error}"),
         )
             .into_response()
-    })
+    });
+    super::managed_proxy::mark_forwarded(response, managed)
 }
 
 #[cfg(all(test, not(any(target_os = "android", target_os = "ios"))))]

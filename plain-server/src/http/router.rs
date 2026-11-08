@@ -28,6 +28,11 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
         )
         .route("/health", get(crate::http::health::health))
         .route("/proxyfs", get(crate::http::proxy::call))
+        .route(
+            "/proxy/:peer/*path",
+            any(crate::http::managed_proxy::call)
+                .layer(DefaultBodyLimit::max(15 * 60 * 1000 * 1000)),
+        )
         .route("/zip/dir", get(crate::http::zip::dir))
         .route("/zip/files", get(crate::http::zip::files))
         .route(

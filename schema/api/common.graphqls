@@ -185,6 +185,7 @@ type Peer {
 	createdAt: Instant!
 	updatedAt: Instant!
 	online: Boolean!
+	managed: Boolean!
 	key: String!
 	publicKey: String!
 	token: String!

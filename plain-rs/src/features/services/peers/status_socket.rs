@@ -68,11 +68,20 @@ pub async fn connect(
     let ws_config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
         .max_message_size(Some(64 * 1024))
         .max_frame_size(Some(64 * 1024));
-    connect_with_config(url, ws_config, None).await
+    connect_with_config(url, ws_config, None, None).await
 }
 
 pub async fn connect_management(
     url: &str,
+) -> anyhow::Result<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+> {
+    connect_management_with_pin(url, None).await
+}
+
+pub(super) async fn connect_management_with_pin(
+    url: &str,
+    pin: Option<[u8; 32]>,
 ) -> anyhow::Result<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
@@ -84,6 +93,7 @@ pub async fn connect_management(
             .max_message_size(Some(1024 * 1024))
             .max_frame_size(Some(1024 * 1024)),
         Some(crate::infrastructure::protocols::graphql::PROTOCOL),
+        pin,
     )
     .await
 }
@@ -92,10 +102,14 @@ async fn connect_with_config(
     url: &str,
     ws_config: tokio_tungstenite::tungstenite::protocol::WebSocketConfig,
     protocol: Option<&str>,
+    pin: Option<[u8; 32]>,
 ) -> anyhow::Result<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
-    let config = config()?;
+    let config = match pin {
+        Some(pin) => http_client::pinned_tls_config(pin)?,
+        None => config()?,
+    };
     use tokio_tungstenite::tungstenite::client::IntoClientRequest;
     let mut request = url.into_client_request()?;
     if let Some(protocol) = protocol {

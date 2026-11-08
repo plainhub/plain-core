@@ -7,7 +7,7 @@ use http::{
     HeaderMap, HeaderName, HeaderValue,
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
 };
-use memchr::{memmem, memrchr};
+use memchr::{memchr_iter, memmem};
 use std::{
     fmt,
     future::poll_fn,
@@ -46,6 +46,7 @@ impl std::error::Error for MultipartError {
 }
 
 type Result<T> = std::result::Result<T, MultipartError>;
+const BUFFER_LIMIT: usize = 64 * 1024;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Stage {
@@ -105,7 +106,11 @@ impl Multipart {
         if self.stage == Stage::Data {
             match self.read_field_data()? {
                 Some((true, _)) => self.stage = Stage::Boundary,
-                _ => return Poll::Pending,
+                Some((false, _)) => {
+                    cx.waker().wake_by_ref();
+                    return Poll::Pending;
+                }
+                None => return Poll::Pending,
             }
         }
 
@@ -155,6 +160,9 @@ impl Multipart {
         let Some(index) = memmem::find(&self.buffer, b"\r\n\r\n") else {
             return self.need_data();
         };
+        if index >= BUFFER_LIMIT {
+            return Poll::Ready(Err(MultipartError::Incomplete));
+        }
         let bytes = self.buffer.split_to(index + 4);
         let mut headers = [httparse::EMPTY_HEADER; 32];
         let parsed =
@@ -173,7 +181,7 @@ impl Multipart {
     }
 
     fn need_data<T>(&self) -> Poll<Result<T>> {
-        if self.eof {
+        if self.eof || self.buffer.len() >= BUFFER_LIMIT {
             Poll::Ready(Err(MultipartError::Incomplete))
         } else {
             Poll::Pending
@@ -181,7 +189,7 @@ impl Multipart {
     }
 
     fn poll_stream(&mut self, cx: &mut Context<'_>) -> Result<()> {
-        while !self.eof {
+        while !self.eof && self.buffer.len() < BUFFER_LIMIT {
             match Pin::new(&mut self.stream).poll_next(cx) {
                 Poll::Ready(Some(Ok(data))) => self.buffer.extend_from_slice(&data),
                 Poll::Ready(Some(Err(error))) => return Err(MultipartError::Body(error)),
@@ -194,6 +202,9 @@ impl Multipart {
 
     fn read_field_data(&mut self) -> Result<Option<(bool, Bytes)>> {
         if let Some(index) = memmem::find(&self.buffer, self.boundary.as_bytes()) {
+            if index > BUFFER_LIMIT {
+                return Ok(Some((false, self.buffer.split_to(BUFFER_LIMIT).freeze())));
+            }
             let bytes = self.buffer.split_to(index).freeze();
             self.buffer.advance(2);
             return Ok(Some((true, bytes)));
@@ -206,14 +217,12 @@ impl Multipart {
         }
 
         let tail = self.buffer.len().saturating_sub(self.boundary.len() - 1);
-        let remaining = &self.buffer[tail..];
-        if let Some(index) = memrchr(b'\r', remaining) {
-            let start = tail + index;
-            if memmem::find(self.boundary.as_bytes(), &self.buffer[start..]).is_some() {
-                return Ok((start != 0).then(|| (false, self.buffer.split_to(start).freeze())));
-            }
-        }
-        Ok(Some((false, self.buffer.split().freeze())))
+        let end = memchr_iter(b'\r', &self.buffer[tail..])
+            .map(|index| tail + index)
+            .find(|index| self.boundary.as_bytes().starts_with(&self.buffer[*index..]))
+            .unwrap_or(self.buffer.len())
+            .min(BUFFER_LIMIT);
+        Ok((end != 0).then(|| (false, self.buffer.split_to(end).freeze())))
     }
 }
 

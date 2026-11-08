@@ -12,6 +12,10 @@ pub use http::{Method, StatusCode, Version, header};
 pub use tls::Certificate;
 pub use url::Url;
 
+pub fn pinned_tls_config(digest: [u8; 32]) -> Result<rustls::ClientConfig, Error> {
+    tls::config(Vec::new(), true, Some(digest))
+}
+
 use body::{ResponseBody, timeout};
 use bytes::Bytes;
 use connector::{Connector, NativeHttp};
@@ -33,6 +37,7 @@ pub fn builder() -> ClientBuilder {
         headers: Ok(headers),
         roots: Vec::new(),
         verify_certificates: true,
+        certificate_sha256: None,
         proxy: true,
         https_only: false,
         redirect: redirect::Policy::limited(10),
@@ -50,6 +55,7 @@ pub struct ClientBuilder {
     headers: Result<HeaderMap, Error>,
     roots: Vec<Certificate>,
     verify_certificates: bool,
+    certificate_sha256: Option<[u8; 32]>,
     proxy: bool,
     https_only: bool,
     redirect: redirect::Policy,
@@ -75,6 +81,11 @@ impl ClientBuilder {
 
     pub fn add_root_certificate(mut self, certificate: Certificate) -> Self {
         self.roots.push(certificate);
+        self
+    }
+
+    pub fn pin_certificate(mut self, digest: [u8; 32]) -> Self {
+        self.certificate_sha256 = Some(digest);
         self
     }
 
@@ -137,7 +148,11 @@ impl ClientBuilder {
 
     fn build_with_matcher(self, matcher: Option<Matcher>) -> Result<Client, Error> {
         let headers = self.headers?;
-        let tls = tls::config(self.roots, self.verify_certificates)?;
+        let tls = tls::config(
+            self.roots,
+            self.verify_certificates,
+            self.certificate_sha256,
+        )?;
         #[cfg(feature = "test-seams")]
         let mut http = NativeHttp::new_with_resolver(connector::TestResolver::new(self.dns));
         #[cfg(not(feature = "test-seams"))]

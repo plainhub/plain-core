@@ -1,7 +1,7 @@
 use crate::server::ServerState;
 use axum::{
     body::Body,
-    extract::{Query, State},
+    extract::{Query, Request, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -58,15 +58,35 @@ fn response(result: Result<Download, Error>) -> Response {
 pub(crate) async fn dir(
     State(state): State<ServerState>,
     Query(params): Query<Params>,
+    request: Request,
 ) -> Response {
-    response(archive_downloads::directory(&state, &params.id).await)
+    let managed =
+        match super::managed_proxy::forwarded_resource(&state, &request.into_parts().0, &params.id)
+        {
+            Ok(managed) => managed,
+            Err(status) => return status.into_response(),
+        };
+    super::managed_proxy::mark_forwarded(
+        response(archive_downloads::directory(&state, &params.id).await),
+        managed,
+    )
 }
 
 pub(crate) async fn files(
     State(state): State<ServerState>,
     Query(params): Query<Params>,
+    request: Request,
 ) -> Response {
-    response(archive_downloads::files(&state, &params.id).await)
+    let managed =
+        match super::managed_proxy::forwarded_resource(&state, &request.into_parts().0, &params.id)
+        {
+            Ok(managed) => managed,
+            Err(status) => return status.into_response(),
+        };
+    super::managed_proxy::mark_forwarded(
+        response(archive_downloads::files(&state, &params.id).await),
+        managed,
+    )
 }
 
 #[cfg(test)]

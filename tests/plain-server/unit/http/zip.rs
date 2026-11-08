@@ -54,7 +54,12 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
         payload.as_bytes(),
     )
     .unwrap();
-    let response = files(State(state.clone()), Query(Params { id })).await;
+    let response = files(
+        State(state.clone()),
+        Query(Params { id }),
+        Request::new(Body::empty()),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
@@ -112,7 +117,12 @@ async fn shared_directory_download_preserves_empty_directories_and_excludes_outs
             },
         )
         .unwrap();
-        let response = dir(State(state.clone()), Query(Params { id })).await;
+        let response = dir(
+            State(state.clone()),
+            Query(Params { id }),
+            Request::new(Body::empty()),
+        )
+        .await;
         assert_eq!(response.status(), StatusCode::OK);
         let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
             .await

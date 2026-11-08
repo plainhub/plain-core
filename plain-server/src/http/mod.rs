@@ -20,6 +20,9 @@ pub(crate) mod upload;
 pub mod proxy;
 
 #[cfg(feature = "core")]
+pub(crate) mod managed_proxy;
+
+#[cfg(feature = "core")]
 pub(crate) mod graphql;
 
 #[cfg(feature = "core")]

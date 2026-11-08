@@ -1,4 +1,3 @@
-use plain_libs::protocols::http_client;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::peers;
 use crate::infrastructure::host::request_scope::NativeRequestScope;
@@ -8,6 +7,7 @@ use crate::infrastructure::protocols::graphql::messages::ServerMessage;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, anyhow, ensure};
 use futures_util::{SinkExt, StreamExt};
+use plain_libs::protocols::http_client;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite::Message;
@@ -17,6 +17,7 @@ pub struct PeerSubscription {
     peer: DPeer,
     client: String,
     scope: NativeRequestScope,
+    pin: Option<[u8; 32]>,
     closed: watch::Sender<bool>,
     commands: mpsc::Sender<ClientMessage>,
     messages: tokio::sync::Mutex<mpsc::Receiver<Result<String, String>>>,
@@ -26,6 +27,14 @@ impl PeerSubscription {
         state: CoreRuntime,
         target: PeerSubscriptionTarget,
         scope: NativeRequestScope,
+    ) -> Result<Arc<Self>, String> {
+        Self::open_with_pin(state, target, scope, None)
+    }
+    pub fn open_with_pin(
+        state: CoreRuntime,
+        target: PeerSubscriptionTarget,
+        scope: NativeRequestScope,
+        pin: Option<[u8; 32]>,
     ) -> Result<Arc<Self>, String> {
         let peer = peers::get(&state.db, &target.peer_id)
             .map_err(|error| error.to_string())?
@@ -49,6 +58,7 @@ impl PeerSubscription {
             peer,
             client,
             scope,
+            pin,
             closed,
             commands,
             messages: tokio::sync::Mutex::new(messages),
@@ -143,7 +153,10 @@ impl PeerSubscription {
         url.query_pairs_mut().append_pair("cid", &self.client);
         let mut socket = tokio::time::timeout(
             Duration::from_secs(10),
-            crate::features::services::peers::status_socket::connect_management(url.as_str()),
+            crate::features::services::peers::status_socket::connect_management_with_pin(
+                url.as_str(),
+                self.pin,
+            ),
         )
         .await??;
         let init = crate::features::services::peers::management_wire::registration(

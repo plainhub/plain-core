@@ -1,6 +1,6 @@
-use plain_libs::protocols::http_client;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
+use plain_libs::protocols::http_client;
 use serde_json::Value;
 use std::time::Duration;
 
@@ -33,30 +33,13 @@ pub async fn query(
         matches!(base.scheme(), "https" | "http") && base.host_str().is_some(),
         "Invalid management address"
     );
-    let encrypted =
-        crate::infrastructure::transport::http_request::encrypt(key, &request.to_string())
-            .map_err(|_| anyhow::anyhow!("invalid_session"))?;
-    let context =
-        crate::infrastructure::transport::http_response::Context::new("/graphql", &encrypted);
-    let response = state
+    let outgoing = state
         .lan
         .client
         .post(base.join("/graphql")?)
-        .header("c-id", client_id)
-        .header("content-type", "application/octet-stream")
-        .body(encrypted)
-        .timeout(Duration::from_secs(10))
-        .send()
-        .await?;
-    if matches!(response.status().as_u16(), 401 | 403) {
-        return Err(AuthorizationError::Session.into());
-    }
-    ensure!(response.status().is_success(), "invalid_session");
-    let bytes = crate::features::services::peers::peer_lan::limited(response, limit).await?;
-    let plain = context
-        .decrypt(key, &bytes)
-        .ok_or_else(|| anyhow::anyhow!("invalid_session"))?;
-    let response: Value = serde_json::from_slice(&plain)?;
+        .header("c-id", client_id);
+    let response = exchange(outgoing, key, &request.to_string(), limit).await?;
+    let response: Value = serde_json::from_slice(&response)?;
     if let Some(errors) = response["errors"].as_array() {
         if !errors.is_empty()
             && errors
@@ -71,4 +54,32 @@ pub async fn query(
         "Invalid management response"
     );
     Ok(response["data"].clone())
+}
+
+pub async fn exchange(
+    outgoing: http_client::RequestBuilder,
+    key: &[u8],
+    request: &str,
+    limit: usize,
+) -> Result<Vec<u8>> {
+    let encrypted = crate::infrastructure::transport::http_request::encrypt(key, request)
+        .map_err(|_| anyhow::anyhow!("invalid_session"))?;
+    let context =
+        crate::infrastructure::transport::http_response::Context::new("/graphql", &encrypted);
+    let response = outgoing
+        .header("content-type", "application/octet-stream")
+        .body(encrypted)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await?;
+    match response.status().as_u16() {
+        401 => return Err(AuthorizationError::Session.into()),
+        403 => return Err(AuthorizationError::Permission.into()),
+        _ => {}
+    }
+    ensure!(response.status().is_success(), "invalid_session");
+    let bytes = crate::features::services::peers::peer_lan::limited(response, limit).await?;
+    context
+        .decrypt(key, &bytes)
+        .ok_or_else(|| anyhow::anyhow!("invalid_session"))
 }

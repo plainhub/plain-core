@@ -216,6 +216,14 @@ pub(crate) async fn call(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    if headers.contains_key(super::managed_proxy::MANAGED_RESOURCE)
+        && !plain_rs::features::services::device::access::is_enabled(
+            &state.prefs,
+            &[plain_rs::features::access::AccessFeature::Files],
+        )
+    {
+        return StatusCode::FORBIDDEN.into_response();
+    }
     match execute(&state, &headers, body).await {
         Ok(response) => response,
         Err(status) => status.into_response(),

@@ -20,9 +20,9 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use plain_libs::protocols::multipart::{Field, Multipart};
 use plain_rs::features::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES;
 use serde::Deserialize;
-use plain_libs::protocols::multipart::{Field, Multipart};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 
@@ -184,7 +184,9 @@ pub(crate) async fn upload_tmp_dir(state: &ServerState) -> anyhow::Result<String
 }
 
 pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -> Response {
-    if !remote_access_allowed(&state) {
+    if !remote_access_allowed(&state)
+        || !super::managed_proxy::forwarded_upload_allowed(&state, &request)
+    {
         return plain(StatusCode::FORBIDDEN, "forbidden");
     }
     let key = match session_key(&state, request.headers()).await {
@@ -197,6 +199,9 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default()
         .to_owned();
+    let managed = request
+        .headers()
+        .contains_key(super::managed_proxy::MANAGED_RESOURCE);
     let mut multipart = match Multipart::from_request(request) {
         Some(multipart) => multipart,
         None => return plain(StatusCode::BAD_REQUEST, "invalid multipart request"),
@@ -239,6 +244,9 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
                 let content_type = field.content_type().unwrap_or_default().to_owned();
                 let destination_dir = PathBuf::from(&current.dir);
                 if current.is_app_file {
+                    if managed {
+                        return plain(StatusCode::FORBIDDEN, "forbidden");
+                    }
                     match store_app_file(
                         &state,
                         &mut field,
@@ -408,7 +416,9 @@ async fn store_app_file(
 }
 
 pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Request) -> Response {
-    if !remote_access_allowed(&state) {
+    if !remote_access_allowed(&state)
+        || !super::managed_proxy::forwarded_upload_allowed(&state, &request)
+    {
         return plain(StatusCode::FORBIDDEN, "forbidden");
     }
     let key = match session_key(&state, request.headers()).await {

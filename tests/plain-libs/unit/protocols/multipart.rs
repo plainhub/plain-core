@@ -79,3 +79,24 @@ async fn rejects_invalid_boundary_truncated_body_and_default_length_overflow() {
         );
     }
 }
+
+#[tokio::test]
+async fn file_chunks_remain_bounded_when_the_body_arrives_at_once() {
+    let data = vec![b'x'; BUFFER_LIMIT * 3 + 5];
+    let mut wire = b"--abc\r\nContent-Disposition: form-data; name=file\r\n\r\n".to_vec();
+    wire.extend_from_slice(&data);
+    wire.extend_from_slice(b"\r\n--abc--\r\n");
+    let mut form = Multipart::from_request(request(
+        Body::from(wire),
+        "multipart/form-data; boundary=abc",
+    ))
+    .unwrap();
+    let mut file = form.next_field().await.unwrap().unwrap();
+    let mut decoded = Vec::new();
+    while let Some(chunk) = file.chunk().await.unwrap() {
+        assert!(chunk.len() <= BUFFER_LIMIT);
+        decoded.extend_from_slice(&chunk);
+    }
+    assert_eq!(decoded, data);
+    assert!(form.next_field().await.unwrap().is_none());
+}

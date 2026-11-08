@@ -17,6 +17,7 @@ pub enum PairingApproval {
 #[derive(Clone)]
 pub(crate) struct ServerState {
     pub(crate) core: plain_rs::runtime::Runtime,
+    pub(crate) managed_proxy: Arc<crate::http::managed_proxy::ManagedProxy>,
     pub(crate) peer_status_capacity: Arc<tokio::sync::Semaphore>,
     #[cfg(feature = "http_transport")]
     pub(crate) public_server: Arc<tokio::sync::Mutex<Option<PublicServer>>>,
@@ -220,6 +221,7 @@ impl ContentServer {
         let build_debug = core.host.startup().debug;
         let state = ServerState {
             core,
+            managed_proxy: Arc::default(),
             public,
             peer_status_capacity: Arc::new(tokio::sync::Semaphore::new(128)),
             #[cfg(feature = "http_transport")]

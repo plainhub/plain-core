@@ -5,6 +5,7 @@ use rustls::{
     crypto::{CryptoProvider, ring},
     pki_types::{CertificateDer, ServerName, UnixTime, pem::PemObject},
 };
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -22,6 +23,7 @@ impl Certificate {
 pub(super) fn config(
     certificates: Vec<Certificate>,
     verify_certificates: bool,
+    certificate_sha256: Option<[u8; 32]>,
 ) -> Result<ClientConfig, Error> {
     if CryptoProvider::get_default().is_none() {
         let _ = ring::default_provider().install_default();
@@ -33,7 +35,12 @@ pub(super) fn config(
     }
 
     let builder = ClientConfig::builder();
-    let mut tls = if verify_certificates {
+    let mut tls = if let Some(digest) = certificate_sha256 {
+        builder
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(PinnedCertificate(digest)))
+            .with_no_client_auth()
+    } else if verify_certificates {
         builder.with_root_certificates(roots).with_no_client_auth()
     } else {
         builder
@@ -43,6 +50,62 @@ pub(super) fn config(
     };
     tls.alpn_protocols = vec![b"http/1.1".to_vec()];
     Ok(tls)
+}
+
+#[derive(Debug)]
+struct PinnedCertificate([u8; 32]);
+
+impl ServerCertVerifier for PinnedCertificate {
+    fn verify_server_cert(
+        &self,
+        leaf: &CertificateDer<'_>,
+        _: &[CertificateDer<'_>],
+        _: &ServerName<'_>,
+        _: &[u8],
+        _: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        if <[u8; 32]>::from(Sha256::digest(leaf.as_ref())) == self.0 {
+            Ok(ServerCertVerified::assertion())
+        } else {
+            Err(rustls::Error::InvalidCertificate(
+                rustls::CertificateError::ApplicationVerificationFailure,
+            ))
+        }
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        signature: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            signature,
+            &ring::default_provider().signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        signature: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            signature,
+            &ring::default_provider().signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        ring::default_provider()
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
 }
 
 #[derive(Debug)]

@@ -26,6 +26,7 @@ pub struct Peer {
     #[graphql(name = "updatedAt")]
     pub updated_at: plain_rs::infrastructure::types::Instant,
     pub online: bool,
+    pub managed: bool,
     #[graphql(guard = "crate::http::auth::public_gate::LocalOwner")]
     pub key: String,
     pub public_key: String,
@@ -40,6 +41,7 @@ impl Peer {
         online: bool,
         local: &[plain_rs::infrastructure::transport::lan::Interface],
     ) -> Self {
+        let managed = row.is_paired() && !row.token.is_empty();
         Self {
             address: Some(
                 plain_rs::features::services::peers::peer_address::address_with_interfaces(
@@ -51,6 +53,7 @@ impl Peer {
             public_key: row.public_key,
             token: row.token,
             online,
+            managed,
             id: row.id.into(),
             name: row.name,
             ip: row.ip,
