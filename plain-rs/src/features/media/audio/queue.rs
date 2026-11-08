@@ -355,7 +355,7 @@ pub fn replace_queue(
         }
         if shuffle {
             use rand::seq::SliceRandom;
-            queued.shuffle(&mut rand::thread_rng());
+            queued.shuffle(&mut rand::rng());
         }
         let start = queued.first().map(AudioTrack::from);
         io::replace_queue_items(connection, &queued)?;
@@ -388,10 +388,10 @@ pub fn select_next(db: &Db, is_next: bool, shuffle: bool) -> DomainResult<Option
             .iter()
             .position(|item| Some(item.file_id.as_str()) == state.current_file_id.as_deref());
         let index = if shuffle {
-            use rand::Rng;
+            use rand::RngExt;
             if items.len() > 1 {
                 let selected =
-                    rand::thread_rng().gen_range(0..items.len() - usize::from(current.is_some()));
+                    rand::rng().random_range(0..items.len() - usize::from(current.is_some()));
                 if current.is_some_and(|index| selected >= index) {
                     selected + 1
                 } else {

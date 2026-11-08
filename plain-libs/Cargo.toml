@@ -50,7 +50,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "futures-core" = "0.3"
 "libc" = "0.2"
 "log" = "0.4"
-"rand" = "0.8"
+"rand" = "=0.10.3"
 "serde" = { "version" = "1", "features" = ["derive"] }
 "sha2" = "0.10"
 "pbkdf2" = { version = "=0.13.0", default-features = false, features = ["sha2"], optional = true }
@@ -69,7 +69,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "rusty_h264-common" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
 "chacha20poly1305" = { "version" = "0.10", "optional" = true }
 "p256" = { "version" = "0.14", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
-"ed25519-dalek" = { "version" = "2", "features" = ["rand_core"], "optional" = true }
+"ed25519-dalek" = { "version" = "2", "optional" = true }
 "rcgen" = { "version" = "0.13", "default-features" = false, "features" = ["pem", "ring"], "optional" = true }
 "der" = { version = "0.8", features = ["std", "derive"], optional = true }
 "pkcs12" = { version = "=0.2.0-pre.0", default-features = false, features = ["kdf"], optional = true }

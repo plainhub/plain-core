@@ -39,7 +39,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "linux-platform" = ["linux-system", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util", "plain-libs/linux-platform"]
 
 "image-metadata" = ["library", "dep:image"]
-"runtime" = ["dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "dep:windows"]
+"runtime" = ["dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/__rustls-tls", "dep:zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "dep:image", "ai-image-search", "dep:tempfile", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "dep:windows"]
 "runtime-media" = ["runtime", "media", "plain-libs/native-watch", "tokio/process"]
 
 "ai-image-search" = ["plain-libs/ai-image-search"]
@@ -53,7 +53,7 @@ plain-libs = { path = "../plain-libs", default-features = false }
 "sha2" = "0.10"
 "hmac" = { "version" = "0.13", "optional" = true }
 "sha2_mac" = { "package" = "sha2", "version" = "0.11", "optional" = true }
-"rand" = "0.8"
+"rand" = "=0.10.3"
 "uuid" = { "version" = "1", "features" = ["v4", "serde"] }
 "log" = "0.4"
 "socket2" = { "version" = "0.6", "optional" = true, "features" = ["all"] }

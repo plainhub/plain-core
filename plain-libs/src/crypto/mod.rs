@@ -19,8 +19,10 @@ pub use symmetric::{
 };
 
 pub fn gen_random(buf: &mut [u8]) {
-    use rand::RngCore;
-    rand::rngs::OsRng.fill_bytes(buf);
+    use rand::TryRng;
+    rand::rngs::SysRng
+        .try_fill_bytes(buf)
+        .expect("system random source failed");
 }
 
 pub fn random_bytes(len: usize) -> Vec<u8> {

@@ -60,13 +60,19 @@ fn ensure(map: &mut Map<String, Value>, key: &str, make: impl FnOnce() -> String
     }
     Ok(())
 }
-pub fn random_password(length: usize) -> String {
-    use rand::Rng;
-    let alphabet = b"23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ";
-    let mut rng = rand::thread_rng();
+fn random_label(alphabet: &[u8], length: usize) -> String {
+    use rand::RngExt;
+    let mut rng = rand::rng();
     (0..length)
-        .map(|_| alphabet[rng.gen_range(0..alphabet.len())] as char)
+        .map(|_| alphabet[rng.random_range(0..alphabet.len())] as char)
         .collect()
+}
+
+pub fn random_password(length: usize) -> String {
+    random_label(
+        b"23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ",
+        length,
+    )
 }
 
 pub fn bootstrap(prefs: &Prefs) -> Result<()> {
@@ -282,12 +288,7 @@ pub fn snapshot(prefs: &Prefs) -> anyhow::Result<SecurityState> {
 mod tests;
 
 pub(crate) fn generate_mdns_hostname() -> String {
-    use rand::Rng;
-    let alphabet = b"abcdefghjkmnpqrstuwxyz";
-    let mut rng = rand::thread_rng();
-    let label: String = (0..2)
-        .map(|_| alphabet[rng.gen_range(0..alphabet.len())] as char)
-        .collect();
+    let label = random_label(b"abcdefghjkmnpqrstuwxyz", 2);
     format!("{label}.local")
 }
 

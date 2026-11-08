@@ -7,7 +7,6 @@ use plain_libs::crypto::xchacha_decrypt_raw;
 use plain_libs::crypto::xchacha_encrypt_raw;
 use plain_libs::utils::base64::base64_decode;
 use plain_libs::utils::base64::base64_encode;
-use rand::{RngCore, rngs::OsRng};
 use sha2::{Digest, Sha256};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -248,9 +247,7 @@ fn canonical(value: &str, length: usize) -> Result<Vec<u8>> {
 }
 
 fn nonce() -> String {
-    let mut bytes = [0_u8; 32];
-    OsRng.fill_bytes(&mut bytes);
-    base64_encode(&bytes)
+    plain_libs::crypto::gen_token()
 }
 
 fn derive(shared: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {

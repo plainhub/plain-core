@@ -2,7 +2,7 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::SessionRow;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
-use rand::RngCore;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -91,7 +91,7 @@ impl<'a> SessionStore<'a> {
         }
         if info.token.is_empty() {
             let mut key = [0u8; 32];
-            rand::thread_rng().fill_bytes(&mut key);
+            rand::rng().fill_bytes(&mut key);
             info.token = plain_libs::utils::base64::base64_encode(&key);
         }
         token_key(&info.token)?;

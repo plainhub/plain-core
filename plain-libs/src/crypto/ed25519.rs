@@ -1,5 +1,4 @@
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
 
 use crate::utils::base64::base64_decode;
 use crate::utils::base64::base64_encode;
@@ -11,7 +10,9 @@ use crate::utils::base64::base64_encode;
 
 /// Generate a new Ed25519 signing key.  Returns (signing_key_64_bytes, verifying_key_32_bytes).
 pub fn ed25519_generate() -> ([u8; 64], [u8; 32]) {
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let mut secret = [0; 32];
+    super::gen_random(&mut secret);
+    let signing_key = SigningKey::from_bytes(&secret);
     let verifying_key = signing_key.verifying_key();
     let sk_bytes = signing_key.to_keypair_bytes();
     let vk_bytes = verifying_key.to_bytes();

@@ -9,7 +9,7 @@ description = "Shared Plain GraphQL, HTTP and native transport adapters"
 "default" = ["core", "http_transport", "media"]
 "media" = ["plain-rs/runtime-media"]
 "http_transport" = ["dep:serde_json", "dep:reqwest", "plain-libs/http-client", "dep:axum", "plain-libs/https", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
-"core" = ["plain-libs/websocket", "dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:anyhow", "dep:plain-graphql", "dep:axum", "dep:reqwest", "plain-libs/http-client", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
+"core" = ["plain-libs/websocket", "dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "dep:anyhow", "dep:plain-graphql", "dep:axum", "dep:reqwest", "plain-libs/http-client", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
 
 
 [dependencies]
@@ -47,7 +47,7 @@ plain-graphql = { path = "../plain-graphql", optional = true }
 "tokio" = { "version" = "1", "features" = ["full", "test-util"] }
 "tower" = { "version" = "0.5", "features" = ["util"] }
 "tempfile" = "3"
-"tokio-tungstenite" = { "version" = "0.30", "features" = ["connect", "rustls-tls-webpki-roots"] }
+"tokio-tungstenite" = { "version" = "0.30", "features" = ["connect"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 plain-rs = { path = "../plain-rs", default-features = false, features = ["linux-platform"] }

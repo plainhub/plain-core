@@ -392,20 +392,11 @@ fn local_ip() -> String {
 
 fn generate_uuid() -> String {
     use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let mut bytes = [0u8; 16];
-    rng.fill(&mut bytes);
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    )
+    let mut bytes = [0; 16];
+    rand::rng().fill_bytes(&mut bytes);
+    uuid::Builder::from_random_bytes(bytes)
+        .into_uuid()
+        .to_string()
 }
 
 fn accept_pending(state: &mut DlnaRendererState, pending: &PendingCastRequest, play_queued: bool) {
