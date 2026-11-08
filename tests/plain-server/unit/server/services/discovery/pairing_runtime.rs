@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use plain_rs::features::discovery::nearby_http::Message;
 use plain_rs::features::peers::pairing::sessions::Target;
 use plain_rs::features::services::discovery::pairing::Device;
@@ -50,7 +51,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
         )
         .await
         .unwrap();
-    let client = plain_libs::protocols::http_client::builder()
+    let client = http_client::builder()
         .danger_accept_invalid_certs(true)
         .build()
         .unwrap();
@@ -60,7 +61,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
         .send()
         .await
         .unwrap();
-    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), http_client::StatusCode::BAD_REQUEST);
     assert_eq!(response.text().await.unwrap(), "unknown message type");
     let malformed = client
         .post(format!("https://127.0.0.1:{https_port}/nearby"))
@@ -68,7 +69,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
         .send()
         .await
         .unwrap();
-    assert_eq!(malformed.status(), reqwest::StatusCode::BAD_REQUEST);
+    assert_eq!(malformed.status(), http_client::StatusCode::BAD_REQUEST);
     assert_eq!(malformed.text().await.unwrap(), "invalid nearby message");
     let request = client
         .post(format!("https://127.0.0.1:{https_port}/nearby"))
@@ -76,7 +77,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
         .send()
         .await
         .unwrap();
-    assert_eq!(request.status(), reqwest::StatusCode::OK);
+    assert_eq!(request.status(), http_client::StatusCode::OK);
     assert_eq!(request.text().await.unwrap(), "1");
     server.stop_public().await;
 }

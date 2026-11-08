@@ -57,13 +57,32 @@ impl Uuid {
     }
 }
 
+#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
 #[inline]
 const fn nibble_to_hex(nibble: u8) -> u8 {
     nibble + b'0' + if nibble > 9 { 0x27 } else { 0 }
 }
 
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 #[inline]
-const fn format_simple(src: &[u8; 16]) -> [u8; 32] {
+fn format_simple(src: &[u8; 16]) -> [u8; 32] {
+    use std::arch::aarch64::*;
+    let mut output = [0; 32];
+    // SAFETY: The inputs each contain 16 bytes, and the output has space for both halves.
+    unsafe {
+        let input = vld1q_u8(src.as_ptr());
+        let digits = vld1q_u8(b"0123456789abcdef".as_ptr());
+        let high = vqtbl1q_u8(digits, vshrq_n_u8::<4>(input));
+        let low = vqtbl1q_u8(digits, vandq_u8(input, vdupq_n_u8(15)));
+        vst1q_u8(output.as_mut_ptr(), vzip1q_u8(high, low));
+        vst1q_u8(output.as_mut_ptr().add(16), vzip2q_u8(high, low));
+    }
+    output
+}
+
+#[cfg(not(all(target_arch = "aarch64", target_feature = "neon")))]
+#[inline]
+fn format_simple(src: &[u8; 16]) -> [u8; 32] {
     let mut dst = [0; 32];
     let mut i = 0;
     while i < 16 {
@@ -76,7 +95,7 @@ const fn format_simple(src: &[u8; 16]) -> [u8; 32] {
 }
 
 #[inline]
-const fn format_hyphenated(src: &[u8; 16]) -> [u8; 36] {
+fn format_hyphenated(src: &[u8; 16]) -> [u8; 36] {
     let simple = format_simple(src);
     let mut dst = [0; 36];
 

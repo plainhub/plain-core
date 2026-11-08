@@ -1,3 +1,4 @@
+use crate::protocols::http_client;
 use crate::dlna::types::DiscoveredDevice;
 use crate::dlna::util::xml_escape;
 use std::time::Duration;
@@ -59,7 +60,7 @@ pub async fn soap_response(
         return Err("missing AVTransport serviceType".into());
     }
     let endpoint = resolve_service_endpoint(&dev.location, &dev.av_transport.control_url)?;
-    let client = crate::protocols::http_client::builder()
+    let client = http_client::builder()
         .timeout(SOAP_TIMEOUT)
         .build()
         .map_err(|e| e.to_string())?;
@@ -96,11 +97,11 @@ pub async fn subscription(
     unsubscribe: bool,
 ) -> Result<Subscription, String> {
     let endpoint = resolve_service_endpoint(&dev.location, &dev.av_transport.event_sub_url)?;
-    let client = crate::protocols::http_client::builder()
+    let client = http_client::builder()
         .timeout(SOAP_TIMEOUT)
         .build()
         .map_err(|e| e.to_string())?;
-    let method = reqwest::Method::from_bytes(if unsubscribe {
+    let method = http_client::Method::from_bytes(if unsubscribe {
         b"UNSUBSCRIBE"
     } else {
         b"SUBSCRIBE"

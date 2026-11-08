@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
 use plain_graphql::{Request, Variables};
 use plain_rs::features::chat::enums::{DeviceType, PeerStatus};
@@ -53,7 +54,7 @@ async fn native_main_record_queries_preserve_addresses_keys_members_and_checked_
     let response = native.execute(request()).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
-    let url = reqwest::Url::parse(data["peerFileUrl"].as_str().unwrap()).unwrap();
+    let url = http_client::Url::parse(data["peerFileUrl"].as_str().unwrap()).unwrap();
     assert_eq!(
         url.query_pairs().find(|(key, _)| key == "id").unwrap().1,
         "a +?#%"

@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::features::services::casting::dlna_sender_runtime::Device;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::dlna::desc;
@@ -38,7 +39,7 @@ async fn scan(state: &CoreRuntime) {
     };
     let query = ssdp::build_m_search("ssdp:all");
     let mut buffer = vec![0u8; 65536];
-    let Ok(client) = plain_libs::protocols::http_client::builder()
+    let Ok(client) = http_client::builder()
         .timeout(Duration::from_secs(5))
         .build()
     else {

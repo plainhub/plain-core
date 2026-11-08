@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::services::discovery::pairing_runtime;
 use crate::features::services::discovery::pairing_runtime::event;
@@ -445,7 +446,7 @@ pub(super) struct Resolved {
     pub ips: Vec<String>,
     pub methods: Vec<DiscoveryMethod>,
     pub device_type: crate::features::chat::enums::DeviceType,
-    pub url: Option<reqwest::Url>,
+    pub url: Option<http_client::Url>,
 }
 fn resolve(
     state: &CoreRuntime,
@@ -498,7 +499,7 @@ fn resolve(
         } else {
             format!("https://{host}")
         };
-        let url = reqwest::Url::parse(&raw)?;
+        let url = http_client::Url::parse(&raw)?;
         ensure!(
             matches!(url.scheme(), "https" | "http")
                 && url.host_str().is_some()
@@ -522,7 +523,7 @@ fn resolve(
             !ip.is_empty() && port != 0,
             "No management address available"
         );
-        Some(reqwest::Url::parse(&format!(
+        Some(http_client::Url::parse(&format!(
             "https://{}:{port}",
             if ip.contains(':') {
                 format!("[{ip}]")

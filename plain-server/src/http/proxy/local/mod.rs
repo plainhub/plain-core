@@ -6,17 +6,17 @@
 //! Three request types it must handle well:
 //!
 //! 1. Thumbnails (<img> tags, many concurrent, small responses)
-//!    → reqwest connection pool reuses TLS sessions → no per-request handshake overhead
+//!    → The HTTP connection pool reuses TLS sessions → no per-request handshake overhead
 //!
 //! 2. Video/audio (<video> tag, Range requests, large response)
 //!    → resp.chunk() streams bytes as they arrive, never buffers full body
 //!    → when browser closes connection (video switched), write fails,
-//!    loop exits, resp is dropped, reqwest closes upstream (body was
+//!    loop exits, resp is dropped, the client closes upstream (body was
 //!    abandoned mid-stream so the connection is NOT returned to the pool)
 //!    → no stale upstream connections
 //!
 //! 3. WebSocket upgrades (app socket, peer sync sockets, login handshake)
-//!    → dialed through reqwest's connection upgrade, then the TCP streams
+//!    → dialed through the HTTP connection upgrade, then the TCP streams
 //!    are spliced byte-for-byte — frames relay without parsing, and the
 //!    handshake is forwarded verbatim so accept/extension checks stay
 //!    end-to-end between webview and device
@@ -27,6 +27,7 @@
 //! A `_cid` query parameter (WS dials) names a paired peer; its current
 //! `ip:port` is re-resolved from the peers table right before dialing.
 
+use plain_libs::protocols::http_client;
 use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -79,16 +80,15 @@ pub struct HttpProxyState {
 }
 
 impl HttpProxyState {
-    /// Build a dedicated reqwest client (no timeout — video streaming and
+    /// Build a dedicated HTTP client (no timeout — video streaming and
     /// WebSocket relays are long-lived) and start accepting connections.
     pub fn start(peers: PeerResolver) -> Self {
-        let client = plain_libs::protocols::http_client::builder()
+        let client = http_client::builder()
             .danger_accept_invalid_certs(true)
-            .danger_accept_invalid_hostnames(true)
             .tcp_keepalive(std::time::Duration::from_secs(60))
             .pool_max_idle_per_host(20)
             .build()
-            .expect("proxy reqwest client");
+            .expect("proxy HTTP client");
 
         let std_listener = StdTcpListener::bind("127.0.0.1:0").expect("http proxy bind");
         let port = std_listener.local_addr().expect("http proxy addr").port();
@@ -113,14 +113,14 @@ impl HttpProxyState {
 
 // ─── Per-connection handler ───────────────────────────────────────────────────
 
-async fn handle(stream: TcpStream, http: reqwest::Client, peers: PeerResolver) {
+async fn handle(stream: TcpStream, http: http_client::Client, peers: PeerResolver) {
     let _ = stream.set_nodelay(true);
     let (rd, mut wr) = stream.into_split();
     let mut reader = BufReader::new(rd);
 
     // Serve multiple requests per connection (HTTP/1.1 keep-alive). The
     // browser reuses the loopback connection for every thumbnail / Range
-    // request, and — because we fully consume each upstream body — reqwest
+    // request, and — because we fully consume each upstream body — the HTTP client
     // returns the TLS connection to its pool, so the next request skips the
     // TLS handshake to the device entirely. That handshake is the dominant
     // latency for video seeking on high-RTT links.
@@ -228,9 +228,9 @@ async fn handle(stream: TcpStream, http: reqwest::Client, peers: PeerResolver) {
             return;
         }
 
-        // 6. Forward request via reqwest (connection pool handles TLS reuse).
+        // 6. Forward request via the HTTP client (connection pool handles TLS reuse).
         let url = format!("{}{}", target_base, path);
-        let req_method: reqwest::Method = method.parse().unwrap_or(reqwest::Method::GET);
+        let req_method: http_client::Method = method.parse().unwrap_or(http_client::Method::GET);
         let mut builder = http.request(req_method, &url);
         for (k, v) in &req_headers {
             match k.as_str() {
@@ -244,8 +244,8 @@ async fn handle(stream: TcpStream, http: reqwest::Client, peers: PeerResolver) {
                 }
                 _ => {
                     if let (Ok(name), Ok(val)) = (
-                        reqwest::header::HeaderName::from_bytes(k.as_bytes()),
-                        reqwest::header::HeaderValue::from_str(v),
+                        http_client::header::HeaderName::from_bytes(k.as_bytes()),
+                        http_client::header::HeaderValue::from_str(v),
                     ) {
                         builder = builder.header(name, val);
                     }
@@ -270,17 +270,14 @@ async fn handle(stream: TcpStream, http: reqwest::Client, peers: PeerResolver) {
         };
 
         // 7. Keep-alive is only safe when we can frame the body ourselves:
-        //    the upstream must give a content-length and must not transform
-        //    the bytes (content-encoding) — reqwest auto-decompresses, which
-        //    would desync a forwarded length. In that case we fall back to
-        //    `connection: close` framing and stream to EOF.
+        //    require a content length and identity encoding. Otherwise stream to EOF.
         let resp_hdrs = resp.headers().clone();
         let content_length = resp_hdrs
-            .get(reqwest::header::CONTENT_LENGTH)
+            .get(http_client::header::CONTENT_LENGTH)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok());
         let compressed = resp_hdrs
-            .get(reqwest::header::CONTENT_ENCODING)
+            .get(http_client::header::CONTENT_ENCODING)
             .is_some_and(|v| v != "identity");
         let keep_alive = !client_close && content_length.is_some() && !compressed;
 
@@ -329,7 +326,7 @@ async fn handle(stream: TcpStream, http: reqwest::Client, peers: PeerResolver) {
         // 9. Stream the response body — never buffer the full body.
         //
         //    resp.chunk() returns the next piece of data as the device sends it.
-        //    reqwest (hyper) dechunks Transfer-Encoding: chunked automatically,
+        //    Hyper dechunks Transfer-Encoding: chunked automatically,
         //    so we always get raw bytes regardless of how the device encoded them.
         //
         //    Keep-alive path: consume exactly content-length bytes. Fully
@@ -337,7 +334,7 @@ async fn handle(stream: TcpStream, http: reqwest::Client, peers: PeerResolver) {
         //    so the next request reuses the TLS session instead of handshaking
         //    again. If the client disconnects mid-stream, write_all fails and
         //    we drop the connection — the abandoned upstream connection is
-        //    closed by reqwest, no stale connections.
+        //    closed by the HTTP client, no stale connections.
         if keep_alive {
             if method == "HEAD" {
                 continue; // no body expected; keep serving this connection
@@ -379,7 +376,7 @@ async fn handle(stream: TcpStream, http: reqwest::Client, peers: PeerResolver) {
 async fn relay_websocket(
     reader: BufReader<tokio::net::tcp::OwnedReadHalf>,
     wr: tokio::net::tcp::OwnedWriteHalf,
-    http: reqwest::Client,
+    http: http_client::Client,
     req_headers: &[(String, String)],
     target_base: String,
     path: String,
@@ -402,7 +399,7 @@ async fn relay_websocket(
         base = replace_authority(&base, peer.address());
     }
 
-    // reqwest speaks http(s) only; ws/wss map onto it for the upgrade dial.
+    // The HTTP client speaks http(s) only; ws/wss map onto it for the upgrade dial.
     let dial_base = if let Some(rest) = base.strip_prefix("wss://") {
         format!("https://{rest}")
     } else if let Some(rest) = base.strip_prefix("ws://") {

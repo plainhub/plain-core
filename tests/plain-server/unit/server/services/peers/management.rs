@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use futures_util::SinkExt;
 use futures_util::StreamExt;
 use plain_rs::features::chat::enums::DeviceType;
@@ -314,7 +315,7 @@ async fn encrypted_clipboard_sync_seeds_baseline_retries_failed_writes_and_reche
     });
     let result = plain_rs::features::services::peers::management_http::query(
         &state,
-        &reqwest::Url::parse(&format!("https://127.0.0.1:{port}")).unwrap(),
+        &http_client::Url::parse(&format!("https://127.0.0.1:{port}")).unwrap(),
         &session.client_id,
         &plain_libs::utils::base64::base64_decode(&peer.token),
         json!({"query":"mutation($text:String!){setClipboard(text:$text)}", "variables":{"text":"encrypted fixture write"}}),

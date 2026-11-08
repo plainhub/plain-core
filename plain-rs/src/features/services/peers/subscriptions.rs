@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::peers;
 use crate::infrastructure::host::request_scope::NativeRequestScope;
@@ -134,7 +135,7 @@ impl PeerSubscription {
         self.current()?;
         let mut changed = self.state.db.peer_changes();
         let key = plain_libs::utils::base64::base64_decode(&self.peer.token);
-        let mut url = reqwest::Url::parse(
+        let mut url = http_client::Url::parse(
             &crate::features::services::peers::peer_address::address(&self.peer).base_url,
         )?;
         url.set_scheme("wss")

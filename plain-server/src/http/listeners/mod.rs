@@ -6,6 +6,7 @@ pub(crate) mod lifecycle;
 #[cfg(feature = "core")]
 mod public_server;
 
+use plain_libs::protocols::http_client;
 use axum::{Extension, Router};
 
 use crate::http::ConnectionScheme;
@@ -102,7 +103,7 @@ impl HttpListeners {
     }
 
     pub async fn check_health(&self) -> Result<(), String> {
-        let client = plain_libs::protocols::http_client::builder()
+        let client = http_client::builder()
             .no_proxy()
             .danger_accept_invalid_certs(true)
             .timeout(Duration::from_millis(500))
@@ -120,7 +121,7 @@ impl HttpListeners {
                         .send()
                         .await
                     {
-                        Ok(response) if response.status() == reqwest::StatusCode::NO_CONTENT => {}
+                        Ok(response) if response.status() == http_client::StatusCode::NO_CONTENT => {}
                         _ => {
                             healthy = false;
                             break;

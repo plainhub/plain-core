@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use futures_util::{Stream, StreamExt};
 use sha2::{Digest, Sha256};
 use std::{
@@ -12,8 +13,8 @@ use tokio::{
 
 pub struct RemoteCache {
     cache: PathBuf,
-    client: OnceLock<Result<reqwest::Client, String>>,
-    verified_client: OnceLock<Result<reqwest::Client, String>>,
+    client: OnceLock<Result<http_client::Client, String>>,
+    verified_client: OnceLock<Result<http_client::Client, String>>,
     locks: plain_libs::utils::keyed_locks::KeyedLocks,
     permits: Semaphore,
 }
@@ -36,7 +37,7 @@ impl RemoteCache {
         name: &str,
         cache_key: Option<&str>,
         mut stop: watch::Receiver<bool>,
-        client: Option<&reqwest::Client>,
+        client: Option<&http_client::Client>,
     ) -> Result<String, String> {
         if *stop.borrow() {
             return Err("Download cancelled".into());
@@ -50,8 +51,7 @@ impl RemoteCache {
                     None => self
                         .client
                         .get_or_init(|| {
-                            plain_libs::protocols::http_client::builder()
-                                .use_rustls_tls()
+                            http_client::builder()
                                 .danger_accept_invalid_certs(true)
                                 .connect_timeout(Duration::from_secs(10))
                                 .build()
@@ -102,11 +102,10 @@ impl RemoteCache {
             let client = self
                 .verified_client
                 .get_or_init(|| {
-                    plain_libs::protocols::http_client::builder()
-                        .use_rustls_tls()
+                    http_client::builder()
                         .connect_timeout(Duration::from_secs(10))
                         .read_timeout(Duration::from_secs(10))
-                        .redirect(reqwest::redirect::Policy::limited(20))
+                        .redirect(http_client::redirect::Policy::limited(20))
                         .build()
                         .map_err(|error| error.to_string())
                 })
@@ -222,8 +221,8 @@ where
     Ok(temporary)
 }
 
-fn url(raw: &str) -> Result<reqwest::Url, String> {
-    let url = reqwest::Url::parse(raw).map_err(|error| error.to_string())?;
+fn url(raw: &str) -> Result<http_client::Url, String> {
+    let url = http_client::Url::parse(raw).map_err(|error| error.to_string())?;
     if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
         return Err("HTTP download URL required".into());
     }

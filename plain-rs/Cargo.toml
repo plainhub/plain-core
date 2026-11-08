@@ -25,7 +25,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "html" = ["plain-libs/html"]
 "phone" = [ "dep:serde_json", "plain-libs/phone"]
 "link-preview" = ["chat", "plain-libs/regex"]
-"http-client" = ["dep:reqwest", "plain-libs/http-client", "tokio/net", "tokio/rt", "tokio/time"]
+"http-client" = ["plain-libs/http-client", "tokio/net", "tokio/rt", "tokio/time"]
 
 "feeds" = ["library", "html"]
 # Exposes test-only seams (e.g. mdns host_responder packet-capture
@@ -48,7 +48,6 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 [dependencies]
 undoc = { path = "../plain-libs/codecs/undoc", optional = true }
 plain-libs = { path = "../plain-libs", default-features = false }
-"reqwest" = { version = "0.12", default-features = false, features = ["stream"], optional = true }
 "sha2" = "0.10"
 "hmac" = { "version" = "0.13", "optional" = true }
 "sha2_mac" = { "package" = "sha2", "version" = "0.11", "optional" = true }

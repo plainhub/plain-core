@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
@@ -443,7 +444,7 @@ async fn file_uri_exports_replace_complete_bytes_and_preserve_existing_files_on_
         let neighbor = directory.path().join("unselected.opml");
         std::fs::write(&target, b"previous export").unwrap();
         std::fs::write(&neighbor, b"unselected bytes").unwrap();
-        let uri = reqwest::Url::from_file_path(&target).unwrap().to_string();
+        let uri = http_client::Url::from_file_path(&target).unwrap().to_string();
         assert!(uri.contains("%20"));
         let chunks = base.join("export");
         std::fs::create_dir_all(&chunks).unwrap();

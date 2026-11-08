@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::server::ServerState;
 use axum::{
     extract::{Request, State},
@@ -10,7 +11,7 @@ fn is_potentially_trustworthy(scheme: &str, host: &str) -> bool {
     if scheme == "https" {
         return true;
     }
-    let Ok(url) = reqwest::Url::parse(&format!("{scheme}://{host}")) else {
+    let Ok(url) = http_client::Url::parse(&format!("{scheme}://{host}")) else {
         return false;
     };
     let Some(host) = url.host_str() else {
@@ -53,8 +54,8 @@ pub(crate) async fn apply(
         let same_origin = origin
             .to_str()
             .ok()
-            .and_then(|origin| reqwest::Url::parse(origin).ok())
-            .zip(reqwest::Url::parse(&format!("{scheme}://{host}")).ok())
+            .and_then(|origin| http_client::Url::parse(origin).ok())
+            .zip(http_client::Url::parse(&format!("{scheme}://{host}")).ok())
             .is_some_and(|(origin, authority)| {
                 origin.scheme() == authority.scheme()
                     && origin.host_str() == authority.host_str()

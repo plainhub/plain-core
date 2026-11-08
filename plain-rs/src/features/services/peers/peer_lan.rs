@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::infrastructure::db::DPeer;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
@@ -5,16 +6,15 @@ use futures_util::StreamExt;
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 pub struct Lan {
-    pub client: reqwest::Client,
+    pub client: http_client::Client,
     pub capacity: Arc<tokio::sync::Semaphore>,
 }
 impl Lan {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            client: plain_libs::protocols::http_client::builder()
-                .use_rustls_tls()
+            client: http_client::builder()
                 .danger_accept_invalid_certs(true)
-                .redirect(reqwest::redirect::Policy::none())
+                .redirect(http_client::redirect::Policy::none())
                 .connect_timeout(Duration::from_secs(3))
                 .build()?,
             capacity: Arc::new(tokio::sync::Semaphore::new(4)),
@@ -87,7 +87,7 @@ pub async fn send(
     }
     Ok(response)
 }
-pub async fn limited(response: reqwest::Response, limit: usize) -> Result<Vec<u8>> {
+pub async fn limited(response: http_client::Response, limit: usize) -> Result<Vec<u8>> {
     ensure!(
         response.content_length().is_none_or(|n| n <= limit as u64),
         "Peer response exceeds limit"

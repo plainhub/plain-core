@@ -81,7 +81,7 @@ pub(crate) struct ProxyParams {
 /// both decoded values.
 ///
 /// The other params are forwarded **verbatim** — no percent-decode. The
-/// proxy hands the rebuilt path straight to reqwest, which re-encodes
+/// proxy hands the rebuilt path straight to the HTTP client, which re-encodes
 /// the URL when it talks to the upstream device. Decoding here would
 /// turn `+` into a space and corrupt opaque values such as the
 /// base64-encrypted `id` parameter used by `/fs` (see

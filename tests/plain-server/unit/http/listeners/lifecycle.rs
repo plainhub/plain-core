@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 use crate::server::ContentServer;
 use std::sync::Arc;
@@ -45,7 +46,7 @@ async fn loopback_and_public_listeners_serve_the_same_health_endpoint() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[9; 32]);
     let server = server(directory.path(), &token);
-    let client = plain_libs::protocols::http_client::builder().build().unwrap();
+    let client = http_client::builder().build().unwrap();
     let url = format!("http://127.0.0.1:{}/health", server.port);
     assert_eq!(client.get(&url).send().await.unwrap().status(), 200);
     assert_eq!(
@@ -202,7 +203,7 @@ async fn health_works_without_a_host() {
     let token = plain_libs::utils::base64::base64_encode(&[14; 32]);
     let server = server(directory.path(), &token);
     let (port, _) = start(&server).await;
-    let client = plain_libs::protocols::http_client::builder().build().unwrap();
+    let client = http_client::builder().build().unwrap();
     let base = format!("http://127.0.0.1:{port}");
     let response = client.get(format!("{base}/health")).send().await.unwrap();
     assert_eq!(response.status(), 200);

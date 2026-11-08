@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::features::chat::enums::DeviceType;
 use crate::features::services::notifications::types::Notification;
 use crate::features::services::peers::management::Identity;
@@ -108,7 +109,7 @@ fn notification(id: &str) -> Notification {
     }
 }
 
-fn observation(items: Vec<Notification>) -> Result<(App, Vec<Notification>, reqwest::Url)> {
+fn observation(items: Vec<Notification>) -> Result<(App, Vec<Notification>, http_client::Url)> {
     Ok((
         App {
             device_name: "Fixture".into(),
@@ -117,7 +118,7 @@ fn observation(items: Vec<Notification>) -> Result<(App, Vec<Notification>, reqw
             url_token: plain_libs::utils::base64::base64_encode(&[9; 32]),
         },
         items,
-        reqwest::Url::parse("https://127.0.0.1:18443").unwrap(),
+        http_client::Url::parse("https://127.0.0.1:18443").unwrap(),
     ))
 }
 
@@ -359,7 +360,7 @@ async fn snapshots_recover_without_alerts_and_credentials_or_membership_retire_o
             Ok((
                 app,
                 items,
-                reqwest::Url::parse("https://127.0.0.2:18443").unwrap(),
+                http_client::Url::parse("https://127.0.0.2:18443").unwrap(),
             )),
             &events,
         )
@@ -450,7 +451,7 @@ async fn invalid_snapshots_do_not_mutate_projection_and_icons_decrypt_with_stand
         )
         .unwrap();
     let value = event(&mut receiver);
-    let url = reqwest::Url::parse(value["group"]["items"][0]["icon"].as_str().unwrap()).unwrap();
+    let url = http_client::Url::parse(value["group"]["items"][0]["icon"].as_str().unwrap()).unwrap();
     let file_id = url
         .query_pairs()
         .find(|(key, _)| key == "id")

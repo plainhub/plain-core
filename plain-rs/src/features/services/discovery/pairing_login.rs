@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::features::services::discovery::pairing_attempts::Resolved;
 use crate::runtime::Runtime as CoreRuntime;
@@ -397,7 +398,7 @@ fn verify_response(response: &Value, expected: &str, public_key: &str, now: i64)
 }
 async fn metadata(
     state: &CoreRuntime,
-    base: &reqwest::Url,
+    base: &http_client::Url,
     client_id: &str,
     key: &[u8],
 ) -> Result<Value> {
@@ -411,7 +412,7 @@ async fn metadata(
     )
     .await
     .map_err(|error| {
-        if error.downcast_ref::<reqwest::Error>().is_some() {
+        if error.downcast_ref::<http_client::Error>().is_some() {
             anyhow::anyhow!("failed_connect")
         } else {
             anyhow::anyhow!("invalid_session")

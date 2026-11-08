@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
@@ -17,8 +18,8 @@ pub struct Identity {
 }
 
 impl Identity {
-    pub fn http_url(&self) -> Result<reqwest::Url> {
-        let mut url = reqwest::Url::parse(&self.url)?;
+    pub fn http_url(&self) -> Result<http_client::Url> {
+        let mut url = http_client::Url::parse(&self.url)?;
         url.set_scheme("https")
             .map_err(|_| anyhow!("Invalid management address"))?;
         url.set_query(None);
@@ -162,7 +163,7 @@ pub fn identity(peer: &DPeer, actor: &str, base: &str) -> Option<Identity> {
     {
         return None;
     }
-    let mut url = reqwest::Url::parse(base).ok()?;
+    let mut url = http_client::Url::parse(base).ok()?;
     if url.scheme() != "https" || url.host_str().is_none() {
         return None;
     }
@@ -432,7 +433,7 @@ async fn connection_loop(
                 use crate::features::services::peers::management_wire;
                 use crate::features::services::peers::management_wire::Incoming;
                 use crate::infrastructure::protocols::graphql::messages::ClientMessage;
-                let url = reqwest::Url::parse(&identity.url)?;
+                let url = http_client::Url::parse(&identity.url)?;
                 let client = url
                     .query_pairs()
                     .find(|(name, _)| name == "cid")

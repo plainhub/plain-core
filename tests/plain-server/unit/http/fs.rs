@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
 use crate::server::ServerState;
 use axum::body::Body;
@@ -686,7 +687,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     )
     .unwrap();
     let url = format!("http://127.0.0.1:{}/fs?action=preview", server.port);
-    let client = plain_libs::protocols::http_client::builder().build().unwrap();
+    let client = http_client::builder().build().unwrap();
     let response = client
         .get(&url)
         .query(&[("id", &id)])
@@ -802,8 +803,8 @@ async fn fs_thumbnail_latency_benchmark() {
         )
         .await
         .unwrap();
-    let http = plain_libs::protocols::http_client::builder()
-        .add_root_certificate(reqwest::Certificate::from_pem(pem.as_bytes()).unwrap())
+    let http = http_client::builder()
+        .add_root_certificate(http_client::Certificate::from_pem(pem.as_bytes()).unwrap())
         .build()
         .unwrap();
     let origin = format!("https://localhost:{port}");

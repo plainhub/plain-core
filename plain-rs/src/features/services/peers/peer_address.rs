@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::infrastructure::db::DPeer;
 use serde::{Serialize, Serializer};
 #[derive(Serialize)]
@@ -90,7 +91,7 @@ pub fn same_identity(peer: &DPeer, expected: &DPeer) -> bool {
         && peer.status == expected.status
 }
 pub fn download_url(peer: &DPeer, file_id: &str) -> anyhow::Result<String> {
-    let mut url = reqwest::Url::parse(&format!(
+    let mut url = http_client::Url::parse(&format!(
         "{}/fs",
         peer.base_url()
             .ok_or_else(|| anyhow::anyhow!("No peer address"))?

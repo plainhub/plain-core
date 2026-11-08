@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 
 #[test]
@@ -45,7 +46,7 @@ fn resource_proxy_uses_the_requested_operation_and_named_size() {
         size: None,
         version: Some("updated".into()),
     };
-    let url = reqwest::Url::parse(
+    let url = http_client::Url::parse(
         &resource_target(
             "https://device.invalid/fs?id=encrypted%2Breference",
             &parameters,

@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
 use crate::test_support::graphql_http as call;
 use std::sync::Arc;
@@ -55,7 +56,7 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
         },
     )
     .unwrap();
-    let client = plain_libs::protocols::http_client::builder().build().unwrap();
+    let client = http_client::builder().build().unwrap();
     let url = format!("http://127.0.0.1:{}/fs", server.port);
     let response = client
         .get(&url)

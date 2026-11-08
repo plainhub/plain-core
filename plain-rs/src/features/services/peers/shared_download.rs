@@ -1,6 +1,7 @@
+use plain_libs::protocols::http_client;
 use anyhow::{Result, ensure};
-pub fn download_url(raw: &str) -> Result<reqwest::Url> {
-    let url = reqwest::Url::parse(raw)?;
+pub fn download_url(raw: &str) -> Result<http_client::Url> {
+    let url = http_client::Url::parse(raw)?;
     ensure!(
         url.scheme() == "https"
             && url.username().is_empty()

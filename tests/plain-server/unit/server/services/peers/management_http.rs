@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
 use axum::{Router, body::Bytes, http::HeaderMap, routing::post};
 use plain_rs::features::services::peers::management_http::*;
@@ -63,7 +64,7 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
     let local_dir = plain_libs::temporary::tempdir().unwrap();
     let local = ContentServer::open(local_dir.path()).unwrap();
     let key = plain_libs::utils::base64::base64_decode(&session.token);
-    let url = reqwest::Url::parse(&format!("https://127.0.0.1:{proxy_port}")).unwrap();
+    let url = http_client::Url::parse(&format!("https://127.0.0.1:{proxy_port}")).unwrap();
     let request = json!({"query":"{ app { deviceName } }"});
     let first = query(
         &local.runtime_state().core,
@@ -89,7 +90,7 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
         65536,
     )
     .await;
-    let direct = reqwest::Url::parse(&format!("https://127.0.0.1:{port}")).unwrap();
+    let direct = http_client::Url::parse(&format!("https://127.0.0.1:{port}")).unwrap();
     let fresh = query(
         &local.runtime_state().core,
         &direct,

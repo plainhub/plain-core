@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 
 #[cfg(feature = "http_transport")]
@@ -8,9 +9,9 @@ async fn setup_route_uses_the_real_listener_scheme_and_persists_across_restart()
     let state = core.runtime_state();
     plain_rs::features::prefs::security::configure_password_login(&state.prefs).unwrap();
     let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
-    let client = plain_libs::protocols::http_client::builder()
+    let client = http_client::builder()
         .add_root_certificate(
-            reqwest::Certificate::from_pem(certificate_pem.as_slice()).unwrap(),
+            http_client::Certificate::from_pem(certificate_pem.as_slice()).unwrap(),
         )
         .build()
         .unwrap();

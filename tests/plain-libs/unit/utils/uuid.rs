@@ -52,3 +52,22 @@ fn v4_masks_only_the_version_and_variant_bits() {
     assert_eq!(random.as_bytes()[6] >> 4, 4);
     assert_eq!(random.as_bytes()[8] & 0xc0, 0x80);
 }
+
+#[test]
+fn display_encodes_every_byte_in_each_position() {
+    for position in 0..16 {
+        for byte in 0..=255u8 {
+            let mut bytes = [0; 16];
+            bytes[position] = byte;
+            let mut expected = String::new();
+            for (index, byte) in bytes.iter().enumerate() {
+                use std::fmt::Write;
+                if matches!(index, 4 | 6 | 8 | 10) {
+                    expected.push('-');
+                }
+                write!(&mut expected, "{byte:02x}").unwrap();
+            }
+            assert_eq!(Uuid::from_bytes(bytes).to_string(), expected);
+        }
+    }
+}

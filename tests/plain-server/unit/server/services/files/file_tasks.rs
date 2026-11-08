@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
 use plain_rs::features::files::tasks::FileTaskStatus;
 use serde_json::{Value, json};
@@ -7,7 +8,7 @@ use std::sync::Mutex;
 use tokio_tungstenite::tungstenite::Message;
 
 async fn call(port: u16, token: &str, doc: String) -> Value {
-    let text = plain_libs::protocols::http_client::builder().build().unwrap()
+    let text = http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{port}/graphql"))
         .bearer_auth(token)
         .header("content-type", "application/json")

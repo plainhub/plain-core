@@ -11,6 +11,7 @@
 //! Everything is best-effort: a URL that fails to fetch or lacks usable
 //! metadata simply produces no preview entry.
 
+use plain_libs::protocols::http_client;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::OnceLock;
@@ -70,19 +71,18 @@ fn resolve_url(base: &str, url: &str) -> String {
 /// Host part of `url`, or empty when unparsable. Mirrors
 /// `LinkPreview.extractHost` (ktor `Url(url).host`).
 fn extract_host(url: &str) -> String {
-    reqwest::Url::parse(url)
+    http_client::Url::parse(url)
         .ok()
         .and_then(|u| u.host_str().map(String::from))
         .unwrap_or_default()
 }
 
-/// Attempt a shared fetch client (per call this is cheap; reqwest caches
-/// connections internally).
-fn http_client() -> Option<reqwest::Client> {
-    static CLIENT: OnceLock<Option<reqwest::Client>> = OnceLock::new();
+/// Share the fetch client and its connection pool across requests.
+fn http_client() -> Option<http_client::Client> {
+    static CLIENT: OnceLock<Option<http_client::Client>> = OnceLock::new();
     CLIENT
         .get_or_init(|| {
-            plain_libs::protocols::http_client::builder()
+            http_client::builder()
                 .timeout(FETCH_TIMEOUT)
                 .build()
                 .ok()
@@ -120,7 +120,7 @@ fn og_title_or_default(html: &str) -> Option<String> {
 
 /// Fetch one URL and build a link-preview JSON object (same shape as
 /// `plain-app` `DLinkPreview`). Any failure returns `{url, hasError: true}`.
-async fn fetch_link_preview(client: &reqwest::Client, url: &str) -> (Value, Option<Image>) {
+async fn fetch_link_preview(client: &http_client::Client, url: &str) -> (Value, Option<Image>) {
     let response = match client.get(url).send().await {
         Ok(r) => r,
         Err(_) => return (error_preview(url), None),
@@ -130,7 +130,7 @@ async fn fetch_link_preview(client: &reqwest::Client, url: &str) -> (Value, Opti
     }
     let content_type = response
         .headers()
-        .get(reqwest::header::CONTENT_TYPE)
+        .get(http_client::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_lowercase();
@@ -139,7 +139,7 @@ async fn fetch_link_preview(client: &reqwest::Client, url: &str) -> (Value, Opti
     }
     if response
         .headers()
-        .get(reqwest::header::CONTENT_LENGTH)
+        .get(http_client::header::CONTENT_LENGTH)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<usize>().ok())
         .is_some_and(|len| len > MAX_RESPONSE_SIZE)
@@ -177,7 +177,7 @@ async fn fetch_link_preview(client: &reqwest::Client, url: &str) -> (Value, Opti
         image_url = extract_favicon(&html, url);
     }
     if image_url.is_none() {
-        image_url = reqwest::Url::parse(url)
+        image_url = http_client::Url::parse(url)
             .ok()
             .filter(|u| !u.host_str().unwrap_or("").is_empty())
             .map(|u| {
@@ -246,7 +246,7 @@ fn extract_favicon(html: &str, url: &str) -> Option<String> {
 /// return `(fid:..., width, height)` (empty path on failure). Mirrors
 /// `downloadImageWithSize` + `importImageBytesToFid`.
 async fn download_image_with_size(
-    client: &reqwest::Client,
+    client: &http_client::Client,
     image_url: &str,
 ) -> (Option<Image>, i32, i32) {
     let response = match client.get(image_url).send().await {
@@ -258,7 +258,7 @@ async fn download_image_with_size(
     }
     let content_type = response
         .headers()
-        .get(reqwest::header::CONTENT_TYPE)
+        .get(http_client::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_lowercase();
@@ -297,7 +297,7 @@ struct Image {
     bytes: Vec<u8>,
     mime: String,
 }
-async fn read_bounded(mut response: reqwest::Response, limit: usize) -> anyhow::Result<Vec<u8>> {
+async fn read_bounded(mut response: http_client::Response, limit: usize) -> anyhow::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await? {
         if chunk.len() > limit.saturating_sub(bytes.len()) {
@@ -321,7 +321,7 @@ async fn refresh_with(
     db: &Db,
     directory: &Path,
     id: &str,
-    client: &reqwest::Client,
+    client: &http_client::Client,
 ) -> anyhow::Result<Option<crate::infrastructure::db::DChat>> {
     let Some(row) = crate::infrastructure::db::chat_store::messages::get(db, id)? else {
         return Ok(None);

@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
 use chrono::Utc;
 use plain_rs::features::prefs::Prefs;
@@ -30,7 +31,7 @@ fn fixture() -> Fixture {
 }
 
 async fn call(server: &ContentServer, token: &str, query: &str) -> Value {
-    let text = plain_libs::protocols::http_client::builder().build().unwrap()
+    let text = http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{}/graphql", server.port))
         .bearer_auth(token)
         .header("content-type", "application/json")
@@ -130,7 +131,7 @@ async fn main_schema_rejects_retired_client_scheduler_controls() {
         "{pomodoroTotalCompleted}",
         "mutation { configurePomodoroDay(date:\"2026-10-03\", dayStart:\"2026-10-03T00:00:00Z\") {date} }",
     ] {
-        let result: Value = plain_libs::protocols::http_client::builder().build().unwrap()
+        let result: Value = http_client::builder().build().unwrap()
             .post(format!("http://127.0.0.1:{}/graphql", server.port))
             .bearer_auth(&token)
             .header("content-type", "application/json")

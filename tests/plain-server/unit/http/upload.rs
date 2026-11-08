@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 
 #[test]
@@ -22,7 +23,7 @@ async fn multipart_upload(
     info: serde_json::Value,
     bytes: &[u8],
     file_first: bool,
-) -> reqwest::Response {
+) -> http_client::Response {
     let boundary = "plain-upload-regression-boundary";
     let metadata = format!(
         "{}|{}|{}",
@@ -52,14 +53,14 @@ async fn multipart_upload(
         .chunks(32768)
         .map(|chunk| Ok::<_, std::io::Error>(axum::body::Bytes::copy_from_slice(chunk)))
         .collect::<Vec<_>>();
-    let mut request = plain_libs::protocols::http_client::builder().build().unwrap()
+    let mut request = http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{}{endpoint}", core.port))
         .header("c-id", client_id)
         .header(
             "content-type",
             format!("multipart/form-data; boundary={boundary}"),
         )
-        .body(reqwest::Body::wrap_stream(futures_util::stream::iter(
+        .body(http_client::Body::wrap_stream(futures_util::stream::iter(
             chunks,
         )));
     if let Some(token) = token {

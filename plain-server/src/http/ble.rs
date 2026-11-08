@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::server::ServerState;
 use anyhow::{Result, ensure};
 use axum::body::Body;
@@ -54,7 +55,7 @@ pub(crate) async fn dispatch(state: ServerState, data: &[u8]) -> Result<Vec<u8>>
             offset,
             length,
         } => {
-            let mut url = reqwest::Url::parse("http://localhost/fs")?;
+            let mut url = http_client::Url::parse("http://localhost/fs")?;
             url.query_pairs_mut()
                 .append_pair("id", &file_id)
                 .append_pair("action", "download");

@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
@@ -568,7 +569,7 @@ async fn channel_snapshot_recovers_current_public_list_without_emitting_another_
         plain_rs::features::chat::channels::state::create(&state.db, "actor", "before-reconnect")
             .unwrap();
     let mut events = state.events.subscribe();
-    let client = plain_libs::protocols::http_client::builder().build().unwrap();
+    let client = http_client::builder().build().unwrap();
     let response = client
         .post(format!("http://127.0.0.1:{}/graphql", server.port))
         .bearer_auth(plain_libs::utils::base64::base64_encode(&[3; 32]))

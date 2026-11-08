@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 use crate::server::ContentServer;
 use futures_util::{SinkExt, StreamExt};
@@ -37,7 +38,7 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
         )
         .await
         .unwrap();
-    let _client = plain_libs::protocols::http_client::builder().build().unwrap();
+    let _client = http_client::builder().build().unwrap();
     for action in ["NOPE", "SNAPSHOT"] {
         assert!(control(&server, action).await.is_err());
     }

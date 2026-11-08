@@ -1,6 +1,7 @@
 mod preview;
 pub use preview::title as preview_title;
 
+use plain_libs::protocols::http_client;
 use crate::features::feeds::{error, now, require_url};
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::notes_feeds::FeedEntryRow;
@@ -251,7 +252,7 @@ fn item_to_row(feed: &FeedRow, item: ParsedEntry) -> FeedEntryRow {
     }
 }
 
-fn fetch_error(error_value: reqwest::Error) -> DomainError {
+fn fetch_error(error_value: http_client::Error) -> DomainError {
     if let Some(status) = error_value.status() {
         return error(format!("SERVER:{}: {error_value}", status.as_u16()));
     }
@@ -267,7 +268,7 @@ fn fetch_error(error_value: reqwest::Error) -> DomainError {
 
 pub async fn fetch_text(url: &str, max_bytes: usize) -> DomainResult<String> {
     require_url(url)?;
-    let client = plain_libs::protocols::http_client::builder()
+    let client = http_client::builder()
         .timeout(std::time::Duration::from_secs(25))
         .build()
         .map_err(error)?;

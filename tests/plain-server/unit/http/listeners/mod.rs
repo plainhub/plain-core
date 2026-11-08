@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 use axum::{
     extract::ConnectInfo,
@@ -22,7 +23,7 @@ async fn serves_http_and_tls_then_releases_both_ports() {
     let server = HttpListeners::start(router, 0, 0, cert, key).await.unwrap();
     let http = server.http_port;
     let https = server.https_port;
-    let client = plain_libs::protocols::http_client::builder()
+    let client = http_client::builder()
         .danger_accept_invalid_certs(true)
         .build()
         .unwrap();
@@ -181,9 +182,8 @@ async fn https_connections_disable_nagle_before_application_data() {
     let incoming = tokio::net::TcpListener::from_std(listener.try_clone().unwrap()).unwrap();
     let config = std::sync::Arc::new(tls_config(&certificate, &key).unwrap());
     let client = tokio::spawn(async move {
-        plain_libs::protocols::http_client::builder()
+        http_client::builder()
             .danger_accept_invalid_certs(true)
-            .http1_only()
             .build()
             .unwrap()
             .get(format!("https://{address}/"))

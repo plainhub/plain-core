@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::features::chat::enums::DeviceType;
 use crate::features::services::notifications::types::Notification;
 use crate::features::services::peers::management::Identity;
@@ -211,7 +212,7 @@ impl Store {
         client_id: &str,
         id: &str,
         identity: &Identity,
-        result: Result<(AppSnapshot, Vec<Notification>, reqwest::Url)>,
+        result: Result<(AppSnapshot, Vec<Notification>, http_client::Url)>,
         host: &Arc<crate::infrastructure::host::bridge::Host>,
     ) -> Result<()> {
         let mut state = self.0.lock().unwrap();

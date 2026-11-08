@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 #[test]
 fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encoding() {
@@ -36,7 +37,7 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
             false,
         )
         .unwrap();
-    let url = reqwest::Url::parse(&url).unwrap();
+    let url = http_client::Url::parse(&url).unwrap();
     let query: std::collections::HashMap<_, _> = url.query_pairs().collect();
     assert!(!query.contains_key("sid"));
     let (scope, payload) = crate::features::files::resource_link::parse(&query["id"]).unwrap();

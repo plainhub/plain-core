@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::features::services::peers::peer_transport::Pending;
 use crate::infrastructure::transport::router::Outcome;
 use crate::infrastructure::transport::router::TransportType;
@@ -87,7 +88,7 @@ pub async fn run(
             TransportType::Aware => {
                 let url =
                     crate::features::services::peers::peer_address::download_url(&peer, file_id)?;
-                let url = reqwest::Url::parse(&url)?;
+                let url = http_client::Url::parse(&url)?;
                 let path = format!("{}?{}", url.path(), url.query().unwrap_or_default());
                 let response = tokio::time::timeout(
                     Duration::from_secs(15),

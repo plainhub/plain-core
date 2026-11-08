@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use plain_rs::features::services::peers::peer_address::*;
 use plain_rs::infrastructure::db::DPeer;
 use serde_json::json;
@@ -43,7 +44,7 @@ async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_
     let response = file(&server, &peer, file_id).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
-    let parsed = reqwest::Url::parse(data["peerFileUrl"].as_str().unwrap()).unwrap();
+    let parsed = http_client::Url::parse(data["peerFileUrl"].as_str().unwrap()).unwrap();
     assert_eq!(parsed.host_str(), Some("127.0.0.1"));
     assert_eq!(parsed.path(), "/fs");
     assert_eq!(

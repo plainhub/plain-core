@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::server::ServerState;
 use plain_rs::infrastructure::events::WsEvent;
 use serde::{Deserialize, Serialize};
@@ -132,7 +133,7 @@ impl NativeManagement {
         let Some((port, _)) = self.state.public_ports().await else {
             return Ok(false);
         };
-        plain_libs::protocols::http_client::builder()
+        http_client::builder()
             .no_proxy()
             .timeout(std::time::Duration::from_secs(2))
             .build()
@@ -140,7 +141,7 @@ impl NativeManagement {
             .get(format!("http://127.0.0.1:{port}/health"))
             .send()
             .await
-            .map(|response| response.status() == reqwest::StatusCode::OK)
+            .map(|response| response.status() == http_client::StatusCode::OK)
             .map_err(|error| error.to_string())
     }
 

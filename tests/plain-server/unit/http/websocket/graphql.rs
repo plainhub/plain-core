@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 use futures_util::SinkExt;
 use serde_json::{Value, json};
@@ -131,13 +132,12 @@ async fn heartbeat(socket: &mut TestSocket, cipher: &mut graphql::Stream, key: &
     .unwrap();
 }
 
-async fn connected_http_clients(pem: &str, origin: &str, count: usize) -> Vec<reqwest::Client> {
-    let certificate = reqwest::Certificate::from_pem(pem.as_bytes()).unwrap();
+async fn connected_http_clients(pem: &str, origin: &str, count: usize) -> Vec<http_client::Client> {
+    let certificate = http_client::Certificate::from_pem(pem.as_bytes()).unwrap();
     let mut clients = Vec::with_capacity(count);
     for _ in 0..count {
-        let client = plain_libs::protocols::http_client::builder()
+        let client = http_client::builder()
             .add_root_certificate(certificate.clone())
-            .http1_only()
             .build()
             .unwrap();
         let ready = client
@@ -176,8 +176,8 @@ async fn fs_burst_and_page_cancellation(
         )
         .await
         .unwrap();
-    let http = plain_libs::protocols::http_client::builder()
-        .add_root_certificate(reqwest::Certificate::from_pem(pem.as_bytes()).unwrap())
+    let http = http_client::builder()
+        .add_root_certificate(http_client::Certificate::from_pem(pem.as_bytes()).unwrap())
         .build()
         .unwrap();
     let origin = format!("https://localhost:{port}");
@@ -247,7 +247,7 @@ async fn fs_burst_and_page_cancellation(
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.version(), reqwest::Version::HTTP_11);
+    assert_eq!(response.version(), http_client::Version::HTTP_11);
     let context =
         plain_rs::infrastructure::transport::http_response::Context::new("/graphql", &body);
     let bytes = response.bytes().await.unwrap();
@@ -298,7 +298,7 @@ async fn fs_burst_and_page_cancellation(
         complete.spawn(async move {
             let response = request.send().await.unwrap();
             assert_eq!(response.status(), StatusCode::OK);
-            assert_eq!(response.version(), reqwest::Version::HTTP_11);
+            assert_eq!(response.version(), http_client::Version::HTTP_11);
             let bytes = response.bytes().await.unwrap();
             let image = image::load_from_memory(&bytes).unwrap();
             assert_eq!((image.width(), image.height()), (256, 192));

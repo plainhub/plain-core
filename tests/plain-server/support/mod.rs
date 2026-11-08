@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 #[path = "../../support/filesystem.rs"]
 mod filesystem;
 pub(crate) use filesystem::public_directory;
@@ -12,7 +13,7 @@ pub(crate) async fn graphql_http_variables(
     query: &str,
     variables: serde_json::Value,
 ) -> serde_json::Value {
-    let response = plain_libs::protocols::http_client::builder().build().unwrap()
+    let response = http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{port}/graphql"))
         .bearer_auth(token)
         .header("content-type", "application/json")

@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use rustls::{
     DigitallySignedStruct, SignatureScheme,
     client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
@@ -75,7 +76,7 @@ pub async fn connect_management(
 ) -> anyhow::Result<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
-    let mut url = reqwest::Url::parse(url)?;
+    let mut url = http_client::Url::parse(url)?;
     url.set_path("/graphql");
     connect_with_config(
         url.as_str(),

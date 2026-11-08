@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 use crate::features::chat::enums::DeviceType;
 use crate::infrastructure::db::chat_store::SaveMode;
@@ -35,7 +36,7 @@ fn connection_identity_uses_the_canonical_tls_address_and_encodes_the_local_clie
     let peer = peer();
     let actor = "actor&auth=1 /?";
     let result = identity(&peer, actor, "https://[::1]:18443").unwrap();
-    let url = reqwest::Url::parse(&result.url).unwrap();
+    let url = http_client::Url::parse(&result.url).unwrap();
     assert_eq!(url.scheme(), "wss");
     assert_eq!(url.host_str(), Some("[::1]"));
     assert_eq!(url.port(), Some(18443));

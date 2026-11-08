@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 use crate::infrastructure::db::chat_store::channels;
 
@@ -27,7 +28,7 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core) {
 async fn http_mutations_own_identity_pending_members_and_owner_policy() {
     let (_dir, server) = fixture();
     let state = server.runtime_state();
-    let _client = plain_libs::protocols::http_client::builder().build().unwrap();
+    let _client = http_client::builder().build().unwrap();
     // The channel surface is GraphQL-only now; the runtime takes the actor
     // from the core identity rather than a request header.
     let result = execute(

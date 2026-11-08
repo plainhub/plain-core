@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use serde_json::Value;
@@ -22,7 +23,7 @@ impl std::error::Error for AuthorizationError {}
 
 pub async fn query(
     state: &CoreRuntime,
-    base: &reqwest::Url,
+    base: &http_client::Url,
     client_id: &str,
     key: &[u8],
     request: Value,

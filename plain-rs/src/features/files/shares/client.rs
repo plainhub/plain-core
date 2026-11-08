@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -30,7 +31,7 @@ impl Link {
         link.page_url = url.to_string();
         Ok(link)
     }
-    pub fn url(&self, path: &str) -> Result<reqwest::Url> {
+    pub fn url(&self, path: &str) -> Result<http_client::Url> {
         ensure!(
             self.port > 0 && !self.host.is_empty() && !self.shared_id.is_empty(),
             "Invalid share endpoint"
@@ -42,7 +43,7 @@ impl Link {
                 .any(|c| c.is_whitespace() || "/@?#,\\".contains(c)),
             "Invalid share host"
         );
-        let url = reqwest::Url::parse(&plain_libs::utils::build_url::build_url(
+        let url = http_client::Url::parse(&plain_libs::utils::build_url::build_url(
             "https", &self.host, self.port, path,
         ))?;
         ensure!(

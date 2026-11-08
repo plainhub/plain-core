@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::features::prefs::pref_keys::AI_IMAGE_SEARCH_MODEL;
 use crate::features::services::images::index::ImageIndex;
 use crate::features::services::images::status::ImageSearchStatus;
@@ -347,7 +348,7 @@ impl Runtime {
         tokio::fs::create_dir_all(&directory)
             .await
             .map_err(|e| e.to_string())?;
-        let client = plain_libs::protocols::http_client::builder()
+        let client = http_client::builder()
             .connect_timeout(Duration::from_secs(30))
             .read_timeout(Duration::from_secs(30))
             .build()

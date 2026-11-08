@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
@@ -117,7 +118,7 @@ impl FeedAssets {
         self.cache_formats(url, true).await
     }
     async fn cache_formats(&self, url: &str, bookmark: bool) -> DomainResult<String> {
-        let response = plain_libs::protocols::http_client::builder()
+        let response = http_client::builder()
             .timeout(std::time::Duration::from_secs(15))
             .build()
             .map_err(|e| DomainError::Other(e.to_string()))?

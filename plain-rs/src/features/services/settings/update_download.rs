@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::features::prefs::pref_keys::SKIP_VERSION;
 use crate::features::prefs::security::UpdateInfo;
 use crate::features::services::settings::updates;
@@ -286,8 +287,8 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
         }
     }
 }
-fn validate_url(raw: &str) -> Result<reqwest::Url> {
-    let url = reqwest::Url::parse(raw)?;
+fn validate_url(raw: &str) -> Result<http_client::Url> {
+    let url = http_client::Url::parse(raw)?;
     ensure!(
         url.scheme() == "https"
             && url.host_str().is_some()
@@ -297,12 +298,11 @@ fn validate_url(raw: &str) -> Result<reqwest::Url> {
     );
     Ok(url)
 }
-fn client() -> Result<&'static reqwest::Client> {
-    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+fn client() -> Result<&'static http_client::Client> {
+    static CLIENT: OnceLock<Result<http_client::Client, String>> = OnceLock::new();
     CLIENT
         .get_or_init(|| {
-            plain_libs::protocols::http_client::builder()
-                .use_rustls_tls()
+            http_client::builder()
                 .https_only(true)
                 .user_agent("PlainHub")
                 .connect_timeout(Duration::from_secs(30))

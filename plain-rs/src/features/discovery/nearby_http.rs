@@ -1,15 +1,15 @@
 pub use crate::features::discovery::nearby_wire::Message;
+use plain_libs::protocols::http_client;
 use anyhow::Result;
 use std::{sync::OnceLock, time::Duration};
 
-fn client() -> Result<&'static reqwest::Client> {
-    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+fn client() -> Result<&'static http_client::Client> {
+    static CLIENT: OnceLock<Result<http_client::Client, String>> = OnceLock::new();
     CLIENT
         .get_or_init(|| {
-            plain_libs::protocols::http_client::builder()
+            http_client::builder()
                 .no_proxy()
                 .danger_accept_invalid_certs(true)
-                .danger_accept_invalid_hostnames(true)
                 .connect_timeout(Duration::from_secs(5))
                 .build()
                 .map_err(|e| e.to_string())
@@ -35,7 +35,7 @@ pub fn url(ip: &str, port: u16) -> Result<String> {
 pub async fn post_url(url: &str, body: String, timeout: Duration) -> Result<bool> {
     let result = client()?
         .post(url)
-        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .header(http_client::header::CONTENT_TYPE, "application/json")
         .timeout(timeout)
         .body(body)
         .send()

@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use crate::features::prefs::pref_keys::{AUTO_CHECK_UPDATE, SKIP_VERSION};
 use crate::features::prefs::security::UpdateInfo;
 use crate::features::updates::Release;
@@ -15,12 +16,11 @@ pub enum AppUpdateStatus {
     NotDue,
 }
 
-fn client() -> Result<&'static reqwest::Client> {
-    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+fn client() -> Result<&'static http_client::Client> {
+    static CLIENT: OnceLock<Result<http_client::Client, String>> = OnceLock::new();
     CLIENT
         .get_or_init(|| {
-            plain_libs::protocols::http_client::builder()
-                .use_rustls_tls()
+            http_client::builder()
                 .user_agent("PlainHub")
                 .timeout(Duration::from_secs(30))
                 .build()
@@ -156,15 +156,15 @@ async fn fetch(state: &CoreRuntime) -> Result<AppUpdateStatus> {
         .ok_or_else(|| anyhow!("Missing update source"))?;
     let abis = &startup.supported_abis;
     let version = &startup.app_version;
-    let url = reqwest::Url::parse(&source.url)?;
+    let url = http_client::Url::parse(&source.url)?;
     ensure!(
         url.scheme() == "https" && url.host_str().is_some(),
         "Invalid update source"
     );
     let response = client()?.get(url).send().await?;
     update(state, serde_json::json!({"checkUpdateTime":now_ms}))?;
-    if response.status() == reqwest::StatusCode::FORBIDDEN
-        || response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
+    if response.status() == http_client::StatusCode::FORBIDDEN
+        || response.status() == http_client::StatusCode::TOO_MANY_REQUESTS
     {
         return Ok(AppUpdateStatus::RateLimited);
     }

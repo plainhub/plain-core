@@ -5,6 +5,7 @@
 //! Only the client that holds the urlToken can mint one, so the decrypted value
 //! is a peer URL chosen by the UI, not attacker input.
 
+use plain_libs::protocols::http_client;
 use crate::server::ServerState;
 use axum::{
     body::Body,
@@ -84,7 +85,7 @@ pub(crate) async fn call(
     proxy(&url, &headers).await
 }
 fn resource_target(url: &str, parameters: &crate::http::fs::Parameters) -> anyhow::Result<String> {
-    let mut url = reqwest::Url::parse(url)?;
+    let mut url = http_client::Url::parse(url)?;
     anyhow::ensure!(url.path() == "/fs", "File resource URL required");
     let id = url
         .query_pairs()
@@ -113,7 +114,7 @@ fn resource_target(url: &str, parameters: &crate::http::fs::Parameters) -> anyho
 }
 
 pub(crate) async fn proxy(url: &str, headers: &HeaderMap) -> Response {
-    let client = match plain_libs::protocols::http_client::builder().build() {
+    let client = match http_client::builder().build() {
         Ok(client) => client,
         Err(error) => {
             return (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response();

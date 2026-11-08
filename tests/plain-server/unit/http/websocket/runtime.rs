@@ -1,3 +1,4 @@
+use plain_libs::protocols::http_client;
 use super::*;
 #[test]
 fn upstream_json_keeps_the_control_envelope_registry() {
@@ -339,7 +340,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
 #[tokio::test]
 async fn root_serves_the_spa_and_old_ws_path_never_upgrades() {
     let (_directory, core) = public_fixture();
-    let client = plain_libs::protocols::http_client::builder().build().unwrap();
+    let client = http_client::builder().build().unwrap();
     for path in ["/", "/ws?cid=browser"] {
         let response = client
             .get(format!("http://127.0.0.1:{}{path}", core.port))
