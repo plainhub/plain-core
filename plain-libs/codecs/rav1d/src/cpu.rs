@@ -118,7 +118,10 @@ impl CpuFlags {
 
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            use raw_cpuid::CpuId;
+            #[cfg(target_arch = "x86")]
+            use std::arch::x86::__cpuid;
+            #[cfg(target_arch = "x86_64")]
+            use std::arch::x86_64::__cpuid;
 
             if is_x86_feature_detected!("sse2") {
                 flags |= Self::SSE2;
@@ -150,22 +153,25 @@ impl CpuFlags {
                 flags |= Self::AVX512ICL;
             }
 
-            /// Detect Excavator, Zen, Zen+, Zen 2, Zen 3, Zen 3+, Zen 4.
-            fn is_slow_gather() -> Option<()> {
-                let cpu_id = CpuId::new();
-
-                let vendor = cpu_id.get_vendor_info()?;
-                let is_amd = vendor.as_str() == "AuthenticAMD";
-                if !is_amd {
-                    return None;
+            fn is_slow_gather() -> bool {
+                let vendor = __cpuid(0);
+                if vendor.eax < 1
+                    || vendor.ebx != u32::from_le_bytes(*b"Auth")
+                    || vendor.edx != u32::from_le_bytes(*b"enti")
+                    || vendor.ecx != u32::from_le_bytes(*b"cAMD")
+                {
+                    return false;
                 }
-
-                let features = cpu_id.get_feature_info()?;
-                let family = features.family_id();
-
-                (family <= 0x19).then_some(())
+                let eax = __cpuid(1).eax;
+                let base_family = (eax >> 8) & 0xf;
+                let family = if base_family == 0xf {
+                    base_family + ((eax >> 20) & 0xff)
+                } else {
+                    base_family
+                };
+                family <= 0x19
             }
-            if flags.contains(Self::AVX2) && is_slow_gather().is_some() {
+            if flags.contains(Self::AVX2) && is_slow_gather() {
                 flags |= Self::SLOW_GATHER;
             }
         }
@@ -247,7 +253,6 @@ pub(crate) fn rav1d_init_cpu() {
 pub fn rav1d_set_cpu_flags_mask(mask: c_uint) {
     RAV1D_CPU_FLAGS_MASK.store(mask, Ordering::SeqCst);
 }
-
 
 #[cold]
 pub extern "C" fn dav1d_set_cpu_flags_mask(mask: c_uint) {

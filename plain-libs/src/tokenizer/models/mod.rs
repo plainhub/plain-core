@@ -3,7 +3,6 @@ pub mod unigram;
 pub mod wordlevel;
 pub mod wordpiece;
 
-use ahash::AHashMap;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -15,11 +14,11 @@ use crate::tokenizer::models::wordpiece::WordPiece;
 use crate::tokenizer::{Model, Result, Token};
 
 struct OrderedVocabIter<'a> {
-    vocab_r: &'a AHashMap<u32, String>,
+    vocab_r: &'a HashMap<u32, String>,
 }
 
 impl<'a> OrderedVocabIter<'a> {
-    fn new(vocab_r: &'a AHashMap<u32, String>) -> Self {
+    fn new(vocab_r: &'a HashMap<u32, String>) -> Self {
         Self { vocab_r }
     }
 }

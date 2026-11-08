@@ -1,7 +1,6 @@
 use crate::tokenizer::decoders::wordpiece;
 use crate::tokenizer::tokenizer::{Decoder, Result};
 
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,10 +35,10 @@ impl Default for CTC {
 }
 
 impl Decoder for CTC {
-    fn decode_chain(&self, tokens: Vec<String>) -> Result<Vec<String>> {
+    fn decode_chain(&self, mut tokens: Vec<String>) -> Result<Vec<String>> {
+        tokens.dedup();
         Ok(tokens
             .into_iter()
-            .dedup()
             .filter_map(|token| {
                 let mut replaced = token.replace(&self.pad_token, "");
                 if self.cleanup {

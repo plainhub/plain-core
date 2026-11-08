@@ -1,0 +1,7 @@
+{
+  "name": "axum",
+  "version": "0.7.9",
+  "repository": "https://github.com/tokio-rs/axum",
+  "archive-sha256": "edca88bc138befd0323b20752846e6587272d3b03b0343c8ea28a6f819e6e71f",
+  "revision": "9983bc1da460becd3a0f08c513d610411e84dd43"
+}

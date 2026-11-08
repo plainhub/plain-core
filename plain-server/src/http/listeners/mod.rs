@@ -9,11 +9,8 @@ mod public_server;
 use axum::{Extension, Router};
 
 use crate::http::ConnectionScheme;
-use axum_server::{
-    Handle,
-    accept::NoDelayAcceptor,
-    tls_rustls::{RustlsAcceptor, RustlsConfig},
-};
+use plain_libs::protocols::https::{self, ServerConfig};
+pub use plain_rs::infrastructure::tls_identity::config as tls_config;
 use std::{net::SocketAddr, time::Duration};
 use tokio::{sync::watch, task::JoinHandle};
 
@@ -21,7 +18,6 @@ pub struct HttpListeners {
     pub http_port: u16,
     pub https_port: u16,
     stop: watch::Sender<bool>,
-    tls_handle: Handle,
     tasks: Vec<JoinHandle<()>>,
     failure: watch::Receiver<Option<String>>,
 }
@@ -42,7 +38,7 @@ impl HttpListeners {
         router: Router,
         http_port: u16,
         https_port: u16,
-        tls: RustlsConfig,
+        tls: ServerConfig,
     ) -> Result<Self, String> {
         let router = crate::http::router::with_readiness(router);
         let http = bind::bind_listener_fallback(http_port, &bind::HTTP_PORTS)
@@ -52,9 +48,9 @@ impl HttpListeners {
         let http_port = http.local_addr().map_err(|e| e.to_string())?.port();
         let https_port = https.local_addr().map_err(|e| e.to_string())?.port();
         http.set_nonblocking(true).map_err(|e| e.to_string())?;
-        https.set_nonblocking(true).map_err(|e| e.to_string())?;
         let http = tokio::net::TcpListener::from_std(http).map_err(|e| e.to_string())?;
         let (stop, mut receiver) = watch::channel(false);
+        let tls_stop = receiver.clone();
         let app = router
             .clone()
             .layer(Extension(ConnectionScheme("http")))
@@ -73,18 +69,15 @@ impl HttpListeners {
             }
             task_guard.completed = true;
         });
-        let tls_handle = Handle::new();
-        let handle = tls_handle.clone();
         let tls_task = tokio::spawn(async move {
             let mut task_guard = ListenerTaskGuard::new("HTTPS", failure_sender.clone());
-            if let Err(error) = https_server(https, tls)
-                .handle(handle)
-                .serve(
-                    router
-                        .layer(Extension(ConnectionScheme("https")))
-                        .into_make_service_with_connect_info::<SocketAddr>(),
-                )
-                .await
+            if let Err(error) = https::serve(
+                https,
+                router.layer(Extension(ConnectionScheme("https"))),
+                tls,
+                tls_stop,
+            )
+            .await
             {
                 let _ = failure_sender.send(Some(format!("HTTPS serve failed: {error}")));
             }
@@ -94,7 +87,6 @@ impl HttpListeners {
             http_port,
             https_port,
             stop,
-            tls_handle,
             tasks: vec![http_task, tls_task],
             failure,
         };
@@ -147,8 +139,6 @@ impl HttpListeners {
 
     pub async fn shutdown(mut self) {
         let _ = self.stop.send(true);
-        self.tls_handle
-            .graceful_shutdown(Some(Duration::from_secs(1)));
         let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
         for task in &mut self.tasks {
             if tokio::time::timeout_at(deadline, &mut *task).await.is_err() {
@@ -162,7 +152,6 @@ impl HttpListeners {
 impl Drop for HttpListeners {
     fn drop(&mut self) {
         let _ = self.stop.send(true);
-        self.tls_handle.shutdown();
         for task in &self.tasks {
             task.abort();
         }
@@ -194,20 +183,6 @@ impl Drop for ListenerTaskGuard {
             )));
         }
     }
-}
-
-fn https_server(
-    listener: std::net::TcpListener,
-    tls: RustlsConfig,
-) -> axum_server::Server<RustlsAcceptor<NoDelayAcceptor>> {
-    axum_server::from_tcp(listener)
-        .acceptor(RustlsAcceptor::new(tls).acceptor(NoDelayAcceptor::new()))
-}
-
-pub fn tls_config(certificate_pem: &[u8], private_key_pem: &[u8]) -> Result<RustlsConfig, String> {
-    Ok(RustlsConfig::from_config(std::sync::Arc::new(
-        plain_rs::infrastructure::tls_identity::config(certificate_pem, private_key_pem)?,
-    )))
 }
 
 #[cfg(test)]

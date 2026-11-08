@@ -17,7 +17,6 @@ use crate::src::wrap_fn_ptr::wrap_fn_ptr;
 use libc::ptrdiff_t;
 use std::cmp;
 use std::ffi::c_int;
-use strum::FromRepr;
 
 #[cfg(all(
     feature = "asm",
@@ -275,16 +274,20 @@ fn loop_filter<BD: BitDepth>(
     }
 }
 
-#[derive(FromRepr)]
-enum HV {
-    H,
-    V,
+crate::src::enum_map::enum_values! {
+    from_repr(usize);
+    enum HV {
+        H,
+        V,
+    }
 }
 
-#[derive(FromRepr)]
-enum YUV {
-    Y,
-    UV,
+crate::src::enum_map::enum_values! {
+    from_repr(usize);
+    enum YUV {
+        Y,
+        UV,
+    }
 }
 
 fn loop_filter_sb128_rust<BD: BitDepth, const HV: usize, const YUV: usize>(
@@ -466,7 +469,7 @@ impl Rav1dLoopFilterDSPContext {
             }
         }
 
-         // Reachable on some #[cfg]s.
+        // Reachable on some #[cfg]s.
         {
             let _ = flags;
             self

@@ -1,22 +1,24 @@
+use std::collections::HashMap;
 pub(crate) mod cache;
 
 #[cfg(feature = "ai-image-search")]
-mod fancy;
+mod fancy_engine;
 #[cfg(feature = "ai-image-search")]
-pub use fancy::SysRegex;
-
-#[cfg(not(feature = "ai-image-search"))]
-compile_error!("The `fancy-regex` feature must be enabled");
+pub use fancy_engine::SysRegex;
 
 pub mod padding;
 pub mod truncation;
 
-use ahash::AHashMap;
 use serde::{Serialize, Serializer};
 use std::collections::BTreeMap;
 
+#[derive(serde::Deserialize, Serialize)]
+pub(super) struct ComponentTag<T> {
+    pub(super) r#type: T,
+}
+
 pub(crate) fn ordered_map<S, K, V>(
-    value: &AHashMap<K, V>,
+    value: &HashMap<K, V>,
     serializer: S,
 ) -> std::result::Result<S::Ok, S::Error>
 where
@@ -38,7 +40,6 @@ macro_rules! impl_enum_from (
     }
 );
 
-#[macro_export]
 macro_rules! impl_serde_type{
     (
      $(#[$meta:meta])*
@@ -94,41 +95,36 @@ macro_rules! impl_serde_type{
      $(#[$meta:meta])*
      $vis:vis struct $struct_name:ident;
     ) => {
-        paste::paste!{
-            $(#[$meta])*
-            $vis struct $struct_name;
+        $(#[$meta])*
+        $vis struct $struct_name;
 
-            impl serde::Serialize for $struct_name {
-                fn serialize<S>(&self, serializer: S)  -> std::result::Result<S::Ok, S::Error> where
-                    S: serde::ser::Serializer {
-                    let helper = [<$struct_name Helper>]{r#type: [<$struct_name Type>]::$struct_name};
-                    helper.serialize(serializer)
+        impl serde::Serialize for $struct_name {
+            fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                let tag = $crate::tokenizer::utils::ComponentTag {
+                    r#type: stringify!($struct_name),
+                };
+                serde::Serialize::serialize(&tag, serializer)
+            }
+        }
+
+        impl<'de> serde::Deserialize<'de> for $struct_name {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let tag: $crate::tokenizer::utils::ComponentTag<String> =
+                    serde::Deserialize::deserialize(deserializer)?;
+                if tag.r#type != stringify!($struct_name) {
+                    return Err(serde::de::Error::unknown_variant(
+                        &tag.r#type,
+                        &[stringify!($struct_name)],
+                    ));
                 }
-            }
-
-            impl<'de> serde::Deserialize<'de> for $struct_name {
-                fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-                where
-                    D: serde::Deserializer<'de>,
-                {
-                    let _helper = [<$struct_name Helper>]::deserialize(deserializer)?;
-                    Ok($struct_name)
-                }
-            }
-
-            #[derive(serde::Serialize, serde::Deserialize)]
-            enum [<$struct_name Type>] {
-                $struct_name,
-            }
-
-            #[derive(serde::Serialize, serde::Deserialize)]
-            struct [<$struct_name Helper>] {
-
-                r#type: [<$struct_name Type>],
+                Ok($struct_name)
             }
         }
     }
 }
-
-// Re-export macro_rules_attribute
-pub use macro_rules_attribute::macro_rules_attribute;

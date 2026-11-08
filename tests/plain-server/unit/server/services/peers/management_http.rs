@@ -47,17 +47,16 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
         }),
     );
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let config = axum_server::tls_rustls::RustlsConfig::from_pem(
-        cert.cert.pem().into_bytes(),
-        cert.key_pair.serialize_pem().into_bytes(),
+    let config = plain_rs::infrastructure::tls_identity::config(
+        cert.cert.pem().as_bytes(),
+        cert.key_pair.serialize_pem().as_bytes(),
     )
-    .await
     .unwrap();
     let socket = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let proxy_port = socket.local_addr().unwrap().port();
     let proxy = tokio::spawn(async move {
-        axum_server::from_tcp_rustls(socket, config)
-            .serve(router.into_make_service())
+        let (_stop, stopped) = tokio::sync::watch::channel(false);
+        plain_libs::protocols::https::serve(socket, router, config, stopped)
             .await
             .unwrap();
     });

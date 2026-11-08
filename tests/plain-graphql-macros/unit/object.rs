@@ -12,14 +12,10 @@ fn ordinary_objects_use_the_default_no_entity_path() {
 
 #[test]
 fn unused_entity_and_concrete_options_are_rejected() {
-    use darling::FromMeta;
+    use crate::meta::FromMeta;
     assert!(
         args::Object::from_list(
-            &darling::ast::NestedMeta::parse_meta_list(quote::quote!(concrete(
-                name = "X",
-                params(i32)
-            )))
-            .unwrap()
+            crate::meta::parse_list(quote::quote!(concrete(name = "X", params(i32)))).unwrap()
         )
         .is_err()
     );
@@ -46,7 +42,7 @@ fn parameters_are_immutable_and_unused_processor_options_are_rejected() {
 
 #[test]
 fn unused_generation_options_are_rejected() {
-    use darling::FromMeta;
+    use crate::meta::FromMeta;
     for option in [
         "name_type",
         "serial",
@@ -57,8 +53,8 @@ fn unused_generation_options_are_rejected() {
         r#"rename_args = "snake_case""#,
     ] {
         let tokens = option.parse().unwrap();
-        let items = darling::ast::NestedMeta::parse_meta_list(tokens).unwrap();
-        assert!(args::Object::from_list(&items).is_err(), "{option}");
+        let items = crate::meta::parse_list(tokens).unwrap();
+        assert!(args::Object::from_list(items).is_err(), "{option}");
     }
     for option in [
         "flatten",
@@ -66,14 +62,14 @@ fn unused_generation_options_are_rejected() {
         "complexity = 3",
     ] {
         let tokens = option.parse().unwrap();
-        let items = darling::ast::NestedMeta::parse_meta_list(tokens).unwrap();
-        assert!(args::ObjectField::from_list(&items).is_err(), "{option}");
+        let items = crate::meta::parse_list(tokens).unwrap();
+        assert!(args::ObjectField::from_list(items).is_err(), "{option}");
     }
 }
 
 #[test]
 fn unused_argument_secrecy_metadata_is_rejected() {
-    use darling::FromMeta;
-    let items = darling::ast::NestedMeta::parse_meta_list(quote::quote!(secret)).unwrap();
-    assert!(args::Argument::from_list(&items).is_err());
+    use crate::meta::FromMeta;
+    let items = crate::meta::parse_list(quote::quote!(secret)).unwrap();
+    assert!(args::Argument::from_list(items).is_err());
 }

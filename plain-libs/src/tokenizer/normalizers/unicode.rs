@@ -1,9 +1,9 @@
 use crate::tokenizer::tokenizer::{NormalizedString, Normalizer, Result};
-use crate::tokenizer::utils::macro_rules_attribute;
 
-#[derive(Default, Copy, Clone, Debug)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct NFD;
+impl_serde_type! {
+    #[derive(Default, Copy, Clone, Debug)]
+    pub struct NFD;
+}
 impl Normalizer for NFD {
     fn normalize(&self, normalized: &mut NormalizedString) -> Result<()> {
         normalized.nfd();
@@ -11,9 +11,10 @@ impl Normalizer for NFD {
     }
 }
 
-#[derive(Default, Copy, Clone, Debug)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct NFKD;
+impl_serde_type! {
+    #[derive(Default, Copy, Clone, Debug)]
+    pub struct NFKD;
+}
 impl Normalizer for NFKD {
     fn normalize(&self, normalized: &mut NormalizedString) -> Result<()> {
         normalized.nfkd();
@@ -21,9 +22,10 @@ impl Normalizer for NFKD {
     }
 }
 
-#[derive(Default, Copy, Clone, Debug)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct NFC;
+impl_serde_type! {
+    #[derive(Default, Copy, Clone, Debug)]
+    pub struct NFC;
+}
 impl Normalizer for NFC {
     fn normalize(&self, normalized: &mut NormalizedString) -> Result<()> {
         normalized.nfc();
@@ -31,9 +33,10 @@ impl Normalizer for NFC {
     }
 }
 
-#[derive(Default, Copy, Clone, Debug)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct NFKC;
+impl_serde_type! {
+    #[derive(Default, Copy, Clone, Debug)]
+    pub struct NFKC;
+}
 impl Normalizer for NFKC {
     fn normalize(&self, normalized: &mut NormalizedString) -> Result<()> {
         normalized.nfkc();
@@ -72,9 +75,10 @@ fn do_nmt(normalized: &mut NormalizedString) {
         });
 }
 
-#[derive(Default, Copy, Clone, Debug)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct Nmt;
+impl_serde_type! {
+    #[derive(Default, Copy, Clone, Debug)]
+    pub struct Nmt;
+}
 impl Normalizer for Nmt {
     fn normalize(&self, normalized: &mut NormalizedString) -> Result<()> {
         do_nmt(normalized);

@@ -6,8 +6,8 @@ use crate::audio_tags::util::math::RoundedDivision;
 use std::io::{Read, Seek, SeekFrom};
 use std::time::Duration;
 
+use crate::audio_tags::ogg::page::{Packets, PageHeader};
 use crate::utils::binary::{LittleEndian, ReadBytesExt};
-use ogg_pager::{Packets, PageHeader};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 #[non_exhaustive]
@@ -108,7 +108,7 @@ where
     let mut length = 1000;
     if let Ok(last_page) = last_page {
         let first_page_abgp = first_page_header.abgp;
-        let last_page_abgp = last_page.header().abgp;
+        let last_page_abgp = last_page.abgp;
 
         if properties.sample_rate > 0 {
             let total_samples = u128::from(last_page_abgp.saturating_sub(first_page_abgp));

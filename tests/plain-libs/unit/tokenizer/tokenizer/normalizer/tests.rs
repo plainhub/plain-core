@@ -1,6 +1,6 @@
 use super::*;
 use regex::Regex;
-use unicode_categories::UnicodeCategories;
+use crate::tokenizer::unicode_categories::is_mark_nonspacing;
 
 #[test]
 fn test_len_range_inclusive() {
@@ -55,7 +55,7 @@ fn nfd_adds_new_chars() {
 #[test]
 fn remove_chars_added_by_nfd() {
     let mut n = NormalizedString::from("élégant");
-    n.nfd().filter(|c| !c.is_mark_nonspacing());
+    n.nfd().filter(|c| !is_mark_nonspacing(c));
 
     assert_eq!(n.get(), "elegant");
 
@@ -117,7 +117,7 @@ fn remove_chars() {
 #[test]
 fn mixed_addition_and_removal() {
     let mut n = NormalizedString::from("élégant");
-    n.nfd().filter(|c| !c.is_mark_nonspacing() && c != 'n');
+    n.nfd().filter(|c| !is_mark_nonspacing(c) && c != 'n');
     assert_eq!(n.get(), "elegat");
     assert_eq!(
         &n.alignments,

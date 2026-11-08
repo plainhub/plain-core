@@ -1,20 +1,14 @@
 use crate::tokenizer::tokenizer::{Decoder, Result};
-use monostate::MustBe;
 
-use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize, Clone, Debug, Serialize, Default)]
-#[non_exhaustive]
-pub struct ByteFallback {
-    #[serde(rename = "type")]
-    type_: MustBe!("ByteFallback"),
+impl_serde_type! {
+    #[derive(Clone, Debug, Default)]
+    #[non_exhaustive]
+    pub struct ByteFallback;
 }
 
 impl ByteFallback {
     pub fn new() -> Self {
-        Self {
-            type_: MustBe!("ByteFallback"),
-        }
+        Self
     }
 }
 
@@ -32,30 +26,23 @@ impl Decoder for ByteFallback {
             if let Some(bytes) = bytes {
                 previous_byte_tokens.push(bytes);
             } else {
-                if !previous_byte_tokens.is_empty() {
-                    if let Ok(string) = String::from_utf8(previous_byte_tokens.clone()) {
-                        new_tokens.push(string);
-                    } else {
-                        for _ in 0..previous_byte_tokens.len() {
-                            new_tokens.push("�".into());
-                        }
-                    }
-                    previous_byte_tokens.clear();
-                }
+                flush_bytes(&mut previous_byte_tokens, &mut new_tokens);
                 new_tokens.push(token);
             }
         }
-        if !previous_byte_tokens.is_empty() {
-            if let Ok(string) = String::from_utf8(previous_byte_tokens.clone()) {
-                new_tokens.push(string);
-            } else {
-                for _ in 0..previous_byte_tokens.len() {
-                    new_tokens.push("�".into());
-                }
-            }
-        }
+        flush_bytes(&mut previous_byte_tokens, &mut new_tokens);
 
         Ok(new_tokens)
+    }
+}
+
+fn flush_bytes(bytes: &mut Vec<u8>, tokens: &mut Vec<String>) {
+    if bytes.is_empty() {
+        return;
+    }
+    match String::from_utf8(std::mem::take(bytes)) {
+        Ok(text) => tokens.push(text),
+        Err(error) => tokens.resize_with(tokens.len() + error.as_bytes().len(), || "�".into()),
     }
 }
 

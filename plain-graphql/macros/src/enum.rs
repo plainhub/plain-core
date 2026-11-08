@@ -2,7 +2,7 @@ use crate::{
     args::{self, RenameRuleExt, RenameTarget},
     utils::{GeneratorResult, gen_deprecation, get_crate_path, get_rustdoc},
 };
-use darling::ast::Data;
+use crate::meta::Data;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Error, ext::IdentExt};
@@ -34,7 +34,7 @@ pub fn generate(enum_args: &args::Enum) -> GeneratorResult<TokenStream> {
     let mut items = Vec::new();
     let mut schema_enum_items = Vec::new();
     for variant in e {
-        if !variant.fields.is_empty() {
+        if !variant.fields.fields.is_empty() {
             return Err(Error::new_spanned(
                 &variant.ident,
                 format!(

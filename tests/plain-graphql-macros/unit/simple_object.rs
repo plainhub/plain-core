@@ -1,5 +1,4 @@
 use super::*;
-use darling::FromDeriveInput;
 
 fn getters(input: syn::DeriveInput) -> Vec<String> {
     let args = args::SimpleObject::from_derive_input(&input).unwrap();

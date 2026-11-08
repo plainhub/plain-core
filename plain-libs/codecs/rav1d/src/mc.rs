@@ -35,7 +35,6 @@ use std::iter;
 use std::mem;
 use std::ptr;
 use std::slice;
-use to_method::To;
 
 #[cfg(all(
     feature = "asm",
@@ -132,7 +131,7 @@ fn filter_8tap<BD: BitDepth>(
     let pixel = (0..f.len())
         .map(|y| {
             let px = *(src + x + (y as isize - 3) * stride).index::<BD>();
-            f[y] as i32 * px.to::<i32>()
+            f[y] as i32 * Into::<i32>::into(px)
         })
         .sum();
     FilterResult { pixel }
@@ -405,7 +404,8 @@ fn filter_bilin<BD: BitDepth>(
     mxy: usize,
     stride: isize,
 ) -> FilterResult {
-    let src = |y: isize, x: usize| -> i32 { (*(src + x + y * stride).index::<BD>()).to::<i32>() };
+    let src =
+        |y: isize, x: usize| -> i32 { Into::<i32>::into(*(src + x + y * stride).index::<BD>()) };
     let x0 = src(0, x);
     let x1 = src(1, x);
     let pixel = 16 * x0 + mxy as i32 * (x1 - x0);
@@ -638,9 +638,7 @@ fn avg_rust<BD: BitDepth>(
         let dst = dst + (y as isize * dst.pixel_stride::<BD>());
         let dst = &mut *dst.slice_mut::<BD>(w);
         for x in 0..w {
-            dst[x] = bd.iclip_pixel(
-                ((tmp1[y * w + x] as i32 + tmp2[y * w + x] as i32 + rnd) >> sh).to::<i32>(),
-            );
+            dst[x] = bd.iclip_pixel((tmp1[y * w + x] as i32 + tmp2[y * w + x] as i32 + rnd) >> sh);
         }
     }
 }
@@ -1022,7 +1020,8 @@ fn resize_rust<BD: BitDepth>(
             dst[dst_x] = bd.iclip_pixel(
                 -(0..f.len())
                     .map(|i| {
-                        f[i] as i32 * src[iclip(src_x + i as i32, 0, max) as usize].to::<i32>()
+                        f[i] as i32
+                            * Into::<i32>::into(src[iclip(src_x + i as i32, 0, max) as usize])
                     })
                     .sum::<i32>()
                     + 64
@@ -2384,7 +2383,7 @@ impl Rav1dMCDSPContext {
             }
         }
 
-         // Reachable on some #[cfg]s.
+        // Reachable on some #[cfg]s.
         {
             let _ = flags;
             self

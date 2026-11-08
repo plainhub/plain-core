@@ -1,12 +1,12 @@
 use crate::tokenizer::processors::PostProcessorWrapper;
 use crate::tokenizer::tokenizer::{Encoding, PostProcessor, Result};
-use crate::tokenizer::utils::macro_rules_attribute;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct Sequence {
-    processors: Vec<PostProcessorWrapper>,
+impl_serde_type! {
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Sequence {
+        processors: Vec<PostProcessorWrapper>,
+    }
 }
 
 impl Sequence {

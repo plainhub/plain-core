@@ -43,7 +43,7 @@ fn bert_processing() {
             vec![1, 0, 0, 1],
             vec![1, 1, 1, 1],
             vec![],
-            AHashMap::from_iter(vec![(0, 1..3)]),
+            HashMap::from_iter(vec![(0, 1..3)]),
         )
     );
     assert_eq!(single_encoding.token_to_sequence(2), Some(0));
@@ -69,7 +69,7 @@ fn bert_processing() {
             vec![1, 0, 0, 1, 0, 1],
             vec![1, 1, 1, 1, 1, 1],
             vec![],
-            AHashMap::from_iter(vec![(0, 1..3), (1, 4..5)]),
+            HashMap::from_iter(vec![(0, 1..3), (1, 4..5)]),
         )
     );
     assert_eq!(pair_encoding.token_to_sequence(2), Some(0));
@@ -90,7 +90,7 @@ fn bert_processing() {
             vec![0, 0, 0],
             vec![1, 1, 1],
             vec![],
-            AHashMap::from_iter(vec![(0, 0..2), (1, 2..3)]),
+            HashMap::from_iter(vec![(0, 0..2), (1, 2..3)]),
         )
     );
     assert_eq!(pair_encoding.token_to_sequence(0), Some(0));

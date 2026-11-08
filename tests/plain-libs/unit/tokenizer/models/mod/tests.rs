@@ -3,8 +3,8 @@ use crate::tokenizer::models::bpe::{BpeBuilder, Vocab};
 
 #[test]
 fn incomplete_ordered_vocab() {
-    let vocab_r: AHashMap<u32, String> =
-        AHashMap::from([(0, "Hi".to_string()), (2, "There".to_string())]);
+    let vocab_r: HashMap<u32, String> =
+        HashMap::from([(0, "Hi".to_string()), (2, "There".to_string())]);
 
     let ordered = OrderedVocabIter::new(&vocab_r);
 

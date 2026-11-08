@@ -34,46 +34,37 @@ impl Pattern for &String {
 
 impl Pattern for &Regex {
     fn find_matches(&self, inside: &str) -> Result<Vec<(Offsets, bool)>> {
-        if inside.is_empty() {
-            return Ok(vec![((0, 0), false)]);
-        }
-
-        let mut prev = 0;
-        let mut splits = Vec::with_capacity(inside.len());
-        for m in self.find_iter(inside) {
-            if prev != m.start() {
-                splits.push(((prev, m.start()), false));
-            }
-            splits.push(((m.start(), m.end()), true));
-            prev = m.end();
-        }
-        if prev != inside.len() {
-            splits.push(((prev, inside.len()), false))
-        }
-        Ok(splits)
+        Ok(matches_and_gaps(
+            inside,
+            self.find_iter(inside).map(|m| (m.start(), m.end())),
+        ))
     }
 }
 
 impl Pattern for &SysRegex {
     fn find_matches(&self, inside: &str) -> Result<Vec<(Offsets, bool)>> {
-        if inside.is_empty() {
-            return Ok(vec![((0, 0), false)]);
-        }
-
-        let mut prev = 0;
-        let mut splits = Vec::with_capacity(inside.len());
-        for (start, end) in self.find_iter(inside) {
-            if prev != start {
-                splits.push(((prev, start), false));
-            }
-            splits.push(((start, end), true));
-            prev = end;
-        }
-        if prev != inside.len() {
-            splits.push(((prev, inside.len()), false))
-        }
-        Ok(splits)
+        Ok(matches_and_gaps(inside, self.find_iter(inside)))
     }
+}
+
+fn matches_and_gaps(inside: &str, matches: impl Iterator<Item = Offsets>) -> Vec<(Offsets, bool)> {
+    if inside.is_empty() {
+        return vec![((0, 0), false)];
+    }
+
+    let mut prev = 0;
+    let mut splits = Vec::with_capacity(inside.len());
+    for (start, end) in matches {
+        if prev != start {
+            splits.push(((prev, start), false));
+        }
+        splits.push(((start, end), true));
+        prev = end;
+    }
+    if prev != inside.len() {
+        splits.push(((prev, inside.len()), false));
+    }
+    splits
 }
 
 impl<F> Pattern for F

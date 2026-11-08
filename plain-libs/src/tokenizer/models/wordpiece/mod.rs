@@ -1,5 +1,4 @@
 use crate::tokenizer::tokenizer::{Model, Result, Token};
-use ahash::AHashMap;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -11,8 +10,8 @@ pub enum Error {
     MissingUnkToken,
 }
 
-type Vocab = AHashMap<String, u32>;
-type VocabR = AHashMap<u32, String>;
+type Vocab = HashMap<String, u32>;
+type VocabR = HashMap<u32, String>;
 
 struct Config {
     vocab: Vocab,
@@ -29,7 +28,7 @@ impl Default for WordPieceBuilder {
     fn default() -> Self {
         Self {
             config: Config {
-                vocab: AHashMap::new(),
+                vocab: HashMap::new(),
                 unk_token: String::from("[UNK]"),
                 continuing_subword_prefix: String::from("##"),
                 max_input_chars_per_word: 100,
@@ -44,7 +43,7 @@ impl WordPieceBuilder {
     }
 
     #[must_use]
-    pub fn vocab<V: Into<AHashMap<String, u32>>>(mut self, vocab: V) -> Self {
+    pub fn vocab<V: Into<HashMap<String, u32>>>(mut self, vocab: V) -> Self {
         self.config.vocab = vocab.into();
         self
     }
@@ -108,8 +107,8 @@ impl std::fmt::Debug for WordPiece {
 impl Default for WordPiece {
     fn default() -> Self {
         Self {
-            vocab: AHashMap::new(),
-            vocab_r: AHashMap::new(),
+            vocab: HashMap::new(),
+            vocab_r: HashMap::new(),
             unk_token: String::from("[UNK]"),
             continuing_subword_prefix: String::from("##"),
             max_input_chars_per_word: 100,

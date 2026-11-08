@@ -66,7 +66,7 @@ pub fn base64_encode_url_safe(bytes: &[u8]) -> String {
 /// Padding is optional because plenty of producers drop it. A length of
 /// `4n + 1` can never be valid and is rejected.
 pub fn base64_decode_checked(input: &str) -> Result<Vec<u8>, Invalid> {
-    decode_checked(input, false)
+    decode_checked(input, false, false)
 }
 
 pub fn base64_decode_standard(input: &[u8]) -> Result<Vec<u8>, Invalid> {
@@ -74,14 +74,22 @@ pub fn base64_decode_standard(input: &[u8]) -> Result<Vec<u8>, Invalid> {
         offset: error.valid_up_to(),
         found: char::from(input[error.valid_up_to()]),
     })?;
-    decode_checked(text, true)
+    decode_checked(text, true, true)
 }
 
-fn decode_checked(input: &str, standard: bool) -> Result<Vec<u8>, Invalid> {
+#[cfg(feature = "ai-image-search")]
+pub(crate) fn base64_decode_standard_optional_padding(input: &str) -> Result<Vec<u8>, Invalid> {
+    decode_checked(input, true, false)
+}
+
+fn decode_checked(input: &str, standard: bool, require_padding: bool) -> Result<Vec<u8>, Invalid> {
     let body = input.trim_end_matches('=');
     if standard {
         let padding = input.len() - body.len();
-        if input.len() % 4 != 0 || padding > 2 {
+        if (require_padding && input.len() % 4 != 0)
+            || padding > 2
+            || (padding != 0 && (body.len() % 4 < 2 || body.len() % 4 + padding > 4))
+        {
             return Err(Invalid {
                 offset: body.len(),
                 found: '=',

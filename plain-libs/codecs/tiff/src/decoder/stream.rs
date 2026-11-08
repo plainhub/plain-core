@@ -2,6 +2,11 @@
 
 use std::io::{self, BufRead, BufReader, Read, Seek, Take};
 
+#[cfg(feature = "fax")]
+use crate::fax::{
+    decoder::{self, DecodeStatus, Group4Decoder},
+    Color,
+};
 pub use crate::tags::ByteOrder;
 
 /// Reader that is aware of the byte order.
@@ -256,8 +261,9 @@ impl<R: Read> Read for PackBitsReader<R> {
 }
 
 
+#[cfg(feature = "fax")]
 pub struct Group4Reader<R: Read> {
-    decoder: fax34::decoder::Group4Decoder<io::Bytes<io::BufReader<io::Take<R>>>>,
+    decoder: Group4Decoder<io::Bytes<io::BufReader<io::Take<R>>>>,
     line_buf: io::Cursor<Vec<u8>>,
     height: u16,
     width: u16,
@@ -265,6 +271,7 @@ pub struct Group4Reader<R: Read> {
 }
 
 
+#[cfg(feature = "fax")]
 impl<R: Read> Group4Reader<R> {
     pub fn new(
         dimensions: (u32, u32),
@@ -275,7 +282,7 @@ impl<R: Read> Group4Reader<R> {
         let height = u16::try_from(dimensions.1)?;
 
         Ok(Self {
-            decoder: fax34::decoder::Group4Decoder::new(
+            decoder: Group4Decoder::new(
                 io::BufReader::new(reader.take(compressed_length)).bytes(),
                 width,
             )?,
@@ -288,6 +295,7 @@ impl<R: Read> Group4Reader<R> {
 }
 
 
+#[cfg(feature = "fax")]
 impl<R: Read> Read for Group4Reader<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         // Either we have not read any line or we are at the end of a line.
@@ -297,8 +305,8 @@ impl<R: Read> Read for Group4Reader<R> {
             let next = self.decoder.advance().map_err(std::io::Error::other)?;
 
             match next {
-                fax34::decoder::DecodeStatus::End => (),
-                fax34::decoder::DecodeStatus::Incomplete => {
+                DecodeStatus::End => (),
+                DecodeStatus::Incomplete => {
                     self.y += 1;
 
                     // We known `transitions` yields exactly `self.width` items (per doc).
@@ -306,7 +314,7 @@ impl<R: Read> Read for Group4Reader<R> {
                     // memory especially for long runs can be much quicker. The `transitions` are
                     // the positions at which each run-length ends, i.e. the prefix sum of run
                     // lengths. Runs in fax4 start with white.
-                    let transitions = fax34::decoder::pels(self.decoder.transition(), self.width);
+                    let transitions = decoder::pels(self.decoder.transition(), self.width);
 
                     let buffer = self.line_buf.get_mut();
                     buffer.resize(usize::from(self.width).div_ceil(8), 0u8);
@@ -331,8 +339,8 @@ impl<R: Read> Read for Group4Reader<R> {
                     //
                     // So indeed the Fax4::White run is implemented by filling with zeros.
                     let mut bits = transitions.map(|c| match c {
-                        fax34::Color::Black => true,
-                        fax34::Color::White => false,
+                        Color::Black => true,
+                        Color::White => false,
                     });
 
                     // Assemble bits in MSB as per our library representation for buffer.

@@ -27,14 +27,9 @@ doctest = false
 "default" = ["bitdepth_8", "bitdepth_16"]
 
 [dependencies]
-"assert_matches" = { path = "../assert_matches" }
-"atomig" = { path = "../atomig", features = ["derive"] }
 "bitflags" = { version = "=2.13.2" }
 "cfg-if" = { version = "=1.0.5" }
 "libc" = { version = "=0.2.189" }
 "parking_lot" = { version = "=0.12.5" }
 "paste" = { version = "=1.0.15" }
-"raw-cpuid" = { version = "=11.6.0" }
-"strum" = { path = "../strum", features = ["derive"] }
-"to_method" = { path = "../to_method" }
 "zerocopy" = { path = "../zerocopy", features = ["derive"] }

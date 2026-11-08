@@ -1,7 +1,7 @@
 use super::*;
 use crate::tokenizer::processors::{ByteLevel, PostProcessorWrapper};
 use crate::tokenizer::tokenizer::{Encoding, PostProcessor};
-use ahash::AHashMap;
+use std::collections::HashMap;
 use std::iter::FromIterator;
 
 #[test]
@@ -21,7 +21,7 @@ fn process_chain() {
         vec![],
         vec![],
         vec![],
-        AHashMap::new(),
+        HashMap::new(),
     );
 
     let bytelevel = ByteLevel::default().trim_offsets(true);
@@ -41,7 +41,7 @@ fn process_chain() {
         vec![],
         vec![],
         vec![],
-        AHashMap::from_iter(vec![(0, 0..5)]),
+        HashMap::from_iter(vec![(0, 0..5)]),
     );
 
     assert_eq!(
@@ -84,7 +84,7 @@ fn process_chain() {
         vec![],
         vec![],
         vec![],
-        AHashMap::from_iter(vec![(0, 0..5), (1, 5..10)]),
+        HashMap::from_iter(vec![(0, 0..5), (1, 5..10)]),
     );
     assert_eq!(
         pair_expected,

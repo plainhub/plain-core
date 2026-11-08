@@ -39,8 +39,8 @@ use {
     proc_macro2::Span,
     quote::quote,
     syn::{
-        parse_quote, Data, DataEnum, DataStruct, DataUnion, DeriveInput, Error, Expr, ExprLit,
-        GenericParam, Ident, Lit,
+        Data, DataEnum, DataStruct, DataUnion, DeriveInput, Error, Expr, ExprLit, GenericParam,
+        Ident, Lit, parse_quote,
     },
 };
 
@@ -325,7 +325,11 @@ fn derive_from_zeroes_enum(ast: &DeriveInput, enm: &DataEnum) -> proc_macro2::To
         .variants
         .iter()
         .filter_map(|v| v.discriminant.as_ref())
-        .any(|(_, e)| {
+        .any(|entry| {
+            let mut e = &entry.1;
+            while let Expr::Group(group) = e {
+                e = &group.expr;
+            }
             if let Expr::Lit(ExprLit {
                 lit: Lit::Int(i), ..
             }) = e

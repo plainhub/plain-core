@@ -2,7 +2,7 @@ use crate::{
     args::{self, RenameTarget},
     utils::{GeneratorResult, RemoveLifetime, get_crate_path, get_rustdoc},
 };
-use darling::ast::{Data, Style};
+use crate::meta::{Data, Style};
 use proc_macro::TokenStream;
 use quote::quote;
 use std::collections::HashSet;

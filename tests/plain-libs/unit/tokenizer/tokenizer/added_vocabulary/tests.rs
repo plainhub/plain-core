@@ -7,15 +7,15 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
 struct ModelMock {
-    vocab: AHashMap<String, u32>,
-    vocab_r: AHashMap<u32, String>,
+    vocab: HashMap<String, u32>,
+    vocab_r: HashMap<u32, String>,
 }
 impl ModelMock {
     pub fn new<I>(iter: I) -> Self
     where
         I: IntoIterator<Item = &'static (&'static str, u32)>,
     {
-        let vocab: AHashMap<String, u32> = iter
+        let vocab: HashMap<String, u32> = iter
             .into_iter()
             .map(|&(tok, id)| (tok.to_string(), id))
             .collect();
@@ -145,7 +145,7 @@ fn can_add_special_tokens() {
     assert!(vocab.is_special_token("test"));
     assert_eq!(
         *vocab.get_added_tokens_decoder(),
-        AHashMap::from([
+        HashMap::from([
             (0, AddedToken::from("test", true)),
             (2, AddedToken::from("added_token_1", true)),
             (3, AddedToken::from("added_token_2", true)),

@@ -1,5 +1,5 @@
-use ahash::AHashMap;
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::RwLock;
 
@@ -13,7 +13,7 @@ where
     K: Eq + Hash + Clone,
     V: Clone,
 {
-    map: RwLock<AHashMap<K, V>>,
+    map: RwLock<HashMap<K, V>>,
     pub capacity: usize,
 }
 
@@ -44,7 +44,7 @@ where
     V: Clone,
 {
     pub(crate) fn new(capacity: usize) -> Self {
-        let map = RwLock::new(AHashMap::with_capacity(capacity));
+        let map = RwLock::new(HashMap::with_capacity(capacity));
         Cache { map, capacity }
     }
 

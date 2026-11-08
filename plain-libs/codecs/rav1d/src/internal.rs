@@ -84,10 +84,9 @@ use crate::src::refmvs::RefMvsFrame;
 use crate::src::refmvs::RefMvsTemporalBlock;
 use crate::src::refmvs::RefmvsTile;
 use crate::src::relaxed_atomic::RelaxedAtomic;
+use crate::src::relaxed_atomic::{Atom, Atomic};
 use crate::src::thread_task::Rav1dTaskIndex;
 use crate::src::thread_task::Rav1dTasks;
-use atomig::Atom;
-use atomig::Atomic;
 use libc::ptrdiff_t;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
@@ -105,7 +104,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::thread::JoinHandle;
-use strum::FromRepr;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 use zerocopy::FromZeroes;
@@ -550,8 +548,18 @@ impl Rav1dFrameContextBdFn {
     }
 }
 
-#[derive(Clone, Copy, Default, Atom)]
+#[derive(Clone, Copy, Default)]
 pub struct CodedBlockInfo(i16);
+
+impl Atom for CodedBlockInfo {
+    type Repr = i16;
+    fn pack(self) -> Self::Repr {
+        self.0
+    }
+    fn unpack(value: Self::Repr) -> Self {
+        Self(value)
+    }
+}
 
 impl CodedBlockInfo {
     const TXTP_BITS: u8 = (TxfmType::BITS - WHT_WHT.leading_zeros()) as u8;
@@ -911,12 +919,15 @@ pub struct Rav1dTileState {
     pub lr_ref: RwLock<[Av1RestorationUnit; 3]>,
 }
 
-#[derive(Clone, Copy, Default, FromRepr)]
-#[repr(u8)]
-pub enum TileStateRef {
-    #[default]
-    Frame,
-    Local,
+crate::src::enum_map::enum_values! {
+    from_repr(u8);
+    #[derive(Clone, Copy, Default)]
+    #[repr(u8)]
+    pub enum TileStateRef {
+        #[default]
+        Frame,
+        Local,
+    }
 }
 
 impl Atom for TileStateRef {

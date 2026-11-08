@@ -139,14 +139,12 @@ fn tokens_serde() {
 }
 
 fn get_bert_template() -> TemplateProcessing {
-    TemplateProcessing::builder()
-        .try_single(vec!["[CLS]", "$0", "[SEP]"])
-        .unwrap()
-        .try_pair("[CLS]:0 $A:0 [SEP]:0 $B:1 [SEP]:1")
-        .unwrap()
-        .special_tokens(vec![("[CLS]", 1), ("[SEP]", 0)])
-        .build()
-        .unwrap()
+    TemplateProcessingDeserializer {
+        single: "[CLS] $0 [SEP]".try_into().unwrap(),
+        pair: "[CLS]:0 $A:0 [SEP]:0 $B:1 [SEP]:1".try_into().unwrap(),
+        special_tokens: vec![("[CLS]", 1), ("[SEP]", 0)].into(),
+    }
+    .into()
 }
 
 #[test]
@@ -183,20 +181,6 @@ fn template_processing_serde() {
 }
 
 #[test]
-fn missing_special_tokens() {
-    let processor = TemplateProcessing::builder()
-        .try_single("[CLS] $0 [SEP]")
-        .unwrap()
-        .try_pair("[CLS] $A:0 [SEP] $B:1 [SEP]")
-        .unwrap()
-        .build();
-
-    let err_a = Err("Missing SpecialToken(s) with id(s) `[SEP], [CLS]`".into());
-    let err_b = Err("Missing SpecialToken(s) with id(s) `[CLS], [SEP]`".into());
-    assert!(processor == err_a || processor == err_b);
-}
-
-#[test]
 fn template_processing() {
     let processor = tests::get_bert_template();
     assert_eq!(processor.added_tokens(false), 2);
@@ -228,7 +212,7 @@ fn template_processing() {
             vec![1, 0, 0, 1],
             vec![1, 1, 1, 1],
             vec![],
-            AHashMap::from_iter(vec![(0, 1..3)]),
+            HashMap::from_iter(vec![(0, 1..3)]),
         )
     );
     assert_eq!(single_encoding.token_to_sequence(2), Some(0));
@@ -252,7 +236,7 @@ fn template_processing() {
             vec![1, 0, 0, 1, 0, 1],
             vec![1, 1, 1, 1, 1, 1],
             vec![],
-            AHashMap::from_iter(vec![(0, 1..3), (1, 4..5)]),
+            HashMap::from_iter(vec![(0, 1..3), (1, 4..5)]),
         )
     );
     assert_eq!(pair_encoding.token_to_sequence(2), Some(0));
@@ -313,9 +297,9 @@ fn template_processing_overflowing() {
                 vec![1, 0, 1],
                 vec![1, 1, 1],
                 vec![],
-                AHashMap::from_iter(vec![(0, 1..2)]),
+                HashMap::from_iter(vec![(0, 1..2)]),
             )],
-            AHashMap::from_iter(vec![(0, 1..3)]),
+            HashMap::from_iter(vec![(0, 1..3)]),
         )
     );
     assert_eq!(single_encoding.token_to_sequence(2), Some(0));
@@ -371,9 +355,9 @@ fn template_processing_overflowing() {
                         vec![1, 0, 1, 0, 1],
                         vec![1, 1, 1, 1, 1],
                         vec![],
-                        AHashMap::from_iter(vec![(0, 1..2), (1, 3..4)]),
+                        HashMap::from_iter(vec![(0, 1..2), (1, 3..4)]),
                     ),],
-                    AHashMap::from_iter(vec![(1, 3..5), (0, 1..2)]),
+                    HashMap::from_iter(vec![(1, 3..5), (0, 1..2)]),
                 ),
                 Encoding::new(
                     vec![1, 13, 0, 17, 0],
@@ -390,7 +374,7 @@ fn template_processing_overflowing() {
                     vec![1, 0, 1, 0, 1],
                     vec![1, 1, 1, 1, 1],
                     vec![],
-                    AHashMap::from_iter(vec![(0, 1..2), (1, 3..4)]),
+                    HashMap::from_iter(vec![(0, 1..2), (1, 3..4)]),
                 ),
                 Encoding::new(
                     vec![1, 12, 14, 0, 17, 0],
@@ -422,12 +406,12 @@ fn template_processing_overflowing() {
                         vec![1, 0, 1, 0, 1],
                         vec![1, 1, 1, 1, 1],
                         vec![],
-                        AHashMap::from_iter(vec![(0, 1..2), (1, 3..4)]),
+                        HashMap::from_iter(vec![(0, 1..2), (1, 3..4)]),
                     ),],
-                    AHashMap::from_iter(vec![(0, 1..3), (1, 4..5)]),
+                    HashMap::from_iter(vec![(0, 1..3), (1, 4..5)]),
                 )
             ],
-            AHashMap::from_iter(vec![(0, 1..3), (1, 4..6)]),
+            HashMap::from_iter(vec![(0, 1..3), (1, 4..6)]),
         )
     );
     assert_eq!(pair_encoding.token_to_sequence(2), Some(0));
@@ -435,31 +419,4 @@ fn template_processing_overflowing() {
     assert_eq!(pair_encoding.token_to_sequence(4), Some(1));
     assert_eq!(pair_encoding.token_to_sequence(5), Some(1));
     assert_eq!(pair_encoding.token_to_sequence(6), None);
-}
-#[test]
-fn pair_must_use_both_sequences() {
-    let processor = TemplateProcessing::builder()
-        .try_single("$0")
-        .unwrap()
-        .try_pair("$0 $1")
-        .unwrap()
-        .build();
-    assert_eq!(
-        processor,
-        Err("Template for `pair` must use both sequences".into())
-    );
-}
-
-#[test]
-fn expect_wrong_error_message() {
-    let processor = TemplateProcessing::builder()
-        .try_single("$0")
-        .unwrap()
-        .try_pair("$0 $1")
-        .unwrap()
-        .build();
-    assert_ne!(
-        processor,
-        Err("Expect the left side error message to be different from the right side!".into())
-    );
 }

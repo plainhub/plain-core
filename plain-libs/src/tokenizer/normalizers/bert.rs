@@ -1,7 +1,7 @@
 use crate::tokenizer::tokenizer::{NormalizedString, Normalizer, Result};
 
+use crate::tokenizer::unicode_categories::{is_mark_nonspacing, is_other};
 use serde::{Deserialize, Serialize};
-use unicode_categories::UnicodeCategories;
 
 fn is_whitespace(c: char) -> bool {
     // These are technically control characters but we count them as whitespace
@@ -18,7 +18,7 @@ fn is_control(c: char) -> bool {
         // The definition of `is_control` here is quite large and contains also
         // Cc, Cf, Cn or Co
         // cf. https://unicode.org/reports/tr44/ (Table 12)
-        _ => c.is_other(),
+        _ => is_other(c),
     }
 }
 
@@ -94,7 +94,7 @@ impl BertNormalizer {
     }
 
     fn do_strip_accents(&self, normalized: &mut NormalizedString) {
-        normalized.nfd().filter(|c| !c.is_mark_nonspacing());
+        normalized.nfd().filter(|c| !is_mark_nonspacing(c));
     }
 
     fn do_lowercase(&self, normalized: &mut NormalizedString) {

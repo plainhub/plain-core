@@ -20,16 +20,14 @@ doctest = false
 [features]
 "default" = ["deflate", "fax", "jpeg", "lzw"]
 "deflate" = ["dep:flate2"]
-"fax" = ["dep:fax34"]
+"fax" = []
 "jpeg" = ["dep:zune-jpeg"]
 "lzw" = ["dep:weezl"]
 "webp" = []
 "zstd" = []
 
 [dependencies]
-"fax34" = { path = "../fax", package = "fax", optional = true }
 "flate2" = { version = "=1.1.10", optional = true }
-"half" = { version = "=2.7.1" }
 "quick-error" = { version = "=2.0.1" }
 "weezl" = { version = "=0.1.12", optional = true }
 "zune-jpeg" = { version = "=0.5.15", optional = true }

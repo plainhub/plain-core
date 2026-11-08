@@ -1,19 +1,14 @@
 use crate::tokenizer::tokenizer::{Decoder, Result};
-use monostate::MustBe;
-use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-#[non_exhaustive]
-pub struct Fuse {
-    #[serde(rename = "type")]
-    type_: MustBe!("Fuse"),
+impl_serde_type! {
+    #[derive(Clone, Debug, Default)]
+    #[non_exhaustive]
+    pub struct Fuse;
 }
 
 impl Fuse {
     pub fn new() -> Self {
-        Self {
-            type_: MustBe!("Fuse"),
-        }
+        Self
     }
 }
 

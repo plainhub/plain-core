@@ -79,12 +79,11 @@ impl<T: ?Sized> AsRef<T> for CArc<T> {
         {
             use std::mem;
             use std::ptr;
-            use to_method::To;
 
             // Some extra checks to check if our ptrs are definitely invalid.
 
             let real_ref = (*self.owner).as_ref().get_ref();
-            assert_eq!(real_ref.to::<NonNull<T>>(), self.base_stable_ref.0);
+            assert_eq!(Into::<NonNull<T>>::into(real_ref), self.base_stable_ref.0);
 
             let real_ptr = ptr::from_ref(real_ref);
             let stable_ptr = self.stable_ref.0.as_ptr().cast_const();

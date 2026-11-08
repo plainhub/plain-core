@@ -253,9 +253,7 @@ unsafe extern "system" fn handle_event(
     if error_code == ERROR_NOTIFY_ENUM_DIR || (error_code == 0 && bytes_written == 0) {
         emit_event(
             &request.event_handler,
-            Ok(Event::new(EventKind::Other)
-                .set_flag(Flag::Rescan)
-                .add_path(request.state.dir.clone())),
+            Ok(Event::rescan().add_path(request.state.dir.clone())),
         );
         return;
     }

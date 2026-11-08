@@ -1,0 +1,7 @@
+{
+  "name": "stacker",
+  "version": "0.1.25",
+  "repository": "https://github.com/rust-lang/stacker",
+  "archive-sha256": "707f49d46706bacf8a2b00d51dace3f9de527c13eec3778f570c411f89e69967",
+  "revision": "cdf19cf36cd0343a97c174ee6f7f8241f88b35f0"
+}

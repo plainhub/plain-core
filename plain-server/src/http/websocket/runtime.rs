@@ -1,13 +1,10 @@
 use crate::server::ServerState;
 use axum::{
-    extract::{
-        WebSocketUpgrade,
-        ws::{CloseFrame, Message, WebSocket},
-    },
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
+use plain_libs::protocols::websocket::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use plain_rs::features::prefs::security::PasswordType;
 use plain_rs::features::services::confirmation_channel;
 use plain_rs::infrastructure::events::WsEvent;
@@ -132,9 +129,12 @@ impl Runtime {
         if let Some(outgoing) = outgoing {
             tokio::time::timeout(
                 Duration::from_secs(2),
-                outgoing.send(Message::Binary(plain_libs::utils::base64::base64_decode(
-                    result["frame"].as_str().unwrap_or_default(),
-                ))),
+                outgoing.send(Message::Binary(
+                    plain_libs::utils::base64::base64_decode(
+                        result["frame"].as_str().unwrap_or_default(),
+                    )
+                    .into(),
+                )),
             )
             .await??;
             completed(state, result).await;
@@ -158,7 +158,7 @@ impl Runtime {
 }
 fn close(code: u16, reason: &'static str) -> Message {
     Message::Close(Some(CloseFrame {
-        code,
+        code: code.into(),
         reason: reason.into(),
     }))
 }
@@ -333,7 +333,7 @@ async fn run(
                             }
                         })();
                         match accepted {
-                            Ok(Some(response)) => { if socket.send(Message::Text(serde_json::to_string(&response).unwrap())).await.is_err() { break; } }
+                            Ok(Some(response)) => { if socket.send(Message::Text(serde_json::to_string(&response).unwrap().into())).await.is_err() { break; } }
                             Ok(None) => {}
                             Err(error) => {
                                 let reason = if error.to_string() == "too_many_login_attempts" { "too_many_login_attempts" } else { "invalid_login_request" };
@@ -361,7 +361,7 @@ async fn run(
                     };
                     match crate::http::auth::ws_login::execute(&state, request).await {
                         Ok(result) => {
-                            if socket.send(Message::Binary(plain_libs::utils::base64::base64_decode(result["frame"].as_str().unwrap_or_default()))).await.is_err() { break; }
+                            if socket.send(Message::Binary(plain_libs::utils::base64::base64_decode(result["frame"].as_str().unwrap_or_default()).into())).await.is_err() { break; }
                             if result["status"] == "PENDING" {
                                 let request_id = result["requestId"].as_str().unwrap().to_owned();
                                 pending = Some(request_id.clone());
@@ -404,7 +404,7 @@ async fn run(
                     if let Some(c) = state.main_ws.connections.lock().unwrap().get_mut(&id) { c.registered = true; }
                     if channel == Channel::ImageEditor {
                         let Some(bytes) = stream.as_mut().and_then(|stream| stream.encode("IMAGE_EDITOR_READY", b"", &key)) else { break; };
-                        if socket.send(Message::Binary(bytes)).await.is_err() { break; }
+                        if socket.send(Message::Binary(bytes.into())).await.is_err() { break; }
                     }
                 } else {
                     if channel != Channel::Screen {
@@ -446,7 +446,7 @@ async fn run(
                     event.payload.into_bytes()
                 };
                 let Some(bytes) = stream.as_mut().and_then(|stream| stream.encode(event.event_type, &payload, &key)) else { break; };
-                Message::Binary(bytes)
+                Message::Binary(bytes.into())
             }
         };
         let closing = matches!(message, Message::Close(_));
@@ -490,7 +490,7 @@ async fn run(
             Err(error) => log::warn!("Screen mirror touch cleanup: {error}"),
         }
     }
-    let _ = tokio::time::timeout(Duration::from_secs(1), socket.close()).await;
+    let _ = tokio::time::timeout(Duration::from_secs(1), socket.close(None)).await;
 }
 fn notify_login_request(
     state: &ServerState,

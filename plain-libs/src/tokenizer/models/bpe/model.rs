@@ -1,14 +1,13 @@
 use super::{super::OrderedVocabIter, Error, Pair, Word};
 use crate::tokenizer::tokenizer::{Model, Result, Token};
 use crate::tokenizer::utils::cache::{Cache, DEFAULT_CACHE_CAPACITY, MAX_LENGTH};
-use ahash::AHashMap;
 use std::borrow::Cow;
 
 use std::collections::HashMap;
 
-pub type Vocab = AHashMap<String, u32>;
-type VocabR = AHashMap<u32, String>;
-pub type MergeMap = AHashMap<Pair, (u32, u32)>;
+pub type Vocab = HashMap<String, u32>;
+type VocabR = HashMap<u32, String>;
+pub type MergeMap = HashMap<Pair, (u32, u32)>;
 pub type Merges = Vec<(String, String)>;
 
 struct Config {
@@ -32,7 +31,7 @@ impl Default for BpeBuilder {
     fn default() -> Self {
         Self {
             config: Config {
-                vocab: AHashMap::new(),
+                vocab: HashMap::new(),
                 merges: vec![],
                 cache_capacity: DEFAULT_CACHE_CAPACITY,
                 dropout: None,
@@ -53,7 +52,7 @@ impl BpeBuilder {
     }
 
     #[must_use]
-    pub fn vocab_and_merges<V: Into<AHashMap<String, u32>>>(
+    pub fn vocab_and_merges<V: Into<HashMap<String, u32>>>(
         mut self,
         vocab: V,
         merges: Merges,

@@ -162,7 +162,7 @@ fn decode_decoder<R: Read + Seek>(mut decoder: Decoder<R>) -> Result<Bitmap> {
             .into_iter()
             .map(|v| (u32::from(v) * 255 / ((1_u32 << depth.min(16)) - 1)) as u8)
             .collect(),
-        DecodingResult::F16(v) => v.into_iter().map(|v| float(v.to_f32())).collect(),
+        DecodingResult::F16(v) => v.into_iter().map(|v| float(binary16_to_f32(v))).collect(),
         DecodingResult::F32(v) => v.into_iter().map(float).collect(),
         DecodingResult::F64(v) => v.into_iter().map(|v| float(v as f32)).collect(),
         DecodingResult::U32(v) => v.into_iter().map(|v| (v >> 24) as u8).collect(),
@@ -405,6 +405,25 @@ fn stream<R: Read + Seek, const C: usize>(
     } else {
         Ok(Bitmap::new_rgb(data, w, h))
     }
+}
+
+// Scalar widening adapted from half 2.7.1 (half/SOURCE.json).
+fn binary16_to_f32(value: u16) -> f32 {
+    let sign = u32::from(value & 0x8000) << 16;
+    let exponent = (value >> 10) & 0x1f;
+    let mantissa = u32::from(value & 0x03ff);
+    let bits = match (exponent, mantissa) {
+        (0, 0) => sign,
+        (0, _) => {
+            let shift = mantissa.leading_zeros() - 21;
+            let exponent = (113 - shift) << 23;
+            sign | exponent | (((mantissa << shift) & 0x03ff) << 13)
+        }
+        (31, 0) => sign | 0x7f80_0000,
+        (31, _) => sign | 0x7fc0_0000 | (mantissa << 13),
+        _ => sign | ((u32::from(exponent) + 112) << 23) | (mantissa << 13),
+    };
+    f32::from_bits(bits)
 }
 
 #[cfg(test)]

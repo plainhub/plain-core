@@ -1,12 +1,11 @@
 use crate::server::ServerState;
 use axum::{
-    extract::{
-        Query, State, WebSocketUpgrade,
-        ws::{Message, WebSocket},
-    },
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use futures_util::{SinkExt, StreamExt};
+use plain_libs::protocols::websocket::{Message, WebSocket, WebSocketUpgrade};
 use plain_rs::features::services::peers::status_runtime::{ConnectionGuard, emit};
 use serde::Deserialize;
 use serde_json::json;
@@ -56,14 +55,14 @@ async fn connected(
         authenticated=tokio::time::timeout(Duration::from_secs(10), async {
             let challenge = uuid::Uuid::new_v4().to_string();
             socket.send(Message::Text(json!({"challenge": challenge}).to_string().into())).await.ok()?;
-            match socket.recv().await {
+            match socket.next().await {
                 Some(Ok(Message::Binary(body))) => state.peer_status.connections.open(&state.db, &id, &challenge, &body).ok(),
                 _ => None,
             }
         }) => authenticated.ok().flatten(),
     };
     let Some((lease, changed)) = authenticated else {
-        let _ = socket.close().await;
+        let _ = socket.close(None).await;
         return;
     };
     let _guard = ConnectionGuard {
@@ -81,14 +80,14 @@ async fn connected(
                 _=stop.changed()=>break,
                 _=public_stop.changed()=>break,
                 _=check.tick()=>if !state.peer_status.connections.valid(&state.db,&lease) { break; },
-                frame=socket.recv()=>match frame {
+                frame=socket.next()=>match frame {
                     Some(Ok(Message::Close(_)))|None|Some(Err(_))=>break,
                     _=>{},
                 }
             }
         }
     }
-    let _ = tokio::time::timeout(Duration::from_secs(1), socket.close()).await;
+    let _ = tokio::time::timeout(Duration::from_secs(1), socket.close(None)).await;
 }
 #[cfg(all(test, feature = "http_transport"))]
 #[path = "../../../../tests/plain-server/unit/http/websocket/status.rs"]

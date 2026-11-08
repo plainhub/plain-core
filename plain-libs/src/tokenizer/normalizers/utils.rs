@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::tokenizer::normalizers::NormalizerWrapper;
 use crate::tokenizer::tokenizer::{NormalizedString, Normalizer, Result};
-use crate::tokenizer::utils::macro_rules_attribute;
 
 #[derive(Clone, Deserialize, Debug, Serialize)]
 #[serde(tag = "type")]
@@ -47,9 +46,10 @@ impl Normalizer for Sequence {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct Lowercase;
+impl_serde_type! {
+    #[derive(Copy, Clone, Debug)]
+    pub struct Lowercase;
+}
 impl Normalizer for Lowercase {
     fn normalize(&self, normalized: &mut NormalizedString) -> Result<()> {
         normalized.lowercase();

@@ -1,12 +1,12 @@
 use crate::tokenizer::pre_tokenizers::PreTokenizerWrapper;
 use crate::tokenizer::tokenizer::{PreTokenizedString, PreTokenizer, Result};
-use crate::tokenizer::utils::macro_rules_attribute;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct Sequence {
-    pretokenizers: Vec<PreTokenizerWrapper>,
+impl_serde_type! {
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct Sequence {
+        pretokenizers: Vec<PreTokenizerWrapper>,
+    }
 }
 
 impl Sequence {

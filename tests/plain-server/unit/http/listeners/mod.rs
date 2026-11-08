@@ -172,7 +172,6 @@ async fn occupied_ports_fall_back_for_both_listeners() {
 
 #[tokio::test]
 async fn https_connections_disable_nagle_before_application_data() {
-    use axum_server::accept::Accept;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     let (certificate, key) = certificate();
@@ -180,7 +179,7 @@ async fn https_connections_disable_nagle_before_application_data() {
     listener.set_nonblocking(true).unwrap();
     let address = listener.local_addr().unwrap();
     let incoming = tokio::net::TcpListener::from_std(listener.try_clone().unwrap()).unwrap();
-    let server = https_server(listener, tls_config(&certificate, &key).unwrap());
+    let config = std::sync::Arc::new(tls_config(&certificate, &key).unwrap());
     let client = tokio::spawn(async move {
         reqwest::Client::builder()
             .danger_accept_invalid_certs(true)
@@ -197,7 +196,7 @@ async fn https_connections_disable_nagle_before_application_data() {
     });
     let (stream, _) = incoming.accept().await.unwrap();
     assert!(!stream.nodelay().unwrap());
-    let (mut stream, ()) = server.get_ref().accept(stream, ()).await.unwrap();
+    let mut stream = https::accept_tls(config, stream).await.unwrap();
     assert!(stream.get_ref().0.nodelay().unwrap());
     let mut request = Vec::new();
     let mut buffer = [0; 1024];

@@ -272,7 +272,7 @@ fn mappings() {
             Some(2),
             Some(3),
         ],
-        sequence_ranges: AHashMap::from_iter(vec![(0, 0..7), (1, 7..11)]),
+        sequence_ranges: HashMap::from_iter(vec![(0, 0..7), (1, 7..11)]),
         ..Default::default()
     };
     assert_eq!(encoding.word_to_tokens(0, 0), Some((0, 2)));
@@ -325,7 +325,7 @@ fn padding() {
         offsets: vec![(0, 6)],
         special_tokens_mask: vec![0],
         attention_mask: vec![1],
-        sequence_ranges: AHashMap::from([(0, 0..1)]),
+        sequence_ranges: HashMap::from([(0, 0..1)]),
         ..Default::default()
     };
     let target_length = 2;
@@ -339,5 +339,5 @@ fn padding() {
         pad_token,
         PaddingDirection::Left,
     );
-    assert_eq!(a.sequence_ranges, AHashMap::from([(0, 1..2)]));
+    assert_eq!(a.sequence_ranges, HashMap::from([(0, 1..2)]));
 }

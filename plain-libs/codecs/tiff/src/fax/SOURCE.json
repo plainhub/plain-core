@@ -1,0 +1,20 @@
+{
+  "packages": [
+    {
+      "name": "fax",
+      "version": "0.2.6",
+      "repository": "https://github.com/pdf-rs/fax",
+      "revision": "40b226eb97b391355e971fd95a8dd532a4c127a0",
+      "archive-sha256": "f05de7d48f37cd6730705cbca900770cab77a89f413d23e100ad7fad7795a0ab"
+    },
+    {
+      "name": "fax_derive",
+      "version": "0.2.0",
+      "repository": "https://github.com/pdf-rs/fax",
+      "revision": "40b226eb97b391355e971fd95a8dd532a4c127a0",
+      "archive-sha256": "a0aca10fb742cb43f9e7bb8467c91aa9bcb8e3ffbc6a6f7389bb93ffc920577d"
+    }
+  ],
+  "license-revision": "8abb1ad8763cf83b933115be73b6401e565ede81",
+  "license-sha256": "3ba40a1168abff9ddcc35200937e8762143ce9f33d0ae746945476e40dd2fe43"
+}

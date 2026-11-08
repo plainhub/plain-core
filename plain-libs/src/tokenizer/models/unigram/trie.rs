@@ -1,4 +1,4 @@
-use ahash::AHashMap;
+use std::collections::HashMap;
 use std::hash::Hash;
 
 #[derive(Default)]
@@ -78,14 +78,14 @@ impl<Label> Default for Trie<Label> {
 #[derive(Clone)]
 pub struct Node<Label> {
     is_leaf: bool,
-    children: AHashMap<Label, Node<Label>>,
+    children: HashMap<Label, Node<Label>>,
 }
 
 impl<Label> Default for Node<Label> {
     fn default() -> Self {
         Self {
             is_leaf: false,
-            children: AHashMap::new(),
+            children: HashMap::new(),
         }
     }
 }

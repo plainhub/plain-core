@@ -113,8 +113,7 @@ fn callback_keeps_context_alive_and_stops_emitting_when_deactivated() {
         }
     });
     let paths = [c"/watch/file".as_ptr(); 2];
-    let flags =
-        [fs::kFSEventStreamEventFlagItemCreated | fs::kFSEventStreamEventFlagItemModified; 2];
+    let flags = [(StreamFlags::ITEM_CREATED | StreamFlags::ITEM_MODIFIED).bits(); 2];
     let callback_context = Arc::downgrade(&context);
     callback(
         ptr::null_mut(),

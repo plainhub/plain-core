@@ -8,7 +8,6 @@ use crate::src::log::Rav1dLogger;
 use bitflags::bitflags;
 use std::ffi::c_int;
 use std::ffi::c_uint;
-use strum::FromRepr;
 
 pub type Dav1dContext = RawArc<Rav1dContext>;
 
@@ -57,17 +56,20 @@ pub const DAV1D_DECODEFRAMETYPE_INTRA: Dav1dDecodeFrameType =
 pub const DAV1D_DECODEFRAMETYPE_KEY: Dav1dDecodeFrameType =
     Rav1dDecodeFrameType::Key as Dav1dDecodeFrameType;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromRepr, Default)]
-pub(crate) enum Rav1dDecodeFrameType {
-    /// decode and return all frames
-    #[default]
-    All = 0,
-    /// decode and return frames referenced by other frames only
-    Reference = 1,
-    /// decode and return intra frames only (includes keyframes)
-    Intra = 2,
-    /// decode and return keyframes only
-    Key = 3,
+crate::src::enum_map::enum_values! {
+    from_repr(usize);
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+    pub(crate) enum Rav1dDecodeFrameType {
+        /// decode and return all frames
+        #[default]
+        All = 0,
+        /// decode and return frames referenced by other frames only
+        Reference = 1,
+        /// decode and return intra frames only (includes keyframes)
+        Intra = 2,
+        /// decode and return keyframes only
+        Key = 3,
+    }
 }
 
 impl From<Rav1dDecodeFrameType> for Dav1dDecodeFrameType {

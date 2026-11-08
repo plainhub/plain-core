@@ -6,7 +6,7 @@ use crate::{
         get_rustdoc,
     },
 };
-use darling::ast::{Data, Style};
+use crate::meta::{Data, Style};
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::quote;
@@ -155,7 +155,7 @@ pub fn generate(interface_args: &args::Interface) -> GeneratorResult<TokenStream
             (name.to_string(), Ident::new_raw(method, Span::call_site()))
         } else {
             let method_name = Ident::new_raw(name, Span::call_site());
-            (RenameTarget::Field.rename(name.as_ref()), method_name)
+            (RenameTarget::Field.rename(name), method_name)
         };
         let mut calls = Vec::new();
         let mut use_params = Vec::new();

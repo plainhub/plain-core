@@ -1,5 +1,3 @@
-use strum::EnumCount;
-
 use crate::include::common::bitdepth::AsPrimitive;
 use crate::include::common::bitdepth::BitDepth;
 use crate::include::common::bitdepth::DynCoef;
@@ -776,7 +774,7 @@ impl Rav1dInvTxfmDSPContext {
             }
         }
 
-         // Reachable on some #[cfg]s.
+        // Reachable on some #[cfg]s.
         {
             let _ = flags;
             let _ = bpc;

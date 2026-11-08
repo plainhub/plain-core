@@ -135,11 +135,7 @@ impl<'de> Deserialize<'de> for NormalizerWrapper {
                         serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Precompiled => NormalizerWrapper::Precompiled(
-                        serde_json::from_str(
-                            &serde_json::to_string(&values).expect("Can reserialize precompiled"),
-                        )
-                        // .map_err(serde::de::Error::custom)
-                        .expect("Precompiled"),
+                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Replace => NormalizerWrapper::Replace(
                         serde_json::from_value(values).map_err(serde::de::Error::custom)?,

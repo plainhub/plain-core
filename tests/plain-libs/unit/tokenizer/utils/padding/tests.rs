@@ -1,6 +1,6 @@
 use super::*;
 use crate::tokenizer::tokenizer::Encoding;
-use ahash::AHashMap;
+use std::collections::HashMap;
 
 #[test]
 fn pad_to_multiple() {
@@ -15,7 +15,7 @@ fn pad_to_multiple() {
                 vec![],
                 vec![],
                 vec![],
-                AHashMap::new(),
+                HashMap::new(),
             ),
             Encoding::new(
                 vec![0, 1, 2],
@@ -26,7 +26,7 @@ fn pad_to_multiple() {
                 vec![],
                 vec![],
                 vec![],
-                AHashMap::new(),
+                HashMap::new(),
             ),
         ]
     }

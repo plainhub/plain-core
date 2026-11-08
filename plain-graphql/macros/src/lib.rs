@@ -6,6 +6,7 @@ mod r#enum;
 mod input_object;
 mod interface;
 mod merged_subscription;
+mod meta;
 mod scalar;
 mod subscription;
 mod union;
@@ -16,19 +17,19 @@ mod output_type;
 mod simple_object;
 mod utils;
 
-use darling::{FromDeriveInput, FromMeta};
+use crate::meta::FromMeta;
 use proc_macro::TokenStream;
 use syn::{DeriveInput, ItemImpl, parse_macro_input};
 
 #[proc_macro_attribute]
 pub fn object(args: TokenStream, input: TokenStream) -> TokenStream {
-    let nested = match darling::ast::NestedMeta::parse_meta_list(args.into()) {
+    let nested = match meta::parse_list(args.into()) {
         Ok(args) => args,
-        Err(error) => return darling::Error::from(error).write_errors().into(),
+        Err(error) => return error.to_compile_error().into(),
     };
-    let args = match args::Object::from_list(&nested) {
+    let args = match args::Object::from_list(nested) {
         Ok(args) => args,
-        Err(error) => return error.write_errors().into(),
+        Err(error) => return error.to_compile_error().into(),
     };
     match object::generate(&args, &mut parse_macro_input!(input as ItemImpl)) {
         Ok(output) => output.into(),
@@ -41,7 +42,7 @@ pub fn simple_object(input: TokenStream) -> TokenStream {
     let args =
         match args::SimpleObject::from_derive_input(&parse_macro_input!(input as DeriveInput)) {
             Ok(args) => args,
-            Err(error) => return error.write_errors().into(),
+            Err(error) => return error.to_compile_error().into(),
         };
     match simple_object::generate(&args) {
         Ok(output) => output.into(),
@@ -54,7 +55,7 @@ pub fn merged_object(input: TokenStream) -> TokenStream {
     let args =
         match args::MergedObject::from_derive_input(&parse_macro_input!(input as DeriveInput)) {
             Ok(args) => args,
-            Err(error) => return error.write_errors().into(),
+            Err(error) => return error.to_compile_error().into(),
         };
     match merged_object::generate(&args) {
         Ok(output) => output.into(),
@@ -70,7 +71,7 @@ macro_rules! derive_type {
                 input as DeriveInput
             )) {
                 Ok(args) => args,
-                Err(error) => return error.write_errors().into(),
+                Err(error) => return error.to_compile_error().into(),
             };
             match $generator::generate(&args) {
                 Ok(output) => output.into(),
@@ -88,13 +89,13 @@ macro_rules! attribute_type {
     ($entry:ident, $options:ident, $generator:ident) => {
         #[proc_macro_attribute]
         pub fn $entry(args: TokenStream, input: TokenStream) -> TokenStream {
-            let nested = match darling::ast::NestedMeta::parse_meta_list(args.into()) {
+            let nested = match meta::parse_list(args.into()) {
                 Ok(args) => args,
-                Err(error) => return darling::Error::from(error).write_errors().into(),
+                Err(error) => return error.to_compile_error().into(),
             };
-            let args = match args::$options::from_list(&nested) {
+            let args = match args::$options::from_list(nested) {
                 Ok(args) => args,
-                Err(error) => return error.write_errors().into(),
+                Err(error) => return error.to_compile_error().into(),
             };
             match $generator::generate(&args, &mut parse_macro_input!(input as ItemImpl)) {
                 Ok(output) => output.into(),

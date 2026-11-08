@@ -11,46 +11,50 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::mem;
 use std::ops::Neg;
-use strum::EnumCount;
-use strum::FromRepr;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 use zerocopy::FromZeroes;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
-pub enum ObuMetaType {
-    HdrCll = 1,
-    HdrMdcv = 2,
-    Scalability = 3,
-    ItutT35 = 4,
-    Timecode = 5,
+crate::src::enum_map::enum_values! {
+    from_repr(usize);
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum ObuMetaType {
+        HdrCll = 1,
+        HdrMdcv = 2,
+        Scalability = 3,
+        ItutT35 = 4,
+        Timecode = 5,
+    }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, EnumCount, FromRepr, Default, Debug)]
-pub enum TxfmSize {
-    // Square
-    #[default]
-    S4x4 = 0,
-    S8x8 = 1,
-    S16x16 = 2,
-    S32x32 = 3,
-    S64x64 = 4,
+crate::src::enum_map::enum_values! {
+    count, from_repr(usize);
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Debug)]
+    pub enum TxfmSize {
+        // Square
+        #[default]
+        S4x4 = 0,
+        S8x8 = 1,
+        S16x16 = 2,
+        S32x32 = 3,
+        S64x64 = 4,
 
-    // Rectangular
-    R4x8 = 5,
-    R8x4 = 6,
-    R8x16 = 7,
-    R16x8 = 8,
-    R16x32 = 9,
-    R32x16 = 10,
-    R32x64 = 11,
-    R64x32 = 12,
-    R4x16 = 13,
-    R16x4 = 14,
-    R8x32 = 15,
-    R32x8 = 16,
-    R16x64 = 17,
-    R64x16 = 18,
+        // Rectangular
+        R4x8 = 5,
+        R8x4 = 6,
+        R8x16 = 7,
+        R16x8 = 8,
+        R16x32 = 9,
+        R32x16 = 10,
+        R32x64 = 11,
+        R64x32 = 12,
+        R4x16 = 13,
+        R16x4 = 14,
+        R8x32 = 15,
+        R32x8 = 16,
+        R16x64 = 17,
+        R64x16 = 18,
+    }
 }
 
 impl TxfmSize {
@@ -105,15 +109,18 @@ impl TxfmSize {
     }
 }
 
-#[repr(u8)]
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, EnumCount)]
-pub enum BlockLevel {
-    #[default]
-    Bl128x128 = 0,
-    Bl64x64 = 1,
-    Bl32x32 = 2,
-    Bl16x16 = 3,
-    Bl8x8 = 4,
+crate::src::enum_map::enum_values! {
+    count;
+    #[repr(u8)]
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum BlockLevel {
+        #[default]
+        Bl128x128 = 0,
+        Bl64x64 = 1,
+        Bl32x32 = 2,
+        Bl16x16 = 3,
+        Bl8x8 = 4,
+    }
 }
 
 impl BlockLevel {
@@ -149,11 +156,14 @@ pub const DCT_ADST: TxfmType = 2;
 pub const ADST_DCT: TxfmType = 1;
 pub const DCT_DCT: TxfmType = 0;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, FromRepr)]
-pub enum TxClass {
-    TwoD,
-    H,
-    V,
+crate::src::enum_map::enum_values! {
+    from_repr(usize);
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub enum TxClass {
+        TwoD,
+        H,
+        V,
+    }
 }
 
 pub type IntraPredMode = u8;
@@ -182,74 +192,86 @@ pub const HOR_PRED: IntraPredMode = 2;
 pub const VERT_PRED: IntraPredMode = 1;
 pub const DC_PRED: IntraPredMode = 0;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromRepr, EnumCount, Default)]
-pub enum InterIntraPredMode {
-    #[default]
-    Dc = 0,
-    Vert = 1,
-    Hor = 2,
-    Smooth = 3,
+crate::src::enum_map::enum_values! {
+    count, from_repr(usize);
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub enum InterIntraPredMode {
+        #[default]
+        Dc = 0,
+        Vert = 1,
+        Hor = 2,
+        Smooth = 3,
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, FromRepr, EnumCount)]
-pub enum BlockPartition {
-    #[default]
-    None = 0,
-    H = 1,
-    V = 2,
-    Split = 3,
-    TopSplit = 4,
-    BottomSplit = 5,
-    LeftSplit = 6,
-    RightSplit = 7,
-    H4 = 8,
-    V4 = 9,
+crate::src::enum_map::enum_values! {
+    count, from_repr(usize);
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub enum BlockPartition {
+        #[default]
+        None = 0,
+        H = 1,
+        V = 2,
+        Split = 3,
+        TopSplit = 4,
+        BottomSplit = 5,
+        LeftSplit = 6,
+        RightSplit = 7,
+        H4 = 8,
+        V4 = 9,
+    }
 }
 
 impl BlockPartition {
     pub const N_SUB8X8_PARTITIONS: usize = 4;
 }
 
-#[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq, FromRepr, EnumCount, FromZeroes)]
-pub enum BlockSize {
-    Bs128x128 = 0,
-    Bs128x64 = 1,
-    Bs64x128 = 2,
-    Bs64x64 = 3,
-    Bs64x32 = 4,
-    Bs64x16 = 5,
-    Bs32x64 = 6,
-    Bs32x32 = 7,
-    Bs32x16 = 8,
-    Bs32x8 = 9,
-    Bs16x64 = 10,
-    Bs16x32 = 11,
-    Bs16x16 = 12,
-    Bs16x8 = 13,
-    Bs16x4 = 14,
-    Bs8x32 = 15,
-    Bs8x16 = 16,
-    Bs8x8 = 17,
-    Bs8x4 = 18,
-    Bs4x16 = 19,
-    Bs4x8 = 20,
-    Bs4x4 = 21,
+crate::src::enum_map::enum_values! {
+    count, from_repr(u8);
+    #[repr(u8)]
+    #[derive(Clone, Copy, PartialEq, Eq, FromZeroes)]
+    pub enum BlockSize {
+        Bs128x128 = 0,
+        Bs128x64 = 1,
+        Bs64x128 = 2,
+        Bs64x64 = 3,
+        Bs64x32 = 4,
+        Bs64x16 = 5,
+        Bs32x64 = 6,
+        Bs32x32 = 7,
+        Bs32x16 = 8,
+        Bs32x8 = 9,
+        Bs16x64 = 10,
+        Bs16x32 = 11,
+        Bs16x16 = 12,
+        Bs16x8 = 13,
+        Bs16x4 = 14,
+        Bs8x32 = 15,
+        Bs8x16 = 16,
+        Bs8x8 = 17,
+        Bs8x4 = 18,
+        Bs4x16 = 19,
+        Bs4x8 = 20,
+        Bs4x4 = 21,
+    }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, EnumCount, Default, FromRepr)]
-pub enum Filter2d {
-    #[default]
-    Regular8Tap = 0,
-    RegularSmooth8Tap = 1,
-    RegularSharp8Tap = 2,
-    SharpRegular8Tap = 3,
-    SharpSmooth8Tap = 4,
-    Sharp8Tap = 5,
-    SmoothRegular8Tap = 6,
-    Smooth8Tap = 7,
-    SmoothSharp8Tap = 8,
-    Bilinear = 9,
+crate::src::enum_map::enum_values! {
+    count, from_repr(usize);
+    #[derive(Clone, Copy, PartialEq, Eq, Default)]
+    pub enum Filter2d {
+        #[default]
+        Regular8Tap = 0,
+        RegularSmooth8Tap = 1,
+        RegularSharp8Tap = 2,
+        SharpRegular8Tap = 3,
+        SharpSmooth8Tap = 4,
+        Sharp8Tap = 5,
+        SmoothRegular8Tap = 6,
+        Smooth8Tap = 7,
+        SmoothSharp8Tap = 8,
+        Bilinear = 9,
+    }
 }
 
 impl EnumKey<{ Self::COUNT }> for Filter2d {
@@ -389,12 +411,15 @@ impl Neg for Mv {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromRepr, Default)]
-pub enum MotionMode {
-    #[default]
-    Translation = 0,
-    Obmc = 1,
-    Warp = 2,
+crate::src::enum_map::enum_values! {
+    from_repr(usize);
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub enum MotionMode {
+        #[default]
+        Translation = 0,
+        Obmc = 1,
+        Warp = 2,
+    }
 }
 
 #[derive(Clone, Default)]

@@ -1,3 +1,11 @@
+use std::ffi::c_void;
+
+#[cfg(any(
+    feature = "volumes",
+    all(target_os = "macos", feature = "native-watch")
+))]
+pub(crate) const CF_URL_POSIX_PATH_STYLE: isize = 0;
+
 unsafe extern "C" {
     fn mach_host_self() -> u32;
     static mach_task_self_: u32;
@@ -6,6 +14,28 @@ unsafe extern "C" {
 
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
+    #[cfg(target_os = "macos")]
+    pub(crate) fn CFArrayGetCount(array: *const c_void) -> isize;
+    #[cfg(target_os = "macos")]
+    pub(crate) fn CFArrayGetValueAtIndex(array: *const c_void, index: isize) -> *const c_void;
+    #[cfg(any(
+        feature = "volumes",
+        all(
+            target_os = "macos",
+            any(feature = "native-watch", feature = "disk-metrics")
+        )
+    ))]
+    fn CFURLCreateFromFileSystemRepresentation(
+        allocator: *const c_void,
+        bytes: *const u8,
+        len: isize,
+        directory: u8,
+    ) -> *const c_void;
+    #[cfg(any(
+        feature = "volumes",
+        all(target_os = "macos", feature = "native-watch")
+    ))]
+    pub(crate) fn CFURLCopyFileSystemPath(url: *const c_void, style: isize) -> *const c_void;
     fn CFRelease(value: *const std::ffi::c_void);
     fn CFStringGetLength(value: *const std::ffi::c_void) -> isize;
     fn CFStringGetMaximumSizeForEncoding(length: isize, encoding: u32) -> isize;
@@ -15,6 +45,27 @@ unsafe extern "C" {
         size: isize,
         encoding: u32,
     ) -> u8;
+}
+
+#[cfg(any(
+    feature = "volumes",
+    all(
+        target_os = "macos",
+        any(feature = "native-watch", feature = "disk-metrics")
+    )
+))]
+pub(crate) fn cf_file_url(path: &std::path::Path) -> Option<OwnedCF> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let bytes = path.as_os_str().as_bytes();
+    unsafe {
+        OwnedCF::from_owned(CFURLCreateFromFileSystemRepresentation(
+            std::ptr::null(),
+            bytes.as_ptr(),
+            bytes.len() as isize,
+            0,
+        ))
+    }
 }
 
 pub(crate) struct OwnedCF<T = std::ffi::c_void>(std::ptr::NonNull<T>);

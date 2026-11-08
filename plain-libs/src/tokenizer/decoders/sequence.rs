@@ -1,12 +1,12 @@
 use crate::tokenizer::decoders::DecoderWrapper;
 use crate::tokenizer::tokenizer::{Decoder, Result};
-use crate::tokenizer::utils::macro_rules_attribute;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct Sequence {
-    decoders: Vec<DecoderWrapper>,
+impl_serde_type! {
+    #[derive(Clone, Debug)]
+    pub struct Sequence {
+        decoders: Vec<DecoderWrapper>,
+    }
 }
 
 impl Sequence {

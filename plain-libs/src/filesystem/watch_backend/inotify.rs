@@ -1,25 +1,13 @@
 use crate::filesystem::watch_backend::*;
-use std::{
-    collections::HashMap,
-    ffi::{CString, OsString},
-    io,
-    os::{
-        fd::{AsRawFd, FromRawFd, OwnedFd},
-        unix::ffi::OsStringExt,
-    },
-};
+#[cfg(test)]
+use crate::platform::inotify::decode;
+use crate::platform::inotify::{self, RawEvent};
+use std::{collections::HashMap, io, os::fd::OwnedFd};
 use tokio::io::unix::AsyncFd;
 
 pub struct Watcher {
     fd: AsyncFd<OwnedFd>,
     directories: HashMap<i32, PathBuf>,
-}
-
-pub struct Event {
-    descriptor: i32,
-    mask: u32,
-    cookie: u32,
-    name: OsString,
 }
 
 impl Watcher {
@@ -31,13 +19,8 @@ impl Watcher {
     }
 
     fn open() -> io::Result<Self> {
-        let fd = unsafe { libc::inotify_init1(libc::IN_NONBLOCK | libc::IN_CLOEXEC) };
-        if fd < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let fd = unsafe { OwnedFd::from_raw_fd(fd) };
         Ok(Self {
-            fd: AsyncFd::new(fd)?,
+            fd: AsyncFd::new(inotify::open()?),
             directories: HashMap::new(),
         })
     }
@@ -46,7 +29,6 @@ impl Watcher {
         if self.directories.values().any(|current| current == path) {
             return Ok(());
         }
-        let name = CString::new(path.as_os_str().as_encoded_bytes())?;
         let mask = libc::IN_CLOSE_WRITE
             | libc::IN_MOVED_FROM
             | libc::IN_MOVED_TO
@@ -56,11 +38,7 @@ impl Watcher {
             | libc::IN_MOVE_SELF
             | libc::IN_ONLYDIR
             | libc::IN_DONT_FOLLOW;
-        let descriptor =
-            unsafe { libc::inotify_add_watch(self.fd.get_ref().as_raw_fd(), name.as_ptr(), mask) };
-        if descriptor < 0 {
-            return Err(io::Error::last_os_error());
-        }
+        let descriptor = inotify::add(self.fd.get_ref(), path, mask)?;
         self.directories.insert(descriptor, path.to_owned());
         Ok(())
     }
@@ -81,54 +59,31 @@ impl Watcher {
             .collect::<Vec<_>>();
         for wd in selected {
             self.directories.remove(&wd);
-            unsafe {
-                libc::inotify_rm_watch(self.fd.get_ref().as_raw_fd(), wd as _);
-            }
+            let _ = inotify::remove(self.fd.get_ref(), wd);
         }
     }
 
-    pub async fn read(&self) -> io::Result<Vec<Event>> {
+    pub async fn read(&self) -> io::Result<Vec<RawEvent>> {
         let mut buffer = vec![0u8; 65536];
         loop {
             let mut ready = self.fd.readable().await?;
-            let result = ready.try_io(|fd| {
-                let count = unsafe {
-                    libc::read(
-                        fd.get_ref().as_raw_fd(),
-                        buffer.as_mut_ptr().cast(),
-                        buffer.len(),
-                    )
-                };
-                if count < 0 {
-                    Err(io::Error::last_os_error())
-                } else {
-                    Ok(count as usize)
-                }
-            });
-            let count = match result {
+            match ready.try_io(|fd| inotify::read(fd.get_ref(), &mut buffer)) {
                 Ok(Err(error)) if error.kind() == io::ErrorKind::Interrupted => continue,
-                Ok(result) => result?,
+                Ok(result) => return result,
                 Err(_) => continue,
-            };
-            if count == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "filesystem watcher closed",
-                ));
             }
-            return decode(&buffer[..count]);
         }
     }
 
-    pub fn change(&mut self, event: Event) -> Option<Change> {
-        if event.mask & libc::IN_Q_OVERFLOW != 0 {
+    pub fn change(&mut self, event: RawEvent) -> Option<Change> {
+        if event.has(libc::IN_Q_OVERFLOW) {
             return Some(Change {
                 path: PathBuf::new(),
                 kind: Kind::Refresh,
             });
         }
         let parent = self.directories.get(&event.descriptor)?.clone();
-        if event.mask & libc::IN_IGNORED != 0 {
+        if event.has(libc::IN_IGNORED) {
             self.directories.remove(&event.descriptor);
             return Some(Change {
                 path: parent,
@@ -140,76 +95,23 @@ impl Watcher {
         } else {
             parent.join(event.name)
         };
-        let kind =
-            if event.mask & (libc::IN_UNMOUNT | libc::IN_DELETE_SELF | libc::IN_MOVE_SELF) != 0 {
-                Kind::Refresh
-            } else if event.mask & libc::IN_MOVED_FROM != 0 {
-                Kind::From(event.cookie)
-            } else if event.mask & libc::IN_MOVED_TO != 0 {
-                Kind::To(event.cookie)
-            } else if event.mask & libc::IN_DELETE != 0 {
-                Kind::Removed
-            } else if event.mask & libc::IN_ISDIR != 0 {
-                Kind::Directory
-            } else if event.mask & libc::IN_CLOSE_WRITE != 0 {
-                Kind::Completed
-            } else {
-                return None;
-            };
+        let kind = if event.has(libc::IN_UNMOUNT | libc::IN_DELETE_SELF | libc::IN_MOVE_SELF) {
+            Kind::Refresh
+        } else if event.has(libc::IN_MOVED_FROM) {
+            Kind::From(event.cookie)
+        } else if event.has(libc::IN_MOVED_TO) {
+            Kind::To(event.cookie)
+        } else if event.has(libc::IN_DELETE) {
+            Kind::Removed
+        } else if event.has(libc::IN_ISDIR) {
+            Kind::Directory
+        } else if event.has(libc::IN_CLOSE_WRITE) {
+            Kind::Completed
+        } else {
+            return None;
+        };
         Some(Change { path, kind })
     }
-}
-
-fn decode(bytes: &[u8]) -> io::Result<Vec<Event>> {
-    let mut events = Vec::new();
-    let mut offset = 0;
-    let header = std::mem::size_of::<libc::inotify_event>();
-    while offset < bytes.len() {
-        if bytes.len() - offset < header {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "truncated filesystem event",
-            ));
-        }
-        let raw = unsafe {
-            std::ptr::read_unaligned(bytes[offset..].as_ptr().cast::<libc::inotify_event>())
-        };
-        let end = offset
-            .checked_add(header)
-            .and_then(|n| n.checked_add(raw.len as usize))
-            .filter(|end| *end <= bytes.len())
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "invalid filesystem event length",
-                )
-            })?;
-        let name = &bytes[offset + header..end];
-        let length = name
-            .iter()
-            .position(|byte| *byte == 0)
-            .unwrap_or(name.len());
-        let name = OsString::from_vec(name[..length].to_vec());
-        if !name.is_empty()
-            && (Path::new(&name).components().count() != 1
-                || Path::new(&name)
-                    .components()
-                    .any(|part| !matches!(part, std::path::Component::Normal(_))))
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "invalid filesystem event name",
-            ));
-        }
-        events.push(Event {
-            descriptor: raw.wd,
-            mask: raw.mask,
-            cookie: raw.cookie,
-            name,
-        });
-        offset = end;
-    }
-    Ok(events)
 }
 
 #[cfg(test)]

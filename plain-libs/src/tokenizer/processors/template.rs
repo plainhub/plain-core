@@ -1,9 +1,6 @@
-use derive_builder::Builder;
-
 use crate::tokenizer::{Encoding, PostProcessor, Result};
-use ahash::{AHashMap, AHashSet};
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::result::Result as StdResult;
 
@@ -176,7 +173,7 @@ impl TryFrom<&str> for Template {
 #[serde(transparent)]
 pub struct Tokens(
     #[serde(serialize_with = "crate::tokenizer::utils::ordered_map")]
-    pub  AHashMap<String, SpecialToken>,
+    pub  HashMap<String, SpecialToken>,
 );
 
 impl<T: Into<SpecialToken>> From<Vec<T>> for Tokens {
@@ -192,27 +189,21 @@ impl<T: Into<SpecialToken>> From<Vec<T>> for Tokens {
     }
 }
 
-impl From<AHashMap<String, SpecialToken>> for Tokens {
-    fn from(v: AHashMap<String, SpecialToken>) -> Self {
+impl From<HashMap<String, SpecialToken>> for Tokens {
+    fn from(v: HashMap<String, SpecialToken>) -> Self {
         Self(v)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Builder, Serialize, Deserialize, Eq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
 #[serde(tag = "type", from = "TemplateProcessingDeserializer")]
-#[builder(build_fn(validate = "Self::validate"))]
 pub struct TemplateProcessing {
-    #[builder(try_setter, default = "\"$0\".try_into().unwrap()")]
     pub single: Template,
-    #[builder(try_setter, default = "\"$A:0 $B:1\".try_into().unwrap()")]
     pair: Template,
-    #[builder(setter(skip), default = "self.default_added(true)")]
     #[serde(skip)]
     added_single: usize,
-    #[builder(setter(skip), default = "self.default_added(false)")]
     #[serde(skip)]
     added_pair: usize,
-    #[builder(setter(into), default)]
     special_tokens: Tokens,
 }
 
@@ -268,18 +259,6 @@ impl TemplateProcessing {
     }
 }
 
-impl From<&str> for TemplateProcessingBuilderError {
-    fn from(e: &str) -> Self {
-        e.to_string().into()
-    }
-}
-
-impl PartialEq for TemplateProcessingBuilderError {
-    fn eq(&self, other: &Self) -> bool {
-        self.to_string() == other.to_string()
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 struct TemplateProcessingDeserializer {
@@ -289,8 +268,8 @@ struct TemplateProcessingDeserializer {
 }
 impl From<TemplateProcessingDeserializer> for TemplateProcessing {
     fn from(t: TemplateProcessingDeserializer) -> Self {
-        let added_single = count_added(&t.single, Some(&t.special_tokens));
-        let added_pair = count_added(&t.pair, Some(&t.special_tokens));
+        let added_single = count_added(&t.single, &t.special_tokens);
+        let added_pair = count_added(&t.pair, &t.special_tokens);
         Self {
             single: t.single,
             pair: t.pair,
@@ -301,88 +280,17 @@ impl From<TemplateProcessingDeserializer> for TemplateProcessing {
     }
 }
 
-fn count_added(container: &Template, special_tokens: Option<&Tokens>) -> usize {
+fn count_added(container: &Template, special_tokens: &Tokens) -> usize {
     container
         .0
         .iter()
         .map(|p| match p {
             Piece::Sequence { .. } => 0,
             Piece::SpecialToken { id, .. } => {
-                special_tokens.map_or(0, |spt| spt.0.get(id).map_or(0, |s| s.ids.len()))
+                special_tokens.0.get(id).map_or(0, |token| token.ids.len())
             }
         })
         .sum()
-}
-
-impl TemplateProcessingBuilder {
-    fn default_added(&self, is_single: bool) -> usize {
-        let container = if is_single {
-            self.single.as_ref()
-        } else {
-            self.pair.as_ref()
-        };
-        container.map_or(0, |pieces| {
-            count_added(pieces, self.special_tokens.as_ref())
-        })
-    }
-
-    fn validate(&self) -> std::result::Result<(), String> {
-        let pair_has_both = self.pair.as_ref().is_none_or(|pair| {
-            let mut has_a = false;
-            let mut has_b = false;
-            for piece in &pair.0 {
-                if let Piece::Sequence {
-                    id: Sequence::A, ..
-                } = piece
-                {
-                    has_a = true;
-                }
-                if let Piece::Sequence {
-                    id: Sequence::B, ..
-                } = piece
-                {
-                    has_b = true;
-                }
-            }
-            has_a && has_b
-        });
-        if !pair_has_both {
-            return Err("Template for `pair` must use both sequences".into());
-        }
-
-        let check = |sp| {
-            let exist = self
-                .special_tokens
-                .as_ref()
-                .is_some_and(|map| map.0.contains_key(sp));
-
-            match exist {
-                false => Some(sp),
-                true => None,
-            }
-        };
-
-        let empty = [];
-        let missing: AHashSet<&str> = self
-            .single
-            .as_ref()
-            .map_or(empty.iter(), |s| s.0.iter())
-            .chain(self.pair.as_ref().map_or(empty.iter(), |s| s.0.iter()))
-            .filter_map(|piece| match piece {
-                Piece::Sequence { .. } => None,
-                Piece::SpecialToken { id, .. } => check(id.as_ref()),
-            })
-            .collect::<AHashSet<_>>();
-
-        if missing.is_empty() {
-            Ok(())
-        } else {
-            Err(format!(
-                "Missing SpecialToken(s) with id(s) `{}`",
-                missing.iter().join(", ")
-            ))
-        }
-    }
 }
 
 impl Default for TemplateProcessing {
@@ -398,10 +306,6 @@ impl Default for TemplateProcessing {
 }
 
 impl TemplateProcessing {
-    pub fn builder() -> TemplateProcessingBuilder {
-        TemplateProcessingBuilder::default()
-    }
-
     fn apply_template(
         &self,
         template: &[Piece],
@@ -421,7 +325,7 @@ impl TemplateProcessing {
                     }
                     Piece::SpecialToken { id, type_id } => {
                         if add_special_tokens {
-                            let tok = &self.special_tokens.0[id]; // We already checked existence above
+                            let tok = &self.special_tokens.0[id];
                             let len = tok.ids.len();
 
                             let encoding = Encoding::new(
@@ -439,7 +343,7 @@ impl TemplateProcessing {
                                 // overflowing
                                 vec![],
                                 // sequence_range
-                                AHashMap::new(),
+                                HashMap::new(),
                             );
                             Some(encoding)
                         } else {

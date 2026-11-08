@@ -8,11 +8,11 @@ use crate::audio_tags::tag::Accessor;
 use crate::audio_tags::util::text::{utf8_decode, utf8_decode_str, utf16_decode};
 
 use std::borrow::Cow;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek};
 
+use crate::audio_tags::ogg::page::{Packets, PageHeader};
 use crate::utils::base64::base64_decode_standard;
 use crate::utils::binary::{LittleEndian, ReadBytesExt};
-use ogg_pager::{Packets, PageHeader};
 
 pub type OGGTags = (Option<VorbisComments>, PageHeader, Packets);
 
@@ -234,7 +234,7 @@ pub(crate) fn read_from<T>(
     data: &mut T,
     header_sig: &[u8],
     comment_sig: &[u8],
-    packets_to_read: isize,
+    packets_to_read: usize,
     parse_options: ParseOptions,
 ) -> Result<OGGTags>
 where
@@ -242,14 +242,8 @@ where
 {
     debug_assert!(packets_to_read >= 2);
 
-    // TODO: Would be nice if we didn't have to read just to seek and reread immediately
-    let start = data.stream_position()?;
     let first_page_header = PageHeader::read(data)?;
-
-    data.seek(SeekFrom::Start(start))?;
-
-    // Read the header packets
-    let packets = Packets::read_count(data, packets_to_read)?;
+    let packets = Packets::read_count(data, &first_page_header, packets_to_read)?;
 
     let identification_packet = packets
         .get(0)

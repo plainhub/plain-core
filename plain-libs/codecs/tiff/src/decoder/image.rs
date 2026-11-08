@@ -603,6 +603,7 @@ impl Image {
 
                 Box::new(Cursor::new(data))
             }
+            #[cfg(feature = "fax")]
             CompressionMethod::Fax4 => Box::new(super::stream::Group4Reader::new(
                 dimensions,
                 reader,

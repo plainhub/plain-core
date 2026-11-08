@@ -1,8 +1,8 @@
 use crate::tokenizer::tokenizer::{Offsets, Token};
 use crate::tokenizer::utils::padding::PaddingDirection;
 use crate::tokenizer::utils::truncation::TruncationDirection;
-use ahash::AHashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::ops::Range;
 
 #[derive(Default, PartialEq, Debug, Clone, Serialize, Deserialize)]
@@ -23,7 +23,7 @@ pub struct Encoding {
 
     overflowing: Vec<Encoding>,
 
-    sequence_ranges: AHashMap<usize, Range<usize>>,
+    sequence_ranges: HashMap<usize, Range<usize>>,
 }
 impl Encoding {
     pub fn new(
@@ -35,7 +35,7 @@ impl Encoding {
         special_tokens_mask: Vec<u32>,
         attention_mask: Vec<u32>,
         overflowing: Vec<Self>,
-        sequence_ranges: AHashMap<usize, Range<usize>>,
+        sequence_ranges: HashMap<usize, Range<usize>>,
     ) -> Self {
         Self {
             ids,
@@ -60,7 +60,7 @@ impl Encoding {
             special_tokens_mask: Vec::with_capacity(len),
             attention_mask: Vec::with_capacity(len),
             overflowing: vec![],
-            sequence_ranges: AHashMap::new(),
+            sequence_ranges: HashMap::new(),
         }
     }
 
@@ -89,7 +89,7 @@ impl Encoding {
             attention_mask: vec![1; length],
             special_tokens_mask: vec![0; length],
             overflowing: vec![],
-            sequence_ranges: AHashMap::new(),
+            sequence_ranges: HashMap::new(),
         }
     }
 
@@ -345,7 +345,7 @@ impl Encoding {
             special_tokens_mask: self.special_tokens_mask[start..stop].to_vec(),
             attention_mask: self.attention_mask[start..stop].to_vec(),
             overflowing: vec![],
-            sequence_ranges: AHashMap::new(),
+            sequence_ranges: HashMap::new(),
         };
 
         loop {
@@ -363,7 +363,7 @@ impl Encoding {
                 special_tokens_mask: self.special_tokens_mask[start..stop].to_vec(),
                 attention_mask: self.attention_mask[start..stop].to_vec(),
                 overflowing: vec![],
-                sequence_ranges: AHashMap::new(),
+                sequence_ranges: HashMap::new(),
             });
         }
         *self = new_encoding;

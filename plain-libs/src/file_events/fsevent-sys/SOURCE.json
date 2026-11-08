@@ -1,0 +1,7 @@
+{
+  "name": "fsevent-sys",
+  "version": "4.1.0",
+  "repository": "https://github.com/octplane/fsevent-rust/tree/master/fsevent-sys",
+  "revision": "b3f6d1ae0eb331dd15d28a9984eb3157878ea100",
+  "archive-sha256": "76ee7a02da4d231650c7cea31349b889be2f45ddb3ef3032d2ec8185f6313fd2"
+}

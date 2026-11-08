@@ -9,6 +9,8 @@
 mod bytecast;
 pub mod decoder;
 mod directory;
+#[cfg(feature = "fax")]
+mod fax;
 
 mod error;
 pub mod tags;

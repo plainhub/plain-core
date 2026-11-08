@@ -1,3 +1,4 @@
+use crate::platform::stack_space::remaining_stack;
 // pest. The Elegant Parser
 // Copyright (c) 2018 Dragoș Tiselice
 //
@@ -78,14 +79,6 @@ enum LimitKind {
 }
 
 const REQUIRED_STACK_SPACE: usize = 64 * 1024;
-
-#[inline]
-fn remaining_stack() -> Option<usize> {
-    #[cfg(feature = "peg")]
-    return stacker::remaining_stack();
-    #[cfg(not(feature = "peg"))]
-    return None;
-}
 
 #[derive(Debug)]
 struct CallLimitTracker {

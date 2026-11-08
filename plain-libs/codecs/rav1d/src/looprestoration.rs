@@ -25,7 +25,6 @@ use std::iter;
 use std::mem;
 use std::ops::Add;
 use std::slice;
-use to_method::To;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 use zerocopy::FromZeroes;
@@ -420,11 +419,11 @@ fn wiener_rust<BD: BitDepth>(
             let mut sum = 1 << bitdepth + 6;
 
             if BD::BPC == BPC::BPC8 {
-                sum += tmp[i + 3].to::<i32>() * 128;
+                sum += Into::<i32>::into(tmp[i + 3]) * 128;
             }
 
             for (&tmp, &filter) in iter::zip(&tmp[i..i + 7], &filter[0][..7]) {
-                sum += tmp.to::<i32>() * filter as c_int;
+                sum += Into::<i32>::into(tmp) * filter as c_int;
             }
 
             hor[i] = iclip(sum + rounding_off_h >> round_bits_h, 0, clip_limit - 1) as u16;
@@ -3542,7 +3541,7 @@ impl Rav1dLoopRestorationDSPContext {
             }
         }
 
-         // Reachable on some #[cfg]s.
+        // Reachable on some #[cfg]s.
         {
             let _ = flags;
             let _ = bpc;

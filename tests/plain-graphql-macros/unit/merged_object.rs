@@ -1,5 +1,4 @@
 use super::*;
-use darling::FromDeriveInput;
 use syn::visit_mut::{self, VisitMut};
 
 #[derive(Default)]

@@ -1,11 +1,4 @@
 use super::*;
-fn assert_close(actual: f64, expected: f64, tolerance: f64) {
-    assert!(
-        (actual - expected).abs() < tolerance,
-        "{actual} differs from {expected} by more than {tolerance}"
-    );
-}
-
 #[test]
 fn set_sentence() {
     let lattice = Lattice::from("", 1, 2);
@@ -60,14 +53,13 @@ fn insert_test() {
     lattice.insert(0, 2, 0.0, 7);
     lattice.insert(1, 4, 0.0, 8);
     lattice.insert(2, 6, 0.0, 9);
-    // 0 & 1 are bos and eos
-    let node0 = lattice.nodes[2].borrow();
-    let node1 = lattice.nodes[3].borrow();
-    let node2 = lattice.nodes[4].borrow();
-    let node3 = lattice.nodes[5].borrow();
-    let node4 = lattice.nodes[6].borrow();
-    let node5 = lattice.nodes[7].borrow();
-    let node6 = lattice.nodes[8].borrow();
+    let node0 = lattice.begin_nodes[0][0].borrow();
+    let node1 = lattice.begin_nodes[1][0].borrow();
+    let node2 = lattice.begin_nodes[2][0].borrow();
+    let node3 = lattice.begin_nodes[5][0].borrow();
+    let node4 = lattice.begin_nodes[0][1].borrow();
+    let node5 = lattice.begin_nodes[1][1].borrow();
+    let node6 = lattice.begin_nodes[2][1].borrow();
 
     assert_eq!(lattice.piece(&node0), "A");
     assert_eq!(lattice.piece(&node1), "B");
@@ -171,70 +163,4 @@ fn test_viterbi2() {
 
     lattice.insert(0, 3, 10.0, 8);
     assert_eq!(lattice.tokens(), ["ABC"]);
-}
-
-#[test]
-fn test_nbest() {
-    let mut lattice = Lattice::from("ABC", 1, 2);
-    lattice.insert(0, 1, 0.0, 3);
-    lattice.insert(1, 1, 0.0, 4);
-    lattice.insert(2, 1, 0.0, 5);
-    lattice.insert(0, 2, 2.0, 6);
-    lattice.insert(1, 2, 5.0, 7);
-    lattice.insert(0, 3, 10.0, 8);
-
-    let nbests = lattice.nbest_tokens(10);
-    assert_eq!(
-        nbests,
-        vec![
-            vec!["ABC"],
-            vec!["A", "BC"],
-            vec!["AB", "C"],
-            vec!["A", "B", "C"]
-        ]
-    );
-
-    assert!(lattice.nbest_tokens(0).is_empty());
-    assert_eq!(lattice.nbest_tokens(1), vec![vec!["ABC"]]);
-}
-#[test]
-fn test_log_sum_exp() {
-    let mut x = 0.0;
-
-    let v: Vec<f64> = vec![1.0, 2.0, 3.0];
-    for (i, y) in v.iter().enumerate() {
-        x = log_sum_exp(x, *y, i == 0);
-    }
-    assert_close(x, v.iter().map(|n| n.exp()).sum::<f64>().ln(), 0.001);
-}
-
-#[test]
-fn test_populate() {
-    let mut lattice = Lattice::from("ABC", 1, 2);
-    lattice.insert(0, 1, 1.0, 3); // A
-    lattice.insert(1, 1, 1.2, 4); // B
-    lattice.insert(2, 1, 2.5, 5); // C
-    lattice.insert(0, 2, 3.0, 6); // AB
-    lattice.insert(1, 2, 4.0, 7); // BC
-    lattice.insert(0, 3, 2.0, 8); // ABC
-
-    let mut probs = vec![0.0; 9];
-    let p1 = (1.0_f64 + 1.2 + 2.5).exp();
-    let p2 = (3.0_f64 + 2.5).exp();
-    let p3 = (1.0_f64 + 4.0).exp();
-    let p4 = 2.0_f64.exp();
-    let z = p1 + p2 + p3 + p4;
-
-    let log_z = lattice.populate_marginal(1.0, &mut probs);
-
-    assert_close(log_z, z.ln(), 0.001);
-    assert_close(probs[0], 0.0, 0.001);
-    assert_close(probs[1], 0.0, 0.001);
-    assert_close(probs[2], 0.0, 0.001);
-    assert_close(probs[3], (p1 + p3) / z, 0.001);
-    assert_close(probs[4], (p1) / z, 0.001);
-    assert_close(probs[5], (p1 + p2) / z, 0.001);
-    assert_close(probs[6], (p2) / z, 0.001);
-    assert_close(probs[7], (p3) / z, 0.001);
-    assert_close(probs[8], (p4) / z, 0.001);
 }

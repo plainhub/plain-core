@@ -3,7 +3,6 @@ use crate::include::dav1d::common::Rav1dDataProps;
 use crate::src::c_arc::CArc;
 use crate::src::c_arc::RawCArc;
 use std::ptr::NonNull;
-use to_method::To as _;
 
 #[derive(Default)]
 #[repr(C)]
@@ -45,7 +44,7 @@ impl From<Rav1dData> for Dav1dData {
         Self {
             data: data
                 .as_ref()
-                .map(|data| data.as_ref().to::<NonNull<[u8]>>().cast()),
+                .map(|data| Into::<NonNull<[u8]>>::into(data.as_ref()).cast()),
             sz: data.as_ref().map(|data| data.len()).unwrap_or_default(),
             r#ref: data.map(|data| data.into_raw()),
             m: m.into(),

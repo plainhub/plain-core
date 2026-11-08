@@ -5,11 +5,11 @@ use regex::Regex;
 use crate::tokenizer::tokenizer::{
     PreTokenizedString, PreTokenizer, Result, SplitDelimiterBehavior, pattern::Invert,
 };
-use crate::tokenizer::utils::macro_rules_attribute;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct Whitespace;
+impl_serde_type! {
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Whitespace;
+}
 
 impl Default for Whitespace {
     fn default() -> Self {
@@ -28,9 +28,10 @@ impl PreTokenizer for Whitespace {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct WhitespaceSplit;
+impl_serde_type! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub struct WhitespaceSplit;
+}
 
 impl PreTokenizer for WhitespaceSplit {
     fn pre_tokenize(&self, pretokenized: &mut PreTokenizedString) -> Result<()> {

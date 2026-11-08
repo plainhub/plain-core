@@ -3,18 +3,14 @@ use serde::{Deserialize, Serialize};
 use crate::tokenizer::tokenizer::{
     PreTokenizedString, PreTokenizer, Result, SplitDelimiterBehavior,
 };
-use crate::tokenizer::utils::macro_rules_attribute;
-use unicode_categories::UnicodeCategories;
+use crate::tokenizer::unicode_categories::is_punctuation;
 
-fn is_punc(x: char) -> bool {
-    char::is_ascii_punctuation(&x) || x.is_punctuation()
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct Punctuation {
-    #[serde(default = "default_split")]
-    pub behavior: SplitDelimiterBehavior,
+impl_serde_type! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub struct Punctuation {
+        #[serde(default = "default_split")]
+        pub behavior: SplitDelimiterBehavior,
+    }
 }
 
 fn default_split() -> SplitDelimiterBehavior {
@@ -35,7 +31,7 @@ impl Default for Punctuation {
 
 impl PreTokenizer for Punctuation {
     fn pre_tokenize(&self, pretokenized: &mut PreTokenizedString) -> Result<()> {
-        pretokenized.split(|_, s| s.split(is_punc, self.behavior))
+        pretokenized.split(|_, s| s.split(is_punctuation, self.behavior))
     }
 }
 

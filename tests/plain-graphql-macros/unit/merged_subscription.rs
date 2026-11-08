@@ -1,5 +1,4 @@
 use super::*;
-use darling::FromDeriveInput;
 
 #[test]
 fn merged_subscriptions_register_members_without_intermediate_types() {

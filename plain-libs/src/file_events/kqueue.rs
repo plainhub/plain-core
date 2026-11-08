@@ -1,11 +1,11 @@
 use super::event::*;
 use super::{Error, EventHandler, RecursiveMode, Result, Watcher};
 use crate::file_events::{Receiver, Sender, unbounded};
-use kqueue::{EventData, EventFilter, FilterFlag, Ident};
 use std::collections::HashMap;
 use std::env;
-use std::fs::metadata;
-use std::os::unix::io::AsRawFd;
+use std::fs::{File, metadata};
+use std::io;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
@@ -13,6 +13,26 @@ use walkdir::WalkDir;
 
 const KQUEUE: mio::Token = mio::Token(0);
 const MESSAGE: mio::Token = mio::Token(1);
+
+const VNODE_FLAGS: &[u32] = &[
+    libc::NOTE_WRITE,
+    libc::NOTE_EXTEND,
+    libc::NOTE_ATTRIB,
+    libc::NOTE_LINK,
+    libc::NOTE_RENAME,
+    libc::NOTE_REVOKE,
+    #[cfg(target_os = "freebsd")]
+    libc::NOTE_CLOSE_WRITE,
+    #[cfg(target_os = "freebsd")]
+    libc::NOTE_CLOSE,
+    #[cfg(target_os = "freebsd")]
+    libc::NOTE_OPEN,
+    #[cfg(target_os = "freebsd")]
+    libc::NOTE_READ,
+    #[cfg(target_os = "openbsd")]
+    libc::NOTE_TRUNCATE,
+    libc::NOTE_DELETE,
+];
 
 // The EventLoop will set up a mio::Poll and use it to wait for the following:
 //
@@ -25,9 +45,9 @@ struct EventLoop {
     event_loop_waker: Arc<mio::Waker>,
     event_loop_tx: Sender<EventLoopMsg>,
     event_loop_rx: Receiver<EventLoopMsg>,
-    kqueue: kqueue::Watcher,
+    kqueue: OwnedFd,
     event_handler: Box<dyn EventHandler>,
-    watches: HashMap<PathBuf, bool>,
+    watches: HashMap<PathBuf, (File, bool)>,
 }
 
 #[derive(Debug)]
@@ -43,7 +63,7 @@ enum EventLoopMsg {
 }
 
 impl EventLoop {
-    pub fn new(kqueue: kqueue::Watcher, event_handler: Box<dyn EventHandler>) -> Result<Self> {
+    pub fn new(kqueue: OwnedFd, event_handler: Box<dyn EventHandler>) -> Result<Self> {
         let (event_loop_tx, event_loop_rx) = unbounded::<EventLoopMsg>();
         let poll = mio::Poll::new()?;
 
@@ -135,137 +155,105 @@ impl EventLoop {
         let mut add_watches = Vec::new();
         let mut remove_watches = Vec::new();
 
-        while let Some(event) = self.kqueue.poll(None) {
-            log::trace!("kqueue event: {event:?}");
-
-            match event {
-                kqueue::Event {
-                    data: EventData::Vnode(data),
-                    ident: Ident::Filename(_, path),
-                } => {
-                    let path = PathBuf::from(path);
-                    let event = match data {
-                        /*
-                        TODO: Differentiate folders and files
-                        kqueue doesn't tell us if this was a file or a dir, so we
-                        could only emulate this inotify behavior if we keep track of
-                        all files and directories internally and then perform a
-                        lookup.
-                        */
-                        kqueue::Vnode::Delete => {
-                            remove_watches.push(path.clone());
-                            Ok(Event::new(EventKind::Remove(RemoveKind::Any)).add_path(path))
-                        }
-
-                        // a write to a directory means that a new file was created in it, let's
-                        // figure out which file this was
-                        kqueue::Vnode::Write if path.is_dir() => {
-                            // find which file is new in the directory by comparing it with our
-                            // list of known watches
-                            std::fs::read_dir(&path)
-                                .map(|dir| {
-                                    dir.filter_map(std::result::Result::ok)
-                                        .map(|f| f.path())
-                                        .find(|f| !self.watches.contains_key(f))
-                                })
-                                .map(|file| {
-                                    if let Some(file) = file {
-                                        // watch this new file
-                                        add_watches.push(file.clone());
-
-                                        Event::new(EventKind::Create(if file.is_dir() {
-                                            CreateKind::Folder
-                                        } else if file.is_file() {
-                                            CreateKind::File
-                                        } else {
-                                            CreateKind::Other
-                                        }))
-                                        .add_path(file)
-                                    } else {
-                                        Event::new(EventKind::Modify(ModifyKind::Data(
-                                            DataChange::Any,
-                                        )))
-                                        .add_path(path)
-                                    }
-                                })
-                                .map_err(Into::into)
-                        }
-
-                        // data was written to this file
-                        kqueue::Vnode::Write => Ok(Event::new(EventKind::Modify(
-                            ModifyKind::Data(DataChange::Any),
-                        ))
-                        .add_path(path)),
-
-                        /*
-                        Extend and Truncate are just different names for the same
-                        operation, extend is only used on FreeBSD, truncate everywhere
-                        else
-                        */
-                        kqueue::Vnode::Extend | kqueue::Vnode::Truncate => Ok(Event::new(
-                            EventKind::Modify(ModifyKind::Data(DataChange::Size)),
-                        )
-                        .add_path(path)),
-
-                        /*
-                        this kevent has the same problem as the delete kevent. The
-                        only way i can think of providing "better" event with more
-                        information is to do the diff our self, while this maybe do
-                        able of delete. In this case it would somewhat expensive to
-                        keep track and compare ever peace of metadata for every file
-                        */
-                        kqueue::Vnode::Attrib => Ok(Event::new(EventKind::Modify(
-                            ModifyKind::Metadata(MetadataKind::Any),
-                        ))
-                        .add_path(path)),
-
-                        /*
-                        The link count on a file changed => subdirectory created or
-                        delete.
-                        */
-                        kqueue::Vnode::Link => {
-                            // As we currently don't have a solution that would allow us
-                            // to only add/remove the new/delete directory and that dosn't include a
-                            // possible race condition. On possible solution would be to
-                            // create a `HashMap<PathBuf, Vec<PathBuf>>` which would
-                            // include every directory and this content add the time of
-                            // adding it to kqueue. While this should allow us to do the
-                            // diff and only add/remove the files necessary. This would
-                            // also introduce a race condition, where multiple files could
-                            // all ready be remove from the directory, and we could get out
-                            // of sync.
-                            // So for now, until we find a better solution, let remove and
-                            // readd the whole directory.
-                            // This is a expensive operation, as we recursive through all
-                            // subdirectories.
-                            remove_watches.push(path.clone());
-                            add_watches.push(path.clone());
-                            Ok(Event::new(EventKind::Modify(ModifyKind::Any)).add_path(path))
-                        }
-
-                        // Kqueue not provide us with the information necessary to provide
-                        // the new file name to the event.
-                        kqueue::Vnode::Rename => {
-                            remove_watches.push(path.clone());
-                            Ok(
-                                Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Any)))
-                                    .add_path(path),
-                            )
-                        }
-
-                        // Access to the file was revoked via revoke(2) or the underlying file system was unmounted.
-                        kqueue::Vnode::Revoke => {
-                            remove_watches.push(path.clone());
-                            Ok(Event::new(EventKind::Remove(RemoveKind::Any)).add_path(path))
-                        }
-
-                        // On different BSD variants, different extra events may be present
-                        _ => Ok(Event::new(EventKind::Other)),
-                    };
-                    self.event_handler.handle_event(event);
+        let timeout = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
+        loop {
+            let mut event = std::mem::MaybeUninit::<libc::kevent>::uninit();
+            let count = unsafe {
+                libc::kevent(
+                    self.kqueue.as_raw_fd(),
+                    std::ptr::null(),
+                    0,
+                    event.as_mut_ptr(),
+                    1,
+                    &timeout,
+                )
+            };
+            if count == 0 {
+                break;
+            }
+            if count < 0 {
+                let error = io::Error::last_os_error();
+                if error.kind() == io::ErrorKind::Interrupted {
+                    continue;
                 }
-                // as we don't add any other EVFILTER to kqueue we should never get here
-                kqueue::Event { ident: _, data: _ } => unreachable!(),
+                self.event_handler.handle_event(Err(error.into()));
+                break;
+            }
+            let event = unsafe { event.assume_init() };
+            if event.flags & libc::EV_ERROR != 0 {
+                self.event_handler
+                    .handle_event(Err(io::Error::from_raw_os_error(event.data as i32).into()));
+                continue;
+            }
+            let Some(path) = self.watches.iter().find_map(|(path, (file, _))| {
+                (file.as_raw_fd() as usize == event.ident as usize).then_some(path)
+            }) else {
+                continue;
+            };
+            for &flag in VNODE_FLAGS {
+                if event.fflags & flag == 0 {
+                    continue;
+                }
+                let kind = match flag {
+                    libc::NOTE_WRITE if path.is_dir() => {
+                        match std::fs::read_dir(path) {
+                            Ok(entries) => {
+                                let new_file = entries
+                                    .filter_map(std::result::Result::ok)
+                                    .map(|entry| entry.path())
+                                    .find(|file| !self.watches.contains_key(file));
+                                if let Some(file) = new_file {
+                                    let kind = if file.is_dir() {
+                                        CreateKind::Folder
+                                    } else if file.is_file() {
+                                        CreateKind::File
+                                    } else {
+                                        CreateKind::Other
+                                    };
+                                    add_watches.push(file.clone());
+                                    self.event_handler
+                                        .handle_event(Ok(
+                                            Event::new(EventKind::Create(kind)).add_path(file)
+                                        ));
+                                    continue;
+                                }
+                            }
+                            Err(error) => {
+                                self.event_handler.handle_event(Err(error.into()));
+                                continue;
+                            }
+                        }
+                        EventKind::Modify(ModifyKind::Data(DataChange::Any))
+                    }
+                    libc::NOTE_WRITE => EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+                    libc::NOTE_EXTEND => EventKind::Modify(ModifyKind::Data(DataChange::Size)),
+                    #[cfg(target_os = "openbsd")]
+                    libc::NOTE_TRUNCATE => EventKind::Modify(ModifyKind::Data(DataChange::Size)),
+                    libc::NOTE_ATTRIB => EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any)),
+                    libc::NOTE_LINK => {
+                        remove_watches.push(path.clone());
+                        add_watches.push(path.clone());
+                        EventKind::Modify(ModifyKind::Any)
+                    }
+                    libc::NOTE_RENAME => {
+                        remove_watches.push(path.clone());
+                        EventKind::Modify(ModifyKind::Name(RenameMode::Any))
+                    }
+                    libc::NOTE_DELETE | libc::NOTE_REVOKE => {
+                        remove_watches.push(path.clone());
+                        EventKind::Remove(RemoveKind::Any)
+                    }
+                    _ => {
+                        self.event_handler
+                            .handle_event(Ok(Event::new(EventKind::Other)));
+                        continue;
+                    }
+                };
+                self.event_handler
+                    .handle_event(Ok(Event::new(kind).add_path(path.clone())));
             }
         }
 
@@ -279,63 +267,69 @@ impl EventLoop {
     }
 
     fn add_watch(&mut self, path: PathBuf, is_recursive: bool) -> Result<()> {
-        // If the watch is not recursive, or if we determine (by stat'ing the path to get its
-        // metadata) that the watched path is not a directory, add a single path watch.
-        if !is_recursive || !metadata(&path).map_err(Error::io)?.is_dir() {
-            self.add_single_watch(path, false)?;
-        } else {
-            for entry in WalkDir::new(path).follow_links(true).into_iter() {
-                let entry = entry.map_err(map_walkdir_error)?;
-                self.add_single_watch(entry.path().to_path_buf(), is_recursive)?;
+        let recursive = is_recursive && metadata(&path).map_err(Error::io)?.is_dir();
+        let mut files = Vec::new();
+        let open = |path: PathBuf| {
+            File::open(&path)
+                .map(|file| (path.clone(), file))
+                .map_err(|error| Error::io(error).add_path(path))
+        };
+        if recursive {
+            for entry in WalkDir::new(path).follow_links(true) {
+                files.push(open(entry.map_err(map_walkdir_error)?.into_path())?);
             }
+        } else {
+            files.push(open(path)?);
         }
-
-        // Only make a single `kevent` syscall to add all the watches.
-        self.kqueue.watch()?;
-
-        Ok(())
-    }
-
-    fn add_single_watch(&mut self, path: PathBuf, is_recursive: bool) -> Result<()> {
-        let event_filter = EventFilter::EVFILT_VNODE;
-        let filter_flags = FilterFlag::NOTE_DELETE
-            | FilterFlag::NOTE_WRITE
-            | FilterFlag::NOTE_EXTEND
-            | FilterFlag::NOTE_ATTRIB
-            | FilterFlag::NOTE_LINK
-            | FilterFlag::NOTE_RENAME
-            | FilterFlag::NOTE_REVOKE;
-
-        log::trace!("adding kqueue watch: {}", path.display());
-
-        self.kqueue
-            .add_filename(&path, event_filter, filter_flags)
-            .map_err(|e| Error::io(e).add_path(path.clone()))?;
-        self.watches.insert(path, is_recursive);
-
+        let changes: Vec<libc::kevent> = files
+            .iter()
+            .map(|(_, file)| {
+                let mut event: libc::kevent = unsafe { std::mem::zeroed() };
+                event.ident = file.as_raw_fd() as _;
+                event.filter = libc::EVFILT_VNODE;
+                event.flags = libc::EV_ADD | libc::EV_CLEAR;
+                event.fflags = libc::NOTE_DELETE
+                    | libc::NOTE_WRITE
+                    | libc::NOTE_EXTEND
+                    | libc::NOTE_ATTRIB
+                    | libc::NOTE_LINK
+                    | libc::NOTE_RENAME
+                    | libc::NOTE_REVOKE;
+                event
+            })
+            .collect();
+        let count = changes
+            .len()
+            .try_into()
+            .map_err(|_| Error::generic("Too many kqueue watches"))?;
+        if unsafe {
+            libc::kevent(
+                self.kqueue.as_raw_fd(),
+                changes.as_ptr(),
+                count,
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null(),
+            )
+        } < 0
+        {
+            return Err(io::Error::last_os_error().into());
+        }
+        self.watches.extend(
+            files
+                .into_iter()
+                .map(|(path, file)| (path, (file, recursive))),
+        );
         Ok(())
     }
 
     fn remove_watch(&mut self, path: PathBuf, remove_recursive: bool) -> Result<()> {
-        log::trace!("removing kqueue watch: {}", path.display());
-
-        match self.watches.remove(&path) {
-            None => return Err(Error::watch_not_found()),
-            Some(is_recursive) => {
-                self.kqueue
-                    .remove_filename(&path, EventFilter::EVFILT_VNODE)
-                    .map_err(|e| Error::io(e).add_path(path.clone()))?;
-
-                if is_recursive || remove_recursive {
-                    for entry in WalkDir::new(path).follow_links(true).into_iter() {
-                        let p = entry.map_err(map_walkdir_error)?.path().to_path_buf();
-                        self.kqueue
-                            .remove_filename(&p, EventFilter::EVFILT_VNODE)
-                            .map_err(|e| Error::io(e).add_path(p))?;
-                    }
-                }
-                self.kqueue.watch()?;
-            }
+        let (_, recursive) = self
+            .watches
+            .remove(&path)
+            .ok_or_else(Error::watch_not_found)?;
+        if recursive || remove_recursive {
+            self.watches.retain(|watch, _| !watch.starts_with(&path));
         }
         Ok(())
     }
@@ -352,7 +346,14 @@ fn map_walkdir_error(e: walkdir::Error) -> Error {
 
 impl KqueueWatcher {
     fn from_event_handler(event_handler: Box<dyn EventHandler>) -> Result<Self> {
-        let kqueue = kqueue::Watcher::new()?;
+        let fd = unsafe { libc::kqueue() };
+        if fd < 0 {
+            return Err(io::Error::last_os_error().into());
+        }
+        let kqueue = unsafe { OwnedFd::from_raw_fd(fd) };
+        if unsafe { libc::fcntl(kqueue.as_raw_fd(), libc::F_SETFD, libc::FD_CLOEXEC) } < 0 {
+            return Err(io::Error::last_os_error().into());
+        }
         let event_loop = EventLoop::new(kqueue, event_handler)?;
         let channel = event_loop.event_loop_tx.clone();
         let waker = event_loop.event_loop_waker.clone();

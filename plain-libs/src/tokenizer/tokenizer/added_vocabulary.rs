@@ -1,10 +1,11 @@
 use super::{
     Model, NormalizedString, Normalizer, Offsets, PreTokenizedString, Token, normalizer::Range,
 };
-use ahash::{AHashMap, AHashSet};
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use regex::Regex;
 use serde::{Deserialize, Serialize, Serializer, ser::SerializeSeq};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -113,15 +114,15 @@ fn space_rightmost_at_start(sentence: &str) -> usize {
 
 #[derive(Clone, Debug)]
 pub struct AddedVocabulary {
-    added_tokens_map: AHashMap<String, u32>,
+    added_tokens_map: HashMap<String, u32>,
 
-    added_tokens_map_r: AHashMap<u32, AddedToken>,
+    added_tokens_map_r: HashMap<u32, AddedToken>,
 
     added_tokens: Vec<AddedToken>,
 
     special_tokens: Vec<AddedToken>,
 
-    special_tokens_set: AHashSet<String>,
+    special_tokens_set: HashSet<String>,
 
     split_trie: MatchingSet,
 
@@ -141,11 +142,11 @@ impl AddedVocabulary {
             .build::<_, &&[u8]>([])
             .expect("The normalized trie should build correctly");
         Self {
-            added_tokens_map: AHashMap::new(),
-            added_tokens_map_r: AHashMap::new(),
+            added_tokens_map: HashMap::new(),
+            added_tokens_map_r: HashMap::new(),
             added_tokens: vec![],
             special_tokens: vec![],
-            special_tokens_set: AHashSet::new(),
+            special_tokens_set: HashSet::new(),
             split_trie: (trie, vec![]),
             split_normalized_trie: (normalized_trie, vec![]),
             encode_special_tokens: false,
@@ -161,11 +162,11 @@ impl AddedVocabulary {
         self.added_tokens_map.is_empty()
     }
 
-    pub fn get_vocab(&self) -> &AHashMap<String, u32> {
+    pub fn get_vocab(&self) -> &HashMap<String, u32> {
         &self.added_tokens_map
     }
 
-    pub fn get_added_tokens_decoder(&self) -> &AHashMap<u32, AddedToken> {
+    pub fn get_added_tokens_decoder(&self) -> &HashMap<u32, AddedToken> {
         &self.added_tokens_map_r
     }
 
@@ -232,8 +233,7 @@ impl AddedVocabulary {
 
         let mut ignored = 0;
 
-        let mut existing: AHashSet<AddedToken> =
-            self.added_tokens_map_r.values().cloned().collect();
+        let mut existing: HashSet<AddedToken> = self.added_tokens_map_r.values().cloned().collect();
         let mut next_id = self.added_tokens_map_r.keys().copied().max().map_or(
             model.get_vocab_size() as u32,
             |max| {

@@ -5,7 +5,7 @@ use crate::audio_tags::tag::ItemKey;
 use std::collections::TryReserveError;
 use std::fmt::{Debug, Display, Formatter};
 
-use ogg_pager::PageError;
+use crate::audio_tags::ogg::page::PageError;
 
 pub type Result<T> = std::result::Result<T, LoftyError>;
 
@@ -46,7 +46,7 @@ pub enum ErrorKind {
     AtomMismatch,
 
     // Conversions for external errors
-    OggPage(ogg_pager::PageError),
+    OggPage(PageError),
 
     StringFromUtf8(std::string::FromUtf8Error),
 
@@ -353,7 +353,7 @@ impl From<FileEncodingError> for LoftyError {
     }
 }
 
-impl From<ogg_pager::PageError> for LoftyError {
+impl From<PageError> for LoftyError {
     fn from(input: PageError) -> Self {
         Self {
             kind: ErrorKind::OggPage(input),

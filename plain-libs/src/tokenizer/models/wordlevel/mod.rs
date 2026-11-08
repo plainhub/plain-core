@@ -1,13 +1,12 @@
 use super::OrderedVocabIter;
 use crate::tokenizer::tokenizer::{Model, Result, Token};
-use ahash::AHashMap;
 use std::collections::HashMap;
 
 mod serialization;
 
 // Re-export
 
-type Vocab = AHashMap<String, u32>;
+type Vocab = HashMap<String, u32>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -18,7 +17,7 @@ pub enum Error {
 }
 
 struct Config {
-    vocab: AHashMap<String, u32>,
+    vocab: HashMap<String, u32>,
     unk_token: String,
 }
 
@@ -30,7 +29,7 @@ impl Default for WordLevelBuilder {
     fn default() -> Self {
         Self {
             config: Config {
-                vocab: AHashMap::new(),
+                vocab: HashMap::new(),
                 unk_token: String::from("<unk>"),
             },
         }
@@ -43,7 +42,7 @@ impl WordLevelBuilder {
     }
 
     #[must_use]
-    pub fn vocab(mut self, vocab: AHashMap<String, u32>) -> Self {
+    pub fn vocab(mut self, vocab: HashMap<String, u32>) -> Self {
         self.config.vocab = vocab;
         self
     }
@@ -72,8 +71,8 @@ impl WordLevelBuilder {
 
 #[derive(PartialEq, Clone, Eq)]
 pub struct WordLevel {
-    vocab: AHashMap<String, u32>,
-    vocab_r: AHashMap<u32, String>,
+    vocab: HashMap<String, u32>,
+    vocab_r: HashMap<u32, String>,
     pub unk_token: String,
 }
 
@@ -95,8 +94,8 @@ impl WordLevel {
 impl Default for WordLevel {
     fn default() -> Self {
         Self {
-            vocab: AHashMap::new(),
-            vocab_r: AHashMap::new(),
+            vocab: HashMap::new(),
+            vocab_r: HashMap::new(),
             unk_token: String::from("<unk>"),
         }
     }

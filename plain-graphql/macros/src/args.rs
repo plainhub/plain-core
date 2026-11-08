@@ -1,18 +1,30 @@
-use darling::{
-    FromDeriveInput, FromField, FromMeta, FromVariant,
-    ast::{Data, Fields},
-    util::{Ignored, SpannedValue},
-};
 use crate::case::{ToLowerCamelCase, ToPascalCase, ToShoutySnakeCase, ToSnakeCase};
-use syn::{Attribute, Expr, Generics, Ident, Lit, LitBool, Path, Type, Visibility};
-#[derive(FromMeta, Clone)]
-#[darling(default)]
+use crate::meta::{self, Data, Fields, FromMeta, Options};
+use syn::{
+    Attribute, DeriveInput, Expr, Field, Generics, Ident, Lit, LitBool, Meta, Path, Result, Type,
+    Variant, Visibility,
+};
+#[derive(Clone)]
 pub struct CacheControl {
     public: bool,
     private: bool,
     pub no_cache: bool,
     pub max_age: usize,
 }
+impl FromMeta for CacheControl {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            public: options.optional("public")?.unwrap_or(true),
+            private: options.optional("private")?.unwrap_or_default(),
+            no_cache: options.optional("no_cache")?.unwrap_or_default(),
+            max_age: options.optional("max_age")?.unwrap_or_default(),
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 impl Default for CacheControl {
     fn default() -> Self {
         Self {
@@ -34,11 +46,12 @@ pub enum DefaultValue {
     Value(Lit),
 }
 impl FromMeta for DefaultValue {
-    fn from_word() -> darling::Result<Self> {
-        Ok(DefaultValue::Default)
-    }
-    fn from_value(value: &Lit) -> darling::Result<Self> {
-        Ok(DefaultValue::Value(value.clone()))
+    fn from_meta(value: &Meta) -> Result<Self> {
+        if matches!(value, Meta::Path(_)) {
+            Ok(Self::Default)
+        } else {
+            Ok(Self::Value(meta::literal(value)?.clone()))
+        }
     }
 }
 #[derive(Debug, Clone, Default)]
@@ -50,81 +63,132 @@ pub enum Deprecation {
     },
 }
 impl FromMeta for Deprecation {
-    fn from_word() -> darling::Result<Self> {
-        Ok(Deprecation::Deprecated { reason: None })
-    }
-    fn from_value(value: &Lit) -> darling::Result<Self> {
-        match value {
-            Lit::Bool(LitBool { value: true, .. }) => Ok(Deprecation::Deprecated { reason: None }),
-            Lit::Bool(LitBool { value: false, .. }) => Ok(Deprecation::NoDeprecated),
-            Lit::Str(str) => Ok(Deprecation::Deprecated {
-                reason: Some(str.value()),
+    fn from_meta(value: &Meta) -> Result<Self> {
+        if matches!(value, Meta::Path(_)) {
+            return Ok(Self::Deprecated { reason: None });
+        }
+        match meta::literal(value)? {
+            Lit::Bool(LitBool { value: true, .. }) => Ok(Self::Deprecated { reason: None }),
+            Lit::Bool(LitBool { value: false, .. }) => Ok(Self::NoDeprecated),
+            Lit::Str(reason) => Ok(Self::Deprecated {
+                reason: Some(reason.value()),
             }),
-            _ => Err(darling::Error::unexpected_lit_type(value)),
+            lit => Err(syn::Error::new_spanned(
+                lit,
+                "Expected a boolean or deprecation reason",
+            )),
         }
     }
 }
-#[derive(FromField)]
-#[darling(attributes(graphql), forward_attrs(doc))]
 pub struct SimpleObjectField {
     pub ident: Option<Ident>,
     pub ty: Type,
     pub vis: Visibility,
     pub attrs: Vec<Attribute>,
-    #[darling(default)]
     pub skip: bool,
-    #[darling(default)]
     pub getter: bool,
-    #[darling(default)]
     pub name: Option<String>,
-    #[darling(default)]
     pub deprecation: Deprecation,
-    #[darling(default)]
     pub cache_control: CacheControl,
-    #[darling(default)]
     pub guard: Option<Expr>,
 }
-#[derive(FromDeriveInput)]
-#[darling(attributes(graphql), forward_attrs(doc))]
+impl SimpleObjectField {
+    pub fn from_field(input: &Field) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            ty: input.ty.clone(),
+            vis: input.vis.clone(),
+            attrs: meta::docs(&input.attrs),
+            skip: options.optional("skip")?.unwrap_or_default(),
+            getter: options.optional("getter")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            deprecation: options.optional("deprecation")?.unwrap_or_default(),
+            cache_control: options.optional("cache_control")?.unwrap_or_default(),
+            guard: options.optional("guard")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct SimpleObject {
     pub ident: Ident,
     pub generics: Generics,
     pub attrs: Vec<Attribute>,
-    pub data: Data<Ignored, SimpleObjectField>,
-    #[darling(default)]
+    pub data: Data<(), SimpleObjectField>,
     pub internal: bool,
-    #[darling(default)]
     pub complex: bool,
-    #[darling(default)]
     pub name: Option<String>,
-    #[darling(default)]
     pub cache_control: CacheControl,
-    #[darling(default)]
     pub guard: Option<Expr>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(FromMeta, Default)]
-#[darling(default)]
+impl SimpleObject {
+    pub fn from_derive_input(input: &DeriveInput) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            generics: input.generics.clone(),
+            attrs: meta::docs(&input.attrs),
+            data: Data::parse(input, |_| Ok(()), SimpleObjectField::from_field)?,
+            internal: options.optional("internal")?.unwrap_or_default(),
+            complex: options.optional("complex")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            cache_control: options.optional("cache_control")?.unwrap_or_default(),
+            guard: options.optional("guard")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
+#[derive(Default)]
 pub struct Argument {
     pub name: Option<String>,
     pub desc: Option<String>,
     pub default: Option<DefaultValue>,
     pub deprecation: Deprecation,
 }
-#[derive(FromMeta, Default)]
-#[darling(default)]
+impl FromMeta for Argument {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            name: options.optional("name")?,
+            desc: options.optional("desc")?,
+            default: options.optional("default")?,
+            deprecation: options.optional("deprecation")?.unwrap_or_default(),
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
+#[derive(Default)]
 pub struct Object {
     pub internal: bool,
     pub name: Option<String>,
     pub cache_control: CacheControl,
-    #[darling(default)]
     pub guard: Option<Expr>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(FromMeta, Default)]
-#[darling(default)]
+impl FromMeta for Object {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            internal: options.optional("internal")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            cache_control: options.optional("cache_control")?.unwrap_or_default(),
+            guard: options.optional("guard")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
+#[derive(Default)]
 pub struct ObjectField {
     pub skip: bool,
     pub name: Option<String>,
@@ -132,213 +196,447 @@ pub struct ObjectField {
     pub cache_control: CacheControl,
     pub guard: Option<Expr>,
 }
-#[derive(FromDeriveInput)]
-#[darling(attributes(graphql), forward_attrs(doc))]
+impl FromMeta for ObjectField {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            skip: options.optional("skip")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            deprecation: options.optional("deprecation")?.unwrap_or_default(),
+            cache_control: options.optional("cache_control")?.unwrap_or_default(),
+            guard: options.optional("guard")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct Enum {
     pub ident: Ident,
     pub attrs: Vec<Attribute>,
-    pub data: Data<EnumItem, Ignored>,
-    #[darling(default)]
+    pub data: Data<EnumItem, ()>,
     pub internal: bool,
-    #[darling(default)]
     pub name: Option<String>,
-    #[darling(default)]
     pub rename_items: Option<RenameRule>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(FromVariant)]
-#[darling(attributes(graphql), forward_attrs(doc))]
+impl Enum {
+    pub fn from_derive_input(input: &DeriveInput) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            attrs: meta::docs(&input.attrs),
+            data: Data::parse(input, EnumItem::from_variant, |_| Ok(()))?,
+            internal: options.optional("internal")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            rename_items: options.optional("rename_items")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct EnumItem {
     pub ident: Ident,
     pub attrs: Vec<Attribute>,
-    pub fields: Fields<Ignored>,
-    #[darling(default)]
+    pub fields: Fields<()>,
     pub name: Option<String>,
-    #[darling(default)]
     pub deprecation: Deprecation,
 }
-#[derive(FromDeriveInput)]
-#[darling(attributes(graphql), forward_attrs(doc))]
+impl EnumItem {
+    pub fn from_variant(input: &Variant) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            attrs: meta::docs(&input.attrs),
+            fields: Fields::parse(&input.fields, |_| Ok(()))?,
+            name: options.optional("name")?,
+            deprecation: options.optional("deprecation")?.unwrap_or_default(),
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct Union {
     pub ident: Ident,
     pub generics: Generics,
     pub attrs: Vec<Attribute>,
-    pub data: Data<UnionItem, Ignored>,
-    #[darling(default)]
+    pub data: Data<UnionItem, ()>,
     pub internal: bool,
-    #[darling(default)]
     pub name: Option<String>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(FromVariant)]
-#[darling(attributes(graphql))]
+impl Union {
+    pub fn from_derive_input(input: &DeriveInput) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            generics: input.generics.clone(),
+            attrs: meta::docs(&input.attrs),
+            data: Data::parse(input, UnionItem::from_variant, |_| Ok(()))?,
+            internal: options.optional("internal")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct UnionItem {
     pub ident: Ident,
     pub fields: Fields<syn::Type>,
 }
-#[derive(FromField)]
-#[darling(attributes(graphql), forward_attrs(doc))]
+impl UnionItem {
+    pub fn from_variant(input: &Variant) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            fields: Fields::parse(&input.fields, |field| Ok(field.ty.clone()))?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct InputObjectField {
     pub ident: Option<Ident>,
     pub ty: Type,
     pub attrs: Vec<Attribute>,
-    #[darling(default)]
     pub name: Option<String>,
-    #[darling(default)]
     pub default: Option<DefaultValue>,
-    #[darling(default)]
     pub skip: bool,
-    #[darling(default)]
     pub deprecation: Deprecation,
 }
-#[derive(FromDeriveInput)]
-#[darling(attributes(graphql), forward_attrs(doc))]
+impl InputObjectField {
+    pub fn from_field(input: &Field) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            ty: input.ty.clone(),
+            attrs: meta::docs(&input.attrs),
+            name: options.optional("name")?,
+            default: options.optional("default")?,
+            skip: options.optional("skip")?.unwrap_or_default(),
+            deprecation: options.optional("deprecation")?.unwrap_or_default(),
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct InputObject {
     pub ident: Ident,
     pub generics: Generics,
     pub attrs: Vec<Attribute>,
-    pub data: Data<Ignored, InputObjectField>,
-    #[darling(default)]
+    pub data: Data<(), InputObjectField>,
     pub internal: bool,
-    #[darling(default)]
     pub name: Option<String>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(FromMeta)]
+impl InputObject {
+    pub fn from_derive_input(input: &DeriveInput) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            generics: input.generics.clone(),
+            attrs: meta::docs(&input.attrs),
+            data: Data::parse(input, |_| Ok(()), InputObjectField::from_field)?,
+            internal: options.optional("internal")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct InterfaceFieldArgument {
     pub name: String,
-    #[darling(default)]
     pub desc: Option<String>,
     pub ty: Type,
-    #[darling(default)]
     pub default: Option<DefaultValue>,
-    #[darling(default)]
     pub deprecation: Deprecation,
 }
-#[derive(FromMeta)]
+impl FromMeta for InterfaceFieldArgument {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            name: options.required("name")?,
+            desc: options.optional("desc")?,
+            ty: options.required("ty")?,
+            default: options.optional("default")?,
+            deprecation: options.optional("deprecation")?.unwrap_or_default(),
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct InterfaceField {
-    pub name: SpannedValue<String>,
+    pub name: String,
     pub ty: Type,
-    #[darling(default)]
     pub method: Option<String>,
-    #[darling(default)]
     pub desc: Option<String>,
-    #[darling(default, multiple, rename = "arg")]
     pub args: Vec<InterfaceFieldArgument>,
-    #[darling(default)]
     pub deprecation: Deprecation,
 }
-#[derive(FromVariant)]
+impl FromMeta for InterfaceField {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            name: options.required("name")?,
+            ty: options.required("ty")?,
+            method: options.optional("method")?,
+            desc: options.optional("desc")?,
+            args: options.multiple("arg")?,
+            deprecation: options.optional("deprecation")?.unwrap_or_default(),
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct InterfaceMember {
     pub ident: Ident,
     pub fields: Fields<syn::Type>,
 }
-#[derive(FromDeriveInput)]
-#[darling(attributes(graphql), forward_attrs(doc))]
+impl InterfaceMember {
+    pub fn from_variant(input: &Variant) -> Result<Self> {
+        Ok(Self {
+            ident: input.ident.clone(),
+            fields: Fields::parse(&input.fields, |field| Ok(field.ty.clone()))?,
+        })
+    }
+}
+
 pub struct Interface {
     pub ident: Ident,
     pub generics: Generics,
     pub attrs: Vec<Attribute>,
-    pub data: Data<InterfaceMember, Ignored>,
-    #[darling(default)]
+    pub data: Data<InterfaceMember, ()>,
     pub internal: bool,
-    #[darling(default)]
     pub name: Option<String>,
-    #[darling(default, multiple, rename = "field")]
     pub fields: Vec<InterfaceField>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(FromMeta, Default)]
-#[darling(default)]
+impl Interface {
+    pub fn from_derive_input(input: &DeriveInput) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            generics: input.generics.clone(),
+            attrs: meta::docs(&input.attrs),
+            data: Data::parse(input, InterfaceMember::from_variant, |_| Ok(()))?,
+            internal: options.optional("internal")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            fields: options.multiple("field")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
+#[derive(Default)]
 pub struct Scalar {
     pub internal: bool,
     pub name: Option<String>,
     pub specified_by_url: Option<String>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(FromMeta, Default)]
-#[darling(default)]
+impl FromMeta for Scalar {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            internal: options.optional("internal")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            specified_by_url: options.optional("specified_by_url")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
+#[derive(Default)]
 pub struct Subscription {
     pub internal: bool,
     pub name: Option<String>,
-    #[darling(default)]
     pub guard: Option<Expr>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(FromMeta, Default)]
-#[darling(default)]
+impl FromMeta for Subscription {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            internal: options.optional("internal")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            guard: options.optional("guard")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
+#[derive(Default)]
 pub struct SubscriptionFieldArgument {
     pub name: Option<String>,
     pub desc: Option<String>,
     pub default: Option<DefaultValue>,
     pub deprecation: Deprecation,
 }
-#[derive(FromMeta, Default)]
-#[darling(default)]
+impl FromMeta for SubscriptionFieldArgument {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            name: options.optional("name")?,
+            desc: options.optional("desc")?,
+            default: options.optional("default")?,
+            deprecation: options.optional("deprecation")?.unwrap_or_default(),
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
+#[derive(Default)]
 pub struct SubscriptionField {
     pub skip: bool,
     pub name: Option<String>,
     pub deprecation: Deprecation,
     pub guard: Option<Expr>,
 }
-#[derive(FromField)]
+impl FromMeta for SubscriptionField {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            skip: options.optional("skip")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            deprecation: options.optional("deprecation")?.unwrap_or_default(),
+            guard: options.optional("guard")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct MergedObjectField {
     pub ty: Type,
 }
-#[derive(FromDeriveInput)]
-#[darling(attributes(graphql), forward_attrs(doc))]
+impl MergedObjectField {
+    pub fn from_field(input: &Field) -> Result<Self> {
+        Ok(Self {
+            ty: input.ty.clone(),
+        })
+    }
+}
+
 pub struct MergedObject {
     pub ident: Ident,
     pub generics: Generics,
     pub attrs: Vec<Attribute>,
-    pub data: Data<Ignored, MergedObjectField>,
-    #[darling(default)]
+    pub data: Data<(), MergedObjectField>,
     pub internal: bool,
-    #[darling(default)]
     pub name: Option<String>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(FromField)]
+impl MergedObject {
+    pub fn from_derive_input(input: &DeriveInput) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            generics: input.generics.clone(),
+            attrs: meta::docs(&input.attrs),
+            data: Data::parse(input, |_| Ok(()), MergedObjectField::from_field)?,
+            internal: options.optional("internal")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
 pub struct MergedSubscriptionField {
     pub ty: Type,
 }
-#[derive(FromDeriveInput)]
-#[darling(attributes(graphql), forward_attrs(doc))]
+impl MergedSubscriptionField {
+    pub fn from_field(input: &Field) -> Result<Self> {
+        Ok(Self {
+            ty: input.ty.clone(),
+        })
+    }
+}
+
 pub struct MergedSubscription {
     pub ident: Ident,
     pub generics: Generics,
     pub attrs: Vec<Attribute>,
-    pub data: Data<Ignored, MergedSubscriptionField>,
-    #[darling(default)]
+    pub data: Data<(), MergedSubscriptionField>,
     pub internal: bool,
-    #[darling(default)]
     pub name: Option<String>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(Debug, Copy, Clone, FromMeta)]
+impl MergedSubscription {
+    pub fn from_derive_input(input: &DeriveInput) -> Result<Self> {
+        let mut options = Options::from_attrs(&input.attrs)?;
+        let value = Self {
+            ident: input.ident.clone(),
+            generics: input.generics.clone(),
+            attrs: meta::docs(&input.attrs),
+            data: Data::parse(input, |_| Ok(()), MergedSubscriptionField::from_field)?,
+            internal: options.optional("internal")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum RenameRule {
-    #[darling(rename = "lowercase")]
     Lower,
-    #[darling(rename = "UPPERCASE")]
     Upper,
-    #[darling(rename = "PascalCase")]
     Pascal,
-    #[darling(rename = "camelCase")]
     Camel,
-    #[darling(rename = "snake_case")]
     Snake,
-    #[darling(rename = "SCREAMING_SNAKE_CASE")]
     ScreamingSnake,
 }
+impl FromMeta for RenameRule {
+    fn from_meta(meta: &Meta) -> Result<Self> {
+        if let Meta::List(list) = meta {
+            let items = meta::parse_list(list.tokens.clone())?;
+            if let [Meta::Path(path)] = items.as_slice()
+                && let Some(name) = path.get_ident()
+            {
+                return Self::from_name(&name.to_string(), name.span());
+            }
+            return Err(syn::Error::new_spanned(
+                list,
+                "Expected one GraphQL rename rule",
+            ));
+        }
+        let value = meta::string(meta)?;
+        Self::from_name(&value.value(), value.span())
+    }
+}
 impl RenameRule {
+    fn from_name(name: &str, span: proc_macro2::Span) -> Result<Self> {
+        match name {
+            "lowercase" => Ok(Self::Lower),
+            "UPPERCASE" => Ok(Self::Upper),
+            "PascalCase" => Ok(Self::Pascal),
+            "camelCase" => Ok(Self::Camel),
+            "snake_case" => Ok(Self::Snake),
+            "SCREAMING_SNAKE_CASE" => Ok(Self::ScreamingSnake),
+            _ => Err(syn::Error::new(span, "Unknown GraphQL rename rule")),
+        }
+    }
     fn rename(&self, name: impl AsRef<str>) -> String {
         match self {
             Self::Lower => name.as_ref().to_lowercase(),
@@ -378,20 +676,44 @@ impl RenameRuleExt for Option<RenameRule> {
         self.unwrap_or(target.rule()).rename(name)
     }
 }
-#[derive(FromMeta, Default)]
-#[darling(default)]
+#[derive(Default)]
 pub struct ComplexObject {
     pub internal: bool,
     pub guard: Option<Expr>,
-    #[darling(rename = "crate")]
     pub crate_path: Option<Path>,
 }
-#[derive(FromMeta, Default)]
-#[darling(default)]
+impl FromMeta for ComplexObject {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            internal: options.optional("internal")?.unwrap_or_default(),
+            guard: options.optional("guard")?,
+            crate_path: options.optional("crate")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
+}
+
+#[derive(Default)]
 pub struct ComplexObjectField {
     pub skip: bool,
     pub name: Option<String>,
     pub deprecation: Deprecation,
     pub cache_control: CacheControl,
     pub guard: Option<Expr>,
+}
+impl FromMeta for ComplexObjectField {
+    fn from_list(items: Vec<Meta>) -> Result<Self> {
+        let mut options = Options::new(items);
+        let value = Self {
+            skip: options.optional("skip")?.unwrap_or_default(),
+            name: options.optional("name")?,
+            deprecation: options.optional("deprecation")?.unwrap_or_default(),
+            cache_control: options.optional("cache_control")?.unwrap_or_default(),
+            guard: options.optional("guard")?,
+        };
+        options.finish()?;
+        Ok(value)
+    }
 }

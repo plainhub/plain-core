@@ -1,6 +1,6 @@
 // Take a look at the license at the top of the repository in the LICENSE file.
 
-use crate::platform::apple_device::OwnedCF;
+use crate::platform::apple_device::{OwnedCF, cf_file_url};
 use crate::system_metrics::Disk;
 use crate::system_metrics::sys::ffi;
 
@@ -13,7 +13,7 @@ use core_foundation_sys::string::CFStringRef;
 use libc::c_void;
 
 use std::ffi::OsString;
-use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::ptr;
 
@@ -71,15 +71,7 @@ unsafe fn get_list(container: &mut Vec<Disk>) {
             .map(|&byte| byte as u8)
             .collect();
         let mount_point = PathBuf::from(OsString::from_vec(mount_bytes));
-        let mount_bytes = mount_point.as_os_str().as_bytes();
-        let volume_url = match OwnedCF::from_owned(
-            core_foundation_sys::url::CFURLCreateFromFileSystemRepresentation(
-                kCFAllocatorDefault,
-                mount_bytes.as_ptr(),
-                mount_bytes.len() as _,
-                false as _,
-            ),
-        ) {
+        let volume_url = match cf_file_url(&mount_point) {
             Some(url) => url,
             None => {
                 sysinfo_debug!("getfsstat returned incompatible paths");
@@ -127,7 +119,6 @@ unsafe fn get_list(container: &mut Vec<Disk>) {
 
 type RetainedCFArray = OwnedCF<core_foundation_sys::array::__CFArray>;
 type RetainedCFDictionary = OwnedCF<core_foundation_sys::dictionary::__CFDictionary>;
-type RetainedCFURL = OwnedCF<core_foundation_sys::url::__CFURL>;
 
 unsafe fn build_requested_properties(properties: &[CFStringRef]) -> Option<RetainedCFArray> {
     OwnedCF::from_owned(CFArrayCreate(
@@ -139,12 +130,12 @@ unsafe fn build_requested_properties(properties: &[CFStringRef]) -> Option<Retai
 }
 
 fn get_disk_properties(
-    volume_url: &RetainedCFURL,
+    volume_url: &OwnedCF,
     requested_properties: &RetainedCFArray,
 ) -> Option<RetainedCFDictionary> {
     unsafe {
         OwnedCF::from_owned(ffi::CFURLCopyResourcePropertiesForKeys(
-            volume_url.as_ptr(),
+            volume_url.as_ptr().cast(),
             requested_properties.as_ptr(),
             ptr::null_mut(),
         ))

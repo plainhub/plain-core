@@ -38,7 +38,6 @@ use std::ffi::c_void;
 use std::mem;
 use std::ptr::NonNull;
 use std::sync::Arc;
-use to_method::To as _;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 use zerocopy::FromZeroes;
@@ -767,16 +766,16 @@ impl Rav1dPicAllocator {
             frame_hdr,
             ..Default::default()
         };
-        let mut pic_c = pic.to::<Dav1dPicture>();
+        let mut pic_c = Into::<Dav1dPicture>::into(pic);
         // SAFETY: `pic_c` is a valid `Dav1dPicture` with `data`, `stride`, `allocator_data` unset.
         let result = unsafe { (self.alloc_picture_callback)(&mut pic_c, self.cookie) };
-        result.try_to::<Rav1dResult>().unwrap()?;
+        TryInto::<Rav1dResult>::try_into(result).unwrap()?;
         // `data`, `stride`, and `allocator_data` are the only fields set by the allocator.
         // Of those, only `data` and `allocator_data` are read through `r#ref`,
         // so we need to read those directly first and allocate the `Arc`.
         let data = pic_c.data;
         let allocator_data = pic_c.allocator_data;
-        let mut pic = pic_c.to::<Rav1dPicture>();
+        let mut pic = Into::<Rav1dPicture>::into(pic_c);
         let len = pic.p.pic_len(pic.stride);
         // TODO fallible allocation
         pic.data = Some(Arc::new(Rav1dPictureData {

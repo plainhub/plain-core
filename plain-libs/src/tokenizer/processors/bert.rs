@@ -1,6 +1,6 @@
 use crate::tokenizer::tokenizer::{Encoding, PostProcessor, Result};
-use ahash::AHashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::iter::FromIterator;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -74,7 +74,7 @@ impl PostProcessor for BertProcessing {
 
                     // For compatibility with `TemplateProcessing`, the sequence_ranges shouldn't contain
                     // the special tokens.
-                    let sequence_ranges = AHashMap::from_iter(vec![(0, 1..ids.len() - 1)]);
+                    let sequence_ranges = HashMap::from_iter(vec![(0, 1..ids.len() - 1)]);
                     Encoding::new(
                         ids,
                         type_ids,
@@ -107,7 +107,7 @@ impl PostProcessor for BertProcessing {
                                 // For compatibility with `TemplateProcessing`, the sequence_ranges shouldn't
                                 // contain the special tokens.
                                 let sequence_ranges =
-                                    AHashMap::from_iter(vec![(0, 1..ids.len() - 1)]);
+                                    HashMap::from_iter(vec![(0, 1..ids.len() - 1)]);
                                 Encoding::new(
                                     ids,
                                     type_ids,
@@ -136,8 +136,7 @@ impl PostProcessor for BertProcessing {
 
                     // For compatibility with `TemplateProcessing`, the sequence_ranges shouldn't contain
                     // the special tokens.
-                    let pair_sequence_ranges =
-                        AHashMap::from_iter(vec![(1, 0..pair_ids.len() - 1)]);
+                    let pair_sequence_ranges = HashMap::from_iter(vec![(1, 0..pair_ids.len() - 1)]);
                     Encoding::new(
                         pair_ids,
                         pair_type_ids,
@@ -164,7 +163,7 @@ impl PostProcessor for BertProcessing {
                                 // For compatibility with `TemplateProcessing`, the sequence_ranges
                                 // shouldn't contain the special tokens.
                                 let pair_sequence_ranges =
-                                    AHashMap::from_iter(vec![(1, 0..pair_ids.len() - 1)]);
+                                    HashMap::from_iter(vec![(1, 0..pair_ids.len() - 1)]);
                                 Encoding::new(
                                     pair_ids,
                                     pair_type_ids,

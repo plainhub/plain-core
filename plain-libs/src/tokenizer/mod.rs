@@ -3,11 +3,13 @@
 #[macro_use]
 pub mod utils;
 pub mod decoders;
+mod graphemes;
 pub mod models;
 pub mod normalizers;
 pub mod pre_tokenizers;
 pub mod processors;
 pub mod tokenizer;
+mod unicode_categories;
 
 // Re-export from tokenizer
 pub use tokenizer::*;

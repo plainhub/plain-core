@@ -3,13 +3,13 @@ use serde::{Deserialize, Serialize};
 use crate::tokenizer::tokenizer::{
     PreTokenizedString, PreTokenizer, Result, SplitDelimiterBehavior,
 };
-use crate::tokenizer::utils::macro_rules_attribute;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct Digits {
-    pub individual_digits: bool,
+impl_serde_type! {
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    #[non_exhaustive]
+    pub struct Digits {
+        pub individual_digits: bool,
+    }
 }
 
 impl Digits {

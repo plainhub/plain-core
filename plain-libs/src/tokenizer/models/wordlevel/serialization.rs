@@ -1,10 +1,10 @@
 use super::{super::OrderedVocabIter, WordLevel, WordLevelBuilder};
-use ahash::AHashSet;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{MapAccess, Visitor},
     ser::SerializeStruct,
 };
+use std::collections::HashSet;
 
 impl Serialize for WordLevel {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -52,7 +52,7 @@ impl<'de> Visitor<'de> for WordLevelVisitor {
             "vocab",
         ]
         .into_iter()
-        .collect::<AHashSet<_>>();
+        .collect::<HashSet<_>>();
         while let Some(key) = map.next_key::<String>()? {
             match key.as_ref() {
                 "vocab" => builder = builder.vocab(map.next_value()?),

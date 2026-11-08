@@ -1,10 +1,10 @@
 use crate::tokenizer::pre_tokenizers::unicode_scripts::scripts::{Script, get_script};
 use crate::tokenizer::tokenizer::{PreTokenizedString, PreTokenizer, Result, normalizer::Range};
-use crate::tokenizer::utils::macro_rules_attribute;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[macro_rules_attribute(impl_serde_type!)]
-pub struct UnicodeScripts;
+impl_serde_type! {
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct UnicodeScripts;
+}
 
 impl UnicodeScripts {
     pub fn new() -> Self {

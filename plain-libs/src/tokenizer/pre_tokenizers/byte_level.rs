@@ -1,16 +1,16 @@
-use ahash::{AHashMap, AHashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use crate::tokenizer::utils::SysRegex;
 use serde::{Deserialize, Serialize};
 
 use crate::tokenizer::tokenizer::{
-    Decoder, Encoding, PostProcessor, PreTokenizedString, PreTokenizer, Result,
+    Decoder, Encoding, NormalizedString, PostProcessor, PreTokenizedString, PreTokenizer, Result,
     SplitDelimiterBehavior,
 };
-use crate::tokenizer::utils::macro_rules_attribute;
 
-pub(crate) fn bytes_char() -> AHashMap<u8, char> {
+fn bytes_char() -> HashMap<u8, char> {
     let mut bs: Vec<u8> = vec![];
     bs.extend(b'!'..=b'~');
     bs.extend(b'\xA1'..=b'\xAC');
@@ -45,20 +45,36 @@ static RE: LazyLock<SysRegex> = LazyLock::new(|| {
     SysRegex::new(r"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+")
         .unwrap()
 });
-static BYTES_CHAR: LazyLock<AHashMap<u8, char>> = LazyLock::new(bytes_char);
-static CHAR_BYTES: LazyLock<AHashMap<char, u8>> =
-    LazyLock::new(|| bytes_char().into_iter().map(|(c, b)| (b, c)).collect());
+static BYTES_CHAR: LazyLock<HashMap<u8, char>> = LazyLock::new(bytes_char);
+static CHAR_BYTES: LazyLock<HashMap<char, u8>> =
+    LazyLock::new(|| BYTES_CHAR.iter().map(|(&b, &c)| (c, b)).collect());
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[macro_rules_attribute(impl_serde_type!)]
-#[non_exhaustive]
-pub struct ByteLevel {
-    pub add_prefix_space: bool,
+pub(crate) fn encode_bytes(normalized: &mut NormalizedString) -> Result<()> {
+    let text = normalized.get();
+    let mut transformations = Vec::with_capacity(text.len());
+    for (offset, ch) in text.char_indices() {
+        transformations.extend(
+            text.as_bytes()[offset..offset + ch.len_utf8()]
+                .iter()
+                .enumerate()
+                .map(|(index, byte)| (BYTES_CHAR[byte], isize::from(index > 0))),
+        );
+    }
+    normalized.transform(transformations, 0);
+    Ok(())
+}
 
-    pub trim_offsets: bool,
+impl_serde_type! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    #[non_exhaustive]
+    pub struct ByteLevel {
+        pub add_prefix_space: bool,
 
-    #[serde(default = "default_true")]
-    pub use_regex: bool,
+        pub trim_offsets: bool,
+
+        #[serde(default = "default_true")]
+        pub use_regex: bool,
+    }
 }
 
 fn default_true() -> bool {
@@ -84,7 +100,7 @@ impl ByteLevel {
         }
     }
 
-    pub fn alphabet() -> AHashSet<char> {
+    pub fn alphabet() -> HashSet<char> {
         BYTES_CHAR.values().copied().collect()
     }
 
@@ -121,21 +137,7 @@ impl PreTokenizer for ByteLevel {
                 Ok(vec![normalized])
             }
         })?;
-        pretokenized.normalize(|normalized| {
-            let s = normalized.get();
-            let mut transformations: Vec<(char, isize)> = Vec::with_capacity(s.len());
-            for (i, cur_char) in s.char_indices() {
-                let size = cur_char.len_utf8();
-                transformations.extend(
-                    s.as_bytes()[i..i + size]
-                        .iter()
-                        .enumerate()
-                        .map(|(i, b)| (BYTES_CHAR[b], isize::from(i > 0))),
-                );
-            }
-            normalized.transform(transformations, 0);
-            Ok(())
-        })
+        pretokenized.normalize(encode_bytes)
     }
 }
 

@@ -37,7 +37,6 @@ use std::ptr::fn_addr_eq;
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
-use to_method::To as _;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct PictureFlags(u8);
@@ -105,7 +104,7 @@ unsafe extern "C" fn dav1d_default_picture_alloc(
     cookie: Option<SendSyncNonNull<c_void>>,
 ) -> Dav1dResult {
     // SAFETY: Guaranteed by safety preconditions.
-    let p = unsafe { p_c.read() }.to::<Rav1dPicture>();
+    let p = Into::<Rav1dPicture>::into(unsafe { p_c.read() });
     let hbd = (p.p.bpc > 8) as c_int;
     let aligned_w = p.p.w + 127 & !127;
     let has_chroma = p.p.layout != Rav1dPixelLayout::I400;

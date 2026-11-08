@@ -7,16 +7,18 @@ use crate::src::levels::BlockSize;
 use crate::src::levels::InterIntraPredMode;
 use paste::paste;
 use std::cmp::Ordering;
-use strum::EnumCount;
 
-#[derive(Clone, Copy, EnumCount)]
-enum WedgeDirectionType {
-    Horizontal,
-    Vertical,
-    Oblique27,
-    Oblique63,
-    Oblique117,
-    Oblique153,
+crate::src::enum_map::enum_values! {
+    count;
+    #[derive(Clone, Copy)]
+    enum WedgeDirectionType {
+        Horizontal,
+        Vertical,
+        Oblique27,
+        Oblique63,
+        Oblique117,
+        Oblique153,
+    }
 }
 
 struct WedgeCodeType {
@@ -323,11 +325,13 @@ impl<const LEN_444: usize, const LEN_422: usize, const LEN_420: usize>
 }
 
 const fn build_master() -> [[[u8; 64]; 64]; WedgeDirectionType::COUNT] {
-    #[derive(EnumCount)]
-    enum WedgeMasterLineType {
-        Odd,
-        Even,
-        Vert,
+    crate::src::enum_map::enum_values! {
+        count;
+        enum WedgeMasterLineType {
+            Odd,
+            Even,
+            Vert,
+        }
     }
 
     const WEDGE_MASTER_BORDER: [[u8; 8]; WedgeMasterLineType::COUNT] = [

@@ -1,0 +1,7 @@
+{
+  "name": "spm_precompiled",
+  "version": "0.1.4",
+  "repository": "https://github.com/huggingface/spm_precompiled",
+  "archive-sha256": "5851699c4033c63636f7ea4cf7b7c1f1bf06d0cc03cfb42e711de5a5c46cf326",
+  "revision": "effe52a6d6f5d8312b1d096ab712cf4cc20b59b6"
+}

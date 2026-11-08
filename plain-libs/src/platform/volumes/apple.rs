@@ -1,5 +1,7 @@
 use super::*;
-use crate::platform::apple_device::OwnedCF as Owned;
+use crate::platform::apple_device::{
+    CF_URL_POSIX_PATH_STYLE, CFURLCopyFileSystemPath, OwnedCF as Owned, cf_file_url,
+};
 use std::ffi::{CStr, c_void};
 use std::os::unix::ffi::OsStrExt;
 
@@ -9,14 +11,7 @@ unsafe extern "C" {
     static kCFURLVolumeUUIDStringKey: Ref;
     static kCFURLVolumeURLKey: Ref;
     static kCFURLCanonicalPathKey: Ref;
-    fn CFURLCreateFromFileSystemRepresentation(
-        allocator: Ref,
-        bytes: *const u8,
-        len: isize,
-        directory: u8,
-    ) -> Ref;
     fn CFURLCopyResourcePropertyForKey(url: Ref, key: Ref, value: *mut Ref, error: *mut Ref) -> u8;
-    fn CFURLCopyFileSystemPath(url: Ref, style: isize) -> Ref;
 }
 
 fn property(url: Ref, key: Ref) -> Result<Option<Owned>> {
@@ -28,16 +23,7 @@ fn property(url: Ref, key: Ref) -> Result<Option<Owned>> {
 }
 
 fn resource_url(path: &Path) -> Result<Owned> {
-    let bytes = path.as_os_str().as_bytes();
-    let raw = unsafe {
-        CFURLCreateFromFileSystemRepresentation(
-            std::ptr::null(),
-            bytes.as_ptr(),
-            bytes.len() as isize,
-            0,
-        )
-    };
-    unsafe { Owned::from_owned(raw) }.context("Cannot create filesystem resource URL")
+    cf_file_url(path).context("Cannot create filesystem resource URL")
 }
 
 pub(super) fn containing(path: &Path) -> Result<Location> {
@@ -45,7 +31,7 @@ pub(super) fn containing(path: &Path) -> Result<Location> {
     let url = resource_url(path)?;
     let root = property(url.as_ptr(), unsafe { kCFURLVolumeURLKey })?
         .context("Volume root is unavailable")?;
-    let raw_path = unsafe { CFURLCopyFileSystemPath(root.as_ptr(), 0) };
+    let raw_path = unsafe { CFURLCopyFileSystemPath(root.as_ptr(), CF_URL_POSIX_PATH_STYLE) };
     let root_path =
         unsafe { Owned::from_owned(raw_path) }.context("Cannot resolve volume root path")?;
     let root_path = PathBuf::from(

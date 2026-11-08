@@ -31,7 +31,6 @@ use std::ops::Add;
 use std::ops::Shl;
 use std::ops::Shr;
 use std::ptr;
-use to_method::To;
 
 #[cfg(all(
     feature = "asm",
@@ -400,7 +399,7 @@ fn generate_grain_uv_rust<BD: BitDepth>(
             assert!(x < X);
         }
 
-         // False positive; used in a `const`.
+        // False positive; used in a `const`.
         const fn check_buf_index_all<T, const Y: usize, const X: usize>(buf: &Option<[[T; X]; Y]>) {
             Self { y: true, x: true }.check_buf_index(buf);
             Self { y: true, x: false }.check_buf_index(buf);
@@ -630,7 +629,7 @@ fn fgy_32x32xn_rust<BD: BitDepth>(
 
         let noise_y = |src: BD::Pixel, grain| {
             let noise = round2(
-                scaling.as_ref()[src.to::<usize>()] as c_int * grain,
+                scaling.as_ref()[Into::<usize>::into(src)] as c_int * grain,
                 data.scaling_shift,
             );
             iclip(src.as_::<c_int>() + noise, min_value, max_value).as_::<BD::Pixel>()
@@ -1377,7 +1376,7 @@ impl Rav1dFilmGrainDSPContext {
             }
         }
 
-         // Reachable on some #[cfg]s.
+        // Reachable on some #[cfg]s.
         {
             let _ = flags;
             self

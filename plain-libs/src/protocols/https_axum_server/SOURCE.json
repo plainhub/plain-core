@@ -1,0 +1,7 @@
+{
+  "name": "axum-server",
+  "version": "0.7.3",
+  "repository": "https://github.com/programatik29/axum-server",
+  "archive-sha256": "c1ab4a3ec9ea8a657c72d99a03a824af695bd0fb5ec639ccbd9cd3543b41a5f9",
+  "revision": "0ce7940a32f158f1add542aed4a450137377a4b2"
+}

@@ -175,7 +175,6 @@ use std::iter;
 use std::mem;
 use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering;
-use strum::EnumCount;
 
 fn init_quant_tables(
     seq_hdr: &Rav1dSequenceHeader,

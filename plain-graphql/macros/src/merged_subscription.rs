@@ -2,7 +2,7 @@ use crate::{
     args::{self, RenameTarget},
     utils::{GeneratorResult, get_crate_path, get_rustdoc},
 };
-use darling::ast::Data;
+use crate::meta::Data;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{Error, LitInt};

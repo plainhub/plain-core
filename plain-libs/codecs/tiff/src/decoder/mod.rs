@@ -11,7 +11,6 @@ use crate::{
     bytecast, ColorType, Directory, TiffError, TiffFormatError, TiffResult, TiffUnsupportedError,
     UsageError,
 };
-use half::f16;
 
 use self::image::Image;
 use self::stream::{ByteOrder, EndianReader};
@@ -38,7 +37,7 @@ pub enum DecodingResult {
     /// A vector of 64 bit unsigned ints
     U64(Vec<u64>),
     /// A vector of 16 bit IEEE floats (held in u16)
-    F16(Vec<f16>),
+    F16(Vec<u16>),
     /// A vector of 32 bit IEEE floats
     F32(Vec<f32>),
     /// A vector of 64 bit IEEE floats
@@ -163,7 +162,7 @@ pub enum DecodingBuffer<'a> {
     /// A slice of 64 bit unsigned ints
     U64(&'a mut [u64]),
     /// A slice of 16 bit IEEE floats
-    F16(&'a mut [f16]),
+    F16(&'a mut [u16]),
     /// A slice of 32 bit IEEE floats
     F32(&'a mut [f32]),
     /// A slice of 64 bit IEEE floats
@@ -189,7 +188,7 @@ impl<'a> DecodingBuffer<'a> {
             DecodingBuffer::I32(buf) => bytecast::i32_as_ne_bytes(buf),
             DecodingBuffer::U64(buf) => bytecast::u64_as_ne_bytes(buf),
             DecodingBuffer::I64(buf) => bytecast::i64_as_ne_bytes(buf),
-            DecodingBuffer::F16(buf) => bytecast::f16_as_ne_bytes(buf),
+            DecodingBuffer::F16(buf) => bytecast::u16_as_ne_bytes(buf),
             DecodingBuffer::F32(buf) => bytecast::f32_as_ne_bytes(buf),
             DecodingBuffer::F64(buf) => bytecast::f64_as_ne_bytes(buf),
         }
@@ -205,7 +204,7 @@ impl<'a> DecodingBuffer<'a> {
             DecodingBuffer::I32(buf) => bytecast::i32_as_ne_mut_bytes(buf),
             DecodingBuffer::U64(buf) => bytecast::u64_as_ne_mut_bytes(buf),
             DecodingBuffer::I64(buf) => bytecast::i64_as_ne_mut_bytes(buf),
-            DecodingBuffer::F16(buf) => bytecast::f16_as_ne_mut_bytes(buf),
+            DecodingBuffer::F16(buf) => bytecast::u16_as_ne_mut_bytes(buf),
             DecodingBuffer::F32(buf) => bytecast::f32_as_ne_mut_bytes(buf),
             DecodingBuffer::F64(buf) => bytecast::f64_as_ne_mut_bytes(buf),
         }
@@ -425,7 +424,7 @@ impl DecodingExtent {
             DecodingExtent::U16(count) => Layout::array::<u16>(count),
             DecodingExtent::U32(count) => Layout::array::<u32>(count),
             DecodingExtent::U64(count) => Layout::array::<u64>(count),
-            DecodingExtent::F16(count) => Layout::array::<f16>(count),
+            DecodingExtent::F16(count) => Layout::array::<u16>(count),
             DecodingExtent::F32(count) => Layout::array::<f32>(count),
             DecodingExtent::F64(count) => Layout::array::<f64>(count),
             DecodingExtent::I8(count) => Layout::array::<i8>(count),

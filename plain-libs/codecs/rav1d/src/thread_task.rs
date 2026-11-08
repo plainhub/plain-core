@@ -29,8 +29,7 @@ use crate::src::internal::TaskThreadData;
 use crate::src::internal::TaskType;
 use crate::src::iter::wrapping_iter;
 use crate::src::relaxed_atomic::RelaxedAtomic;
-use atomig::Atom;
-use atomig::Atomic;
+use crate::src::relaxed_atomic::{Atom, Atomic};
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use parking_lot::RwLock;
@@ -349,7 +348,7 @@ impl Rav1dFrameContextTaskThread {
 }
 
 /// 1-based index into the task queue vector. 0 is reserved for None.
-#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Debug, Atom)]
+#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(transparent)]
 pub struct Rav1dTaskIndex(Option<NonZeroU32>);
 
@@ -367,6 +366,16 @@ impl Rav1dTaskIndex {
 
     pub fn is_some(self) -> bool {
         self.0.is_some()
+    }
+}
+
+impl Atom for Rav1dTaskIndex {
+    type Repr = u32;
+    fn pack(self) -> Self::Repr {
+        self.0.map_or(0, NonZeroU32::get)
+    }
+    fn unpack(value: Self::Repr) -> Self {
+        Self(NonZeroU32::new(value))
     }
 }
 

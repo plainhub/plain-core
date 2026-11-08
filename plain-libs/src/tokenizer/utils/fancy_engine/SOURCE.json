@@ -1,0 +1,7 @@
+{
+  "name": "fancy-regex",
+  "version": "0.14.0",
+  "repository": "https://github.com/fancy-regex/fancy-regex",
+  "archive-sha256": "6e24cb5a94bcae1e5408b0effca5cd7172ea3c5755049c5f3af4cd283a165298",
+  "revision": "810a8f3c1662ea33f8dbfb1864d31aa0d2da6c3c"
+}

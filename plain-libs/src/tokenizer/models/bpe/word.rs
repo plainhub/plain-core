@@ -1,8 +1,6 @@
 use super::Pair;
-use ahash::AHashMap;
-use dary_heap::QuaternaryHeap;
-use rand_tokenizer::{Rng, rng};
-use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::{cmp::Ordering, collections::BinaryHeap};
 
 #[derive(Debug, Eq)]
 struct Merge {
@@ -72,10 +70,6 @@ impl std::fmt::Debug for Word {
 }
 
 impl Word {
-    pub(super) fn new() -> Self {
-        Word { symbols: vec![] }
-    }
-
     pub(super) fn with_capacity(capacity: usize) -> Self {
         Self {
             symbols: Vec::with_capacity(capacity),
@@ -101,63 +95,8 @@ impl Word {
         });
     }
 
-    pub(super) fn merge(
-        &mut self,
-        c1: u32,
-        c2: u32,
-        replacement: u32,
-        max_length: usize,
-    ) -> Vec<(Pair, i32)> {
-        let mut changes: Vec<(Pair, i32)> = vec![];
-        let mut i = 0;
-        loop {
-            if i >= self.symbols.len() {
-                break;
-            }
-
-            // Found a pair
-            if self.symbols[i].c == c1 && i + 1 < self.symbols.len() && self.symbols[i + 1].c == c2
-            {
-                let first = self.symbols[i];
-                let second = self.symbols[i + 1];
-
-                // Remove in place
-                let new_s = Symbol {
-                    c: replacement,
-                    prev: first.prev,
-                    next: second.next,
-                    len: first.len + second.len,
-                };
-
-                // If there are other characters before the pair
-                if i > 0 {
-                    changes.push(((self.symbols[i - 1].c, first.c), -1));
-                    if self.symbols[i - 1].len + new_s.len < max_length {
-                        changes.push(((self.symbols[i - 1].c, replacement), 1));
-                    }
-                }
-
-                self.symbols.insert(i, new_s); // Insert replacement before first char of pair
-                self.symbols.remove(i + 1); // Remove first char of pair
-                self.symbols.remove(i + 1); // And then the second
-
-                // If there are other characters after the pair
-                if i < self.symbols.len() - 1 {
-                    changes.push(((second.c, self.symbols[i + 1].c), -1));
-                    if self.symbols[i + 1].len + new_s.len < max_length {
-                        changes.push(((replacement, self.symbols[i + 1].c), 1));
-                    }
-                }
-            }
-
-            i += 1;
-        }
-
-        changes
-    }
-
-    pub(super) fn merge_all(&mut self, merges: &AHashMap<Pair, (u32, u32)>, dropout: Option<f32>) {
-        let mut queue = QuaternaryHeap::with_capacity(self.symbols.len());
+    pub(super) fn merge_all(&mut self, merges: &HashMap<Pair, (u32, u32)>, dropout: Option<f32>) {
+        let mut queue = BinaryHeap::with_capacity(self.symbols.len());
         let mut skip = Vec::with_capacity(queue.len());
 
         queue.extend(
@@ -175,7 +114,7 @@ impl Word {
         );
 
         while let Some(top) = queue.pop() {
-            if dropout.map(|d| rng().random::<f32>() < d).unwrap_or(false) {
+            if dropout.is_some_and(|probability| rand::random::<f32>() < probability) {
                 skip.push(top);
             } else {
                 // Re-insert the skipped elements
@@ -246,10 +185,6 @@ impl Word {
         self.symbols.retain(|s| s.len != 0);
     }
 
-    pub(super) fn get_chars(&self) -> Vec<u32> {
-        self.symbols.iter().map(|s| s.c).collect()
-    }
-
     pub(super) fn get_chars_iter(&self) -> impl Iterator<Item = u32> + '_ {
         self.symbols.iter().map(|s| s.c)
     }
@@ -264,7 +199,3 @@ impl Word {
         })
     }
 }
-
-#[cfg(test)]
-#[path = "../../../../../tests/plain-libs/unit/tokenizer/models/bpe/word/tests.rs"]
-mod tests;

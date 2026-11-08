@@ -1,6 +1,6 @@
 use super::*;
 use crate::tokenizer::tokenizer::Encoding;
-use ahash::AHashMap;
+use std::collections::HashMap;
 
 fn get_empty() -> Encoding {
     Encoding::new(
@@ -12,7 +12,7 @@ fn get_empty() -> Encoding {
         vec![],
         vec![],
         vec![],
-        AHashMap::new(),
+        HashMap::new(),
     )
 }
 
@@ -26,7 +26,7 @@ fn get_short() -> Encoding {
         vec![0, 0],
         vec![1, 1],
         vec![],
-        AHashMap::new(),
+        HashMap::new(),
     )
 }
 
@@ -45,7 +45,7 @@ fn get_medium() -> Encoding {
         vec![0, 0, 0, 0],
         vec![1, 1, 1, 1],
         vec![],
-        AHashMap::new(),
+        HashMap::new(),
     )
 }
 
@@ -86,7 +86,7 @@ fn get_long() -> Encoding {
         vec![0, 0, 0, 0, 0, 0, 0, 0],
         vec![1, 1, 1, 1, 1, 1, 1, 1],
         vec![],
-        AHashMap::new(),
+        HashMap::new(),
     )
 }
 

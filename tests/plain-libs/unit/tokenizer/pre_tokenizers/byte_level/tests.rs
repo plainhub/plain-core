@@ -209,7 +209,7 @@ fn processor_trims_offsets_pre_tokenized() {
         vec![],
         vec![],
         vec![],
-        AHashMap::new(),
+        HashMap::new(),
     );
     process_offsets(&mut encoding, true);
     assert_eq!(
@@ -223,7 +223,7 @@ fn processor_trims_offsets_pre_tokenized() {
             vec![],
             vec![],
             vec![],
-            AHashMap::new(),
+            HashMap::new(),
         )
     );
 }
@@ -245,7 +245,7 @@ fn processor_trims_offsets() {
         vec![],
         vec![],
         vec![],
-        AHashMap::new(),
+        HashMap::new(),
     );
     let expected = Encoding::new(
         vec![0; 5],
@@ -262,7 +262,7 @@ fn processor_trims_offsets() {
         vec![],
         vec![],
         vec![],
-        AHashMap::from_iter(vec![(0, 0..5)]),
+        HashMap::from_iter(vec![(0, 0..5)]),
     );
 
     let bytelevel = ByteLevel::default().trim_offsets(true);
@@ -302,7 +302,7 @@ fn processor_trims_offsets() {
         vec![],
         vec![],
         vec![],
-        AHashMap::from_iter(vec![(0, 0..5), (1, 5..10)]),
+        HashMap::from_iter(vec![(0, 0..5), (1, 5..10)]),
     );
     assert_eq!(
         pair_expected,

@@ -6,10 +6,9 @@ use crate::tokenizer::tokenizer::{Model, Result, Token};
 use crate::tokenizer::utils::cache::{Cache, MAX_LENGTH};
 use std::collections::HashMap;
 
-use ahash::AHashMap;
 use std::convert::TryInto;
 
-type TokenMap = AHashMap<String, u32>;
+type TokenMap = HashMap<String, u32>;
 type Vocab = Vec<(String, f64)>;
 
 pub struct Unigram {
@@ -89,7 +88,7 @@ impl Unigram {
         byte_fallback: bool,
     ) -> Result<Self> {
         let n = vocab.len();
-        let mut token_to_ids: TokenMap = AHashMap::new();
+        let mut token_to_ids: TokenMap = HashMap::new();
         let mut builder = TrieBuilder::default();
 
         if let Some(unk_id) = unk_id {

@@ -1,9 +1,10 @@
 pub use error::{Error, ErrorKind, Result};
-pub use notify_types::event::{self, Event, EventKind};
+pub use event::{Event, EventKind};
 pub use recursive_mode::RecursiveMode;
 use std::path::Path;
 pub(crate) use std::sync::mpsc::{Receiver, Sender, channel as unbounded};
 mod error;
+pub mod event;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub(crate) mod inotify;
 mod recursive_mode;
@@ -11,6 +12,8 @@ mod recursive_mode;
 pub type RecommendedWatcher = inotify::INotifyWatcher;
 #[cfg(target_os = "macos")]
 pub(crate) mod fsevent;
+#[cfg(target_os = "macos")]
+mod macos_ffi;
 #[cfg(target_os = "macos")]
 pub type RecommendedWatcher = fsevent::FsEventWatcher;
 #[cfg(windows)]

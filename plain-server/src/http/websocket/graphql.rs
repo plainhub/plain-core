@@ -1,14 +1,12 @@
 use crate::graphql::executor::RequestContext;
 use crate::server::ServerState;
 use axum::{
-    extract::{
-        Query, State, WebSocketUpgrade,
-        ws::{CloseFrame, Message, WebSocket},
-    },
-    http::{HeaderMap, StatusCode},
+    extract::{Query, State},
+    http::StatusCode,
     response::{IntoResponse, Response},
 };
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
+use plain_libs::protocols::websocket::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 use plain_rs::infrastructure::protocols::graphql;
 use plain_rs::infrastructure::protocols::graphql::Ack;
@@ -25,18 +23,15 @@ pub(crate) struct Params {
 pub(crate) async fn upgrade(
     State(state): State<ServerState>,
     Query(params): Query<Params>,
-    headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
-    let protocol = headers
-        .get("sec-websocket-protocol")
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.split(',').any(|item| item.trim() == PROTOCOL));
-    if !protocol || params.cid.is_empty() || params.cid.len() > 1024 {
+    let Some(ws) = ws.require_protocol(PROTOCOL) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    if params.cid.is_empty() || params.cid.len() > 1024 {
         return StatusCode::BAD_REQUEST.into_response();
     }
-    ws.protocols([PROTOCOL])
-        .max_message_size(1024 * 1024)
+    ws.max_message_size(1024 * 1024)
         .max_frame_size(1024 * 1024)
         .on_upgrade(move |socket| run(socket, state, params.cid))
         .into_response()
@@ -135,7 +130,7 @@ async fn run(mut socket: WebSocket, state: ServerState, client: String) {
             ack,
         }) => {
             let result = async {
-                tokio::time::timeout(Duration::from_secs(2), socket.send(Message::Binary(ack))).await.map_err(|_| "Slow subscription client")?.map_err(|error| error.to_string())?;
+                tokio::time::timeout(Duration::from_secs(2), socket.send(Message::Binary(ack.into()))).await.map_err(|_| "Slow subscription client")?.map_err(|error| error.to_string())?;
                 session.mark_online()?;
                 let mut read = Box::pin(session.read());
                 loop {
@@ -159,7 +154,7 @@ async fn run(mut socket: WebSocket, state: ServerState, client: String) {
                     };
                     read = Box::pin(session.read());
                     let frame = stream.encode(outbound.as_bytes(), &key).ok_or("Sequence exhausted")?;
-                    tokio::time::timeout(Duration::from_secs(2), socket.send(Message::Binary(frame))).await.map_err(|_| "Slow subscription client")?.map_err(|error| error.to_string())?;
+                    tokio::time::timeout(Duration::from_secs(2), socket.send(Message::Binary(frame.into()))).await.map_err(|_| "Slow subscription client")?.map_err(|error| error.to_string())?;
                 }
                 Ok::<_, String>(())
             }.await;
@@ -178,7 +173,7 @@ async fn run(mut socket: WebSocket, state: ServerState, client: String) {
     let _ = tokio::time::timeout(
         Duration::from_secs(1),
         socket.send(Message::Close(Some(CloseFrame {
-            code: if result.is_err() { 1008 } else { 1000 },
+            code: (if result.is_err() { 1008u16 } else { 1000u16 }).into(),
             reason: if result.is_err() {
                 "invalid_subscription"
             } else {

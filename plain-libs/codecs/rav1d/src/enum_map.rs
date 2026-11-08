@@ -32,7 +32,7 @@ where
 // Has to be a macro until we have `#![feature(generic_const_exprs)]`.
 macro_rules! enum_map_ty {
     ($K:ty, $V:ty) => {
-        $crate::src::enum_map::EnumMap<$K, $V, { <$K as ::strum::EnumCount>::COUNT }>
+        $crate::src::enum_map::EnumMap<$K, $V, { <$K>::COUNT }>
     }
 }
 
@@ -58,7 +58,7 @@ where
     V: DefaultValue,
 {
     /// Create an [`EnumMap`] with default values when `V: ` [`DefaultValue`].
-     // TODO(kkysen) remove when used
+    // TODO(kkysen) remove when used
     const fn default() -> Self {
         Self {
             array: [V::DEFAULT; N],
@@ -118,3 +118,40 @@ macro_rules! enum_map {
 }
 
 pub(crate) use enum_map;
+
+macro_rules! enum_values {
+    (
+        $($metadata:ident $(($repr:ty))?),+;
+        $(#[$attribute:meta])*
+        $visibility:vis enum $name:ident {
+            $($(#[$variant_attribute:meta])* $variant:ident $(= $value:expr)?),+ $(,)?
+        }
+    ) => {
+        $(#[$attribute])*
+        $visibility enum $name {
+            $($(#[$variant_attribute])* $variant $(= $value)?),+
+        }
+        $crate::src::enum_map::enum_values!(@metadata [$name; $($variant),+] $($metadata $(($repr))?),+);
+    };
+    (@metadata $variants:tt $first:ident $(($repr:ty))? $(, $rest:ident $(($rest_repr:ty))?)*) => {
+        $crate::src::enum_map::enum_values!(@one $variants $first $(($repr))?);
+        $($crate::src::enum_map::enum_values!(@one $variants $rest $(($rest_repr))?);)*
+    };
+    (@one [$name:ident; $($variant:ident),+] count) => {
+        impl $name {
+            pub const COUNT: usize = [$(Self::$variant),+].len();
+        }
+    };
+    (@one [$name:ident; $($variant:ident),+] from_repr($repr:ty)) => {
+        impl $name {
+            pub const fn from_repr(value: $repr) -> Option<Self> {
+                match value {
+                    $(value if value == Self::$variant as $repr => Some(Self::$variant),)+
+                    _ => None,
+                }
+            }
+        }
+    };
+}
+
+pub(crate) use enum_values;

@@ -1,4 +1,3 @@
-use ahash::AHashMap;
 use std::{
     fs::read_to_string,
     ops::{Deref, DerefMut},
@@ -580,7 +579,7 @@ where
         final_vocab
     }
 
-    pub fn get_added_tokens_decoder(&self) -> AHashMap<u32, AddedToken> {
+    pub fn get_added_tokens_decoder(&self) -> HashMap<u32, AddedToken> {
         self.added_vocabulary.get_added_tokens_decoder().clone()
     }
 

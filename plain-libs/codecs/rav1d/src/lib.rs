@@ -68,7 +68,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Once;
 use std::thread;
-use to_method::To as _;
 
 #[cold]
 fn init_internal() {
@@ -85,8 +84,8 @@ pub const fn rav1d_version() -> &'static str {
     RAV1D_VERSION
 }
 
-
 #[cold]
+
 pub extern "C" fn dav1d_version() -> *const c_char {
     DAV1D_VERSION.as_ptr()
 }
@@ -826,7 +825,7 @@ pub unsafe extern "C" fn dav1d_picture_unref(p: Option<NonNull<Dav1dPicture>>) {
     };
     // SAFETY: `p` is safe to read from.
     let p_c = unsafe { p.as_ptr().read() };
-    let mut p_rust = p_c.to::<Rav1dPicture>();
+    let mut p_rust = Into::<Rav1dPicture>::into(p_c);
     let _ = mem::take(&mut p_rust);
     let p_c = p_rust.into();
     // SAFETY: `p` is safe to write to.
@@ -843,7 +842,7 @@ pub unsafe extern "C" fn dav1d_data_create(buf: Option<NonNull<Dav1dData>>, sz: 
         let buf = validate_input!(buf.ok_or(EINVAL))?;
         validate_input!((sz <= usize::MAX / 2, EINVAL))?;
         let data = Rav1dData::create(sz)?;
-        let data = data.to::<Dav1dData>();
+        let data = Into::<Dav1dData>::into(data);
         let ptr = data
             .data
             .map(|ptr| ptr.as_ptr())
@@ -901,7 +900,7 @@ pub unsafe extern "C" fn dav1d_data_wrap_user_data(
         let user_data = validate_input!(user_data.ok_or(EINVAL))?;
         // SAFETY: `buf` is safe to read from.
         let data_c = unsafe { buf.as_ptr().read() };
-        let mut data = data_c.to::<Rav1dData>();
+        let mut data = Into::<Rav1dData>::into(data_c);
         // SAFETY: `user_data` is valid to dereference until `free_callback` is called on it, which deallocates it.
         unsafe { data.wrap_user_data(user_data, free_callback, cookie) }?;
         let data_c = data.into();
@@ -921,7 +920,7 @@ pub unsafe extern "C" fn dav1d_data_unref(buf: Option<NonNull<Dav1dData>>) {
     let Ok(mut buf) = buf else { return };
     // SAFETY: `buf` is safe to read from and write to.
     let buf = unsafe { buf.as_mut() };
-    let _ = mem::take(buf).to::<Rav1dData>();
+    let _: Rav1dData = mem::take(buf).into();
 }
 
 /// # Safety
@@ -933,5 +932,5 @@ pub unsafe extern "C" fn dav1d_data_props_unref(props: Option<NonNull<Dav1dDataP
     let Ok(mut props) = props else { return };
     // SAFETY: `props` is safe to read from and write to.
     let props = unsafe { props.as_mut() };
-    let _ = mem::take(props).to::<Rav1dDataProps>();
+    let _: Rav1dDataProps = mem::take(props).into();
 }

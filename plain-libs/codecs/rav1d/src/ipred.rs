@@ -42,7 +42,6 @@ use std::cmp;
 use std::ffi::c_int;
 use std::ffi::c_uint;
 use std::slice;
-use strum::FromRepr;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 
@@ -336,12 +335,14 @@ fn dc_gen<BD: BitDepth>(
     return dc;
 }
 
-#[derive(FromRepr)]
-#[repr(u8)]
-enum DcGen {
-    Top,
-    Left,
-    TopLeft,
+crate::src::enum_map::enum_values! {
+    from_repr(u8);
+    #[repr(u8)]
+    enum DcGen {
+        Top,
+        Left,
+        TopLeft,
+    }
 }
 
 impl DcGen {
@@ -1453,8 +1454,6 @@ unsafe extern "C" fn pal_pred_c_erased<BD: BitDepth>(
 mod neon {
     use super::*;
 
-    use to_method::To;
-
     #[cfg(feature = "bitdepth_8")]
     use crate::include::common::bitdepth::BitDepth8;
 
@@ -1632,7 +1631,7 @@ mod neon {
         match BD::BPC {
             BPC::BPC8 => {
                 // Really a no-op cast, but it's difficult to do it properly with generics.
-                let px = px.to::<u16>() as <BitDepth8 as BitDepth>::Pixel;
+                let px = Into::<u16>::into(px) as <BitDepth8 as BitDepth>::Pixel;
                 // SAFETY: We're assuming the asm is actually correct and safe.
                 unsafe { dav1d_ipred_pixel_set_8bpc_neon(out, px, n) }
             }
@@ -1736,7 +1735,7 @@ mod neon {
         assert!(angle > 90 && angle < 180);
         let mut dy = dav1d_dr_intra_derivative[((angle - 90) >> 1) as usize] as c_int;
         let mut dx = dav1d_dr_intra_derivative[((180 - angle) >> 1) as usize] as c_int;
-        let mut buf = [0.to::<BD::Pixel>(); 3 * (64 + 1)]; // NOTE: C code doesn't initialize
+        let mut buf = [Into::<BD::Pixel>::into(0); 3 * (64 + 1)]; // NOTE: C code doesn't initialize
 
         // The asm can underread below the start of top[] and left[]; to avoid
         // surprising behaviour, make sure this is within the allocated stack space.
@@ -2256,7 +2255,7 @@ impl Rav1dIntraPredDSPContext {
             }
         }
 
-         // Reachable on some #[cfg]s.
+        // Reachable on some #[cfg]s.
         {
             let _ = flags;
             self
