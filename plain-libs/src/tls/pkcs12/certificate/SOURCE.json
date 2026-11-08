@@ -1,0 +1,18 @@
+[
+  {
+    "name": "x509-parser",
+    "version": "0.18.1",
+    "repository": "https://github.com/rusticata/x509-parser",
+    "revision": "33b15d2db5a19b15c17bb15fa57b08691316ee95",
+    "archive-sha256": "d43b0f71ce057da06bc0851b23ee24f3f86190b07203dd8f567d0b706a185202",
+    "retained": "Name display conventions and abbreviations"
+  },
+  {
+    "name": "oid-registry",
+    "version": "0.8.1",
+    "repository": "https://github.com/rusticata/oid-registry",
+    "revision": "33b20513b73ce04e1de48232beba3fa89df33b1d",
+    "archive-sha256": "12f40cff3dde1b6087cc5d5f5d4d65712f34016a03ed60e9c08dcc392736b5b7",
+    "retained": "Active short names only"
+  }
+]

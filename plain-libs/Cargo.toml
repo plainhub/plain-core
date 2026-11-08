@@ -11,7 +11,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "file-walk" = ["dep:anyhow"]
 "default" = ["crypto"]
 "crypto" = ["dep:chacha20poly1305", "dep:p256", "dep:ed25519-dalek", "dep:pbkdf2"]
-"tls" = ["dep:rcgen", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:x509-parser", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
+"tls" = ["dep:rcgen", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
 "time" = ["dep:chrono"]
 "sqlite" = ["time", "dep:rusqlite"]
 "html" = []
@@ -75,7 +75,6 @@ description = "Reusable cryptography, media, file, format and native components"
 "pkcs12" = { version = "=0.2.0-pre.0", default-features = false, features = ["kdf"], optional = true }
 "pkcs5" = { version = "0.8", features = ["alloc", "pbes2"], optional = true }
 "pkcs8" = { version = "0.11", optional = true }
-"x509-parser" = { version = "0.18", optional = true }
 "cbc" = { version = "0.2", features = ["block-padding", "alloc"], optional = true }
 "des" = { version = "0.9", optional = true }
 "rc2" = { version = "0.9", optional = true }

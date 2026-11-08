@@ -14,6 +14,8 @@ use pkcs12::{
 };
 use std::fmt::Display;
 
+mod certificate;
+
 type Result<T> = std::result::Result<T, String>;
 const DATA: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.7.1");
 const ENCRYPTED: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.7.6");
@@ -181,16 +183,14 @@ fn safe_bytes(safe: &ContentInfo, password: &str) -> Result<Vec<u8>> {
     }
 }
 
-fn attribute(bag: &SafeBag, oid: ObjectIdentifier) -> Option<Vec<u8>> {
+fn attribute(bag: &SafeBag, oid: ObjectIdentifier) -> Option<&Any> {
     bag.bag_attributes
         .as_ref()?
         .iter()
         .find(|a| a.oid == oid)?
         .values
         .iter()
-        .next()?
-        .to_der()
-        .ok()
+        .next()
 }
 
 fn bags(
@@ -201,11 +201,8 @@ fn bags(
 ) -> Result<()> {
     for bag in Vec::<SafeBag>::from_der(bytes).map_err(error)? {
         let id = attribute(&bag, LOCAL_ID)
-            .and_then(|bytes| OctetString::from_der(&bytes).ok())
+            .and_then(|value| value.decode_as::<OctetString>().ok())
             .map(|v| v.into_bytes().into_vec());
-        let alias = attribute(&bag, NAME)
-            .and_then(|bytes| BmpString::from_der(&bytes).ok())
-            .map(|v| v.to_string());
         match bag.bag_id {
             pkcs12::PKCS_12_KEY_BAG_OID | pkcs12::PKCS_12_PKCS8_KEY_BAG_OID => {
                 let der = if bag.bag_id == pkcs12::PKCS_12_KEY_BAG_OID {
@@ -228,6 +225,9 @@ fn bags(
                 };
                 if let Some(id) = id {
                     pkcs8::PrivateKeyInfoRef::try_from(der.as_slice()).map_err(error)?;
+                    let alias = attribute(&bag, NAME)
+                        .and_then(|value| value.decode_as::<BmpString>().ok())
+                        .map(|value| value.to_string());
                     keys.push(Key { id, alias, der });
                 }
             }
@@ -239,11 +239,9 @@ fn bags(
                     return Err("Unsupported PKCS12 certificate type".into());
                 }
                 let der = cert.cert_value.into_bytes().into_vec();
-                let (_, certificate) = x509_parser::parse_x509_certificate(&der).map_err(error)?;
-                let subject = certificate.subject().to_string();
-                let issuer = certificate.issuer().to_string();
+                let (subject, issuer) = certificate::names(&der).map_err(error)?;
                 let trusted = attribute(&bag, TRUST)
-                    .and_then(|v| ObjectIdentifier::from_der(&v).ok())
+                    .and_then(|value| value.decode_as::<ObjectIdentifier>().ok())
                     == Some(ANY_USAGE);
                 certs.push(Certificate {
                     id,

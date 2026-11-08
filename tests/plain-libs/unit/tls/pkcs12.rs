@@ -333,3 +333,65 @@ fn scrypt_decrypts_and_rejects_excessive_cost_before_allocation() {
         );
     }
 }
+
+#[test]
+fn imports_legacy_certificate_names_and_rejects_trailing_certificate_data() {
+    use rcgen::{
+        BmpString, CertificateParams, DistinguishedName, DnType, DnValue, KeyPair, UniversalString,
+    };
+
+    let mut params = CertificateParams::new(vec!["fixture.test".into()]).unwrap();
+    params.distinguished_name = DistinguishedName::new();
+    params.distinguished_name.push(
+        DnType::CommonName,
+        DnValue::UniversalString(UniversalString::try_from("A").unwrap()),
+    );
+    params.distinguished_name.push(
+        DnType::OrganizationName,
+        DnValue::BmpString(BmpString::try_from("組").unwrap()),
+    );
+    let key = KeyPair::generate().unwrap();
+    let leaf = params.self_signed(&key).unwrap().der().to_vec();
+    let key_der = key.serialize_der();
+    let display = "CN=00000041, O=組";
+    assert_eq!(
+        certificate::names(&leaf).unwrap(),
+        (display.into(), display.into())
+    );
+
+    let mut values = plaintext_bags();
+    let key_bag = values
+        .iter_mut()
+        .find(|bag| bag.bag_id == pkcs12::PKCS_12_PKCS8_KEY_BAG_OID)
+        .unwrap();
+    key_bag.bag_id = pkcs12::PKCS_12_KEY_BAG_OID;
+    key_bag.bag_value = ContextSpecific {
+        tag_number: der::TagNumber(0),
+        tag_mode: der::TagMode::Explicit,
+        value: Any::from_der(&key_der).unwrap(),
+    }
+    .to_der()
+    .unwrap();
+
+    for append_trailing_byte in [false, true] {
+        let mut bags = values.clone();
+        let bag = bags
+            .iter_mut()
+            .find(|bag| bag.bag_id == pkcs12::PKCS_12_CERT_BAG_OID)
+            .unwrap();
+        let mut cert = ContextSpecific::<CertBag>::from_der(&bag.bag_value).unwrap();
+        let mut bytes = leaf.clone();
+        if append_trailing_byte {
+            bytes.push(0);
+        }
+        cert.value.cert_value = OctetString::new(bytes).unwrap();
+        bag.bag_value = cert.to_der().unwrap();
+
+        let result = decode(&unencrypted_pfx(bags), "password");
+        if append_trailing_byte {
+            assert!(result.is_err());
+        } else {
+            assert_eq!(result.unwrap(), (vec![leaf.clone()], key_der.clone()));
+        }
+    }
+}
