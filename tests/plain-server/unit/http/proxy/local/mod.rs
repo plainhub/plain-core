@@ -1,8 +1,8 @@
-use plain_libs::protocols::http_client;
 use crate::http::proxy::local::utils::extract_proxy_params;
 use crate::http::proxy::local::utils::sha1;
 use crate::http::proxy::local::utils::ws_accept_key;
 use crate::http::proxy::local::{PeerResolver, ResolvedPeer};
+use plain_libs::protocols::http_client;
 use std::sync::Arc;
 
 fn no_peers() -> PeerResolver {
@@ -161,6 +161,35 @@ fn replace_authority_swaps_host_between_scheme_and_path() {
         crate::http::proxy::local::replace_authority("not-a-url", "h2:1"),
         "not-a-url"
     );
+}
+
+#[tokio::test]
+async fn loopback_proxy_requires_the_target_query_parameter() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let upstream = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = upstream.local_addr().unwrap();
+    let serve = tokio::spawn(async move {
+        let (mut stream, _) = upstream.accept().await.unwrap();
+        let mut request = [0u8; 1024];
+        stream.read(&mut request).await.unwrap();
+        stream
+            .write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
+            .await
+            .unwrap();
+    });
+    let proxy = crate::http::proxy::local::HttpProxyState::start(no_peers());
+    let response = http_client::builder()
+        .no_proxy()
+        .build()
+        .unwrap()
+        .get(format!("http://127.0.0.1:{}/fs", proxy.port))
+        .header("x-proxy-target", format!("http://{address}"))
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+        .unwrap();
+    serve.abort();
+    assert_eq!(response.status().as_u16(), 400);
 }
 
 #[tokio::test]

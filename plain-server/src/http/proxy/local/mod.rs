@@ -1,4 +1,4 @@
-//! Local HTTP/WebSocket proxy — the webview's only network transport.
+//! Loopback HTTP/WebSocket transport for the desktop webview's remote devices.
 //!
 //! Solves the self-signed cert problem:
 //!   webview ──plain HTTP/WS──► 127.0.0.1:N ──TLS (self-signed ok)──► device
@@ -21,9 +21,7 @@
 //!    handshake is forwarded verbatim so accept/extension checks stay
 //!    end-to-end between webview and device
 //!
-//! Target URL is passed via:
-//!   a) _pt query parameter  — every browser-initiated call (WS can set no headers)
-//!   b) x-proxy-target header — fetch/XHR
+//! The `_pt` query parameter carries the upstream URL for both transports.
 //! A `_cid` query parameter (WS dials) names a paired peer; its current
 //! `ip:port` is re-resolved from the peers table right before dialing.
 
@@ -39,9 +37,7 @@ mod tests;
 #[cfg(feature = "core")]
 pub mod utils;
 
-/// CORS preflight headers. Same on the local server and the upstream
-/// HTTP proxy — both surfaces serve the web UI, so the policy is
-/// identical.
+/// CORS headers for the loopback proxy.
 pub const CORS: &[u8] = b"access-control-allow-origin: *\r\n\
                        access-control-allow-methods: GET, POST, PUT, DELETE, OPTIONS\r\n\
                        access-control-allow-headers: *\r\n";
@@ -176,15 +172,7 @@ async fn handle(stream: TcpStream, http: http_client::Client, peers: PeerResolve
         // 4. Proxy target.
         let params = extract_proxy_params(&raw_path);
         let path = params.path;
-        let target_base = if !params.pt.is_empty() {
-            params.pt.trim_end_matches('/').to_owned()
-        } else {
-            req_headers
-                .iter()
-                .find(|(k, _)| k == "x-proxy-target")
-                .map(|(_, v)| v.trim_end_matches('/').to_owned())
-                .unwrap_or_default()
-        };
+        let target_base = params.pt.trim_end_matches('/').to_owned();
         if target_base.is_empty() {
             let _ = wr.write_all(b"HTTP/1.1 400 Bad Request\r\n").await;
             let _ = wr.write_all(CORS).await;
@@ -234,12 +222,12 @@ async fn handle(stream: TcpStream, http: http_client::Client, peers: PeerResolve
         let mut builder = http.request(req_method, &url);
         for (k, v) in &req_headers {
             match k.as_str() {
-                // Strip hop-by-hop and proxy-internal headers. `origin` must
+                // Strip hop-by-hop headers. `origin` must
                 // go too: the device's CORS gate 403s cross-origin browser
                 // requests (release builds only allow any host when the user
                 // opts in), while Rust-client requests without Origin pass —
                 // the proxy is the device's trusted agent, not a web page.
-                "host" | "connection" | "transfer-encoding" | "x-proxy-target" | "origin" => {
+                "host" | "connection" | "transfer-encoding" | "origin" => {
                     continue;
                 }
                 _ => {
