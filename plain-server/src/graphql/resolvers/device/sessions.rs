@@ -18,8 +18,8 @@ struct Session {
     client_ip: String,
     os_name: String,
     os_version: String,
-    browser_name: String,
-    browser_version: String,
+    app_name: String,
+    app_version: String,
     last_seen_at: Option<Instant>,
     last_active: Instant,
     created_at: Instant,
@@ -39,8 +39,8 @@ impl TryFrom<plain_rs::infrastructure::db::SessionRow> for Session {
             client_ip: row.client_ip,
             os_name: value.os_name,
             os_version: value.os_version,
-            browser_name: value.browser_name,
-            browser_version: value.browser_version,
+            app_name: value.app_name,
+            app_version: value.app_version,
             last_seen_at: row
                 .last_seen_at
                 .map(|at| {

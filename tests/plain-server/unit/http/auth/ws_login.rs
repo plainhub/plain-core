@@ -7,7 +7,7 @@ fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
     for index in (0..66).rev() {
         attempts.pending.insert(format!("{index:032x}"), Pending {
             client_id: "界".repeat(200), client_ip: "fixture".into(),
-            request: json!({"browserName":"界".repeat(200), "password":"fixture-password-secret", "token":"fixture-token-secret", "ecdhPublicKey":"fixture-key-secret", "verificationCode":"forged-code"}),
+            request: json!({"appName":"界".repeat(200), "password":"fixture-password-secret", "token":"fixture-token-secret", "ecdhPublicKey":"fixture-key-secret", "verificationCode":"forged-code"}),
             at: Instant::now(), protection: password_protection(None),
         });
     }
@@ -23,7 +23,7 @@ fn local_request_pages_are_bounded_and_never_expose_request_secrets() {
         Some(format!("{:032x}", 63).as_str())
     );
     assert_eq!(first.requests[0].client_id.chars().count(), 128);
-    assert_eq!(first.requests[0].browser_name.chars().count(), 128);
+    assert_eq!(first.requests[0].app_name.chars().count(), 128);
     assert!(
         first
             .requests
@@ -222,7 +222,7 @@ async fn browser_login(
         .await
         .unwrap();
     let session = plain_libs::crypto::EcdhSession::generate();
-    let mut request = json!({"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
+    let mut request = json!({"appName":"Fixture","appVersion":"1","osName":"mac","osVersion":"27.2.0","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
     let digest = password.map(plain_libs::crypto::sha512_hex);
     if let Some(digest) = &digest {
         request["password"] = json!(digest);
@@ -435,6 +435,10 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
             channel.verification_code
         );
         assert_eq!(request["request"]["password"], "");
+        assert_eq!(request["request"]["appName"], "Fixture");
+        assert_eq!(request["request"]["appVersion"], "1");
+        assert_eq!(request["request"]["osName"], "macOS");
+        assert_eq!(request["request"]["osVersion"], "27.2.0");
         server
             .native_management()
             .unwrap()
@@ -462,10 +466,13 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
                 response["ecdhPublicKey"].as_str().unwrap(),
             ))
             .unwrap();
-        assert_eq!(
-            state.db.session_get(client_id).unwrap().unwrap().token,
-            plain_libs::utils::base64::base64_encode(&shared)
-        );
+        let saved = state.db.session_get(client_id).unwrap().unwrap();
+        assert_eq!(saved.token, plain_libs::utils::base64::base64_encode(&shared));
+        assert_eq!(saved.r#type, plain_rs::features::sessions::SessionType::Login);
+        assert_eq!(saved.app_name, "Fixture");
+        assert_eq!(saved.app_version, "1");
+        assert_eq!(saved.os_name, "macOS");
+        assert_eq!(saved.os_version, "27.2.0");
         let signing =
             plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
         let signed = format!(
@@ -611,7 +618,7 @@ fn recovery_requests_follow_creation_order_independent_of_hash_iteration() {
             Pending {
                 client_id: id.into(),
                 client_ip: String::new(),
-                request: json!({"browserName":id}),
+                request: json!({"appName":id}),
                 at: now,
                 protection: password_protection(None),
             },
@@ -854,7 +861,7 @@ async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_
         let session = plain_libs::crypto::EcdhSession::generate();
         let request = json!({
             "password":digest, "loginContext":context,
-            "browserName":"Fixture", "browserVersion":"1", "osName":"Fixture", "osVersion":"1",
+            "appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1",
             "isMobile":false, "ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes),
         });
         let inner = plain_libs::crypto::xchacha_encrypt_raw(
@@ -1035,7 +1042,7 @@ async fn password_login_verifies_the_salted_record_and_rejects_reusable_stored_v
             unreachable!()
         };
         let session = plain_libs::crypto::EcdhSession::generate();
-        let request = json!({"password":secret,"loginContext":channel.context,"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes)});
+        let request = json!({"password":secret,"loginContext":channel.context,"appName":"Fixture","appVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes)});
         let frame = channel
             .encrypt_request(&serde_json::to_vec(&request).unwrap(), now_ms())
             .unwrap();

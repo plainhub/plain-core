@@ -10,7 +10,7 @@ use crate::infrastructure::db::models::simple::ShareRow;
 use crate::infrastructure::db::models::simple::TrashedMessageRow;
 
 const SESSION_COLUMNS: &str = "client_id, name, type, client_ip, os_name, os_version, \
-     browser_name, browser_version, token, url_token, last_seen_at, created_at, updated_at";
+     app_name, app_version, token, url_token, last_seen_at, created_at, updated_at";
 const SHARE_COLUMNS: &str = "id, name, password, url_token, expires_at, read_only, data, \
      created_at, updated_at";
 const POMODORO_COLUMNS: &str =
@@ -25,8 +25,8 @@ fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
         client_ip: row.get(3)?,
         os_name: row.get(4)?,
         os_version: row.get(5)?,
-        browser_name: row.get(6)?,
-        browser_version: row.get(7)?,
+        app_name: row.get(6)?,
+        app_version: row.get(7)?,
         token: row.get(8)?,
         url_token: row.get(9)?,
         last_seen_at: row.get(10)?,
@@ -230,7 +230,7 @@ impl Db {
         self.with_conn(|connection| {
             #[cfg(feature = "chat")]
             let before = self.1.session_revision.load(std::sync::atomic::Ordering::Acquire);
-            connection.execute("INSERT OR REPLACE INTO sessions (client_id,name,type,client_ip,os_name,os_version,browser_name,browser_version,token,url_token,last_seen_at,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",params![row.client_id,row.name,row.r#type,row.client_ip,row.os_name,row.os_version,row.browser_name,row.browser_version,row.token,row.url_token,row.last_seen_at,row.created_at,row.updated_at])?;
+            connection.execute("INSERT OR REPLACE INTO sessions (client_id,name,type,client_ip,os_name,os_version,app_name,app_version,token,url_token,last_seen_at,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",params![row.client_id,row.name,row.r#type,row.client_ip,row.os_name,row.os_version,row.app_name,row.app_version,row.token,row.url_token,row.last_seen_at,row.created_at,row.updated_at])?;
             #[cfg(feature = "chat")]
             self.update_session_snapshot(before, |snapshot| {snapshot.activity.retain(|(id,_)| id != &row.client_id);snapshot.rows.insert(row.client_id.clone(),row);});
             Ok(())

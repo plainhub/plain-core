@@ -137,7 +137,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         let keys = password_keys(&mut socket, &server.runtime_state(), cid).await;
         let request = json!({
             "password":digest, "loginContext":keys.context,
-            "browserName":"Test", "browserVersion":"1", "osName":"Fixture", "osVersion":"1",
+            "appName":"Test", "appVersion":"1", "osName":"Fixture", "osVersion":"1",
             "isMobile":false, "ecdhPublicKey":plain_libs::utils::base64::base64_encode(&client.public_key_bytes),
             "peer":null,
         });
@@ -161,7 +161,8 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             .unwrap();
         assert_eq!(payload["clientId"], cid);
         assert_eq!(payload["request"]["password"], "");
-        assert_eq!(payload["request"]["browserName"], "Test");
+        assert_eq!(payload["request"]["appName"], "Test");
+        assert_eq!(payload["request"]["osName"], "Fixture");
         let id = payload["requestId"].as_str().unwrap();
         confirm_login(&server, id, allowed).await.unwrap();
         let response = tokio::time::timeout(Duration::from_secs(3), socket.next())
@@ -276,7 +277,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
             let keys = password_keys(&mut socket, &state, &cid).await;
             let request = json!({
                 "password":digest, "loginContext":keys.context,
-                "browserName":"Test", "browserVersion":"1", "osName":"Fixture", "osVersion":"1",
+                "appName":"Test", "appVersion":"1", "osName":"Fixture", "osVersion":"1",
                 "isMobile":false, "ecdhPublicKey":plain_libs::utils::base64::base64_encode(&client.public_key_bytes),
                 "peer":null,
             });

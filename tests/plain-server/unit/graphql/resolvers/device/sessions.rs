@@ -150,7 +150,7 @@ async fn management_requires_a_trusted_caller_identity() {
 }
 
 #[tokio::test]
-async fn only_the_local_owner_can_mint_custom_session_credentials() {
+async fn only_the_local_owner_can_mint_api_tokens() {
     let (_directory, core) = fixture();
     let state = core.runtime_state();
     let before = state.db.session_list().unwrap().len();
@@ -167,12 +167,14 @@ async fn only_the_local_owner_can_mint_custom_session_credentials() {
     let created = core
         .native_management()
         .unwrap()
-        .create_session("Owned custom credential".into())
+        .create_session("Owned API token".into())
         .unwrap();
     let id = created.client_id.as_str();
     let token = created.token.as_str();
     assert_eq!(plain_libs::utils::base64::base64_decode(token).len(), 32);
-    assert_eq!(state.db.session_get(id).unwrap().unwrap().token, token);
+    let saved = state.db.session_get(id).unwrap().unwrap();
+    assert_eq!(saved.token, token);
+    assert_eq!(saved.r#type, plain_rs::features::sessions::SessionType::ApiToken);
     assert_eq!(state.db.session_list().unwrap().len(), before + 1);
     core.stop_core().await;
 }

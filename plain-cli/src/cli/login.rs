@@ -42,8 +42,8 @@ fn display_requests(output: &mut impl Write, page: &NativeWebLoginRequests) -> i
         )?;
         writeln!(
             output,
-            "  Browser: {:?} {:?}",
-            request.browser_name, request.browser_version
+            "  App: {:?} {:?}",
+            request.app_name, request.app_version
         )?;
         writeln!(
             output,

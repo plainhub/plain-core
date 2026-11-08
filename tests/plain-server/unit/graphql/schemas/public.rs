@@ -831,6 +831,8 @@ fn closed_fields_keep_named_enums_and_required_wrappers() {
             "[DiscoveryMethod!]!",
         ),
         ("type", "Session", "type", "SessionType!"),
+        ("type", "Session", "appName", "String!"),
+        ("type", "Session", "appVersion", "String!"),
         ("type", "PairingState", "phase", "PairingPhase!"),
         ("input", "PeerRecordInput", "status", "PeerStatus!"),
         ("input", "PeerRecordInput", "deviceType", "DeviceType!"),
@@ -864,7 +866,7 @@ fn closed_fields_keep_named_enums_and_required_wrappers() {
         ("DeviceType", "COMPUTER PHONE TABLET TV NAS OTHER"),
         ("PeerStatus", "PAIRED UNPAIRED CHANNEL"),
         ("DiscoveryMethod", "LAN DNS_SD BLE QR"),
-        ("SessionType", "WEB CUSTOM"),
+        ("SessionType", "LOGIN API_TOKEN"),
         (
             "PairingPhase",
             "STARTING PASSWORD_REQUIRED AUTHENTICATING PAIRING WAITING_CONFIRMATION COMMITTING SUCCEEDED FAILED CANCELLED",

@@ -128,7 +128,7 @@ pub(super) async fn run(
     let ecdh = EcdhSession::generate();
     let startup = state.host.startup();
     let mut request = json!({
-        "browserName":"PlainApp","browserVersion":startup.app_version,
+        "appName":"PlainApp","appVersion":startup.app_version,
         "osName":startup.os_name,"osVersion":startup.os_version,
         "isMobile":matches!(startup.device_type, crate::features::chat::enums::DeviceType::Phone | crate::features::chat::enums::DeviceType::Tablet),
         "ecdhPublicKey":base64_encode(&ecdh.public_key_bytes),

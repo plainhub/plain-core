@@ -85,12 +85,12 @@ fn session_save_get_and_touch() {
         url_token: "resource-key".into(),
         client_id: "client-1".into(),
         name: "Browser".into(),
-        r#type: crate::features::sessions::SessionType::Web,
+        r#type: crate::features::sessions::SessionType::Login,
         client_ip: "192.168.1.5".into(),
         os_name: "macOS".into(),
         os_version: "15.0".into(),
-        browser_name: "Chrome".into(),
-        browser_version: "120".into(),
+        app_name: "Chrome".into(),
+        app_version: "120".into(),
         token: "tok".into(),
         last_seen_at: Some("2026-01-01T00:00:00.000Z".into()),
         created_at: "2026-01-01T00:00:00.000Z".into(),
@@ -99,8 +99,8 @@ fn session_save_get_and_touch() {
     db.session_save(&row).unwrap();
 
     let got = db.session_get("client-1").unwrap().expect("session");
-    assert_eq!(got.r#type, crate::features::sessions::SessionType::Web);
-    assert_eq!(got.browser_name, "Chrome");
+    assert_eq!(got.r#type, crate::features::sessions::SessionType::Login);
+    assert_eq!(got.app_name, "Chrome");
     assert_eq!(got.url_token, row.url_token);
 
     db.session_touch(&[("client-1".into(), "2026-03-01T00:00:00.000Z".into())])
@@ -111,7 +111,7 @@ fn session_save_get_and_touch() {
         Some("2026-03-01T00:00:00.000Z")
     );
     // Touching must not disturb the rest of the row.
-    assert_eq!(touched.browser_version, "120");
+    assert_eq!(touched.app_version, "120");
 
     assert_eq!(db.session_list().unwrap().len(), 1);
     assert_eq!(db.session_delete("client-1").unwrap(), 1);
@@ -130,12 +130,12 @@ fn session_list_orders_by_last_active_desc() {
             url_token: "resource-key".into(),
             client_id: id.into(),
             name: id.into(),
-            r#type: crate::features::sessions::SessionType::Web,
+            r#type: crate::features::sessions::SessionType::Login,
             client_ip: "10.0.0.1".into(),
             os_name: String::new(),
             os_version: String::new(),
-            browser_name: String::new(),
-            browser_version: String::new(),
+            app_name: String::new(),
+            app_version: String::new(),
             token: String::new(),
             last_seen_at: Some(at.into()),
             created_at: at.into(),
@@ -344,12 +344,12 @@ fn serialized_field_names_are_snake_case() {
         url_token: "resource-key".into(),
         client_id: "c".into(),
         name: "n".into(),
-        r#type: crate::features::sessions::SessionType::Web,
+        r#type: crate::features::sessions::SessionType::Login,
         client_ip: "1.2.3.4".into(),
         os_name: String::new(),
         os_version: String::new(),
-        browser_name: String::new(),
-        browser_version: String::new(),
+        app_name: String::new(),
+        app_version: String::new(),
         token: "t".into(),
         last_seen_at: None,
         created_at: "2026-01-01T00:00:00.000Z".into(),
@@ -362,8 +362,8 @@ fn serialized_field_names_are_snake_case() {
         "client_ip",
         "os_name",
         "os_version",
-        "browser_name",
-        "browser_version",
+        "app_name",
+        "app_version",
         "last_seen_at",
         "created_at",
         "updated_at",
@@ -371,7 +371,7 @@ fn serialized_field_names_are_snake_case() {
         assert!(object.contains_key(key), "missing snake_case key {key}");
     }
     // The Rust keyword field is exposed under its plain name, not `r#type`.
-    assert_eq!(object["type"], "WEB");
+    assert_eq!(object["type"], "LOGIN");
 }
 
 #[cfg(feature = "chat")]
@@ -415,12 +415,12 @@ fn session_cache_row() -> SessionRow {
     SessionRow {
         client_id: "cache-client".into(),
         name: "Browser".into(),
-        r#type: crate::features::sessions::SessionType::Web,
+        r#type: crate::features::sessions::SessionType::Login,
         client_ip: "127.0.0.1".into(),
         os_name: String::new(),
         os_version: String::new(),
-        browser_name: String::new(),
-        browser_version: String::new(),
+        app_name: String::new(),
+        app_version: String::new(),
         token: "session-key".into(),
         url_token: "resource-key".into(),
         last_seen_at: None,
@@ -502,7 +502,7 @@ fn session_cache_tracks_mutations_clones_raw_sql_and_rollbacks() {
     );
     assert_eq!(
         db.session_get(&row.client_id).unwrap().unwrap().r#type,
-        crate::features::sessions::SessionType::Web
+        crate::features::sessions::SessionType::Login
     );
     db.session_delete(&row.client_id).unwrap();
     assert!(clone.session_get(&row.client_id).unwrap().is_none());

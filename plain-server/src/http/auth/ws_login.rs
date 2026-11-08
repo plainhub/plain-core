@@ -202,8 +202,8 @@ impl LoginAttempts {
                 request_id: id.clone(),
                 client_id: display(&request.client_id),
                 client_ip: display(&request.client_ip),
-                browser_name: display(&text(&request.request, "browserName")),
-                browser_version: display(&text(&request.request, "browserVersion")),
+                app_name: display(&text(&request.request, "appName")),
+                app_version: display(&text(&request.request, "appVersion")),
                 os_name: display(&text(&request.request, "osName")),
                 os_version: display(&text(&request.request, "osVersion")),
                 verification_code: match &request.protection {
@@ -440,12 +440,12 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> anyhow::Resul
         r#type: existing
             .as_ref()
             .map(|row| row.r#type)
-            .unwrap_or(plain_rs::features::sessions::SessionType::Web),
+            .unwrap_or(plain_rs::features::sessions::SessionType::Login),
         client_ip: request.client_ip.clone(),
         os_name: text(&request.request, "osName"),
         os_version: text(&request.request, "osVersion"),
-        browser_name: text(&request.request, "browserName"),
-        browser_version: text(&request.request, "browserVersion"),
+        app_name: text(&request.request, "appName"),
+        app_version: text(&request.request, "appVersion"),
         token: token.to_owned(),
         last_seen_at: existing
             .as_ref()
@@ -533,12 +533,23 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                     LoginProtection::DeviceConfirmation(channel)
                 }
             };
-            for field in ["browserName", "browserVersion", "osName", "osVersion"] {
+            for field in ["appName", "appVersion", "osName", "osVersion"] {
                 anyhow::ensure!(
                     request[field].is_string(),
                     "Invalid login metadata: {field}"
                 );
             }
+            let os_name = text(&request, "osName");
+            let canonical_os_name = match os_name.trim().to_ascii_lowercase().as_str() {
+                "darwin" | "mac" | "macos" | "mac os x" => "macOS",
+                "window" | "windows" | "win32" => "Windows",
+                "linux" => "Linux",
+                "android" => "Android",
+                "ios" => "iOS",
+                "ipados" => "iPadOS",
+                _ => os_name.as_str(),
+            };
+            request["osName"] = json!(canonical_os_name);
             anyhow::ensure!(
                 request["isMobile"].is_boolean(),
                 "Invalid login metadata: isMobile"

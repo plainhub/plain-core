@@ -73,7 +73,7 @@ fn offer(
         )
         .unwrap();
     let channel = server.finish(&reveal, now).unwrap();
-    let request = json!({"password":digest,"loginContext":keys.context,"browserName":"Test","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&client.public_key_bytes),"peer":peer});
+    let request = json!({"password":digest,"loginContext":keys.context,"appName":"Test","appVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&client.public_key_bytes),"peer":peer});
     let frame = serde_json::to_vec(&request).unwrap();
     let frame = keys.encrypt_request(&frame, now).unwrap();
     (
@@ -105,7 +105,7 @@ async fn web_login_ecdh_encrypted_response_signature_and_token_auth_survive_rest
         issued["token"]
     );
     let row = state.db.session_get("browser").unwrap().unwrap();
-    assert_eq!(row.r#type, plain_rs::features::sessions::SessionType::Web);
+    assert_eq!(row.r#type, plain_rs::features::sessions::SessionType::Login);
     assert_eq!(
         plain_rs::infrastructure::db::Db::open(
             &plain_rs::infrastructure::data_paths::DataPaths::new(dir.path()).database()

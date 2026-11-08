@@ -138,8 +138,8 @@ type Session {
 	clientIp: String!
 	osName: String!
 	osVersion: String!
-	browserName: String!
-	browserVersion: String!
+	appName: String!
+	appVersion: String!
 	lastSeenAt: Instant
 	lastActive: Instant!
 	createdAt: Instant!
@@ -147,8 +147,8 @@ type Session {
 }
 
 enum SessionType {
-	WEB
-	CUSTOM
+	LOGIN
+	API_TOKEN
 }
 
 type Temperature {

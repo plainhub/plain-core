@@ -13,7 +13,7 @@ fn session_store_and_authentication_rows_share_one_sqlite_authority() {
         .unwrap();
     let row = db.session_get("browser").unwrap().unwrap();
     assert_eq!(row.token, first.token);
-    assert_eq!(row.r#type, crate::features::sessions::SessionType::Custom);
+    assert_eq!(row.r#type, crate::features::sessions::SessionType::ApiToken);
     assert_eq!(token_key(&row.token).unwrap().len(), 32);
     db.session_delete("browser").unwrap();
     assert!(store.get("browser").unwrap().is_none());
@@ -77,7 +77,7 @@ fn session_types_preserve_storage_and_wire_values() {
             ..Default::default()
         })
         .unwrap();
-    for (kind, wire) in [(SessionType::Web, "WEB"), (SessionType::Custom, "CUSTOM")] {
+    for (kind, wire) in [(SessionType::Login, "LOGIN"), (SessionType::ApiToken, "API_TOKEN")] {
         let mut row = db.session_get("typed").unwrap().unwrap();
         row.r#type = kind;
         db.session_save(&row).unwrap();

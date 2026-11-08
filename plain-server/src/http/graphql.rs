@@ -11,7 +11,7 @@ fn bearer_value(value: &str) -> &str {
     value.split(' ').nth(1).unwrap_or("")
 }
 
-fn valid_custom_bearer(value: &str, session_token: &str) -> bool {
+fn valid_api_token_bearer(value: &str, session_token: &str) -> bool {
     let bearer = bearer_value(value);
     !bearer.is_empty()
         && !session_token.is_empty()
@@ -121,8 +121,8 @@ async fn execute(
             .ok_or(StatusCode::UNAUTHORIZED)?;
         (true, key)
     } else {
-        if session.r#type != plain_rs::features::sessions::SessionType::Custom
-            || !valid_custom_bearer(authorization.unwrap(), &session.token)
+        if session.r#type != plain_rs::features::sessions::SessionType::ApiToken
+            || !valid_api_token_bearer(authorization.unwrap(), &session.token)
         {
             return Err(StatusCode::UNAUTHORIZED);
         }

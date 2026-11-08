@@ -135,9 +135,14 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
     let client = state.host.startup();
     assert!(!client.os_name.is_empty());
     assert!(!client.os_version.is_empty());
-    assert_eq!(request["request"]["osName"], client.os_name);
+    let os_name = if cfg!(target_os = "macos") {
+        "macOS"
+    } else {
+        client.os_name.as_str()
+    };
+    assert_eq!(request["request"]["osName"], os_name);
     assert_eq!(request["request"]["osVersion"], client.os_version);
-    assert_eq!(request["request"]["browserVersion"], client.app_version);
+    assert_eq!(request["request"]["appVersion"], client.app_version);
 
     let waiting = phase(
         &state,
@@ -180,10 +185,10 @@ async fn passwordless_native_management_displays_the_same_code_and_commits_only_
             .token
     );
     let session = remote_state.db.session_get(&local_id).unwrap().unwrap();
-    assert_eq!(session.os_name, client.os_name);
+    assert_eq!(session.os_name, os_name);
     assert_eq!(session.os_version, client.os_version);
-    assert_eq!(session.browser_name, "PlainApp");
-    assert_eq!(session.browser_version, client.app_version);
+    assert_eq!(session.app_name, "PlainApp");
+    assert_eq!(session.app_version, client.app_version);
     assert_eq!(base64_decode(&peer.key).len(), 32);
     assert_ne!(peer.key, peer.token);
     local.shutdown().await;

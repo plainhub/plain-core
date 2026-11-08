@@ -63,7 +63,7 @@ async fn browser_login(
         .await
         .unwrap();
     let session = plain_libs::crypto::EcdhSession::generate();
-    let request = json!({"browserName":"Fixture","browserVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
+    let request = json!({"appName":"Fixture","appVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
     let encrypted = channel
         .encrypt_request(&serde_json::to_vec(&request).unwrap(), now_ms())
         .unwrap();
