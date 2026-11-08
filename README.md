@@ -156,7 +156,22 @@ it does not maintain a second set of handlers.
 
 Requires Rust 1.99+ and a C compiler. Building ONNX Runtime from source requires Python 3.10+.
 
-To build with an already prepared ONNX Runtime, set `PLAIN_ONNX_RUNTIME_DIR` to its artifact directory and `PLAIN_ONNX_RUNTIME_SHA256` to the library digest from a trusted build record. Cargo uses CMake 3.19+ to validate the artifact, target, source recipe and notices without running Python.
+For builds with prepared ONNX Runtime artifacts, set `PLAIN_ONNX_RUNTIME_MANIFEST`
+to the absolute path of a trusted JSON file mapping Rust target triples to
+their library SHA-256 digests. Obtain the manifest independently from the trusted
+build record. Place each artifact in a directory named after its target next to
+the manifest. The producer prepares each target with the existing recipe:
+
+```sh
+python3 plain-libs/native/ai_image_search/prepare_onnxruntime.py --target "$target" --output "$artifact_root/$target"
+```
+
+Each target directory contains the native library, `runtime.json`, `LICENSE`
+and `ThirdPartyNotices.txt`. Cargo uses CMake 3.19+ to verify the selected
+artifact and stage it in the usual build output without running Python.
+`PLAIN_ONNX_RUNTIME_DIR` still controls the output directory when set by a consumer.
+
+For a single prepared runtime already in place, set `PLAIN_ONNX_RUNTIME_DIR` and `PLAIN_ONNX_RUNTIME_SHA256` instead.
 
 ```sh
 cargo check --workspace --locked    # Check all packages for compile errors
