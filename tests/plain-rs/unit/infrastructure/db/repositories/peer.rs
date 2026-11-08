@@ -186,7 +186,7 @@ fn peer_url_helpers_use_best_ip_and_port() {
     );
     assert_eq!(
         peer.file_url("abc").unwrap(),
-        "https://203.0.113.7:8443/fs?id=abc"
+        "https://203.0.113.7:8443/fs?id=abc&action=preview"
     );
     // Default HTTPS port is omitted.
     peer.port = Some(443);

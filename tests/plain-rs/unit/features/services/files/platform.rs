@@ -414,9 +414,12 @@ async fn sdk_private_paths_skip_host_and_external_task_batches_sample_one_live_g
 
 #[tokio::test]
 async fn automatic_indexing_excludes_private_hidden_nomedia_and_app_storage_paths() {
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")));
     let directory = tempfile::Builder::new()
         .prefix("external-index-")
-        .tempdir_in(std::env::current_dir().unwrap())
+        .tempdir_in(home)
         .unwrap();
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();

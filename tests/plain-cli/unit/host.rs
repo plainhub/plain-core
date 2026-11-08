@@ -204,6 +204,8 @@ async fn completion_scan_runs_directly_without_another_host_request() {
     let directory = Directory(home.join(uuid::Uuid::new_v4().to_string()));
     std::fs::create_dir(&directory.0).unwrap();
     let core = Arc::new(ContentServer::open(&directory.0.as_path().join("core")).unwrap());
+    crate::storage::configure_index(&core.runtime().db, std::slice::from_ref(&directory.0))
+        .unwrap();
     core.native_media_catalog()
         .unwrap()
         .configure_scan_directories(None)

@@ -59,7 +59,7 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
     let url = format!("http://127.0.0.1:{}/fs", server.port);
     let response = client
         .get(&url)
-        .query(&[("id", &encoded)])
+        .query(&[("id", encoded.as_str()), ("action", "download")])
         .bearer_auth(&token)
         .header("range", "bytes=2-7")
         .send()
@@ -70,7 +70,7 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
     assert_eq!(response.bytes().await.unwrap().as_ref(), b"ared a");
     let response = client
         .get(&url)
-        .query(&[("id", &encoded)])
+        .query(&[("id", encoded.as_str()), ("action", "download")])
         .bearer_auth(&token)
         .header("range", "bytes=100-")
         .send()

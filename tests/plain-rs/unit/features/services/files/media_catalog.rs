@@ -285,7 +285,7 @@ fn counting_one_media_kind_does_not_scan_unrelated_files() {
 #[test]
 fn counts_and_bucket_facts_use_a_covering_index_without_sorting_all_media() {
     let db = crate::infrastructure::db::Db::open(std::path::Path::new(":memory:")).unwrap();
-    db.with_conn(|c|c.execute_batch("INSERT INTO volumes VALUES('v','v','/media',1); WITH RECURSIVE n(x) AS(VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,size_bytes) SELECT 'f'||x,'v','images/'||x||'.jpg',x||'.jpg','IMAGE','2026',100 FROM n;")).unwrap();
+    db.with_conn(|c|c.execute_batch("INSERT INTO volumes(id,identity,path,is_available) VALUES('v','v','/media',1); WITH RECURSIVE n(x) AS(VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,size_bytes) SELECT 'f'||x,'v','images/'||x||'.jpg',x||'.jpg','IMAGE','2026',100 FROM n;")).unwrap();
     let (base, args) = super::selection(&db, crate::features::enums::DataType::Image, "").unwrap();
     for sql in [
         base.replace("{columns}", "COUNT(*)"),

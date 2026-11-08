@@ -893,17 +893,12 @@ async fn an_unmounted_source_is_a_coverage_gap_and_does_not_retire_catalog_rows(
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
     let id = state.db.with_conn(|connection| -> rusqlite::Result<String> {
-        connection.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('offline-fixture','offline-fixture',?1,1)", [source.to_str().unwrap()])?;
+        connection.execute("INSERT INTO volumes(id,identity,path,is_available,index_mode) VALUES('offline-fixture','offline-fixture',?1,1,'BLOCKLIST')", [source.to_str().unwrap()])?;
         let volume_id: String = connection.query_row("SELECT id FROM volumes ORDER BY rowid DESC LIMIT 1", [], |row| row.get(0)).unwrap();
         connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,favorited) VALUES('file-'||'missing.rs',?1,'missing.rs','missing.rs','FILE','2026-01-01T00:00:00.000Z',1)", [volume_id])?;
         Ok("file-missing.rs".into())
     }).unwrap();
     let catalog = NativeMediaCatalog::new(state.clone());
-    crate::features::services::files::indexing::set_directories(
-        &catalog.state.db,
-        &[source.to_string_lossy().into_owned()],
-    )
-    .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     let result = catalog.scan_source_directories("/").await.unwrap();
     assert_eq!(
@@ -1180,8 +1175,7 @@ async fn sdk_host_restores_the_configured_index_without_scanning_on_startup() {
 
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
-async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying() {
-    use serde_json::json;
+async fn changed_index_directories_refresh_all_shared_media_lists_without_copying() {
     let directory = directory_scan_fixture();
     let folders: Vec<_> = ["Documents", "Music"]
         .into_iter()
@@ -1197,7 +1191,6 @@ async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying
     }
     let core = crate::test_runtime::Core::open(&directory.path().join("private")).unwrap();
     let state = core.runtime_state();
-    state.file_platform.use_sdk_for_test();
     state
         .media_scans
         .set_defaults(crate::features::files::index_scope::Defaults {
@@ -1205,37 +1198,23 @@ async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying
             excluded_names: vec![],
         })
         .unwrap();
-    let grants = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
-    let shared = grants.clone();
-    let (generation, mut requests) = state.host.connect();
-    let host = state.host.clone();
-    let responder = tokio::spawn(async move {
-        while let Some(request) = requests.recv().await {
-            let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => json!(["MEDIA_SCAN"]),
-                "systemMountFacts" => json!(
-                    shared
-                        .lock()
-                        .unwrap()
-                        .iter()
-                        .map(|path| json!({"path":path,"driveType":"INTERNAL_STORAGE"}))
-                        .collect::<Vec<_>>()
-                ),
-                "systemAccessFacts" => json!({"granted":{"FILES":true}}),
-                method => panic!("Unexpected host request: {method}"),
-            };
-            host.reply(generation, json!({"id":request["id"],"result":result}))
-                .unwrap();
-        }
-    });
     let catalog = NativeMediaCatalog::new(state.clone());
-    host_connected(state.clone(), generation).await.unwrap();
-    for indices in [vec![0], vec![0, 1], vec![1]] {
-        *grants.lock().unwrap() = indices
+    catalog.configure_scan_directories(None).unwrap();
+    let volume_id = state.db.register_volume(&folders[0]).unwrap();
+    for indices in [&[0][..], &[0, 1], &[1]] {
+        let included = indices
             .iter()
-            .map(|index| folders[*index].to_string_lossy().into_owned())
+            .map(|&index| folders[index].to_string_lossy().into_owned())
             .collect();
-        access_changed(state.clone(), generation).await.unwrap();
+        crate::features::services::files::indexing::set(
+            &state,
+            &volume_id,
+            crate::infrastructure::db::IndexMode::Allowlist,
+            included,
+            Vec::new(),
+        )
+        .await
+        .unwrap();
         state.media_scans.wait_background().await.unwrap();
         let expected = indices.len() as i64;
         for kind in [DataType::Audio, DataType::Video, DataType::Doc] {
@@ -1247,8 +1226,6 @@ async fn changed_directory_grants_refresh_all_shared_media_lists_without_copying
         std::fs::read(fixtures.join("audio-tagged.mp3")).unwrap()
     );
     assert!(folders[0].join("document.pdf").is_file());
-    state.host.disconnect(generation);
-    responder.await.unwrap();
     core.stop_core().await;
 }
 
@@ -1304,8 +1281,8 @@ async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
         .db
         .set_volume_index(
             &volume.id,
-            volume.index_mode,
-            &volume.included_dirs,
+            crate::infrastructure::db::IndexMode::Blocklist,
+            &[],
             &[relative],
         )
         .unwrap();

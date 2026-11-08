@@ -120,8 +120,8 @@ async fn fs_animated_png_preserves_frames_for_both_extensions_and_preview_sizes(
         let path = files.path().join(name);
         std::fs::write(&path, original).unwrap();
         let id = file_id(&key, path.to_str().unwrap());
-        for options in ["", "&size=sm", "&size=lg", "&action=download"] {
-            let response = call_fs(&state, &format!("id={id}&action=preview{options}"), &[]).await;
+        for options in ["preview", "preview&size=sm", "preview&size=lg", "download"] {
+            let response = call_fs(&state, &format!("id={id}&action={options}"), &[]).await;
             assert_eq!(response.status(), StatusCode::OK, "{name}{options}");
             assert_eq!(response.headers()[header::CONTENT_TYPE], mime);
             assert_eq!(body_bytes(response).await, original, "{name}{options}");

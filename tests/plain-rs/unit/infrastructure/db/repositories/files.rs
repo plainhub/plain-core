@@ -230,7 +230,7 @@ fn visibility_batch_uses_path_indexes_instead_of_scanning_unrelated_files() {
     };
     let db = Db::open(Path::new(":memory:")).unwrap();
     db.with_conn(|c| {
-        c.execute("INSERT INTO volumes VALUES('v','v','/media',1)", []).unwrap();
+        c.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('v','v','/media',1)", []).unwrap();
         c.execute_batch("WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<10000) INSERT INTO files(id,volume_id,path,file_name,kind,updated_at) SELECT 'f'||x,'v','images/'||x||'.jpg',x||'.jpg','IMAGE','2026-01-01' FROM n;").unwrap();
     });
     let scope = crate::features::files::index_scope::Scope {
@@ -286,7 +286,7 @@ fn visibility_batch_uses_path_indexes_instead_of_scanning_unrelated_files() {
 #[test]
 fn visibility_subtrees_preserve_missing_trash_boundaries_and_nested_volumes() {
     let db = Db::open(Path::new(":memory:")).unwrap();
-    db.with_conn(|c| c.execute_batch("INSERT INTO volumes VALUES('v','v','/media',1),('nested','nested','/media/a/mount',0);
+    db.with_conn(|c| c.execute_batch("INSERT INTO volumes(id,identity,path,is_available) VALUES('v','v','/media',1),('nested','nested','/media/a/mount',0);
         INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,missing,favorited,trashed_at,original_path) VALUES
         ('a','v','a','a','DIRECTORY','2026',0,1,NULL,NULL),
         ('child','v','a/你好%_.jpg','你好%_.jpg','IMAGE','2026',0,1,NULL,NULL),

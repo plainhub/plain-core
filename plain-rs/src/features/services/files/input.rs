@@ -89,7 +89,7 @@ pub async fn prepare(
         let mut skip = if seekable { 0 } else { source.offset as u64 };
         let mut remaining = (source.length >= 0).then_some(source.length as u64);
         let mut written = 0u64;
-        let mut buffer = [0u8; 64 * 1024];
+        let mut buffer = vec![0u8; 64 * 1024];
         loop {
             if skip == 0 && remaining == Some(0) {
                 break;

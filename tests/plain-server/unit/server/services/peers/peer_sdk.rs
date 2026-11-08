@@ -205,10 +205,10 @@ async fn ble_incoming_file_uses_root_encrypted_fid_and_eof_without_native_http_b
         &format!("fid:{}", imported.fid_suffix),
         &plain_rs::features::prefs::ensure_url_token(&state.prefs),
     );
-    for (offset, length, expected) in [
-        (0, 6, b"actual".as_slice()),
-        (6, 8192, b" bytes".as_slice()),
-        (12, 8192, b"".as_slice()),
+    for (offset, length, expected_status, expected) in [
+        (0, 6, 206, b"actual".as_slice()),
+        (6, 8192, 206, b" bytes".as_slice()),
+        (12, 8192, 416, b"".as_slice()),
     ] {
         let request = plain_rs::infrastructure::protocols::ble::Request::FileChunk {
             client_id: "peer".into(),
@@ -223,7 +223,7 @@ async fn ble_incoming_file_uses_root_encrypted_fid_and_eof_without_native_http_b
             .unwrap();
         let (status, body) =
             plain_rs::infrastructure::protocols::ble::decode_response(&bytes).unwrap();
-        assert_eq!(status, 200);
+        assert_eq!(status, expected_status);
         assert_eq!(body, expected);
     }
     assert!(!state.host.connected());

@@ -101,9 +101,10 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
                     } else {
                         &data[offset..data.len().min(offset + 8192)]
                     };
+                    let status = if bytes.is_empty() { 416 } else { 206 };
                     ble.reply_for_test(
                         &request["params"],
-                        plain_rs::infrastructure::protocols::ble::response(200, bytes).unwrap(),
+                        plain_rs::infrastructure::protocols::ble::response(status, bytes).unwrap(),
                     )
                 }
                 "peerTransportSocketCloseAll" => json!(true),
@@ -256,7 +257,7 @@ async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_byt
                         count.fetch_add(1, Ordering::SeqCst);
                         ble.reply_for_test(
                             &request["params"],
-                            plain_rs::infrastructure::protocols::ble::response(200, b"abc")
+                            plain_rs::infrastructure::protocols::ble::response(206, b"abc")
                                 .unwrap(),
                         )
                     }
