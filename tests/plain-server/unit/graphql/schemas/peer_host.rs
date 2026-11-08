@@ -66,13 +66,13 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     peer.public_key = plain_libs::utils::base64::base64_encode(&public_key);
     peers::save(&db, &[peer], SaveMode::Insert).unwrap();
     let server = ContentServer::start(dir.path(), &token, prefs.clone()).unwrap();
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, https) = server
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem,
+            cert_key,
         )
         .await
         .unwrap();

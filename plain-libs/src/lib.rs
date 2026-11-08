@@ -18,6 +18,8 @@ pub mod media;
 #[cfg(feature = "phone")]
 pub mod phone;
 pub mod platform;
+#[cfg(feature = "regex")]
+pub mod regex;
 #[cfg(feature = "tls")]
 pub mod tls;
 pub mod utils;

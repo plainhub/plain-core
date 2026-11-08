@@ -49,13 +49,13 @@ fn fixture() -> (tempfile::TempDir, crate::server::ContentServer) {
 #[cfg(feature = "http_transport")]
 async fn public_fixture() -> (tempfile::TempDir, crate::server::ContentServer, u16) {
     let (dir, server) = fixture();
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (http, _) = server
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem,
+            cert_key,
         )
         .await
         .unwrap();

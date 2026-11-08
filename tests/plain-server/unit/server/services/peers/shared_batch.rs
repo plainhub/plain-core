@@ -14,10 +14,10 @@ async fn tls() -> (u16, tokio::task::JoinHandle<()>, Arc<Notify>, Arc<Notify>) {
         extract::Query,
         routing::get,
     };
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let config = plain_rs::infrastructure::tls_identity::config(
-        cert.cert.pem().as_bytes(),
-        cert.key_pair.serialize_pem().as_bytes(),
+        cert_pem.as_slice(),
+        cert_key.as_slice(),
     )
     .unwrap();
     let socket = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

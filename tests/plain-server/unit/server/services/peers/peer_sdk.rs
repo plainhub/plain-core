@@ -35,13 +35,13 @@ fn peer(id: &str, port: u16, pk: &[u8], ip: &str) -> DPeer {
     row
 }
 async fn public(server: &ContentServer) -> u16 {
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     server
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem,
+            cert_key,
         )
         .await
         .unwrap()

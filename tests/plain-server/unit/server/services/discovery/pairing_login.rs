@@ -53,13 +53,13 @@ async fn server() -> (tempfile::TempDir, crate::server::ContentServer, u16) {
         .prefs
         .set("device_name", "Fixture")
         .unwrap();
-    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, port) = server
         .start_public(
             0,
             0,
-            certificate.cert.pem().into_bytes(),
-            certificate.key_pair.serialize_pem().into_bytes(),
+            certificate_pem,
+            certificate_key,
         )
         .await
         .unwrap();

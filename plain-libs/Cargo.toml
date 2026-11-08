@@ -15,7 +15,8 @@ description = "Reusable cryptography, media, file, format and native components"
 "time" = ["dep:chrono"]
 "sqlite" = ["time", "dep:rusqlite"]
 "html" = []
-"phone" = ["dep:regex", "dep:flate2", "dep:serde_json"]
+"regex" = ["dep:regex-automata", "dep:regex-syntax"]
+"phone" = ["regex", "dep:flate2", "dep:serde_json"]
 "phone-batch" = ["phone", "tokio/rt"]
 "media" = ["time", "dep:anyhow", "dep:encoding_rs", "dep:flate2", "dep:paste"]
 "thumbnails" = ["dep:tiff", "dep:heic-rs", "dep:rav1d", "media", "crypto", "dep:image", "dep:tempfile", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util", "dep:thiserror"]
@@ -29,7 +30,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "unix-platform" = ["dep:anyhow"]
 "storage-platform" = ["volumes"]
 "linux-platform" = ["storage-platform", "dep:serde_json"]
-"ai-image-search" = ["dep:image", "dep:serde_json", "dep:cc", "dep:aho-corasick", "dep:regex-automata", "dep:regex-syntax", "dep:paste", "dep:regex", "dep:thiserror", "dep:unicode-normalization-alignments"]
+"ai-image-search" = ["dep:image", "dep:serde_json", "dep:cc", "dep:aho-corasick", "regex", "regex-automata/dfa", "regex-automata/nfa", "regex-automata/perf", "dep:paste", "dep:thiserror", "dep:unicode-normalization-alignments"]
 "test-seams" = ["dep:tempfile"]
 
 "peg" = ["dep:memchr"]
@@ -57,7 +58,6 @@ description = "Reusable cryptography, media, file, format and native components"
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util", "sync"] }
 "anyhow" = { "version" = "1", "optional" = true }
 "chrono" = { "version" = "0.4", "features" = ["serde"], "optional" = true }
-"regex" = { "version" = "1", "optional" = true }
 "rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "backup", "cache"], "optional" = true }
 "flate2" = { version = "1", optional = true }
 "serde_json" = { "version" = "1", "optional" = true }
@@ -70,7 +70,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "chacha20poly1305" = { "version" = "0.10", "optional" = true }
 "p256" = { "version" = "0.14", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
 "ed25519-dalek" = { "version" = "2", "optional" = true }
-"rcgen" = { "version" = "0.13", "default-features" = false, "features" = ["pem", "ring"], "optional" = true }
+"rcgen" = { "version" = "0.13", "default-features" = false, "features" = ["ring"], "optional" = true }
 "der" = { version = "0.8", features = ["std", "derive"], optional = true }
 "pkcs12" = { version = "=0.2.0-pre.0", default-features = false, features = ["kdf"], optional = true }
 "pkcs5" = { version = "0.8", features = ["alloc", "pbes2"], optional = true }
@@ -90,7 +90,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "rav1d" = { path = "codecs/rav1d", optional = true }
 
 "aho-corasick" = { "version" = "=1.1.5", "optional" = true }
-"regex-automata" = { version = "0.4", default-features = false, features = ["std", "syntax", "meta", "nfa", "dfa", "hybrid", "perf", "unicode"], optional = true }
+"regex-automata" = { version = "0.4", default-features = false, features = ["std", "syntax", "meta", "hybrid", "dfa-onepass", "nfa-backtrack", "perf-inline", "perf-literal", "unicode"], optional = true }
 "regex-syntax" = { version = "0.8", default-features = false, features = ["std", "unicode"], optional = true }
 "memchr" = { "version" = "=2.8.3", "optional" = true }
 "paste" = { "version" = "=1.0.15", "optional" = true, "features" = [] }

@@ -148,13 +148,13 @@ async fn passwordless_server() -> (tempfile::TempDir, crate::server::ContentServ
         json!("unexposed-password"),
     )
     .unwrap();
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (port, _) = server
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem,
+            cert_key,
         )
         .await
         .unwrap();

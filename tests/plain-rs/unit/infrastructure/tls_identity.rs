@@ -2,11 +2,12 @@ use super::*;
 
 #[test]
 fn config_preserves_chains_mixed_sections_line_endings_and_alpn() {
-    let first = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let second = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let certificate = first.cert.pem();
-    let key = first.key_pair.serialize_pem();
-    let chain = format!("text before PEM\n{key}{certificate}{}", second.cert.pem());
+    let (certificate, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (second_certificate, second_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let certificate = String::from_utf8(certificate).unwrap();
+    let key = String::from_utf8(key).unwrap();
+    let second_certificate = String::from_utf8(second_certificate).unwrap();
+    let chain = format!("text before PEM\n{key}{certificate}{second_certificate}");
     let mixed_key = format!("{certificate}{key}");
     let configured = config(chain.as_bytes(), mixed_key.as_bytes()).unwrap();
     assert_eq!(
@@ -28,7 +29,7 @@ fn config_preserves_chains_mixed_sections_line_endings_and_alpn() {
     assert!(
         config(
             certificate.as_bytes(),
-            second.key_pair.serialize_pem().as_bytes()
+            second_key.as_slice()
         )
         .is_err()
     );
@@ -36,9 +37,9 @@ fn config_preserves_chains_mixed_sections_line_endings_and_alpn() {
 
 #[test]
 fn pem_failures_are_rejected_without_skipping_a_malformed_recognized_section() {
-    let identity = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let certificate = identity.cert.pem();
-    let key = identity.key_pair.serialize_pem();
+    let (certificate, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let certificate = String::from_utf8(certificate).unwrap();
+    let key = String::from_utf8(key).unwrap();
     for malformed in [
         "-----BEGIN CERTIFICATE-----\n@@@\n-----END CERTIFICATE-----\n",
         "-----BEGIN CERTIFICATE-----\nAQID\n",
@@ -80,9 +81,9 @@ fn private_key_reader_preserves_all_three_pem_encodings_and_first_key_selection(
             kind
         );
     }
-    let identity = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let certificate = identity.cert.pem();
-    let key = identity.key_pair.serialize_pem();
+    let (certificate, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let certificate = String::from_utf8(certificate).unwrap();
+    let key = String::from_utf8(key).unwrap();
     let following = "-----BEGIN PRIVATE KEY-----\n@@@\n-----END PRIVATE KEY-----\n";
     assert!(
         config(
@@ -183,21 +184,22 @@ fn pkcs12_import_persists_a_matching_identity_and_failed_import_preserves_it() {
 #[test]
 fn certificate_fingerprint_hashes_the_leaf_der() {
     use sha2::{Digest, Sha256};
-    let leaf = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let other = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let expected = plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(leaf.cert.der().as_ref()));
+    let (leaf, _) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (other, _) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let der = CertificateDer::from_pem_slice(&leaf).unwrap();
+    let expected = plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(der.as_ref()));
     assert_eq!(
-        certificate_sha256(leaf.cert.pem().as_bytes()).unwrap(),
+        certificate_sha256(&leaf).unwrap(),
         expected
     );
     let chain = format!(
         "{}{}",
-        leaf.cert.pem().replace('\n', "\r\n"),
-        other.cert.pem()
+        String::from_utf8(leaf).unwrap().replace('\n', "\r\n"),
+        std::str::from_utf8(&other).unwrap()
     );
     assert_eq!(certificate_sha256(chain.as_bytes()).unwrap(), expected);
     assert_ne!(
-        certificate_sha256(other.cert.pem().as_bytes()).unwrap(),
+        certificate_sha256(&other).unwrap(),
         expected
     );
     assert!(certificate_sha256(b"invalid certificate").is_err());

@@ -17,7 +17,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use regex::Regex;
+use plain_libs::regex;
 use serde_json::{Value, json};
 
 use plain_libs::utils::image_dimensions;
@@ -103,8 +103,9 @@ fn optional(s: &str) -> Option<String> {
 
 /// Escape-rules light: find the value captured inside `content` of an HTML tag.
 fn og_value(html: &str, pattern: &str) -> Option<String> {
-    let re = Regex::new(&format!("(?i){pattern}")).ok()?;
-    re.captures(html).map(|c| c[1].to_string())
+    let re = regex::compile(&format!("(?i){pattern}")).ok()?;
+    let span = regex::captures(&re, html)?.get_group(1)?;
+    Some(html[span.range()].to_owned())
 }
 
 /// `og:title` wins over the plain `<title>`; fall back to `<title>` when no

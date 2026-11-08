@@ -2,7 +2,7 @@ use super::{
     Model, NormalizedString, Normalizer, Offsets, PreTokenizedString, Token, normalizer::Range,
 };
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
-use regex::Regex;
+use crate::regex::{self, Regex};
 use serde::{Deserialize, Serialize, Serializer, ser::SerializeSeq};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -84,10 +84,10 @@ impl std::hash::Hash for AddedToken {
 
 type MatchingSet = (AhoCorasick, Vec<u32>);
 
-static STARTS_WITH_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\w").unwrap());
-static ENDS_WITH_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\w$").unwrap());
-static RIGHTMOST_SPACE_AT_START: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*").unwrap());
-static LEFTMOST_SPACE_AT_END: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*$").unwrap());
+static STARTS_WITH_WORD: LazyLock<Regex> = LazyLock::new(|| regex::compile(r"^\w").unwrap());
+static ENDS_WITH_WORD: LazyLock<Regex> = LazyLock::new(|| regex::compile(r"\w$").unwrap());
+static RIGHTMOST_SPACE_AT_START: LazyLock<Regex> = LazyLock::new(|| regex::compile(r"^\s*").unwrap());
+static LEFTMOST_SPACE_AT_END: LazyLock<Regex> = LazyLock::new(|| regex::compile(r"\s*$").unwrap());
 
 fn ends_with_word(sentence: &str) -> bool {
     ENDS_WITH_WORD.is_match(sentence)

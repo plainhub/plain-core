@@ -1,4 +1,4 @@
-use regex::Regex;
+use crate::regex;
 
 use super::*;
 use crate::tokenizer::{OffsetReferential, OffsetType};
@@ -101,7 +101,7 @@ fn non_legacy_meta_space() {
 
     let pretok = Metaspace::new('▁', PrependScheme::First, false);
     let mut pretokenized = PreTokenizedString::from("Hey my friend <s>how▁are you");
-    let re_ref = Regex::new(r"(<s>)").unwrap();
+    let re_ref = regex::compile(r"(<s>)").unwrap();
     pretokenized
         .split(|_, sequence| sequence.split(&re_ref, SplitDelimiterBehavior::Isolated))
         .expect("Bad split");

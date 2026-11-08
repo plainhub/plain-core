@@ -79,7 +79,7 @@ impl Split {
     ) -> Result<Self> {
         let pattern: SplitPattern = pattern.into();
         let regex = match &pattern {
-            SplitPattern::String(s) => SysRegex::new(&regex::escape(s))?,
+            SplitPattern::String(s) => SysRegex::new(&crate::regex::escape(s))?,
             SplitPattern::Regex(r) => SysRegex::new(r)?,
         };
 

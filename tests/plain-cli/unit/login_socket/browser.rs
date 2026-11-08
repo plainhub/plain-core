@@ -88,13 +88,13 @@ async fn local_approval_socket_controls_real_passwordless_browser_sessions() {
     state.prefs.set("password_type", "NONE").unwrap();
     state.prefs.set("login_require_approval", true).unwrap();
     state.prefs.set("password", "unexposed-password").unwrap();
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (port, _) = core
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem,
+            cert_key,
         )
         .await
         .unwrap();

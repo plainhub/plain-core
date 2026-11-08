@@ -55,31 +55,38 @@ pub fn generate_pem(san_names: &[String]) -> io::Result<(Vec<u8>, Vec<u8>)> {
     let CertifiedKey { cert, key_pair } =
         generate_simple_self_signed(san_names.to_vec()).map_err(io::Error::other)?;
     Ok((
-        cert.pem().into_bytes(),
-        key_pair.serialize_pem().into_bytes(),
+        pem(b"CERTIFICATE", cert.der().as_ref(), b"\r\n"),
+        pem(b"PRIVATE KEY", key_pair.serialized_der(), b"\r\n"),
     ))
+}
+
+fn pem(label: &[u8], bytes: &[u8], newline: &[u8]) -> Vec<u8> {
+    let encoded = crate::utils::base64::base64_encode(bytes);
+    let mut text = Vec::with_capacity(
+        30 + 2 * label.len() + encoded.len() + (encoded.len().div_ceil(64) + 2) * newline.len(),
+    );
+    text.extend_from_slice(b"-----BEGIN ");
+    text.extend_from_slice(label);
+    text.extend_from_slice(b"-----");
+    text.extend_from_slice(newline);
+    for line in encoded.as_bytes().chunks(64) {
+        text.extend_from_slice(line);
+        text.extend_from_slice(newline);
+    }
+    text.extend_from_slice(b"-----END ");
+    text.extend_from_slice(label);
+    text.extend_from_slice(b"-----");
+    text.extend_from_slice(newline);
+    text
 }
 
 pub fn decode_pkcs12(bytes: &[u8], password: &str) -> Result<(Vec<u8>, Vec<u8>), String> {
     let (chain, key) = pkcs12::decode(bytes, password)?;
-    let pem = |label: &str, bytes: &[u8]| {
-        let encoded = crate::utils::base64::base64_encode(bytes);
-        let mut text = format!("-----BEGIN {label}-----\n");
-        for line in encoded.as_bytes().chunks(64) {
-            text.push_str(std::str::from_utf8(line).unwrap());
-            text.push('\n');
-        }
-        text.push_str(&format!("-----END {label}-----\n"));
-        text
-    };
-    let certificates = chain
-        .iter()
-        .map(|cert| pem("CERTIFICATE", cert))
-        .collect::<String>();
-    Ok((
-        certificates.into_bytes(),
-        pem("PRIVATE KEY", &key).into_bytes(),
-    ))
+    let mut certificates = Vec::new();
+    for cert in chain {
+        certificates.extend(pem(b"CERTIFICATE", &cert, b"\n"));
+    }
+    Ok((certificates, pem(b"PRIVATE KEY", &key, b"\n")))
 }
 
 mod pkcs12;

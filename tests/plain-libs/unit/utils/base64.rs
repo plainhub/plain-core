@@ -81,3 +81,11 @@ fn standard_decoding_preserves_padding_alphabet_and_unused_bit_checks() {
     }
     assert_eq!(base64_decode_checked("Zg").unwrap(), b"f");
 }
+
+#[test]
+fn complete_blocks_and_tail_use_the_requested_alphabet() {
+    let mut bytes = [0xfb, 0xff, 0xbf].repeat(64);
+    bytes.extend_from_slice(&[0xfb, 0xff]);
+    assert_eq!(base64_encode(&bytes), "+/+/".repeat(64) + "+/8=");
+    assert_eq!(base64_encode_url_safe(&bytes), "-_-_".repeat(64) + "-_8=");
+}

@@ -791,14 +791,14 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
 async fn fs_thumbnail_latency_benchmark() {
     let (_root, core, _state, key) = test_state();
     let source = tempfile::tempdir().unwrap();
-    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let pem = certificate.cert.pem();
+    let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let pem = String::from_utf8(certificate_pem).unwrap();
     let (_, port) = core
         .start_public(
             0,
             0,
             pem.clone().into_bytes(),
-            certificate.key_pair.serialize_pem().into_bytes(),
+            certificate_key,
         )
         .await
         .unwrap();

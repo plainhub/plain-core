@@ -32,13 +32,13 @@ impl Node {
         let core = Arc::new(
             ContentServer::open_with_cache(&data, &directory.path().join("cache")).unwrap(),
         );
-        let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+        let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
         let (_, port) = core
             .start_public(
                 0,
                 0,
-                certificate.cert.pem().into_bytes(),
-                certificate.key_pair.serialize_pem().into_bytes(),
+                certificate_pem,
+                certificate_key,
             )
             .await
             .unwrap();

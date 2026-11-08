@@ -1,10 +1,10 @@
-use regex::Regex;
+use plain_libs::regex::{self, Regex};
 use std::collections::HashSet;
 use std::sync::OnceLock;
 fn url_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?i)https?://(?:[-\w.])+(?:\:[0-9]+)?(?:/(?:[\w/_.-]*(?:\?[\w&=%.+-]*)?(?:#[\w.-]*)?)?)?")
+        regex::compile(r"(?i)https?://(?:[-\w.])+(?:\:[0-9]+)?(?:/(?:[\w/_.-]*(?:\?[\w&=%.+-]*)?(?:#[\w.-]*)?)?)?")
             .expect("url regex")
     })
 }
@@ -15,7 +15,7 @@ pub fn extract_urls(text: &str) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut urls = Vec::new();
     for m in url_regex().find_iter(text) {
-        let url = m.as_str();
+        let url = &text[m.range()];
         if is_valid_url(url) && seen.insert(url.to_string()) {
             urls.push(url.to_string());
             if urls.len() == 5 {

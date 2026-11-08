@@ -27,13 +27,13 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
     peers::save(&db, &[peer.clone()], SaveMode::Insert).unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[1; 32]);
     let server = ContentServer::start(path.parent().unwrap(), &token, prefs.clone()).unwrap();
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (http, _) = server
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem.clone(),
+            cert_key.clone(),
         )
         .await
         .unwrap();
@@ -208,13 +208,13 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
         b_prefs.clone(),
     )
     .unwrap();
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, b_https) = b
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem.clone(),
+            cert_key.clone(),
         )
         .await
         .unwrap();
@@ -228,8 +228,8 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
     a.start_public(
         0,
         0,
-        cert.cert.pem().into_bytes(),
-        cert.key_pair.serialize_pem().into_bytes(),
+        cert_pem.clone(),
+        cert_key.clone(),
     )
     .await
     .unwrap();
@@ -240,8 +240,8 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
     b.start_public(
         0,
         b_https,
-        cert.cert.pem().into_bytes(),
-        cert.key_pair.serialize_pem().into_bytes(),
+        cert_pem.clone(),
+        cert_key.clone(),
     )
     .await
     .unwrap();
@@ -267,8 +267,8 @@ async fn rust_outgoing_reconnects_same_address_without_native_and_stops_without_
     a.start_public(
         0,
         0,
-        cert.cert.pem().into_bytes(),
-        cert.key_pair.serialize_pem().into_bytes(),
+        cert_pem.clone(),
+        cert_key.clone(),
     )
     .await
     .unwrap();

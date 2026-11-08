@@ -38,13 +38,13 @@ async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authen
     let (_remote_dir, remote_server) = fixture("remote");
     let mut ports = Vec::new();
     for server in [&local_server, &remote_server] {
-        let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+        let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
         let (_, port) = server
             .start_public(
                 0,
                 0,
-                cert.cert.pem().into_bytes(),
-                cert.key_pair.serialize_pem().into_bytes(),
+                cert_pem,
+                cert_key,
             )
             .await
             .unwrap();

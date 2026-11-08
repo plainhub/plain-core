@@ -38,12 +38,12 @@ async fn first_start_advertises_the_persisted_generated_mdns_name() {
             .bytes()
             .all(|byte| b"abcdefghjkmnpqrstuwxyz".contains(&byte))
     );
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     core.start_public(
         0,
         0,
-        cert.cert.pem().into_bytes(),
-        cert.key_pair.serialize_pem().into_bytes(),
+        cert_pem,
+        cert_key,
     )
     .await
     .unwrap();

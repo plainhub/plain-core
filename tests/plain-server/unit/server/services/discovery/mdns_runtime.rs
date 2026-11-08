@@ -25,13 +25,13 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
     let state = server.runtime_state();
     // The advertised port is the live public listener's, so the test has to
     // start one — announcing port 0 is refused by contract.
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     server
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem,
+            cert_key,
         )
         .await
         .unwrap();

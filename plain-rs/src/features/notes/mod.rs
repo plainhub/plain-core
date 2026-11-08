@@ -105,22 +105,36 @@ pub fn export(db: &Db, query: &str) -> DomainResult<String> {
 mod tests;
 
 pub fn markdown_title(content: &str) -> String {
-    static IMAGES: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static IMAGES: std::sync::OnceLock<plain_libs::regex::Regex> = std::sync::OnceLock::new();
     let images = IMAGES.get_or_init(|| {
-        regex::Regex::new(r"(?i)!\[.*?\]\(.*?\)|!\[.*?\]\[.*?\]|<img.*?>").unwrap()
+        plain_libs::regex::compile(r"(?i)!\[.*?\]\(.*?\)|!\[.*?\]\[.*?\]|<img.*?>").unwrap()
     });
     for line in content.lines() {
         if let Some(title) = line.trim().strip_prefix("# ") {
-            return images.replace_all(title.trim(), "🖼").into_owned();
+            return replace_images(images, title.trim()).into_owned();
         }
     }
-    images
-        .replace_all(content, "🖼")
+    replace_images(images, content)
         .replace('\n', "")
         .trim()
         .chars()
         .take(50)
         .collect()
+}
+fn replace_images<'a>(images: &plain_libs::regex::Regex, text: &'a str) -> std::borrow::Cow<'a, str> {
+    let mut matches = images.find_iter(text);
+    let Some(first) = matches.next() else {
+        return std::borrow::Cow::Borrowed(text);
+    };
+    let mut result = String::with_capacity(text.len());
+    let mut start = 0;
+    for found in std::iter::once(first).chain(matches) {
+        result.push_str(&text[start..found.start()]);
+        result.push('🖼');
+        start = found.end();
+    }
+    result.push_str(&text[start..]);
+    std::borrow::Cow::Owned(result)
 }
 fn resolved_title<'a>(title: &'a str, content: &str) -> std::borrow::Cow<'a, str> {
     if title.is_empty() {

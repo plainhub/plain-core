@@ -1,5 +1,5 @@
 use super::*;
-use regex::Regex;
+use crate::regex;
 
 macro_rules! do_test {
     ($inside: expr, $pattern: expr => @ERROR) => {
@@ -52,7 +52,7 @@ fn functions() {
 
 #[test]
 fn regex() {
-    let is_whitespace = Regex::new(r"\s+").unwrap();
+    let is_whitespace = regex::compile(r"\s+").unwrap();
     do_test!("a   b", &is_whitespace => vec![((0, 1), false), ((1, 4), true), ((4, 5), false)]);
     do_test!("   a   b   ", &is_whitespace =>
         vec![((0, 3), true), ((3, 4), false), ((4, 7), true), ((7, 8), false), ((8, 11), true)]

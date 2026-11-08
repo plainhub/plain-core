@@ -1,25 +1,25 @@
 use super::plan::PLANS;
-use regex::Regex;
+use crate::regex::{self, Regex};
 use std::{borrow::Cow, sync::LazyLock};
 
 // Phone syntax follows Google libphonenumber v9.0.41 (Apache-2.0); attribution is in data/NOTICE.
 const PUNCTUATION: &str = r"-x\u{2010}-\u{2015}\u{2212}\u{30fc}\u{ff0d}-\u{ff0f} \u{a0}\u{ad}\u{200b}\u{2060}\u{3000}()\u{ff08}\u{ff09}\u{ff3b}\u{ff3d}.\[\]/~\u{2053}\u{223c}";
 
 static VIABLE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(&format!(
+    regex::compile(&format!(
     r"(?i)^(?:[+＋]*(?:[{PUNCTUATION}*]*\p{{Nd}}){{3,}}[{PUNCTUATION}*a-z\p{{Nd}}]*|\p{{Nd}}{{2}})$"
 )).unwrap()
 });
-static SECOND: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(.*)[\\/] *x").unwrap());
+static SECOND: LazyLock<Regex> = LazyLock::new(|| regex::compile(r"(.*)[\\/] *x").unwrap());
 static EXTENSION: LazyLock<Regex> = LazyLock::new(|| {
     let label = r"(?:e?xt(?:ensi(?:o\u{0301}?|ó))?n?|ｅ?ｘｔｎ?|доб|anexo)";
     let ambiguous = r"(?:[xｘ#＃~～]|int|ｉｎｔ)";
     let separators = r"[ \u{a0}\t,]*";
     let after = r"[:.．]?[ \u{a0}\t,-]*";
-    Regex::new(&format!(r"(?i)(?:;ext=\p{{Nd}}{{1,20}}|{separators}{label}{after}\p{{Nd}}{{1,20}}#?|{separators}{ambiguous}{after}\p{{Nd}}{{1,9}}#?|[- ]+\p{{Nd}}{{1,6}}#|[ \u{{a0}}\t]*(?:,{{2}}|;){after}\p{{Nd}}{{1,15}}#?|[ \u{{a0}}\t]*,+{after}\p{{Nd}}{{1,9}}#?)$")).unwrap()
+    regex::compile(&format!(r"(?i)(?:;ext=\p{{Nd}}{{1,20}}|{separators}{label}{after}\p{{Nd}}{{1,20}}#?|{separators}{ambiguous}{after}\p{{Nd}}{{1,9}}#?|[- ]+\p{{Nd}}{{1,6}}#|[ \u{{a0}}\t]*(?:,{{2}}|;){after}\p{{Nd}}{{1,15}}#?|[ \u{{a0}}\t]*,+{after}\p{{Nd}}{{1,9}}#?)$")).unwrap()
 });
 static CONTEXT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
+    regex::compile(
     r"^(?:\+[\p{Nd}().-]+|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)*[a-zA-Z](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.?)$"
 ).unwrap()
 });
@@ -39,10 +39,9 @@ pub(super) fn prepare(input: &str) -> Option<Normalized> {
         .find(|(_, ch)| matches!(ch, '+' | '＋') || digit(*ch).is_some())?
         .0;
     let number = uri[start..].trim_end_matches(|ch: char| !ch.is_alphanumeric() && ch != '#');
-    let number = SECOND
-        .captures(number)
-        .and_then(|captures| captures.get(1))
-        .map_or(number, |value| value.as_str());
+    let number = regex::captures(&SECOND, number)
+        .and_then(|captures| captures.get_group(1))
+        .map_or(number, |value| &number[value.range()]);
     let number = if let Some(extension) = EXTENSION.find(number) {
         if VIABLE.is_match(&number[..extension.start()]) {
             &number[..extension.start()]

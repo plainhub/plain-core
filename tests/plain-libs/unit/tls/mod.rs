@@ -45,3 +45,22 @@ fn regenerates_when_one_file_missing() {
     assert!(key.exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn pem_wraps_after_64_characters_and_preserves_line_endings() {
+    let bytes = [0; 49];
+    for newline in ["\n", "\r\n"] {
+        let expected = [
+            "-----BEGIN CERTIFICATE-----",
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "AA==",
+            "-----END CERTIFICATE-----",
+            "",
+        ]
+        .join(newline);
+        assert_eq!(
+            pem(b"CERTIFICATE", &bytes, newline.as_bytes()),
+            expected.as_bytes()
+        );
+    }
+}

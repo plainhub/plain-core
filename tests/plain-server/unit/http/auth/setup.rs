@@ -7,10 +7,10 @@ async fn setup_route_uses_the_real_listener_scheme_and_persists_across_restart()
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     plain_rs::features::prefs::security::configure_password_login(&state.prefs).unwrap();
-    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let client = plain_libs::protocols::http_client::builder()
         .add_root_certificate(
-            reqwest::Certificate::from_pem(certificate.cert.pem().as_bytes()).unwrap(),
+            reqwest::Certificate::from_pem(certificate_pem.as_slice()).unwrap(),
         )
         .build()
         .unwrap();
@@ -18,8 +18,8 @@ async fn setup_route_uses_the_real_listener_scheme_and_persists_across_restart()
         .start_public(
             0,
             0,
-            certificate.cert.pem().into_bytes(),
-            certificate.key_pair.serialize_pem().into_bytes(),
+            certificate_pem.clone(),
+            certificate_key,
         )
         .await
         .unwrap();

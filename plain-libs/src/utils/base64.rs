@@ -30,25 +30,32 @@ const STANDARD: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwx
 const URL_SAFE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 fn encode(bytes: &[u8], alphabet: &[u8; 64]) -> String {
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let b0 = chunk[0] as usize;
-        let b1 = chunk.get(1).copied().unwrap_or(0) as usize;
-        let b2 = chunk.get(2).copied().unwrap_or(0) as usize;
-        out.push(alphabet[b0 >> 2] as char);
-        out.push(alphabet[((b0 & 3) << 4) | (b1 >> 4)] as char);
-        out.push(if chunk.len() > 1 {
-            alphabet[((b1 & 0xf) << 2) | (b2 >> 6)] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            alphabet[b2 & 0x3f] as char
-        } else {
-            '='
-        });
+    let mut out = Vec::with_capacity(bytes.len().div_ceil(3) * 4);
+    let chunks = bytes.as_chunks::<3>();
+    for &[b0, b1, b2] in chunks.0 {
+        out.extend_from_slice(&[
+            alphabet[usize::from(b0 >> 2)],
+            alphabet[usize::from((b0 & 3) << 4 | b1 >> 4)],
+            alphabet[usize::from((b1 & 15) << 2 | b2 >> 6)],
+            alphabet[usize::from(b2 & 63)],
+        ]);
     }
-    out
+    match chunks.1 {
+        &[b0] => out.extend_from_slice(&[
+            alphabet[usize::from(b0 >> 2)],
+            alphabet[usize::from((b0 & 3) << 4)],
+            b'=',
+            b'=',
+        ]),
+        &[b0, b1] => out.extend_from_slice(&[
+            alphabet[usize::from(b0 >> 2)],
+            alphabet[usize::from((b0 & 3) << 4 | b1 >> 4)],
+            alphabet[usize::from((b1 & 15) << 2)],
+            b'=',
+        ]),
+        _ => {}
+    }
+    String::from_utf8(out).expect("Base64 alphabet is ASCII")
 }
 
 /// Standard alphabet (`+` / `/`), padded with `=`.

@@ -35,13 +35,13 @@ fn peer(id: &str, port: u16, pk: &[u8]) -> DPeer {
 async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host() {
     let (_a, a, kp, _) = root("a");
     let (_b, b, bkp, _) = root("b");
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, https) = b
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem.clone(),
+            cert_key.clone(),
         )
         .await
         .unwrap();
@@ -99,13 +99,13 @@ async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host
 async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
     let (_a, a, kp, _) = root("a");
     let (_b, b, bkp, _) = root("b");
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, https) = b
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem.clone(),
+            cert_key.clone(),
         )
         .await
         .unwrap();

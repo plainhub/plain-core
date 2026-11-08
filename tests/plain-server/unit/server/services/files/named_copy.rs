@@ -254,10 +254,10 @@ async fn remote_copy_follows_redirects_fetches_fresh_bytes_and_leaves_no_output_
 #[tokio::test]
 async fn public_url_copy_rejects_untrusted_tls_even_after_a_peer_cache_client_was_used() {
     use std::sync::atomic::{AtomicUsize, Ordering};
-    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let config = plain_rs::infrastructure::tls_identity::config(
-        certificate.cert.pem().as_bytes(),
-        certificate.key_pair.serialize_pem().as_bytes(),
+        certificate_pem.as_slice(),
+        certificate_key.as_slice(),
     )
     .unwrap();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

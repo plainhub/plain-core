@@ -5,10 +5,10 @@ use axum::{
 };
 
 fn certificate() -> (Vec<u8>, Vec<u8>) {
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     (
-        cert.cert.pem().into_bytes(),
-        cert.key_pair.serialize_pem().into_bytes(),
+        cert_pem,
+        cert_key,
     )
 }
 

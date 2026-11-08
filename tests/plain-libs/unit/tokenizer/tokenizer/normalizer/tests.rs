@@ -1,5 +1,5 @@
 use super::*;
-use regex::Regex;
+use crate::regex;
 use crate::tokenizer::unicode_categories::is_mark_nonspacing;
 
 #[test]
@@ -461,7 +461,7 @@ fn replace() {
 
     // Regex
     let mut s = NormalizedString::from(" Hello   friend ");
-    let re = Regex::new(r"\s+").unwrap();
+    let re = regex::compile(r"\s+").unwrap();
     s.replace(&re, "_").unwrap();
     assert_eq!(s.get(), "_Hello_friend_");
 }

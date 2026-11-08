@@ -1,6 +1,6 @@
 use crate::tokenizer::utils::SysRegex;
 use crate::tokenizer::{Offsets, Result};
-use regex::Regex;
+use crate::regex::{self, Regex};
 
 pub trait Pattern {
     fn find_matches(&self, inside: &str) -> Result<Vec<(Offsets, bool)>>;
@@ -20,7 +20,7 @@ impl Pattern for &str {
             return Ok(vec![((0, inside.chars().count()), false)]);
         }
 
-        let re = Regex::new(&regex::escape(self))?;
+        let re = regex::compile(&regex::escape(self))?;
         (&re).find_matches(inside)
     }
 }

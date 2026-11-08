@@ -17,13 +17,13 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
     )
     .unwrap();
     let state = server.runtime_state().core;
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let listeners = crate::http::listeners::HttpListeners::start(
         axum::Router::new().route("/nearby", axum::routing::post(|| async { "1" })),
         0,
         0,
-        cert.cert.pem().into_bytes(),
-        cert.key_pair.serialize_pem().into_bytes(),
+        cert_pem,
+        cert_key,
     )
     .await
     .unwrap();

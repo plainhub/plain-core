@@ -1,6 +1,6 @@
 use super::number::NumberType;
+use crate::regex::{self, Captures, Regex};
 use flate2::read::GzDecoder;
-use regex::{Captures, Regex};
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
@@ -26,22 +26,23 @@ impl From<String> for Pattern {
 
 impl Pattern {
     fn regex(&self) -> &Regex {
-        self.compiled
-            .get_or_init(|| Regex::new(&self.source).expect("Invalid bundled numbering expression"))
+        self.compiled.get_or_init(|| {
+            regex::compile(&self.source).expect("Invalid bundled numbering expression")
+        })
     }
     pub fn matches(&self, number: &str) -> bool {
         !self.source.is_empty() && self.regex().is_match(number)
     }
-    pub fn captures<'a>(&self, number: &'a str) -> Option<Captures<'a>> {
+    pub fn captures(&self, number: &str) -> Option<Captures> {
         if self.source.is_empty() {
             None
         } else {
-            self.regex().captures(number)
+            regex::captures(self.regex(), number)
         }
     }
     pub fn prefix<'a>(&self, number: &'a str) -> Option<&'a str> {
         self.captures(number)
-            .map(|matched| &number[matched.get(0).unwrap().end()..])
+            .map(|matched| &number[matched.get_group(0).unwrap().end..])
     }
 }
 
@@ -109,20 +110,20 @@ impl Plan {
         let Some(captures) = self.national_prefix.captures(number) else {
             return;
         };
-        if captures.get(0).unwrap().is_empty() {
+        if captures.get_group(0).unwrap().is_empty() {
             return;
         }
-        let first = captures.get(1);
-        let second = captures.get(2);
+        let first = captures.get_group(1);
+        let second = captures.get_group(2);
         let mut stripped = String::new();
         if !self.transform.is_empty()
             && first.is_some()
             && (second.is_some_and(|second| !second.is_empty())
                 || (second.is_none() && first.is_some_and(|first| !first.is_empty())))
         {
-            captures.expand(&self.transform, &mut stripped);
+            captures.interpolate_string_into(number, &self.transform, &mut stripped);
         }
-        stripped.push_str(&number[captures.get(0).unwrap().end()..]);
+        stripped.push_str(&number[captures.get_group(0).unwrap().end..]);
         if self.general.matches(number) && !self.general.matches(&stripped) {
             return;
         }

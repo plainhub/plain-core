@@ -165,14 +165,14 @@ async fn fs_burst_and_page_cancellation(
         std::thread::available_parallelism().unwrap().get(),
     )
     .min(300);
-    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let pem = certificate.cert.pem();
+    let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let pem = String::from_utf8(certificate_pem).unwrap();
     let (_, port) = server
         .start_public(
             0,
             0,
             pem.clone().into_bytes(),
-            certificate.key_pair.serialize_pem().into_bytes(),
+            certificate_key,
         )
         .await
         .unwrap();

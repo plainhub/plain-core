@@ -40,13 +40,13 @@ fn device() -> Device {
 #[tokio::test]
 async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
     let (_dir, server) = fixture("local");
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, https_port) = server
         .start_public(
             0,
             0,
-            cert.cert.pem().into_bytes(),
-            cert.key_pair.serialize_pem().into_bytes(),
+            cert_pem.clone(),
+            cert_key.clone(),
         )
         .await
         .unwrap();
@@ -99,13 +99,13 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     let router = Router::new()
         .route("/nearby", post(receive))
         .with_state(send);
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let listeners = crate::http::listeners::HttpListeners::start(
         router,
         0,
         0,
-        cert.cert.pem().into_bytes(),
-        cert.key_pair.serialize_pem().into_bytes(),
+        cert_pem.clone(),
+        cert_key.clone(),
     )
     .await
     .unwrap();

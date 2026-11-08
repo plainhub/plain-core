@@ -10,7 +10,7 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
     prefs.set("background_service_enabled", false).unwrap();
     prefs.set("remote_access", false).unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[19; 32]);
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let server = ContentServer::start_http(
         directory.path(),
         &token,
@@ -18,8 +18,8 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
         plain_rs::infrastructure::platform::startup::config(),
         0,
         0,
-        cert.cert.pem().into_bytes(),
-        cert.key_pair.serialize_pem().into_bytes(),
+        cert_pem,
+        cert_key,
     )
     .await
     .unwrap();
