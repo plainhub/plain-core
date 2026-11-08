@@ -70,7 +70,7 @@ export function resolvedPatches(metadata, url) {
 function manifests(root, manifest) {
   return Object.fromEntries([...new Set([join(root, 'Cargo.toml'), join(root, 'src-tauri/Cargo.toml'), manifest])]
     .filter(isFile)
-    .map(path => [relative(root, path).split('\\').join('/'), createHash('sha256').update(readFileSync(path)).digest('hex')]))
+    .map(path => [relative(root, path), createHash('sha256').update(readFileSync(path)).digest('hex')]))
 }
 
 function locations(root, manifest) {
