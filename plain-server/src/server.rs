@@ -18,6 +18,7 @@ pub enum PairingApproval {
 pub(crate) struct ServerState {
     pub(crate) core: plain_rs::runtime::Runtime,
     pub(crate) managed_proxy: Arc<crate::http::managed_proxy::ManagedProxy>,
+    pub(crate) native_file_url_key: [u8; 32],
     pub(crate) peer_status_capacity: Arc<tokio::sync::Semaphore>,
     #[cfg(feature = "http_transport")]
     pub(crate) public_server: Arc<tokio::sync::Mutex<Option<PublicServer>>>,
@@ -121,6 +122,17 @@ impl ContentServer {
             .map_err(|error| error.to_string())
     }
 
+    pub fn native_file_url_token(&self) -> String {
+        plain_libs::utils::base64::base64_encode(&self.state.native_file_url_key)
+    }
+
+    pub async fn preview_native_file(
+        &self,
+        id: String,
+    ) -> Result<crate::native::resources::FilePreview, String> {
+        crate::http::fs::native_preview(self.state.clone(), id).await
+    }
+
     pub async fn read_resource(
         &self,
         path: &str,
@@ -222,6 +234,9 @@ impl ContentServer {
         let state = ServerState {
             core,
             managed_proxy: Arc::default(),
+            native_file_url_key: plain_libs::crypto::random_bytes(32)
+                .try_into()
+                .expect("32 random bytes"),
             public,
             peer_status_capacity: Arc::new(tokio::sync::Semaphore::new(128)),
             #[cfg(feature = "http_transport")]

@@ -12,6 +12,13 @@ pub use registry::{NativeResource, NativeResourceRegistry, ResourceAccessError};
 pub const MAX_RESOURCE_READ_BYTES: usize = 64 * 1024;
 pub const MAX_RESOURCE_RESPONSE_BYTES: u64 = 32 * 1024 * 1024;
 
+#[derive(Serialize)]
+pub struct FilePreview {
+    pub status: u16,
+    pub headers: std::collections::BTreeMap<String, String>,
+    pub content: String,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceInfo {

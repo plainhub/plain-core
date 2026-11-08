@@ -2,7 +2,7 @@ use crate::http::file_response::{self, secure};
 use crate::server::ServerState;
 use axum::{
     extract::{Request, State},
-    http::{StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use plain_rs::features::services::files::content;
@@ -27,25 +27,77 @@ impl Parameters {
 }
 
 pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
-    let mut request = request.into_parts().0;
+    let request = request.into_parts().0;
     let parameters = match axum::extract::Query::<Parameters>::try_from_uri(&request.uri) {
         Ok(parameters) if parameters.is_valid() => parameters.0,
         _ => return StatusCode::BAD_REQUEST.into_response(),
     };
-    let id = parameters.id;
-    let managed = match super::managed_proxy::forwarded_resource(&state, &request, &id) {
+    let managed = match super::managed_proxy::forwarded_resource(&state, &request, &parameters.id) {
         Ok(managed) => managed,
         Err(status) => return status.into_response(),
     };
+    super::managed_proxy::mark_forwarded(
+        serve(state, parameters, request.headers, false).await,
+        managed,
+    )
+}
+
+pub(crate) async fn native_preview(
+    state: ServerState,
+    id: String,
+) -> Result<crate::native::resources::FilePreview, String> {
+    use crate::native::resources::{FilePreview, MAX_RESOURCE_RESPONSE_BYTES};
+    let parameters = Parameters {
+        id,
+        action: content::Action::Preview,
+        size: None,
+        version: None,
+    };
+    let (parts, body) = serve(state, parameters, HeaderMap::new(), true)
+        .await
+        .into_parts();
+    let mut preview = FilePreview {
+        status: parts.status.as_u16(),
+        headers: Default::default(),
+        content: String::new(),
+    };
+    if parts.status.is_success() {
+        for name in [
+            header::CONTENT_TYPE,
+            header::CONTENT_DISPOSITION,
+            header::CONTENT_LENGTH,
+            header::LAST_MODIFIED,
+        ] {
+            if let Some(value) = parts
+                .headers
+                .get(&name)
+                .and_then(|value| value.to_str().ok())
+            {
+                preview.headers.insert(name.to_string(), value.to_owned());
+            }
+        }
+        let bytes = axum::body::to_bytes(body, MAX_RESOURCE_RESPONSE_BYTES as usize)
+            .await
+            .map_err(|error| error.to_string())?;
+        preview.content = String::from_utf8_lossy(&bytes).into_owned();
+    }
+    Ok(preview)
+}
+
+async fn serve(
+    state: ServerState,
+    parameters: Parameters,
+    mut headers: HeaderMap,
+    native: bool,
+) -> Response {
     if matches!(
         parameters.action,
         content::Action::Probe | content::Action::Transcode
     ) {
-        request.headers.remove(header::RANGE);
+        headers.remove(header::RANGE);
     }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let range = request
-        .headers
+    let range = headers
         .get(header::RANGE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
@@ -69,7 +121,11 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
         } else {
             links::ReadKind::Original
         };
-        let file = links::resolve(&state, &id, kind).await?;
+        let file = if native {
+            links::resolve_native(&state, &parameters.id, state.native_file_url_key).await?
+        } else {
+            links::resolve(&state, &parameters.id, kind).await?
+        };
         let content = content::read(&state, file, options).await?;
         let response = match content {
             Content::File {
@@ -78,12 +134,12 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
                 name,
                 download,
             } => secure(
-                file_response::stream_file(&path, &mime, &request.headers).await,
+                file_response::stream_file(&path, &mime, &headers).await,
                 Some(&name),
                 download,
             ),
             Content::Temporary { file, mime, name } => secure(
-                file_response::stream_temporary(file, mime, &request.headers).await,
+                file_response::stream_temporary(file, mime, &headers).await,
                 name.as_deref(),
                 false,
             ),
@@ -98,7 +154,7 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
                         &state.resources,
                         &path,
                         state.stop.clone(),
-                        &request.headers,
+                        &headers,
                     )
                     .await
                     {
@@ -120,8 +176,7 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
             Content::Thumbnail { bytes, name } => secure(
                 file_response::thumbnail(
                     bytes,
-                    request
-                        .headers
+                    headers
                         .get(header::IF_NONE_MATCH)
                         .and_then(|v| v.to_str().ok()),
                 ),
@@ -148,14 +203,13 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
         Ok::<_, anyhow::Error>(response)
     }
     .await;
-    let response = result.unwrap_or_else(|error| {
+    result.unwrap_or_else(|error| {
         (
             StatusCode::FORBIDDEN,
             format!("File is expired or does not exist. {error}"),
         )
             .into_response()
-    });
-    super::managed_proxy::mark_forwarded(response, managed)
+    })
 }
 
 #[cfg(all(test, not(any(target_os = "android", target_os = "ios"))))]

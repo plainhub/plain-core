@@ -57,11 +57,34 @@ pub fn decrypt(state: &CoreRuntime, id: &str, purpose: &str) -> anyhow::Result<V
 }
 
 pub async fn resolve(state: &CoreRuntime, id: &str, kind: ReadKind) -> anyhow::Result<File> {
+    resolve_with_key(state, id, kind, None).await
+}
+
+pub async fn resolve_native(state: &CoreRuntime, id: &str, key: [u8; 32]) -> anyhow::Result<File> {
+    resolve_with_key(state, id, ReadKind::Original, Some(key)).await
+}
+
+async fn resolve_with_key(
+    state: &CoreRuntime,
+    id: &str,
+    kind: ReadKind,
+    native_key: Option<[u8; 32]>,
+) -> anyhow::Result<File> {
     let owner = state.clone();
     let id = id.to_owned();
     let (scope, resource) = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
         let (scope, payload) = resource_link::parse(&id)?;
-        let resource = resource_link::open(&scope, &key(&owner, &scope)?, payload)?;
+        let resource = match (native_key, &scope) {
+            (Some(key), Scope::Session(id))
+                if owner.native_client_id().ok().as_ref() == Some(id) =>
+            {
+                resource_link::open(&scope, &key, payload)?
+            }
+            (Some(_), Scope::Session(_) | Scope::Share(_)) => {
+                anyhow::bail!("Invalid native resource scope")
+            }
+            _ => resource_link::open(&scope, &key(&owner, &scope)?, payload)?,
+        };
         Ok((scope, resource))
     })
     .await??;

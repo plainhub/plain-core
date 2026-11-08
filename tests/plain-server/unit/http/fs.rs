@@ -788,6 +788,35 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
 }
 
 #[tokio::test]
+async fn native_file_preview_uses_its_session_and_the_shared_preview() {
+    use plain_rs::features::files::resource_link::{self, Resource, Scope};
+    let (_root, core, state, global) = test_state();
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let native = plain_libs::utils::base64::base64_decode(&core.native_file_url_token());
+    assert_ne!(native, global);
+    let scope = Scope::Session(state.native_client_id().unwrap());
+    for (name, bytes, expected) in [
+        ("fixture.txt", b"text preview\n".as_slice(), "text preview"),
+        ("fixture.md", b"# Markdown preview\n".as_slice(), "# Markdown preview"),
+        ("fixture.docx", include_bytes!("../../../../plain-rs/testdata/preview.docx").as_slice(), "# Document preview"),
+    ] {
+        let path = directory.path().join(name);
+        std::fs::write(&path, bytes).unwrap();
+        let resource = Resource::reference(path.to_str().unwrap());
+        let id = resource_link::seal(&scope, &native, &resource).unwrap();
+        let preview = core.preview_native_file(id.clone()).await.unwrap();
+        assert_eq!(preview.status, 200);
+        assert!(preview.content.contains(expected));
+        assert!(preview.headers["content-disposition"].contains(name));
+        assert_eq!(call_fs(&state, &format!("id={id}&action=preview"), &[]).await.status(), StatusCode::FORBIDDEN);
+        let wrong = resource_link::seal(&scope, &global, &resource).unwrap();
+        assert_eq!(core.preview_native_file(wrong).await.unwrap().status, 403);
+        let legacy = resource_link::seal(&Scope::Global, &global, &resource).unwrap();
+        assert_eq!(core.preview_native_file(legacy).await.unwrap().status, 200);
+    }
+}
+
+#[tokio::test]
 #[ignore]
 async fn fs_thumbnail_latency_benchmark() {
     let (_root, core, _state, key) = test_state();
