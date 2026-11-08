@@ -161,7 +161,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             .unwrap();
         }
     });
-    let client = reqwest::Client::builder()
+    let client = plain_libs::protocols::http_client::builder()
         .danger_accept_invalid_certs(true)
         .no_proxy()
         .build()

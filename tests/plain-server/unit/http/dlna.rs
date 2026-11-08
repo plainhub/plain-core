@@ -90,7 +90,7 @@ fn local_ip_skips_loopback_so_it_matches_the_ssdp_location() {
 async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
     let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
     let (dir, server, port) = public_fixture().await;
-    let client = reqwest::Client::new();
+    let client = plain_libs::protocols::http_client::builder().build().unwrap();
     let base = format!("http://127.0.0.1:{port}");
     let state = server.runtime_state();
 
@@ -168,7 +168,7 @@ async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
 async fn a_forged_c_ip_header_cannot_impersonate_an_allowed_sender() {
     let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
     let (dir, server, port) = public_fixture().await;
-    let client = reqwest::Client::new();
+    let client = plain_libs::protocols::http_client::builder().build().unwrap();
     let base = format!("http://127.0.0.1:{port}");
     let state = server.runtime_state();
     state.prefs.set("background_service_enabled", true).unwrap();
@@ -362,7 +362,7 @@ async fn public_dlna_reads_the_native_players_reported_position() {
         .await
         .unwrap();
     let soap = r#"<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo></s:Body></s:Envelope>"#;
-    let response = reqwest::Client::new()
+    let response = plain_libs::protocols::http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{port}/AVTransport/control"))
         .header(
             "soapaction",
@@ -436,7 +436,7 @@ async fn an_oversized_control_request_never_reaches_the_protocol() {
     );
     assert!(soap.len() > MAX_BODY, "the request must exceed the cap");
 
-    let status = reqwest::Client::new()
+    let status = plain_libs::protocols::http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{port}/AVTransport/control"))
         .header("content-type", "text/xml")
         .header(

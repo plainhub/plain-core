@@ -8,8 +8,8 @@ description = "Shared Plain GraphQL, HTTP and native transport adapters"
 [features]
 "default" = ["core", "http_transport", "media"]
 "media" = ["plain-rs/runtime-media"]
-"http_transport" = ["dep:serde_json", "dep:reqwest", "reqwest/rustls-tls", "dep:axum", "plain-libs/https", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
-"core" = ["plain-libs/websocket", "dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:anyhow", "dep:plain-graphql", "dep:axum", "dep:reqwest", "reqwest/rustls-tls", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
+"http_transport" = ["dep:serde_json", "dep:reqwest", "plain-libs/http-client", "dep:axum", "plain-libs/https", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
+"core" = ["plain-libs/websocket", "dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "tokio-tungstenite/rustls-tls-webpki-roots", "dep:anyhow", "dep:plain-graphql", "dep:axum", "dep:reqwest", "plain-libs/http-client", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
 
 
 [dependencies]
@@ -38,7 +38,7 @@ plain-graphql = { path = "../plain-graphql", optional = true }
 "socket2" = { "version" = "0.6", "features" = ["all"] }
 "hyper" = { "version" = "1", "features" = ["client", "http1"] }
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"] }
-"reqwest" = { "version" = "0.12", "default-features" = false, "features" = ["rustls-tls"] }
+"reqwest" = { "version" = "0.12", "default-features" = false, "features" = ["rustls-tls-webpki-roots-no-provider"] }
 "rcgen" = { "version" = "0.13", "default-features" = false, "features" = ["pem", "ring"] }
 # Test-only: exposes plain-rs mdns packet-capture test seams, which
 # `#[cfg(test)]` in plain-rs cannot reach from this crate's test binary.

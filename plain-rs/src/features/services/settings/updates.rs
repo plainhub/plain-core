@@ -19,7 +19,7 @@ fn client() -> Result<&'static reqwest::Client> {
     static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
     CLIENT
         .get_or_init(|| {
-            reqwest::Client::builder()
+            plain_libs::protocols::http_client::builder()
                 .use_rustls_tls()
                 .user_agent("PlainHub")
                 .timeout(Duration::from_secs(30))

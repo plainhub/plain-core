@@ -55,7 +55,7 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
         },
     )
     .unwrap();
-    let client = reqwest::Client::new();
+    let client = plain_libs::protocols::http_client::builder().build().unwrap();
     let url = format!("http://127.0.0.1:{}/fs", server.port);
     let response = client
         .get(&url)

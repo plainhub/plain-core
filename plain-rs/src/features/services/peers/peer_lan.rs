@@ -11,7 +11,7 @@ pub struct Lan {
 impl Lan {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            client: reqwest::Client::builder()
+            client: plain_libs::protocols::http_client::builder()
                 .use_rustls_tls()
                 .danger_accept_invalid_certs(true)
                 .redirect(reqwest::redirect::Policy::none())

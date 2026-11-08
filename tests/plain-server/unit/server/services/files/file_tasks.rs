@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use tokio_tungstenite::tungstenite::Message;
 
 async fn call(port: u16, token: &str, doc: String) -> Value {
-    let text = reqwest::Client::new()
+    let text = plain_libs::protocols::http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{port}/graphql"))
         .bearer_auth(token)
         .header("content-type", "application/json")

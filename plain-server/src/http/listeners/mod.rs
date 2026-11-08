@@ -102,7 +102,7 @@ impl HttpListeners {
     }
 
     pub async fn check_health(&self) -> Result<(), String> {
-        let client = reqwest::Client::builder()
+        let client = plain_libs::protocols::http_client::builder()
             .no_proxy()
             .danger_accept_invalid_certs(true)
             .timeout(Duration::from_millis(500))

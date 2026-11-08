@@ -8,7 +8,7 @@ async fn setup_route_uses_the_real_listener_scheme_and_persists_across_restart()
     let state = core.runtime_state();
     plain_rs::features::prefs::security::configure_password_login(&state.prefs).unwrap();
     let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let client = reqwest::Client::builder()
+    let client = plain_libs::protocols::http_client::builder()
         .add_root_certificate(
             reqwest::Certificate::from_pem(certificate.cert.pem().as_bytes()).unwrap(),
         )

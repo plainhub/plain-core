@@ -37,7 +37,7 @@ async fn public_status_auth_scoped_connections_key_rotation_and_stop_use_rust_wi
         )
         .await
         .unwrap();
-    let _client = reqwest::Client::new();
+    let _client = plain_libs::protocols::http_client::builder().build().unwrap();
     for action in ["NOPE", "SNAPSHOT"] {
         assert!(control(&server, action).await.is_err());
     }

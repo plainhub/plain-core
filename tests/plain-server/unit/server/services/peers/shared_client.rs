@@ -21,7 +21,7 @@ async fn authenticated_main_browse_caches_and_queues_real_tls_files_without_host
     let (port, tls, _, _, _) = tls().await;
     let expected = card(port);
     let row = save_card(&state, &expected);
-    let client = reqwest::Client::new();
+    let client = plain_libs::protocols::http_client::builder().build().unwrap();
     let query = "mutation($id:ID!,$expected:SharedMessageCardInput!){browseSharedLink(messageId:$id,expected:$expected){info{urlToken} link{host port sharedId token pageUrl} card{name expiresAt totalSize}}}";
     let variables = json!({"id":row.id,"expected":expected});
     assert_eq!(

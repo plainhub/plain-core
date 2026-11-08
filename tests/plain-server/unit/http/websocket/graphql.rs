@@ -135,7 +135,7 @@ async fn connected_http_clients(pem: &str, origin: &str, count: usize) -> Vec<re
     let certificate = reqwest::Certificate::from_pem(pem.as_bytes()).unwrap();
     let mut clients = Vec::with_capacity(count);
     for _ in 0..count {
-        let client = reqwest::Client::builder()
+        let client = plain_libs::protocols::http_client::builder()
             .add_root_certificate(certificate.clone())
             .http1_only()
             .build()
@@ -176,7 +176,7 @@ async fn fs_burst_and_page_cancellation(
         )
         .await
         .unwrap();
-    let http = reqwest::Client::builder()
+    let http = plain_libs::protocols::http_client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(pem.as_bytes()).unwrap())
         .build()
         .unwrap();

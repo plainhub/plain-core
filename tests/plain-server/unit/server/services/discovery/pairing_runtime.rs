@@ -50,7 +50,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
         )
         .await
         .unwrap();
-    let client = reqwest::Client::builder()
+    let client = plain_libs::protocols::http_client::builder()
         .danger_accept_invalid_certs(true)
         .build()
         .unwrap();

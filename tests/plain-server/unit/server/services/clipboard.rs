@@ -84,7 +84,7 @@ async fn platform_callbacks_before_write_reply_do_not_republish_received_text() 
 }
 
 async fn call(port: u16, token: &str, query: &str) -> Value {
-    let response = reqwest::Client::new()
+    let response = plain_libs::protocols::http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{port}/graphql"))
         .bearer_auth(token)
         .header("content-type", "application/json")

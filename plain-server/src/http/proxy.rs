@@ -113,7 +113,7 @@ fn resource_target(url: &str, parameters: &crate::http::fs::Parameters) -> anyho
 }
 
 pub(crate) async fn proxy(url: &str, headers: &HeaderMap) -> Response {
-    let client = match reqwest::Client::builder().build() {
+    let client = match plain_libs::protocols::http_client::builder().build() {
         Ok(client) => client,
         Err(error) => {
             return (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response();

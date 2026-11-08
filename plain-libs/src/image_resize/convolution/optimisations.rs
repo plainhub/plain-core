@@ -96,10 +96,10 @@ macro_rules! try_process_in_threads_h {
             #[cfg(feature = "thumbnails")]
             {
                 use crate::image_resize::threading::split_h_two_images_for_threading;
-                use rayon::prelude::*;
+                use crate::image_resize::threading::for_each_part;
 
                 if let Some(iter) = split_h_two_images_for_threading($src_view, $dst_view, $offset) {
-                    iter.for_each(|(src, mut dst)| {
+                    for_each_part(iter, |(src, mut dst)| {
                         $op(&src, &mut dst, 0, $($arg),+);
                     });
                     break 'block;
@@ -117,10 +117,10 @@ macro_rules! try_process_in_threads_v {
             #[cfg(feature = "thumbnails")]
             {
                 use crate::image_resize::threading::split_v_two_images_for_threading;
-                use rayon::prelude::*;
+                use crate::image_resize::threading::for_each_part;
 
                 if let Some(iter) = split_v_two_images_for_threading($src_view, $dst_view, $offset) {
-                    iter.for_each(|(src, mut dst)| {
+                    for_each_part(iter, |(src, mut dst)| {
                         $op(&src, &mut dst, 0, $($arg),+);
                     });
                     break 'block;

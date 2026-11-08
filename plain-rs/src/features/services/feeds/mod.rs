@@ -267,7 +267,7 @@ fn fetch_error(error_value: reqwest::Error) -> DomainError {
 
 pub async fn fetch_text(url: &str, max_bytes: usize) -> DomainResult<String> {
     require_url(url)?;
-    let client = reqwest::Client::builder()
+    let client = plain_libs::protocols::http_client::builder()
         .timeout(std::time::Duration::from_secs(25))
         .build()
         .map_err(error)?;

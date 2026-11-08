@@ -59,7 +59,7 @@ pub async fn soap_response(
         return Err("missing AVTransport serviceType".into());
     }
     let endpoint = resolve_service_endpoint(&dev.location, &dev.av_transport.control_url)?;
-    let client = reqwest::Client::builder()
+    let client = crate::protocols::http_client::builder()
         .timeout(SOAP_TIMEOUT)
         .build()
         .map_err(|e| e.to_string())?;
@@ -96,7 +96,7 @@ pub async fn subscription(
     unsubscribe: bool,
 ) -> Result<Subscription, String> {
     let endpoint = resolve_service_endpoint(&dev.location, &dev.av_transport.event_sub_url)?;
-    let client = reqwest::Client::builder()
+    let client = crate::protocols::http_client::builder()
         .timeout(SOAP_TIMEOUT)
         .build()
         .map_err(|e| e.to_string())?;

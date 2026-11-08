@@ -82,7 +82,7 @@ impl HttpProxyState {
     /// Build a dedicated reqwest client (no timeout — video streaming and
     /// WebSocket relays are long-lived) and start accepting connections.
     pub fn start(peers: PeerResolver) -> Self {
-        let client = reqwest::Client::builder()
+        let client = plain_libs::protocols::http_client::builder()
             .danger_accept_invalid_certs(true)
             .danger_accept_invalid_hostnames(true)
             .tcp_keepalive(std::time::Duration::from_secs(60))

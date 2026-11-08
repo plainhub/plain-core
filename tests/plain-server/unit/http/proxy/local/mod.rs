@@ -215,7 +215,7 @@ async fn handle_strips_origin_but_forwards_custom_headers() {
     let mut client = TcpStream::connect(relay_addr).await.unwrap();
     let (server_side, _) = relay.accept().await.unwrap();
 
-    let client_http = reqwest::Client::new();
+    let client_http = plain_libs::protocols::http_client::builder().build().unwrap();
     tokio::spawn(async move {
         crate::http::proxy::local::handle(server_side, client_http, no_peers()).await;
     });
@@ -292,7 +292,7 @@ async fn websocket_upgrade_relays_handshake_and_frames() {
     let mut client = TcpStream::connect(relay_addr).await.unwrap();
     let (server_side, _) = relay.accept().await.unwrap();
 
-    let client_http = reqwest::Client::new();
+    let client_http = plain_libs::protocols::http_client::builder().build().unwrap();
     let connection = tokio::spawn(async move {
         crate::http::proxy::local::handle(server_side, client_http, peers).await;
     });
@@ -381,7 +381,7 @@ async fn websocket_upgrade_refused_by_device_closes_cleanly() {
     let mut client = TcpStream::connect(relay_addr).await.unwrap();
     let (server_side, _) = relay.accept().await.unwrap();
 
-    let client_http = reqwest::Client::new();
+    let client_http = plain_libs::protocols::http_client::builder().build().unwrap();
     tokio::spawn(async move {
         crate::http::proxy::local::handle(server_side, client_http, no_peers()).await;
     });
@@ -430,7 +430,7 @@ async fn websocket_upgrade_unreachable_target_closes_cleanly() {
             observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }))
     });
-    let client_http = reqwest::Client::new();
+    let client_http = plain_libs::protocols::http_client::builder().build().unwrap();
     let connection = tokio::spawn(async move {
         crate::http::proxy::local::handle(server_side, client_http, peers).await;
     });
@@ -465,7 +465,7 @@ async fn upstream_failure_returns_502_with_cors_headers() {
     let mut client = TcpStream::connect(relay_addr).await.unwrap();
     let (server_side, _) = relay.accept().await.unwrap();
 
-    let client_http = reqwest::Client::new();
+    let client_http = plain_libs::protocols::http_client::builder().build().unwrap();
     tokio::spawn(async move {
         crate::http::proxy::local::handle(server_side, client_http, no_peers()).await;
     });

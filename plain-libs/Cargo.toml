@@ -18,13 +18,14 @@ description = "Reusable cryptography, media, file, format and native components"
 "phone" = ["dep:regex", "dep:flate2", "dep:serde_json"]
 "phone-batch" = ["phone", "tokio/rt"]
 "media" = ["time", "dep:anyhow", "dep:encoding_rs", "dep:flate2", "dep:paste"]
-"thumbnails" = ["dep:tiff", "dep:heic-rs", "dep:rav1d", "media", "crypto", "dep:image", "dep:tempfile", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util", "dep:rayon", "dep:thiserror"]
+"thumbnails" = ["dep:tiff", "dep:heic-rs", "dep:rav1d", "media", "crypto", "dep:image", "dep:tempfile", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util", "dep:thiserror"]
 "filesystem" = ["time", "tokio/fs", "tokio/rt", "tokio/time"]
 "watch" = ["filesystem", "tokio/net"]
 "apk" = ["dep:anyhow", "dep:zip"]
 "https" = ["dep:axum", "axum/tokio", "dep:hyper-util", "hyper-util/server-auto", "hyper-util/service", "dep:tokio-rustls", "tokio/net", "tokio/rt", "tokio/sync", "tokio/macros", "tokio/time"]
 "websocket" = ["dep:axum", "dep:hyper", "dep:hyper-util", "dep:tokio-tungstenite", "tokio/rt"]
-"dlna" = ["dep:reqwest", "reqwest/rustls-tls"]
+"dlna" = ["http-client"]
+"http-client" = ["dep:reqwest", "reqwest/rustls-tls-webpki-roots-no-provider", "dep:rustls"]
 "unix-platform" = ["dep:anyhow"]
 "storage-platform" = ["volumes"]
 "linux-platform" = ["storage-platform", "dep:serde_json"]
@@ -63,7 +64,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "encoding_rs" = { "version" = "=0.8.42", "optional" = true }
 "image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"], "optional" = true }
 "tempfile" = { "version" = "3", "optional" = true }
-"jpeg-decoder" = { version = "0.3", optional = true }
+"jpeg-decoder" = { version = "0.3", default-features = false, optional = true }
 "rusty_h264-decoder" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
 "rusty_h264-common" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
 "chacha20poly1305" = { "version" = "0.10", "optional" = true }
@@ -82,6 +83,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "hmac" = { "version" = "0.13", "optional" = true }
 "sha2_mac" = { "package" = "sha2", "version" = "0.11", "optional" = true }
 "zip" = { "version" = "9", "default-features" = false, "features" = ["deflate-flate2"], "optional" = true }
+"rustls" = { version = "0.23", default-features = false, features = ["ring", "std"], optional = true }
 "reqwest" = { version = "0.12", default-features = false, features = ["stream"], optional = true }
 
 "tiff" = { path = "codecs/tiff", optional = true }
@@ -93,7 +95,6 @@ description = "Reusable cryptography, media, file, format and native components"
 "regex-syntax" = { version = "0.8", default-features = false, features = ["std", "unicode"], optional = true }
 "memchr" = { "version" = "=2.8.3", "optional" = true }
 "paste" = { "version" = "=1.0.15", "optional" = true, "features" = [] }
-"rayon" = { "version" = "=1.12.0", "optional" = true, "features" = [] }
 "thiserror" = { "version" = "=2.0.21", "optional" = true, "features" = [] }
 "unicode-normalization-alignments" = { "version" = "=0.1.12", "optional" = true }
 "walkdir" = { "version" = "=2.5.0", "optional" = true }
@@ -107,7 +108,7 @@ description = "Reusable cryptography, media, file, format and native components"
 "tempfile" = "3"
 "serde_json" = "1"
 "tokio" = { version = "1", features = ["full", "test-util"] }
-"jpeg-decoder" = { version = "0.3", features = ["platform_independent"] }
+"jpeg-decoder" = { version = "0.3", default-features = false, features = ["platform_independent"] }
 
 [target."cfg(any(target_os=\"freebsd\", target_os=\"openbsd\", target_os = \"netbsd\", target_os = \"dragonfly\", target_os = \"ios\"))".dependencies]
 "mio" = { "version" = "=1.2.3", "features" = ["os-ext"], "optional" = true }

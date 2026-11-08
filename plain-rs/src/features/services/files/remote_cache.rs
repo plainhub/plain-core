@@ -50,7 +50,7 @@ impl RemoteCache {
                     None => self
                         .client
                         .get_or_init(|| {
-                            reqwest::Client::builder()
+                            plain_libs::protocols::http_client::builder()
                                 .use_rustls_tls()
                                 .danger_accept_invalid_certs(true)
                                 .connect_timeout(Duration::from_secs(10))
@@ -102,7 +102,7 @@ impl RemoteCache {
             let client = self
                 .verified_client
                 .get_or_init(|| {
-                    reqwest::Client::builder()
+                    plain_libs::protocols::http_client::builder()
                         .use_rustls_tls()
                         .connect_timeout(Duration::from_secs(10))
                         .read_timeout(Duration::from_secs(10))

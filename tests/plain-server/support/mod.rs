@@ -12,7 +12,7 @@ pub(crate) async fn graphql_http_variables(
     query: &str,
     variables: serde_json::Value,
 ) -> serde_json::Value {
-    let response = reqwest::Client::new()
+    let response = plain_libs::protocols::http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{port}/graphql"))
         .bearer_auth(token)
         .header("content-type", "application/json")

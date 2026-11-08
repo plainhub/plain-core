@@ -29,7 +29,7 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
     );
     let (http, https) = server.http_ports().await.unwrap();
     assert_eq!(http, server.port);
-    let client = reqwest::Client::builder()
+    let client = plain_libs::protocols::http_client::builder()
         .danger_accept_invalid_certs(true)
         .build()
         .unwrap();
@@ -294,7 +294,7 @@ async fn every_transport_build_serves_the_main_guest_and_peer_contracts_without_
     prefs.set("remote_access", true).unwrap();
     let token = plain_libs::utils::base64::base64_encode(&[3; 32]);
     let server = ContentServer::start(directory.path(), &token, prefs).unwrap();
-    let client = reqwest::Client::new();
+    let client = plain_libs::protocols::http_client::builder().build().unwrap();
     let document = serde_json::json!({"query":"query Main { __typename audioQueueItems(query: \"\", offset: 0, limit: 10) { mediaId } }","operationName":"Main"});
     let native = server
         .graphql_executor()

@@ -75,7 +75,7 @@ async fn native_restart_returns_final_ports_and_the_public_health_endpoint_is_re
     let settings = management.preferences().unwrap();
     assert_eq!(settings["http_port"], result.http_port);
     assert_eq!(settings["https_port"], result.https_port);
-    let response = reqwest::Client::new()
+    let response = plain_libs::protocols::http_client::builder().build().unwrap()
         .get(format!("http://127.0.0.1:{}/health", result.http_port))
         .timeout(std::time::Duration::from_secs(10))
         .send()

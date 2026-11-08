@@ -82,7 +82,7 @@ fn http_client() -> Option<reqwest::Client> {
     static CLIENT: OnceLock<Option<reqwest::Client>> = OnceLock::new();
     CLIENT
         .get_or_init(|| {
-            reqwest::Client::builder()
+            plain_libs::protocols::http_client::builder()
                 .timeout(FETCH_TIMEOUT)
                 .build()
                 .ok()

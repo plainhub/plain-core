@@ -36,10 +36,6 @@
 //! Types which implement a subset of these traits can then be converted to/from
 //! byte sequences with little to no runtime overhead.
 //!
-//! Zerocopy also provides byte-order aware integer types that support these
-//! conversions; see the [`byteorder`] module. These types are especially useful
-//! for network parsing.
-//!
 //! [user-survey]: https://docs.google.com/forms/d/e/1FAIpQLSdzBNTN9tzwsmtyZxRFNL02K36IWCdHWW2ZBckyQS2xiO3i8Q/viewform?usp=published_options
 //!
 //! # Cargo Features
@@ -48,15 +44,6 @@
 //!   By default, `zerocopy` is `no_std`. When the `alloc` feature is enabled,
 //!   the `alloc` crate is added as a dependency, and some allocation-related
 //!   functionality is added.
-//!
-//! - **`byteorder`** (enabled by default)
-//!   Adds the [`byteorder`] module and a dependency on the `byteorder` crate.
-//!   The `byteorder` module provides byte order-aware equivalents of the
-//!   multi-byte primitive numerical types. Unlike their primitive equivalents,
-//!   the types in this module have no alignment requirement and support byte
-//!   order conversions. This can be useful in handling file formats, network
-//!   packet layouts, etc which don't provide alignment guarantees and which may
-//!   use a byte order different from that of the execution platform.
 //!
 //! - **`derive`**
 //!   Provides derives for the core marker traits via the `zerocopy-derive`
@@ -259,9 +246,6 @@ extern crate self as zerocopy;
 #[macro_use]
 mod macros;
 
-#[cfg(feature = "byteorder")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "byteorder")))]
-pub mod byteorder;
 #[doc(hidden)]
 pub mod macro_util;
 mod post_monomorphization_compile_fail_tests;
@@ -269,9 +253,6 @@ mod util;
 // TODO(#252): If we make this pub, come up with a better name.
 mod wrappers;
 
-#[cfg(feature = "byteorder")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "byteorder")))]
-pub use crate::byteorder::*;
 pub use crate::wrappers::*;
 
 #[cfg(any(feature = "derive", test))]
@@ -1138,8 +1119,7 @@ pub use zerocopy_derive::FromZeroes;
 /// of bytes by performing a runtime check that the byte sequence contains a
 /// valid instance of `Self`.
 ///
-/// `TryFromBytes` is ignorant of byte order. For byte order-aware types, see
-/// the [`byteorder`] module.
+/// `TryFromBytes` is ignorant of byte order.
 ///
 /// # What is a "valid instance"?
 ///
@@ -2557,9 +2537,8 @@ pub unsafe trait FromBytes: FromZeroes {
 /// ```
 ///
 /// This error indicates that the type being annotated has padding bytes, which
-/// is illegal for `AsBytes` types. Consider reducing the alignment of some
-/// fields by using types in the [`byteorder`] module, adding explicit struct
-/// fields where those padding bytes would be, or using `#[repr(packed)]`. See
+/// is illegal for `AsBytes` types. Consider adding explicit struct fields where
+/// those padding bytes would be, or using `#[repr(packed)]`. See
 /// the Rust Reference's page on [type layout] for more information
 /// about type layout and padding.
 ///
@@ -4071,8 +4050,7 @@ macro_rules! transmute_mut {
 /// compile time. So, for instance, an invocation with a Windows path containing
 /// backslashes `\` would not compile correctly on Unix.
 ///
-/// `include_value!` is ignorant of byte order. For byte order-aware types, see
-/// the [`byteorder`] module.
+/// `include_value!` is ignorant of byte order.
 ///
 /// # Examples
 ///

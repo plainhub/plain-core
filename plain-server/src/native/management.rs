@@ -132,7 +132,7 @@ impl NativeManagement {
         let Some((port, _)) = self.state.public_ports().await else {
             return Ok(false);
         };
-        reqwest::Client::builder()
+        plain_libs::protocols::http_client::builder()
             .no_proxy()
             .timeout(std::time::Duration::from_secs(2))
             .build()

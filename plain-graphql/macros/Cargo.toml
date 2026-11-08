@@ -12,7 +12,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "=1.0.107"
 quote = "=1.0.47"
-syn = { version = "=2.0.119", features = ["extra-traits", "visit-mut"] }
+syn = { version = "=2.0.119", features = ["extra-traits", "full", "visit-mut"] }
 thiserror = "=2.0.21"
 
 [package.metadata.upstream]

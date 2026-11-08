@@ -20,11 +20,9 @@ doctest = false
 [features]
 "__internal_use_only_features_that_work_on_stable" = ["alloc", "derive", "simd"]
 "alloc" = []
-"default" = ["byteorder"]
 "derive" = ["zerocopy-derive"]
 "simd" = []
 "simd-nightly" = ["simd"]
 
 [dependencies]
-"byteorder" = { version = "=1.5.0", optional = true, default-features = false }
 "zerocopy-derive" = { path = "../zerocopy-derive", optional = true }

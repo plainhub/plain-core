@@ -20,7 +20,7 @@ async fn fixture_server() -> (std::net::SocketAddr, tokio::task::JoinHandle<()>)
 #[tokio::test]
 async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
     let (addr, server) = fixture_server().await;
-    let client = reqwest::Client::builder()
+    let client = plain_libs::protocols::http_client::builder()
         .no_proxy()
         .resolve("fixture.example", addr)
         .build()
@@ -74,7 +74,7 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
 #[tokio::test]
 async fn missing_content_length_cannot_bypass_body_limit() {
     let (addr, server) = fixture_server().await;
-    let response = reqwest::Client::builder()
+    let response = plain_libs::protocols::http_client::builder()
         .no_proxy()
         .build()
         .unwrap()

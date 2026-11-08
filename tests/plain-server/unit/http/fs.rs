@@ -686,7 +686,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     )
     .unwrap();
     let url = format!("http://127.0.0.1:{}/fs?action=preview", server.port);
-    let client = reqwest::Client::new();
+    let client = plain_libs::protocols::http_client::builder().build().unwrap();
     let response = client
         .get(&url)
         .query(&[("id", &id)])
@@ -802,7 +802,7 @@ async fn fs_thumbnail_latency_benchmark() {
         )
         .await
         .unwrap();
-    let http = reqwest::Client::builder()
+    let http = plain_libs::protocols::http_client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(pem.as_bytes()).unwrap())
         .build()
         .unwrap();

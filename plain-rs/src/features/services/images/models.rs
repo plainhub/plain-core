@@ -347,7 +347,7 @@ impl Runtime {
         tokio::fs::create_dir_all(&directory)
             .await
             .map_err(|e| e.to_string())?;
-        let client = reqwest::Client::builder()
+        let client = plain_libs::protocols::http_client::builder()
             .connect_timeout(Duration::from_secs(30))
             .read_timeout(Duration::from_secs(30))
             .build()

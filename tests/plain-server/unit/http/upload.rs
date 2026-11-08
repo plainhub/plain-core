@@ -52,7 +52,7 @@ async fn multipart_upload(
         .chunks(32768)
         .map(|chunk| Ok::<_, std::io::Error>(axum::body::Bytes::copy_from_slice(chunk)))
         .collect::<Vec<_>>();
-    let mut request = reqwest::Client::new()
+    let mut request = plain_libs::protocols::http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{}{endpoint}", core.port))
         .header("c-id", client_id)
         .header(
