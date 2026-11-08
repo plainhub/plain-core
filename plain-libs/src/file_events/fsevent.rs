@@ -9,7 +9,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::ptr;
 use std::sync::{
-    Arc, Mutex,
+    Arc, Mutex, Weak,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -205,14 +205,14 @@ struct StreamContextInfo {
 
 extern "C" fn retain_context(info: *const libc::c_void) -> *const libc::c_void {
     unsafe {
-        Arc::increment_strong_count(info.cast::<StreamContextInfo>());
+        Arc::increment_strong_count(info.cast::<Weak<StreamContextInfo>>());
     }
     info
 }
 
 extern "C" fn release_context(info: *const libc::c_void) {
     unsafe {
-        Arc::decrement_strong_count(info.cast::<StreamContextInfo>());
+        Arc::decrement_strong_count(info.cast::<Weak<StreamContextInfo>>());
     }
 }
 
@@ -426,9 +426,11 @@ impl FsEventWatcher {
             recursive_info: self.recursive_info.clone(),
         });
 
+        // The native stream can outlive invalidation, so its context must not own the Rust handler.
+        let callback_context = Arc::new(Arc::downgrade(&context));
         let stream_context = fs::FSEventStreamContext {
             version: 0,
-            info: Arc::as_ptr(&context) as *mut libc::c_void,
+            info: Arc::as_ptr(&callback_context).cast_mut().cast(),
             retain: Some(retain_context),
             release: Some(release_context),
             copy_description: None,
@@ -480,8 +482,10 @@ extern "C" fn callback(
     event_flags: *const fs::FSEventStreamEventFlags,
     _event_ids: *const fs::FSEventStreamEventId,
 ) {
-    // The native stream retains this Arc, and this callback keeps its own reference across user code.
-    let info = unsafe { Arc::from_raw(retain_context(info).cast::<StreamContextInfo>()) };
+    let context = unsafe { &*info.cast::<Weak<StreamContextInfo>>() };
+    let Some(info) = context.upgrade() else {
+        return;
+    };
     if num_events == 0 {
         return;
     }

@@ -9,7 +9,9 @@ fn watcher_drop_drains_and_releases_the_native_context() {
     watcher
         .watch(directory.path(), RecursiveMode::Recursive)
         .unwrap();
+    let context = Arc::downgrade(&watcher.stream.as_ref().unwrap().context);
     drop(watcher);
+    assert!(context.upgrade().is_none());
     assert!(weak.upgrade().is_none());
 }
 
@@ -37,13 +39,17 @@ fn native_context_callbacks_balance_arc_ownership() {
         event_handler: Arc::new(Mutex::new(Handler(drops.clone()))),
         recursive_info: HashMap::new(),
     });
-    let pointer = Arc::as_ptr(&context).cast();
+    let callback_context = Arc::new(Arc::downgrade(&context));
+    let weak = Arc::downgrade(&callback_context);
+    let pointer = Arc::as_ptr(&callback_context).cast();
     assert_eq!(retain_context(pointer), pointer);
-    assert_eq!(Arc::strong_count(&context), 2);
+    assert_eq!(Arc::strong_count(&callback_context), 2);
+    drop(callback_context);
     drop(context);
-    assert_eq!(drops.load(Ordering::SeqCst), 0);
-    release_context(pointer);
     assert_eq!(drops.load(Ordering::SeqCst), 1);
+    assert!(weak.upgrade().unwrap().upgrade().is_none());
+    release_context(pointer);
+    assert!(weak.upgrade().is_none());
 }
 
 #[test]
@@ -109,9 +115,10 @@ fn callback_keeps_context_alive_and_stops_emitting_when_deactivated() {
     let paths = [c"/watch/file".as_ptr(); 2];
     let flags =
         [fs::kFSEventStreamEventFlagItemCreated | fs::kFSEventStreamEventFlagItemModified; 2];
+    let callback_context = Arc::downgrade(&context);
     callback(
         ptr::null_mut(),
-        Arc::as_ptr(&context).cast_mut().cast(),
+        ptr::from_ref(&callback_context).cast_mut().cast(),
         2,
         paths.as_ptr().cast_mut().cast(),
         flags.as_ptr(),
@@ -128,9 +135,10 @@ fn empty_native_batch_does_not_read_null_event_arrays() {
         recursive_info: HashMap::new(),
         event_handler: Arc::new(Mutex::new(|_| {})),
     });
+    let callback_context = Arc::downgrade(&context);
     callback(
         ptr::null_mut(),
-        Arc::as_ptr(&context).cast_mut().cast(),
+        ptr::from_ref(&callback_context).cast_mut().cast(),
         0,
         ptr::null_mut(),
         ptr::null(),

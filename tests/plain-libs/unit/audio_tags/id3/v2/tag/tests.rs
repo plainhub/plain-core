@@ -7,7 +7,7 @@ use crate::audio_tags::id3::v2::{
 };
 use crate::audio_tags::picture::MimeType;
 use crate::audio_tags::tag::items::{ENGLISH, Timestamp};
-use crate::audio_tags::tag::utils::read_path;
+use crate::audio_tags::tag::utils::read_tag_fixture;
 
 use super::*;
 
@@ -16,7 +16,7 @@ use std::collections::HashMap;
 const COMMENT_FRAME_ID: &str = "COMM";
 
 fn read_tag(path: &str) -> Id3v2Tag {
-    let tag_bytes = read_path(path);
+    let tag_bytes = read_tag_fixture(path);
     read_tag_with_options(
         &tag_bytes,
         ParseOptions::new().parsing_mode(ParsingMode::Strict),
@@ -82,14 +82,14 @@ fn parse_id3v2() {
         String::from("Classical"),
     )));
 
-    let parsed_tag = read_tag("tests/tags/assets/id3v2/test.id3v24");
+    let parsed_tag = read_tag("id3v2/test.id3v24");
 
     assert_eq!(expected_tag, parsed_tag);
 }
 
 #[test]
 fn id3v2_to_tag() {
-    let id3v2 = read_tag("tests/tags/assets/id3v2/test.id3v24");
+    let id3v2 = read_tag("id3v2/test.id3v24");
 
     let tag: Tag = id3v2.into();
 
@@ -149,13 +149,13 @@ fn create_full_test_tag(version: Id3v2Version) -> Id3v2Tag {
     tag.insert(Frame::Text(TextInformationFrame::new(
         FrameId::Valid(Cow::Borrowed("TIT2")),
         encoding,
-        String::from("TempleOS Hymn Risen (Remix)"),
+        String::from("Fixture Track"),
     )));
 
     tag.insert(Frame::Text(TextInformationFrame::new(
         FrameId::Valid(Cow::Borrowed("TPE1")),
         encoding,
-        String::from("Dave Eddy"),
+        String::from("Fixture Artist"),
     )));
 
     tag.insert(Frame::Text(TextInformationFrame::new(
@@ -167,7 +167,7 @@ fn create_full_test_tag(version: Id3v2Version) -> Id3v2Tag {
     tag.insert(Frame::Text(TextInformationFrame::new(
         FrameId::Valid(Cow::Borrowed("TALB")),
         encoding,
-        String::from("Summer"),
+        String::from("Fixture Album"),
     )));
 
     tag.insert(Frame::Timestamp(TimestampFrame::new(
@@ -197,7 +197,7 @@ fn create_full_test_tag(version: Id3v2Version) -> Id3v2Tag {
             pic_type: PictureType::CoverFront,
             mime_type: Some(MimeType::Png),
             description: None,
-            data: read_path("tests/tags/assets/id3v2/test_full_cover.png").into(),
+            data: read_tag_fixture("id3v2/test_full_cover.png").into(),
         },
     )));
 
@@ -207,7 +207,7 @@ fn create_full_test_tag(version: Id3v2Version) -> Id3v2Tag {
 #[test]
 fn id3v24_full() {
     let tag = create_full_test_tag(Id3v2Version::V4);
-    let parsed_tag = read_tag("tests/tags/assets/id3v2/test_full.id3v24");
+    let parsed_tag = read_tag("id3v2/test_full.id3v24");
 
     assert_eq!(tag, parsed_tag);
 }
@@ -215,7 +215,7 @@ fn id3v24_full() {
 #[test]
 fn id3v23_full() {
     let mut tag = create_full_test_tag(Id3v2Version::V3);
-    let mut parsed_tag = read_tag("tests/tags/assets/id3v2/test_full.id3v23");
+    let mut parsed_tag = read_tag("id3v2/test_full.id3v23");
 
     // Tags may change order after being read, due to the TDRC conversion
     tag.frames.sort_by_key(|frame| frame.id_str().to_string());
@@ -228,7 +228,7 @@ fn id3v23_full() {
 #[test]
 fn id3v22_full() {
     let tag = create_full_test_tag(Id3v2Version::V2);
-    let parsed_tag = read_tag("tests/tags/assets/id3v2/test_full.id3v22");
+    let parsed_tag = read_tag("id3v2/test_full.id3v22");
 
     assert_eq!(tag, parsed_tag);
 }
@@ -289,7 +289,7 @@ fn multi_item_tag_to_id3v2() {
 
 #[test]
 fn utf16_txxx_with_single_bom() {
-    let _ = read_tag("tests/tags/assets/id3v2/issue_53.id3v24");
+    let _ = read_tag("id3v2/issue_53.id3v24");
 }
 
 #[test]
@@ -850,7 +850,7 @@ fn get_set_user_defined_text() {
 #[test]
 fn read_multiple_composers_should_not_fail_with_bad_frame_length() {
     // Issue #255
-    let tag = read_tag("tests/tags/assets/id3v2/multiple_composers.id3v24");
+    let tag = read_tag("id3v2/multiple_composers.id3v24");
     let mut composers = tag
         .get_texts(&FrameId::Valid(Cow::Borrowed("TCOM")))
         .unwrap();
@@ -864,7 +864,7 @@ fn read_multiple_composers_should_not_fail_with_bad_frame_length() {
 fn trim_end_nulls_when_reading_frame_content() {
     // Issue #273
     // Tag written by mid3v2. All frames contain null-terminated UTF-8 text
-    let tag = read_tag("tests/tags/assets/id3v2/trailing_nulls.id3v24");
+    let tag = read_tag("id3v2/trailing_nulls.id3v24");
 
     // Verify that each different frame type no longer has null terminator
     let artist = tag.get_text(&FrameId::Valid(Cow::Borrowed("TPE1")));
@@ -883,7 +883,7 @@ fn trim_end_nulls_when_reading_frame_content() {
     let Frame::UserUrl(url) = &url_frame else {
         panic!("Expected a UserUrl")
     };
-    assert_eq!(url.content, "https://www.myfanpage.com");
+    assert_eq!(url.content, "https://example.invalid/artist");
 }
 
 fn id3v2_tag_with_genre(value: &str) -> Id3v2Tag {
@@ -1174,9 +1174,9 @@ fn ensure_frame_skipping_within_bounds() {
     // This tag has an invalid `TDEN` frame, but it is skippable in BestAttempt/Relaxed parsing mode.
     // We should be able to continue reading the tag as normal, reaching the other `TDTG` frame.
 
-    let path = "tests/tags/assets/id3v2/skippable_frame_otherwise_valid.id3v24";
+    let path = "id3v2/skippable_frame_otherwise_valid.id3v24";
     let tag = read_tag_with_options(
-        &read_path(path),
+        &read_tag_fixture(path),
         ParseOptions::new().parsing_mode(ParsingMode::BestAttempt),
     );
 

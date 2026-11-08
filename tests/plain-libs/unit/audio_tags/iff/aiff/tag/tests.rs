@@ -29,7 +29,7 @@ fn parse_aiff_text() {
         ]),
     };
 
-    let tag = crate::audio_tags::tag::utils::read_path("tests/tags/assets/test.aiff_text");
+    let tag = crate::audio_tags::tag::utils::read_tag_fixture("test.aiff_text");
 
     let parsed_tag = super::super::read::read_from(
         &mut Cursor::new(tag),
@@ -44,7 +44,7 @@ fn parse_aiff_text() {
 
 #[test]
 fn aiff_text_to_tag() {
-    let tag_bytes = crate::audio_tags::tag::utils::read_path("tests/tags/assets/test.aiff_text");
+    let tag_bytes = crate::audio_tags::tag::utils::read_tag_fixture("test.aiff_text");
 
     let aiff_text = super::super::read::read_from(
         &mut Cursor::new(tag_bytes),
@@ -103,7 +103,7 @@ fn tag_to_aiff_text() {
 
 #[test]
 fn zero_sized_text_chunks() {
-    let tag_bytes = crate::audio_tags::tag::utils::read_path("tests/tags/assets/zero.aiff_text");
+    let tag_bytes = crate::audio_tags::tag::utils::read_tag_fixture("zero.aiff_text");
 
     let aiff_file = super::super::read::read_from(
         &mut Cursor::new(tag_bytes),

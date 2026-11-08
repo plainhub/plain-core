@@ -8,7 +8,7 @@ fn zero_size_id3v2() {
 
     use std::io::Cursor;
 
-    let mut f = Cursor::new(std::fs::read("tests/tags/assets/id3v2/zero.id3v2").unwrap());
+    let mut f = Cursor::new(crate::audio_tags::tag::utils::read_tag_fixture("id3v2/zero.id3v2"));
     let header = Id3v2Header::parse(&mut f).unwrap();
     assert!(
         parse_id3v2(
@@ -31,7 +31,7 @@ fn bad_frame_id_relaxed_id3v2() {
     // Contains a frame with a "+" in the ID, which is invalid.
     // All other frames in the tag are valid, however.
     let mut f = Cursor::new(
-        std::fs::read("tests/tags/assets/id3v2/bad_frame_otherwise_valid.id3v24").unwrap(),
+        crate::audio_tags::tag::utils::read_tag_fixture("id3v2/bad_frame_otherwise_valid.id3v24"),
     );
     let header = Id3v2Header::parse(&mut f).unwrap();
     let id3v2 = parse_id3v2(

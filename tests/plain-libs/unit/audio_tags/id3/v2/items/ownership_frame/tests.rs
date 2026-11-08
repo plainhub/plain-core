@@ -15,7 +15,7 @@ fn expected() -> OwnershipFrame<'static> {
 
 #[test]
 fn owne_decode() {
-    let cont = crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.owne");
+    let cont = crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.owne");
 
     let parsed_owne = OwnershipFrame::parse(&mut &cont[..], FrameFlags::default())
         .unwrap()
@@ -29,7 +29,7 @@ fn owne_encode() {
     let encoded = expected().as_bytes(false).unwrap();
 
     let expected_bytes =
-        crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.owne");
+        crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.owne");
 
     assert_eq!(encoded, expected_bytes);
 }

@@ -48,7 +48,7 @@ fn expected() -> RelativeVolumeAdjustmentFrame<'static> {
 
 #[test]
 fn rva2_decode() {
-    let cont = crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.rva2");
+    let cont = crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.rva2");
 
     let parsed_rva2 = RelativeVolumeAdjustmentFrame::parse(
         &mut &cont[..],
@@ -67,7 +67,7 @@ fn rva2_encode() {
     let encoded = expected().as_bytes();
 
     let expected_bytes =
-        crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.rva2");
+        crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.rva2");
 
     // We have to check the output in fragments, as the order of channels is not guaranteed.
     assert_eq!(encoded.len(), expected_bytes.len());

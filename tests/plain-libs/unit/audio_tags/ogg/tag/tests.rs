@@ -20,7 +20,7 @@ fn read_tag(tag: &[u8]) -> VorbisComments {
 fn parse_vorbis_comments() {
     let mut expected_tag = VorbisComments::default();
 
-    expected_tag.set_vendor(String::from("Lavf58.76.100"));
+    expected_tag.set_vendor(String::from("Fixture vendor"));
 
     expected_tag.push(String::from("ALBUM"), String::from("Baz album"));
     expected_tag.push(String::from("ARTIST"), String::from("Bar artist"));
@@ -30,7 +30,7 @@ fn parse_vorbis_comments() {
     expected_tag.push(String::from("TITLE"), String::from("Foo title"));
     expected_tag.push(String::from("TRACKNUMBER"), String::from("1"));
 
-    let file_cont = crate::audio_tags::tag::utils::read_path("tests/tags/assets/test.vorbis");
+    let file_cont = crate::audio_tags::tag::utils::read_tag_fixture("test.vorbis");
     let parsed_tag = read_tag(&file_cont);
 
     assert_eq!(expected_tag, parsed_tag);
@@ -38,7 +38,7 @@ fn parse_vorbis_comments() {
 
 #[test]
 fn vorbis_comments_to_tag() {
-    let tag_bytes = std::fs::read("tests/tags/assets/test.vorbis").unwrap();
+    let tag_bytes = crate::audio_tags::tag::utils::read_tag_fixture("test.vorbis");
     let vorbis_comments = read_tag(&tag_bytes);
 
     let tag: Tag = vorbis_comments.into();
@@ -142,13 +142,13 @@ fn multi_value_roundtrip() {
 
 #[test]
 fn zero_sized_vorbis_comments() {
-    let tag_bytes = std::fs::read("tests/tags/assets/zero.vorbis").unwrap();
+    let tag_bytes = crate::audio_tags::tag::utils::read_tag_fixture("zero.vorbis");
     let _ = read_tag(&tag_bytes);
 }
 
 #[test]
 fn issue_60() {
-    let tag_bytes = std::fs::read("tests/tags/assets/issue_60.vorbis").unwrap();
+    let tag_bytes = crate::audio_tags::tag::utils::read_tag_fixture("issue_60.vorbis");
     let tag = read_tag(&tag_bytes);
 
     assert_eq!(tag.pictures().len(), 1);

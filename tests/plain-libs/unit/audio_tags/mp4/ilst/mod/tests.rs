@@ -12,7 +12,7 @@ use crate::audio_tags::tag::{ItemValue, Tag, TagItem, TagType};
 use std::io::{Cursor, Read as _, Seek as _, Write as _};
 
 fn read_ilst(path: &str, parse_options: ParseOptions) -> Ilst {
-    let tag = std::fs::read(path).unwrap();
+    let tag = utils::read_tag_fixture(path);
     read_ilst_raw(&tag, parse_options)
 }
 
@@ -99,7 +99,7 @@ fn parse_ilst() {
         AtomData::UTF8(String::from("Foo title")),
     ));
 
-    let tag = crate::audio_tags::tag::utils::read_path("tests/tags/assets/ilst/test.ilst");
+    let tag = crate::audio_tags::tag::utils::read_tag_fixture("ilst/test.ilst");
     let len = tag.len();
 
     let cursor = Cursor::new(tag);
@@ -117,7 +117,7 @@ fn parse_ilst() {
 
 #[test]
 fn ilst_to_tag() {
-    let tag = crate::audio_tags::tag::utils::read_path("tests/tags/assets/ilst/test.ilst");
+    let tag = crate::audio_tags::tag::utils::read_tag_fixture("ilst/test.ilst");
     let len = tag.len();
 
     let cursor = Cursor::new(tag);
@@ -192,7 +192,7 @@ fn tag_to_ilst() {
 
 #[test]
 fn issue_34() {
-    let ilst = read_ilst_strict("tests/tags/assets/ilst/issue_34.ilst");
+    let ilst = read_ilst_strict("ilst/issue_34.ilst");
 
     verify_atom(
         &ilst,
@@ -211,7 +211,7 @@ fn issue_34() {
 
 #[test]
 fn advisory_rating() {
-    let ilst = read_ilst_strict("tests/tags/assets/ilst/advisory_rating.ilst");
+    let ilst = read_ilst_strict("ilst/advisory_rating.ilst");
 
     verify_atom(
         &ilst,
@@ -239,7 +239,7 @@ fn read_non_full_meta_atom() {
 
 #[test]
 fn multi_value_atom() {
-    let ilst = read_ilst_strict("tests/tags/assets/ilst/multi_value_atom.ilst");
+    let ilst = read_ilst_strict("ilst/multi_value_atom.ilst");
     let artist_atom = ilst.get(&AtomIdent::Fourcc(*b"\xa9ART")).unwrap();
 
     assert_eq!(
@@ -353,7 +353,7 @@ fn merge_insert() {
 
 #[test]
 fn invalid_atom_type() {
-    let ilst = read_ilst_strict("tests/tags/assets/ilst/invalid_atom_type.ilst");
+    let ilst = read_ilst_strict("ilst/invalid_atom_type.ilst");
 
     // The tag contains 3 items, however the last one has an invalid type. We will stop at that point, but retain the
     // first two items.
@@ -367,7 +367,7 @@ fn invalid_atom_type() {
 
 #[test]
 fn invalid_string_encoding() {
-    let ilst = read_ilst_bestattempt("tests/tags/assets/ilst/invalid_string_encoding.ilst");
+    let ilst = read_ilst_bestattempt("ilst/invalid_string_encoding.ilst");
 
     // The tag has an album string with some unknown encoding, but the rest of the tag
     // is valid. We should have all items present except the album.
@@ -408,7 +408,7 @@ fn flag_item_conversion() {
 #[test]
 fn gnre_conversion_case_1() {
     // Case 1: 1 `gnre` atom present, no `©gen` present. `gnre` gets converted without issue.
-    let ilst = read_ilst_bestattempt("tests/tags/assets/ilst/gnre_conversion_case_1.ilst");
+    let ilst = read_ilst_bestattempt("ilst/gnre_conversion_case_1.ilst");
 
     assert_eq!(ilst.len(), 2);
     assert_eq!(ilst.artist().unwrap(), "Foo artist"); // Sanity check
@@ -418,7 +418,7 @@ fn gnre_conversion_case_1() {
 #[test]
 fn gnre_conversion_case_2() {
     // Case 2: 1 `gnre` atom present, 1 `©gen` present. `gnre` gets discarded.
-    let ilst = read_ilst_bestattempt("tests/tags/assets/ilst/gnre_conversion_case_2.ilst");
+    let ilst = read_ilst_bestattempt("ilst/gnre_conversion_case_2.ilst");
 
     assert_eq!(ilst.len(), 2);
     assert_eq!(ilst.artist().unwrap(), "Foo artist"); // Sanity check
@@ -430,7 +430,7 @@ fn gnre_conversion_case_3() {
     // Case 2: 1 `gnre` atom present, 1 `©gen` present. implicit conversion are disabled, `gnre` is retained
     //         as an unknown atom.
     let ilst = read_ilst(
-        "tests/tags/assets/ilst/gnre_conversion_case_2.ilst",
+        "ilst/gnre_conversion_case_2.ilst",
         ParseOptions::new().implicit_conversions(false),
     );
 

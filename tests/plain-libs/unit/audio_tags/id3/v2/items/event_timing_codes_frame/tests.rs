@@ -36,7 +36,7 @@ fn expected() -> EventTimingCodesFrame<'static> {
 
 #[test]
 fn etco_decode() {
-    let cont = crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.etco");
+    let cont = crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.etco");
 
     let parsed_etco = EventTimingCodesFrame::parse(&mut &cont[..], FrameFlags::default())
         .unwrap()
@@ -50,7 +50,7 @@ fn etco_encode() {
     let encoded = expected().as_bytes();
 
     let expected_bytes =
-        crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.etco");
+        crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.etco");
 
     assert_eq!(encoded, expected_bytes);
 }

@@ -19,7 +19,7 @@ fn parse_riff_info() {
     expected_tag.insert(String::from("IPRD"), String::from("Baz album"));
     expected_tag.insert(String::from("IPRT"), String::from("1"));
 
-    let tag = crate::audio_tags::tag::utils::read_path("tests/tags/assets/test.riff");
+    let tag = crate::audio_tags::tag::utils::read_tag_fixture("test.riff");
     let mut parsed_tag = RiffInfoList::default();
 
     super::read::parse_riff_info(
@@ -36,7 +36,7 @@ fn parse_riff_info() {
 
 #[test]
 fn riff_info_to_tag() {
-    let tag_bytes = crate::audio_tags::tag::utils::read_path("tests/tags/assets/test.riff");
+    let tag_bytes = crate::audio_tags::tag::utils::read_tag_fixture("test.riff");
 
     let mut reader = std::io::Cursor::new(&tag_bytes[..]);
     let mut riff_info = RiffInfoList::default();

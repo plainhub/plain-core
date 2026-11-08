@@ -8,10 +8,7 @@ fn expected() -> GeneralEncapsulatedObject<'static> {
         mime_type: Some(String::from("audio/mpeg")),
         file_name: Some(String::from("a.mp3")),
         descriptor: Some(String::from("Test Asset")),
-        data: crate::audio_tags::tag::utils::read_path(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../plain-rs/testdata/upstream/lofty/assets/minimal/full_test.mp3"
-        )),
+        data: vec![0xff, 0xfb, 0x90, 0x64, 0x00, 0x7f, 0x80, 0xff],
     }
 }
 
@@ -19,7 +16,7 @@ fn expected() -> GeneralEncapsulatedObject<'static> {
 fn geob_decode() {
     let expected = expected();
 
-    let cont = crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.geob");
+    let cont = crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.geob");
 
     let parsed_geob = GeneralEncapsulatedObject::parse(&cont, FrameFlags::default()).unwrap();
 
@@ -33,7 +30,7 @@ fn geob_encode() {
     let encoded = to_encode.as_bytes();
 
     let expected_bytes =
-        crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.geob");
+        crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.geob");
 
     assert_eq!(encoded, expected_bytes);
 }

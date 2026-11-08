@@ -55,7 +55,7 @@ fn parse_ape() {
     expected_tag.insert(track_number_item);
     expected_tag.insert(genre_item);
 
-    let tag = crate::audio_tags::tag::utils::read_path("tests/tags/assets/test.apev2");
+    let tag = crate::audio_tags::tag::utils::read_tag_fixture("test.apev2");
     let mut reader = Cursor::new(tag);
 
     let (Some(parsed_tag), _) =
@@ -74,7 +74,7 @@ fn parse_ape() {
 
 #[test]
 fn ape_to_tag() {
-    let tag_bytes = crate::audio_tags::tag::utils::read_path("tests/tags/assets/test.apev2");
+    let tag_bytes = crate::audio_tags::tag::utils::read_tag_fixture("test.apev2");
     let mut reader = Cursor::new(tag_bytes);
 
     let (Some(ape), _) =

@@ -23,7 +23,7 @@ fn expected(encoding: TextEncoding) -> SynchronizedTextFrame<'static> {
 
 #[test]
 fn sylt_decode() {
-    let cont = crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.sylt");
+    let cont = crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.sylt");
 
     let parsed_sylt = SynchronizedTextFrame::parse(&cont, FrameFlags::default()).unwrap();
 
@@ -35,14 +35,14 @@ fn sylt_encode() {
     let encoded = expected(TextEncoding::Latin1).as_bytes().unwrap();
 
     let expected_bytes =
-        crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.sylt");
+        crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.sylt");
 
     assert_eq!(encoded, expected_bytes);
 }
 
 #[test]
 fn sylt_decode_utf16() {
-    let cont = crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test_utf16.sylt");
+    let cont = crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test_utf16.sylt");
 
     let parsed_sylt = SynchronizedTextFrame::parse(&cont, FrameFlags::default()).unwrap();
 
@@ -54,7 +54,7 @@ fn sylt_encode_utf_16() {
     let encoded = expected(TextEncoding::UTF16).as_bytes().unwrap();
 
     let expected_bytes =
-        crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test_utf16.sylt");
+        crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test_utf16.sylt");
 
     assert_eq!(encoded, expected_bytes);
 }

@@ -14,7 +14,7 @@ fn parse_id3v1() {
         genre: Some(32),
     };
 
-    let tag = crate::audio_tags::tag::utils::read_path("tests/tags/assets/test.id3v1");
+    let tag = crate::audio_tags::tag::utils::read_tag_fixture("test.id3v1");
     let parsed_tag = crate::audio_tags::id3::v1::read::parse_id3v1(tag.try_into().unwrap());
 
     assert_eq!(expected_tag, parsed_tag);
@@ -22,7 +22,7 @@ fn parse_id3v1() {
 
 #[test]
 fn id3v1_to_tag() {
-    let tag_bytes = crate::audio_tags::tag::utils::read_path("tests/tags/assets/test.id3v1");
+    let tag_bytes = crate::audio_tags::tag::utils::read_tag_fixture("test.id3v1");
     let id3v1 = crate::audio_tags::id3::v1::read::parse_id3v1(tag_bytes.try_into().unwrap());
 
     let tag: Tag = id3v1.into();

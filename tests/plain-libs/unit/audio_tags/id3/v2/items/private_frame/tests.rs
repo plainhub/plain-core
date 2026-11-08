@@ -10,7 +10,7 @@ fn expected() -> PrivateFrame<'static> {
 
 #[test]
 fn priv_decode() {
-    let cont = crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.priv");
+    let cont = crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.priv");
 
     let parsed_priv = PrivateFrame::parse(&mut &cont[..], FrameFlags::default())
         .unwrap()
@@ -24,7 +24,7 @@ fn priv_encode() {
     let encoded = expected().as_bytes().unwrap();
 
     let expected_bytes =
-        crate::audio_tags::tag::utils::read_path("tests/tags/assets/id3v2/test.priv");
+        crate::audio_tags::tag::utils::read_tag_fixture("id3v2/test.priv");
 
     assert_eq!(encoded, expected_bytes);
 }

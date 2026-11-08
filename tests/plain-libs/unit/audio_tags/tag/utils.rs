@@ -1,6 +1,7 @@
 use crate::audio_tags::tag::{ItemKey, Tag, TagType};
 use std::fs::File;
 use std::io::Read;
+use std::path::Path;
 
 pub(crate) fn create_tag(tag_type: TagType) -> Tag {
     let mut tag = Tag::new(tag_type);
@@ -30,8 +31,14 @@ pub(crate) fn verify_tag(tag: &Tag, track_number: bool, genre: bool) {
     }
 }
 
-pub(crate) fn read_path(path: &str) -> Vec<u8> {
-    read_file(&mut File::open(path).unwrap())
+pub(crate) fn read_path(path: impl AsRef<Path>) -> Vec<u8> {
+    read_file(&mut File::open(path.as_ref()).unwrap_or_else(|error| {
+        panic!("Cannot open audio fixture {}: {error}", path.as_ref().display())
+    }))
+}
+
+pub(crate) fn read_tag_fixture(name: &str) -> Vec<u8> {
+    read_path(Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-tags").join(name))
 }
 
 pub(crate) fn read_file(file: &mut File) -> Vec<u8> {
