@@ -38,6 +38,8 @@ pub(crate) fn add(fd: &OwnedFd, path: &Path, mask: u32) -> io::Result<i32> {
 }
 
 pub(crate) fn remove(fd: &OwnedFd, descriptor: i32) -> io::Result<()> {
+    #[cfg(target_os = "android")]
+    let descriptor = descriptor.cast_unsigned();
     if unsafe { libc::inotify_rm_watch(fd.as_raw_fd(), descriptor) } < 0 {
         Err(io::Error::last_os_error())
     } else {

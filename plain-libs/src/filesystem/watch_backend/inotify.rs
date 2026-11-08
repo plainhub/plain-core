@@ -3,7 +3,7 @@ use crate::filesystem::watch_backend::*;
 use crate::platform::inotify::decode;
 use crate::platform::inotify::{self, RawEvent};
 use std::{collections::HashMap, io, os::fd::OwnedFd};
-use tokio::io::unix::AsyncFd;
+use tokio::io::{Interest, unix::AsyncFd};
 
 pub struct Watcher {
     fd: AsyncFd<OwnedFd>,
@@ -19,8 +19,11 @@ impl Watcher {
     }
 
     fn open() -> io::Result<Self> {
+        let fd = inotify::open()?;
+        // SAFETY: The owned descriptor remains open and stable until AsyncFd drops it.
+        let fd = unsafe { AsyncFd::register_with_interest(fd, Interest::READABLE) }?;
         Ok(Self {
-            fd: AsyncFd::new(inotify::open()?),
+            fd,
             directories: HashMap::new(),
         })
     }
@@ -93,7 +96,7 @@ impl Watcher {
         let path = if event.name.is_empty() {
             parent
         } else {
-            parent.join(event.name)
+            parent.join(&event.name)
         };
         let kind = if event.has(libc::IN_UNMOUNT | libc::IN_DELETE_SELF | libc::IN_MOVE_SELF) {
             Kind::Refresh
