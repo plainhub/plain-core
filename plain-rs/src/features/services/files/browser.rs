@@ -193,7 +193,7 @@ impl Runtime {
         tokio::fs::create_dir_all(parent)
             .await
             .map_err(|error| error.to_string())?;
-        let temporary = Arc::new(Output(parent.join(format!("{}.mp4", uuid::Uuid::new_v4()))));
+        let temporary = Arc::new(Output(parent.join(format!("{}.mp4", plain_libs::utils::uuid::Uuid::new_v4()))));
         let reservation = temporary.clone();
         tokio::task::spawn_blocking(move || {
             std::fs::OpenOptions::new()

@@ -95,8 +95,8 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
         "Update cannot republish an inactive service"
     );
     allowed.store(true, Ordering::SeqCst);
-    let debug_a = uuid::Uuid::new_v4();
-    let debug_b = uuid::Uuid::new_v4();
+    let debug_a = plain_libs::utils::uuid::Uuid::new_v4();
+    let debug_b = plain_libs::utils::uuid::Uuid::new_v4();
     let _token_string = token.clone();
     let debug = crate::native::management::NativeManagement::new(state.clone())
         .acquire_mdns_debug_session(debug_a.to_string())
@@ -177,8 +177,8 @@ async fn authenticated_runtime_preserves_radio_modes_and_releases_global_owner()
         true,
         "Debug page disposal must preserve manual discovery"
     );
-    let first = uuid::Uuid::new_v4();
-    let second = uuid::Uuid::new_v4();
+    let first = plain_libs::utils::uuid::Uuid::new_v4();
+    let second = plain_libs::utils::uuid::Uuid::new_v4();
     execute(
         &state,
         Request::Acquire {

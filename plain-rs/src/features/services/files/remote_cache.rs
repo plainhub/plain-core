@@ -258,7 +258,7 @@ fn destination(
         }
         plain_libs::utils::hex::bytes_to_hex(&hash.finalize())
     } else {
-        uuid::Uuid::new_v4().to_string()
+        plain_libs::utils::uuid::Uuid::new_v4().into_string()
     };
     Ok(directory.join(match extension {
         Some(extension) => format!("{key}.{extension}"),

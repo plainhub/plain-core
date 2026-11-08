@@ -35,7 +35,7 @@ impl UploadChunks {
             ensure_running(&stop)?;
             let parent = destination.parent().ok_or("upload directory unavailable")?;
             std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-            let temporary = parent.join(format!(".upload_chunk_{}", uuid::Uuid::new_v4()));
+            let temporary = parent.join(format!(".upload_chunk_{}", plain_libs::utils::uuid::Uuid::new_v4()));
             let file = std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)

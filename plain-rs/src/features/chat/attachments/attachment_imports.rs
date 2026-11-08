@@ -69,7 +69,7 @@ impl Imports {
             .ok_or_else(|| anyhow::anyhow!("Invalid attachment name"))?
             .to_owned();
         let root = temp_root(directory)?;
-        let token = uuid::Uuid::new_v4().to_string();
+        let token = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         let path = root.join(&token);
         fs::OpenOptions::new()
             .write(true)

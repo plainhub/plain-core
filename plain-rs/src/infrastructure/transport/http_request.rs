@@ -2,7 +2,7 @@ pub fn encrypt(key: &[u8], payload: &str) -> Result<Vec<u8>, &'static str> {
     let body = format!(
         "{}|{}|{}",
         chrono::Utc::now().timestamp_millis(),
-        uuid::Uuid::new_v4(),
+        plain_libs::utils::uuid::Uuid::new_v4(),
         payload
     );
     plain_libs::crypto::xchacha_encrypt_raw(key, body.as_bytes()).ok_or("Invalid management key")

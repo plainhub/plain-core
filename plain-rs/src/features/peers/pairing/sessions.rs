@@ -147,7 +147,7 @@ impl Sessions {
         pending.remove(id)
     }
     pub fn start(&self, target: Target, ecdh: EcdhSession) -> Ticket {
-        self.start_generation(target, ecdh, uuid::Uuid::new_v4().to_string())
+        self.start_generation(target, ecdh, plain_libs::utils::uuid::Uuid::new_v4().into_string())
     }
     pub fn start_generation(
         &self,

@@ -35,7 +35,7 @@ async fn socket(
         state.aware.subscribe(state, &peer.id).await?,
         "Aware unavailable"
     );
-    let token = uuid::Uuid::new_v4().to_string();
+    let token = plain_libs::utils::uuid::Uuid::new_v4().into_string();
     let mut lease = Lease {
         host: state.host.clone(),
         token: token.clone(),

@@ -79,7 +79,7 @@ fn temporary_guard_removes_partial_file_and_generation_paths_cannot_escape_root(
     drop(Temporary(path.clone()));
     assert!(!path.exists());
     assert!(directory(root.path(), "../outside").is_err());
-    let generation = uuid::Uuid::new_v4().to_string();
+    let generation = plain_libs::utils::uuid::Uuid::new_v4().into_string();
     assert_eq!(
         directory(root.path(), &generation).unwrap(),
         root.path().join("shared-transfers").join(generation)
@@ -88,7 +88,7 @@ fn temporary_guard_removes_partial_file_and_generation_paths_cannot_escape_root(
 #[tokio::test]
 async fn cleanup_removes_only_the_owned_generation_and_is_repeatable() {
     let root = plain_libs::temporary::tempdir().unwrap();
-    let generation = uuid::Uuid::new_v4().to_string();
+    let generation = plain_libs::utils::uuid::Uuid::new_v4().into_string();
     let owned = directory(root.path(), &generation).unwrap();
     tokio::fs::create_dir_all(&owned).await.unwrap();
     tokio::fs::write(owned.join("file"), b"fixture")

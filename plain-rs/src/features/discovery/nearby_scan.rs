@@ -38,7 +38,7 @@ impl Scans {
             state.scans.clear();
         }
     }
-    pub fn report_state(&self, owner: u64, id: uuid::Uuid, active: bool) -> Result<()> {
+    pub fn report_state(&self, owner: u64, id: plain_libs::utils::uuid::Uuid, active: bool) -> Result<()> {
         let mut state = self.0.lock().unwrap();
         ensure!(state.owner == Some(owner), "Stale BLE scan host");
         let id = id.to_string();
@@ -103,7 +103,7 @@ impl Scans {
                 .unwrap();
             entries.remove(&oldest);
         }
-        let generation = uuid::Uuid::new_v4().to_string();
+        let generation = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         entries.insert(
             client_id.into(),
             Entry {

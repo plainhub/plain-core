@@ -223,7 +223,7 @@ async fn raw_ble_advertisements_are_consumed_without_public_rebroadcast() {
     let bridge = server.host_events().unwrap();
     let state = server.runtime_state();
     let mut public = state.events.subscribe();
-    let scan = uuid::Uuid::new_v4().to_string();
+    let scan = plain_libs::utils::uuid::Uuid::new_v4().into_string();
     bridge
         .publish_text(
             "BLE_SCAN_STATE_REPORTED",
@@ -311,7 +311,7 @@ async fn scan_facts_are_validated_and_scoped_to_the_connected_host() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let server = server(&dir);
     let old = server.host_events().unwrap();
-    let id = uuid::Uuid::from_u128(1).to_string();
+    let id = plain_libs::utils::uuid::Uuid::from_u128(1).to_string();
     let active = serde_json::json!({"scanId":id,"active":true}).to_string();
     old.publish_text("BLE_SCAN_STATE_REPORTED", active.clone())
         .await

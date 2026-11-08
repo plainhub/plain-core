@@ -24,7 +24,7 @@ pub async fn convert(
     let output = Temporary(
         state
             .directory
-            .join(format!(".resource_{}", uuid::Uuid::new_v4())),
+            .join(format!(".resource_{}", plain_libs::utils::uuid::Uuid::new_v4())),
     );
     let converted = match conversion {
         Conversion::Video3gp => convert_3gp(state, path, &output.0).await?,
@@ -91,7 +91,7 @@ async fn convert_3gp(
             state
                 .cache
                 .root()
-                .join(format!(".resource_input_{}", uuid::Uuid::new_v4())),
+                .join(format!(".resource_input_{}", plain_libs::utils::uuid::Uuid::new_v4())),
         );
         let mut reader = state
             .resources

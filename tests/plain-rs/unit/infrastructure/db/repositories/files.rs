@@ -11,9 +11,9 @@ fn file_paths_are_relative_and_preserve_user_state() {
         .unwrap()
         .remove(0);
     for value in [&first.id, &first.volume_id] {
-        let id = uuid::Uuid::parse_str(value).unwrap();
-        assert_eq!(id.get_version_num(), 7);
-        assert_eq!(id.get_variant(), uuid::Variant::RFC4122);
+        let id = plain_libs::utils::uuid::Uuid::parse_str(value).unwrap();
+        assert_eq!(id.as_bytes()[6] >> 4, 7);
+        assert_eq!(id.as_bytes()[8] & 0xc0, 0x80);
     }
     assert!(!Path::new(&first.path).is_absolute());
     db.with_conn(|conn| conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [&first.id]))

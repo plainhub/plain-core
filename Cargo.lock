@@ -110,7 +110,6 @@ dependencies = [
  "matchit",
  "memchr",
  "mime",
- "multer",
  "percent-encoding",
  "pin-project-lite",
  "rustversion",
@@ -1352,23 +1351,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "multer"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83e87776546dc87511aa5ee218730c92b666d7264ab6ed41f9d215af9cd5224b"
-dependencies = [
- "bytes",
- "encoding_rs",
- "futures-util",
- "http",
- "httparse",
- "memchr",
- "mime",
- "spin",
- "version_check",
-]
-
-[[package]]
 name = "multiversion_no_op"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1626,8 +1608,11 @@ dependencies = [
  "flate2",
  "fnv",
  "futures-core",
+ "getrandom 0.4.3",
  "heic-rs",
  "hmac",
+ "http",
+ "httparse",
  "hyper",
  "hyper-util",
  "image",
@@ -1635,6 +1620,7 @@ dependencies = [
  "libc",
  "log",
  "memchr",
+ "mime",
  "mio",
  "p256",
  "pbkdf2",
@@ -1711,7 +1697,6 @@ dependencies = [
  "tokio-rustls",
  "tokio-tungstenite",
  "undoc",
- "uuid",
  "zip",
 ]
 
@@ -1740,7 +1725,6 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tower",
- "uuid",
  "zip",
 ]
 
@@ -1761,7 +1745,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-tungstenite",
- "uuid",
 ]
 
 [[package]]
@@ -2338,12 +2321,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spin"
-version = "0.9.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
-
-[[package]]
 name = "spki"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2687,18 +2664,6 @@ name = "utf8_iter"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
-
-[[package]]
-name = "uuid"
-version = "1.26.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
-dependencies = [
- "getrandom 0.4.3",
- "js-sys",
- "serde_core",
- "wasm-bindgen",
-]
 
 [[package]]
 name = "vcpkg"

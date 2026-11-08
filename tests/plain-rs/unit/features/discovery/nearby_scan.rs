@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 fn begin(scans: &Scans) -> String {
     scans.set_owner(1);
-    let id = uuid::Uuid::new_v4();
+    let id = plain_libs::utils::uuid::Uuid::new_v4();
     scans.report_state(1, id, true).unwrap();
     id.to_string()
 }
@@ -29,7 +29,7 @@ fn only_active_unanswered_reads_have_a_host_owner() {
         )
         .unwrap();
     assert_eq!(scans.pending_owner(&session, &short, &generation), None);
-    let second = uuid::Uuid::new_v4();
+    let second = plain_libs::utils::uuid::Uuid::new_v4();
     scans.report_state(1, second, true).unwrap();
     let Step::Read { generation } = scans.seen(&second.to_string(), &short).unwrap() else {
         panic!();
@@ -171,10 +171,10 @@ fn duplicate_scan_facts_preserve_pending_reads_and_capacity() {
     scans.set_owner(1);
     for index in 1..=16 {
         scans
-            .report_state(1, uuid::Uuid::from_u128(index), true)
+            .report_state(1, plain_libs::utils::uuid::Uuid::from_u128(index), true)
             .unwrap();
     }
-    let id = uuid::Uuid::from_u128(1);
+    let id = plain_libs::utils::uuid::Uuid::from_u128(1);
     let short = "706c6169-2d74-8e53-9a16-f08b62c591d3";
     assert!(matches!(
         scans.seen(&id.to_string(), short).unwrap(),
@@ -187,13 +187,13 @@ fn duplicate_scan_facts_preserve_pending_reads_and_capacity() {
     ));
     assert!(
         scans
-            .report_state(1, uuid::Uuid::from_u128(17), true)
+            .report_state(1, plain_libs::utils::uuid::Uuid::from_u128(17), true)
             .is_err()
     );
     scans.report_state(1, id, false).unwrap();
     scans.report_state(1, id, false).unwrap();
     scans
-        .report_state(1, uuid::Uuid::from_u128(17), true)
+        .report_state(1, plain_libs::utils::uuid::Uuid::from_u128(17), true)
         .unwrap();
 }
 

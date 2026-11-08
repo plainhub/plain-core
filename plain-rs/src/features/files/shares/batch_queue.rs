@@ -92,7 +92,7 @@ pub struct Queue {
 impl Default for Queue {
     fn default() -> Self {
         Self {
-            runtime_id: uuid::Uuid::new_v4().to_string(),
+            runtime_id: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
             state: Mutex::new(State::default()),
             changed: watch::channel(0).0,
         }
@@ -173,7 +173,7 @@ impl Queue {
             return Ok(id);
         }
         ensure!(s.tasks.len() < 128, "Shared batch capacity exceeded");
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         let title = if intent.kind == Kind::Zip {
             intent.zip_name.clone()
         } else {
@@ -253,7 +253,7 @@ impl Queue {
             else {
                 continue;
             };
-            t.run.snapshot.generation = uuid::Uuid::new_v4().to_string();
+            t.run.snapshot.generation = plain_libs::utils::uuid::Uuid::new_v4().into_string();
             t.run.snapshot.status = "DOWNLOADING".into();
             t.run.snapshot.error.clear();
             t.run.snapshot.failures.clear();
@@ -358,7 +358,7 @@ impl Queue {
         let mut s = self.state.lock().unwrap();
         let t = Self::active(&mut s, id, generation)?;
         ensure!(t.transfer.is_none(), "Shared transfer already active");
-        let ticket = uuid::Uuid::new_v4().to_string();
+        let ticket = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         let (reply, receiver) = oneshot::channel();
         t.run.snapshot.current_file = file.into();
         t.run.snapshot.packing = size.is_none();

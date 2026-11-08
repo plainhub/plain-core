@@ -64,7 +64,7 @@ pub(super) async fn tls() -> (
             let plain = plain_libs::crypto::xchacha_decrypt_raw(&[7;32], &body).unwrap();
             let plain = String::from_utf8(plain).unwrap();
             let parts: Vec<_> = plain.splitn(3, '|').collect();
-            assert!(uuid::Uuid::parse_str(parts[1]).is_ok());
+            assert!(plain_libs::utils::uuid::Uuid::parse_str(parts[1]).is_ok());
             let request: Value = serde_json::from_str(parts[2]).unwrap();
             count.fetch_add(1, Ordering::SeqCst);
             if request["variables"]["relativePath"] == "slow" {

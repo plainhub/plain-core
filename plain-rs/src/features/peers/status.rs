@@ -24,7 +24,7 @@ pub struct Connections {
 impl Default for Connections {
     fn default() -> Self {
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
             state: Mutex::new(State {
                 revision: 0,
                 connections: HashMap::new(),
@@ -56,7 +56,7 @@ impl Connections {
             .connections
             .values()
             .any(|p| p.id == *id && p.key == peer.key && p.public_key == peer.public_key);
-        let lease = uuid::Uuid::new_v4().to_string();
+        let lease = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         state.connections.insert(lease.clone(), peer);
         state.revision = state.revision.wrapping_add(1);
         Ok((lease, changed))
@@ -191,7 +191,7 @@ pub fn handshake(key: &[u8], keypair: &[u8], client_id: &str, challenge: &str) -
     if client_id.is_empty() {
         bail!("Missing client identity");
     }
-    uuid::Uuid::parse_str(challenge)?;
+    plain_libs::utils::uuid::Uuid::parse_str(challenge)?;
     let content = serde_json::to_string(&Proof {
         client_id: client_id.to_owned(),
         challenge: challenge.to_owned(),

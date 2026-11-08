@@ -13,7 +13,7 @@ pub fn write(directory: &Path, messages: &[Value], now_ms: i64) -> Result<()> {
         return Ok(());
     }
     fs::create_dir_all(directory)?;
-    let name = format!("deleted_{now_ms}_{}", uuid::Uuid::new_v4());
+    let name = format!("deleted_{now_ms}_{}", plain_libs::utils::uuid::Uuid::new_v4());
     fs::write(
         directory.join(format!("{name}.json")),
         serde_json::to_vec_pretty(messages)?,

@@ -26,7 +26,7 @@ impl OwnerLease {
             "mDNS is owned by another runtime"
         );
         Ok(Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
             host,
             release_multicast: false,
         })
@@ -82,7 +82,7 @@ struct Session {
     context: Context,
     published: bool,
     manual_scanning: bool,
-    debug_sessions: std::collections::HashSet<uuid::Uuid>,
+    debug_sessions: std::collections::HashSet<plain_libs::utils::uuid::Uuid>,
     discovery_sessions: crate::features::discovery::sessions::DiscoverySessions,
     owner: Option<OwnerLease>,
 }
@@ -145,7 +145,7 @@ pub struct Runtime {
 impl Default for Runtime {
     fn default() -> Self {
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
             session: Mutex::new(None),
             operation: tokio::sync::Mutex::new(()),
             revision: AtomicU64::new(0),
@@ -158,8 +158,8 @@ impl Default for Runtime {
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Request {
-    Acquire { token: uuid::Uuid, owner: String },
-    Release { token: uuid::Uuid, owner: String },
+    Acquire { token: plain_libs::utils::uuid::Uuid, owner: String },
+    Release { token: plain_libs::utils::uuid::Uuid, owner: String },
     Receiver {},
     Start {},
     Stop {},
@@ -499,7 +499,7 @@ impl Runtime {
                 }
                 Request::Receiver {} => {}
                 Request::DebugStart { token } => {
-                    let token = uuid::Uuid::parse_str(&token)?;
+                    let token = plain_libs::utils::uuid::Uuid::parse_str(&token)?;
                     ensure!(
                         session.debug_sessions.contains(&token)
                             || session.debug_sessions.len() < 16,
@@ -510,7 +510,7 @@ impl Runtime {
                     crate::infrastructure::protocols::mdns::packet_capture::set_enabled(true);
                 }
                 Request::DebugStop { token } => {
-                    let token = uuid::Uuid::parse_str(&token)?;
+                    let token = plain_libs::utils::uuid::Uuid::parse_str(&token)?;
                     session.set_scanning(
                         session.manual_scanning
                             || session.discovery_sessions.active()

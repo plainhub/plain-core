@@ -27,7 +27,7 @@ pub fn default_device_name() -> String {
     let host = plain_libs::utils::hostname::get();
     let trimmed = host.trim().trim_end_matches('.').trim_end_matches(".local");
     if trimmed.is_empty() {
-        format!("Plain-{}", uuid::Uuid::new_v4().to_string())
+        format!("Plain-{}", plain_libs::utils::uuid::Uuid::new_v4().into_string())
     } else {
         trimmed.to_string()
     }

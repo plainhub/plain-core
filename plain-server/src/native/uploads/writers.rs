@@ -57,7 +57,7 @@ impl UploadWriters {
         if canceled.has_changed().is_err() {
             return Err("upload chunk canceled".into());
         }
-        let handle = uuid::Uuid::new_v4().to_string();
+        let handle = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         registry.slots.insert(
             handle.clone(),
             Arc::new(Slot {

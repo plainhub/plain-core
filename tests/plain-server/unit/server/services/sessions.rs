@@ -146,7 +146,7 @@ async fn web_login_ecdh_encrypted_response_signature_and_token_auth_survive_rest
     let plaintext = format!(
         "{}|{}|{{\"query\":\"{{noteCount(query:\\\"\\\")}}\"}}",
         chrono::Utc::now().timestamp_millis(),
-        uuid::Uuid::new_v4()
+        plain_libs::utils::uuid::Uuid::new_v4()
     );
     let encrypted = plain_libs::crypto::xchacha_encrypt_raw(&shared, plaintext.as_bytes()).unwrap();
     let context =

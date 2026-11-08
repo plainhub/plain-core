@@ -53,7 +53,7 @@ async fn connected(
         _=stop.changed()=>None,
         _=public_stop.changed()=>None,
         authenticated=tokio::time::timeout(Duration::from_secs(10), async {
-            let challenge = uuid::Uuid::new_v4().to_string();
+            let challenge = plain_libs::utils::uuid::Uuid::new_v4().into_string();
             socket.send(Message::Text(json!({"challenge": challenge}).to_string().into())).await.ok()?;
             match socket.next().await {
                 Some(Ok(Message::Binary(body))) => state.peer_status.connections.open(&state.db, &id, &challenge, &body).ok(),

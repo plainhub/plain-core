@@ -2,7 +2,7 @@ use super::*;
 fn fixture() -> (PathBuf, Db, Imports) {
     let dir = std::env::temp_dir().join(format!(
         "plain-attachment-test-{}",
-        uuid::Uuid::new_v4().to_string()
+        plain_libs::utils::uuid::Uuid::new_v4().into_string()
     ));
     let db = Db::open(&dir.join("plain.db")).unwrap();
     let mut chat = crate::infrastructure::db::DChat::new(

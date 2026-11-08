@@ -80,7 +80,7 @@ fn report(
                 &state,
                 generation,
                 Facts {
-                    lease: uuid::Uuid::from_u128(1),
+                    lease: plain_libs::utils::uuid::Uuid::from_u128(1),
                     available,
                 },
             )
@@ -170,7 +170,7 @@ async fn facts_drive_shared_bytes_and_skip_duplicate_platform_work() {
     assert_eq!(calls.len(), 1);
     assert_eq!(
         command(&calls),
-        &json!({"serviceUuid":null,"revision":2,"lease":uuid::Uuid::from_u128(1)})
+        &json!({"serviceUuid":null,"revision":2,"lease":plain_libs::utils::uuid::Uuid::from_u128(1)})
     );
     let (result, calls) = drive(
         &state,
@@ -293,7 +293,7 @@ async fn host_replacement_rejects_pending_results_and_old_cleanup_cannot_clear_n
     assert_eq!(
         runtime.state.lock().unwrap().facts,
         Some(Facts {
-            lease: uuid::Uuid::from_u128(1),
+            lease: plain_libs::utils::uuid::Uuid::from_u128(1),
             available: true,
         })
     );
@@ -304,7 +304,7 @@ async fn host_replacement_rejects_pending_results_and_old_cleanup_cannot_clear_n
                 &state,
                 generation,
                 Facts {
-                    lease: uuid::Uuid::from_u128(1),
+                    lease: plain_libs::utils::uuid::Uuid::from_u128(1),
                     available: false,
                 }
             )
@@ -331,7 +331,7 @@ async fn queued_unavailability_prevents_a_stale_start_after_capability_sampling(
         &state,
         generation,
         Facts {
-            lease: uuid::Uuid::from_u128(1),
+            lease: plain_libs::utils::uuid::Uuid::from_u128(1),
             available: false,
         },
     );
@@ -354,7 +354,7 @@ async fn queued_unavailability_prevents_a_stale_start_after_capability_sampling(
 #[test]
 fn facts_accept_only_typed_platform_readings() {
     assert!(
-        serde_json::from_value::<Facts>(json!({"available":true,"lease":uuid::Uuid::from_u128(1)}))
+        serde_json::from_value::<Facts>(json!({"available":true,"lease":plain_libs::utils::uuid::Uuid::from_u128(1)}))
             .is_ok()
     );
     for value in [
@@ -388,7 +388,7 @@ async fn a_new_sdk_lease_receives_a_command_even_when_the_bytes_are_unchanged() 
                 &task_state,
                 generation,
                 Facts {
-                    lease: uuid::Uuid::from_u128(2),
+                    lease: plain_libs::utils::uuid::Uuid::from_u128(2),
                     available: true,
                 },
             )
@@ -398,7 +398,7 @@ async fn a_new_sdk_lease_receives_a_command_even_when_the_bytes_are_unchanged() 
     result.unwrap();
     assert_eq!(command(&calls)["serviceUuid"], first["serviceUuid"]);
     assert_eq!(command(&calls)["revision"], 2);
-    assert_eq!(command(&calls)["lease"], json!(uuid::Uuid::from_u128(2)));
+    assert_eq!(command(&calls)["lease"], json!(plain_libs::utils::uuid::Uuid::from_u128(2)));
     state.host.disconnect(generation);
     core.stop_core().await;
 }

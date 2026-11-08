@@ -243,7 +243,7 @@ async fn run(
             return;
         }
     }
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
     let (sender, mut outgoing) = mpsc::channel(8);
     let (closing, mut closed) = tokio::sync::watch::channel(None);
     state.main_ws.connections.lock().unwrap().insert(

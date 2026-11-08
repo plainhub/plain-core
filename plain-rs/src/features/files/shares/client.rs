@@ -66,7 +66,7 @@ impl Link {
         let envelope = format!(
             "{}|{}|{body}",
             crate::features::peers::pairing::now_ms(),
-            uuid::Uuid::new_v4()
+            plain_libs::utils::uuid::Uuid::new_v4()
         );
         plain_libs::crypto::xchacha_encrypt_raw(&self.key()?, envelope.as_bytes())
             .ok_or_else(|| anyhow::anyhow!("Cannot encrypt shared request"))

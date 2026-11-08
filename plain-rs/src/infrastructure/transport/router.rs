@@ -112,7 +112,7 @@ impl Router {
             deadline: now + Duration::from_secs(300),
             attempt,
         };
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         if state.routes.contains_key(&id) {
             bail!("Transport route ID collision");
         }

@@ -11,7 +11,7 @@ fn encrypts_the_existing_replay_envelope_with_fresh_nonces() {
         String::from_utf8(plain_libs::crypto::xchacha_decrypt_raw(&key, &first).unwrap()).unwrap();
     let parts = plain.splitn(3, '|').collect::<Vec<_>>();
     assert!(parts[0].parse::<i64>().unwrap() > 0);
-    assert!(uuid::Uuid::parse_str(parts[1]).is_ok());
+    assert!(plain_libs::utils::uuid::Uuid::parse_str(parts[1]).is_ok());
     assert_eq!(parts[2], r#"{"query":"{ app { deviceName } }"}"#);
 }
 

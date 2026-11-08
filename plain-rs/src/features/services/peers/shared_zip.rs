@@ -51,7 +51,7 @@ pub fn pack(
         ensure!(names.insert(&item.entry_name), "Duplicate shared ZIP entry");
     }
     std::fs::create_dir_all(&directory)?;
-    let path = directory.join(format!(".share-zip-{}.tmp", uuid::Uuid::new_v4()));
+    let path = directory.join(format!(".share-zip-{}.tmp", plain_libs::utils::uuid::Uuid::new_v4()));
     let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)

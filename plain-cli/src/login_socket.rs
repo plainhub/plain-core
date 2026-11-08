@@ -139,7 +139,7 @@ async fn command(
     command: Command,
 ) -> Result<ReplyResult> {
     let id = |value: String| {
-        uuid::Uuid::parse_str(&value)
+        plain_libs::utils::uuid::Uuid::parse_str(&value)
             .map(|value| value.to_string())
             .map_err(|_| anyhow!("Invalid login request id"))
     };

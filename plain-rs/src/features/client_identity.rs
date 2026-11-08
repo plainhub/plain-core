@@ -1,4 +1,4 @@
-use uuid::Uuid;
+use plain_libs::utils::uuid::Uuid;
 
 pub const DISCOVERY_UUID: &str = "706c6169-0000-8000-8000-000000000000";
 pub const DISCOVERY_UUID_MASK: &str = "ffffffff-0000-f000-c000-000000000000";
@@ -7,7 +7,7 @@ pub fn generate() -> String {
     let mut bytes = *Uuid::new_v4().as_bytes();
     bytes[..4].copy_from_slice(b"plai");
     bytes[6] = (bytes[6] & 0x0f) | 0x80;
-    Uuid::from_bytes(bytes).to_string()
+    Uuid::from_bytes(bytes).into_string()
 }
 
 pub fn parse(value: &str) -> Option<Uuid> {

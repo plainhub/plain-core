@@ -32,7 +32,7 @@ async fn closed_native_page_cancels_its_pending_main_schema_request_before_radio
                 .execute_scoped(
                     Request::new(format!(
                         r#"mutation{{acquireDiscovery(token:"{}")}}"#,
-                        uuid::Uuid::new_v4()
+                        plain_libs::utils::uuid::Uuid::new_v4()
                     )),
                     scope,
                 )
@@ -223,7 +223,7 @@ async fn pending_multicast_requests_remain_independent_until_permission_is_grant
     let acquire = || {
         Request::new(format!(
             r#"mutation{{acquireDiscovery(token:"{}")}}"#,
-            uuid::Uuid::new_v4()
+            plain_libs::utils::uuid::Uuid::new_v4()
         ))
     };
     let first_scope = NativeRequestScope::default();

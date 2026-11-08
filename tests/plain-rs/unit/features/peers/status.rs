@@ -13,8 +13,8 @@ fn status_proof_is_bound_to_connection_and_rejects_old_signed_content() {
     peer.key = plain_libs::utils::base64::base64_encode(&key);
     peer.public_key = plain_libs::utils::base64::base64_encode(&public_key);
     peers::save(&db, &[peer], SaveMode::Insert).unwrap();
-    let first = uuid::Uuid::new_v4().to_string();
-    let second = uuid::Uuid::new_v4().to_string();
+    let first = plain_libs::utils::uuid::Uuid::new_v4().into_string();
+    let second = plain_libs::utils::uuid::Uuid::new_v4().into_string();
     let body = handshake(&key, &keypair, "peer", &first).unwrap();
     let connections = Connections::default();
     assert!(connections.open(&db, "peer", &second, &body).is_err());

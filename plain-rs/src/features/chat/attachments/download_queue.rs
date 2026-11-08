@@ -67,7 +67,7 @@ pub struct Queue {
 impl Queue {
     pub fn new(db: Db, directory: PathBuf, imports: Arc<Imports>) -> Self {
         Self {
-            runtime_id: uuid::Uuid::new_v4().to_string(),
+            runtime_id: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
             db,
             directory,
             imports,

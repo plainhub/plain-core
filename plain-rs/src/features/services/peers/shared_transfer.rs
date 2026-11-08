@@ -107,7 +107,7 @@ async fn commit(work: &BlockingWork, source: PathBuf, target: PathBuf) -> Result
     .await
 }
 pub fn directory(root: &Path, generation: &str) -> Result<PathBuf> {
-    uuid::Uuid::parse_str(generation)?;
+    plain_libs::utils::uuid::Uuid::parse_str(generation)?;
     Ok(root.join("shared-transfers").join(generation))
 }
 pub async fn cleanup(root: &Path, generation: &str) -> Result<()> {

@@ -1,7 +1,7 @@
 use super::*;
 
 fn pending(state: &CoreRuntime, owner: u64, id: &str) -> Pending {
-    let scan = uuid::Uuid::new_v4();
+    let scan = plain_libs::utils::uuid::Uuid::new_v4();
     state.ble_scans.report_state(owner, scan, true).unwrap();
     let client_id = id.to_string();
     let Step::Read { generation } = state.ble_scans.seen(&scan.to_string(), &client_id).unwrap()
@@ -100,7 +100,7 @@ async fn scheduled_read_supplies_canonical_request_and_checks_reply_identity() {
         let core = crate::test_runtime::Core::open(directory.path()).unwrap();
         let state = core.runtime_state();
         let (owner, mut requests) = crate::test_support::HostRequests::connect(&state.host);
-        let scan = uuid::Uuid::new_v4();
+        let scan = plain_libs::utils::uuid::Uuid::new_v4();
         let client_id = "706c6169-2d74-8e53-9a16-f08b62c591d3".to_string();
         state.ble_scans.set_owner(owner);
         state.ble_scans.report_state(owner, scan, true).unwrap();

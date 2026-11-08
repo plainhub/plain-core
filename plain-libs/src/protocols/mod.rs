@@ -7,3 +7,6 @@ pub mod mdns;
 
 #[cfg(feature = "websocket")]
 pub mod websocket;
+
+#[cfg(feature = "multipart")]
+pub mod multipart;

@@ -203,7 +203,7 @@ impl Runtime {
         anyhow::ensure!(!number.trim().is_empty(), "MMS recipient is required");
         crate::features::services::capabilities::require(&self.host, "TELEPHONY").await?;
         let _guard = self.send.lock().await;
-        let id = format!("pending_mms_{}", uuid::Uuid::new_v4());
+        let id = format!("pending_mms_{}", plain_libs::utils::uuid::Uuid::new_v4());
         let temporary = OwnedAttachments(self.directory.join("mms_attachments").join(&id));
         tokio::fs::create_dir_all(&temporary.0).await?;
         let mut attachments = vec![];

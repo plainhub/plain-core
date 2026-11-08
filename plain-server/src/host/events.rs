@@ -301,7 +301,7 @@ impl HostEvents {
             active: bool,
         }
         let value: ScanState = serde_json::from_str(&payload).map_err(|error| error.to_string())?;
-        let id = uuid::Uuid::parse_str(&value.scan_id).map_err(|error| error.to_string())?;
+        let id = plain_libs::utils::uuid::Uuid::parse_str(&value.scan_id).map_err(|error| error.to_string())?;
         return self
             .state
             .ble_scans

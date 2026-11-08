@@ -7,13 +7,13 @@ use std::sync::Mutex;
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Facts {
-    lease: uuid::Uuid,
+    lease: plain_libs::utils::uuid::Uuid,
     available: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct Advertisement {
-    lease: uuid::Uuid,
+    lease: plain_libs::utils::uuid::Uuid,
     service_uuid: Option<String>,
 }
 

@@ -278,7 +278,7 @@ fn status_handshake_and_graphql_signatures_cannot_cross_protocols() {
         &key,
         &kp,
         &peer,
-        &uuid::Uuid::new_v4().to_string(),
+        &plain_libs::utils::uuid::Uuid::new_v4().into_string(),
     )
     .unwrap();
     assert!(authenticate_status(&db, &peer, &body).is_ok());

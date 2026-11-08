@@ -55,7 +55,7 @@ pub fn extract(cache: &Path, reference: &str) -> Result<PathBuf, String> {
     {
         return Ok(output);
     }
-    let temporary = cache.join(format!("{key}-{}.tmp", uuid::Uuid::new_v4()));
+    let temporary = cache.join(format!("{key}-{}.tmp", plain_libs::utils::uuid::Uuid::new_v4()));
     let result = (|| -> Result<(), String> {
         let mut target = File::create(&temporary).map_err(|error| error.to_string())?;
         let written = std::io::copy(&mut entry, &mut target).map_err(|error| error.to_string())?;

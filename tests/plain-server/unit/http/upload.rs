@@ -27,7 +27,7 @@ async fn multipart_upload(
     let metadata = format!(
         "{}|{}|{}",
         chrono::Utc::now().timestamp_millis(),
-        uuid::Uuid::new_v4(),
+        plain_libs::utils::uuid::Uuid::new_v4(),
         info
     );
     let encrypted = plain_libs::crypto::xchacha_encrypt_raw(key, metadata.as_bytes()).unwrap();

@@ -179,7 +179,7 @@ fn build_archive(
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
     std::fs::create_dir_all(directory)?;
-    let path = directory.join(format!("archive-{}.tmp", uuid::Uuid::new_v4()));
+    let path = directory.join(format!("archive-{}.tmp", plain_libs::utils::uuid::Uuid::new_v4()));
     let staging = StagedFile(path.clone());
     let file = std::fs::OpenOptions::new()
         .read(true)

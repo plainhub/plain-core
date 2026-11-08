@@ -9,14 +9,14 @@ description = "Shared Plain GraphQL, HTTP and native transport adapters"
 "default" = ["core", "http_transport", "media"]
 "media" = ["plain-rs/runtime-media"]
 "http_transport" = ["dep:serde_json", "dep:reqwest", "plain-libs/http-client", "dep:axum", "plain-libs/https", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
-"core" = ["plain-libs/websocket", "dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "dep:anyhow", "dep:plain-graphql", "dep:axum", "dep:reqwest", "plain-libs/http-client", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
+"core" = ["plain-libs/websocket", "plain-libs/multipart", "dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "dep:anyhow", "dep:plain-graphql", "dep:axum", "dep:reqwest", "plain-libs/http-client", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
 
 
 [dependencies]
 plain-libs = { path = "../plain-libs", default-features = false }
 "subtle" = { "version" = "2", "optional" = true }
 "futures-util" = { "version" = "0.3", "default-features" = false, "features" = ["sink", "std"], "optional" = true }
-"axum" = { "version" = "0.7", "default-features" = false, "features" = ["multipart", "json", "query", "tokio", "http1"], "optional" = true }
+"axum" = { "version" = "0.7", "default-features" = false, "features" = ["json", "query", "tokio", "http1"], "optional" = true }
 "reqwest" = { "version" = "0.12", "default-features" = false, "features" = ["stream"], "optional" = true }
 "tokio-tungstenite" = { "version" = "0.30", "default-features" = false, "features" = ["connect"], "optional" = true }
 "tower" = { "version" = "0.5", "features" = ["util"], "optional" = true }
@@ -25,7 +25,6 @@ plain-libs = { path = "../plain-libs", default-features = false }
 "serde" = { "version" = "1", "features" = ["derive"] }
 "serde_json" = { "version" = "1", "optional" = true }
 "sha2" = "0.10"
-"uuid" = { "version" = "1", "features" = ["v4", "serde"] }
 "log" = "0.4"
 "rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "cache"], "optional" = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }

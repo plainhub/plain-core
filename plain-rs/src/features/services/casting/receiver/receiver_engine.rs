@@ -394,9 +394,7 @@ fn generate_uuid() -> String {
     use rand::Rng;
     let mut bytes = [0; 16];
     rand::rng().fill_bytes(&mut bytes);
-    uuid::Builder::from_random_bytes(bytes)
-        .into_uuid()
-        .to_string()
+    plain_libs::utils::uuid::Uuid::from_random_bytes(bytes).into_string()
 }
 
 fn accept_pending(state: &mut DlnaRendererState, pending: &PendingCastRequest, play_queued: bool) {

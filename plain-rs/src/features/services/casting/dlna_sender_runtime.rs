@@ -321,7 +321,7 @@ pub async fn acquire_permission(
         return Ok(());
     }
     release_permission(state, slot).await;
-    let lease = uuid::Uuid::new_v4().to_string();
+    let lease = plain_libs::utils::uuid::Uuid::new_v4().into_string();
     if state
         .host
         .call("mdnsMulticast", json!({"lease":lease,"acquire":true}))

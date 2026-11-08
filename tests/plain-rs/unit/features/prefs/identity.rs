@@ -18,10 +18,10 @@ fn tmp_prefs(tag: &str) -> Prefs {
 fn ensure_identity_generates_and_persists_all_three_keys() {
     let prefs = tmp_prefs("identity");
     let id = ensure_identity(&prefs);
-    let uuid = uuid::Uuid::parse_str(&id.client_id).expect("clientId must be a UUID");
+    let uuid = plain_libs::utils::uuid::Uuid::parse_str(&id.client_id).expect("clientId must be a UUID");
     assert_eq!(&uuid.as_bytes()[..4], b"plai");
-    assert_eq!(uuid.get_version_num(), 8);
-    assert_eq!(uuid.get_variant(), uuid::Variant::RFC4122);
+    assert_eq!(uuid.as_bytes()[6] >> 4, 8);
+    assert_eq!(uuid.as_bytes()[8] & 0xc0, 0x80);
     assert!(!id.device_name.is_empty());
     assert!(!id.ed25519_keypair.is_empty());
 

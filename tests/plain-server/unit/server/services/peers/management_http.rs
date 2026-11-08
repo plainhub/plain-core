@@ -118,7 +118,7 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
             .collect();
         assert_ne!(nonces[0], nonces[1]);
         for nonce in nonces {
-            assert!(uuid::Uuid::parse_str(nonce).is_ok());
+            assert!(plain_libs::utils::uuid::Uuid::parse_str(nonce).is_ok());
         }
     }
     proxy.abort();

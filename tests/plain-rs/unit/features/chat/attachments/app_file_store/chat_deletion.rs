@@ -8,7 +8,7 @@ use crate::infrastructure::db::chat_store::messages;
 fn deletion_releases_exact_references_and_preserves_other_conversations() {
     let root = std::env::temp_dir().join(format!(
         "plain-chat-delete-{}",
-        uuid::Uuid::new_v4().to_string()
+        plain_libs::utils::uuid::Uuid::new_v4().into_string()
     ));
     fs::create_dir_all(&root).unwrap();
     let db = Db::open(&root.join("plain.db")).unwrap();
@@ -44,7 +44,7 @@ fn deletion_releases_exact_references_and_preserves_other_conversations() {
 fn failed_sql_restores_attachment_and_message_then_retry_deletes_once() {
     let root = std::env::temp_dir().join(format!(
         "plain-chat-rollback-{}",
-        uuid::Uuid::new_v4().to_string()
+        plain_libs::utils::uuid::Uuid::new_v4().into_string()
     ));
     fs::create_dir_all(&root).unwrap();
     let db = Db::open(&root.join("plain.db")).unwrap();
@@ -83,7 +83,7 @@ fn entity_removal_is_atomic_retains_channel_peer_and_returns_removed_channel_sna
     use crate::infrastructure::db::chat_store::peers;
     let root = std::env::temp_dir().join(format!(
         "plain-entity-delete-{}",
-        uuid::Uuid::new_v4().to_string()
+        plain_libs::utils::uuid::Uuid::new_v4().into_string()
     ));
     fs::create_dir_all(&root).unwrap();
     let db = Db::open(&root.join("plain.db")).unwrap();
@@ -197,7 +197,7 @@ fn checked_channel_delete_preserves_newer_row_message_and_attachment() {
     use crate::infrastructure::db::chat_store::channels;
     let root = std::env::temp_dir().join(format!(
         "plain-checked-channel-{}",
-        uuid::Uuid::new_v4().to_string()
+        plain_libs::utils::uuid::Uuid::new_v4().into_string()
     ));
     fs::create_dir_all(&root).unwrap();
     let db = Db::open(&root.join("plain.db")).unwrap();

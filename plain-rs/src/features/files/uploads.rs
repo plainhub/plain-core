@@ -245,7 +245,7 @@ pub async fn merge(
         let _ = tokio::fs::remove_dir_all(dir).await;
         anyhow::bail!("Chunk total size {expected} != file size {size}");
     }
-    let temp = Temp(dir.join(format!(".merge_{}", uuid::Uuid::new_v4())));
+    let temp = Temp(dir.join(format!(".merge_{}", plain_libs::utils::uuid::Uuid::new_v4())));
     let written = concatenate(dir, count, &temp.0).await?;
     anyhow::ensure!(
         written == expected,
@@ -278,7 +278,7 @@ pub async fn merge(
                 plain_libs::utils::unique_path::unique_sibling(&path)?
             };
             let staging =
-                Temp(path.with_file_name(format!(".merge_destination_{}", uuid::Uuid::new_v4())));
+                Temp(path.with_file_name(format!(".merge_destination_{}", plain_libs::utils::uuid::Uuid::new_v4())));
             tokio::fs::copy(&temp.0, &staging.0).await?;
             let staged = staging.0.clone();
             let path =

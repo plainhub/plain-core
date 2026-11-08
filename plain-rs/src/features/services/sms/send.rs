@@ -125,7 +125,7 @@ pub async fn execute(
         !parts.is_empty() && parts.len() <= 1024,
         "Invalid SMS part count"
     );
-    let request_id = uuid::Uuid::new_v4().to_string();
+    let request_id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
     sends.register(request_id.clone(), request.client_request_id, parts.len())?;
     let sent = host.call("systemSendSmsParts", json!({"requestId":request_id,"number":request.number,"parts":parts,"subscriptionId":request.subscription_id})).await;
     match sent {

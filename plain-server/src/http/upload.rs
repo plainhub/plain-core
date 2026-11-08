@@ -16,12 +16,13 @@
 
 use crate::server::ServerState;
 use axum::{
-    extract::{FromRequest, Multipart, Request, State},
+    extract::{Request, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use plain_rs::features::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES;
 use serde::Deserialize;
+use plain_libs::protocols::multipart::{Field, Multipart};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncWriteExt;
 
@@ -81,7 +82,7 @@ async fn read_info<T: for<'de> Deserialize<'de>>(
     state: &ServerState,
     client: &str,
     key: &[u8],
-    field: axum::extract::multipart::Field<'_>,
+    field: Field<'_>,
 ) -> anyhow::Result<T> {
     let bytes = field
         .bytes()
@@ -99,7 +100,7 @@ async fn read_info<T: for<'de> Deserialize<'de>>(
 
 /// Streams one multipart part into `destination`, returning the byte count.
 async fn stream_to_file(
-    field: &mut axum::extract::multipart::Field<'_>,
+    field: &mut Field<'_>,
     destination: &Path,
 ) -> anyhow::Result<u64> {
     if let Some(parent) = destination.parent() {
@@ -136,14 +137,14 @@ impl Drop for Temporary {
 }
 
 fn temp_name(prefix: &str) -> String {
-    format!(".{prefix}_{}", uuid::Uuid::new_v4())
+    format!(".{prefix}_{}", plain_libs::utils::uuid::Uuid::new_v4())
 }
 
 /// A declared-length chunk goes through the shared writer, whose `Drop`
 /// unlinks the temp file on every early return.
 async fn store_chunk(
     state: &ServerState,
-    field: &mut axum::extract::multipart::Field<'_>,
+    field: &mut Field<'_>,
     info: &ChunkInfo,
 ) -> Result<i64, String> {
     let declared = info.size as u64;
@@ -196,9 +197,9 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default()
         .to_owned();
-    let mut multipart = match Multipart::from_request(request, &()).await {
-        Ok(multipart) => multipart,
-        Err(_) => return plain(StatusCode::BAD_REQUEST, "invalid multipart request"),
+    let mut multipart = match Multipart::from_request(request) {
+        Some(multipart) => multipart,
+        None => return plain(StatusCode::BAD_REQUEST, "invalid multipart request"),
     };
     let mut info: Option<UploadInfo> = None;
     let mut saved: Option<String> = None;
@@ -365,7 +366,7 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
 
 async fn store_app_file(
     state: &ServerState,
-    field: &mut axum::extract::multipart::Field<'_>,
+    field: &mut Field<'_>,
     name: &str,
     content_type: &str,
     expected: i64,
@@ -420,9 +421,9 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default()
         .to_owned();
-    let mut multipart = match Multipart::from_request(request, &()).await {
-        Ok(multipart) => multipart,
-        Err(_) => return plain(StatusCode::BAD_REQUEST, "invalid multipart request"),
+    let mut multipart = match Multipart::from_request(request) {
+        Some(multipart) => multipart,
+        None => return plain(StatusCode::BAD_REQUEST, "invalid multipart request"),
     };
     let mut info: Option<ChunkInfo> = None;
     let mut saved_size = None;

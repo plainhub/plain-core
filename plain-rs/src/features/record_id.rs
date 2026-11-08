@@ -1,5 +1,5 @@
 use std::time::{SystemTime, UNIX_EPOCH};
-use uuid::Uuid;
+use plain_libs::utils::uuid::Uuid;
 
 pub fn generate() -> String {
     let millis = SystemTime::now()

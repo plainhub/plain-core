@@ -218,7 +218,7 @@ impl SyncService {
             }
             let (status, receiver) = watch::channel(FeedSyncState {
                 feed_id: feed.id.clone().into(),
-                task_id: uuid::Uuid::new_v4().to_string().into(),
+                task_id: plain_libs::utils::uuid::Uuid::new_v4().into_string().into(),
                 revision: self.next_revision(),
                 status: FeedWorkerStatus::Queued,
                 error: String::new(),
@@ -238,7 +238,7 @@ impl SyncService {
         let batch = if aggregate {
             let (sender, _) = watch::channel(FeedSyncState {
                 feed_id: "all".into(),
-                task_id: uuid::Uuid::new_v4().to_string().into(),
+                task_id: plain_libs::utils::uuid::Uuid::new_v4().into_string().into(),
                 revision: self.next_revision(),
                 status: FeedWorkerStatus::Running,
                 error: String::new(),

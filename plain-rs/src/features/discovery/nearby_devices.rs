@@ -131,7 +131,7 @@ impl Devices {
         let ble = ble.unwrap_or(s.ble);
         if s.lan != lan || s.ble != ble {
             for entry in s.entries.values_mut() {
-                entry.generation = uuid::Uuid::new_v4().to_string();
+                entry.generation = plain_libs::utils::uuid::Uuid::new_v4().into_string();
             }
         }
         s.lan = lan;
@@ -164,7 +164,7 @@ impl Devices {
                     device.id.clone(),
                     Entry {
                         device,
-                        generation: uuid::Uuid::new_v4().to_string(),
+                        generation: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
                         seen: now,
                         age: Duration::from_secs(age),
                         emitted: None,
@@ -226,7 +226,7 @@ impl Devices {
             device.id.clone(),
             Entry {
                 device,
-                generation: uuid::Uuid::new_v4().to_string(),
+                generation: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
                 seen: now,
                 age: Duration::ZERO,
                 emitted: if emit { Some(now) } else { emitted },
@@ -306,7 +306,7 @@ impl Devices {
             e.seen = Instant::now();
             e.age = Duration::ZERO;
             e.device.last_seen_at = now;
-            e.generation = uuid::Uuid::new_v4().to_string();
+            e.generation = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         } else {
             let updated = db.delete_cached_nearby_device_if_last_seen_matches(
                 &probe.device.id,

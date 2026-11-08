@@ -53,7 +53,6 @@ plain-libs = { path = "../plain-libs", default-features = false }
 "hmac" = { "version" = "0.13", "optional" = true }
 "sha2_mac" = { "package" = "sha2", "version" = "0.11", "optional" = true }
 "rand" = "=0.10.3"
-"uuid" = { "version" = "1", "features" = ["v4", "serde"] }
 "log" = "0.4"
 "socket2" = { "version" = "0.6", "optional" = true, "features" = ["all"] }
 "serde" = { "version" = "1", "features" = ["derive"] }
@@ -82,7 +81,7 @@ plain-graphql = { path = "../plain-graphql", optional = true }
 [dev-dependencies]
 "chacha20poly1305" = { "version" = "0.10" }
 plain-libs = { path = "../plain-libs", default-features = false, features = ["test-seams", "https"] }
-"axum" = { "version" = "0.7", "default-features" = false, "features" = ["multipart", "json", "query", "tokio", "http1"] }
+"axum" = { "version" = "0.7", "default-features" = false, "features" = ["json", "query", "tokio", "http1"] }
 "serde_json" = "1"
 "tokio" = { "version" = "1", "features" = ["full", "test-util"] }
 

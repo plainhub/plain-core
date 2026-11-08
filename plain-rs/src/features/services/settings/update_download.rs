@@ -69,7 +69,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             snapshot: AppUpdateDownload {
-                core_id: uuid::Uuid::new_v4().to_string().into(),
+                core_id: plain_libs::utils::uuid::Uuid::new_v4().into_string().into(),
                 ..Default::default()
             },
             cancel: None,
@@ -217,7 +217,7 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
             validate_url(&identity.url)?;
             discard(&state, &info.downloaded_apk_path)?;
             updates::update(&state, serde_json::json!({"downloadedApkPath":""}))?;
-            let id = uuid::Uuid::new_v4().to_string();
+            let id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
             let (cancel, receiver) = watch::channel(false);
             runtime.state.lock().unwrap().cancel = Some(cancel.clone());
             let snapshot = runtime.publish(

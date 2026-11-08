@@ -44,7 +44,7 @@ async fn local_listener_rejects_invalid_commands_preserves_live_sockets_and_clea
             .contains("Invalid login request id")
     );
     assert!(
-        decide(root.path(), uuid::Uuid::new_v4().to_string(), true)
+        decide(root.path(), plain_libs::utils::uuid::Uuid::new_v4().into_string(), true)
             .await
             .is_err()
     );

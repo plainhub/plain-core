@@ -174,7 +174,7 @@ async fn decode_sdk(
     request: &Request,
     system: bool,
 ) -> Result<Option<Vec<u8>>, String> {
-    let token = uuid::Uuid::new_v4().to_string();
+    let token = plain_libs::utils::uuid::Uuid::new_v4().into_string();
     let (sender, mut receiver) = oneshot::channel();
     state
         .thumbnails
@@ -403,7 +403,7 @@ impl Thumbnails {
         tokio::task::spawn_blocking(move || -> std::io::Result<()> {
             use std::io::Write;
             std::fs::create_dir_all(cached.parent().unwrap())?;
-            let temporary = cached.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+            let temporary = cached.with_extension(format!("{}.tmp", plain_libs::utils::uuid::Uuid::new_v4()));
             let _cleanup = Temporary(temporary.clone());
             let mut file = std::fs::OpenOptions::new()
                 .create_new(true)

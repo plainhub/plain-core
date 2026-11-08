@@ -129,7 +129,7 @@ impl NativeResources {
             .map_err(|_| ResourceError::Busy)?;
         let mut connection = self.host.connection_changes();
         let generation = self.host.generation().ok_or(ResourceError::Unavailable)?;
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         let (attached_tx, attached_rx) = oneshot::channel();
         let (outgoing, receiver) = mpsc::channel(4);
         let (sender, incoming) = mpsc::channel(4);

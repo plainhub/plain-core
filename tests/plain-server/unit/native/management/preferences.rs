@@ -131,9 +131,9 @@ async fn native_scan_history_preserves_order_and_scoped_deletion() {
     });
     assert_eq!(ids.len(), 4);
     for id in &ids {
-        let uuid = uuid::Uuid::parse_str(id).unwrap();
-        assert_eq!(uuid.get_version_num(), 7);
-        assert_eq!(uuid.get_variant(), uuid::Variant::RFC4122);
+        let uuid = plain_libs::utils::uuid::Uuid::parse_str(id).unwrap();
+        assert_eq!(uuid.as_bytes()[6] >> 4, 7);
+        assert_eq!(uuid.as_bytes()[8] & 0xc0, 0x80);
     }
     assert!(management.remove_scan_history("duplicate".into()).unwrap());
     assert_eq!(

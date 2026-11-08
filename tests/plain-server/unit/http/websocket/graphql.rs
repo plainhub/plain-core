@@ -235,7 +235,7 @@ async fn fs_burst_and_page_cancellation(
     let plaintext = format!(
         "{}|{}|{}",
         chrono::Utc::now().timestamp_millis(),
-        uuid::Uuid::new_v4(),
+        plain_libs::utils::uuid::Uuid::new_v4(),
         json!({"query":r#"{noteCount(query:"")} "#})
     );
     let body = plain_libs::crypto::xchacha_encrypt_raw(key, plaintext.as_bytes()).unwrap();
@@ -314,7 +314,7 @@ async fn fs_burst_and_page_cancellation(
             let plaintext = format!(
                 "{}|{}|{}",
                 chrono::Utc::now().timestamp_millis(),
-                uuid::Uuid::new_v4(),
+                plain_libs::utils::uuid::Uuid::new_v4(),
                 json!({"query":r#"{noteCount(query:"")}"#})
             );
             plain_libs::crypto::xchacha_encrypt_raw(key, plaintext.as_bytes()).unwrap()

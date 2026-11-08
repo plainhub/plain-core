@@ -265,7 +265,7 @@ fn store(
     let mut installed = false;
     if !path.is_file() {
         let temporary =
-            path.with_file_name(format!(".import-{}", uuid::Uuid::new_v4().to_string()));
+            path.with_file_name(format!(".import-{}", plain_libs::utils::uuid::Uuid::new_v4().into_string()));
         fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -351,7 +351,7 @@ pub fn release(db: &Db, directory: &Path, id: &str) -> std::io::Result<bool> {
         return Ok(false);
     };
     let path = owned_path(directory, &file.real_path)?;
-    let quarantine = path.with_file_name(format!(".release-{}", uuid::Uuid::new_v4().to_string()));
+    let quarantine = path.with_file_name(format!(".release-{}", plain_libs::utils::uuid::Uuid::new_v4().into_string()));
     let moved = file.ref_count <= 1 && path.exists();
     if moved {
         fs::rename(&path, &quarantine)?;

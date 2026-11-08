@@ -9,7 +9,7 @@ impl Default for NativeRequestScope {
     fn default() -> Self {
         let (closed, _) = watch::channel(false);
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
             closed,
         }
     }

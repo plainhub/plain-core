@@ -23,7 +23,7 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
             .abs_diff(crate::features::peers::pairing::now_ms() as u64)
             < 1000
     );
-    assert!(uuid::Uuid::parse_str(parts[1]).is_ok());
+    assert!(plain_libs::utils::uuid::Uuid::parse_str(parts[1]).is_ok());
     let document: Value = serde_json::from_str(parts[2]).unwrap();
     assert_eq!(
         document["variables"]["relativePath"],

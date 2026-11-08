@@ -101,7 +101,7 @@ impl MdnsMutation {
         mdns_runtime::control(
             ctx.data::<ServerState>()?,
             Request::Acquire {
-                token: uuid::Uuid::parse_str(&token)?,
+                token: plain_libs::utils::uuid::Uuid::parse_str(&token)?,
                 owner: discovery_owner(ctx)?,
             },
         )
@@ -116,7 +116,7 @@ impl MdnsMutation {
         mdns_runtime::control(
             ctx.data::<ServerState>()?,
             Request::Release {
-                token: uuid::Uuid::parse_str(&token)?,
+                token: plain_libs::utils::uuid::Uuid::parse_str(&token)?,
                 owner: discovery_owner(ctx)?,
             },
         )

@@ -172,7 +172,7 @@ impl MediaScans {
         }
         let (cancel, receiver) = watch::channel(false);
         let (activity, _) = watch::channel(());
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         guard.job = Some(Job {
             purpose,
             snapshot: Snapshot {

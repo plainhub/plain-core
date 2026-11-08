@@ -121,7 +121,7 @@ impl Attempts {
         ensure!(attempts.len() < 128, "Pairing capacity exceeded");
         let state = State {
             device_id: id,
-            generation: uuid::Uuid::new_v4().to_string(),
+            generation: plain_libs::utils::uuid::Uuid::new_v4().into_string(),
             mode,
             phase: PairingPhase::Starting,
             error: None,

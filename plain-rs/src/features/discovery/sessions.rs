@@ -1,6 +1,6 @@
 use anyhow::{Result, ensure};
 use std::collections::HashMap;
-use uuid::Uuid;
+use plain_libs::utils::uuid::Uuid;
 
 const SESSION_CAPACITY: usize = 128;
 const OWNER_CAPACITY: usize = 16;
