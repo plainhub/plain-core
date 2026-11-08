@@ -96,7 +96,10 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
     let state = core.runtime_state();
     let executor = core.native_graphql().unwrap();
     let resolve = |id: &str| {
-        plain_rs::features::services::peers::peer_address::proxy_address(&state.db, id).unwrap()
+        plain_rs::infrastructure::db::chat_store::peers::get(&state.db, id)
+            .unwrap()
+            .map(|peer| plain_rs::features::services::peers::peer_address::address(&peer).base_url)
+            .filter(|url| !url.is_empty())
     };
     assert_eq!(resolve("peer-a"), None);
     state
@@ -112,7 +115,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
             "pairing-key",
         )
         .unwrap();
-    assert_eq!(resolve("peer-a"), Some("127.0.0.1:9443".into()));
+    assert_eq!(resolve("peer-a"), Some("https://127.0.0.1:9443".into()));
     let query = "{peers{id name port token publicKey online}}";
     let response = executor.execute(plain_graphql::Request::new(query)).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -140,7 +143,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
     );
     assert_eq!(row.key, "pairing-key");
     assert!(row.token.is_empty());
-    assert_eq!(resolve("peer-a"), Some("127.0.0.1:9443".into()));
+    assert_eq!(resolve("peer-a"), Some("https://127.0.0.1:9443".into()));
     row.port = None;
     plain_rs::infrastructure::db::chat_store::peers::save(
         &state.db,

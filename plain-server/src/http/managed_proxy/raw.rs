@@ -19,7 +19,7 @@ use plain_rs::{
     },
     infrastructure::db::{DPeer, SessionRow, chat_store::peers},
 };
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 enum Target {
     Managed(Arc<super::PeerRoute>),
@@ -233,27 +233,47 @@ pub(super) async fn auth(state: ServerState, target: String, request: Request) -
         })
 }
 
-pub(super) async fn native_graphql(state: ServerState, target: &str, request: Request) -> Response {
-    let caller = caller_id(request.headers());
+fn native_peer(
+    state: &ServerState,
+    caller: &str,
+    target: &str,
+) -> Result<http_client::Url, StatusCode> {
     if !state.native_client_id().is_ok_and(|id| id == caller) {
-        return StatusCode::UNAUTHORIZED.into_response();
+        return Err(StatusCode::UNAUTHORIZED);
     }
     let peer = match peers::get(&state.db, target) {
         Ok(Some(peer)) if peer.id != caller && peer.is_paired() && !peer.token.is_empty() => peer,
-        Ok(_) => return StatusCode::NOT_FOUND.into_response(),
-        Err(_) => return StatusCode::BAD_GATEWAY.into_response(),
+        Ok(_) => return Err(StatusCode::NOT_FOUND),
+        Err(_) => return Err(StatusCode::BAD_GATEWAY),
     };
-    let Ok(base) = http_client::Url::parse(&peer_address::address(&peer).base_url) else {
-        return StatusCode::BAD_GATEWAY.into_response();
+    http_client::Url::parse(&peer_address::address(&peer).base_url)
+        .map_err(|_| StatusCode::BAD_GATEWAY)
+}
+
+pub(super) async fn native_graphql(state: ServerState, target: &str, request: Request) -> Response {
+    match native_peer(&state, caller_id(request.headers()), target) {
+        Ok(base) => native_relay(state, base, request, false).await,
+        Err(status) => status.into_response(),
+    }
+}
+
+// Browsers cannot set headers on a WebSocket, so the desktop client id travels in `cid`.
+pub(super) async fn native_socket(state: ServerState, target: &str, request: Request) -> Response {
+    let Ok(Query(parameters)) = Query::<HashMap<String, String>>::try_from_uri(request.uri())
+    else {
+        return StatusCode::BAD_REQUEST.into_response();
     };
-    native_relay(state, base, request, false).await
+    let caller = parameters.get("cid").map_or("", String::as_str);
+    match native_peer(&state, caller, target) {
+        Ok(base) => native_relay(state, base, request, true).await,
+        Err(status) => status.into_response(),
+    }
 }
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct NativeTarget {
     base: String,
-    peer_id: String,
 }
 
 pub(super) async fn native(state: ServerState, ticket: &str, request: Request) -> Response {
@@ -274,7 +294,7 @@ pub(super) async fn native(state: ServerState, ticket: &str, request: Request) -
     let Ok(target) = serde_json::from_slice::<NativeTarget>(&plain) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    let Ok(mut base) = http_client::Url::parse(&target.base) else {
+    let Ok(base) = http_client::Url::parse(&target.base) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     if !matches!(base.scheme(), "http" | "https")
@@ -282,19 +302,7 @@ pub(super) async fn native(state: ServerState, ticket: &str, request: Request) -
     {
         return StatusCode::BAD_REQUEST.into_response();
     }
-    let websocket = request.headers().contains_key(header::UPGRADE);
-    let mut rediscover = false;
-    if websocket && !target.peer_id.is_empty() {
-        if let Ok(Some(address)) = peer_address::proxy_address(&state.db, &target.peer_id) {
-            let Ok(updated) = http_client::Url::parse(&format!("{}://{address}", base.scheme()))
-            else {
-                return StatusCode::BAD_GATEWAY.into_response();
-            };
-            base = updated;
-            rediscover = true;
-        }
-    }
-    native_relay(state, base, request, rediscover).await
+    native_relay(state, base, request, false).await
 }
 
 async fn native_relay(

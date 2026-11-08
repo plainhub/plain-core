@@ -159,6 +159,9 @@ pub(crate) async fn call(
         if target.starts_with("c.") {
             return raw::native(state, &target, request).await;
         }
+        if request.headers().contains_key(header::UPGRADE) {
+            return raw::native_socket(state, &target, request).await;
+        }
     }
     if request.method() == Method::GET && path == "fs" {
         return resource(state, &target, &path, request).await;

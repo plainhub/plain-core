@@ -295,6 +295,27 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     )
     .await
     .unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(12),
+        subscription(
+            &format!("ws://127.0.0.1:{a_http}/proxy/{b_id}/graphql?cid={a_id}"),
+            &a_id,
+            &native_key,
+            pin,
+        ),
+    )
+    .await
+    .unwrap();
+    for url in [
+        format!("ws://127.0.0.1:{a_http}/proxy/{b_id}/graphql"),
+        format!(
+            "ws://127.0.0.1:{a_http}/proxy/{b_id}/graphql?cid={}",
+            browser.client_id
+        ),
+        format!("ws://127.0.0.1:{a_http}/proxy/unknown/graphql?cid={a_id}"),
+    ] {
+        assert!(tokio_tungstenite::connect_async(url).await.is_err());
+    }
     b_state
         .prefs
         .set(pref_keys::API_PERMISSIONS, Vec::<AccessFeature>::new())
@@ -593,7 +614,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         &native_scope,
         "native-proxy",
         &a_state.native_file_url_key,
-        &serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}"),"peerId":b_id}))
+        &serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}")}))
             .unwrap(),
     )
     .unwrap();
@@ -739,7 +760,7 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
         &scope,
         "native-proxy",
         &state.native_file_url_key,
-        &serde_json::to_vec(&json!({"base":format!("http://{address}"),"peerId":""})).unwrap(),
+        &serde_json::to_vec(&json!({"base":format!("http://{address}")})).unwrap(),
     )
     .unwrap();
     let http = http_client::builder().no_proxy().build().unwrap();

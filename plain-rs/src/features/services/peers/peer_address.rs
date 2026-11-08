@@ -104,23 +104,6 @@ pub fn download_url(peer: &DPeer, file_id: &str) -> anyhow::Result<String> {
         );
     Ok(url.to_string())
 }
-pub fn proxy_address(
-    db: &crate::infrastructure::db::Db,
-    id: &str,
-) -> anyhow::Result<Option<String>> {
-    let peer = crate::infrastructure::db::chat_store::peers::get(db, id)?
-        .filter(|peer| peer.is_paired() || !peer.token.is_empty());
-    Ok(peer.and_then(|peer| {
-        if peer.ip.is_empty() {
-            return None;
-        }
-        let host = peer.best_ip();
-        let port = peer.port?;
-        let url = plain_libs::utils::http_url::build_url("https", &host, port, "");
-        url.strip_prefix("https://").map(str::to_owned)
-    }))
-}
-
 #[cfg(test)]
 #[path = "../../../../../tests/plain-rs/unit/features/services/peers/peer_address.rs"]
 mod tests;
