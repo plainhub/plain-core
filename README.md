@@ -257,7 +257,7 @@ A `v*` tag builds the frontend from plain-desktop, compiles it into `plainapp` f
 
 ## Work on desktop or app
 
-Keep plain-core next to plain-desktop or plain-app. Run these commands in the desktop or app repository; its `scripts/core` calls `plain-core/scripts/core-dependencies.py`.
+Keep plain-core next to plain-desktop or plain-app. Run these commands in the desktop or app repository; its `scripts/core` calls the shared Node.js tool in `plain-core/scripts/core-dependencies.mjs`.
 
 ```bash
 ./scripts/core local        # Use local plain-core
