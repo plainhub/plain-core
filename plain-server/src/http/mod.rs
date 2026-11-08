@@ -17,9 +17,6 @@ pub(crate) mod zip;
 pub(crate) mod upload;
 
 #[cfg(feature = "core")]
-pub mod proxy;
-
-#[cfg(feature = "core")]
 pub(crate) mod managed_proxy;
 
 #[cfg(feature = "core")]

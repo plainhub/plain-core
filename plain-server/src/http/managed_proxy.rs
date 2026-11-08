@@ -29,6 +29,8 @@ use std::{
 };
 use subtle::ConstantTimeEq;
 
+mod attachment;
+mod raw;
 mod socket;
 mod upload;
 
@@ -40,6 +42,8 @@ type RouteSlot = Arc<tokio::sync::Mutex<Option<Arc<PeerRoute>>>>;
 #[derive(Default)]
 pub(crate) struct ManagedProxy {
     routes: Mutex<HashMap<String, RouteSlot>>,
+    attachments: Mutex<HashMap<String, attachment::RouteSlot>>,
+    native_client: std::sync::OnceLock<http_client::Client>,
 }
 
 struct PeerRoute {
@@ -148,8 +152,22 @@ pub(crate) async fn call(
     Path((target, path)): Path<(String, String)>,
     request: Request,
 ) -> Response {
+    if native_loopback(&state, &request) {
+        if path == "graphql" && request.method() == Method::POST {
+            return raw::native_graphql(state, &target, request).await;
+        }
+        if target.starts_with("c.") {
+            return raw::native(state, &target, request).await;
+        }
+    }
+    if request.method() == Method::GET && path == "fs" {
+        return resource(state, &target, &path, request).await;
+    }
     if !same_origin(&request) || !remote_access(&state) {
         return StatusCode::FORBIDDEN.into_response();
+    }
+    if path == "auth" && request.method() == Method::GET {
+        return raw::auth(state, target, request).await;
     }
     if path == "graphql" && request.method() == Method::GET {
         return socket::upgrade(state, target, request).await;
@@ -159,11 +177,44 @@ pub(crate) async fn call(
         (Method::POST, "upload" | "upload_chunk") => {
             upload::call(state, &target, &path, request).await
         }
-        (Method::GET, "fs" | "zip/dir" | "zip/files") => {
-            resource(state, &target, &path, request).await
-        }
-        _ => StatusCode::NOT_FOUND.into_response(),
+        (Method::GET, "zip/dir" | "zip/files") => resource(state, &target, &path, request).await,
+        _ => raw::call(state, &target, &path, request).await,
     }
+}
+
+pub(super) fn native_loopback(state: &ServerState, request: &Request) -> bool {
+    use axum::extract::ConnectInfo;
+    use std::net::SocketAddr;
+    let host = request
+        .uri()
+        .authority()
+        .map(|host| host.as_str())
+        .or_else(|| {
+            request
+                .headers()
+                .get(header::HOST)
+                .and_then(|host| host.to_str().ok())
+        });
+    request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .is_some_and(|peer| peer.0.ip().is_loopback())
+        && request
+            .extensions()
+            .get::<ConnectionScheme>()
+            .is_some_and(|scheme| scheme.0 == "http")
+        && host
+            .and_then(|host| host.parse::<axum::http::uri::Authority>().ok())
+            .is_some_and(|authority| {
+                matches!(authority.host(), "localhost" | "127.0.0.1" | "[::1]")
+            })
+        && request.headers().get(header::ORIGIN).is_none_or(|origin| {
+            matches!(
+                origin.as_bytes(),
+                b"tauri://localhost" | b"http://tauri.localhost" | b"https://tauri.localhost"
+            ) || (state.build_debug.load(std::sync::atomic::Ordering::Relaxed)
+                && origin.as_bytes() == b"http://localhost:4000")
+        })
 }
 
 fn same_origin(request: &Request) -> bool {
@@ -202,7 +253,7 @@ fn remote_access(state: &ServerState) -> bool {
     state.prefs.get_or("remote_access", true)
 }
 
-fn caller(state: &ServerState, id: &str) -> Result<SessionRow> {
+pub(crate) fn caller(state: &ServerState, id: &str) -> Result<SessionRow> {
     ensure!(remote_access(state), "no_permission");
     state
         .db
@@ -321,33 +372,21 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
     let Ok(query) = serde_json::from_str::<plain_graphql::Request>(text) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    let Ok(features) = authorize_graphql(&state, &query, false) else {
+    if authorize_graphql(&query, false).is_err() {
         return StatusCode::FORBIDDEN.into_response();
-    };
+    }
     let Ok(route) = state.managed_proxy.route(&state, target).await else {
         return StatusCode::BAD_GATEWAY.into_response();
     };
-    if current(&state, &session).is_err()
-        || route.check_current(&state).is_err()
-        || !access::is_enabled(&state.prefs, &features)
-    {
+    if current(&state, &session).is_err() || route.check_current(&state).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }
     let Ok(url) = route.base.join("/graphql") else {
         return StatusCode::BAD_GATEWAY.into_response();
     };
-    let mut outgoing = route.client.post(url).header("c-id", &route.client_id);
-    if features.contains(&AccessFeature::Files) {
-        if !route.supports_managed_resources {
-            return StatusCode::BAD_GATEWAY.into_response();
-        }
-        outgoing = outgoing.header(MANAGED_RESOURCE, "1");
-    }
+    let outgoing = route.client.post(url).header("c-id", &route.client_id);
     let response = management_http::exchange(outgoing, &route.key, text, GRAPHQL_LIMIT).await;
-    if current(&state, &session).is_err()
-        || route.check_current(&state).is_err()
-        || !access::is_enabled(&state.prefs, &features)
-    {
+    if current(&state, &session).is_err() || route.check_current(&state).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }
     let response = match response {
@@ -380,128 +419,56 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
 #[path = "../../../tests/plain-server/unit/http/managed_proxy.rs"]
 mod tests;
 
-fn authorize_graphql(
-    state: &ServerState,
-    request: &plain_graphql::Request,
-    subscription: bool,
-) -> Result<Vec<AccessFeature>> {
+fn authorize_graphql(request: &plain_graphql::Request, subscription: bool) -> Result<()> {
     use plain_graphql::parser::{
         parse_query,
         types::{OperationType, Selection},
     };
     let document = parse_query(&request.query)?;
-    let mut roots = Vec::new();
-    let mut kind = None;
-    for (name, operation) in document.operations.iter() {
-        if request
+    let mut operations = document.operations.iter().filter(|(name, _)| {
+        request
             .operation_name
             .as_deref()
-            .is_some_and(|selected| name.is_none_or(|name| name.as_str() != selected))
-        {
-            continue;
-        }
-        ensure!(
-            kind.replace(operation.node.ty).is_none(),
-            "Operation name required"
-        );
-        roots.extend(&operation.node.selection_set.node.items);
-    }
-    let kind = kind.ok_or_else(|| anyhow!("Operation name required"))?;
+            .is_none_or(|selected| name.is_some_and(|name| name.as_str() == selected))
+    });
+    let (_, operation) = operations
+        .next()
+        .ok_or_else(|| anyhow!("Operation name required"))?;
+    ensure!(operations.next().is_none(), "Operation name required");
     ensure!(
-        (kind == OperationType::Subscription) == subscription,
+        (operation.node.ty == OperationType::Subscription) == subscription,
         "Invalid managed operation"
     );
-    let mut pending = roots
-        .into_iter()
-        .map(|selection| (selection, true))
-        .collect::<Vec<_>>();
+    let mut pending: Vec<_> = operation.node.selection_set.node.items.iter().collect();
     let mut fragments = std::collections::HashSet::new();
-    let mut features = Vec::new();
-    while let Some((selection, root)) = pending.pop() {
+    while let Some(selection) = pending.pop() {
         match &selection.node {
             Selection::Field(field) => {
-                let name = field.node.name.node.as_str();
                 ensure!(
-                    !matches!(name, "urlToken" | "token") && !name.starts_with("__"),
+                    !matches!(field.node.name.node.as_str(), "urlToken" | "token"),
                     "Managed credential field denied"
                 );
-                if root {
-                    let feature = match (kind, name) {
-                        (OperationType::Query, "app") => None,
-                        (OperationType::Query, "docs" | "docCount") => Some(AccessFeature::Docs),
-                        (OperationType::Query, "images" | "imageCount") => {
-                            Some(AccessFeature::Images)
-                        }
-                        (OperationType::Query, "videos" | "videoCount") => {
-                            Some(AccessFeature::Videos)
-                        }
-                        (OperationType::Query, "audios" | "audioCount") => {
-                            Some(AccessFeature::Audio)
-                        }
-                        (
-                            OperationType::Query,
-                            "files" | "fileCount" | "fileInfo" | "indexedFiles"
-                            | "indexedFileCount" | "mounts" | "recentFiles" | "pathExists"
-                            | "pathKind" | "uploadedChunks" | "mergeStatus",
-                        )
-                        | (OperationType::Mutation, "mergeChunks" | "deleteChunks")
-                        | (
-                            OperationType::Subscription,
-                            "accessUpdated" | "mediaScanProgress" | "uploadMergeResult",
-                        ) => Some(AccessFeature::Files),
-                        _ => return Err(anyhow!("Managed operation denied")),
-                    };
-                    if let Some(feature) = feature.filter(|feature| !features.contains(feature)) {
-                        features.push(feature);
-                    }
-                }
-                pending.extend(
-                    field
-                        .node
-                        .selection_set
-                        .node
-                        .items
-                        .iter()
-                        .map(|item| (item, false)),
-                );
+                pending.extend(&field.node.selection_set.node.items);
             }
-            Selection::InlineFragment(fragment) => pending.extend(
-                fragment
-                    .node
-                    .selection_set
-                    .node
-                    .items
-                    .iter()
-                    .map(|item| (item, root)),
-            ),
+            Selection::InlineFragment(fragment) => {
+                pending.extend(&fragment.node.selection_set.node.items)
+            }
             Selection::FragmentSpread(spread) => {
                 let name = &spread.node.fragment_name.node;
-                if fragments.insert((name.clone(), root)) {
+                if fragments.insert(name) {
                     let fragment = document
                         .fragments
                         .get(name)
                         .ok_or_else(|| anyhow!("Unknown fragment"))?;
-                    pending.extend(
-                        fragment
-                            .node
-                            .selection_set
-                            .node
-                            .items
-                            .iter()
-                            .map(|item| (item, root)),
-                    );
+                    pending.extend(&fragment.node.selection_set.node.items);
                 }
             }
         }
     }
-    ensure!(access::is_enabled(&state.prefs, &features), "no_permission");
-    Ok(features)
+    Ok(())
 }
 
 async fn resource(state: ServerState, target: &str, path: &str, request: Request) -> Response {
-    if !access::is_enabled(&state.prefs, &[AccessFeature::Files]) {
-        return StatusCode::FORBIDDEN.into_response();
-    }
     let Ok(axum::extract::Query(parameters)) =
         axum::extract::Query::<crate::http::fs::Parameters>::try_from_uri(request.uri())
     else {
@@ -516,14 +483,52 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
     let Ok((Scope::Session(id), payload)) = resource_link::parse(&parameters.id) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let Ok(session) = caller(&state, &id) else {
-        return StatusCode::UNAUTHORIZED.into_response();
+    let native = path == "fs"
+        && native_loopback(&state, &request)
+        && state.native_client_id().is_ok_and(|native| native == id);
+    let session = if native {
+        None
+    } else {
+        if !same_origin(&request) {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+        let Ok(session) = caller(&state, &id) else {
+            return StatusCode::UNAUTHORIZED.into_response();
+        };
+        Some(session)
     };
-    let Ok(url_key) = decode_key(&session.url_token) else {
-        return StatusCode::UNAUTHORIZED.into_response();
+    let url_key = if let Some(session) = &session {
+        let Ok(key) = decode_key(&session.url_token) else {
+            return StatusCode::UNAUTHORIZED.into_response();
+        };
+        key
+    } else {
+        state.native_file_url_key.to_vec()
     };
+    let scope = Scope::Session(id);
     let purpose = format!("managed:{target}:{path}:{}", parameters.action.as_str());
-    let Ok(plain) = resource_link::decrypt(&Scope::Session(id), &purpose, &url_key, payload) else {
+    let plain = session
+        .as_ref()
+        .and_then(|_| resource_link::decrypt(&scope, &purpose, &url_key, payload).ok());
+    let (Some(session), Some(plain)) = (session.as_ref(), plain) else {
+        if path == "fs"
+            && let Ok(reference) = resource_link::decrypt(
+                &scope,
+                &format!("chat-attachment:{target}"),
+                &url_key,
+                payload,
+            )
+        {
+            return attachment::call(
+                &state,
+                target,
+                parameters,
+                &reference,
+                session.as_ref(),
+                request.headers(),
+            )
+            .await;
+        }
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let Ok(route) = state.managed_proxy.route(&state, target).await else {
@@ -532,10 +537,7 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
     if !route.supports_managed_resources {
         return StatusCode::BAD_GATEWAY.into_response();
     }
-    if current(&state, &session).is_err()
-        || route.check_current(&state).is_err()
-        || !access::is_enabled(&state.prefs, &[AccessFeature::Files])
-    {
+    if current(&state, session).is_err() || route.check_current(&state).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }
     let scope = Scope::Session(route.client_id.clone());
@@ -572,39 +574,53 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
     let Ok(id) = id else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    let Ok(mut url) = route.base.join(&format!("/{path}")) else {
+    let mut parameters = parameters;
+    parameters.id = id;
+    let Ok(url) = resource_url(&route.base, path, &parameters) else {
         return StatusCode::BAD_GATEWAY.into_response();
     };
-    {
-        let mut query = url.query_pairs_mut();
-        query.append_pair("id", &id);
-        if path == "fs" {
-            query.append_pair("action", parameters.action.as_str());
-            if let Some(size) = parameters.size {
-                use plain_rs::features::services::files::content::Size;
-                query.append_pair(
-                    "size",
-                    match size {
-                        Size::Small => "sm",
-                        Size::Large => "lg",
-                    },
-                );
-            }
-            if let Some(version) = parameters.version {
-                query.append_pair("v", &version);
-            }
-        }
-    }
     let outgoing = route
         .client
         .get(url)
         .header("c-id", &route.client_id)
         .header(MANAGED_RESOURCE, "1")
         .bearer_auth(&route.peer.token);
-    relay(outgoing, request.headers()).await
+    relay(outgoing, request.headers(), true).await
 }
 
-async fn relay(mut request: http_client::RequestBuilder, headers: &HeaderMap) -> Response {
+fn resource_url(
+    base: &http_client::Url,
+    path: &str,
+    parameters: &crate::http::fs::Parameters,
+) -> Result<http_client::Url> {
+    use plain_rs::features::services::files::content::Size;
+    let mut url = base.join(&format!("/{path}"))?;
+    let mut query = url.query_pairs_mut();
+    query.append_pair("id", &parameters.id);
+    if path == "fs" {
+        query.append_pair("action", parameters.action.as_str());
+        if let Some(size) = parameters.size {
+            query.append_pair(
+                "size",
+                match size {
+                    Size::Small => "sm",
+                    Size::Large => "lg",
+                },
+            );
+        }
+        if let Some(version) = &parameters.version {
+            query.append_pair("v", version);
+        }
+    }
+    drop(query);
+    Ok(url)
+}
+
+async fn relay(
+    mut request: http_client::RequestBuilder,
+    headers: &HeaderMap,
+    managed: bool,
+) -> Response {
     for name in [
         header::RANGE,
         header::IF_RANGE,
@@ -619,7 +635,8 @@ async fn relay(mut request: http_client::RequestBuilder, headers: &HeaderMap) ->
         return StatusCode::BAD_GATEWAY.into_response();
     };
     let status = response.status();
-    if (status.is_success() || status == StatusCode::NOT_MODIFIED)
+    if managed
+        && (status.is_success() || status == StatusCode::NOT_MODIFIED)
         && !response.headers().contains_key(MANAGED_RESOURCE)
     {
         return StatusCode::BAD_GATEWAY.into_response();

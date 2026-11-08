@@ -95,8 +95,9 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let executor = core.native_graphql().unwrap();
-    let resolver = core.peer_proxy_resolver();
-    let resolve = |id: &str| resolver(id).map(|peer| peer.address().to_owned());
+    let resolve = |id: &str| {
+        plain_rs::features::services::peers::peer_address::proxy_address(&state.db, id).unwrap()
+    };
     assert_eq!(resolve("peer-a"), None);
     state
         .db

@@ -27,6 +27,7 @@ impl Parameters {
 }
 
 pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
+    let native = super::managed_proxy::native_loopback(&state, &request);
     let request = request.into_parts().0;
     let parameters = match axum::extract::Query::<Parameters>::try_from_uri(&request.uri) {
         Ok(parameters) if parameters.is_valid() => parameters.0,
@@ -36,8 +37,14 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
         Ok(managed) => managed,
         Err(status) => return status.into_response(),
     };
+    let native = native
+        && matches!(
+            plain_rs::features::files::resource_link::parse(&parameters.id),
+            Ok((plain_rs::features::files::resource_link::Scope::Session(id), _))
+                if state.native_client_id().is_ok_and(|native| native == id)
+        );
     super::managed_proxy::mark_forwarded(
-        serve(state, parameters, request.headers, false).await,
+        serve(state, parameters, request.headers, native).await,
         managed,
     )
 }
@@ -122,7 +129,7 @@ async fn serve(
             links::ReadKind::Original
         };
         let file = if native {
-            links::resolve_native(&state, &parameters.id, state.native_file_url_key).await?
+            links::resolve_native(&state, &parameters.id, kind, state.native_file_url_key).await?
         } else {
             links::resolve(&state, &parameters.id, kind).await?
         };

@@ -114,7 +114,10 @@ pub fn proxy_address(
         if peer.ip.is_empty() {
             return None;
         }
-        Some(format!("{}:{}", peer.best_ip(), peer.port?))
+        let host = peer.best_ip();
+        let port = peer.port?;
+        let url = plain_libs::utils::http_url::build_url("https", &host, port, "");
+        url.strip_prefix("https://").map(str::to_owned)
     }))
 }
 

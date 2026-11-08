@@ -621,3 +621,101 @@ async fn a_local_commit_failure_preserves_the_old_row_and_reports_the_remote_gra
     local.shutdown().await;
     remote.shutdown().await;
 }
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
+    use plain_libs::protocols::http_client;
+    use plain_rs::{
+        features::{
+            chat::enums::DeviceType,
+            services::{peers::management_http, sessions},
+        },
+        infrastructure::db::{
+            DPeer,
+            chat_store::{SaveMode, peers},
+        },
+    };
+
+    let (_a_dir, a, a_port) = server().await;
+    let (_b_dir, b, b_port) = server().await;
+    let a_state = a.runtime_state();
+    let b_state = b.runtime_state();
+    let a_id = a_state.native_client_id().unwrap();
+    let b_id = b_state.native_client_id().unwrap();
+    b_state.prefs.set("password_type", "NONE").unwrap();
+    let mut events = ConfirmationCallbacks::new(&b_state);
+    let peer = DPeer::new(
+        &b_id,
+        "Fixture B",
+        "127.0.0.1",
+        Some(b_port),
+        DeviceType::Computer,
+    );
+    peers::save(&a_state.db, &[peer], SaveMode::Insert).unwrap();
+    let mut browser = sessions::create(&a_state, "fixture-browser".into()).unwrap();
+    browser.client_id = "fixture-browser".into();
+    browser.r#type = plain_rs::features::sessions::SessionType::Login;
+    a_state.db.session_save(&browser).unwrap();
+    let http = http_client::builder()
+        .no_proxy()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap();
+    let query = |input: Value| {
+        let client = http.clone();
+        let key = base64_decode(&browser.token);
+        let id = browser.client_id.clone();
+        async move {
+            let body = json!({
+                "query":"mutation($input: PairingDeviceInput!) { pairDevice(input: $input) { generation } }",
+                "variables":{"input":input},
+            });
+            let response = management_http::exchange(
+                client
+                    .post(format!("https://localhost:{a_port}/graphql"))
+                    .header("c-id", id),
+                &key,
+                &body.to_string(),
+                8192,
+            )
+            .await
+            .unwrap();
+            serde_json::from_slice::<Value>(&response).unwrap()
+        }
+    };
+    let denied =
+        query(json!({"id":b_id,"host":format!("127.0.0.1:{b_port}"),"mode":"MANAGE"})).await;
+    assert_eq!(denied["errors"][0]["message"], "no_permission");
+    let started = query(json!({"id":b_id,"mode":"MANAGE"})).await;
+    let generation = started["data"]["pairDevice"]["generation"]
+        .as_str()
+        .expect("pairing generation");
+    let request = confirmation(&mut events).await;
+    b.native_management()
+        .unwrap()
+        .confirm_web_login(request, true)
+        .await
+        .unwrap();
+    phase(&a_state, generation, &[PairingPhase::Succeeded]).await;
+    let peer = peers::get(&a_state.db, &b_id).unwrap().unwrap();
+    let grant = b_state.db.session_get(&a_id).unwrap().unwrap();
+    assert!(!peer.token.is_empty());
+    assert_eq!(peer.token, grant.token);
+    assert!(
+        a_state
+            .db
+            .session_get(&browser.client_id)
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        b_state
+            .db
+            .session_get(&browser.client_id)
+            .unwrap()
+            .is_none()
+    );
+    a.shutdown().await;
+    b.shutdown().await;
+}

@@ -8,10 +8,7 @@ use axum::{
 use futures_util::{SinkExt, StreamExt};
 use plain_libs::protocols::websocket::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use plain_rs::{
-    features::{
-        access::AccessFeature,
-        services::{device::access, peers::subscriptions::PeerSubscription},
-    },
+    features::services::peers::subscriptions::PeerSubscription,
     infrastructure::{
         db::SessionRow,
         host::request_scope::NativeRequestScope,
@@ -21,7 +18,7 @@ use plain_rs::{
         },
     },
 };
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashSet, time::Duration};
 
 #[derive(serde::Deserialize)]
 struct Parameters {
@@ -126,7 +123,7 @@ async fn relay(
     mut stream: Stream,
     key: &[u8],
 ) -> Result<(), String> {
-    let mut active = HashMap::<String, Vec<AccessFeature>>::new();
+    let mut active = HashSet::<String>::new();
     let mut recheck = tokio::time::interval(Duration::from_secs(1));
     recheck.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
@@ -134,12 +131,6 @@ async fn relay(
         route
             .check_current(state)
             .map_err(|_| "Management session revoked")?;
-        if !active
-            .values()
-            .all(|features| access::is_enabled(&state.prefs, features))
-        {
-            return Err("Permission revoked".into());
-        }
         tokio::select! {
             _ = recheck.tick() => {}
             incoming = socket.next() => {
@@ -149,11 +140,11 @@ async fn relay(
                         let message = serde_json::from_slice::<ClientMessage>(&plain).map_err(|_| "Invalid subscription request")?;
                         match &message {
                             ClientMessage::Subscribe { id, payload } => {
-                                if active.len() >= 64 || active.contains_key(id) {
+                                if active.len() >= 64 || active.contains(id) {
                                     return Err("Subscription limit reached".into());
                                 }
-                                let features = authorize_graphql(state, payload, true).map_err(|_| "Subscription denied")?;
-                                active.insert(id.clone(), features);
+                                authorize_graphql(payload, true).map_err(|_| "Subscription denied")?;
+                                active.insert(id.clone());
                             }
                             ClientMessage::Complete { id } => { active.remove(id); }
                             ClientMessage::Ping { payload } => {
@@ -179,18 +170,15 @@ async fn relay(
                 let id = match &parsed {
                     ServerMessage::Next { id, .. } => Some(id),
                     ServerMessage::Error { id, .. } | ServerMessage::Complete { id } => {
-                        if active.remove(id).is_none() { continue; }
+                        if !active.remove(id) { continue; }
                         None
                     }
                     ServerMessage::Pong { .. } => None,
                 };
                 current(state, session).map_err(|_| "Session revoked")?;
                 route.check_current(state).map_err(|_| "Management session revoked")?;
-                if let Some(id) = id {
-                    let Some(features) = active.get(id) else { continue };
-                    if !access::is_enabled(&state.prefs, features) {
-                        return Err("Permission revoked".into());
-                    }
+                if id.is_some_and(|id| !active.contains(id)) {
+                    continue;
                 }
                 let frame = stream.encode(message.as_bytes(), key).ok_or("Sequence exhausted")?;
                 send(socket, Message::Binary(frame.into())).await?;

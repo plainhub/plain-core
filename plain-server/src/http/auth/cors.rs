@@ -49,6 +49,8 @@ pub(crate) async fn apply(
         .unwrap_or_default();
     let trustworthy = is_potentially_trustworthy(scheme, host);
     let origin = request.headers().get(header::ORIGIN).cloned();
+    let native_proxy = (request.uri().path() == "/fs" || request.uri().path().starts_with("/proxy/"))
+        && crate::http::managed_proxy::native_loopback(&state, &request);
     let mut allow_headers = None;
     if let Some(origin) = &origin {
         let same_origin = origin
@@ -62,6 +64,7 @@ pub(crate) async fn apply(
                     && origin.port_or_known_default() == authority.port_or_known_default()
             });
         if !same_origin
+            && !native_proxy
             && !state.prefs.get_or("allow_any_host", false)
             && !state.build_debug.load(std::sync::atomic::Ordering::Relaxed)
         {
@@ -78,6 +81,7 @@ pub(crate) async fn apply(
                     .filter(|value| {
                         matches!(value.as_str(), "content-type" | "authorization" | "accept")
                             || value.starts_with("c-")
+                            || (native_proxy && matches!(value.as_str(), "range" | "if-range" | "if-none-match" | "if-modified-since"))
                     })
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -110,10 +114,16 @@ pub(crate) async fn apply(
     if let Some(origin) = origin {
         headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
         headers.append(header::VARY, "Origin".parse().unwrap());
+        if native_proxy {
+            headers.insert(
+                header::ACCESS_CONTROL_EXPOSE_HEADERS,
+                axum::http::HeaderValue::from_static("content-disposition, content-range, etag"),
+            );
+        }
         if options {
             headers.insert(
                 header::ACCESS_CONTROL_ALLOW_METHODS,
-                "GET, POST, PUT, DELETE, OPTIONS, HEAD".parse().unwrap(),
+                "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD".parse().unwrap(),
             );
             headers.insert(header::ACCESS_CONTROL_MAX_AGE, "86400".parse().unwrap());
             if let Some(value) = allow_headers.filter(|v| !v.is_empty()) {

@@ -10,46 +10,70 @@ fn fields(values: &[&[u8]]) -> Option<Vec<u8>> {
     }
     Some(encoded)
 }
-fn init_aad(client: &str) -> Option<Vec<u8>> {
-    fields(&[b"plain-graphql-init-v1", b"/graphql", client.as_bytes()])
+fn init_aad(client: &str, path: &str) -> Option<Vec<u8>> {
+    fields(&[b"plain-graphql-init-v1", path.as_bytes(), client.as_bytes()])
 }
 pub fn seal_init(key: &[u8], client: &str, plain: &[u8]) -> Option<Vec<u8>> {
+    seal_init_for(key, client, "/graphql", plain)
+}
+pub fn seal_init_for(key: &[u8], client: &str, path: &str, plain: &[u8]) -> Option<Vec<u8>> {
     let mut frame = vec![1];
     frame.extend_from_slice(&xchacha_encrypt_raw_with_aad(
         key,
         plain,
-        &init_aad(client)?,
+        &init_aad(client, path)?,
     )?);
     Some(frame)
 }
 pub fn open_init(key: &[u8], client: &str, frame: &[u8]) -> Option<Vec<u8>> {
+    open_init_for(key, client, "/graphql", frame)
+}
+pub fn open_init_for(key: &[u8], client: &str, path: &str, frame: &[u8]) -> Option<Vec<u8>> {
     if frame.first() != Some(&1) {
         return None;
     }
-    xchacha_decrypt_raw_with_aad(key, frame.get(1..)?, &init_aad(client)?)
+    xchacha_decrypt_raw_with_aad(key, frame.get(1..)?, &init_aad(client, path)?)
 }
-fn ack_aad(client: &str, init: &[u8]) -> Option<Vec<u8>> {
+fn ack_aad(client: &str, path: &str, init: &[u8]) -> Option<Vec<u8>> {
     fields(&[
         b"plain-graphql-ack-v1",
-        b"/graphql",
+        path.as_bytes(),
         client.as_bytes(),
         &Sha256::digest(init),
     ])
 }
 pub fn seal_ack(key: &[u8], client: &str, init: &[u8], plain: &[u8]) -> Option<Vec<u8>> {
+    seal_ack_for(key, client, "/graphql", init, plain)
+}
+pub fn seal_ack_for(
+    key: &[u8],
+    client: &str,
+    path: &str,
+    init: &[u8],
+    plain: &[u8],
+) -> Option<Vec<u8>> {
     let mut frame = vec![1];
     frame.extend_from_slice(&xchacha_encrypt_raw_with_aad(
         key,
         plain,
-        &ack_aad(client, init)?,
+        &ack_aad(client, path, init)?,
     )?);
     Some(frame)
 }
 pub fn open_ack(key: &[u8], client: &str, init: &[u8], frame: &[u8]) -> Option<Vec<u8>> {
+    open_ack_for(key, client, "/graphql", init, frame)
+}
+pub fn open_ack_for(
+    key: &[u8],
+    client: &str,
+    path: &str,
+    init: &[u8],
+    frame: &[u8],
+) -> Option<Vec<u8>> {
     if frame.first() != Some(&1) {
         return None;
     }
-    xchacha_decrypt_raw_with_aad(key, frame.get(1..)?, &ack_aad(client, init)?)
+    xchacha_decrypt_raw_with_aad(key, frame.get(1..)?, &ack_aad(client, path, init)?)
 }
 #[derive(Clone, Copy)]
 pub enum Role {

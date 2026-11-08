@@ -53,6 +53,48 @@ impl WebSocketUpgrade {
         self
     }
 
+    pub fn relay<T, F>(self, headers: &HeaderMap, mut upstream: T, until: F) -> Response
+    where
+        T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+        F: Future<Output = ()> + Send + 'static,
+    {
+        let accept = derive_accept_key(self.key.as_bytes());
+        if !header_eq(headers, header::UPGRADE, b"websocket")
+            || headers
+                .get(header::SEC_WEBSOCKET_ACCEPT)
+                .map(HeaderValue::as_bytes)
+                != Some(accept.as_bytes())
+        {
+            return Response::builder()
+                .status(StatusCode::BAD_GATEWAY)
+                .body(Body::empty())
+                .unwrap();
+        }
+        let mut response = Response::builder()
+            .status(StatusCode::SWITCHING_PROTOCOLS)
+            .header(header::CONNECTION, "upgrade")
+            .header(header::UPGRADE, "websocket")
+            .header(header::SEC_WEBSOCKET_ACCEPT, accept);
+        for name in [
+            header::SEC_WEBSOCKET_PROTOCOL,
+            header::SEC_WEBSOCKET_EXTENSIONS,
+        ] {
+            if let Some(value) = headers.get(&name) {
+                response = response.header(name, value);
+            }
+        }
+        tokio::spawn(async move {
+            if let Ok(upgraded) = self.on_upgrade.await {
+                let mut downstream = TokioIo::new(upgraded);
+                tokio::select! {
+                    _ = tokio::io::copy_bidirectional(&mut downstream, &mut upstream) => {}
+                    _ = until => {}
+                }
+            }
+        });
+        response.body(Body::empty()).unwrap()
+    }
+
     pub fn on_upgrade<F, Fut>(self, callback: F) -> Response
     where
         F: FnOnce(WebSocket) -> Fut + Send + 'static,

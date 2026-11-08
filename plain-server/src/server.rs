@@ -150,29 +150,6 @@ impl ContentServer {
             .map_err(|error| error.to_string())
     }
 
-    pub fn peer_proxy_resolver(&self) -> crate::http::proxy::local::PeerResolver {
-        let state = self.state.clone();
-        Arc::new(move |id| {
-            if state.native_client_id().is_err() {
-                return None;
-            }
-            match plain_rs::features::services::peers::peer_address::proxy_address(&state.db, id) {
-                Ok(address) => address.map(|address| {
-                    let state = state.clone();
-                    crate::http::proxy::local::ResolvedPeer::new(address, move || {
-                        if state.native_client_id().is_ok() {
-                            state.mdns.browse_resident();
-                        }
-                    })
-                }),
-                Err(error) => {
-                    log::warn!("Peer proxy address lookup failed: {error}");
-                    None
-                }
-            }
-        })
-    }
-
     #[cfg(feature = "media")]
     pub fn native_audio(&self) -> Result<crate::native::audio::NativeAudio, String> {
         self.state.native_client_id()?;

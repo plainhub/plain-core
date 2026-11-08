@@ -62,6 +62,7 @@ impl UploadQuery {
         ctx: &Context<'_>,
         file_id: String,
     ) -> plain_graphql::Result<Vec<String>> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         ctx.data::<Arc<plain_rs::features::services::files::upload_chunks::UploadChunks>>()?
             .list(&file_id)
             .await
@@ -71,6 +72,7 @@ impl UploadQuery {
     /// `NONE` when no merge was ever started for this id, which is what a
     /// client sees before it calls `mergeChunks`.
     fn merge_status(&self, ctx: &Context<'_>, file_id: String) -> plain_graphql::Result<MergeTask> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         Ok(merge_task(
             &ctx.data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
                 .status(&file_id),
@@ -252,6 +254,7 @@ impl FileOpsMutation {
         ctx: &Context<'_>,
         file_id: String,
     ) -> plain_graphql::Result<bool> {
+        public_gate::require(ctx, prefs(ctx), &[STORAGE])?;
         let base = upload_base(ctx).await?;
         ctx.data_unchecked::<std::sync::Arc<plain_rs::features::files::uploads::Runtime>>()
             .delete(&base, &file_id)

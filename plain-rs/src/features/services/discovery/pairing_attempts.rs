@@ -448,6 +448,13 @@ pub(super) struct Resolved {
     pub device_type: crate::features::chat::enums::DeviceType,
     pub url: Option<http_client::Url>,
 }
+pub fn nearby_management_address(state: &CoreRuntime, id: &str) -> Result<http_client::Url> {
+    ensure!(state.nearby_devices.contains(id), "Nearby device unavailable");
+    resolve(state, Some(id), None, Mode::Manage)?
+        .url
+        .ok_or_else(|| anyhow::anyhow!("No management address available"))
+}
+
 fn resolve(
     state: &CoreRuntime,
     id: Option<&str>,

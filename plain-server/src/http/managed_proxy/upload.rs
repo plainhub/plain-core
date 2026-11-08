@@ -8,10 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use plain_libs::protocols::{http_client, multipart::Multipart};
-use plain_rs::{
-    features::{access::AccessFeature, services::device::access},
-    infrastructure::transport::http_request,
-};
+use plain_rs::infrastructure::transport::http_request;
 use std::io;
 use tokio::sync::mpsc;
 
@@ -21,9 +18,6 @@ pub(super) async fn call(
     path: &str,
     request: Request,
 ) -> Response {
-    if !access::is_enabled(&state.prefs, &[AccessFeature::Files]) {
-        return StatusCode::FORBIDDEN.into_response();
-    }
     let Ok(session) = caller(&state, caller_id(request.headers())) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
@@ -55,10 +49,7 @@ pub(super) async fn call(
     if !route.supports_managed_resources {
         return StatusCode::BAD_GATEWAY.into_response();
     }
-    if current(&state, &session).is_err()
-        || route.check_current(&state).is_err()
-        || !access::is_enabled(&state.prefs, &[AccessFeature::Files])
-    {
+    if current(&state, &session).is_err() || route.check_current(&state).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }
     let Ok(encrypted) = http_request::encrypt(&route.key, text) else {

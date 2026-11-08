@@ -1,10 +1,11 @@
 use crate::server::ServerState;
 use axum::{
     extract::{ConnectInfo, Path, Request as HttpRequest, State},
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, HeaderName, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
+use plain_libs::protocols::http_client;
 use plain_rs::features::prefs::pref_keys::{DLNA_ALLOWED_SENDERS, DLNA_DENIED_SENDERS};
 use plain_rs::features::services::casting::receiver::control::emit;
 #[cfg(test)]
@@ -162,7 +163,7 @@ pub(crate) async fn media(
     };
     if path.starts_with("http://") || path.starts_with("https://") {
         return crate::http::file_response::secure(
-            crate::http::proxy::proxy(&path, request.headers()).await,
+            remote_media(&path, request.headers()).await,
             None,
             false,
         );
@@ -267,4 +268,57 @@ pub(crate) async fn callback(State(state): State<ServerState>, request: HttpRequ
         log::warn!("Cast callback failed: {error}");
     }
     StatusCode::OK.into_response()
+}
+
+const REMOTE_MEDIA_SKIPPED: &[&str] = &[
+    "connection",
+    "transfer-encoding",
+    "upgrade",
+    "content-encoding",
+    "content-length",
+];
+
+async fn remote_media(url: &str, headers: &HeaderMap) -> Response {
+    let client = match http_client::builder().build() {
+        Ok(client) => client,
+        Err(error) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response();
+        }
+    };
+    let mut request = client.get(url);
+    for name in [
+        header::USER_AGENT,
+        header::RANGE,
+        header::IF_RANGE,
+        header::IF_NONE_MATCH,
+    ] {
+        if let Some(value) = headers.get(&name) {
+            request = request.header(name, value);
+        }
+    }
+    let upstream = match request.send().await {
+        Ok(response) => response,
+        Err(error) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response();
+        }
+    };
+    let status =
+        StatusCode::from_u16(upstream.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let mut response = Response::builder().status(status);
+    for (name, value) in upstream.headers() {
+        let name = name.as_str();
+        if REMOTE_MEDIA_SKIPPED.contains(&name) {
+            continue;
+        }
+        if let Ok(name) = HeaderName::from_bytes(name.as_bytes()) {
+            response = response.header(name, value.clone());
+        }
+    }
+    let stream = upstream
+        .bytes_stream()
+        .map(|chunk| chunk.map_err(std::io::Error::other));
+    match response.body(axum::body::Body::from_stream(stream)) {
+        Ok(response) => response,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }

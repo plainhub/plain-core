@@ -60,8 +60,8 @@ pub async fn resolve(state: &CoreRuntime, id: &str, kind: ReadKind) -> anyhow::R
     resolve_with_key(state, id, kind, None).await
 }
 
-pub async fn resolve_native(state: &CoreRuntime, id: &str, key: [u8; 32]) -> anyhow::Result<File> {
-    resolve_with_key(state, id, ReadKind::Original, Some(key)).await
+pub async fn resolve_native(state: &CoreRuntime, id: &str, kind: ReadKind, key: [u8; 32]) -> anyhow::Result<File> {
+    resolve_with_key(state, id, kind, Some(key)).await
 }
 
 async fn resolve_with_key(

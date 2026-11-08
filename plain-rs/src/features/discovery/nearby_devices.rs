@@ -235,6 +235,10 @@ impl Devices {
         s.revision += 1;
         Ok(emit)
     }
+    pub fn contains(&self, id: &str) -> bool {
+        self.0.lock().unwrap().entries.contains_key(id)
+    }
+
     pub fn snapshot(&self) -> Snapshot {
         let s = self.0.lock().unwrap();
         Snapshot {

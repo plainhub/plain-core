@@ -27,7 +27,6 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
             post(crate::http::graphql::call).get(crate::http::websocket::graphql::upgrade),
         )
         .route("/health", get(crate::http::health::health))
-        .route("/proxyfs", get(crate::http::proxy::call))
         .route(
             "/proxy/:peer/*path",
             any(crate::http::managed_proxy::call)

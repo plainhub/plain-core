@@ -184,6 +184,16 @@ impl PeersQuery {
     }
 }
 
+fn management_login(
+    ctx: &Context<'_>,
+    state: &crate::server::ServerState,
+) -> plain_graphql::Result<()> {
+    let id = ctx.data::<crate::graphql::executor::RequestClient>()?.client_id();
+    crate::http::managed_proxy::caller(state, id)
+        .map(|_| ())
+        .map_err(|_| plain_graphql::Error::new("no_permission"))
+}
+
 #[derive(Default)]
 pub struct PeersMutation;
 
@@ -194,13 +204,22 @@ impl PeersMutation {
         ctx: &Context<'_>,
         input: PairingDeviceInput,
     ) -> plain_graphql::Result<PairingState> {
+        let core = ctx.data::<crate::server::ServerState>()?;
         if (input.mode == Some(PairingMode::Manage) || input.generation.is_some())
             && !crate::http::auth::public_gate::is_local(ctx)
         {
-            return Err(plain_graphql::Error::new("no_permission"));
+            if input.host.is_some()
+                || (input.id.is_none() && input.generation.is_none())
+                || input.id.as_ref().is_some_and(|id| {
+                    core.native_client_id().is_ok_and(|local| id.as_str() == local)
+                })
+            {
+                return Err(plain_graphql::Error::new("no_permission"));
+            }
+            management_login(ctx, core)?;
         }
         let state = plain_rs::features::services::discovery::pairing_attempts::start(
-            ctx.data::<crate::server::ServerState>()?,
+            core,
             input.id.map(|id| id.to_string()),
             input.host,
             input.mode.map(Into::into),
@@ -228,7 +247,7 @@ impl PeersMutation {
             })
             && !crate::http::auth::public_gate::is_local(ctx)
         {
-            return Err(plain_graphql::Error::new("no_permission"));
+            management_login(ctx, state)?;
         }
         Ok(
             plain_rs::features::services::discovery::pairing_attempts::cancel(state, &generation)
