@@ -1,7 +1,7 @@
 use crate::server::ServerState;
 use axum::{
     extract::{ConnectInfo, Path, Request as HttpRequest, State},
-    http::{HeaderMap, HeaderName, StatusCode, header},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
@@ -154,64 +154,24 @@ mod tests;
 
 pub(crate) async fn media(
     State(state): State<ServerState>,
-    Path(raw): Path<String>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Path(name): Path<String>,
     request: HttpRequest,
 ) -> Response {
-    let id = raw.split('.').next().unwrap_or_default();
-    let Some((path, mime)) = plain_rs::features::services::casting::media_alias::lookup(id) else {
-        return StatusCode::BAD_REQUEST.into_response();
+    let Some(resource) = state.cast.media.lookup(&name, peer.ip()) else {
+        return StatusCode::NOT_FOUND.into_response();
     };
-    if path.starts_with("http://") || path.starts_with("https://") {
-        return crate::http::file_response::secure(
-            remote_media(&path, request.headers()).await,
-            None,
-            false,
-        );
-    }
-    if path.starts_with("content://") {
-        #[cfg(feature = "http_transport")]
-        {
-            return match crate::http::file_response::resource(
-                &state.resources,
-                &path,
-                state.stop.clone(),
-                request.headers(),
-            )
-            .await
-            {
-                Ok(body) => crate::http::file_response::secure(body.into_response(), None, false),
-                Err(status) => status.into_response(),
-            };
-        }
-        #[cfg(not(feature = "http_transport"))]
-        {
-            return StatusCode::NOT_FOUND.into_response();
-        }
-    }
-    let path = match plain_rs::features::services::files::references::resolve(
-        state.db.clone(),
-        state.directory.clone(),
-        &path,
-    ) {
-        Ok(path) => path,
-        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    let (parts, _) = request.into_parts();
+    let cancelled = resource.clone().cancelled();
+    let mut response = tokio::select! {
+        biased;
+        _ = cancelled => return StatusCode::NOT_FOUND.into_response(),
+        response = media_response(&state, &resource, &parts.method, &parts.headers) => response,
     };
-    let mut response = crate::http::file_response::stream_file(
-        std::path::Path::new(&path),
-        &mime,
-        request.headers(),
-    )
-    .await;
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
-    response
-        .headers_mut()
-        .insert("x-content-type-options", "nosniff".parse().unwrap());
-    if !mime.starts_with("image/")
-        && (response.status() == StatusCode::OK || response.status() == StatusCode::PARTIAL_CONTENT)
-    {
-        *response.status_mut() = StatusCode::PARTIAL_CONTENT;
+    if response.status().is_success() {
         response
             .headers_mut()
             .insert("realTimeInfo.dlna.org", "DLNA.ORG_TLAG=*".parse().unwrap());
@@ -221,40 +181,94 @@ pub(crate) async fn media(
         response
             .headers_mut()
             .insert("transfermode.dlna.org", "Streaming".parse().unwrap());
-        response
-            .headers_mut()
-            .insert("contentfeatures.dlna.org", "".parse().unwrap());
     }
-    crate::http::file_response::secure(response, None, false)
+    let response = crate::http::file_response::secure(response, None, false);
+    let head = parts.method == axum::http::Method::HEAD;
+    let (parts, body) = response.into_parts();
+    let body = if head {
+        axum::body::Body::empty()
+    } else {
+        axum::body::Body::from_stream(body.into_data_stream().take_until(resource.cancelled()))
+    };
+    Response::from_parts(parts, body)
 }
 
-pub(crate) async fn callback(State(state): State<ServerState>, request: HttpRequest) -> Response {
+async fn media_response(
+    state: &ServerState,
+    resource: &plain_rs::features::services::casting::media_alias::Resource,
+    method: &axum::http::Method,
+    headers: &HeaderMap,
+) -> Response {
+    let path = &resource.path;
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return remote_media(path, method, headers).await;
+    }
+    if path.starts_with("content://") {
+        let Ok(input) = state.resources.read_file(path, state.stop.clone()).await else {
+            return StatusCode::BAD_GATEWAY.into_response();
+        };
+        let Ok(size) = u64::try_from(input.length) else {
+            return StatusCode::BAD_GATEWAY.into_response();
+        };
+        return crate::http::file_response::stream_open_file(
+            tokio::fs::File::from_std(input.file),
+            input.offset as u64,
+            size,
+            &resource.mime,
+            headers,
+        )
+        .await;
+    }
+    let path = match plain_rs::features::services::files::references::resolve(
+        state.db.clone(),
+        state.directory.clone(),
+        path,
+    ) {
+        Ok(path) => path,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+    crate::http::file_response::stream_file(std::path::Path::new(&path), &resource.mime, headers)
+        .await
+}
+
+pub(crate) async fn callback(
+    State(state): State<ServerState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    request: HttpRequest,
+) -> Response {
     if request.method().as_str() != "NOTIFY" {
         return StatusCode::METHOD_NOT_ALLOWED.into_response();
     }
-    let sid = request
+    let Some(sid) = request
         .headers()
         .get("SID")
         .and_then(|v| v.to_str().ok())
-        .map(str::to_owned);
-    let sequence = request
+        .filter(|v| !v.is_empty())
+        .map(str::to_owned)
+    else {
+        return StatusCode::PRECONDITION_FAILED.into_response();
+    };
+    let Some(sequence) = request
         .headers()
         .get("SEQ")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.parse::<u32>().ok());
+        .and_then(|v| v.parse::<u32>().ok())
+    else {
+        return StatusCode::PRECONDITION_FAILED.into_response();
+    };
+    if !state.cast.media.accepts(peer.ip()) {
+        return StatusCode::PRECONDITION_FAILED.into_response();
+    }
     let Ok(body) = axum::body::to_bytes(request.into_body(), 1024 * 1024).await else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     let xml = String::from_utf8_lossy(&body);
     let fields = plain_rs::features::services::casting::cast_runtime::attributes(&xml);
     let _guard = state.cast.operations.lock().await;
-    if sid
-        .as_ref()
-        .is_some_and(|sid| sid != &state.cast.snapshot().sid)
-    {
-        return StatusCode::OK.into_response();
+    if sid != state.cast.snapshot().sid || !state.cast.media.accepts(peer.ip()) {
+        return StatusCode::PRECONDITION_FAILED.into_response();
     }
-    if let Some(sequence) = sequence {
+    {
         let mut previous = state.cast.callback_sequence.lock().unwrap();
         if previous.is_some_and(|previous| {
             sequence.wrapping_sub(previous) == 0 || sequence.wrapping_sub(previous) >= (1 << 31)
@@ -270,55 +284,168 @@ pub(crate) async fn callback(State(state): State<ServerState>, request: HttpRequ
     StatusCode::OK.into_response()
 }
 
-const REMOTE_MEDIA_SKIPPED: &[&str] = &[
-    "connection",
-    "transfer-encoding",
-    "upgrade",
-    "content-encoding",
-    "content-length",
-];
-
-async fn remote_media(url: &str, headers: &HeaderMap) -> Response {
-    let client = match http_client::builder().build() {
-        Ok(client) => client,
-        Err(error) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response();
+fn remote_address_allowed(ip: std::net::IpAddr) -> bool {
+    let ip = ip.to_canonical();
+    let allowed = match ip {
+        std::net::IpAddr::V4(ip) => {
+            !ip.is_loopback()
+                && !ip.is_link_local()
+                && !ip.is_multicast()
+                && !ip.is_broadcast()
+                && ip.octets()[0] != 0
+                && ip.octets()[0] < 240
+                && !(ip.octets()[0] == 100 && (64..=127).contains(&ip.octets()[1]))
+                && ip.octets() != [168, 63, 129, 16]
+        }
+        std::net::IpAddr::V6(ip) => {
+            !ip.is_loopback()
+                && !ip.is_unspecified()
+                && !ip.is_unicast_link_local()
+                && !ip.is_multicast()
+                && ip.segments() != [0xfd00, 0xec2, 0, 0, 0, 0, 0, 0x254]
         }
     };
-    let mut request = client.get(url);
-    for name in [
-        header::USER_AGENT,
-        header::RANGE,
-        header::IF_RANGE,
-        header::IF_NONE_MATCH,
-    ] {
+    allowed
+        && !plain_rs::infrastructure::protocols::mdns::host_responder::is_local_ipv6(
+            &ip.to_string(),
+        )
+        && !plain_rs::infrastructure::protocols::mdns::host_responder::local_ipv4_strs()
+            .iter()
+            .filter_map(|local| local.parse::<std::net::IpAddr>().ok())
+            .any(|local| local == ip)
+}
+
+fn remote_target_allowed(
+    address: SocketAddr,
+    host: &str,
+    initial_host: &str,
+    initial_addresses: Option<&[SocketAddr]>,
+) -> bool {
+    let ip = address.ip().to_canonical();
+    let lan = match ip {
+        std::net::IpAddr::V4(ip) => ip.is_private(),
+        std::net::IpAddr::V6(ip) => ip.is_unique_local(),
+    };
+    remote_address_allowed(ip)
+        && (!lan
+            || initial_addresses.is_none_or(|addresses| {
+                host.trim_matches(['[', ']']) == initial_host.trim_matches(['[', ']'])
+                    && addresses.contains(&address)
+            }))
+}
+
+async fn remote_media(url: &str, method: &axum::http::Method, headers: &HeaderMap) -> Response {
+    let Ok(mut url) = http_client::Url::parse(url) else {
+        return StatusCode::BAD_GATEWAY.into_response();
+    };
+    let initial_host = url.host_str().unwrap_or_default().to_owned();
+    let mut initial_addresses = Vec::new();
+    for attempt in 0..=5 {
+        if !matches!(url.scheme(), "http" | "https")
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
+            return StatusCode::BAD_GATEWAY.into_response();
+        }
+        let Some(host) = url.host_str() else {
+            return StatusCode::BAD_GATEWAY.into_response();
+        };
+        let host = host.trim_matches(['[', ']']);
+        let Some(port) = url.port_or_known_default() else {
+            return StatusCode::BAD_GATEWAY.into_response();
+        };
+        let Ok(addresses) = tokio::net::lookup_host((host, port)).await else {
+            return StatusCode::BAD_GATEWAY.into_response();
+        };
+        let addresses: Vec<_> = addresses.collect();
+        if addresses.is_empty()
+            || addresses.iter().any(|address| {
+                !remote_target_allowed(
+                    *address,
+                    host,
+                    &initial_host,
+                    (attempt != 0).then_some(initial_addresses.as_slice()),
+                )
+            })
+        {
+            return StatusCode::BAD_GATEWAY.into_response();
+        }
+        if attempt == 0 {
+            initial_addresses = addresses.clone();
+        }
+        let upstream = match remote_fetch(url.clone(), method, headers, addresses[0]).await {
+            Ok(upstream) => upstream,
+            Err(_) => return StatusCode::BAD_GATEWAY.into_response(),
+        };
+        if upstream.status().is_redirection() {
+            let Some(next) = upstream
+                .headers()
+                .get(header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|location| url.join(location).ok())
+            else {
+                return StatusCode::BAD_GATEWAY.into_response();
+            };
+            url = next;
+            continue;
+        }
+        return remote_response(upstream, method);
+    }
+    StatusCode::BAD_GATEWAY.into_response()
+}
+
+async fn remote_fetch(
+    url: http_client::Url,
+    method: &axum::http::Method,
+    headers: &HeaderMap,
+    address: SocketAddr,
+) -> Result<http_client::Response, http_client::Error> {
+    let client = match http_client::builder()
+        .no_proxy()
+        .redirect(http_client::redirect::Policy::none())
+        .resolve(url.host_str().unwrap().trim_matches(['[', ']']), address)
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .read_timeout(std::time::Duration::from_secs(30))
+        .build()
+    {
+        Ok(client) => client,
+        Err(error) => return Err(error),
+    };
+    let mut request = client.request(method.clone(), url);
+    for name in [header::RANGE, header::IF_RANGE] {
         if let Some(value) = headers.get(&name) {
             request = request.header(name, value);
         }
     }
-    let upstream = match request.send().await {
-        Ok(response) => response,
-        Err(error) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response();
-        }
-    };
-    let status =
-        StatusCode::from_u16(upstream.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    request.send().await
+}
+
+fn remote_response(upstream: http_client::Response, method: &axum::http::Method) -> Response {
+    let status = upstream.status();
+    if !matches!(status.as_u16(), 200 | 206 | 416) {
+        return StatusCode::BAD_GATEWAY.into_response();
+    }
     let mut response = Response::builder().status(status);
-    for (name, value) in upstream.headers() {
-        let name = name.as_str();
-        if REMOTE_MEDIA_SKIPPED.contains(&name) {
-            continue;
-        }
-        if let Ok(name) = HeaderName::from_bytes(name.as_bytes()) {
+    for name in [
+        header::CONTENT_TYPE,
+        header::CONTENT_LENGTH,
+        header::CONTENT_RANGE,
+        header::ACCEPT_RANGES,
+    ] {
+        if let Some(value) = upstream.headers().get(&name) {
             response = response.header(name, value.clone());
         }
     }
-    let stream = upstream
-        .bytes_stream()
-        .map(|chunk| chunk.map_err(std::io::Error::other));
-    match response.body(axum::body::Body::from_stream(stream)) {
-        Ok(response) => response,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
+    let body = if method == axum::http::Method::HEAD {
+        axum::body::Body::empty()
+    } else {
+        axum::body::Body::from_stream(
+            upstream
+                .bytes_stream()
+                .map(|chunk| chunk.map_err(std::io::Error::other)),
+        )
+    };
+    response
+        .body(body)
+        .unwrap_or_else(|_| StatusCode::BAD_GATEWAY.into_response())
 }

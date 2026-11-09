@@ -21,27 +21,22 @@ use std::{
 use tokio_rustls::TlsConnector;
 use tower::Service;
 
-#[cfg(not(feature = "test-seams"))]
-pub(super) type NativeHttp = HttpConnector;
-#[cfg(feature = "test-seams")]
-pub(super) type NativeHttp = HttpConnector<TestResolver>;
+pub(super) type NativeHttp = HttpConnector<Resolver>;
 
-#[cfg(feature = "test-seams")]
-pub(super) use resolver::TestResolver;
+pub(super) use resolver::Resolver;
 
-#[cfg(feature = "test-seams")]
 mod resolver {
     use super::*;
     use hyper_util::client::legacy::connect::dns::{GaiResolver, Name};
     use std::{collections::HashMap, net::SocketAddr};
 
     #[derive(Clone)]
-    pub(in super::super) struct TestResolver {
+    pub(in super::super) struct Resolver {
         system: GaiResolver,
         overrides: Arc<HashMap<String, SocketAddr>>,
     }
 
-    impl TestResolver {
+    impl Resolver {
         pub(in super::super) fn new(overrides: HashMap<String, SocketAddr>) -> Self {
             Self {
                 system: GaiResolver::new(),
@@ -50,7 +45,7 @@ mod resolver {
         }
     }
 
-    impl Service<Name> for TestResolver {
+    impl Service<Name> for Resolver {
         type Response = Box<dyn Iterator<Item = SocketAddr> + Send>;
         type Error = io::Error;
         type Future = Pin<Box<dyn Future<Output = Result<Self::Response, io::Error>> + Send>>;

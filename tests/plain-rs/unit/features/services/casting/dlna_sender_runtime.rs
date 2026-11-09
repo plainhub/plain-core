@@ -133,3 +133,49 @@ async fn saturated_host_receives_latest_sender_snapshot() {
     state.host.disconnect(generation);
     server.stop_core().await;
 }
+
+#[tokio::test]
+async fn stop_revokes_media_before_waiting_for_an_in_flight_control_operation() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(dir.path()).unwrap();
+    let state = core.runtime_state();
+    let peer = "192.0.2.10".parse().unwrap();
+    let mut session = crate::features::services::casting::media_alias::Session::new(peer);
+    let name = session.register("/fixture.mp4", "video/mp4");
+    state.cast.media.replace(session);
+    let stream = state.cast.media.lookup(&name, peer).unwrap();
+    let operation = state.cast.operations.lock().await;
+    let stopping = {
+        let state = state.clone();
+        tokio::spawn(async move { run(&state, Command::Stop).await })
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(2), stream.cancelled())
+        .await
+        .unwrap();
+    assert!(state.cast.media.lookup(&name, peer).is_none());
+    assert!(!stopping.is_finished());
+    drop(operation);
+    stopping.await.unwrap().unwrap();
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn stop_cancels_a_play_command_already_queued_behind_an_operation() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let core = crate::test_runtime::Core::open(dir.path()).unwrap();
+    let state = core.runtime_state();
+    state.cast.transport.lock().unwrap().item = Some(Item {
+        path: "/fixture.mp4".into(),
+        ..Default::default()
+    });
+    let operation = state.cast.operations.lock().await;
+    let mut playing = std::pin::pin!(run(&state, Command::Play));
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    assert!(std::future::Future::poll(playing.as_mut(), &mut context).is_pending());
+    let mut stopping = std::pin::pin!(run(&state, Command::Stop));
+    assert!(std::future::Future::poll(stopping.as_mut(), &mut context).is_pending());
+    drop(operation);
+    assert_eq!(playing.await.err().unwrap(), "Cast cancelled");
+    stopping.await.unwrap();
+    core.stop_core().await;
+}

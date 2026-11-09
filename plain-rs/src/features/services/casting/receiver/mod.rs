@@ -14,12 +14,21 @@ pub fn senders_contain_ip(list: &[String], ip: &str) -> bool {
     crate::features::prefs::dlna::senders_contain_ip(list, ip)
 }
 
-/// True when `method` + `path` targets a DLNA MediaRenderer receiver endpoint.
-/// Mirrors plain-app's `isDlnaReceiverPath` in `HttpRouteRegistry.kt`.
 pub fn is_receiver_path(method: &str, path: &str) -> bool {
-    let clean = path.split('?').next().unwrap_or(path);
-    if method == "GET" && clean == "/description.xml" {
-        return true;
-    }
-    clean.starts_with("/AVTransport/") || clean.starts_with("/RenderingControl/")
+    let path = path.split('?').next().unwrap_or(path);
+    matches!(
+        (method, path),
+        (
+            "GET" | "HEAD",
+            "/dlna/description.xml"
+                | "/dlna/av-transport/scpd.xml"
+                | "/dlna/rendering-control/scpd.xml"
+        ) | (
+            "POST",
+            "/dlna/av-transport/control" | "/dlna/rendering-control/control"
+        ) | (
+            "SUBSCRIBE" | "UNSUBSCRIBE",
+            "/dlna/av-transport/event" | "/dlna/rendering-control/event"
+        )
+    )
 }

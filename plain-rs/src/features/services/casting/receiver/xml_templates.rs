@@ -15,16 +15,16 @@ pub fn device_description(ip: &str, port: u16, uuid: &str, device_name: &str) ->
       <service>
         <serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>
         <serviceId>urn:upnp-org:serviceId:AVTransport</serviceId>
-        <controlURL>/AVTransport/control</controlURL>
-        <eventSubURL>/AVTransport/event</eventSubURL>
-        <SCPDURL>/AVTransport/scpd.xml</SCPDURL>
+        <controlURL>/dlna/av-transport/control</controlURL>
+        <eventSubURL>/dlna/av-transport/event</eventSubURL>
+        <SCPDURL>/dlna/av-transport/scpd.xml</SCPDURL>
       </service>
       <service>
         <serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType>
         <serviceId>urn:upnp-org:serviceId:RenderingControl</serviceId>
-        <controlURL>/RenderingControl/control</controlURL>
-        <eventSubURL>/RenderingControl/event</eventSubURL>
-        <SCPDURL>/RenderingControl/scpd.xml</SCPDURL>
+        <controlURL>/dlna/rendering-control/control</controlURL>
+        <eventSubURL>/dlna/rendering-control/event</eventSubURL>
+        <SCPDURL>/dlna/rendering-control/scpd.xml</SCPDURL>
       </service>
     </serviceList>
   </device>
@@ -38,3 +38,12 @@ pub const SCPD_XML: &str = r#"<?xml version="1.0"?>
   <actionList></actionList>
   <serviceStateTable></serviceStateTable>
 </scpd>"#;
+
+pub const VOLUME_RESPONSE_XML: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>
+    <u:GetVolumeResponse xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1">
+      <CurrentVolume>100</CurrentVolume>
+    </u:GetVolumeResponse>
+  </s:Body>
+</s:Envelope>"#;

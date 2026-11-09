@@ -520,6 +520,7 @@ impl Runtime {
         (state.http_port != 0).then_some((state.http_port as u16, state.https_port as u16))
     }
     pub async fn shutdown(&self, stop: &watch::Sender<bool>) {
+        self.cast.stop_tasks();
         self.shared_batches.shutdown(&self.directory).await;
         let external_index = self.external_index_task.lock().take();
         if let Some(task) = external_index {

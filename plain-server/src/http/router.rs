@@ -49,9 +49,9 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
             "/image_editor",
             get(crate::http::websocket::image_editor::upgrade),
         )
-        .route("/media/:id", get(crate::http::dlna::media))
+        .route("/dlna/media/:id", get(crate::http::dlna::media))
         .route(
-            "/callback/cast",
+            "/dlna/callback",
             axum::routing::any(crate::http::dlna::callback),
         )
         .route("/init", post(crate::http::init::init))
@@ -89,18 +89,27 @@ pub(crate) fn transfer_routes(state: ServerState) -> Router {
 #[cfg(feature = "core")]
 fn dlna_routes(state: ServerState) -> Router {
     Router::new()
-        .route("/description.xml", get(crate::http::dlna::receiver))
-        .route("/AVTransport/scpd.xml", get(crate::http::dlna::receiver))
+        .route("/dlna/description.xml", get(crate::http::dlna::receiver))
         .route(
-            "/RenderingControl/scpd.xml",
+            "/dlna/av-transport/scpd.xml",
             get(crate::http::dlna::receiver),
         )
-        .route("/AVTransport/control", post(crate::http::dlna::receiver))
         .route(
-            "/RenderingControl/control",
+            "/dlna/rendering-control/scpd.xml",
+            get(crate::http::dlna::receiver),
+        )
+        .route(
+            "/dlna/av-transport/control",
             post(crate::http::dlna::receiver),
         )
-        .route("/AVTransport/event", any(crate::http::dlna::receiver))
-        .route("/RenderingControl/event", any(crate::http::dlna::receiver))
+        .route(
+            "/dlna/rendering-control/control",
+            post(crate::http::dlna::receiver),
+        )
+        .route("/dlna/av-transport/event", any(crate::http::dlna::receiver))
+        .route(
+            "/dlna/rendering-control/event",
+            any(crate::http::dlna::receiver),
+        )
         .with_state(state)
 }

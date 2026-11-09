@@ -59,7 +59,7 @@ pub fn search_responses(uuid: &str, ip: &str, port: u16) -> Vec<String> {
 fn notify_msg(usn: &str, nt: &str, nts: &str, ip: &str, port: u16) -> String {
     format!(
         "NOTIFY * HTTP/1.1\r\nHOST: {SSDP_ADDR}:{SSDP_PORT}\r\n\
-         CACHE-CONTROL: max-age=1800\r\nLOCATION: http://{ip}:{port}/description.xml\r\n\
+         CACHE-CONTROL: max-age=1800\r\nLOCATION: http://{ip}:{port}/dlna/description.xml\r\n\
          NT: {nt}\r\nNTS: {nts}\r\nSERVER: Android/1.0 UPnP/1.1 PlainApp/1.0\r\nUSN: {usn}\r\n\r\n"
     )
 }
@@ -67,7 +67,7 @@ fn notify_msg(usn: &str, nt: &str, nts: &str, ip: &str, port: u16) -> String {
 fn search_response(st: &str, usn: &str, ip: &str, port: u16) -> String {
     format!(
         "HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=1800\r\n\
-         LOCATION: http://{ip}:{port}/description.xml\r\n\
+         LOCATION: http://{ip}:{port}/dlna/description.xml\r\n\
          SERVER: Android/1.0 UPnP/1.1 PlainApp/1.0\r\nST: {st}\r\nUSN: {usn}\r\n\r\n"
     )
 }

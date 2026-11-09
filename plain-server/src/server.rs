@@ -446,6 +446,7 @@ impl ContentServer {
         }
     }
     pub async fn stop_core(&self) {
+        self.state.cast.media.interrupt();
         let _shutdown = self.state.shutdown.lock().await;
         self.state.subscription_sessions.close_client(None);
         if *self.state.stop.borrow() {
@@ -465,6 +466,7 @@ impl ContentServer {
 }
 impl Drop for ContentServer {
     fn drop(&mut self) {
+        self.state.cast.stop_tasks();
         self.state.subscription_sessions.close_client(None);
         let _ = self.stop.send(true);
         if let Some(task) = &self.task {

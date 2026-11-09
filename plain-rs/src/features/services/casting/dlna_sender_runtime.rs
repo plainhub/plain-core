@@ -50,6 +50,8 @@ pub struct Snapshot {
 #[derive(Default)]
 pub struct Runtime {
     pub snapshot: Mutex<Snapshot>,
+    pub media: super::media_alias::Registry,
+    pub transport: Mutex<Transport>,
     delivery: Mutex<bool>,
     pub devices: Mutex<HashMap<String, DiscoveredDevice>>,
     pub scan: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -62,6 +64,15 @@ pub struct Runtime {
     pub callback_sequence: Mutex<Option<u32>>,
     pub receiver_operations: tokio::sync::Mutex<()>,
     pub operations: tokio::sync::Mutex<()>,
+}
+
+#[derive(Default)]
+pub struct Transport {
+    pub uri: String,
+    pub item: Option<Item>,
+    pub mime: String,
+    pub started: bool,
+    pub stopped: bool,
 }
 
 pub struct MulticastLease {
@@ -123,6 +134,7 @@ impl Runtime {
         }
     }
     pub fn stop_tasks(&self) {
+        self.media.interrupt();
         for slot in [&self.scan, &self.polling, &self.renewal] {
             if let Some(task) = slot.lock().unwrap().take() {
                 task.abort();
@@ -179,7 +191,22 @@ pub enum Command {
 }
 pub async fn run(state: &CoreRuntime, command: Command) -> Result<Snapshot, String> {
     let runtime = state.cast.clone();
+    let interruption = runtime.media.interruption();
+    if matches!(command, Command::Stop | Command::Clear) {
+        runtime.media.interrupt();
+    }
     let _guard = runtime.operations.lock().await;
+    if matches!(
+        command,
+        Command::Cast { .. }
+            | Command::Play
+            | Command::Pause
+            | Command::Seek { .. }
+            | Command::Select { .. }
+    ) && interruption != runtime.media.interruption()
+    {
+        return Err("Cast cancelled".into());
+    }
     let result = execute(state, &runtime, command).await;
     runtime.publish(state);
     result?;
@@ -224,7 +251,14 @@ pub async fn execute(
                 .as_ref()
                 .is_some_and(|current| current.id != id)
             {
-                crate::features::services::casting::dlna_sender_playback::end(state, false).await;
+                let items = std::mem::take(&mut runtime.snapshot.lock().unwrap().items);
+                let unchanged =
+                    crate::features::services::casting::dlna_sender_playback::end(state, true)
+                        .await;
+                runtime.snapshot.lock().unwrap().items = items;
+                if !unchanged {
+                    return Err("Cast cancelled".into());
+                }
             }
             runtime.snapshot.lock().unwrap().current_device = Some(device);
         }
@@ -234,6 +268,17 @@ pub async fn execute(
         }
         Play | Pause => {
             let play = matches!(command, Play);
+            if play && !runtime.media.active() {
+                let (item, mime) = {
+                    let transport = runtime.transport.lock().unwrap();
+                    (
+                        transport.item.clone().ok_or("No cast media selected")?,
+                        transport.mime.clone(),
+                    )
+                };
+                super::dlna_sender_playback::cast_with_mime(state, item, false, Some(mime)).await?;
+                return Ok(());
+            }
             let device = runtime.device()?;
             crate::features::services::casting::dlna_sender_playback::soap(
                 state,
@@ -269,9 +314,11 @@ pub async fn execute(
             .await?;
             runtime.snapshot.lock().unwrap().progress_ms = ms;
         }
-        Stop | Exit => {
-            let stop = matches!(command, Stop);
-            crate::features::services::casting::dlna_sender_playback::end(state, stop).await;
+        Stop => {
+            crate::features::services::casting::dlna_sender_playback::end(state, true).await;
+        }
+        Exit => {
+            super::dlna_sender_playback::end(state, false).await;
         }
         Add { item } => runtime.snapshot.lock().unwrap().items.push(item),
         Remove { path } => runtime
@@ -294,14 +341,9 @@ pub async fn execute(
             }
         }
         Clear => {
-            let mut s = runtime.snapshot.lock().unwrap();
-            s.items.clear();
-            s.current_uri.clear();
-            s.current_audio = false;
-            s.playing = false;
-            s.progress_ms = 0;
-            s.duration_ms = 0;
-            s.supports_callback = false;
+            let device = runtime.snapshot().current_device;
+            crate::features::services::casting::dlna_sender_playback::end(state, true).await;
+            runtime.snapshot.lock().unwrap().current_device = device;
         }
     }
     Ok(())

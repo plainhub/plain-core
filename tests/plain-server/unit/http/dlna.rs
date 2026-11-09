@@ -1,5 +1,5 @@
-use plain_libs::protocols::http_client;
 use super::*;
+use plain_libs::protocols::http_client;
 use serde_json::{Value, json};
 #[cfg(feature = "http_transport")]
 const TOKEN: &str = "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=";
@@ -48,18 +48,14 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
 }
 
 #[cfg(feature = "http_transport")]
-async fn public_fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer, u16) {
+async fn public_fixture() -> (
+    plain_libs::temporary::TempDir,
+    crate::server::ContentServer,
+    u16,
+) {
     let (dir, server) = fixture();
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
-    let (http, _) = server
-        .start_public(
-            0,
-            0,
-            cert_pem,
-            cert_key,
-        )
-        .await
-        .unwrap();
+    let (http, _) = server.start_public(0, 0, cert_pem, cert_key).await.unwrap();
     (dir, server, http)
 }
 
@@ -89,7 +85,9 @@ fn local_ip_skips_loopback_so_it_matches_the_ssdp_location() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
-    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (dir, server, port) = public_fixture().await;
     let client = http_client::builder().build().unwrap();
     let base = format!("http://127.0.0.1:{port}");
@@ -97,7 +95,7 @@ async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
 
     let describe = || async {
         client
-            .get(format!("{base}/description.xml"))
+            .get(format!("{base}/dlna/description.xml"))
             .send()
             .await
             .unwrap()
@@ -113,7 +111,7 @@ async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
 
     state.prefs.set("dlna", true).unwrap();
     let body = client
-        .get(format!("{base}/description.xml"))
+        .get(format!("{base}/dlna/description.xml"))
         .send()
         .await
         .unwrap()
@@ -134,7 +132,10 @@ async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
     );
 
     // The service description documents are static and served the same way.
-    for path in ["/AVTransport/scpd.xml", "/RenderingControl/scpd.xml"] {
+    for path in [
+        "/dlna/av-transport/scpd.xml",
+        "/dlna/rendering-control/scpd.xml",
+    ] {
         assert_eq!(
             client
                 .get(format!("{base}{path}"))
@@ -149,7 +150,7 @@ async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
     // An unregistered path is not the receiver's business: it falls through to
     // the SPA/bridge fallback, and must not be answered as UPnP.
     let stray = client
-        .get(format!("{base}/AVTransport/nope"))
+        .get(format!("{base}/dlna/av-transport/nope"))
         .send()
         .await
         .unwrap()
@@ -167,7 +168,9 @@ async fn receiver_paths_answer_only_while_the_toggle_and_service_are_on() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn a_forged_c_ip_header_cannot_impersonate_an_allowed_sender() {
-    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (dir, server, port) = public_fixture().await;
     let client = http_client::builder().build().unwrap();
     let base = format!("http://127.0.0.1:{port}");
@@ -184,7 +187,7 @@ async fn a_forged_c_ip_header_cannot_impersonate_an_allowed_sender() {
 
     let soap = r#"<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:SetAVTransportURI xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID><CurrentURI>http://example/a.mp4</CurrentURI><CurrentURIMetaData/></u:SetAVTransportURI></s:Body></s:Envelope>"#;
     let status = client
-        .post(format!("{base}/AVTransport/control"))
+        .post(format!("{base}/dlna/av-transport/control"))
         .header("content-type", "text/xml")
         .header(
             "soapaction",
@@ -219,7 +222,9 @@ async fn a_forged_c_ip_header_cannot_impersonate_an_allowed_sender() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
-    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (dir, server, port) = public_fixture().await;
     let controller = MainDlnaClient(server.native_graphql().unwrap(), server.runtime_state());
     let state = server.runtime_state();
@@ -351,7 +356,9 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
 
 #[tokio::test]
 async fn public_dlna_reads_the_native_players_reported_position() {
-    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (_dir, server, port) = public_fixture().await;
     let state = server.runtime_state();
     state.prefs.set("background_service_enabled", true).unwrap();
@@ -363,8 +370,10 @@ async fn public_dlna_reads_the_native_players_reported_position() {
         .await
         .unwrap();
     let soap = r#"<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:GetPositionInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetPositionInfo></s:Body></s:Envelope>"#;
-    let response = http_client::builder().build().unwrap()
-        .post(format!("http://127.0.0.1:{port}/AVTransport/control"))
+    let response = http_client::builder()
+        .build()
+        .unwrap()
+        .post(format!("http://127.0.0.1:{port}/dlna/av-transport/control"))
         .header(
             "soapaction",
             r#""urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo""#,
@@ -425,7 +434,9 @@ async fn the_two_body_faults_answer_differently() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn an_oversized_control_request_never_reaches_the_protocol() {
-    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK.lock().await;
+    let _runtime = plain_rs::features::services::discovery::mdns_runtime::TEST_LOCK
+        .lock()
+        .await;
     let (dir, server, port) = public_fixture().await;
     let state = server.runtime_state();
     state.prefs.set("background_service_enabled", true).unwrap();
@@ -437,8 +448,10 @@ async fn an_oversized_control_request_never_reaches_the_protocol() {
     );
     assert!(soap.len() > MAX_BODY, "the request must exceed the cap");
 
-    let status = http_client::builder().build().unwrap()
-        .post(format!("http://127.0.0.1:{port}/AVTransport/control"))
+    let status = http_client::builder()
+        .build()
+        .unwrap()
+        .post(format!("http://127.0.0.1:{port}/dlna/av-transport/control"))
         .header("content-type", "text/xml")
         .header(
             "soapaction",
@@ -549,4 +562,404 @@ impl MainDlnaClient {
         };
         serde_json::to_string(&result).map_err(|error| error.to_string())
     }
+}
+
+#[tokio::test]
+async fn media_get_head_range_repeats_and_revocation_use_the_registered_route() {
+    let (_dir, server, port) = public_fixture().await;
+    let state = server.runtime_state();
+    let path = state.directory.join("movie.mp4");
+    std::fs::write(&path, b"0123456789").unwrap();
+    let mut session = plain_rs::features::services::casting::media_alias::Session::new(
+        "127.0.0.1".parse().unwrap(),
+    );
+    let name = session.register(path.to_str().unwrap(), "video/mp4");
+    state.cast.media.replace(session);
+    let url = format!("http://127.0.0.1:{port}/dlna/media/{name}");
+    let client = http_client::builder().no_proxy().build().unwrap();
+    for _ in 0..2 {
+        let response = client
+            .request(http_client::Method::HEAD, &url)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(response.headers()["content-length"], "10");
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        assert!(response.bytes().await.unwrap().is_empty());
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(&response.bytes().await.unwrap()[..], b"0123456789");
+        let response = client
+            .get(&url)
+            .header("Range", "bytes=3-5")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 206);
+        assert_eq!(response.headers()["content-range"], "bytes 3-5/10");
+        assert_eq!(&response.bytes().await.unwrap()[..], b"345");
+    }
+    let response = client
+        .get(&url)
+        .header("Range", "bytes=10-")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 416);
+    assert_eq!(response.headers()["content-range"], "bytes */10");
+    assert_eq!(
+        client
+            .get(url.replace(".mp4", ".mp3"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    state.cast.media.revoke();
+    for method in [http_client::Method::GET, http_client::Method::HEAD] {
+        assert_eq!(
+            client
+                .request(method, &url)
+                .header("Range", "bytes=0-1")
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            404
+        );
+    }
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn media_revocation_cancels_an_open_file_body_and_denies_another_peer() {
+    let (dir, server) = fixture();
+    let state = server.runtime_state();
+    let path = dir.path().join("movie.mp4");
+    std::fs::write(&path, vec![7u8; 256 * 1024]).unwrap();
+    let mut session = plain_rs::features::services::casting::media_alias::Session::new(
+        "127.0.0.1".parse().unwrap(),
+    );
+    let name = session.register(path.to_str().unwrap(), "video/mp4");
+    state.cast.media.replace(session);
+    let request = || {
+        HttpRequest::builder()
+            .body(axum::body::Body::empty())
+            .unwrap()
+    };
+    let response = media(
+        State(state.clone()),
+        ConnectInfo("127.0.0.2:1234".parse().unwrap()),
+        Path(name.clone()),
+        request(),
+    )
+    .await;
+    assert_eq!(response.status(), 404);
+    let response = media(
+        State(state.clone()),
+        ConnectInfo("127.0.0.1:1234".parse().unwrap()),
+        Path(name),
+        request(),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    let mut body = response.into_body().into_data_stream();
+    assert_eq!(body.next().await.unwrap().unwrap().len(), 64 * 1024);
+    state.cast.media.revoke();
+    assert!(body.next().await.is_none());
+    server.shutdown().await;
+}
+
+#[test]
+fn remote_proxy_rejects_local_special_and_metadata_addresses() {
+    for address in [
+        "127.0.0.1",
+        "0.0.0.1",
+        "169.254.169.254",
+        "100.100.100.200",
+        "168.63.129.16",
+        "fd00:ec2::254",
+        "224.0.0.1",
+        "255.255.255.255",
+        "::1",
+        "::",
+        "fe80::1",
+        "ff02::1",
+        "::ffff:127.0.0.1",
+    ] {
+        assert!(
+            !remote_address_allowed(address.parse().unwrap()),
+            "{address}"
+        );
+    }
+    assert!(remote_address_allowed("192.0.2.15".parse().unwrap()));
+}
+
+#[tokio::test]
+async fn callback_requires_current_device_sid_and_sequence() {
+    let (_dir, server) = fixture();
+    let state = server.runtime_state();
+    let session = plain_rs::features::services::casting::media_alias::Session::new(
+        "127.0.0.1".parse().unwrap(),
+    );
+    state.cast.media.replace(session);
+    state.cast.snapshot.lock().unwrap().sid = "uuid:fixture".into();
+    let body = "<Event><TransportState val=\"PLAYING\"/></Event>";
+    for (sid, sequence, peer, expected) in [
+        (None, Some("0"), "127.0.0.1:1234", 412),
+        (Some("uuid:fixture"), None, "127.0.0.1:1234", 412),
+        (Some("uuid:other"), Some("0"), "127.0.0.1:1234", 412),
+        (Some("uuid:fixture"), Some("0"), "127.0.0.2:1234", 412),
+        (Some("uuid:fixture"), Some("0"), "127.0.0.1:1234", 200),
+        (Some("uuid:fixture"), Some("0"), "127.0.0.1:1234", 200),
+    ] {
+        let mut request = HttpRequest::builder().method("NOTIFY");
+        if let Some(sid) = sid {
+            request = request.header("SID", sid);
+        }
+        if let Some(sequence) = sequence {
+            request = request.header("SEQ", sequence);
+        }
+        let response = callback(
+            State(state.clone()),
+            ConnectInfo(peer.parse().unwrap()),
+            request.body(axum::body::Body::from(body)).unwrap(),
+        )
+        .await;
+        assert_eq!(response.status(), expected);
+    }
+    state.cast.media.revoke();
+    let request = HttpRequest::builder()
+        .method("NOTIFY")
+        .header("SID", "uuid:fixture")
+        .header("SEQ", "1")
+        .body(axum::body::Body::from(body))
+        .unwrap();
+    assert_eq!(
+        callback(
+            State(state.clone()),
+            ConnectInfo("127.0.0.1:1234".parse().unwrap()),
+            request
+        )
+        .await
+        .status(),
+        412
+    );
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_media_head_range_and_cancel_preserve_the_descriptor_extent() {
+    use plain_rs::infrastructure::host::resource_stream::NativeResourceFile;
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let path = dir.path().join("native.bin");
+    std::fs::write(
+        &path,
+        [
+            b"prefix".as_slice(),
+            &vec![5u8; 192 * 1024],
+            b"suffix".as_slice(),
+        ]
+        .concat(),
+    )
+    .unwrap();
+    let server = crate::server::ContentServer::open(dir.path()).unwrap();
+    let state = server.runtime_state();
+    let host = state.host.clone();
+    let resources = state.resources.clone();
+    let (generation, mut requests) = crate::test_support::HostRequests::connect(&host);
+    let provider = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            assert_eq!(request["method"], "fileResourceStream");
+            let stream = resources
+                .attach_native(request["params"]["id"].as_str().unwrap(), generation)
+                .unwrap();
+            host.reply(generation, json!({"id":request["id"],"result":null}))
+                .unwrap();
+            let metadata: Value =
+                serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+            assert_eq!(metadata["file"], true);
+            stream
+                .file(NativeResourceFile {
+                    file: std::fs::File::open(&path).unwrap(),
+                    offset: 6,
+                    length: 192 * 1024,
+                })
+                .await
+                .unwrap();
+        }
+    });
+    let mut session = plain_rs::features::services::casting::media_alias::Session::new(
+        "127.0.0.1".parse().unwrap(),
+    );
+    let name = session.register("content://fixture/movie", "video/mp4");
+    state.cast.media.replace(session);
+    for head in [true, false] {
+        let request = HttpRequest::builder()
+            .method(if head { "HEAD" } else { "GET" })
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let response = media(
+            State(state.clone()),
+            ConnectInfo("127.0.0.1:1234".parse().unwrap()),
+            Path(name.clone()),
+            request,
+        )
+        .await;
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            response.headers()["content-length"],
+            (192 * 1024).to_string()
+        );
+        assert_eq!(response.headers()["content-type"], "video/mp4");
+        let mut stream = response.into_body().into_data_stream();
+        if head {
+            assert!(stream.next().await.is_none());
+        } else {
+            assert_eq!(
+                stream.next().await.unwrap().unwrap()[..],
+                vec![5; 64 * 1024]
+            );
+            state.cast.media.revoke();
+            assert!(stream.next().await.is_none());
+        }
+    }
+    provider.abort();
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn remote_proxy_pins_dns_preserves_head_range_and_does_not_forward_credentials() {
+    use axum::{Router, routing::any};
+    let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let captured = requests.clone();
+    let router = Router::new().fallback(any(move |request: HttpRequest| {
+        let captured = captured.clone();
+        async move {
+            captured
+                .lock()
+                .unwrap()
+                .push((request.method().clone(), request.headers().clone()));
+            if request.uri().path() == "/redirect" {
+                return (
+                    StatusCode::FOUND,
+                    [(header::LOCATION, "http://127.0.0.1/private")],
+                    "",
+                )
+                    .into_response();
+            }
+            (
+                StatusCode::PARTIAL_CONTENT,
+                [
+                    ("content-type", "video/mp4"),
+                    ("content-length", "3"),
+                    ("content-range", "bytes 2-4/10"),
+                    ("set-cookie", "private=value"),
+                ],
+                "234",
+            )
+                .into_response()
+        }
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let task = tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+    });
+    let url = http_client::Url::parse(&format!(
+        "http://media.example.invalid:{}/movie",
+        address.port()
+    ))
+    .unwrap();
+    let mut headers = HeaderMap::new();
+    headers.insert(header::RANGE, "bytes=2-4".parse().unwrap());
+    headers.insert(header::COOKIE, "private=cookie".parse().unwrap());
+    headers.insert(header::AUTHORIZATION, "Bearer private".parse().unwrap());
+    for method in [http_client::Method::HEAD, http_client::Method::GET] {
+        let upstream = remote_fetch(url.clone(), &method, &headers, address)
+            .await
+            .unwrap();
+        let response = remote_response(upstream, &method);
+        assert_eq!(response.status(), 206);
+        assert_eq!(response.headers()["content-length"], "3");
+        assert!(!response.headers().contains_key("set-cookie"));
+        let bytes = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        assert_eq!(
+            &bytes[..],
+            if method == http_client::Method::HEAD {
+                b"".as_slice()
+            } else {
+                b"234".as_slice()
+            }
+        );
+    }
+    let redirect = remote_fetch(
+        url.join("/redirect").unwrap(),
+        &http_client::Method::GET,
+        &headers,
+        address,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        redirect.status(),
+        302,
+        "Redirect must return for target validation"
+    );
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 3);
+    assert_eq!(requests[0].0, http_client::Method::HEAD);
+    for (_, headers) in requests.iter() {
+        assert_eq!(headers["range"], "bytes=2-4");
+        assert!(!headers.contains_key(header::COOKIE));
+        assert!(!headers.contains_key(header::AUTHORIZATION));
+    }
+    task.abort();
+}
+
+#[test]
+fn remote_redirect_cannot_rebind_public_dns_to_a_lan_service() {
+    let public = ["192.0.2.50:80".parse().unwrap()];
+    let private = "10.0.0.50:80".parse().unwrap();
+    assert!(!remote_target_allowed(
+        private,
+        "media.example",
+        "media.example",
+        Some(&public)
+    ));
+    assert!(remote_target_allowed(
+        private,
+        "media.example",
+        "media.example",
+        None
+    ));
+    assert!(remote_target_allowed(
+        private,
+        "media.example",
+        "media.example",
+        Some(&[private])
+    ));
+    assert!(!remote_target_allowed(
+        private,
+        "other.example",
+        "media.example",
+        Some(&[private])
+    ));
+    assert!(!remote_target_allowed(
+        "10.0.0.50:8080".parse().unwrap(),
+        "media.example",
+        "media.example",
+        Some(&[private])
+    ));
+    let private_v6 = "[fd00:1234::50]:80".parse().unwrap();
+    assert!(remote_target_allowed(
+        private_v6,
+        "fd00:1234::50",
+        "[fd00:1234::50]",
+        Some(&[private_v6])
+    ));
 }

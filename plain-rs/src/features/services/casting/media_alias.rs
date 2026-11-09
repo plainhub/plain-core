@@ -1,175 +1,210 @@
-//! Short-id media alias registry.
-//!
-//! Mirrors `internal/dlna/media_alias.go`. The flow:
-//!
-//! 1. The front-end builds a `/fs?id=<short_id>` URL (its file-id format).
-//! 2. `Cast` rewrites it to `http://<host>:<http_port>/media/<alias>.<ext>`
-//!    so the TV can pull the file from our HTTP port (which it can reach
-//!    on the LAN, unlike the encrypted GraphQL port).
-//! 3. The `/media/:name` handler resolves `<alias>` back to the original
-//!    file path and streams it.
-//!
-//! Entries are in-memory only with a 30-minute TTL, matching the Go side.
+use std::{collections::HashMap, net::IpAddr, sync::Mutex, time::Duration};
+use tokio::{sync::watch, time::Instant};
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
-/// 30-minute TTL, matching the Go side's `mediaAliasTTL`.
 const TTL: Duration = Duration::from_secs(30 * 60);
 
-#[derive(Clone, Debug)]
-struct MediaAliasEntry {
-    path: String,
-    mime: String,
-    expires_at: Instant,
-    owner: Option<String>,
+#[derive(Clone)]
+pub struct Resource {
+    pub path: String,
+    pub mime: String,
+    lease: watch::Receiver<Option<Instant>>,
 }
 
-static ALIASES: Mutex<Option<HashMap<String, MediaAliasEntry>>> = Mutex::new(None);
-
-fn aliases_mut() -> std::sync::MutexGuard<'static, Option<HashMap<String, MediaAliasEntry>>> {
-    let mut g = ALIASES.lock().unwrap();
-    if g.is_none() {
-        *g = Some(HashMap::new());
+impl Resource {
+    pub async fn cancelled(self) {
+        cancelled(self.lease).await;
     }
-    g
 }
 
-/// Mint a short id for a media path and pick the extension we'll use in
-/// the rewritten `/media/<alias>.<ext>` URL. The `(path, mime)` pair is
-/// stored in the in-memory registry so the `/media/:name` handler can
-/// resolve the alias back to the real file path.
-///
-/// The id is `nanos since epoch in base 36`; collisions are vanishingly
-/// rare on a single-process install (would require two `Cast` calls in
-/// the same nanosecond).
-pub fn register(path: &str, mime: &str) -> (String, String) {
-    register_owned(path, mime, None)
-}
-pub fn register_for_owner(path: &str, mime: &str, owner: &str) -> (String, String) {
-    register_owned(path, mime, Some(owner))
-}
-fn register_owned(path: &str, mime: &str, owner: Option<&str>) -> (String, String) {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let id = base36(now);
-    let ext = path
-        .rsplit_once('.')
-        .map(|(_, e)| e.to_ascii_lowercase())
-        .filter(|e| is_safe_ext(e))
-        .unwrap_or_else(|| "bin".to_string());
-
-    let entry = MediaAliasEntry {
-        path: path.to_string(),
-        mime: mime.trim().to_string(),
-        expires_at: Instant::now() + TTL,
-        owner: owner.map(str::to_owned),
-    };
-    let mut g = aliases_mut();
-    if let Some(map) = g.as_mut() {
-        map.insert(id.clone(), entry);
-    }
-    (id, ext)
-}
-
-/// Resolve a short alias id back to its `(path, mime)`. Returns `None`
-/// when the id is unknown or expired. Mirrors Go `lookupMediaAlias`.
-pub fn lookup(id: &str) -> Option<(String, String)> {
-    let id = id.trim();
-    if id.is_empty() {
-        return None;
-    }
-    let mut g = aliases_mut();
-    let map = g.as_mut()?;
-    let entry = map.get(id).cloned()?;
-    if entry.owner.is_none() && Instant::now() > entry.expires_at {
-        map.remove(id);
-        return None;
-    }
-    Some((entry.path, entry.mime))
-}
-
-/// Rewrite a `http://host/fs?id=<file_id>` URL to a TV-reachable
-/// `http://host:<http_port>/media/<alias>.<ext>` URL. URLs that don't
-/// match our `/fs?id=…` shape are returned unchanged. Mirrors Go
-/// `dlnaSafeMediaURL(inputURL, mime)`.
-///
-#[cfg(feature = "runtime-media")]
-pub fn safe_media_url(input_url: &str, mime: &str) -> String {
-    let parsed = match plain_libs::utils::http_url::parse_http_url(input_url) {
-        Some(u) => u,
-        None => return input_url.to_string(),
-    };
-    if parsed.path != "/fs" {
-        return input_url.to_string();
-    }
-    let id = match parsed.query_param("id") {
-        Some(v) => v,
-        None => return input_url.to_string(),
-    };
-    let id = id.trim();
-    if id.is_empty() {
-        return input_url.to_string();
-    }
-
-    let (alias_id, ext) = register(id, mime);
-    if alias_id.is_empty() {
-        return input_url.to_string();
-    }
-
-    let host = parsed.host.as_str();
-    if host.is_empty() {
-        return input_url.to_string();
-    }
-    let http_port = std::env::var("PLAINAPP_HTTP_PORT")
-        .ok()
-        .and_then(|s| s.parse::<u16>().ok());
-    let host_port = match (http_port, parsed.scheme.as_str(), parsed.port) {
-        (Some(p), _, _) => format!("{host}:{p}"),
-        (None, "http", Some(p)) => format!("{host}:{p}"),
-        (None, "http", None) => host.to_string(),
-        (None, _, None) => {
-            if host.contains(':') {
-                format!("[{host}]")
-            } else {
-                host.to_string()
-            }
+async fn cancelled(mut lease: watch::Receiver<Option<Instant>>) {
+    let mut deadline = *lease.borrow_and_update();
+    while let Some(expires_at) = deadline {
+        tokio::select! {
+            biased;
+            result = lease.changed() => if result.is_err() { return; },
+            _ = tokio::time::sleep_until(expires_at) => return,
         }
-        (None, _, _) => host.to_string(),
-    };
-    format!("http://{host_port}/media/{alias_id}.{ext}")
+        deadline = *lease.borrow_and_update();
+    }
 }
 
-fn base36(mut n: u128) -> String {
-    if n == 0 {
-        return "0".to_string();
-    }
-    let digits = b"0123456789abcdefghijklmnopqrstuvwxyz";
-    let mut buf = Vec::new();
-    while n > 0 {
-        let d = (n % 36) as usize;
-        buf.push(digits[d]);
-        n /= 36;
-    }
-    buf.reverse();
-    String::from_utf8(buf).unwrap_or_else(|_| "0".to_string())
+pub struct Session {
+    peer: IpAddr,
+    resources: HashMap<String, Resource>,
+    lease: watch::Sender<Option<Instant>>,
 }
 
-fn is_safe_ext(e: &str) -> bool {
-    !e.is_empty()
-        && e.len() <= 16
-        && e.chars()
-            .all(|c| c.is_ascii_digit() || c.is_ascii_lowercase())
+impl Session {
+    pub fn new(peer: IpAddr) -> Self {
+        Self {
+            peer: peer.to_canonical(),
+            resources: HashMap::new(),
+            lease: watch::channel(Some(Instant::now() + TTL)).0,
+        }
+    }
+
+    pub fn pending(&self) -> PendingSession {
+        PendingSession(Some(self.lease.clone()))
+    }
+
+    pub fn register(&mut self, path: &str, mime: &str) -> String {
+        let mut random = [0; 32];
+        plain_libs::crypto::gen_random(&mut random);
+        let token = plain_libs::utils::hex::bytes_to_hex(&random);
+        let ext = extension(path, mime);
+        let name = format!("{token}.{ext}");
+        self.resources.insert(
+            name.clone(),
+            Resource {
+                path: path.to_owned(),
+                mime: mime.trim().to_owned(),
+                lease: self.lease.subscribe(),
+            },
+        );
+        name
+    }
 }
 
-pub fn release_owner(owner: &str) {
-    let mut aliases = aliases_mut();
-    if let Some(aliases) = aliases.as_mut() {
-        aliases.retain(|_, entry| entry.owner.as_deref() != Some(owner));
+pub struct PendingSession(Option<watch::Sender<Option<Instant>>>);
+
+impl PendingSession {
+    pub fn cancelled(&self) -> impl std::future::Future<Output = ()> + Send + 'static {
+        cancelled(self.0.as_ref().unwrap().subscribe())
     }
+
+    pub fn keep(mut self) {
+        self.0.take();
+    }
+}
+
+impl Drop for PendingSession {
+    fn drop(&mut self) {
+        if let Some(lease) = self.0.take() {
+            lease.send_replace(None);
+        }
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        self.lease.send_replace(None);
+    }
+}
+
+#[derive(Default)]
+struct Current {
+    generation: u64,
+    interruption: u64,
+    session: Option<Session>,
+}
+
+#[derive(Default)]
+pub struct Registry(Mutex<Current>);
+
+impl Registry {
+    pub fn interruption(&self) -> u64 {
+        self.0.lock().unwrap().interruption
+    }
+
+    pub fn interrupt(&self) {
+        let mut current = self.0.lock().unwrap();
+        current.interruption = current.interruption.wrapping_add(1);
+        current.generation = current.generation.wrapping_add(1);
+        current.session.take();
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.0.lock().unwrap().generation
+    }
+
+    pub fn replace_current(&self, session: Session, generation: u64) -> bool {
+        let mut current = self.0.lock().unwrap();
+        if current.generation != generation {
+            return false;
+        }
+        current.generation = current.generation.wrapping_add(1);
+        current.session = Some(session);
+        true
+    }
+
+    pub fn replace(&self, session: Session) {
+        let mut current = self.0.lock().unwrap();
+        current.generation = current.generation.wrapping_add(1);
+        current.session = Some(session);
+    }
+
+    pub fn revoke(&self) -> u64 {
+        let mut current = self.0.lock().unwrap();
+        current.generation = current.generation.wrapping_add(1);
+        current.session.take();
+        current.generation
+    }
+
+    pub fn renew(&self) {
+        let guard = self.0.lock().unwrap();
+        if let Some(session) = guard.session.as_ref().filter(|session| valid(session)) {
+            session.lease.send_replace(Some(Instant::now() + TTL));
+        }
+    }
+
+    pub fn active(&self) -> bool {
+        self.0.lock().unwrap().session.as_ref().is_some_and(valid)
+    }
+
+    pub fn accepts(&self, peer: IpAddr) -> bool {
+        self.0
+            .lock()
+            .unwrap()
+            .session
+            .as_ref()
+            .is_some_and(|session| valid(session) && session.peer == peer.to_canonical())
+    }
+
+    pub fn lookup(&self, name: &str, peer: IpAddr) -> Option<Resource> {
+        let guard = self.0.lock().unwrap();
+        let session = guard.session.as_ref()?;
+        if !valid(session) || session.peer != peer.to_canonical() {
+            return None;
+        }
+        session.resources.get(name).cloned()
+    }
+}
+
+fn valid(session: &Session) -> bool {
+    session
+        .lease
+        .borrow()
+        .is_some_and(|deadline| deadline > Instant::now())
+}
+
+fn extension(path: &str, mime: &str) -> String {
+    let path = path.split(['?', '#']).next().unwrap_or_default();
+    path.rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .filter(|ext| {
+            !ext.is_empty() && ext.len() <= 16 && ext.bytes().all(|b| b.is_ascii_alphanumeric())
+        })
+        .unwrap_or_else(|| {
+            match mime.split(';').next().unwrap_or_default().trim() {
+                "video/mp4" | "audio/mp4" => "mp4",
+                "video/x-matroska" => "mkv",
+                "video/webm" => "webm",
+                "video/mp2t" => "ts",
+                "audio/mpeg" => "mp3",
+                "audio/flac" => "flac",
+                "audio/wav" | "audio/x-wav" => "wav",
+                "audio/aac" => "aac",
+                "audio/ogg" => "ogg",
+                "image/jpeg" => "jpg",
+                "image/png" => "png",
+                "image/webp" => "webp",
+                _ => "bin",
+            }
+            .to_owned()
+        })
 }
 
 #[cfg(test)]

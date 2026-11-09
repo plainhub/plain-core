@@ -46,7 +46,6 @@ pub fn builder() -> ClientBuilder {
         total_timeout: None,
         keepalive: Duration::from_secs(15),
         max_idle: usize::MAX,
-        #[cfg(feature = "test-seams")]
         dns: Default::default(),
     }
 }
@@ -64,7 +63,6 @@ pub struct ClientBuilder {
     total_timeout: Option<Duration>,
     keepalive: Duration,
     max_idle: usize,
-    #[cfg(feature = "test-seams")]
     dns: std::collections::HashMap<String, std::net::SocketAddr>,
 }
 
@@ -135,7 +133,6 @@ impl ClientBuilder {
         self
     }
 
-    #[cfg(feature = "test-seams")]
     pub fn resolve(mut self, host: &str, address: std::net::SocketAddr) -> Self {
         self.dns.insert(host.to_ascii_lowercase(), address);
         self
@@ -153,10 +150,7 @@ impl ClientBuilder {
             self.verify_certificates,
             self.certificate_sha256,
         )?;
-        #[cfg(feature = "test-seams")]
-        let mut http = NativeHttp::new_with_resolver(connector::TestResolver::new(self.dns));
-        #[cfg(not(feature = "test-seams"))]
-        let mut http = NativeHttp::new();
+        let mut http = NativeHttp::new_with_resolver(connector::Resolver::new(self.dns));
         http.enforce_http(false);
         http.set_connect_timeout(self.connect_timeout);
         http.set_nodelay(true);

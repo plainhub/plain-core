@@ -125,6 +125,7 @@ async fn public_discovery_lifetime(
 }
 
 pub(crate) async fn stop_locked(state: &ServerState, guard: &mut Option<PublicServer>) {
+    state.cast.media.interrupt();
     let _control = state.peer_status.control.lock().await;
     state
         .peer_status

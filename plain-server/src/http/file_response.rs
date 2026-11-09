@@ -21,7 +21,7 @@ pub(crate) async fn stream_file(
     stream_open_file(file, 0, metadata.len(), mime, headers).await
 }
 
-async fn stream_open_file(
+pub(crate) async fn stream_open_file(
     mut file: tokio::fs::File,
     base: u64,
     size: u64,

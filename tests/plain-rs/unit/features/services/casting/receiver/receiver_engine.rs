@@ -38,7 +38,7 @@ async fn search_responses_reach_the_ephemeral_source_port() {
         let packet = std::str::from_utf8(&buffer[..n]).unwrap();
         assert!(packet.starts_with("HTTP/1.1 200 OK"));
         assert!(packet.contains("USN: uuid:test"));
-        assert!(packet.contains("LOCATION: http://192.0.2.1:7878/description.xml"));
+        assert!(packet.contains("LOCATION: http://192.0.2.1:7878/dlna/description.xml"));
     }
     respond_to_search(
         &renderer,

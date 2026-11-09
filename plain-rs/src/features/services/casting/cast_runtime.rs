@@ -53,7 +53,54 @@ pub async fn apply(
     state: &CoreRuntime,
     fields: &std::collections::HashMap<String, String>,
 ) -> anyhow::Result<()> {
+    observe(state, fields, false).await
+}
+
+pub async fn apply_poll(
+    state: &CoreRuntime,
+    fields: &std::collections::HashMap<String, String>,
+) -> anyhow::Result<()> {
+    observe(state, fields, true).await
+}
+
+async fn observe(
+    state: &CoreRuntime,
+    fields: &std::collections::HashMap<String, String>,
+    polled: bool,
+) -> anyhow::Result<()> {
     let runtime = &state.cast;
+    let status = fields.get("TransportState").map(String::as_str);
+    let ended = {
+        let mut transport = runtime.transport.lock().unwrap();
+        if transport.uri.is_empty() {
+            return Ok(());
+        }
+        if fields
+            .get("TrackURI")
+            .filter(|uri| !uri.is_empty())
+            .is_some_and(|uri| uri != &transport.uri)
+        {
+            return Ok(());
+        }
+        match status {
+            Some("PLAYING" | "PAUSED_PLAYBACK") => {
+                transport.started = true;
+                transport.stopped = false;
+                runtime.media.renew();
+                false
+            }
+            Some("STOPPED" | "NO_MEDIA_PRESENT") if polled => {
+                let ended = transport.started && transport.stopped;
+                transport.stopped = true;
+                ended
+            }
+            Some("TRANSITIONING") => {
+                transport.stopped = false;
+                false
+            }
+            _ => false,
+        }
+    };
     {
         let mut s = runtime.snapshot.lock().unwrap();
         if let (Some(position), Some(duration)) =
@@ -62,16 +109,16 @@ pub async fn apply(
             s.progress_ms = time_ms(position);
             s.duration_ms = time_ms(duration);
         }
-        match fields.get("TransportState").map(String::as_str) {
+        match status {
             Some("PLAYING") => s.playing = true,
-            Some("PAUSED_PLAYBACK" | "STOPPED") => s.playing = false,
+            Some("PAUSED_PLAYBACK") => s.playing = false,
             _ => {}
         }
     }
-    if fields.get("TransportState").map(String::as_str) == Some("STOPPED")
-        && !fields.contains_key("AVTransportURIMetaData")
-        && runtime.snapshot().current_device.is_some()
-    {
+    if ended {
+        runtime.media.revoke();
+        runtime.transport.lock().unwrap().uri.clear();
+        runtime.snapshot.lock().unwrap().playing = false;
         let snapshot = runtime.snapshot();
         let next = if !snapshot.items.is_empty() {
             let index = snapshot
@@ -107,6 +154,9 @@ pub async fn apply(
             crate::features::services::casting::dlna_sender_playback::cast(state, next, true)
                 .await
                 .map_err(anyhow::Error::msg)?;
+        } else {
+            super::dlna_sender_playback::end(state, false).await;
+            runtime.snapshot.lock().unwrap().active = false;
         }
     }
     runtime.publish(state);

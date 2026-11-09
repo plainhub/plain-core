@@ -34,49 +34,43 @@ pub async fn route(
     allowed_senders: &[String],
     denied_senders: &[String],
 ) -> DlnaHttpResponse {
-    if path.ends_with("description.xml") {
-        let s = state.read().await;
-        let port = s.port;
-        drop(s);
-        let xml = xml_templates::device_description(local_ip, port, device_uuid, device_name);
-        return http_ok(&xml, "text/xml; charset=\"utf-8\"");
+    let path = path.split('?').next().unwrap_or(path);
+    if !super::is_receiver_path(method, path) {
+        return DlnaHttpResponse {
+            status: 404,
+            content_type: None,
+            headers: vec![],
+            body: String::new(),
+        };
     }
 
-    if path.ends_with("scpd.xml") {
-        return http_ok(xml_templates::SCPD_XML, "text/xml; charset=\"utf-8\"");
-    }
-
-    if method == "POST" && (path.ends_with("control") || path.contains("AVTransport")) {
-        return handle_soap(
-            state,
-            headers,
-            body,
-            sender_ip,
-            command_tx,
-            allowed_senders,
-            denied_senders,
-        )
-        .await;
-    }
-
-    if method == "POST" && path.contains("RenderingControl") {
-        let xml = soap_handler::build_response("GetVolume", "<CurrentVolume>100</CurrentVolume>");
-        return http_ok(&xml, "text/xml; charset=\"utf-8\"");
-    }
-
-    if method == "SUBSCRIBE" {
-        return http_ok_subscribe();
-    }
-
-    if method == "UNSUBSCRIBE" {
-        return http_ok("", "text/plain");
-    }
-
-    DlnaHttpResponse {
-        status: 404,
-        content_type: None,
-        headers: vec![],
-        body: String::new(),
+    match path {
+        "/dlna/description.xml" => {
+            let port = state.read().await.port;
+            let xml = xml_templates::device_description(local_ip, port, device_uuid, device_name);
+            http_ok(&xml, "text/xml; charset=\"utf-8\"")
+        }
+        "/dlna/av-transport/scpd.xml" | "/dlna/rendering-control/scpd.xml" => {
+            http_ok(xml_templates::SCPD_XML, "text/xml; charset=\"utf-8\"")
+        }
+        "/dlna/av-transport/control" => {
+            handle_soap(
+                state,
+                headers,
+                body,
+                sender_ip,
+                command_tx,
+                allowed_senders,
+                denied_senders,
+            )
+            .await
+        }
+        "/dlna/rendering-control/control" => http_ok(
+            xml_templates::VOLUME_RESPONSE_XML,
+            "text/xml; charset=\"utf-8\"",
+        ),
+        _ if method == "SUBSCRIBE" => http_ok_subscribe(),
+        _ => http_ok("", "text/plain"),
     }
 }
 
@@ -246,3 +240,7 @@ fn http_ok_subscribe() -> DlnaHttpResponse {
         body: String::new(),
     }
 }
+
+#[cfg(test)]
+#[path = "../../../../../../tests/plain-rs/unit/features/services/casting/receiver/http_router.rs"]
+mod tests;

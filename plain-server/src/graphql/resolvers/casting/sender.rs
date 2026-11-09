@@ -155,7 +155,11 @@ impl DlnaSenderMutation {
         }
         let state = ctx.data::<ServerState>()?;
         let runtime = state.cast.clone();
+        let interruption = runtime.media.interruption();
         let _guard = runtime.operations.lock().await;
+        if interruption != runtime.media.interruption() {
+            return Err("Cast cancelled".into());
+        }
         let result = async {
             sender::execute(state, &runtime, Command::Select { id: renderer_udn }).await?;
             plain_rs::features::services::casting::dlna_sender_playback::cast_with_mime(
