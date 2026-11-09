@@ -41,7 +41,7 @@ pub(crate) fn init(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
 CASE f.kind WHEN 'AUDIO' THEN 1 WHEN 'VIDEO' THEN 2 WHEN 'IMAGE' THEN 3 WHEN 'DOC' THEN 24 ELSE 22 END AS data_type,
 CASE WHEN substr(v.path,-1)='/' THEN v.path||f.path ELSE v.path||CASE WHEN f.path='' THEN '' ELSE '/'||f.path END END AS path,
 f.file_name,f.kind,f.volume_id,f.file_identity,f.missing,f.indexed,v.is_available,
-COALESCE(f.title,'') AS title,COALESCE(f.artist,'') AS artist,COALESCE(f.album,'') AS album,COALESCE(f.album_artist,'') AS album_artist,COALESCE(f.album_id,'') AS album_id,
+CASE WHEN f.kind='DOC' THEN f.file_name ELSE COALESCE(f.title,'') END AS title,COALESCE(f.artist,'') AS artist,COALESCE(f.album,'') AS album,COALESCE(f.album_artist,'') AS album_artist,COALESCE(f.album_id,'') AS album_id,
 CASE WHEN instr(v.path,'://')>0 THEN v.path||v.identity ELSE CASE WHEN instr(f.path,'/')=0 THEN CASE WHEN v.path='/' THEN '/' ELSE rtrim(v.path,'/') END ELSE rtrim(v.path,'/')||'/'||substr(f.path,1,length(f.path)-length(f.file_name)-1) END END AS bucket_id,
 COALESCE(f.mime_type,'') AS mime_type,CAST(COALESCE(f.size_bytes,0) AS INTEGER) AS size_bytes,CAST(COALESCE(f.duration_ms,0) AS INTEGER) AS duration_ms,f.cover_image_id,
 CAST(COALESCE(f.width,0) AS INTEGER) AS width,CAST(COALESCE(f.height,0) AS INTEGER) AS height,CAST(COALESCE(f.rotation,0) AS INTEGER) AS rotation,f.taken_at,COALESCE(f.created_at,f.updated_at) AS created_at,f.updated_at,

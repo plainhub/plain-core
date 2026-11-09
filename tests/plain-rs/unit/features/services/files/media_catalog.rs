@@ -70,17 +70,16 @@ fn document_filters_and_explicit_trash_selection_use_current_catalog() {
     );
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE files SET trashed_at='2026-01-01T00:00:00Z',original_path=path WHERE id=?1",
+            "UPDATE files SET trashed_at='2026-01-01T00:00:00Z',original_path=path,path='trash/renamed.pdf' WHERE id=?1",
             [&created[0].id],
         )
     })
     .unwrap();
     assert_eq!(count(&db, DataType::Doc, "").unwrap(), 1);
     assert_eq!(count(&db, DataType::Doc, "trash:true ext:pdf").unwrap(), 1);
-    assert_eq!(
-        rows(&db, DataType::Doc, "trash:true", FileSortBy::NameAsc, 10, 0).unwrap()[0].id,
-        created[0].id
-    );
+    let trashed = rows(&db, DataType::Doc, "trash:true", FileSortBy::NameAsc, 10, 0).unwrap();
+    assert_eq!(trashed[0].id, created[0].id);
+    assert_eq!(trashed[0].title, "one.pdf");
 }
 
 #[test]

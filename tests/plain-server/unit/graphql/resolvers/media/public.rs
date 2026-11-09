@@ -353,17 +353,21 @@ async fn videos_carry_the_duration_and_the_taken_time() {
     assert_eq!(data["videos"][0]["tags"], json!([]));
 }
 
-/// `Doc.extension` is derived from the path, matching plain-app's lazy
-/// property — the media store does not carry an extension column.
 #[tokio::test]
-async fn doc_extensions_come_from_the_path() {
+async fn docs_use_the_full_file_name_even_when_indexed_with_a_stem_title() {
     let (_dir, schema, _) = fixture_seeded(
         GRANTED,
         true,
         |db| {
             db.record_media_files(&[
-                media(DataType::Doc, "/storage/Docs/a.pdf", "a", 10, "b3"),
-                media(DataType::Doc, "/storage/Docs/b.txt", "b", 10, "b3"),
+                media(DataType::Doc, "/storage/Docs/notes.md", "notes", 10, "b3"),
+                media(
+                    DataType::Doc,
+                    "/storage/Docs/report.v2.DOC",
+                    "report.v2",
+                    10,
+                    "b3",
+                ),
             ])
             .unwrap();
         },
@@ -371,18 +375,18 @@ async fn doc_extensions_come_from_the_path() {
     );
     let response = schema
         .execute(
-            r#"query { docs(offset:0, limit:10, query:"", sortBy:NAME_ASC) { id extension } }"#,
+            r#"query { docs(offset:0, limit:10, query:"", sortBy:NAME_ASC) { title extension } }"#,
         )
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
-    let docs = data["docs"].as_array().unwrap();
-    let extensions = Value::Array(
-        docs.iter()
-            .map(|d| d["extension"].clone())
-            .collect::<Vec<_>>(),
+    assert_eq!(
+        data["docs"],
+        json!([
+            {"title":"notes.md","extension":"md"},
+            {"title":"report.v2.DOC","extension":"DOC"},
+        ]),
     );
-    assert_eq!(extensions, json!(["pdf", "txt"]), "{data}");
 }
 
 /// One row per folder, sorted by the lowercased folder name, with a bounded
@@ -550,8 +554,12 @@ async fn all_media_lists_accept_the_original_shared_interface_fragment() {
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
-    for field in ["audios", "videos", "docs"] {
-        assert_eq!(data[field][0]["title"], "Media", "{field}: {data}");
+    for (field, title) in [
+        ("audios", "Media"),
+        ("videos", "Media"),
+        ("docs", "file.pdf"),
+    ] {
+        assert_eq!(data[field][0]["title"], title, "{field}: {data}");
         assert_eq!(data[field][0]["size"], 2048, "{field}: {data}");
         assert_eq!(data[field][0]["bucketId"], "/media", "{field}: {data}");
         assert_eq!(

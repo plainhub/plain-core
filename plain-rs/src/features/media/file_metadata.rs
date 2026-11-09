@@ -56,10 +56,10 @@ pub fn read(
         available,
         metadata: MediaFileMetadata {
             data_type,
-            title: if probed.title.is_empty() {
-                file_stem(&path_str)
-            } else {
-                probed.title
+            title: match data_type {
+                DataType::Doc => String::new(),
+                _ if probed.title.is_empty() => file_stem(&path_str),
+                _ => probed.title,
             },
             artist: probed.artist,
             album: probed.album,
