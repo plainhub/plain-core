@@ -5,6 +5,10 @@ use axum::{
     routing::{get, post},
 };
 
+fn health_router() -> Router {
+    Router::new().route("/health", get(|| async { "OK" }))
+}
+
 fn certificate() -> (Vec<u8>, Vec<u8>) {
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     (
@@ -45,11 +49,59 @@ async fn serves_http_and_tls_then_releases_both_ports() {
 }
 
 #[tokio::test]
+async fn readiness_requires_ok_from_both_health_listeners_without_private_route() {
+    use axum::http::StatusCode;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    let probes = Arc::new([AtomicUsize::new(0), AtomicUsize::new(0)]);
+    let observed = probes.clone();
+    let router = Router::new()
+        .route(
+            "/health",
+            get(
+                move |Extension(ConnectionScheme(scheme)): Extension<ConnectionScheme>| {
+                    let observed = observed.clone();
+                    async move {
+                        let index = usize::from(scheme == "https");
+                        if observed[index].fetch_add(1, Ordering::SeqCst) == 0 {
+                            StatusCode::NO_CONTENT
+                        } else {
+                            StatusCode::OK
+                        }
+                    }
+                },
+            ),
+        )
+        .fallback(|| async { StatusCode::GONE });
+    let (cert, key) = certificate();
+    let server = HttpListeners::start(router, 0, 0, cert, key).await.unwrap();
+    assert!(probes[0].load(Ordering::SeqCst) >= 2);
+    assert!(probes[1].load(Ordering::SeqCst) >= 2);
+    let client = http_client::builder()
+        .no_proxy()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap();
+    for (scheme, port) in [("http", server.http_port), ("https", server.https_port)] {
+        let response = client
+            .get(format!("{scheme}://127.0.0.1:{port}/__plain_server_ready"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::GONE);
+    }
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn invalid_tls_never_opens_http_listener() {
     let probe = std::net::TcpListener::bind("0.0.0.0:0").unwrap();
     let port = probe.local_addr().unwrap().port();
     drop(probe);
-    let result = HttpListeners::start(Router::new(), port, 0, vec![], vec![]).await;
+    let result = HttpListeners::start(health_router(), port, 0, vec![], vec![]).await;
     assert!(result.is_err());
     assert!(std::net::TcpListener::bind(("0.0.0.0", port)).is_ok());
 }
@@ -57,7 +109,7 @@ async fn invalid_tls_never_opens_http_listener() {
 #[tokio::test]
 async fn drop_releases_listeners() {
     let (cert, key) = certificate();
-    let server = HttpListeners::start(Router::new(), 0, 0, cert, key)
+    let server = HttpListeners::start(health_router(), 0, 0, cert, key)
         .await
         .unwrap();
     let ports = [server.http_port, server.https_port];
@@ -71,7 +123,7 @@ async fn drop_releases_listeners() {
 #[tokio::test]
 async fn listener_task_abort_is_reported_and_shutdown_releases_ports() {
     let (cert, key) = certificate();
-    let server = HttpListeners::start(Router::new(), 0, 0, cert, key)
+    let server = HttpListeners::start(health_router(), 0, 0, cert, key)
         .await
         .unwrap();
     let ports = [server.http_port, server.https_port];
@@ -99,7 +151,7 @@ async fn nearby_client_handles_probe_accept_reject_timeout_and_offline() {
     use plain_rs::features::peers::pairing::protocol::PairingCancel;
 
     let (cert, key) = certificate();
-    let router = Router::new().route(
+    let router = health_router().route(
         "/nearby",
         post(|headers: HeaderMap, body: String| async move {
             assert_eq!(headers["content-type"], "application/json");
@@ -162,7 +214,7 @@ async fn occupied_ports_fall_back_for_both_listeners() {
     let http = occupied_http.local_addr().unwrap().port();
     let https = occupied_https.local_addr().unwrap().port();
     let (cert, key) = certificate();
-    let listeners = HttpListeners::start(Router::new(), http, https, cert, key)
+    let listeners = HttpListeners::start(health_router(), http, https, cert, key)
         .await
         .unwrap();
     assert_ne!(listeners.http_port, http);

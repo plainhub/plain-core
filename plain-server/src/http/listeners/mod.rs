@@ -15,6 +15,7 @@ pub use plain_rs::infrastructure::tls_identity::config as tls_config;
 use std::{net::SocketAddr, time::Duration};
 use tokio::{sync::watch, task::JoinHandle};
 
+/// The supplied router must serve `GET /health` with status 200 for both listeners.
 pub struct HttpListeners {
     pub http_port: u16,
     pub https_port: u16,
@@ -41,7 +42,6 @@ impl HttpListeners {
         https_port: u16,
         tls: ServerConfig,
     ) -> Result<Self, String> {
-        let router = crate::http::router::with_readiness(router);
         let http = bind::bind_listener_fallback(http_port, &bind::HTTP_PORTS)
             .map_err(|e| format!("HTTP bind failed: {e}"))?;
         let https = bind::bind_listener_fallback(https_port, &bind::HTTPS_PORTS)
@@ -117,11 +117,11 @@ impl HttpListeners {
                 let mut healthy = true;
                 for (scheme, port) in [("http", self.http_port), ("https", self.https_port)] {
                     match client
-                        .get(format!("{scheme}://127.0.0.1:{port}/__plain_server_ready"))
+                        .get(format!("{scheme}://127.0.0.1:{port}/health"))
                         .send()
                         .await
                     {
-                        Ok(response) if response.status() == http_client::StatusCode::NO_CONTENT => {}
+                        Ok(response) if response.status() == http_client::StatusCode::OK => {}
                         _ => {
                             healthy = false;
                             break;

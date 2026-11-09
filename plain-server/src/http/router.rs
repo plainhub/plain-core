@@ -108,8 +108,3 @@ fn dlna_routes(state: ServerState) -> Router {
         .route("/RenderingControl/event", any(crate::http::dlna::receiver))
         .with_state(state)
 }
-
-#[cfg(feature = "http_transport")]
-pub(crate) fn with_readiness(router: Router) -> Router {
-    router.route("/__plain_server_ready", get(crate::http::health::ready))
-}

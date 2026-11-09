@@ -141,11 +141,11 @@ async fn connected_http_clients(pem: &str, origin: &str, count: usize) -> Vec<ht
             .build()
             .unwrap();
         let ready = client
-            .get(format!("{origin}/__plain_server_ready"))
+            .get(format!("{origin}/health"))
             .send()
             .await
             .unwrap();
-        assert_eq!(ready.status(), StatusCode::NO_CONTENT);
+        assert_eq!(ready.status(), StatusCode::OK);
         ready.bytes().await.unwrap();
         clients.push(client);
     }

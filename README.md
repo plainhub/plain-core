@@ -93,7 +93,7 @@ plain-server/
 │   │   ├── graphql.rs        Main, peer and guest GraphQL HTTP adapters
 │   │   ├── init.rs           /init
 │   │   ├── nearby.rs         /nearby
-│   │   ├── health.rs         Health and listener readiness handlers
+│   │   ├── health.rs         Health handler
 │   │   ├── dlna.rs           DLNA description, control, events, media and callbacks
 │   │   ├── static_files.rs   Web UI fallback and static files
 │   │   ├── web_bundle.rs     Embedded Web asset access

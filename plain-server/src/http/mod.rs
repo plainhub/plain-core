@@ -1,10 +1,10 @@
 #[cfg(feature = "http_transport")]
 pub mod listeners;
 
-#[cfg(any(feature = "core", feature = "http_transport"))]
+#[cfg(feature = "core")]
 pub(crate) mod router;
 
-#[cfg(any(feature = "core", feature = "http_transport"))]
+#[cfg(feature = "core")]
 pub(crate) mod health;
 
 #[cfg(feature = "core")]

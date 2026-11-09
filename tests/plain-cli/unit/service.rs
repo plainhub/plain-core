@@ -292,7 +292,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
         .unwrap();
     connection
         .write_all(
-            b"GET /__plain_server_ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
         )
         .await
         .unwrap();
@@ -305,7 +305,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
     .unwrap()
     .unwrap();
     assert!(
-        response.starts_with(b"HTTP/1.1 204"),
+        response.starts_with(b"HTTP/1.1 200"),
         "{}",
         String::from_utf8_lossy(&response)
     );

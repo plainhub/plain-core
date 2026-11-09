@@ -98,6 +98,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     let state = server.runtime_state();
     let (send, mut received) = tokio::sync::mpsc::channel(8);
     let router = Router::new()
+        .route("/health", axum::routing::get(crate::http::health::health))
         .route("/nearby", post(receive))
         .with_state(send);
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
