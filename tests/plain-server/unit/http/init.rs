@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn fixed_password_without_a_secret_requires_initial_setup() {
+async fn fixed_password_without_a_secret_never_advertises_remote_setup() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -22,7 +22,9 @@ async fn fixed_password_without_a_secret_requires_initial_setup() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(payload["needsSetup"], true);
+    assert_eq!(payload["passwordRequired"], true);
+    assert!(payload.get("needsSetup").is_none());
+    assert!(payload.get("setupHttpsPort").is_none());
     core.stop_core().await;
 }
 
@@ -148,6 +150,38 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
         );
         assert!(events.try_recv().is_err());
         assert!(state.db.session_get("browser").unwrap().is_none());
+    }
+    core.stop_core().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn removed_password_setup_route_cannot_initialize_or_replace_a_password() {
+    use plain_libs::protocols::http_client;
+    use plain_rs::features::prefs::security;
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    security::configure_password_login(&state.prefs).unwrap();
+    let (certificate, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let client = http_client::builder()
+        .add_root_certificate(http_client::Certificate::from_pem(&certificate).unwrap())
+        .build()
+        .unwrap();
+    let (http, https) = core.start_public(0, 0, certificate, key).await.unwrap();
+    for configured in [false, true] {
+        if configured {
+            security::set_password_login(&state.prefs, "installed-password").unwrap();
+        }
+        let before = state.prefs.entries();
+        for (scheme, port) in [("http", http), ("https", https)] {
+            let response = client.post(format!("{scheme}://localhost:{port}/auth/setup"))
+                .header("Content-Type", "application/json")
+                .body(serde_json::to_vec(&json!({"passwordHash": plain_libs::crypto::sha512_hex("unwanted-password")})).unwrap())
+                .send().await.unwrap();
+            assert_eq!(response.status().as_u16(), 404);
+            assert_eq!(state.prefs.entries(), before);
+        }
     }
     core.stop_core().await;
 }

@@ -45,25 +45,14 @@ pub(crate) async fn init(
         Ok(pair) => pair,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    let needs_setup =
-        match plain_rs::features::prefs::security::password_setup_required(&state.prefs) {
-            Ok(value) => value,
-            Err(error) => {
-                log::error!("Password setup state unavailable: {error}");
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            }
-        };
     let mut result = json!({"signaturePublicKey":plain_libs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required});
     #[cfg(feature = "http_transport")]
     if let Some(server) = state.public_server.lock().await.as_ref() {
         let pin = &server.tls_certificate_sha256;
         let proof = format!("plain-peer-tls-v1:{pin}");
         result["tlsCertificateSha256"] = json!(pin);
-        result["tlsCertificateSignature"] = json!(plain_libs::crypto::ed25519_sign(&pair, proof.as_bytes()));
-    }
-    if needs_setup {
-        result["needsSetup"] = json!(true);
-        result["setupHttpsPort"] = json!(state.prefs.get_or("https_port", 8443u16));
+        result["tlsCertificateSignature"] =
+            json!(plain_libs::crypto::ed25519_sign(&pair, proof.as_bytes()));
     }
     Json(result).into_response()
 }

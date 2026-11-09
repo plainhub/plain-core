@@ -4,8 +4,8 @@ mod password_login;
 mod update;
 pub use command::Command;
 pub use password_login::{
-    PasswordSetupError, configure_password_login, password_hash, password_setup_required,
-    set_password_login, setup_password, setup_password_hash, valid_password_digest,
+    PasswordError, configure_password_login, password_hash, password_setup_required,
+    set_password_login, valid_password_digest,
 };
 pub use update::{ReleaseInfo, UpdateInfo, UpdatePatch};
 

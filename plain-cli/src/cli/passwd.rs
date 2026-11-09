@@ -16,7 +16,7 @@ pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn prompt_password() -> Result<String> {
+pub(super) fn prompt_password() -> Result<String> {
     let password = plain_libs::platform::unix::read_password::prompt_password("New password: ")?;
     let confirm = plain_libs::platform::unix::read_password::prompt_password("Confirm: ")?;
     anyhow::ensure!(password == confirm, "Passwords do not match");
@@ -24,7 +24,7 @@ fn prompt_password() -> Result<String> {
 }
 
 #[cfg(not(unix))]
-fn prompt_password() -> Result<String> {
+pub(super) fn prompt_password() -> Result<String> {
     anyhow::bail!("Use passwd --stdin to read a password from standard input on this platform")
 }
 

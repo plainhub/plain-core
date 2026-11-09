@@ -773,7 +773,7 @@ async fn password_login_requires_setup_and_the_configured_password() {
         pending.validate(&state, &request).unwrap_err().to_string(),
         "password_setup_required"
     );
-    plain_rs::features::prefs::security::setup_password(security, "owned-password").unwrap();
+    plain_rs::features::prefs::security::set_password_login(security, "owned-password").unwrap();
     let protection =
         password_protection(plain_rs::features::prefs::security::password_hash(security).unwrap());
     let request = json!({"loginContext": protection.channel().context});
@@ -800,7 +800,7 @@ async fn first_password_login_completes_without_owner_approval() {
     let (_directory, server, port) = passwordless_server().await;
     let state = server.runtime_state();
     plain_rs::features::prefs::security::configure_password_login(&state.prefs).unwrap();
-    plain_rs::features::prefs::security::setup_password(&state.prefs, "owned-password").unwrap();
+    plain_rs::features::prefs::security::set_password_login(&state.prefs, "owned-password").unwrap();
     let (_socket, _, _, _) =
         browser_login(&state, port, "first-browser", Some("owned-password")).await;
     assert!(state.db.session_get("first-browser").unwrap().is_some());

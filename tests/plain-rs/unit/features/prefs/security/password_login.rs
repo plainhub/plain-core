@@ -11,58 +11,19 @@ fn pending_password_setup_survives_security_bootstrap() {
 }
 
 #[test]
-fn password_login_starts_with_setup_then_preserves_the_configured_credential() {
+fn configured_password_survives_repeated_bootstrap_and_password_mode_selection() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     bootstrap(&prefs).unwrap();
     let identity = prefs.get::<String>(CLIENT_ID).unwrap();
-    configure_password_login(&prefs).unwrap();
-    assert!(password_setup_required(&prefs).unwrap());
-    assert!(!prefs.get_or(LOGIN_REQUIRE_APPROVAL, true));
-    assert!(matches!(
-        setup_password(&prefs, "  "),
-        Err(PasswordSetupError::InvalidPassword)
-    ));
-    assert!(setup_password(&prefs, "owned-password").unwrap());
-    assert!(!setup_password(&prefs, "replacement").unwrap());
+    set_password_login(&prefs, "owned-password").unwrap();
+    let password = password_hash(&prefs).unwrap();
+    prefs.set(PASSWORD_TYPE, PasswordType::None).unwrap();
     configure_password_login(&prefs).unwrap();
     bootstrap(&prefs).unwrap();
     assert!(!password_setup_required(&prefs).unwrap());
-    assert!(
-        password_hash(&prefs)
-            .unwrap()
-            .unwrap()
-            .verify(plain_libs::crypto::sha512_hex("owned-password").as_bytes())
-    );
-    let stored = std::fs::read_to_string(directory.path().join("prefs.json")).unwrap();
-    assert!(!stored.contains("owned-password"));
-    assert!(!stored.contains(&plain_libs::crypto::sha512_hex("owned-password")));
+    assert_eq!(password_hash(&prefs).unwrap(), password);
     assert_eq!(prefs.get::<String>(CLIENT_ID).unwrap(), identity);
-}
-
-#[test]
-fn concurrent_setup_only_commits_one_password() {
-    let directory = plain_libs::temporary::tempdir().unwrap();
-    let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
-    bootstrap(&prefs).unwrap();
-    configure_password_login(&prefs).unwrap();
-    let results = std::thread::scope(|scope| {
-        let first = scope.spawn(|| setup_password(&prefs, "first-password").unwrap());
-        let second = scope.spawn(|| setup_password(&prefs, "second-password").unwrap());
-        (first.join().unwrap(), second.join().unwrap())
-    });
-    assert_ne!(results.0, results.1);
-    let expected = if results.0 {
-        "first-password"
-    } else {
-        "second-password"
-    };
-    assert!(
-        password_hash(&prefs)
-            .unwrap()
-            .unwrap()
-            .verify(plain_libs::crypto::sha512_hex(expected).as_bytes())
-    );
 }
 
 #[test]
@@ -72,7 +33,6 @@ fn password_login_disables_approval_without_replacing_credentials_or_other_host_
     bootstrap(&prefs).unwrap();
     assert_eq!(password_type(&prefs).unwrap(), PasswordType::None);
     assert!(!password_setup_required(&prefs).unwrap());
-    assert!(!setup_password(&prefs, "unauthorized").unwrap());
     assert!(prefs.get_or(LOGIN_REQUIRE_APPROVAL, true));
     set_password_login(&prefs, "configured-password").unwrap();
     prefs.set(LOGIN_REQUIRE_APPROVAL, true).unwrap();
@@ -105,25 +65,25 @@ fn startup_replaces_existing_plaintext_without_rehashing_a_stored_verifier() {
 }
 
 #[test]
-fn setup_accepts_only_client_digests_and_never_stores_the_digest() {
+fn password_setting_validates_input_and_never_stores_plaintext_or_client_digest() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
-    configure_password_login(&prefs).unwrap();
-    for invalid in ["", "plaintext-password", "ABCDEF"] {
-        assert!(setup_password_hash(&prefs, invalid).is_err());
-        assert!(password_setup_required(&prefs).unwrap());
+    for invalid in ["", "  ", &"x".repeat(1025)] {
+        assert!(matches!(
+            set_password_login(&prefs, invalid),
+            Err(PasswordError::InvalidPassword)
+        ));
+        assert!(password_hash(&prefs).unwrap().is_none());
     }
+    set_password_login(&prefs, "fixture-password").unwrap();
     let digest = plain_libs::crypto::sha512_hex("fixture-password");
-    assert!(setup_password_hash(&prefs, &digest).unwrap());
     assert!(
         password_hash(&prefs)
             .unwrap()
             .unwrap()
             .verify(digest.as_bytes())
     );
-    assert!(
-        !std::fs::read_to_string(directory.path().join("prefs.json"))
-            .unwrap()
-            .contains(&digest)
-    );
+    let stored = std::fs::read_to_string(directory.path().join("prefs.json")).unwrap();
+    assert!(!stored.contains("fixture-password"));
+    assert!(!stored.contains(&digest));
 }

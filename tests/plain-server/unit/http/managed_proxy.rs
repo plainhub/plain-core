@@ -357,7 +357,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let a_id = a_state.native_client_id().unwrap();
     let browser = login(&a_state, "browser");
     security::configure_password_login(&b_state.prefs).unwrap();
-    security::setup_password(&b_state.prefs, "fixture-password").unwrap();
+    security::set_password_login(&b_state.prefs, "fixture-password").unwrap();
     let pair = peer_wire::signing_keypair(&b_state.prefs).unwrap();
     let mut peer = DPeer::new(
         &b_id,

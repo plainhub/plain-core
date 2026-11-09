@@ -43,6 +43,10 @@ impl Service {
                 .map_err(anyhow::Error::msg)?;
         }
         let prefs = core.shared_preferences().map_err(anyhow::Error::msg)?;
+        anyhow::ensure!(
+            plain_rs::features::prefs::security::password_hash(&prefs)?.is_some(),
+            "Admin password is not configured. Run plainapp passwd before starting the service."
+        );
         plain_rs::features::prefs::security::configure_password_login(&prefs)?;
         let mut permissions = prefs
             .get::<Vec<AccessFeature>>(API_PERMISSIONS)?

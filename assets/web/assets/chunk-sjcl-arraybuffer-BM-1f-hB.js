@@ -1,1 +1,0 @@
-function e(e){let t=e instanceof Uint8Array?e:new Uint8Array(e),n=t.indexOf(0);if(n<=0)throw Error(`Missing WebSocket event name`);let r=new TextDecoder(`utf-8`,{fatal:!0}).decode(t.subarray(0,n));if(!/^[A-Z_]+$/.test(r))throw Error(`Invalid WebSocket event name`);return{type:r,data:t.subarray(n+1)}}export{e as t};

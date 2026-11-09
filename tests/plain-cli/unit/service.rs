@@ -228,6 +228,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
     .unwrap();
     prefs.set("http_port", 0).unwrap();
     prefs.set("https_port", 0).unwrap();
+    plain_rs::features::prefs::security::set_password_login(&prefs, "fixture password").unwrap();
     let options = || Options {
         media_directories: vec![source.clone()],
         file_index_defaults: Some(plain_rs::features::files::index_scope::Defaults {
@@ -291,9 +292,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
         .await
         .unwrap();
     connection
-        .write_all(
-            b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
-        )
+        .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
         .await
         .unwrap();
     let mut response = Vec::new();
@@ -337,4 +336,35 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
     assert!(login::requests(&paths.data_dir, None).await.is_err());
     let reopened = ContentServer::open_with_cache(&paths.data_dir, &paths.cache_dir).unwrap();
     reopened.stop_core().await;
+}
+
+#[tokio::test]
+async fn unconfigured_service_fails_before_listeners_or_passwordless_access() {
+    let root = plain_libs::temporary::tempdir().unwrap();
+    let paths = AppPaths {
+        data_dir: root.path().join("data"),
+        cache_dir: root.path().join("cache"),
+        tls_cert: root.path().join("tls.pem"),
+        tls_key: root.path().join("tls.key"),
+    };
+    let error = match Service::start(&paths, Options::default()).await {
+        Ok(service) => {
+            service.shutdown().await;
+            panic!("Unconfigured service started");
+        }
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("plainapp passwd"));
+    assert!(!paths.tls_cert.exists());
+    assert!(!paths.tls_key.exists());
+    let prefs = plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(
+        &paths.data_dir,
+    ))
+    .unwrap();
+    assert!(
+        plain_rs::features::prefs::security::password_hash(&prefs)
+            .unwrap()
+            .is_none()
+    );
+    assert!(login::requests(&paths.data_dir, None).await.is_err());
 }

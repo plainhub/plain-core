@@ -1,0 +1,1 @@
+import{t as e}from"./chunk-temp-y9IehiII.js";import"./chunk-VCheckbox-3cG2pmhZ.js";function t(t){let n=e();function r(e,r,i=!1){let a=r??t?.value;a&&a[e]&&(n.lightbox={sources:a,index:e,visible:!0,readOnly:i})}return{open:r}}export{t};

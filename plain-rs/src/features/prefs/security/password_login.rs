@@ -1,12 +1,12 @@
 use super::*;
 
 #[derive(Debug)]
-pub enum PasswordSetupError {
+pub enum PasswordError {
     InvalidPassword,
     Preferences(PrefsError),
 }
 
-impl std::fmt::Display for PasswordSetupError {
+impl std::fmt::Display for PasswordError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidPassword => formatter.write_str("Password must contain 1 to 1024 bytes"),
@@ -15,11 +15,11 @@ impl std::fmt::Display for PasswordSetupError {
     }
 }
 
-impl std::error::Error for PasswordSetupError {}
+impl std::error::Error for PasswordError {}
 
-fn validate_password(password: &str) -> std::result::Result<(), PasswordSetupError> {
+fn validate_password(password: &str) -> std::result::Result<(), PasswordError> {
     if password.trim().is_empty() || password.len() > 1024 {
-        return Err(PasswordSetupError::InvalidPassword);
+        return Err(PasswordError::InvalidPassword);
     }
     Ok(())
 }
@@ -44,7 +44,6 @@ pub fn configure_password_login(prefs: &Prefs) -> Result<()> {
     let needs_setup = password_type(prefs)? == PasswordType::None;
     prefs.update(|map| {
         if needs_setup {
-            map.remove(PASSWORD);
             put(map, PASSWORD_TYPE, PasswordType::Fixed)?;
         }
         put(map, LOGIN_REQUIRE_APPROVAL, false)
@@ -66,47 +65,11 @@ pub fn valid_password_digest(digest: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-pub fn setup_password(
-    prefs: &Prefs,
-    password: &str,
-) -> std::result::Result<bool, PasswordSetupError> {
-    validate_password(password)?;
-    setup_password_hash(prefs, &plain_libs::crypto::sha512_hex(password))
-}
-
-pub fn setup_password_hash(
-    prefs: &Prefs,
-    digest: &str,
-) -> std::result::Result<bool, PasswordSetupError> {
-    if !valid_password_digest(digest) {
-        return Err(PasswordSetupError::InvalidPassword);
-    }
-    prefs
-        .update(|map| {
-            if map.get(PASSWORD_TYPE) != Some(&json!(PasswordType::Fixed))
-                || map.contains_key(PASSWORD)
-            {
-                return Ok(false);
-            }
-            put(
-                map,
-                PASSWORD,
-                plain_libs::crypto::password::PasswordHash::new(digest.as_bytes()),
-            )?;
-            put(map, LOGIN_REQUIRE_APPROVAL, false)?;
-            Ok(true)
-        })
-        .map_err(PasswordSetupError::Preferences)
-}
-
-pub fn set_password_login(
-    prefs: &Prefs,
-    password: &str,
-) -> std::result::Result<(), PasswordSetupError> {
+pub fn set_password_login(prefs: &Prefs, password: &str) -> std::result::Result<(), PasswordError> {
     validate_password(password)?;
     prefs
         .update(|map| write_password_login(map, password))
-        .map_err(PasswordSetupError::Preferences)
+        .map_err(PasswordError::Preferences)
 }
 
 #[cfg(test)]

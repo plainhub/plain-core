@@ -206,10 +206,10 @@ Desktop consumes these same fragments. After a contract change, run `yarn graphq
 curl -fsSL https://raw.githubusercontent.com/plainhub/plain-core/main/install.sh | bash
 ```
 
-It detects the architecture, downloads the matching release, installs the dependencies and the systemd unit, starts the service, and prints the addresses to open.
+It detects the architecture, downloads the matching release, prompts for an admin password before installing the dependencies and systemd unit, starts the service, and prints the addresses to open. Password entry uses the controlling terminal without echo, including when this script is piped to Bash. Reinstalling preserves an existing password. A first installation without a terminal fails; automated installers can provision a password first using the existing `plainapp passwd --stdin` command with protected standard input, never a command-line password.
 
 ```bash
-sudo plainapp passwd   # admin password, prompted twice
+sudo plainapp passwd   # change the admin password while the service is stopped
 ```
 
 - `http://<host>:8080` — HTTP
@@ -220,11 +220,11 @@ sudo plainapp passwd   # admin password, prompted twice
 ```sh
 cargo build --release --locked -p plainapp
 install -m 0755 target/release/plainapp /usr/local/bin/plainapp
-sudo plainapp install                     # ffmpeg and Avahi
+sudo plainapp install                     # admin password, ffmpeg and Avahi
 sudo systemctl enable --now plainapp
 ```
 
-`plainapp install` writes `/etc/systemd/system/plainapp.service`, whose `ExecStart` is `/usr/local/bin/plainapp run`, so that path is required. It does not copy the binary, and it neither enables nor starts the service.
+`plainapp install` writes `/etc/systemd/system/plainapp.service`, whose `ExecStart` is `/usr/local/bin/plainapp run`, so that path is required. It does not copy the binary, and it neither enables nor starts the service. A new installation requires a nonempty password entered twice. An existing password is kept unchanged. `plainapp run` refuses to open listeners until a password is configured.
 
 The Web UI is compiled into `plain-server` and shared by the CLI and mobile libraries. From the sibling `plain-desktop` checkout, run `bash build.sh` to build directly into `plain-core/assets/web`, then commit the generated assets with the corresponding core changes. Consumers receive the assets through their pinned core Git dependency; no separate mobile Web resource copy is needed.
 
@@ -238,7 +238,7 @@ Ports come from user settings and default to `8080` and `8443`. Data defaults to
 
 Linux root services automatically mount eligible unmounted filesystems at stable `/mnt/usbX` paths and monitor block-device changes.
 
-Configure paths with the `PLAINAPP_DATA_DIR`, `PLAINAPP_CACHE_DIR`, `PLAINAPP_TLS_CERT` and `PLAINAPP_TLS_KEY` environment variables. For isolated test instances, `run` accepts `--data-dir`, `--cache-dir`, repeated `--media-dir` and `--web-root`. `passwd` accepts data/cache directories; `uninstall` and `login` accept a data directory. Installation, update and benchmark commands accept no path overrides.
+Configure paths with the `PLAINAPP_DATA_DIR`, `PLAINAPP_CACHE_DIR`, `PLAINAPP_TLS_CERT` and `PLAINAPP_TLS_KEY` environment variables. For isolated test instances, `run` accepts `--data-dir`, `--cache-dir`, repeated `--media-dir` and `--web-root`. `passwd` accepts data/cache directories; `uninstall` and `login` accept a data directory. Installation, update and benchmark commands accept no path overrides. System service installation also rejects data/cache environment overrides because its unit uses the default directories.
 
 ### Upgrade and removal
 
