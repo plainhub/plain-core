@@ -129,7 +129,7 @@ async fn serve(
             links::ReadKind::Original
         };
         let file = if native {
-            links::resolve_native(&state, &parameters.id, kind, state.native_file_url_key).await?
+            links::resolve_native(&state, &parameters.id, kind, state.url_key).await?
         } else {
             links::resolve(&state, &parameters.id, kind).await?
         };

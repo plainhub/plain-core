@@ -97,24 +97,8 @@ pub fn lookup(id: &str) -> Option<(String, String)> {
 /// match our `/fs?id=…` shape are returned unchanged. Mirrors Go
 /// `dlnaSafeMediaURL(inputURL, mime)`.
 ///
-/// The encrypted `file_id` is resolved to a real path via
-/// `fsx::path_from_file_id` (the Rust port of `plainfs.PathFromFileID`),
-/// then registered as a short alias.
 #[cfg(feature = "runtime-media")]
 pub fn safe_media_url(input_url: &str, mime: &str) -> String {
-    safe_media_url_with_prefs(input_url, mime, None)
-}
-
-/// Same as [`safe_media_url`] but resolves the encrypted `file_id` to a
-/// filesystem path using the provided `crate::infrastructure::db::Db` (required for the
-/// `url_token` lookup). When `db` is `None`, the encrypted id is used
-/// verbatim as the alias key — this is a fallback for tests.
-#[cfg(feature = "runtime-media")]
-pub fn safe_media_url_with_prefs(
-    input_url: &str,
-    mime: &str,
-    prefs: Option<&crate::features::prefs::Prefs>,
-) -> String {
     let parsed = match plain_libs::utils::http_url::parse_http_url(input_url) {
         Some(u) => u,
         None => return input_url.to_string(),
@@ -131,20 +115,7 @@ pub fn safe_media_url_with_prefs(
         return input_url.to_string();
     }
 
-    // Resolve the encrypted file id to a real filesystem path. The Go
-    // side calls `plainfs.PathFromFileID`; here we delegate to
-    // `fsx::path_from_file_id`. On any failure we pass the id through
-    // unchanged so the caller still gets a usable URL (the TV will get
-    // a 404 but the API call doesn't fail).
-    let path = match prefs {
-        Some(p) => match crate::features::files::resource_id::path_from_file_id(id, p) {
-            Ok(p) => p,
-            Err(_) => return input_url.to_string(),
-        },
-        None => id.to_string(),
-    };
-
-    let (alias_id, ext) = register(&path, mime);
+    let (alias_id, ext) = register(id, mime);
     if alias_id.is_empty() {
         return input_url.to_string();
     }

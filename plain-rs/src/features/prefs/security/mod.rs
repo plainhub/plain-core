@@ -30,9 +30,7 @@ pub struct SecurityState {
     pub password: String,
     pub password_type: PasswordType,
     pub login_require_approval: bool,
-    pub rotate_url_token_on_restart: bool,
     pub adb_token: String,
-    pub url_token: String,
     pub api_permissions: Vec<crate::features::access::AccessFeature>,
     pub client_id: String,
     pub mdns_hostname: String,
@@ -93,12 +91,6 @@ pub fn bootstrap(prefs: &Prefs) -> Result<()> {
         }
         ensure(map, ADB_TOKEN, || random_password(32))?;
         ensure(map, MDNS_HOSTNAME, generate_mdns_hostname)?;
-        let rotate = read::<bool>(map, ROTATE_URL_TOKEN_ON_RESTART)?;
-        if rotate {
-            put(map, URL_TOKEN, plain_libs::crypto::gen_token())?;
-        } else {
-            ensure(map, URL_TOKEN, plain_libs::crypto::gen_token)?;
-        }
         if !map.contains_key(PASSWORD_TYPE) {
             put(map, PASSWORD_TYPE, DEFAULT_PASSWORD_TYPE)?;
         }
@@ -163,9 +155,6 @@ pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> anyhow::Result<bool>
         LOGIN_REQUIRE_APPROVAL => Some(Command::SetLoginRequireApproval {
             enabled: serde_json::from_value(value.clone())?,
         }),
-        ROTATE_URL_TOKEN_ON_RESTART => Some(Command::SetRotateUrlToken {
-            enabled: serde_json::from_value(value.clone())?,
-        }),
         MDNS_HOSTNAME => Some(Command::SetMdnsHostname {
             hostname: serde_json::from_value(value.clone())?,
         }),
@@ -175,7 +164,7 @@ pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> anyhow::Result<bool>
         API_PERMISSIONS => Some(Command::SetApiPermissions {
             permissions: serde_json::from_value(value.clone())?,
         }),
-        CLIENT_ID | SIGNATURE_KEY_PAIR | MASTER_SECRET | URL_TOKEN | ADB_TOKEN => {
+        CLIENT_ID | SIGNATURE_KEY_PAIR | MASTER_SECRET | ADB_TOKEN => {
             anyhow::bail!("Rust-only preference")
         }
         _ => None,
@@ -241,7 +230,7 @@ fn signature_public_key(prefs: &Prefs) -> anyhow::Result<String> {
 pub fn get_entry(prefs: &Prefs, key: &str) -> anyhow::Result<Option<Value>> {
     let value = match key {
         PASSWORD => json!(""),
-        ADB_TOKEN | URL_TOKEN | CLIENT_ID | MDNS_HOSTNAME | SKIP_VERSION => {
+        ADB_TOKEN | CLIENT_ID | MDNS_HOSTNAME | SKIP_VERSION => {
             json!(prefs.get::<String>(key)?.unwrap_or_default())
         }
         PASSWORD_TYPE => json!(password_type(prefs)?),
@@ -250,7 +239,6 @@ pub fn get_entry(prefs: &Prefs, key: &str) -> anyhow::Result<Option<Value>> {
                 .get::<bool>(key)?
                 .unwrap_or(DEFAULT_LOGIN_REQUIRE_APPROVAL)
         ),
-        ROTATE_URL_TOKEN_ON_RESTART => json!(prefs.get::<bool>(key)?.unwrap_or_default()),
         API_PERMISSIONS => json!(prefs.get::<Vec<crate::features::access::AccessFeature>>(key)?.unwrap_or_default()),
         AUTO_CHECK_UPDATE => json!(prefs.get::<bool>(key)?.unwrap_or(true)),
         SIGNATURE_PUBLIC_KEY => json!(signature_public_key(prefs)?),
@@ -273,9 +261,7 @@ pub fn snapshot(prefs: &Prefs) -> anyhow::Result<SecurityState> {
             .map(|v| serde_json::from_value(v.clone()))
             .transpose()?
             .unwrap_or(DEFAULT_LOGIN_REQUIRE_APPROVAL),
-        rotate_url_token_on_restart: read(&map, ROTATE_URL_TOKEN_ON_RESTART)?,
         adb_token: read(&map, ADB_TOKEN)?,
-        url_token: read(&map, URL_TOKEN)?,
         api_permissions: read(&map, API_PERMISSIONS)?,
         client_id: read(&map, CLIENT_ID)?,
         mdns_hostname: read(&map, MDNS_HOSTNAME)?,

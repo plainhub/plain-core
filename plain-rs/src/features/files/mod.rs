@@ -23,7 +23,6 @@ mod audio_moves;
 pub mod trash;
 
 #[cfg(feature = "prefs")]
-pub mod resource_id;
 
 #[cfg(all(feature = "crypto", any(feature = "chat", feature = "kv")))]
 pub mod resource_link;

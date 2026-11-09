@@ -13,7 +13,6 @@ async fn retired_management_roots_are_unavailable_to_local_and_authenticated_rem
     let native = core.native_graphql().unwrap();
     for (field, document) in [
         ("resetPassword", r#"mutation{resetPassword}"#),
-        ("resetUrlToken", r#"mutation{resetUrlToken}"#),
         ("resetAdbToken", r#"mutation{resetAdbToken}"#),
         (
             "setNotificationFilterMode",
@@ -189,7 +188,6 @@ async fn native_management_handles_reject_every_operation_after_core_shutdown() 
     stopped!(core.native_management());
     stopped!(management.restart_http_server(Some(0), Some(0)).await);
     stopped!(management.reset_password());
-    stopped!(management.reset_url_token());
     stopped!(management.reset_adb_token());
     stopped!(
         management
@@ -269,13 +267,9 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
         serde_json::json!("fixture-password"),
     )
     .unwrap();
-    state
-        .prefs
-        .set("url_token", "fixture-resource-token")
-        .unwrap();
     let system = management.preferences().unwrap();
     assert_eq!(system["password"], "");
-    assert_eq!(system["url_token"], "fixture-resource-token");
+    assert!(system.get("url_token").is_none());
     for key in system.keys() {
         assert!(
             plain_rs::features::prefs::pref_keys::access(key).is_some()

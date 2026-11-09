@@ -64,7 +64,6 @@ pref_keys! {
         PASSWORD = "password",
         PASSWORD_TYPE = "password_type",
         LOGIN_REQUIRE_APPROVAL = "login_require_approval",
-        ROTATE_URL_TOKEN_ON_RESTART = "rotate_url_token_on_restart",
         API_PERMISSIONS = "api_permissions",
         MDNS_HOSTNAME = "mdns_hostname",
         DEV_TOKEN = "dev_token",
@@ -77,7 +76,6 @@ pref_keys! {
     }
     RustOnly {
         CLIENT_ID = "client_id",
-        URL_TOKEN = "url_token",
         ADB_TOKEN = "adb_token",
         MASTER_SECRET = "master_secret",
         SIGNATURE_KEY_PAIR = "signature_key_pair",

@@ -39,7 +39,6 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
     let before = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
     let mut events = state.events.subscribe();
     let generated = management.reset_password().unwrap();
-    assert!(management.reset_url_token().unwrap());
     assert!(management.reset_adb_token().unwrap());
     let after = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
     assert!(before.password.is_empty() && after.password.is_empty());
@@ -49,19 +48,12 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
             .unwrap()
             .verify(plain_libs::crypto::sha512_hex(&generated).as_bytes())
     );
-    assert_ne!(before.url_token, after.url_token);
     assert_ne!(before.adb_token, after.adb_token);
     assert_eq!(before.client_id, after.client_id);
     assert_eq!(before.signature_public_key, after.signature_public_key);
     assert_eq!(generated.len(), 6);
     assert_eq!(after.adb_token.len(), 32);
-    assert_eq!(
-        plain_libs::utils::base64::base64_decode_checked(&after.url_token)
-            .unwrap()
-            .len(),
-        32
-    );
-    for _ in 0..3 {
+    for _ in 0..2 {
         assert_eq!(events.try_recv().unwrap().event_type, "PREFS_UPDATED");
     }
     assert!(events.try_recv().is_err());
@@ -188,7 +180,6 @@ async fn native_preference_writes_share_validation_and_commit_notifications() {
     let before = state.prefs.entries_sorted();
     for (key, value) in [
         ("http_port", serde_json::json!(70000)),
-        ("url_token", serde_json::json!("invalid")),
         ("unknown_pref", serde_json::json!(true)),
         ("ai_image_search_model", serde_json::json!("unknown")),
     ] {
@@ -286,7 +277,6 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
     let state = core.runtime_state();
     let management = core.native_management().unwrap();
     let client_id = management.get_pref(keys::CLIENT_ID).unwrap();
-    let url_token = management.get_pref(keys::URL_TOKEN).unwrap();
     state
         .prefs
         .set(keys::API_PERMISSIONS, vec!["FILES"])
@@ -317,7 +307,6 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
         .unwrap();
     assert!(management.preferences().is_err());
     assert_eq!(management.get_pref(keys::CLIENT_ID).unwrap(), client_id);
-    assert_eq!(management.get_pref(keys::URL_TOKEN).unwrap(), url_token);
     assert_eq!(
         management.get_pref(keys::API_PERMISSIONS).unwrap(),
         json!(["FILES"])
@@ -325,13 +314,11 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
     let selected = management
         .get_prefs(&[
             keys::CLIENT_ID.into(),
-            keys::URL_TOKEN.into(),
             keys::API_PERMISSIONS.into(),
         ])
         .unwrap();
-    assert_eq!(selected.len(), 3);
+    assert_eq!(selected.len(), 2);
     assert_eq!(selected[keys::CLIENT_ID], client_id);
-    assert_eq!(selected[keys::URL_TOKEN], url_token);
     assert_eq!(selected[keys::API_PERMISSIONS], json!(["FILES"]));
     for key in [
         keys::EDITOR_FONT_SIZE,

@@ -1062,3 +1062,25 @@ async fn password_login_verifies_the_salted_record_and_rejects_reusable_stored_v
     }
     server.stop_core().await;
 }
+
+#[tokio::test]
+async fn relogin_rotates_the_session_url_token_and_keeps_the_session_identity() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let server = crate::server::ContentServer::open(directory.path()).unwrap();
+    let state = server.runtime_state();
+    let request = Pending {
+        client_id: "browser".into(),
+        client_ip: "fixture".into(),
+        request: json!({"appName":"Browser"}),
+        at: Instant::now(),
+        protection: password_protection(None),
+    };
+    persist(&state, &request, "first-token").unwrap();
+    let first = state.db.session_get("browser").unwrap().unwrap();
+    persist(&state, &request, "second-token").unwrap();
+    let second = state.db.session_get("browser").unwrap().unwrap();
+    assert_ne!(first.url_token, second.url_token);
+    assert_eq!(first.client_id, second.client_id);
+    assert_eq!(first.created_at, second.created_at);
+    assert_eq!(second.token, "second-token");
+}

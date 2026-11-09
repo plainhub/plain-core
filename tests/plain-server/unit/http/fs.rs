@@ -792,8 +792,7 @@ async fn native_file_preview_uses_its_session_and_the_shared_preview() {
     use plain_rs::features::files::resource_link::{self, Resource, Scope};
     let (_root, core, state, global) = test_state();
     let directory = plain_libs::temporary::tempdir().unwrap();
-    let native = plain_libs::utils::base64::base64_decode(&core.native_file_url_token());
-    assert_ne!(native, global);
+    let native = core.runtime_state().url_key;
     let scope = Scope::Session(state.native_client_id().unwrap());
     for (name, bytes, expected) in [
         ("fixture.txt", b"text preview\n".as_slice(), "text preview"),
@@ -809,7 +808,7 @@ async fn native_file_preview_uses_its_session_and_the_shared_preview() {
         assert!(preview.content.contains(expected));
         assert!(preview.headers["content-disposition"].contains(name));
         assert_eq!(call_fs(&state, &format!("id={id}&action=preview"), &[]).await.status(), StatusCode::FORBIDDEN);
-        let wrong = resource_link::seal(&scope, &global, &resource).unwrap();
+        let wrong = resource_link::seal(&scope, &[9; 32], &resource).unwrap();
         assert_eq!(core.preview_native_file(wrong).await.unwrap().status, 403);
         let legacy = resource_link::seal(&Scope::Global, &global, &resource).unwrap();
         assert_eq!(core.preview_native_file(legacy).await.unwrap().status, 200);

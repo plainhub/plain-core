@@ -705,15 +705,7 @@ async fn a_library_row_keeps_the_album_art_reference() {
         }])
         .unwrap();
 
-    let key = [7; 32];
-    schema
-        .data::<Arc<Prefs>>()
-        .unwrap()
-        .set(
-            plain_rs::features::prefs::pref_keys::URL_TOKEN,
-            plain_libs::utils::base64::base64_encode(&key),
-        )
-        .unwrap();
+    let key = schema.data::<plain_rs::runtime::Runtime>().unwrap().url_key;
     let document = r#"query { audios(offset: 0, limit: 10, query: "", sortBy: NAME_ASC) {
         id title artist path durationMs size bucketId albumFileId createdAt updatedAt isFavorite tags { name }
     } }"#;
@@ -935,9 +927,19 @@ impl AlbumArtFixture {
 }
 
 #[tokio::test]
-async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token() {
+async fn raw_album_art_is_encoded_only_when_selected_with_the_runtime_url_key() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let db = Arc::new(Db::open(&directory.path().join("data.db")).unwrap());
+    let (events, _) = tokio::sync::broadcast::channel(16);
+    let (runtime, _stop) = crate::test_support::schema::runtime(
+        Arc::new(Host::default()),
+        events,
+        prefs,
+        db,
+        directory.path().to_path_buf(),
+    );
+    let key = runtime.url_key;
     let uri = "content://media/external/audio/albumart/17";
     let schema = plain_graphql::Schema::build(
         AlbumArtFixture(Audio {
@@ -958,11 +960,8 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token(
         plain_graphql::EmptyMutation,
         plain_graphql::EmptySubscription,
     )
-    .data(prefs.clone())
+    .data(runtime)
     .finish();
-    prefs
-        .remove(plain_rs::features::prefs::pref_keys::URL_TOKEN)
-        .unwrap();
     for document in [
         "{ audio { title } }",
         "{ audio { title albumFileId @skip(if: true) } }",
@@ -971,34 +970,19 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_current_url_token(
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         assert_eq!(response.data.into_json().unwrap()["audio"]["title"], "Song");
     }
-    let missing = schema.execute("{ audio { albumFileId } }").await;
-    assert!(!missing.errors.is_empty());
     let document =
         "query Art { audio { ...Cover } } fragment Cover on Audio { cover: albumFileId }";
-    let mut previous: Option<[u8; 32]> = None;
-    for key in [[3u8; 32], [5u8; 32]] {
-        let token = plain_libs::utils::base64::base64_encode(&key);
-        prefs
-            .set(plain_rs::features::prefs::pref_keys::URL_TOKEN, &token)
-            .unwrap();
-        let response = schema.execute(document).await;
-        assert!(response.errors.is_empty(), "{:?}", response.errors);
-        let data = response.data.into_json().unwrap();
-        let id = data["audio"]["cover"].as_str().unwrap();
-        let (scope, payload) = plain_rs::features::files::resource_link::parse(id).unwrap();
-        let resource =
-            plain_rs::features::files::resource_link::open(&scope, &key, payload).unwrap();
-        assert_eq!(
-            resource,
-            plain_rs::features::files::resource_link::Resource::reference(uri)
-        );
-        if let Some(previous) = previous {
-            assert!(
-                plain_rs::features::files::resource_link::open(&scope, &previous, payload).is_err()
-            );
-        }
-        previous = Some(key);
-    }
+    let response = schema.execute(document).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let id = data["audio"]["cover"].as_str().unwrap();
+    let (scope, payload) = plain_rs::features::files::resource_link::parse(id).unwrap();
+    let resource = plain_rs::features::files::resource_link::open(&scope, &key, payload).unwrap();
+    assert_eq!(
+        resource,
+        plain_rs::features::files::resource_link::Resource::reference(uri)
+    );
+    assert!(plain_rs::features::files::resource_link::open(&scope, &[5; 32], payload).is_err());
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

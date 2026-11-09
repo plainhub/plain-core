@@ -171,7 +171,6 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
         plain_rs::features::prefs::Prefs::load(&directory.path().join("prefs.json")).unwrap(),
     );
     prefs.set("remote_access", true).unwrap();
-    plain_rs::features::prefs::identity::ensure_url_token(&prefs);
     let core = crate::server::ContentServer::start(directory.path(), &token, prefs).unwrap();
     let state = core.runtime_state();
     let client_id = state.native_client_id().unwrap();

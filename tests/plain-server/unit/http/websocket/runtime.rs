@@ -388,7 +388,7 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
     let key = plain_libs::utils::base64::base64_decode(
-        &plain_rs::features::prefs::identity::ensure_url_token(&state.prefs),
+        &plain_libs::utils::base64::base64_encode(&state.url_key),
     );
     let client = state.native_client_id().unwrap();
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
@@ -609,7 +609,7 @@ async fn online_clients_follow_authenticated_graphql_connections() {
     let state = core.runtime_state();
     let client = state.native_client_id().unwrap();
     let key = plain_libs::utils::base64::base64_decode(
-        &plain_rs::features::prefs::identity::ensure_url_token(&state.prefs),
+        &plain_libs::utils::base64::base64_encode(&state.url_key),
     );
     let native = core.native_graphql().unwrap();
     let native_id = native
@@ -928,7 +928,7 @@ async fn authenticated_editor_connections_release_unauthenticated_slots() {
     let state = server.runtime_state();
     let client_id = state.native_client_id().unwrap();
     let key = plain_libs::utils::base64::base64_decode(
-        &plain_rs::features::prefs::identity::ensure_url_token(&state.prefs),
+        &plain_libs::utils::base64::base64_encode(&state.url_key),
     );
     let mut sockets = Vec::new();
     for _ in 0..=MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP {

@@ -14,10 +14,6 @@ pub enum Command {
     SetLoginRequireApproval {
         enabled: bool,
     },
-    SetRotateUrlToken {
-        enabled: bool,
-    },
-    ResetUrlToken,
     ResetAdbToken,
     SetApiPermission {
         permission: AccessFeature,
@@ -58,10 +54,6 @@ impl Command {
                 Self::SetLoginRequireApproval { enabled } => {
                     put(map, LOGIN_REQUIRE_APPROVAL, enabled)?
                 }
-                Self::SetRotateUrlToken { enabled } => {
-                    put(map, ROTATE_URL_TOKEN_ON_RESTART, enabled)?
-                }
-                Self::ResetUrlToken => put(map, URL_TOKEN, plain_libs::crypto::gen_token())?,
                 Self::ResetAdbToken => put(map, ADB_TOKEN, random_password(32))?,
                 Self::SetApiPermission {
                     permission,

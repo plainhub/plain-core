@@ -61,7 +61,6 @@ impl Core {
             crate::features::prefs::Prefs::load(&crate::features::prefs::default_path(directory))
                 .map_err(|error| error.to_string())?,
         );
-        crate::features::prefs::identity::ensure_url_token(&prefs);
         Self::start_core(directory, &plain_libs::crypto::gen_token(), prefs)
     }
     pub fn open_with_cache(directory: &Path, cache: &Path) -> Result<Self, String> {
@@ -70,7 +69,6 @@ impl Core {
             crate::features::prefs::Prefs::load(&crate::features::prefs::default_path(directory))
                 .map_err(|error| error.to_string())?,
         );
-        crate::features::prefs::identity::ensure_url_token(&prefs);
         let mut config = crate::infrastructure::platform::startup::config();
         config.cache_dir = Some(cache.to_string_lossy().into_owned());
         Self::start_core_with_config(directory, &plain_libs::crypto::gen_token(), prefs, config)

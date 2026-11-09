@@ -40,11 +40,11 @@ pub(crate) fn resource_credentials(
             .ok_or_else(|| plain_graphql::Error::new("Session unavailable"))?;
         Ok((Scope::Session(id.into()), row.url_token))
     } else {
-        let token = ctx
-            .data::<std::sync::Arc<plain_rs::features::prefs::Prefs>>()?
-            .get::<String>(plain_rs::features::prefs::pref_keys::URL_TOKEN)?
-            .ok_or_else(|| plain_graphql::Error::new("URL token unavailable"))?;
-        Ok((Scope::Global, token))
+        let runtime = ctx.data::<plain_rs::runtime::Runtime>()?;
+        Ok((
+            Scope::Global,
+            plain_libs::utils::base64::base64_encode(&runtime.url_key),
+        ))
     }
 }
 

@@ -14,12 +14,7 @@ pub fn local_key(state: &CoreRuntime, client_id: &str) -> Option<Vec<u8>> {
     if state.native_client_id().ok().as_deref() != Some(client_id) {
         return None;
     }
-    let token = state
-        .prefs
-        .get::<String>(crate::features::prefs::pref_keys::URL_TOKEN)
-        .ok()??;
-    let key = plain_libs::utils::base64::base64_decode(&token);
-    (key.len() == 32).then_some(key)
+    Some(state.url_key.to_vec())
 }
 
 pub fn touch(state: &CoreRuntime, client_id: &str) -> anyhow::Result<()> {

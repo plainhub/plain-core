@@ -144,10 +144,6 @@ async fn configured_public_uses_core_settings_and_keeps_listeners_on_tls_preflig
     assert_ne!(ports.1, 0);
     assert_eq!(core.http_ports().await, Some(ports));
     assert!(core.task.is_none());
-    core.state
-        .prefs
-        .set("rotate_url_token_on_restart", true)
-        .unwrap();
     let preferences = core.state.prefs.entries();
     {
         let state = core.runtime_state();
@@ -176,7 +172,7 @@ async fn configured_public_uses_core_settings_and_keeps_listeners_on_tls_preflig
 }
 
 #[tokio::test]
-async fn core_startup_persists_complete_identity_and_only_rotates_url_token_on_recreation() {
+async fn core_startup_persists_complete_identity_and_regenerates_the_url_key_on_recreation() {
     use plain_rs::features::prefs::pref_keys::*;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = plain_libs::temporary::tempdir().unwrap();
@@ -189,7 +185,6 @@ async fn core_startup_persists_complete_identity_and_only_rotates_url_token_on_r
         MASTER_SECRET,
         ADB_TOKEN,
         MDNS_HOSTNAME,
-        URL_TOKEN,
     ] {
         assert!(
             !prefs.get::<String>(key).unwrap().unwrap().is_empty(),
@@ -210,10 +205,7 @@ async fn core_startup_persists_complete_identity_and_only_rotates_url_token_on_r
     drop(core);
     let core = ContentServer::open_with_cache(directory.path(), cache.path()).unwrap();
     assert_eq!(core.state.prefs.entries(), first);
-    core.state
-        .prefs
-        .set(ROTATE_URL_TOKEN_ON_RESTART, true)
-        .unwrap();
+    let url_key = core.state.url_key;
     plain_rs::features::prefs::security::set_entry(
         &core.state.prefs,
         PASSWORD,
@@ -225,13 +217,9 @@ async fn core_startup_persists_complete_identity_and_only_rotates_url_token_on_r
     core.stop_core().await;
     drop(core);
     let core = ContentServer::open_with_cache(directory.path(), cache.path()).unwrap();
-    assert_ne!(
-        core.state.prefs.get::<String>(URL_TOKEN).unwrap(),
-        persisted.get::<String>(URL_TOKEN).unwrap()
-    );
-    let mut after: std::collections::BTreeMap<_, _> =
+    assert_ne!(core.state.url_key, url_key);
+    let after: std::collections::BTreeMap<_, _> =
         core.state.prefs.entries().into_iter().collect();
-    after.insert(URL_TOKEN.into(), before[URL_TOKEN].clone());
     assert_eq!(after, before);
     core.stop_core().await;
 }

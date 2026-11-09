@@ -64,10 +64,7 @@ pub async fn deliver_observed(
             .filter(|v| !v.is_empty())
             .ok_or_else(|| anyhow::anyhow!("Missing chat identity"))?;
         let key = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
-        let token = state
-            .prefs
-            .get::<String>(crate::features::prefs::pref_keys::URL_TOKEN)?
-            .unwrap_or_default();
+        let token = plain_libs::utils::base64::base64_encode(&state.url_key);
         state
             .delivery
             .send_observed(

@@ -31,14 +31,14 @@ fn missing_file_starts_empty_and_creates_on_first_set() {
 #[test]
 fn roundtrip_string_and_json_shapes() {
     let (_dir, prefs) = tmp_prefs("roundtrip");
-    prefs.set("url_token", "abc123").unwrap();
+    prefs.set("adb_token", "abc123").unwrap();
     prefs.set("dlna_allowed_senders", vec!["/a", "/b"]).unwrap();
     prefs
         .set("volume_alias", serde_json::json!({"enabled": true}))
         .unwrap();
 
     assert_eq!(
-        prefs.get::<String>("url_token").unwrap().as_deref(),
+        prefs.get::<String>("adb_token").unwrap().as_deref(),
         Some("abc123")
     );
     assert_eq!(

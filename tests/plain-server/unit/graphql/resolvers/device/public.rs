@@ -42,7 +42,6 @@ fn fixture(
     let prefs = Arc::new(Prefs::load(&dir.path().join("prefs.json")).unwrap());
     plain_rs::features::prefs::security::bootstrap(&prefs).unwrap();
     prefs.set("client_id", "c1").unwrap();
-    prefs.set("url_token", "dG9rZW4=").unwrap();
     prefs.set("api_permissions", vec!["SMS"]).unwrap();
     prefs.set("http_port", 8080).unwrap();
     prefs.set("https_port", 8443).unwrap();
@@ -437,7 +436,9 @@ async fn app_preferences_do_not_call_the_platform() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["app"]["urlToken"],
-        "dG9rZW4="
+        plain_libs::utils::base64::base64_encode(
+            &schema.data::<plain_rs::runtime::Runtime>().unwrap().url_key
+        )
     );
 }
 

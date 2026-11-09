@@ -23,21 +23,6 @@ fn bootstrap_is_stable_and_snapshot_never_contains_private_secrets() {
     assert!(first.get("signatureKeyPair").is_none());
 }
 #[test]
-fn url_rotation_is_a_bootstrap_policy_and_explicit_reset_preserves_identity() {
-    let (_dir, prefs) = fixture();
-    bootstrap(&prefs).unwrap();
-    let identity = prefs.get::<String>(CLIENT_ID).unwrap();
-    let first = prefs.get::<String>(URL_TOKEN).unwrap();
-    Command::SetRotateUrlToken { enabled: true }
-        .apply(&prefs)
-        .unwrap();
-    assert_eq!(first, prefs.get::<String>(URL_TOKEN).unwrap());
-    bootstrap(&prefs).unwrap();
-    assert_ne!(first, prefs.get::<String>(URL_TOKEN).unwrap());
-    Command::ResetUrlToken.apply(&prefs).unwrap();
-    assert_eq!(identity, prefs.get::<String>(CLIENT_ID).unwrap());
-}
-#[test]
 fn parallel_permission_updates_do_not_lose_changes() {
     let (_dir, prefs) = fixture();
     bootstrap(&prefs).unwrap();
@@ -99,7 +84,6 @@ fn key_value_settings_validate_protected_fields_and_patch_permissions_atomically
     for (key, value) in [
         (PASSWORD_TYPE, serde_json::json!(4)),
         (LOGIN_REQUIRE_APPROVAL, serde_json::json!("false")),
-        (URL_TOKEN, serde_json::json!("client-supplied")),
         (SIGNATURE_KEY_PAIR, serde_json::json!("client-supplied")),
         (MDNS_HOSTNAME, serde_json::json!("invalid.example")),
     ] {
@@ -177,10 +161,6 @@ fn keyed_security_reads_preserve_snapshot_defaults_without_reading_unrelated_key
     assert_eq!(
         get_entry(&prefs, LOGIN_REQUIRE_APPROVAL).unwrap(),
         Some(json!(true))
-    );
-    assert_eq!(
-        get_entry(&prefs, ROTATE_URL_TOKEN_ON_RESTART).unwrap(),
-        Some(json!(false))
     );
     assert_eq!(get_entry(&prefs, API_PERMISSIONS).unwrap(), Some(json!([])));
     assert_eq!(

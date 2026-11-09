@@ -1,7 +1,7 @@
 use crate::server::ContentServer;
 
 #[tokio::test]
-async fn every_runtime_uses_the_current_schema_and_the_same_persisted_identity_keys_and_file_token()
+async fn every_runtime_uses_the_current_schema_and_the_same_persisted_identity_keys_and_a_fresh_url_key()
 {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let first = ContentServer::open(directory.path()).unwrap();
@@ -31,16 +31,13 @@ async fn every_runtime_uses_the_current_schema_and_the_same_persisted_identity_k
         plain_libs::utils::base64::base64_decode(&identity.ed25519_keypair),
         pair
     );
-    assert_eq!(
-        plain_rs::features::prefs::ensure_url_token(&state.prefs),
-        token
-    );
+    assert_eq!(plain_libs::utils::base64::base64_encode(&state.url_key), token);
     assert_eq!(plain_libs::utils::base64::base64_decode(&token).len(), 32);
     first.shutdown().await;
     drop(state);
     let second = ContentServer::open(directory.path()).unwrap();
     assert_eq!(second.native_graphql().unwrap().client_id(), client_id);
-    assert_eq!(second.native_url_token().unwrap(), token);
+    assert_ne!(second.native_url_token().unwrap(), token);
     assert_eq!(
         plain_rs::features::prefs::security::signing_keypair(second.preferences().unwrap())
             .unwrap(),

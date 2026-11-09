@@ -195,10 +195,7 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
                 plain_rs::features::prefs::security::password_hash(&prefs).unwrap(),
                 password
             );
-            let current = (
-                prefs.get::<String>("client_id").unwrap(),
-                prefs.get::<String>("url_token").unwrap(),
-            );
+            let current = prefs.get::<String>("client_id").unwrap();
             if let Some(expected) = &identity {
                 assert_eq!(&current, expected);
             }

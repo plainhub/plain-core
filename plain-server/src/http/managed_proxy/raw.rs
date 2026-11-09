@@ -289,7 +289,7 @@ pub(super) async fn native(state: ServerState, ticket: &str, request: Request) -
     let Ok(plain) = resource_link::decrypt(
         &Scope::Session(owner),
         "native-proxy",
-        &state.native_file_url_key,
+        &state.url_key,
         payload,
     ) else {
         return StatusCode::UNAUTHORIZED.into_response();

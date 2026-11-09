@@ -94,25 +94,6 @@ pub fn ensure_identity(prefs: &Prefs) -> AppIdentity {
     }
 }
 
-/// Return the persistent local-server URL token, generating it on first
-/// run. A token that is base64 of 32 zero bytes can only come from a
-/// build where the RNG silently failed (plain-rs gen_random pre-fix on
-/// Windows) — regenerate it instead of serving it forever.
-pub fn ensure_url_token(prefs: &Prefs) -> String {
-    let zero_token = base64_encode(&[0u8; 32]);
-    match prefs
-        .get::<String>(crate::features::prefs::pref_keys::URL_TOKEN)
-        .unwrap_or(None)
-    {
-        Some(t) if !t.is_empty() && t != zero_token => t,
-        _ => {
-            let token = gen_token();
-            let _ = prefs.set(crate::features::prefs::pref_keys::URL_TOKEN, &token);
-            token
-        }
-    }
-}
-
 pub fn ensure_mdns_hostname(prefs: &Prefs) -> String {
     ensure_string(
         prefs,

@@ -34,10 +34,7 @@ pub(crate) fn key(state: &CoreRuntime, scope: &Scope) -> anyhow::Result<Vec<u8>>
                 .ok_or_else(|| anyhow::anyhow!("Session unavailable"))?
                 .url_token
         }
-        Scope::Global => state
-            .prefs
-            .get::<String>(crate::features::prefs::pref_keys::URL_TOKEN)?
-            .ok_or_else(|| anyhow::anyhow!("URL token unavailable"))?,
+        Scope::Global => return Ok(state.url_key.to_vec()),
         Scope::Share(id) => {
             crate::features::files::shares::Service::new(state.db.clone(), state.prefs.clone())
                 .active(id, true)?

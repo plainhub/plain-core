@@ -67,9 +67,7 @@ impl NativeManagement {
             keys::PASSWORD,
             keys::PASSWORD_TYPE,
             keys::LOGIN_REQUIRE_APPROVAL,
-            keys::ROTATE_URL_TOKEN_ON_RESTART,
             keys::ADB_TOKEN,
-            keys::URL_TOKEN,
             keys::API_PERMISSIONS,
             keys::CLIENT_ID,
             keys::MDNS_HOSTNAME,
@@ -106,13 +104,6 @@ impl NativeManagement {
         self.security_preferences()?
             .reset_password()
             .map_err(|error| error.to_string())
-    }
-
-    pub fn reset_url_token(&self) -> Result<bool, String> {
-        self.security_preferences()?
-            .reset_url_token()
-            .map_err(|error| error.to_string())?;
-        Ok(true)
     }
 
     pub fn reset_adb_token(&self) -> Result<bool, String> {

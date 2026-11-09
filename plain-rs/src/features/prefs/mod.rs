@@ -6,7 +6,7 @@ pub mod security;
 pub mod settings;
 pub mod storage;
 
-pub use identity::{AppIdentity, ensure_identity, ensure_mdns_hostname, ensure_url_token};
+pub use identity::{AppIdentity, ensure_identity, ensure_mdns_hostname};
 
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};

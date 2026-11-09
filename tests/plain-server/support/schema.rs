@@ -2,7 +2,7 @@ use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use std::sync::Arc;
 
-fn runtime(
+pub(crate) fn runtime(
     host: Arc<plain_rs::infrastructure::host::bridge::Host>,
     events: tokio::sync::broadcast::Sender<plain_rs::infrastructure::events::WsEvent>,
     prefs: Arc<Prefs>,

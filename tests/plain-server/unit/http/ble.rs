@@ -107,7 +107,7 @@ async fn incoming_preserves_file_bytes_without_host_bridge() {
     .unwrap();
     let id = plain_rs::features::chat::messages::content::make_file_id(
         &format!("fid:{}", file.fid_suffix),
-        &plain_rs::features::prefs::ensure_url_token(&state.prefs),
+        &plain_libs::utils::base64::base64_encode(&state.url_key),
     );
     let bytes = incoming_exchange(
         &server,

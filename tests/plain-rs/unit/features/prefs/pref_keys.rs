@@ -13,10 +13,10 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
         (PrefAccess::LocalOnly, "http_port https_port background_service_enabled remote_access developer_mode
             allow_any_host nearby_discoverable notification_filter launcher_shortcuts
             image_grid_cells_per_row video_grid_cells_per_row https web_address_bar_expanded
-            password password_type login_require_approval rotate_url_token_on_restart
+            password password_type login_require_approval
             api_permissions mdns_hostname dev_token log_level auto_check_update skip_version"),
         (PrefAccess::RemoteReadOnly, "app_home_features"),
-        (PrefAccess::RustOnly, "client_id url_token adb_token master_secret signature_key_pair"),
+        (PrefAccess::RustOnly, "client_id adb_token master_secret signature_key_pair"),
     ];
     let expected: Vec<_> = groups
         .iter()
@@ -86,7 +86,6 @@ fn exported_constants_match_the_registered_keys() {
         PASSWORD,
         PASSWORD_TYPE,
         LOGIN_REQUIRE_APPROVAL,
-        ROTATE_URL_TOKEN_ON_RESTART,
         API_PERMISSIONS,
         MDNS_HOSTNAME,
         DEV_TOKEN,
@@ -95,7 +94,6 @@ fn exported_constants_match_the_registered_keys() {
         SKIP_VERSION,
         APP_HOME_FEATURES,
         CLIENT_ID,
-        URL_TOKEN,
         ADB_TOKEN,
         MASTER_SECRET,
         SIGNATURE_KEY_PAIR,

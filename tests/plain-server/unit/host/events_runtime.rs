@@ -97,7 +97,6 @@ fn filesystem_media_host(
         plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(&data))
             .unwrap(),
     );
-    plain_rs::features::prefs::identity::ensure_url_token(&prefs);
     let mut config = plain_rs::infrastructure::platform::startup::config();
     config.cache_dir = Some(cache.to_string_lossy().into_owned());
     config.system_media_catalog = system_catalog;

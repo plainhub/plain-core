@@ -564,14 +564,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
 
     let file = dir.path().join("chat.txt");
     std::fs::write(&file, b"chat attachment").unwrap();
-    let b_key = decode_key(
-        &b_state
-            .prefs
-            .get::<String>(pref_keys::URL_TOKEN)
-            .unwrap()
-            .unwrap(),
-    )
-    .unwrap();
+    let b_key = b_state.url_key.to_vec();
     let file_id = resource_link::seal(
         &Scope::Global,
         &b_key,
@@ -613,7 +606,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let ticket = resource_link::encrypt(
         &native_scope,
         "native-proxy",
-        &a_state.native_file_url_key,
+        &a_state.url_key,
         &serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}")}))
             .unwrap(),
     )
@@ -645,7 +638,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let native_attachment = resource_link::encrypt(
         &native_scope,
         &format!("chat-attachment:{b_id}"),
-        &a_state.native_file_url_key,
+        &a_state.url_key,
         reference.as_bytes(),
     )
     .unwrap();
@@ -670,7 +663,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         .unwrap();
     let local_ref = Resource::reference(&format!("fid:{}", imported.id));
     let local_id =
-        resource_link::seal(&native_scope, &a_state.native_file_url_key, &local_ref).unwrap();
+        resource_link::seal(&native_scope, &a_state.url_key, &local_ref).unwrap();
     let response = http
         .get(format!(
             "http://localhost:{a_http}/fs?id={local_id}&action=download"
@@ -738,7 +731,7 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
     let ticket = resource_link::encrypt(
         &scope,
         "native-proxy",
-        &state.native_file_url_key,
+        &state.url_key,
         &serde_json::to_vec(&json!({"base":format!("http://{address}")})).unwrap(),
     )
     .unwrap();

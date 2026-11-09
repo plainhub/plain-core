@@ -56,9 +56,6 @@ impl SecurityPreferences<'_> {
         })?;
         Ok(password)
     }
-    pub fn reset_url_token(&self) -> anyhow::Result<bool> {
-        self.apply(Command::ResetUrlToken)
-    }
     pub fn reset_adb_token(&self) -> anyhow::Result<bool> {
         self.apply(Command::ResetAdbToken)
     }
@@ -91,7 +88,6 @@ pub fn security_key(key: &str) -> bool {
         "password"
             | "password_type"
             | "login_require_approval"
-            | "rotate_url_token_on_restart"
             | "api_permissions"
             | "mdns_hostname"
             | "dev_token"

@@ -214,7 +214,6 @@ async fn remote_cannot_write_remove_or_reset_local_security_settings() {
         r#"mutation { setPref(key:"http_port",value:8080) }"#,
         r#"mutation { removePref(key:"http_port") }"#,
         "mutation { resetPassword }",
-        "mutation { resetUrlToken }",
         "mutation { resetAdbToken }",
         r#"mutation { setNotificationFilterMode(mode:"allowlist") { affectedCount } }"#,
     ] {

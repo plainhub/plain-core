@@ -76,6 +76,7 @@ pub struct Runtime {
     pub audio: Arc<crate::features::services::audio::host::Audio>,
     pub directory: std::path::PathBuf,
     pub token: Arc<str>,
+    pub url_key: [u8; 32],
     pub temp_values: crate::infrastructure::temp_values::TempValues,
     pub events: broadcast::Sender<WsEvent>,
     pub stop: watch::Receiver<bool>,
@@ -432,6 +433,9 @@ impl Runtime {
                 ),
             )),
             token: Arc::from(token.as_str()),
+            url_key: plain_libs::crypto::random_bytes(32)
+                .try_into()
+                .expect("32 random bytes"),
             temp_values: Default::default(),
             events,
             stop: receiver.clone(),
@@ -497,11 +501,7 @@ impl Runtime {
     }
     pub fn native_url_token(&self) -> Result<String, String> {
         self.native_client_id()?;
-        self.prefs
-            .get::<String>(crate::features::prefs::pref_keys::URL_TOKEN)
-            .map_err(|error| error.to_string())?
-            .filter(|token| !token.is_empty())
-            .ok_or_else(|| "native URL token unavailable".into())
+        Ok(plain_libs::utils::base64::base64_encode(&self.url_key))
     }
 
     pub fn native_client_id(&self) -> Result<String, String> {

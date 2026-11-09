@@ -30,9 +30,7 @@ use tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClien
 #[tokio::test]
 async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
     let (_directory, core, prefs) = public_fixture();
-    let key = plain_libs::utils::base64::base64_decode(
-        &plain_rs::features::prefs::identity::ensure_url_token(&prefs),
-    );
+    let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
     let url = format!("ws://127.0.0.1:{}/image_editor?cid={client}", core.port);
     let (mut denied, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
@@ -88,9 +86,7 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
 #[tokio::test]
 async fn screen_transports_authenticated_media_and_controls_separately_from_subscriptions() {
     let (_directory, core, prefs) = public_fixture();
-    let key = plain_libs::utils::base64::base64_decode(
-        &plain_rs::features::prefs::identity::ensure_url_token(&prefs),
-    );
+    let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
     let bridge = Arc::new(core.host_events().unwrap());
     let host = bridge.clone();

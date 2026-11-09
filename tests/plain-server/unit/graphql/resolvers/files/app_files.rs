@@ -46,10 +46,9 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
     .await;
     assert_eq!(page["data"]["appFileCount"], 1);
     assert_eq!(page["data"]["appFiles"][0]["id"], id);
-    let url_token = plain_rs::features::prefs::ensure_url_token(&prefs);
     let encoded = plain_rs::features::files::resource_link::seal(
         &plain_rs::features::files::resource_link::Scope::Global,
-        &plain_libs::utils::base64::base64_decode(&url_token),
+        &server.runtime_state().url_key,
         &plain_rs::features::files::resource_link::Resource {
             r#type: plain_rs::features::files::resource_link::ResourceType::AppFile,
             id: id.to_owned(),

@@ -369,7 +369,6 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     let (_dir, server) = fixture();
     let state = server.runtime_state();
     let session = create(&state, "Remote".into()).unwrap();
-    state.prefs.set("url_token", "resource-token").unwrap();
     state.prefs.set("adb_token", "adb-secret").unwrap();
     state.prefs.set("dev_token", "dev-secret").unwrap();
     let mut peer = plain_rs::infrastructure::db::DPeer::new(
@@ -393,7 +392,7 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     let local = local.data.into_json().unwrap();
     let settings = server.native_management().unwrap().preferences().unwrap();
     assert_eq!(settings["password"], "");
-    assert_eq!(settings["url_token"], "resource-token");
+    assert!(settings.get("url_token").is_none());
     assert_eq!(local["peers"][0]["key"], "peer-secret");
     assert_eq!(local["chatChannels"][0]["key"], "channel-secret");
     assert_eq!(local["sessions"][0]["token"], session.token);

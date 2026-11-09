@@ -68,27 +68,6 @@ fn ensure_identity_normalizes_stored_device_name() {
 }
 
 #[test]
-fn ensure_url_token_generates_persists_and_is_stable() {
-    let prefs = tmp_prefs("urltoken");
-    let t1 = ensure_url_token(&prefs);
-    assert!(!t1.is_empty());
-    assert_eq!(ensure_url_token(&prefs), t1, "stored token reused");
-
-    // Stored token survives reload.
-    let reloaded = Prefs::load(prefs.path()).unwrap();
-    assert_eq!(ensure_url_token(&reloaded), t1);
-}
-
-#[test]
-fn ensure_url_token_regenerates_zero_token() {
-    let prefs = tmp_prefs("zerotoken");
-    let zero = base64_encode(&[0u8; 32]);
-    prefs.set("url_token", zero.as_str()).unwrap();
-    let t = ensure_url_token(&prefs);
-    assert_ne!(t, zero, "all-zero token is regenerated");
-}
-
-#[test]
 fn ensure_mdns_hostname_generates_and_persists_the_pre_migration_format() {
     let prefs = tmp_prefs("mdns");
     let h = ensure_mdns_hostname(&prefs);

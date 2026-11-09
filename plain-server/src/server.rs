@@ -18,7 +18,6 @@ pub enum PairingApproval {
 pub(crate) struct ServerState {
     pub(crate) core: plain_rs::runtime::Runtime,
     pub(crate) managed_proxy: Arc<crate::http::managed_proxy::ManagedProxy>,
-    pub(crate) native_file_url_key: [u8; 32],
     pub(crate) peer_status_capacity: Arc<tokio::sync::Semaphore>,
     #[cfg(feature = "http_transport")]
     pub(crate) public_server: Arc<tokio::sync::Mutex<Option<PublicServer>>>,
@@ -122,10 +121,6 @@ impl ContentServer {
             .map_err(|error| error.to_string())
     }
 
-    pub fn native_file_url_token(&self) -> String {
-        plain_libs::utils::base64::base64_encode(&self.state.native_file_url_key)
-    }
-
     pub async fn preview_native_file(
         &self,
         id: String,
@@ -211,9 +206,6 @@ impl ContentServer {
         let state = ServerState {
             core,
             managed_proxy: Arc::default(),
-            native_file_url_key: plain_libs::crypto::random_bytes(32)
-                .try_into()
-                .expect("32 random bytes"),
             public,
             peer_status_capacity: Arc::new(tokio::sync::Semaphore::new(128)),
             #[cfg(feature = "http_transport")]
@@ -269,18 +261,6 @@ impl ContentServer {
             ))
             .map_err(|error| error.to_string())?,
         );
-        let url_token = plain_rs::features::prefs::identity::ensure_url_token(&prefs);
-        if plain_libs::utils::base64::base64_decode(&url_token).len() != 32 {
-            return Err("token must contain 32 random bytes".into());
-        }
-        if prefs
-            .get::<String>(plain_rs::features::prefs::pref_keys::URL_TOKEN)
-            .map_err(|error| error.to_string())?
-            .as_deref()
-            != Some(url_token.as_str())
-        {
-            return Err("URL token persistence failed".into());
-        }
         let token = plain_libs::crypto::gen_token();
         let mut config = plain_rs::infrastructure::platform::startup::config();
         config.cache_dir = Some(cache_directory.to_string_lossy().into_owned());

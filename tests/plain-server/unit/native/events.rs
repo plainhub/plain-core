@@ -2,8 +2,6 @@ use super::*;
 use crate::server::ContentServer;
 use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 
-const KEY: [u8; 32] = [7; 32];
-
 fn fixture() -> (
     plain_libs::temporary::TempDir,
     ContentServer,
@@ -16,13 +14,6 @@ fn fixture() -> (
         &directory.path().join("cache"),
     )
     .unwrap();
-    core.runtime_state()
-        .prefs
-        .set(
-            plain_rs::features::prefs::pref_keys::URL_TOKEN,
-            plain_libs::utils::base64::base64_encode(&KEY),
-        )
-        .unwrap();
     let scope = NativeRequestScope::default();
     let stream = core
         .native_graphql()
@@ -114,21 +105,3 @@ async fn a_lagged_view_continues_with_retained_binary_frames() {
     core.stop_core().await;
 }
 
-#[tokio::test]
-async fn invalid_stored_event_keys_refuse_subscription() {
-    let (_directory, core, _stream, _scope) = fixture();
-    core.runtime_state()
-        .prefs
-        .set(
-            plain_rs::features::prefs::pref_keys::URL_TOKEN,
-            plain_libs::utils::base64::base64_encode(&KEY[..31]),
-        )
-        .unwrap();
-    assert!(
-        core.native_graphql()
-            .unwrap()
-            .subscribe_events(Default::default())
-            .is_err()
-    );
-    core.stop_core().await;
-}

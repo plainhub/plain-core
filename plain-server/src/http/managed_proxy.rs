@@ -506,7 +506,7 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
         };
         key
     } else {
-        state.native_file_url_key.to_vec()
+        state.url_key.to_vec()
     };
     let scope = Scope::Session(id);
     let purpose = format!("managed:{target}:{path}:{}", parameters.action.as_str());

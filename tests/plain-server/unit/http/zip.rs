@@ -46,7 +46,7 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
         .collect::<Vec<_>>();
     let recorded = state.db.record_media_files(&rows).unwrap();
     let payload = json!({"type":"DOC","query":format!("ids:{},{}",recorded[0].id,recorded[2].id),"name":"selected.zip"}).to_string();
-    let token = plain_rs::features::prefs::ensure_url_token(&state.prefs);
+    let token = plain_libs::utils::base64::base64_encode(&state.url_key);
     let id = plain_rs::features::files::resource_link::encrypt(
         &plain_rs::features::files::resource_link::Scope::Global,
         "zip-files",
