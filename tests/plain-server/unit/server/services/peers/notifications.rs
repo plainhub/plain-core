@@ -114,6 +114,7 @@ fn event(receiver: &mut CallbackReceiver) -> serde_json::Value {
 #[tokio::test]
 async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_credentials() {
     use crate::server::ContentServer;
+    use futures_util::FutureExt;
     use plain_rs::infrastructure::db::chat_store::{SaveMode, peers};
     use std::sync::{
         Arc,
@@ -226,7 +227,8 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
                                 )
                             })
                             .collect();
-                        if granted.contains_key("CLIPBOARD") {
+                        // Subscription authorization follows receiver registration; metadata samples multiple features.
+                        if request["params"]["features"] == json!(["CLIPBOARD"]) {
                             sdk_ready.notify_one();
                         }
                         json!({"granted":granted})
@@ -266,6 +268,26 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     );
     peer.token = session.token;
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
+    let metadata = plain_rs::features::services::peers::management_http::query(
+        &state,
+        &http_client::Url::parse(&format!("https://127.0.0.1:{port}")).unwrap(),
+        &session.client_id,
+        &plain_libs::utils::base64::base64_decode(&peer.token),
+        json!({"query":"{ app { access } }"}),
+        256 * 1024,
+    )
+    .await
+    .unwrap();
+    assert!(
+        metadata["app"]["access"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("CLIPBOARD"))
+    );
+    assert!(
+        subscription_ready.notified().now_or_never().is_none(),
+        "Metadata access sampling must not signal WebSocket subscription readiness"
+    );
     let mut callbacks = CallbackReceiver::new(state.host.clone());
     state.management.start(state.clone()).unwrap();
     tokio::time::timeout(Duration::from_secs(10), requested.notified())
