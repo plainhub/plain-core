@@ -107,8 +107,7 @@ impl ContentServer {
     pub fn native_uploads(&self) -> Result<crate::native::uploads::NativeUploads, String> {
         self.state.native_client_id()?;
         Ok(crate::native::uploads::NativeUploads::new(
-            self.state.upload_chunks.clone(),
-            self.state.stop.clone(),
+            self.state.clone(),
         ))
     }
 

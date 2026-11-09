@@ -170,3 +170,52 @@ async fn closing_a_session_releases_a_blocked_event_producer() {
     assert_eq!(send.await.unwrap_err(), "Subscription session closed");
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn peer_subscriptions_share_the_session_bound_and_closed_owners_are_rejected() {
+    use plain_rs::{
+        features::chat::enums::{DeviceType, PeerStatus},
+        infrastructure::{
+            db::{
+                DPeer,
+                chat_store::{SaveMode, peers},
+            },
+            protocols::graphql::PeerSubscriptionTarget,
+        },
+    };
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let server = ContentServer::open(directory.path()).unwrap();
+    let state = server.runtime_state();
+    let executor = server.native_graphql().unwrap();
+    let scope = NativeRequestScope::default();
+    scope.close();
+    assert!(executor.open_subscriptions(scope).is_err());
+    let mut peer = DPeer::new("peer", "Fixture", "127.0.0.1", None, DeviceType::Phone);
+    peer.status = PeerStatus::Paired;
+    peer.public_key = "fixture-identity".into();
+    peer.token = plain_libs::utils::base64::base64_encode(&[1; 32]);
+    peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
+    for _ in 0..128 {
+        executor.open_subscriptions(Default::default()).unwrap();
+    }
+    assert_eq!(
+        state
+            .subscription_sessions
+            .open_peer_with_pin(
+                state.clone(),
+                PeerSubscriptionTarget {
+                    peer_id: peer.id,
+                    public_key: peer.public_key
+                },
+                Default::default(),
+                Some([1; 32])
+            )
+            .unwrap_err(),
+        "Subscription session capacity reached"
+    );
+    assert_eq!(
+        state.subscription_sessions.entries.lock().unwrap().len(),
+        128
+    );
+    server.stop_core().await;
+}

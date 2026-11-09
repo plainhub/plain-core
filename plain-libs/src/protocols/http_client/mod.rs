@@ -257,6 +257,7 @@ impl Client {
                 headers,
                 body: Body::default(),
                 timeout: None,
+                read_timeout: None,
             })
         });
         RequestBuilder {
@@ -298,6 +299,8 @@ struct Request {
     headers: HeaderMap,
     body: Body,
     timeout: Option<Duration>,
+    // Unset inherits the client; an explicit None disables the read timeout.
+    read_timeout: Option<Option<Duration>>,
 }
 
 pub struct RequestBuilder {
@@ -354,6 +357,13 @@ impl RequestBuilder {
         self
     }
 
+    pub fn read_timeout(mut self, timeout: Option<Duration>) -> Self {
+        if let Ok(request) = &mut self.request {
+            request.read_timeout = Some(timeout);
+        }
+        self
+    }
+
     pub fn query<T: serde::Serialize + ?Sized>(mut self, query: &T) -> Self {
         self.request = self.request.and_then(|mut request| {
             let mut pairs = request.url.query_pairs_mut();
@@ -375,6 +385,7 @@ impl RequestBuilder {
             mut headers,
             body,
             timeout: request_timeout,
+            read_timeout: request_read_timeout,
         } = self.request?;
         let client = &self.client.0;
         if !allowed_scheme(&url, client.https_only) {
@@ -397,7 +408,8 @@ impl RequestBuilder {
         let total = request_timeout
             .or(client.total_timeout)
             .map(|duration| Instant::now() + duration);
-        let headers_deadline = match (total, client.read_timeout) {
+        let read_timeout = request_read_timeout.unwrap_or(client.read_timeout);
+        let headers_deadline = match (total, read_timeout) {
             (Some(total), Some(read)) => Some(total.min(Instant::now() + read)),
             (None, Some(read)) => Some(Instant::now() + read),
             (total, None) => total,
@@ -431,7 +443,7 @@ impl RequestBuilder {
                 ResponseBody::new(
                     incoming,
                     total.map(|deadline| Box::pin(tokio::time::sleep_until(deadline))),
-                    client.read_timeout,
+                    read_timeout,
                 ),
             ),
             url: Box::new(url),

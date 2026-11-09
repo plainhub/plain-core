@@ -254,3 +254,30 @@ async fn assert_authenticated_connect(host: &str, authority: &'static str, https
     }
     server.await.unwrap();
 }
+
+#[tokio::test]
+async fn request_read_timeout_overrides_only_its_request_and_can_disable_inheritance() {
+    let client = builder()
+        .no_proxy()
+        .connect_timeout(Duration::from_secs(5))
+        .read_timeout(Duration::from_secs(30))
+        .build()
+        .unwrap();
+    let normal = client.get("http://127.0.0.1/normal");
+    let extended = client
+        .get("http://127.0.0.1/extended")
+        .timeout(Duration::from_secs(120))
+        .read_timeout(Some(Duration::from_secs(120)));
+    assert_eq!(normal.request.as_ref().unwrap().read_timeout, None);
+    assert_eq!(
+        extended.request.as_ref().unwrap().read_timeout,
+        Some(Some(Duration::from_secs(120)))
+    );
+    assert_eq!(
+        extended.request.as_ref().unwrap().timeout,
+        Some(Duration::from_secs(120))
+    );
+    let streaming = client.get("http://127.0.0.1/streaming").read_timeout(None);
+    assert_eq!(streaming.request.as_ref().unwrap().read_timeout, Some(None));
+    assert_eq!(client.0.read_timeout, Some(Duration::from_secs(30)));
+}

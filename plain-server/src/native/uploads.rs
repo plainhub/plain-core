@@ -1,7 +1,10 @@
-use plain_rs::features::services::files::upload_chunks::{UploadChunk, UploadChunks};
-use std::sync::Arc;
+use crate::server::ServerState;
+use plain_rs::features::services::files::upload_chunks::UploadChunk;
 use tokio::sync::watch;
 
+pub use plain_rs::features::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES;
+
+mod peer;
 mod writers;
 pub use writers::UploadWriters;
 
@@ -9,13 +12,12 @@ pub const MAX_NATIVE_UPLOAD_CHUNK_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone)]
 pub struct NativeUploads {
-    chunks: Arc<UploadChunks>,
-    stop: watch::Receiver<bool>,
+    state: ServerState,
 }
 
 impl NativeUploads {
-    pub(crate) fn new(chunks: Arc<UploadChunks>, stop: watch::Receiver<bool>) -> Self {
-        Self { chunks, stop }
+    pub(crate) fn new(state: ServerState) -> Self {
+        Self { state }
     }
 
     pub async fn write_chunk(&self, id: &str, index: i64, bytes: &[u8]) -> Result<(), String> {
@@ -33,9 +35,10 @@ impl NativeUploads {
     }
 
     pub async fn open_chunk(&self, id: &str, index: i64, size: u64) -> Result<UploadChunk, String> {
-        ensure_running(&self.stop)?;
-        self.chunks
-            .open_chunk(id, index, size, self.stop.clone())
+        ensure_running(&self.state.stop)?;
+        self.state
+            .upload_chunks
+            .open_chunk(id, index, size, self.state.stop.clone())
             .await
     }
 }
@@ -50,3 +53,11 @@ fn ensure_running(stop: &watch::Receiver<bool>) -> Result<(), String> {
 #[cfg(test)]
 #[path = "../../../tests/plain-server/unit/native/uploads.rs"]
 mod tests;
+
+#[cfg(all(test, feature = "http_transport"))]
+#[path = "../../../tests/plain-server/unit/native/uploads/fixture.rs"]
+mod fixture;
+
+#[cfg(test)]
+#[path = "../../../tests/plain-server/unit/native/uploads/local.rs"]
+mod local_fixture;

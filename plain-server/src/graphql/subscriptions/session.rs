@@ -108,6 +108,9 @@ impl Sessions {
         key: Option<Vec<u8>>,
         scope: NativeRequestScope,
     ) -> Result<Arc<Session>, String> {
+        if scope.is_closed() || *state.stop.borrow() {
+            return Err("Subscription session closed".into());
+        }
         let id = next_id()?;
         let (outgoing, incoming) = mpsc::channel(64);
         let (control, control_incoming) = mpsc::channel(32);
@@ -155,10 +158,20 @@ impl Sessions {
         target: plain_rs::infrastructure::protocols::graphql::PeerSubscriptionTarget,
         scope: NativeRequestScope,
     ) -> Result<u64, String> {
+        self.open_peer_with_pin(state, target, scope, None)
+    }
+    pub(crate) fn open_peer_with_pin(
+        self: &Arc<Self>,
+        state: ServerState,
+        target: plain_rs::infrastructure::protocols::graphql::PeerSubscriptionTarget,
+        scope: NativeRequestScope,
+        pin: Option<[u8; 32]>,
+    ) -> Result<u64, String> {
         let id = next_id()?;
-        let session = plain_rs::features::services::peers::subscriptions::PeerSubscription::open(
-            state.core, target, scope,
-        )?;
+        let session =
+            plain_rs::features::services::peers::subscriptions::PeerSubscription::open_with_pin(
+                state.core, target, scope, pin,
+            )?;
         let mut entries = self.entries.lock().map_err(|error| error.to_string())?;
         if entries.len() >= 128 {
             session.close();

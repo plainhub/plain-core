@@ -11,3 +11,6 @@ pub mod host;
 #[cfg(all(test, feature = "core"))]
 #[path = "../../tests/plain-server/support/mod.rs"]
 pub(crate) mod test_support;
+
+#[cfg(feature = "core")]
+mod managed_peers;

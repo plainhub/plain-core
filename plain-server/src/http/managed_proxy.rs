@@ -11,21 +11,13 @@ use plain_rs::{
     features::{
         access::AccessFeature,
         files::resource_link::{self, Resource, Scope},
-        services::{
-            device::access,
-            peers::{management_http, peer_address},
-        },
+        services::{device::access, peers::management_http},
     },
-    infrastructure::{
-        db::{DPeer, SessionRow, chat_store::peers},
-        transport::http_response,
-    },
+    infrastructure::{db::SessionRow, transport::http_response},
 };
-use serde_json::json;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
 };
 use subtle::ConstantTimeEq;
 
@@ -34,116 +26,18 @@ mod raw;
 mod socket;
 mod upload;
 
-const GRAPHQL_LIMIT: usize = 4 * 1024 * 1024;
-const ROUTE_LIFETIME: Duration = Duration::from_secs(30);
+use crate::managed_peers::{GRAPHQL_LIMIT, PeerRoute, ROUTE_LIFETIME, decode_key, decode_pin};
 pub(super) const MANAGED_RESOURCE: &str = "x-plain-managed-resource";
-type RouteSlot = Arc<tokio::sync::Mutex<Option<Arc<PeerRoute>>>>;
-
 #[derive(Default)]
 pub(crate) struct ManagedProxy {
-    routes: Mutex<HashMap<String, RouteSlot>>,
+    pub(crate) peers: crate::managed_peers::ManagedPeerRoutes,
     attachments: Mutex<HashMap<String, attachment::RouteSlot>>,
     native_client: std::sync::OnceLock<http_client::Client>,
 }
 
-struct PeerRoute {
-    peer: DPeer,
-    base: http_client::Url,
-    client_id: String,
-    key: Vec<u8>,
-    url_key: Vec<u8>,
-    pin: [u8; 32],
-    client: http_client::Client,
-    supports_managed_resources: bool,
-    expires: Instant,
-}
-
 impl ManagedProxy {
     async fn route(&self, state: &ServerState, target: &str) -> Result<Arc<PeerRoute>> {
-        let peer = peers::get(&state.db, target)?
-            .filter(|peer| peer.is_paired() && !peer.token.is_empty())
-            .ok_or_else(|| anyhow!("Managed device unavailable"))?;
-        let client_id = state.native_client_id().map_err(anyhow::Error::msg)?;
-        ensure!(target != client_id, "Invalid managed target");
-        let slot = self
-            .routes
-            .lock()
-            .unwrap()
-            .entry(target.into())
-            .or_default()
-            .clone();
-        let mut cached = slot.lock().await;
-        if let Some(route) = cached.as_ref().filter(|route| {
-            route.expires > Instant::now()
-                && route.peer.ip == peer.ip
-                && route.peer.port == peer.port
-                && route.peer.token == peer.token
-                && peer_address::same_identity(&route.peer, &peer)
-        }) {
-            return Ok(route.clone());
-        }
-        let base = http_client::Url::parse(&peer_address::address(&peer).base_url)?;
-        let key = decode_key(&peer.token)?;
-        let data = management_http::query(
-            state,
-            &base,
-            &client_id,
-            &key,
-            json!({"query":"{ app { clientId urlToken tlsCertificateSha256 } __type(name: \"Peer\") { fields { name } } }"}),
-            GRAPHQL_LIMIT,
-        )
-        .await?;
-        let app = &data["app"];
-        ensure!(
-            app["clientId"].as_str() == Some(target),
-            "Managed device identity changed"
-        );
-        let url_key = decode_key(app["urlToken"].as_str().unwrap_or_default())?;
-        let pin = decode_pin(app["tlsCertificateSha256"].as_str().unwrap_or_default())?;
-        let supports_managed_resources = data["__type"]["fields"]
-            .as_array()
-            .is_some_and(|fields| fields.iter().any(|field| field["name"] == "managed"));
-        let client = if let Some(route) = cached
-            .as_ref()
-            .filter(|route| route.base == base && route.pin == pin)
-        {
-            route.client.clone()
-        } else {
-            http_client::builder()
-                .no_proxy()
-                .https_only(true)
-                .pin_certificate(pin)
-                .redirect(http_client::redirect::Policy::none())
-                .connect_timeout(Duration::from_secs(5))
-                .read_timeout(Duration::from_secs(30))
-                .pool_max_idle_per_host(8)
-                .build()?
-        };
-        let route = Arc::new(PeerRoute {
-            peer,
-            base,
-            client_id,
-            key,
-            url_key,
-            pin,
-            client,
-            supports_managed_resources,
-            expires: Instant::now() + ROUTE_LIFETIME,
-        });
-        route.check_current(state)?;
-        *cached = Some(route.clone());
-        Ok(route)
-    }
-}
-
-impl PeerRoute {
-    fn check_current(&self, state: &ServerState) -> Result<()> {
-        let peer = peer_address::current(&state.db, &self.peer.id, &self.peer)?;
-        ensure!(
-            peer.is_paired() && peer.token == self.peer.token,
-            "Management session revoked"
-        );
-        Ok(())
+        self.peers.route(state, target).await
     }
 }
 
@@ -153,8 +47,8 @@ pub(crate) async fn call(
     request: Request,
 ) -> Response {
     if native_loopback(&state, &request) {
-        if path == "graphql" && request.method() == Method::POST {
-            return raw::native_graphql(state, &target, request).await;
+        if path == "graphql" {
+            return StatusCode::FORBIDDEN.into_response();
         }
         if target.starts_with("c.") {
             return raw::native(state, &target, request).await;
@@ -274,24 +168,6 @@ fn current(state: &ServerState, original: &SessionRow) -> Result<()> {
     Ok(())
 }
 
-fn decode_key(token: &str) -> Result<Vec<u8>> {
-    let key = plain_libs::utils::base64::base64_decode_checked(token)?;
-    ensure!(key.len() == 32, "Invalid session key");
-    Ok(key)
-}
-
-fn decode_pin(hex: &str) -> Result<[u8; 32]> {
-    ensure!(
-        hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()),
-        "Invalid certificate fingerprint"
-    );
-    let mut digest = [0; 32];
-    for (index, byte) in digest.iter_mut().enumerate() {
-        *byte = u8::from_str_radix(&hex[index * 2..index * 2 + 2], 16)?;
-    }
-    Ok(digest)
-}
-
 fn caller_id(headers: &HeaderMap) -> &str {
     headers
         .get("c-id")
@@ -384,11 +260,7 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
     if current(&state, &session).is_err() || route.check_current(&state).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let Ok(url) = route.base.join("/graphql") else {
-        return StatusCode::BAD_GATEWAY.into_response();
-    };
-    let outgoing = route.client.post(url).header("c-id", &route.client_id);
-    let response = management_http::exchange(outgoing, &route.key, text, GRAPHQL_LIMIT).await;
+    let response = route.exchange(&state, text, None).await;
     if current(&state, &session).is_err() || route.check_current(&state).is_err() {
         return StatusCode::FORBIDDEN.into_response();
     }

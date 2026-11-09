@@ -36,6 +36,9 @@ impl PeerSubscription {
         scope: NativeRequestScope,
         pin: Option<[u8; 32]>,
     ) -> Result<Arc<Self>, String> {
+        if scope.is_closed() || *state.stop.borrow() {
+            return Err("Subscription session closed".into());
+        }
         let peer = peers::get(&state.db, &target.peer_id)
             .map_err(|error| error.to_string())?
             .ok_or("Peer removed")?;
@@ -77,6 +80,7 @@ impl PeerSubscription {
             if let Err(error) = result {
                 let _ = outgoing.try_send(Err(error.to_string()));
             }
+            running.close();
         });
         Ok(session)
     }

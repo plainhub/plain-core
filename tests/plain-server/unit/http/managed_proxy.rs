@@ -2,6 +2,7 @@ use super::*;
 use crate::server::ContentServer;
 use axum::body::Bytes;
 use futures_util::{SinkExt, StreamExt};
+use plain_rs::infrastructure::db::{DPeer, chat_store::peers};
 use plain_rs::{
     features::{
         chat::enums::{DeviceType, PeerStatus},
@@ -10,6 +11,8 @@ use plain_rs::{
     },
     infrastructure::{db::chat_store::SaveMode, protocols::graphql, transport::http_request},
 };
+use serde_json::json;
+use std::time::Duration;
 use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 
 fn start(path: &std::path::Path, id: &str) -> ContentServer {
@@ -68,50 +71,30 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         .add_root_certificate(http_client::Certificate::from_pem(&cert).unwrap())
         .build()
         .unwrap();
-    let native_key = decode_key(&management.token).unwrap();
-    let native_body =
-        http_request::encrypt(&native_key, r#"{"query":"{ app { clientId urlToken } }"}"#).unwrap();
-    let native_url = format!("http://127.0.0.1:{a_http}/proxy/{b_id}/graphql");
-    let request = || {
-        http.post(&native_url)
-            .header(header::ORIGIN, "tauri://localhost")
-            .body(native_body.clone())
-    };
-    assert_eq!(
-        request().send().await.unwrap().status(),
-        StatusCode::UNAUTHORIZED
-    );
-    assert_eq!(
-        request()
-            .header("c-id", &browser.client_id)
-            .send()
-            .await
-            .unwrap()
-            .status(),
-        StatusCode::UNAUTHORIZED
-    );
-    let response = request().header("c-id", &a_id).send().await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let decoded = http_request::decrypt_response(
-        &native_key,
-        "/graphql",
-        &native_body,
-        &response.bytes().await.unwrap(),
-    )
-    .unwrap();
-    let data: serde_json::Value = serde_json::from_slice(&decoded).unwrap();
+    let executor = a.native_graphql().unwrap();
+    let response = executor
+        .execute_peer_scoped(
+            &b_id,
+            plain_graphql::Request::new("{ app { clientId urlToken } }"),
+            Default::default(),
+            std::time::Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let data = serde_json::to_value(response).unwrap();
     assert_eq!(data["data"]["app"]["clientId"], b_id);
     assert_eq!(data["data"]["app"]["urlToken"], management.url_token);
-    assert_eq!(
-        http.post(format!("http://127.0.0.1:{a_http}/proxy/unknown/graphql"))
-            .header("c-id", &a_id)
-            .body(native_body)
+    for caller in ["", browser.client_id.as_str(), a_id.as_str()] {
+        let response = http
+            .post(format!("http://127.0.0.1:{a_http}/proxy/{b_id}/graphql"))
+            .header(header::ORIGIN, "tauri://localhost")
+            .header("c-id", caller)
+            .body("retired native GraphQL")
             .send()
             .await
-            .unwrap()
-            .status(),
-        StatusCode::NOT_FOUND
-    );
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
 
     let origin = format!("https://localhost:{a_port}");
     let proxy = format!("{origin}/proxy/{b_id}");
@@ -295,18 +278,29 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     )
     .await
     .unwrap();
-    tokio::time::timeout(
-        Duration::from_secs(12),
-        subscription(
-            &format!("ws://127.0.0.1:{a_http}/proxy/{b_id}/graphql?cid={a_id}"),
-            &a_id,
-            &native_key,
-            pin,
-        ),
-    )
-    .await
-    .unwrap();
+    let scope = plain_rs::infrastructure::host::request_scope::NativeRequestScope::default();
+    let handle = executor
+        .open_managed_peer_subscriptions(&b_id, scope.clone())
+        .await
+        .unwrap();
+    let session = executor.subscription_session(handle).unwrap();
+    session.send(r#"{"type":"subscribe","id":"access","payload":{"query":"subscription { accessUpdated }"}}"#).unwrap();
+    let ready = tokio::time::timeout(Duration::from_secs(12), session.read())
+        .await
+        .unwrap()
+        .unwrap();
+    let ready: serde_json::Value = serde_json::from_str(&ready).unwrap();
+    assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
+    scope.close();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), session.read())
+            .await
+            .unwrap()
+            .is_err()
+    );
+    executor.close_subscriptions(handle);
     for url in [
+        format!("ws://127.0.0.1:{a_http}/proxy/{b_id}/graphql?cid={a_id}"),
         format!("ws://127.0.0.1:{a_http}/proxy/{b_id}/graphql"),
         format!(
             "ws://127.0.0.1:{a_http}/proxy/{b_id}/graphql?cid={}",
@@ -607,8 +601,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         &native_scope,
         "native-proxy",
         &a_state.url_key,
-        &serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}")}))
-            .unwrap(),
+        &serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}")})).unwrap(),
     )
     .unwrap();
     let native_base = format!("http://127.0.0.1:{a_http}/proxy/{ticket}");
@@ -662,8 +655,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         .import_file(&file, "chat.txt", "text/plain", false)
         .unwrap();
     let local_ref = Resource::reference(&format!("fid:{}", imported.id));
-    let local_id =
-        resource_link::seal(&native_scope, &a_state.url_key, &local_ref).unwrap();
+    let local_id = resource_link::seal(&native_scope, &a_state.url_key, &local_ref).unwrap();
     let response = http
         .get(format!(
             "http://localhost:{a_http}/fs?id={local_id}&action=download"

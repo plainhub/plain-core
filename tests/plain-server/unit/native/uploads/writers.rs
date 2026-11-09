@@ -1,26 +1,19 @@
 use super::*;
-use plain_rs::features::services::files::upload_chunks::UploadChunks;
 use std::{future::Future, task::Poll};
-use tokio::sync::watch;
 
 fn fixture() -> (
     plain_libs::temporary::TempDir,
-    watch::Sender<bool>,
+    crate::server::ContentServer,
     NativeUploads,
     UploadWriters,
 ) {
-    let root = plain_libs::temporary::tempdir().unwrap();
-    let (stop, receiver) = watch::channel(false);
-    let uploads = NativeUploads::new(
-        Arc::new(UploadChunks::new(root.path().to_owned())),
-        receiver,
-    );
-    (root, stop, uploads, UploadWriters::default())
+    let (root, server, uploads) = super::super::local_fixture::fixture();
+    (root, server, uploads, UploadWriters::default())
 }
 
 #[tokio::test]
 async fn another_scope_cannot_write_finish_or_abort_the_owner_chunk() {
-    let (root, _stop, uploads, writers) = fixture();
+    let (_root, _server, uploads, writers) = fixture();
     let owner = NativeRequestScope::default();
     let other = NativeRequestScope::default();
     let handle = writers
@@ -34,11 +27,18 @@ async fn another_scope_cannot_write_finish_or_abort_the_owner_chunk() {
     writers.write(&owner, &handle, b"def").await.unwrap();
     assert_eq!(writers.finish(&owner, &handle).await.unwrap(), 6);
     assert_eq!(
-        std::fs::read(root.path().join("fixture/chunk_0")).unwrap(),
+        std::fs::read(
+            uploads
+                .state
+                .upload_chunks
+                .directory()
+                .join("fixture/chunk_0")
+        )
+        .unwrap(),
         b"abcdef"
     );
     assert_eq!(
-        std::fs::read_dir(root.path().join("fixture"))
+        std::fs::read_dir(uploads.state.upload_chunks.directory().join("fixture"))
             .unwrap()
             .count(),
         1
@@ -48,7 +48,7 @@ async fn another_scope_cannot_write_finish_or_abort_the_owner_chunk() {
 
 #[tokio::test]
 async fn abort_removes_partial_bytes_and_rejects_later_writes_or_finish() {
-    let (root, _stop, uploads, writers) = fixture();
+    let (_root, _server, uploads, writers) = fixture();
     let owner = NativeRequestScope::default();
     let handle = writers
         .open(&uploads, &owner, "fixture", 0, 6)
@@ -59,7 +59,7 @@ async fn abort_removes_partial_bytes_and_rejects_later_writes_or_finish() {
     assert!(writers.write(&owner, &handle, b"def").await.is_err());
     assert!(writers.finish(&owner, &handle).await.is_err());
     assert_eq!(
-        std::fs::read_dir(root.path().join("fixture"))
+        std::fs::read_dir(uploads.state.upload_chunks.directory().join("fixture"))
             .unwrap()
             .count(),
         0
@@ -68,7 +68,7 @@ async fn abort_removes_partial_bytes_and_rejects_later_writes_or_finish() {
 
 #[tokio::test]
 async fn closing_a_scope_aborts_only_its_chunks_and_refuses_new_opens() {
-    let (root, _stop, uploads, writers) = fixture();
+    let (_root, _server, uploads, writers) = fixture();
     let owner = NativeRequestScope::default();
     let other = NativeRequestScope::default();
     let first = writers
@@ -92,13 +92,27 @@ async fn closing_a_scope_aborts_only_its_chunks_and_refuses_new_opens() {
     );
     writers.write(&other, &second, b"b").await.unwrap();
     assert_eq!(writers.finish(&other, &second).await.unwrap(), 1);
-    assert!(!root.path().join("fixture/chunk_0").exists());
+    assert!(
+        !uploads
+            .state
+            .upload_chunks
+            .directory()
+            .join("fixture/chunk_0")
+            .exists()
+    );
     assert_eq!(
-        std::fs::read(root.path().join("fixture/chunk_1")).unwrap(),
+        std::fs::read(
+            uploads
+                .state
+                .upload_chunks
+                .directory()
+                .join("fixture/chunk_1")
+        )
+        .unwrap(),
         b"b"
     );
     assert_eq!(
-        std::fs::read_dir(root.path().join("fixture"))
+        std::fs::read_dir(uploads.state.upload_chunks.directory().join("fixture"))
             .unwrap()
             .count(),
         1
@@ -107,7 +121,7 @@ async fn closing_a_scope_aborts_only_its_chunks_and_refuses_new_opens() {
 
 #[tokio::test]
 async fn an_aborted_write_waiting_for_the_writer_lock_cannot_resume() {
-    let (root, _stop, uploads, writers) = fixture();
+    let (_root, _server, uploads, writers) = fixture();
     let owner = NativeRequestScope::default();
     let handle = writers
         .open(&uploads, &owner, "fixture", 0, 1)
@@ -122,7 +136,7 @@ async fn an_aborted_write_waiting_for_the_writer_lock_cannot_resume() {
     assert!(write.await.is_err());
     drop(slot);
     assert_eq!(
-        std::fs::read_dir(root.path().join("fixture"))
+        std::fs::read_dir(uploads.state.upload_chunks.directory().join("fixture"))
             .unwrap()
             .count(),
         0
@@ -131,7 +145,7 @@ async fn an_aborted_write_waiting_for_the_writer_lock_cannot_resume() {
 
 #[tokio::test]
 async fn incomplete_finish_drops_the_handle_and_never_publishes_a_chunk() {
-    let (root, _stop, uploads, writers) = fixture();
+    let (_root, _server, uploads, writers) = fixture();
     let owner = NativeRequestScope::default();
     let handle = writers
         .open(&uploads, &owner, "fixture", 0, 2)
@@ -141,7 +155,7 @@ async fn incomplete_finish_drops_the_handle_and_never_publishes_a_chunk() {
     assert!(writers.finish(&owner, &handle).await.is_err());
     assert!(writers.write(&owner, &handle, b"b").await.is_err());
     assert_eq!(
-        std::fs::read_dir(root.path().join("fixture"))
+        std::fs::read_dir(uploads.state.upload_chunks.directory().join("fixture"))
             .unwrap()
             .count(),
         0
@@ -150,7 +164,7 @@ async fn incomplete_finish_drops_the_handle_and_never_publishes_a_chunk() {
 
 #[tokio::test]
 async fn dropping_the_registry_removes_unfinished_owned_chunks() {
-    let (root, _stop, uploads, writers) = fixture();
+    let (_root, _server, uploads, writers) = fixture();
     let owner = NativeRequestScope::default();
     let handle = writers
         .open(&uploads, &owner, "fixture", 0, 2)
@@ -159,7 +173,7 @@ async fn dropping_the_registry_removes_unfinished_owned_chunks() {
     writers.write(&owner, &handle, b"a").await.unwrap();
     drop(writers);
     assert_eq!(
-        std::fs::read_dir(root.path().join("fixture"))
+        std::fs::read_dir(uploads.state.upload_chunks.directory().join("fixture"))
             .unwrap()
             .count(),
         0
@@ -169,12 +183,15 @@ async fn dropping_the_registry_removes_unfinished_owned_chunks() {
 #[test]
 fn pending_open_cancellation_never_registers_or_leaves_late_temporary_files() {
     for cancellation in ["abort-owner", "close-scope", "drop-caller"] {
-        let (root, _stop, uploads, writers) = fixture();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .max_blocking_threads(1)
             .build()
             .unwrap();
+        let (_root, _server, uploads, writers) = {
+            let _entered = runtime.enter();
+            fixture()
+        };
         runtime.block_on(async {
             let owner = NativeRequestScope::default();
             let (release, blocked) = std::sync::mpsc::channel();
@@ -214,19 +231,110 @@ fn pending_open_cancellation_never_registers_or_leaves_late_temporary_files() {
         });
         drop(runtime);
         assert!(
-            !root.path().join("fixture/chunk_0").exists(),
+            !uploads
+                .state
+                .upload_chunks
+                .directory()
+                .join("fixture/chunk_0")
+                .exists(),
             "{cancellation}"
         );
         assert_eq!(
-            std::fs::read(root.path().join("fixture/chunk_1")).unwrap(),
+            std::fs::read(
+                uploads
+                    .state
+                    .upload_chunks
+                    .directory()
+                    .join("fixture/chunk_1")
+            )
+            .unwrap(),
             b"b"
         );
         assert_eq!(
-            std::fs::read_dir(root.path().join("fixture"))
+            std::fs::read_dir(uploads.state.upload_chunks.directory().join("fixture"))
                 .unwrap()
                 .count(),
             1,
             "{cancellation}"
         );
     }
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn blocked_peer_write_and_finish_remain_owned_until_cancel_or_caller_drop() {
+    use crate::native::uploads::fixture::Fixture;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    struct Dropped(Arc<AtomicBool>);
+    impl Drop for Dropped {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+    let fixture = Fixture::new().await;
+    for phase in ["write", "finish"] {
+        for mode in ["abort", "owner", "scope", "caller"] {
+            let writers = UploadWriters::default();
+            let scope = NativeRequestScope::default();
+            let size = if phase == "write" { 3 } else { 0 };
+            let handle = writers
+                .open_peer(
+                    &fixture.local.native_uploads().unwrap(),
+                    &scope,
+                    "remote",
+                    "fixture",
+                    0,
+                    size,
+                )
+                .await
+                .unwrap();
+            let slot = writers.owned(&scope, &handle).unwrap();
+            let dropped = Arc::new(AtomicBool::new(false));
+            {
+                let mut locked = slot.writer.lock().await;
+                let Writer::Peer(peer) = locked.as_mut().unwrap() else {
+                    panic!("expected peer writer")
+                };
+                let guard = Dropped(dropped.clone());
+                let (tx, rx) = tokio::sync::mpsc::channel(2);
+                peer.sender = Some(tx);
+                peer.request = Box::pin(async move {
+                    let _guard = guard;
+                    let _receiver = rx;
+                    std::future::pending().await
+                });
+            }
+            if phase == "write" {
+                writers.write(&scope, &handle, b"a").await.unwrap();
+                writers.write(&scope, &handle, b"b").await.unwrap();
+            }
+            let mut operation = Box::pin(async {
+                if phase == "write" {
+                    writers.write(&scope, &handle, b"c").await.map(|_| 0)
+                } else {
+                    writers.finish(&scope, &handle).await
+                }
+            });
+            assert!(futures_util::poll!(operation.as_mut()).is_pending());
+            assert!(writers.registry.lock().unwrap().slots.contains_key(&handle));
+            match mode {
+                "abort" => writers.abort(&scope, &handle),
+                "owner" => writers.abort_owner(scope.id()),
+                "scope" => scope.close(),
+                "caller" => {}
+                _ => unreachable!(),
+            }
+            if mode != "caller" {
+                assert!(operation.as_mut().await.is_err(), "{phase}/{mode}");
+            }
+            drop(operation);
+            drop(slot);
+            assert!(
+                writers.registry.lock().unwrap().slots.is_empty(),
+                "{phase}/{mode}"
+            );
+            assert!(dropped.load(Ordering::SeqCst), "{phase}/{mode}");
+        }
+    }
+    fixture.stop().await;
 }

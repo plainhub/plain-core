@@ -1,4 +1,4 @@
-use super::{caller, caller_id, current, decode_key};
+use super::{caller, current, decode_key};
 use crate::server::ServerState;
 use anyhow::{Result, anyhow, ensure};
 use axum::{
@@ -248,13 +248,6 @@ fn native_peer(
     };
     http_client::Url::parse(&peer_address::address(&peer).base_url)
         .map_err(|_| StatusCode::BAD_GATEWAY)
-}
-
-pub(super) async fn native_graphql(state: ServerState, target: &str, request: Request) -> Response {
-    match native_peer(&state, caller_id(request.headers()), target) {
-        Ok(base) => native_relay(state, base, request, false).await,
-        Err(status) => status.into_response(),
-    }
 }
 
 // Browsers cannot set headers on a WebSocket, so the desktop client id travels in `cid`.

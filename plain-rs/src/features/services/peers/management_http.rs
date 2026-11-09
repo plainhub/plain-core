@@ -37,7 +37,8 @@ pub async fn query(
         .lan
         .client
         .post(base.join("/graphql")?)
-        .header("c-id", client_id);
+        .header("c-id", client_id)
+        .timeout(Duration::from_secs(10));
     let response = exchange(outgoing, key, &request.to_string(), limit).await?;
     let response: Value = serde_json::from_slice(&response)?;
     if let Some(errors) = response["errors"].as_array() {
@@ -69,7 +70,6 @@ pub async fn exchange(
     let response = outgoing
         .header("content-type", "application/octet-stream")
         .body(encrypted)
-        .timeout(Duration::from_secs(10))
         .send()
         .await?;
     match response.status().as_u16() {

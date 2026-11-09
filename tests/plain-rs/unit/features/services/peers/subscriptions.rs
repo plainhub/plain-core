@@ -70,3 +70,63 @@ async fn chat_rekey_preserves_management_but_unpair_revokes_and_close_releases_p
     );
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn closed_scope_and_bounded_commands_fail_before_opening_or_sending() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let server = ContentServer::open(directory.path()).unwrap();
+    let state = server.runtime_state();
+    let peer = fixture_peer();
+    peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
+    let closed = NativeRequestScope::default();
+    closed.close();
+    assert!(
+        PeerSubscription::open_with_pin(state.clone(), target(&peer), closed, Some([1; 32]))
+            .is_err()
+    );
+    let scope = NativeRequestScope::default();
+    let session =
+        PeerSubscription::open_with_pin(state, target(&peer), scope.clone(), Some([1; 32]))
+            .unwrap();
+    assert_eq!(session.pin, Some([1; 32]));
+    assert_eq!(session.scope_id(), scope.id());
+    assert_eq!(
+        session.send(&"x".repeat(1024 * 1024)).unwrap_err(),
+        "Subscription request too large"
+    );
+    for _ in 0..64 {
+        session.send(r#"{"type":"ping"}"#).unwrap();
+    }
+    assert_eq!(
+        session.send(r#"{"type":"ping"}"#).unwrap_err(),
+        "Subscription command backpressure"
+    );
+    scope.close();
+    assert!(session.send(r#"{"type":"ping"}"#).is_err());
+    tokio::time::timeout(Duration::from_secs(1), session.wait_closed())
+        .await
+        .unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), session.read())
+            .await
+            .unwrap()
+            .is_err()
+    );
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn failed_peer_connection_marks_the_session_closed_for_handle_cleanup() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let server = ContentServer::open(directory.path()).unwrap();
+    let state = server.runtime_state();
+    let mut peer = fixture_peer();
+    peer.port = None;
+    peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
+    let session = PeerSubscription::open(state, target(&peer), Default::default()).unwrap();
+    tokio::time::timeout(Duration::from_secs(1), session.wait_closed())
+        .await
+        .unwrap();
+    assert!(session.send(r#"{"type":"ping"}"#).is_err());
+    server.shutdown().await;
+}

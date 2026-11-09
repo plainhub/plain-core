@@ -1,4 +1,5 @@
 use crate::graphql::executor::GraphqlExecutor;
+use crate::managed_peers::request_error as peer_error;
 use crate::native::events::NativeEventStream;
 use crate::server::ServerState;
 use plain_graphql::{Request, Response};
@@ -46,6 +47,58 @@ impl NativeGraphqlExecutor {
             .subscription_sessions
             .open_peer(self.state.clone(), target, scope)
     }
+    pub async fn open_managed_peer_subscriptions(
+        &self,
+        peer_id: &str,
+        scope: NativeRequestScope,
+    ) -> Result<u64, String> {
+        let mut stop = self.state.stop.clone();
+        tokio::select! {
+            biased;
+            _ = scope.wait_closed() => Err("Native request scope closed".into()),
+            _ = stop.wait_for(|value| *value) => Err("Server stopped".into()),
+            result = async {
+                let route = self.state.managed_proxy.peers.route(&self.state, peer_id).await.map_err(peer_error)?;
+                route.check_current(&self.state).map_err(peer_error)?;
+                self.state.subscription_sessions.open_peer_with_pin(
+                    self.state.clone(),
+                    PeerSubscriptionTarget { peer_id: route.peer.id.clone(), public_key: route.peer.public_key.clone() },
+                    scope.clone(),
+                    Some(route.pin),
+                )
+            } => result,
+        }
+    }
+
+    pub async fn execute_peer_scoped(
+        &self,
+        peer_id: &str,
+        mut request: Request,
+        scope: NativeRequestScope,
+        timeout: std::time::Duration,
+    ) -> Result<Response, String> {
+        let deadline = tokio::time::Instant::now() + timeout;
+        request.extensions.remove("nativeScope");
+        request.extensions.remove("nativeDeadlineMs");
+        let request = serde_json::to_string(&request).map_err(|error| error.to_string())?;
+        if request.len() > crate::managed_peers::GRAPHQL_LIMIT {
+            return Err("GraphQL request too large".into());
+        }
+        let mut stop = self.state.stop.clone();
+        tokio::select! {
+            biased;
+            _ = scope.wait_closed() => Err("Native request scope closed".into()),
+            _ = stop.wait_for(|value| *value) => Err("Server stopped".into()),
+            _ = tokio::time::sleep_until(deadline) => Err("connection_timeout".into()),
+            result = async {
+                let route = self.state.managed_proxy.peers.route(&self.state, peer_id).await?;
+                let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+                let response = route.exchange(&self.state, &request, Some(remaining)).await?;
+                serde_json::from_slice(&response).map_err(anyhow::Error::from)
+            } => result.map_err(peer_error),
+        }
+    }
+
     pub fn subscription_session(
         &self,
         id: u64,
