@@ -1,7 +1,4 @@
 #[cfg(feature = "core")]
-pub mod events;
-
-#[cfg(feature = "core")]
 pub mod assets;
 
 #[cfg(feature = "core")]
@@ -18,3 +15,6 @@ pub mod uploads;
 
 #[cfg(all(feature = "core", feature = "media"))]
 pub mod audio;
+
+#[cfg(feature = "core")]
+pub mod sockets;

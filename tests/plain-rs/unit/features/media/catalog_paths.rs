@@ -126,19 +126,25 @@ fn platform_system_root_matching_respects_path_boundaries_and_windows_case() {
     #[cfg(target_os = "linux")]
     {
         assert!(is_media_excluded_at(
-            "/srv/site/dist/icon.svg",
+            "/usr/share/icon.svg",
             Path::new("/tmp/data"),
             Path::new("/tmp/cache"),
             &[]
         ));
         assert!(!is_media_excluded_at(
-            "/srv2/site/dist/icon.svg",
+            "/usr2/share/icon.svg",
             Path::new("/tmp/data"),
             Path::new("/tmp/cache"),
             &[]
         ));
         assert!(is_media_excluded_at(
             "/etc/ssl/certs/a.pem",
+            Path::new("/tmp/data"),
+            Path::new("/tmp/cache"),
+            &[]
+        ));
+        assert!(!is_media_excluded_at(
+            "/srv/site/assets/icon.svg",
             Path::new("/tmp/data"),
             Path::new("/tmp/cache"),
             &[]

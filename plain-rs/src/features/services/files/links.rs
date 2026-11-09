@@ -57,8 +57,36 @@ pub async fn resolve(state: &CoreRuntime, id: &str, kind: ReadKind) -> anyhow::R
     resolve_with_key(state, id, kind, None).await
 }
 
-pub async fn resolve_native(state: &CoreRuntime, id: &str, kind: ReadKind, key: [u8; 32]) -> anyhow::Result<File> {
+pub async fn resolve_native(
+    state: &CoreRuntime,
+    id: &str,
+    kind: ReadKind,
+    key: [u8; 32],
+) -> anyhow::Result<File> {
     resolve_with_key(state, id, kind, Some(key)).await
+}
+
+pub async fn resolve_native_reference(
+    state: &CoreRuntime,
+    reference: &str,
+    kind: ReadKind,
+) -> anyhow::Result<File> {
+    state.native_client_id().map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(!reference.is_empty(), "Empty resource reference");
+    let file = resolve_resource(
+        state,
+        Scope::Global,
+        resource_link::Resource::reference(reference),
+        kind,
+    )
+    .await?;
+    let physical_path = file
+        .path
+        .split_once("!zip!/")
+        .map_or(file.path.as_str(), |(archive, _)| archive);
+    state.file_platform.authorize(physical_path, false).await?;
+    state.native_client_id().map_err(anyhow::Error::msg)?;
+    Ok(file)
 }
 
 async fn resolve_with_key(
@@ -85,6 +113,15 @@ async fn resolve_with_key(
         Ok((scope, resource))
     })
     .await??;
+    resolve_resource(state, scope, resource, kind).await
+}
+
+async fn resolve_resource(
+    state: &CoreRuntime,
+    scope: Scope,
+    resource: resource_link::Resource,
+    kind: ReadKind,
+) -> anyhow::Result<File> {
     let kind = if resource.r#type == ResourceType::ForegroundMediaThumbnail {
         anyhow::ensure!(
             kind == ReadKind::Thumbnail,

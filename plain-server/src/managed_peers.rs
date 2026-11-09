@@ -1,3 +1,4 @@
+pub(crate) mod resource;
 pub(crate) mod upload;
 
 use crate::server::ServerState;

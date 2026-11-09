@@ -33,3 +33,20 @@ fn reopen_rejects_a_substituted_path_and_temp_entries_are_private() {
     fs::write(file.path(), b"substitute").unwrap();
     assert_eq!(file.reopen().unwrap_err().kind(), io::ErrorKind::NotFound);
 }
+
+#[test]
+fn path_owner_closes_file_and_removes_it_on_drop() {
+    let dir = tempdir().unwrap();
+    let mut file = NamedTempFile::new_in(dir.path()).unwrap();
+    file.write_all(b"prepared").unwrap();
+    let path = file.path().to_owned();
+    let owner = file.into_temp_path();
+    assert_eq!(owner.as_ref(), path);
+    assert_eq!(fs::read(&path).unwrap(), b"prepared");
+    assert_eq!(
+        std::mem::size_of_val(&owner),
+        std::mem::size_of::<PathBuf>()
+    );
+    drop(owner);
+    assert!(!path.exists());
+}

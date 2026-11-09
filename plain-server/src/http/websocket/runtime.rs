@@ -23,6 +23,7 @@ const MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP: usize = 5;
 const INITIAL_MESSAGE_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) struct Runtime {
+    pub(crate) native_sockets: Arc<crate::native::sockets::Sessions>,
     pub(crate) screen_events: tokio::sync::broadcast::Sender<WsEvent>,
     connections: Mutex<HashMap<String, Connection>>,
     unauthenticated: Mutex<HashMap<IpAddr, usize>>,
@@ -31,6 +32,7 @@ pub(crate) struct Runtime {
 impl Default for Runtime {
     fn default() -> Self {
         Self {
+            native_sockets: Arc::default(),
             connections: Mutex::default(),
             unauthenticated: Mutex::default(),
             replay: Default::default(),
@@ -56,7 +58,7 @@ impl Drop for UnauthenticatedConnection {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Channel {
+pub(crate) enum Channel {
     Auth,
     Screen,
     ImageEditor,
@@ -70,7 +72,8 @@ struct Connection {
     channel: Channel,
     client_id: String,
     registered: bool,
-    outgoing: mpsc::Sender<Message>,
+    native: bool,
+    outgoing: Option<mpsc::Sender<Message>>,
     pending: Option<String>,
     closing: tokio::sync::watch::Sender<Option<(u16, &'static str)>>,
 }
@@ -104,7 +107,7 @@ impl Runtime {
         let connections = self.connections.lock().unwrap();
         for c in connections
             .values()
-            .filter(|c| client_id.is_none_or(|id| c.client_id == id))
+            .filter(|c| !c.native && client_id.is_none_or(|id| c.client_id == id))
         {
             let _ = c.closing.send(Some((1000, "")));
         }
@@ -122,7 +125,7 @@ impl Runtime {
             .unwrap()
             .iter_mut()
             .find(|(_, c)| c.pending.as_deref() == Some(request_id))
-            .map(|(_, c)| {
+            .and_then(|(_, c)| {
                 c.pending = None;
                 c.outgoing.clone()
             });
@@ -252,17 +255,15 @@ async fn run(
             channel,
             client_id: params.cid.clone(),
             registered: false,
-            outgoing: sender,
+            native: false,
+            outgoing: Some(sender),
             pending: None,
             closing,
         },
     );
     let mut registered = false;
     let mut stream = None;
-    let mut receiver = match channel {
-        Channel::Auth | Channel::ImageEditor => state.events.subscribe(),
-        Channel::Screen => state.main_ws.screen_events.subscribe(),
-    };
+    let mut receiver = channel.subscribe(&state);
     let mut pending: Option<String> = None;
     enum LoginHandshake {
         AwaitingCommitment,
@@ -411,30 +412,17 @@ async fn run(
                         let _ = socket.send(close(1008, "invalid_request")).await;
                         break;
                     }
-                    let controls = controls(&plain);
-                    if !controls.is_empty() {
-                        if let Err(error) = plain_rs::features::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
-                            log::warn!("Screen mirror controls: {error}");
-                            let _ = socket.send(close(1008, "unsupported_capability")).await;
-                            break;
-                        }
-                        if let Err(error) = state.host.call("systemScreenMirrorControls", json!({"inputs":controls})).await {
-                            log::warn!("Screen mirror controls: {error}");
-                        }
+                    if let Err(error) = dispatch_controls(&state, &plain).await {
+                        log::warn!("Screen mirror controls: {error}");
+                        let _ = socket.send(close(1008, "unsupported_capability")).await;
+                        break;
                     }
                 }
                 continue;
             },
             event = receiver.recv(), if registered => {
                 let event = match event { Ok(event) => event, Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => { let _ = socket.send(close(1013,"slow_client")).await; break; }, Err(_) => break };
-                let allowed = match channel {
-                    Channel::Screen => is_screen_event(event.event_type),
-                    Channel::ImageEditor => event.event_type == "IMAGE_EDITOR_UPDATE",
-                    Channel::Auth => false,
-                };
-                if !allowed { continue; }
-                if event.target_cid.as_ref().is_some_and(|cid| cid != &params.cid) { continue; }
-                let Some(event) = event.into_public() else { continue; };
+                let Some(event) = channel.public_event(event, &params.cid) else { continue; };
                 if !enabled(&state) { break; }
                 // Same key the inbound frames used: the shell holds no session.
                 let Some(key) = plain_rs::features::services::sessions::local_key(&state, &params.cid)
@@ -465,31 +453,7 @@ async fn run(
         )
         .await;
     }
-    state.main_ws.connections.lock().unwrap().remove(&id);
-    if channel == Channel::Screen
-        && registered
-        && !state
-            .main_ws
-            .connections
-            .lock()
-            .unwrap()
-            .values()
-            .any(|c| c.channel == Channel::Screen && c.registered)
-    {
-        match plain_rs::features::services::capabilities::snapshot(&state.host).await {
-            Ok(capabilities) if capabilities.iter().any(|value| value == "SCREEN_MIRROR") => {
-                if let Err(error) = state
-                    .host
-                    .call("systemScreenMirrorResetTouch", json!({}))
-                    .await
-                {
-                    log::warn!("Screen mirror touch cleanup: {error}");
-                }
-            }
-            Ok(_) => {}
-            Err(error) => log::warn!("Screen mirror touch cleanup: {error}"),
-        }
-    }
+    remove_connection(&state, &id).await;
     let _ = tokio::time::timeout(Duration::from_secs(1), socket.close(None)).await;
 }
 fn notify_login_request(
@@ -562,3 +526,97 @@ fn controls(bytes: &[u8]) -> Vec<Value> {
 #[cfg(test)]
 #[path = "../../../../tests/plain-server/unit/http/websocket/runtime.rs"]
 mod tests;
+
+pub(crate) async fn remove_connection(state: &ServerState, id: &str) {
+    let reset_touch = {
+        let mut connections = state.main_ws.connections.lock().unwrap();
+        let Some(connection) = connections.remove(id) else {
+            return;
+        };
+        connection.channel == Channel::Screen
+            && connection.registered
+            && !connections
+                .values()
+                .any(|connection| connection.channel == Channel::Screen && connection.registered)
+    };
+    if reset_touch {
+        match plain_rs::features::services::capabilities::snapshot(&state.host).await {
+            Ok(capabilities) if capabilities.iter().any(|value| value == "SCREEN_MIRROR") => {
+                if let Err(error) = state
+                    .host
+                    .call("systemScreenMirrorResetTouch", json!({}))
+                    .await
+                {
+                    log::warn!("Screen mirror touch cleanup: {error}");
+                }
+            }
+            Ok(_) => {}
+            Err(error) => log::warn!("Screen mirror touch cleanup: {error}"),
+        }
+    }
+}
+
+pub(crate) async fn dispatch_controls(state: &ServerState, payload: &[u8]) -> Result<(), String> {
+    let controls = controls(payload);
+    if controls.is_empty() {
+        return Ok(());
+    }
+    plain_rs::features::services::capabilities::require(&state.host, "SCREEN_MIRROR")
+        .await
+        .map_err(|error| error.to_string())?;
+    if let Err(error) = state
+        .host
+        .call("systemScreenMirrorControls", json!({"inputs": controls}))
+        .await
+    {
+        log::warn!("Screen mirror controls: {error}");
+    }
+    Ok(())
+}
+
+impl Runtime {
+    pub(crate) fn register_native(
+        &self,
+        id: &str,
+        client_id: String,
+        channel: Channel,
+    ) -> tokio::sync::watch::Receiver<Option<(u16, &'static str)>> {
+        let (closing, closed) = tokio::sync::watch::channel(None);
+        self.connections.lock().unwrap().insert(
+            id.into(),
+            Connection {
+                channel,
+                client_id,
+                registered: true,
+                native: true,
+                outgoing: None,
+                pending: None,
+                closing,
+            },
+        );
+        closed
+    }
+}
+
+impl Channel {
+    pub(crate) fn subscribe(
+        self,
+        state: &ServerState,
+    ) -> tokio::sync::broadcast::Receiver<WsEvent> {
+        match self {
+            Self::Screen => state.main_ws.screen_events.subscribe(),
+            Self::Auth | Self::ImageEditor => state.events.subscribe(),
+        }
+    }
+    pub(crate) fn public_event(self, event: WsEvent, client_id: &str) -> Option<WsEvent> {
+        let allowed = match self {
+            Self::Screen => is_screen_event(event.event_type),
+            Self::ImageEditor => event.event_type == "IMAGE_EDITOR_UPDATE",
+            Self::Auth => false,
+        };
+        if !allowed || event.target_cid.as_ref().is_some_and(|id| id != client_id) {
+            return None;
+        }
+        event.into_public()
+    }
+}

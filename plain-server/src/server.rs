@@ -104,6 +104,20 @@ impl ContentServer {
         ))
     }
 
+    pub fn native_sockets(&self) -> Result<crate::native::sockets::NativeSockets, String> {
+        self.state.native_client_id()?;
+        Ok(crate::native::sockets::NativeSockets::new(
+            self.state.clone(),
+        ))
+    }
+
+    pub fn native_resources(&self) -> Result<crate::native::resources::NativeResources, String> {
+        self.state.native_client_id()?;
+        Ok(crate::native::resources::NativeResources::new(
+            self.state.clone(),
+        ))
+    }
+
     pub fn native_uploads(&self) -> Result<crate::native::uploads::NativeUploads, String> {
         self.state.native_client_id()?;
         Ok(crate::native::uploads::NativeUploads::new(

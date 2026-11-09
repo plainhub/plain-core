@@ -268,6 +268,38 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     let event: serde_json::Value = serde_json::from_str(&event).unwrap();
     assert_eq!(event["id"], "content");
     assert_eq!(event["payload"]["data"]["contentChanged"], true);
+    let sockets = local.native_sockets().unwrap();
+    let socket_handle = sockets
+        .open(
+            crate::native::sockets::SocketKind::ImageEditor,
+            Some("remote".into()),
+            Default::default(),
+        )
+        .unwrap();
+    let socket_session = sockets.session(&socket_handle).unwrap();
+    for expected in [vec![0], vec![3]] {
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(5), socket_session.read())
+                .await
+                .unwrap()
+                .unwrap(),
+            expected
+        );
+    }
+    remote_state
+        .events
+        .send(plain_rs::infrastructure::events::WsEvent::broadcast_binary(
+            "IMAGE_EDITOR_UPDATE",
+            vec![0, 255, 1],
+        ))
+        .unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), socket_session.read())
+            .await
+            .unwrap()
+            .unwrap(),
+        vec![4, 0, 255, 1]
+    );
     let wrong_pin = [0; 32];
     assert_ne!(route.pin, wrong_pin);
     let wrong_route = Arc::new(PeerRoute {
@@ -320,6 +352,20 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
             .unwrap()
             .is_err()
     );
+    let rejected_socket = sockets
+        .open(
+            crate::native::sockets::SocketKind::ImageEditor,
+            Some("remote".into()),
+            Default::default(),
+        )
+        .unwrap();
+    let rejected_socket = sockets.session(&rejected_socket).unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(5), rejected_socket.read())
+            .await
+            .unwrap()
+            .is_err()
+    );
     executor.close_subscriptions(rejected_handle);
     *slot.lock().await = Some(route.clone());
     peers::unpair(&state.db, "remote").unwrap();
@@ -338,6 +384,12 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
     assert!(subscription.send(r#"{"type":"ping"}"#).is_err());
     assert!(
         tokio::time::timeout(Duration::from_secs(5), subscription.read())
+            .await
+            .unwrap()
+            .is_err()
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_secs(5), socket_session.read())
             .await
             .unwrap()
             .is_err()

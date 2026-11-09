@@ -123,10 +123,10 @@ description = "Reusable cryptography, media, file, format and native components"
 "jpeg-decoder" = { version = "0.3", default-features = false, features = ["platform_independent"] }
 
 [target."cfg(any(target_os=\"freebsd\", target_os=\"openbsd\", target_os = \"netbsd\", target_os = \"dragonfly\", target_os = \"ios\"))".dependencies]
-"mio" = { "version" = "=1.2.3", "features" = ["os-ext"], "optional" = true }
+"mio" = { "version" = "=1.2.4", "features" = ["os-ext"], "optional" = true }
 
 [target."cfg(any(target_os=\"linux\", target_os=\"android\"))".dependencies]
-"mio" = { "version" = "=1.2.3", "features" = ["os-ext"], "optional" = true }
+"mio" = { "version" = "=1.2.4", "features" = ["os-ext"], "optional" = true }
 
 [target."cfg(target_os=\"macos\")".dependencies]
 "bitflags" = { "version" = "=2.13.2", "optional" = true }

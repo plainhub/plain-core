@@ -1,5 +1,5 @@
-use plain_libs::protocols::http_client;
 use futures_util::{Stream, StreamExt};
+use plain_libs::protocols::http_client;
 use sha2::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},
@@ -135,6 +135,23 @@ impl RemoteCache {
             result = work => result,
         }
     }
+    pub async fn stage_stream_in<S>(
+        &self,
+        directory: &Path,
+        expected: u64,
+        stream: S,
+    ) -> Result<plain_libs::temporary::NamedTempFile, String>
+    where
+        S: Stream<Item = Result<bytes::Bytes, String>> + Send,
+    {
+        let _permit = self
+            .permits
+            .acquire()
+            .await
+            .map_err(|error| error.to_string())?;
+        write_download(directory, Some(expected), stream).await
+    }
+
     async fn download_with<F, FF, S>(
         &self,
         directory: &Path,

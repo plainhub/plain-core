@@ -53,7 +53,9 @@ struct DeniedWatcher {
     calls: Vec<std::path::PathBuf>,
 }
 impl Watcher for DeniedWatcher {
-    fn new<F: plain_libs::file_events::EventHandler>(_: F) -> plain_libs::file_events::Result<Self> {
+    fn new<F: plain_libs::file_events::EventHandler>(
+        _: F,
+    ) -> plain_libs::file_events::Result<Self> {
         Ok(Self::default())
     }
     fn watch(&mut self, path: &Path, _: RecursiveMode) -> plain_libs::file_events::Result<()> {
@@ -73,7 +75,7 @@ impl Watcher for DeniedWatcher {
 #[test]
 #[cfg(target_os = "linux")]
 fn an_inaccessible_watch_descendant_is_skipped_before_descending() {
-    let directory = plain_libs::temporary::tempdir().unwrap();
+    let directory = watch_directory_fixture();
     let denied = directory.path().join("denied");
     let nested = denied.join("nested");
     let readable = directory.path().join("readable");
@@ -276,10 +278,16 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
     #[derive(Default)]
     struct RecordingWatcher(Vec<(std::path::PathBuf, RecursiveMode)>);
     impl Watcher for RecordingWatcher {
-        fn new<F: plain_libs::file_events::EventHandler>(_: F) -> plain_libs::file_events::Result<Self> {
+        fn new<F: plain_libs::file_events::EventHandler>(
+            _: F,
+        ) -> plain_libs::file_events::Result<Self> {
             Ok(Self::default())
         }
-        fn watch(&mut self, path: &Path, mode: RecursiveMode) -> plain_libs::file_events::Result<()> {
+        fn watch(
+            &mut self,
+            path: &Path,
+            mode: RecursiveMode,
+        ) -> plain_libs::file_events::Result<()> {
             self.0.push((path.to_owned(), mode));
             Ok(())
         }
@@ -290,14 +298,15 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
     let directory = watch_directory_fixture();
     let root = directory.path();
     std::fs::create_dir_all(root.join("project/src")).unwrap();
-    std::fs::create_dir_all(root.join("project/.git/objects")).unwrap();
+    std::fs::create_dir_all(root.join("project/cache/objects")).unwrap();
+    std::fs::create_dir_all(root.join("repository/.git/objects")).unwrap();
     let scope = crate::features::files::index_scope::Scope {
         volumes: Vec::new(),
         directories: vec![crate::features::files::index_scope::normalized(root)],
         exclusions: Vec::new(),
         defaults: crate::features::files::index_scope::Defaults {
             excluded_directories: Vec::new(),
-            excluded_names: vec![".git".into()],
+            excluded_names: vec!["cache".into()],
         },
     };
     let mut watcher = RecordingWatcher::default();
@@ -319,7 +328,8 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
             watcher
                 .0
                 .iter()
-                .all(|(path, mode)| !path.to_string_lossy().contains(".git")
+                .all(|(path, mode)| !path.starts_with(root.join("project/cache"))
+                    && !path.starts_with(root.join("repository"))
                     && *mode == RecursiveMode::NonRecursive)
         );
     }
@@ -394,12 +404,16 @@ fn git_project_events_are_skipped_without_disabling_other_file_events() {
     let repo = directory.path().join("project");
     std::fs::create_dir_all(repo.join(".git")).unwrap();
     let (send, mut receive) = tokio::sync::mpsc::channel(8);
-    let excluded = Event::new(EventKind::Remove(plain_libs::file_events::event::RemoveKind::File))
-        .add_path(repo.join("file.txt"));
+    let excluded = Event::new(EventKind::Remove(
+        plain_libs::file_events::event::RemoveKind::File,
+    ))
+    .add_path(repo.join("file.txt"));
     enqueue_event(&send, None, excluded).unwrap();
     assert!(receive.try_recv().is_err());
-    let included = Event::new(EventKind::Remove(plain_libs::file_events::event::RemoveKind::File))
-        .add_path(directory.path().join("report.txt"));
+    let included = Event::new(EventKind::Remove(
+        plain_libs::file_events::event::RemoveKind::File,
+    ))
+    .add_path(directory.path().join("report.txt"));
     enqueue_event(&send, None, included.clone()).unwrap();
     assert_eq!(receive.try_recv().unwrap().paths, included.paths);
 }

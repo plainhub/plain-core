@@ -1,5 +1,5 @@
-use plain_libs::protocols::http_client;
 use anyhow::Result;
+use plain_libs::protocols::http_client;
 use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::services::notifications::types::Notification;
 use plain_rs::features::services::peers::management::Identity;
@@ -240,6 +240,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
                         json!(sdk_facts.lock().unwrap().clone())
                     }
                     "mdnsMulticast" => json!(false),
+                    "onlineClientsChanged" => serde_json::Value::Null,
                     method => panic!("Unexpected notification primitive {method}"),
                 };
                 host.reply(generation, json!({"id":request["id"],"result":result}))

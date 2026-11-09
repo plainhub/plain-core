@@ -254,6 +254,23 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
             "systemScreenMirrorControls"
         );
     }
+    let native_scope = plain_rs::infrastructure::host::request_scope::NativeRequestScope::default();
+    let native_sockets = core.native_sockets().unwrap();
+    let native_handle = native_sockets
+        .open(
+            plain_server::native::sockets::SocketKind::Screen,
+            None,
+            native_scope.clone(),
+        )
+        .unwrap();
+    let native_session = native_sockets.session(&native_handle).unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(3), native_session.read())
+            .await
+            .unwrap()
+            .unwrap(),
+        vec![0]
+    );
     for (kind, payload) in [
         ("SCREEN_MIRROR_VIDEO", vec![0, 255, 1]),
         ("SCREEN_MIRROR_AUDIO", vec![2, 0, 3]),
@@ -267,6 +284,15 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         let ClientMessage::Binary(bytes) = message else {
             panic!("Expected encrypted media")
         };
+        let mut native_bytes = vec![if kind == "SCREEN_MIRROR_VIDEO" { 1 } else { 2 }];
+        native_bytes.extend_from_slice(&payload);
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(3), native_session.read())
+                .await
+                .unwrap()
+                .unwrap(),
+            native_bytes
+        );
         assert_eq!(
             screen_stream.decode(&bytes, &key).unwrap(),
             (kind.to_owned(), payload)
@@ -321,6 +347,8 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     assert!(
         matches!(message, ClientMessage::Close(Some(frame)) if frame.reason == "invalid_request")
     );
+    assert!(received.try_recv().is_err());
+    native_scope.close();
     assert_eq!(
         tokio::time::timeout(Duration::from_secs(3), received.recv())
             .await

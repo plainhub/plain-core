@@ -1,6 +1,4 @@
-use super::{
-    MAX_RESOURCE_READ_BYTES, MAX_RESOURCE_RESPONSE_BYTES, NativeFileResources, ResourceInfo,
-};
+use super::{MAX_RESOURCE_RESPONSE_BYTES, NativeFileResources, ResourceInfo};
 use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 use std::{
     collections::HashMap,
@@ -13,6 +11,7 @@ pub struct NativeResource {
     pub info: ResourceInfo,
     scope: NativeRequestScope,
     store: Arc<NativeFileResources>,
+    reads: Arc<tokio::sync::Semaphore>,
 }
 
 impl NativeResource {
@@ -30,26 +29,13 @@ impl NativeResource {
         if !self.store.is_open(&self.info.id) {
             return Err("resource unavailable".into());
         }
-        let read = async {
-            let mut bytes = Vec::with_capacity(length as usize);
-            while (bytes.len() as u64) < length {
-                let count =
-                    (length - bytes.len() as u64).min(MAX_RESOURCE_READ_BYTES as u64) as usize;
-                let chunk = self
-                    .store
-                    .read(&self.info.id, offset + bytes.len() as u64, count)
-                    .await?;
-                if chunk.is_empty() {
-                    return Err("resource ended before the requested range".into());
-                }
-                bytes.extend_from_slice(&chunk);
-            }
-            Ok(bytes)
-        };
         tokio::select! {
             biased;
             _ = self.scope.wait_closed() => Err("resource owner closed".into()),
-            result = read => result,
+            result = async {
+                let _permit = self.reads.acquire().await.map_err(|_| "resource registry closed")?;
+                self.store.read_range(&self.info.id, offset, length).await
+            } => result,
         }
     }
 }
@@ -66,9 +52,20 @@ struct State {
     handles: HashMap<String, NativeResource>,
 }
 
-#[derive(Default)]
 pub struct NativeResourceRegistry {
     state: Mutex<State>,
+    reads: Arc<tokio::sync::Semaphore>,
+    prepares: tokio::sync::Semaphore,
+}
+
+impl Default for NativeResourceRegistry {
+    fn default() -> Self {
+        Self {
+            state: Mutex::default(),
+            reads: Arc::new(tokio::sync::Semaphore::new(4)),
+            prepares: tokio::sync::Semaphore::new(4),
+        }
+    }
 }
 
 impl NativeResourceRegistry {
@@ -77,6 +74,70 @@ impl NativeResourceRegistry {
         scope: &NativeRequestScope,
         path: &Path,
     ) -> Result<ResourceInfo, String> {
+        self.open_with(scope, |store| async move { store.open(path).await })
+            .await
+    }
+
+    pub(super) async fn open_content(
+        &self,
+        scope: &NativeRequestScope,
+        content: plain_rs::features::services::files::content::Content,
+        stop: Option<tokio::sync::watch::Receiver<bool>>,
+    ) -> Result<ResourceInfo, String> {
+        self.open_with(scope, |store| async move {
+            store.open_content(content, stop).await
+        })
+        .await
+    }
+
+    pub(super) async fn prepare(&self) -> Result<tokio::sync::SemaphorePermit<'_>, String> {
+        self.prepares
+            .acquire()
+            .await
+            .map_err(|_| "resource registry closed".into())
+    }
+
+    pub(super) async fn open_staged(
+        &self,
+        scope: &NativeRequestScope,
+        file: plain_libs::temporary::NamedTempFile,
+        name: String,
+        mime: String,
+        stop: Option<tokio::sync::watch::Receiver<bool>>,
+    ) -> Result<ResourceInfo, String> {
+        self.open_with(scope, |store| async move {
+            store.open_staged(file, name, mime, stop).await
+        })
+        .await
+    }
+
+    pub(super) async fn open_peer(
+        &self,
+        scope: &NativeRequestScope,
+        reference: &str,
+        peer: crate::managed_peers::resource::PeerResource,
+    ) -> Result<ResourceInfo, String> {
+        self.open_with(scope, |store| async move {
+            store.insert(
+                reference.rsplit('/').next().unwrap_or(reference).into(),
+                peer.mime.clone(),
+                peer.size,
+                super::Source::Peer(peer),
+                None,
+            )
+        })
+        .await
+    }
+
+    async fn open_with<F, Fut>(
+        &self,
+        scope: &NativeRequestScope,
+        open: F,
+    ) -> Result<ResourceInfo, String>
+    where
+        F: FnOnce(Arc<NativeFileResources>) -> Fut,
+        Fut: std::future::Future<Output = Result<ResourceInfo, String>>,
+    {
         let store = {
             let mut state = self.state.lock().unwrap();
             ensure_open(scope)?;
@@ -89,7 +150,7 @@ impl NativeResourceRegistry {
         let info = tokio::select! {
             biased;
             _ = scope.wait_closed() => return Err("resource owner closed".into()),
-            result = store.open(path) => result?,
+            result = open(store.clone()) => result?,
         };
         let mut state = self.state.lock().unwrap();
         if scope.is_closed()
@@ -107,6 +168,7 @@ impl NativeResourceRegistry {
                 info: info.clone(),
                 scope: scope.clone(),
                 store,
+                reads: self.reads.clone(),
             },
         );
         Ok(info)
@@ -125,7 +187,7 @@ impl NativeResourceRegistry {
         if resource.scope.id() != scope.id() {
             return Err(ResourceAccessError::Forbidden);
         }
-        if scope.is_closed() {
+        if scope.is_closed() || !resource.store.is_open(id) {
             return Err(ResourceAccessError::Unavailable);
         }
         Ok(resource.clone())

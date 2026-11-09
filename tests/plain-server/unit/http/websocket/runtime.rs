@@ -1,5 +1,5 @@
-use plain_libs::protocols::http_client;
 use super::*;
+use plain_libs::protocols::http_client;
 #[test]
 fn upstream_json_keeps_the_control_envelope_registry() {
     let input=controls(br#"{"type":"screenMirrorControl","input":{"action":"SCROLL","x":0.5,"y":0.25,"deltaX":-10,"deltaY":120}}"#);
@@ -63,8 +63,9 @@ fn rejecting_confirmation_retains_the_legacy_retry_close_code() {
             channel: Channel::Auth,
             client_id: "client".into(),
             registered: false,
+            native: false,
             pending: Some("request".into()),
-            outgoing,
+            outgoing: Some(outgoing),
             closing,
         },
     );
@@ -118,15 +119,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         }
     });
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
-    let (port, _) = server
-        .start_public(
-            0,
-            0,
-            cert_pem,
-            cert_key,
-        )
-        .await
-        .unwrap();
+    let (port, _) = server.start_public(0, 0, cert_pem, cert_key).await.unwrap();
     let digest = plain_libs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
     let client = plain_libs::crypto::EcdhSession::generate();
     for (cid, allowed) in [("rejected-browser", false), ("accepted-browser", true)] {
@@ -387,9 +380,9 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     use tokio_tungstenite::tungstenite::Message as ClientMessage;
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
-    let key = plain_libs::utils::base64::base64_decode(
-        &plain_libs::utils::base64::base64_encode(&state.url_key),
-    );
+    let key = plain_libs::utils::base64::base64_decode(&plain_libs::utils::base64::base64_encode(
+        &state.url_key,
+    ));
     let client = state.native_client_id().unwrap();
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     let host = state.host.clone();
@@ -608,9 +601,9 @@ async fn online_clients_follow_authenticated_graphql_connections() {
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
     let client = state.native_client_id().unwrap();
-    let key = plain_libs::utils::base64::base64_decode(
-        &plain_libs::utils::base64::base64_encode(&state.url_key),
-    );
+    let key = plain_libs::utils::base64::base64_decode(&plain_libs::utils::base64::base64_encode(
+        &state.url_key,
+    ));
     let native = core.native_graphql().unwrap();
     let native_id = native
         .open_subscriptions(
@@ -927,9 +920,9 @@ async fn authenticated_editor_connections_release_unauthenticated_slots() {
     let (_directory, server) = public_fixture();
     let state = server.runtime_state();
     let client_id = state.native_client_id().unwrap();
-    let key = plain_libs::utils::base64::base64_decode(
-        &plain_libs::utils::base64::base64_encode(&state.url_key),
-    );
+    let key = plain_libs::utils::base64::base64_decode(&plain_libs::utils::base64::base64_encode(
+        &state.url_key,
+    ));
     let mut sockets = Vec::new();
     for _ in 0..=MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP {
         let (mut socket, _) = tokio_tungstenite::connect_async(format!(

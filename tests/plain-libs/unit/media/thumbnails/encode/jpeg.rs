@@ -187,6 +187,36 @@ fn thumbnail_encode_preserves_the_baseline_bytes() {
 }
 
 #[test]
+fn reference_basis_matches_the_dct_definition() {
+    for (frequency, weights) in BASIS.iter().enumerate() {
+        for (sample, &weight) in weights.iter().enumerate() {
+            let expected = if frequency == 0 {
+                1.0 / 8.0f64.sqrt()
+            } else {
+                0.5 * (((2 * sample + 1) * frequency) as f64 * std::f64::consts::PI / 16.0).cos()
+            };
+            assert!((weight - expected).abs() < 1e-15);
+        }
+    }
+}
+
+#[test]
+fn half_integer_chroma_coefficients_preserve_reference_rounding() {
+    let quant = &profile(85).unwrap().quant[1];
+    for (left, top, expected) in [(320, 96, 3), (128, 208, -3), (320, 496, 3)] {
+        let rgb = (0..16 * 16)
+            .flat_map(|i| {
+                let (x, y) = (left + i % 16, top + i / 16);
+                [((y * 512 + x) % 200) as u8, (y % 200) as u8, 90]
+            })
+            .collect::<Vec<_>>();
+        let blocks = sampling_blocks(&rgb, 16, 16, 0, 0);
+        let coefficients = transform(&blocks[5], quant);
+        assert_eq!(coefficients[10], expected, "chroma block at {left},{top}");
+    }
+}
+
+#[test]
 fn factored_dct_matches_the_definition_at_every_frequency() {
     for seed in 1..=64 {
         let block = std::array::from_fn(|i| ((i * i * 3 + i * seed * 7 + seed * 11) % 256) as f64);
@@ -204,7 +234,7 @@ fn factored_dct_matches_the_definition_at_every_frequency() {
 }
 
 fn reference_transform(block: &[f64; 64], quant: &[u8; 64]) -> [i16; 64] {
-    let basis = &*BASIS;
+    let basis = &BASIS;
     let zigzag = &*ZIGZAG;
     let mut rows = [[0.0; 8]; 8];
     for y in 0..8 {

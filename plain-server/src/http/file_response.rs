@@ -173,15 +173,7 @@ pub(crate) fn thumbnail(
     use sha2::{Digest, Sha256};
     match bytes {
         Ok(Some(bytes)) => {
-            let mime = if bytes.starts_with(b"\x89PNG") {
-                "image/png"
-            } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
-                "image/gif"
-            } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
-                "image/webp"
-            } else {
-                "image/jpeg"
-            };
+            let mime = plain_rs::features::services::files::content::thumbnail_mime(&bytes);
             let etag = format!(
                 "\"{}\"",
                 plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(&bytes))

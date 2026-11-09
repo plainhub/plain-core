@@ -59,6 +59,15 @@ pub struct NamedTempFile {
 }
 
 #[derive(Debug)]
+pub struct TempPath(FilePath);
+
+impl AsRef<Path> for TempPath {
+    fn as_ref(&self) -> &Path {
+        &self.0.0
+    }
+}
+
+#[derive(Debug)]
 struct FilePath(PathBuf);
 
 impl Drop for FilePath {
@@ -92,6 +101,12 @@ impl NamedTempFile {
 
     pub fn reopen(&self) -> io::Result<File> {
         platform::reopen(&self.file, &self.path.0)
+    }
+
+    pub fn into_temp_path(self) -> TempPath {
+        let Self { path, file } = self;
+        drop(file);
+        TempPath(path)
     }
 
     pub fn persist(self, destination: impl AsRef<Path>) -> Result<File, PersistError> {

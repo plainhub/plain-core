@@ -26,8 +26,8 @@ mod raw;
 mod socket;
 mod upload;
 
+pub(super) use crate::managed_peers::resource::MANAGED_RESOURCE;
 use crate::managed_peers::{GRAPHQL_LIMIT, PeerRoute, ROUTE_LIFETIME, decode_key, decode_pin};
-pub(super) const MANAGED_RESOURCE: &str = "x-plain-managed-resource";
 #[derive(Default)]
 pub(crate) struct ManagedProxy {
     pub(crate) peers: crate::managed_peers::ManagedPeerRoutes,

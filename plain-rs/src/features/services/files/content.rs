@@ -71,6 +71,18 @@ pub enum Content {
     TranscodingUnavailable,
 }
 
+pub fn thumbnail_mime(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(b"\x89PNG") {
+        "image/png"
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        "image/gif"
+    } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
+        "image/webp"
+    } else {
+        "image/jpeg"
+    }
+}
+
 pub async fn read(
     state: &CoreRuntime,
     file: links::File,

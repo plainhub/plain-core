@@ -1,6 +1,5 @@
 use crate::graphql::executor::GraphqlExecutor;
 use crate::managed_peers::request_error as peer_error;
-use crate::native::events::NativeEventStream;
 use crate::server::ServerState;
 use plain_graphql::{Request, Response};
 use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
@@ -20,10 +19,6 @@ impl NativeGraphqlExecutor {
             state,
             client_id,
         }
-    }
-
-    pub fn subscribe_events(&self, scope: NativeRequestScope) -> Result<NativeEventStream, String> {
-        NativeEventStream::scoped(self.state.clone(), self.client_id.clone(), scope)
     }
 
     pub fn open_subscriptions(&self, scope: NativeRequestScope) -> Result<u64, String> {

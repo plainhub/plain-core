@@ -1,3 +1,4 @@
+use super::super::MAX_RESOURCE_READ_BYTES;
 use super::*;
 use std::{future::Future, task::Poll};
 
@@ -104,7 +105,10 @@ async fn closing_the_scope_interrupts_a_read_waiting_for_the_file_lock() {
         .get(&info.id)
         .unwrap()
         .clone();
-    let guard = slot.file.lock().await;
+    let super::super::Source::File { file, .. } = &slot.source else {
+        panic!("file expected")
+    };
+    let guard = file.lock().await;
     let mut read = Box::pin(resource.read_range(0, 8));
     assert!(std::future::poll_fn(|cx| Poll::Ready(read.as_mut().poll(cx).is_pending())).await);
     scope.close();
@@ -190,4 +194,90 @@ fn a_scope_closed_during_file_open_cannot_register_a_late_handle() {
     });
     drop(runtime);
     assert_eq!(std::fs::read(path).unwrap(), b"document");
+}
+
+#[tokio::test]
+async fn generated_thumbnail_handles_preserve_bytes_ranges_and_owner_cleanup() {
+    let registry = NativeResourceRegistry::default();
+    let scope = NativeRequestScope::default();
+    use std::io::Write;
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let mut temporary = plain_libs::temporary::NamedTempFile::new_in(directory.path()).unwrap();
+    let bytes = b"\x89PNGfixture-thumbnail";
+    temporary.write_all(bytes).unwrap();
+    let path = temporary.path().to_path_buf();
+    let info = registry
+        .open_staged(
+            &scope,
+            temporary,
+            "original.bmp".into(),
+            "image/png".into(),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(path.exists());
+    assert_eq!(info.mime, "image/png");
+    assert_eq!(info.name, "original.bmp");
+    assert_eq!(info.size, bytes.len() as u64);
+    let resource = registry.get(&scope, &info.id).unwrap();
+    assert!(matches!(
+        resource.store.state.lock().unwrap().resources[&info.id].source,
+        super::super::Source::Prepared(_)
+    ));
+    assert_eq!(resource.read_range(4, 7).await.unwrap(), &bytes[4..11]);
+    registry.close_owner(scope.id());
+    assert!(!path.exists());
+    assert!(resource.read_range(4, 7).await.is_err());
+}
+
+#[tokio::test]
+async fn temporary_preview_files_live_until_the_resource_is_closed() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let path = directory.path().join("generated.bin");
+    std::fs::write(&path, b"preview bytes").unwrap();
+    let registry = NativeResourceRegistry::default();
+    let scope = NativeRequestScope::default();
+    let info = registry
+        .open_content(
+            &scope,
+            plain_rs::features::services::files::content::Content::Temporary {
+                file: plain_rs::features::services::files::previews::Temporary(path.clone()),
+                mime: "image/png",
+                name: Some("preview.png".into()),
+            },
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(path.exists());
+    assert_eq!(
+        registry
+            .get(&scope, &info.id)
+            .unwrap()
+            .read_range(0, info.size)
+            .await
+            .unwrap(),
+        b"preview bytes"
+    );
+    assert!(registry.close(&scope, &info.id));
+    assert!(!path.exists());
+}
+
+#[tokio::test]
+async fn response_backpressure_does_not_allocate_or_read_after_owner_close() {
+    let root = plain_libs::temporary::tempdir().unwrap();
+    let path = root.path().join("fixture.txt");
+    std::fs::write(&path, b"fixture").unwrap();
+    let registry = NativeResourceRegistry::default();
+    let scope = NativeRequestScope::default();
+    let info = registry.open(&scope, &path).await.unwrap();
+    let resource = registry.get(&scope, &info.id).unwrap();
+    let permits = registry.reads.acquire_many(4).await.unwrap();
+    let mut read = Box::pin(resource.read_range(0, info.size));
+    assert!(std::future::poll_fn(|cx| Poll::Ready(read.as_mut().poll(cx).is_pending())).await);
+    scope.close();
+    assert!(read.await.is_err());
+    drop(permits);
+    assert_eq!(std::fs::read(&path).unwrap(), b"fixture");
 }
