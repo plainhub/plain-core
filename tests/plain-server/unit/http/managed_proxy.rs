@@ -690,27 +690,6 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(&response.bytes().await.unwrap()[..], b"chat attachment");
 
-    let mut request =
-        format!("ws://127.0.0.1:{a_http}/proxy/{ticket}/auth?cid=native-webview&auth=1")
-            .into_client_request()
-            .unwrap();
-    request
-        .headers_mut()
-        .insert(header::ORIGIN, "tauri://localhost".parse().unwrap());
-    let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
-    let (_, hello) = Client::start("native-webview", ConfirmationMode::Password).unwrap();
-    socket
-        .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
-        .await
-        .unwrap();
-    assert!(matches!(
-        tokio::time::timeout(Duration::from_secs(5), socket.next())
-            .await
-            .unwrap(),
-        Some(Ok(Message::Text(_)))
-    ));
-    socket.close(None).await.unwrap();
-
     a_state.db.session_delete(&browser.client_id).unwrap();
     assert_eq!(
         http.get(&url).send().await.unwrap().status(),
@@ -804,16 +783,7 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
     request
         .headers_mut()
         .insert(header::ORIGIN, "tauri://localhost".parse().unwrap());
-    let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
-    let Message::Close(Some(frame)) = tokio::time::timeout(Duration::from_secs(5), socket.next())
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap()
-    else {
-        panic!("Expected close frame")
-    };
-    assert_eq!(u16::from(frame.code), 1011);
+    assert!(tokio_tungstenite::connect_async(request).await.is_err());
     serve.abort();
     a.stop_core().await;
 }

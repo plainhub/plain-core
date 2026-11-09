@@ -277,6 +277,9 @@ struct NativeTarget {
 }
 
 pub(super) async fn native(state: ServerState, ticket: &str, request: Request) -> Response {
+    if request.headers().contains_key(header::UPGRADE) {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
     let Ok((Scope::Session(owner), payload)) = resource_link::parse(ticket) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
