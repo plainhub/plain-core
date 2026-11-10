@@ -27,7 +27,8 @@ fn same_identity_and_os_facts_assemble_all_advertisements() {
             "ver=3.3.24",
             "pf=IOS",
             "aw=1",
-            "ar=0"
+            "ar=0",
+            "pk="
         ]
     );
     assert_eq!(

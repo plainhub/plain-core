@@ -40,7 +40,7 @@ async fn scan_reads_aware_flags_from_discover_and_checks_full_advertised_identit
             crate::infrastructure::protocols::ble::nearby_body(&bytes).unwrap(),
             b"DISCOVER:"
         );
-        let payload = json!({"id":reply_id,"name":"Device","port":2443,"deviceType":"PHONE","version":"1","platform":"test","awareSupported":true,"awareRunning":false});
+        let payload = json!({"id":reply_id,"name":"Device","port":2443,"deviceType":"PHONE","version":"1","platform":"test","signaturePublicKey":plain_libs::utils::base64::base64_encode(&[7;32]),"awareSupported":true,"awareRunning":false});
         state
             .host
             .reply(
