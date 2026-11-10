@@ -75,7 +75,7 @@ pub(crate) async fn call(
             upload::call(state, &target, &path, request).await
         }
         (Method::GET, "zip/dir" | "zip/files") => resource(state, &target, &path, request).await,
-        _ => raw::call(state, &target, &path, request).await,
+        _ => StatusCode::NOT_FOUND.into_response(),
     }
 }
 

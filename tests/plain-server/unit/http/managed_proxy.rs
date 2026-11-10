@@ -98,22 +98,39 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
 
     let origin = format!("https://localhost:{a_port}");
     let proxy = format!("{origin}/proxy/{b_id}");
-    let path = "/health";
-    let proof = resource_link::encrypt(
-        &Scope::Session(browser.client_id.clone()),
-        &format!("relay:{b_id}:GET:{path}"),
-        &decode_key(&browser.url_token).unwrap(),
-        &serde_json::to_vec(&chrono::Utc::now().timestamp_millis()).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(
-        http.get(format!("{proxy}{path}?relay={proof}"))
-            .send()
-            .await
-            .unwrap()
-            .status(),
-        StatusCode::OK
-    );
+    for (method, path) in [
+        (Method::GET, "/health"),
+        (Method::POST, "/init"),
+        (Method::POST, "/nearby"),
+        (Method::PATCH, "/arbitrary/a%2Bb?raw=%2F+x"),
+        (Method::DELETE, "/graphql"),
+        (Method::PUT, "/fs"),
+        (Method::GET, "/upload"),
+        (Method::POST, "/auth"),
+    ] {
+        let proof = resource_link::encrypt(
+            &Scope::Session(browser.client_id.clone()),
+            &format!("relay:{b_id}:{method}:{path}"),
+            &decode_key(&browser.url_token).unwrap(),
+            &serde_json::to_vec(&chrono::Utc::now().timestamp_millis()).unwrap(),
+        )
+        .unwrap();
+        let (path, query) = path.split_once('?').unwrap_or((path, ""));
+        for relay in [
+            format!("relay={proof}"),
+            "relay=invalid".to_owned(),
+            "".to_owned(),
+        ] {
+            let response = http
+                .request(method.clone(), format!("{proxy}{path}?{relay}&{query}"))
+                .header("c-id", &browser.client_id)
+                .header(header::ORIGIN, &origin)
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {path}");
+        }
+    }
     let key = decode_key(&browser.token).unwrap();
     let body =
         http_request::encrypt(&key, "/graphql", r#"{"query":"{ app { clientId } }"}"#).unwrap();
@@ -145,6 +162,26 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
             .await
             .is_err()
     );
+
+    for path in ["auth", "unavailable-socket"] {
+        let (mut socket, response) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{a_http}/proxy/{b_id}/{path}?cid={a_id}"
+        ))
+        .await
+        .unwrap();
+        assert_eq!(response.status(), StatusCode::SWITCHING_PROTOCOLS);
+        if path == "auth" {
+            socket.close(None).await.unwrap();
+        } else {
+            assert!(matches!(
+                tokio::time::timeout(Duration::from_secs(5), socket.next())
+                    .await
+                    .unwrap(),
+                Some(Ok(Message::Close(Some(frame))))
+                    if frame.code == 1011u16.into() && frame.reason == "upstream unavailable"
+            ));
+        }
+    }
 
     let secret = http_request::encrypt(
         &key,
@@ -196,6 +233,31 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
             .status(),
         StatusCode::FORBIDDEN
     );
+    let archive_dir = dir.path().join("archive");
+    std::fs::create_dir(&archive_dir).unwrap();
+    std::fs::write(archive_dir.join("entry.txt"), b"archive fixture").unwrap();
+    let archive_id = resource_link::encrypt(
+        &Scope::Session(browser.client_id.clone()),
+        &format!("managed:{b_id}:zip/dir:download"),
+        &decode_key(&browser.url_token).unwrap(),
+        &serde_json::to_vec(&Resource::reference(archive_dir.to_str().unwrap())).unwrap(),
+    )
+    .unwrap();
+    let response = http
+        .get(format!("{proxy}/zip/dir"))
+        .query(&[("id", archive_id.as_str()), ("action", "download")])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/zip");
+    let mut archive =
+        zip::ZipArchive::new(std::io::Cursor::new(response.bytes().await.unwrap())).unwrap();
+    assert_eq!(archive.len(), 1);
+    let mut entry = Vec::new();
+    std::io::Read::read_to_end(&mut archive.by_name("entry.txt").unwrap(), &mut entry).unwrap();
+    assert_eq!(entry, b"archive fixture");
+
     let data = b"managed upload fixture";
     let upload = |path, metadata: String| {
         let metadata = http_request::encrypt(&key, &format!("/{path}"), &metadata).unwrap();
@@ -370,30 +432,12 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     peers::save(&a_state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     let key = decode_key(&browser.url_token).unwrap();
     let scope = Scope::Session(browser.client_id.clone());
-    let init_proof = resource_link::encrypt(
-        &scope,
-        &format!("relay:{b_id}:POST:/init"),
-        &key,
-        &serde_json::to_vec(&chrono::Utc::now().timestamp_millis()).unwrap(),
-    )
-    .unwrap();
     let http = http_client::builder()
         .no_proxy()
         .add_root_certificate(http_client::Certificate::from_pem(&a_cert).unwrap())
         .build()
         .unwrap();
     let origin = format!("https://localhost:{a_port}");
-    let response = http
-        .post(format!("{origin}/proxy/{b_id}/init?relay={init_proof}"))
-        .header("c-id", &browser.client_id)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let init: serde_json::Value = serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
-    assert_eq!(init["signaturePublicKey"], peer.public_key);
-    assert_eq!(init["authenticated"], false);
-
     let socket_path = format!("/proxy/{b_id}/auth?cid={}", browser.client_id);
     let pin = decode_pin(
         &a_state
@@ -487,8 +531,9 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         Some(Ok(Message::Close(_)))
     ));
     let password = b"fixture-password";
-    let login = opaque_ke::ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, password)
-        .unwrap();
+    let login =
+        opaque_ke::ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, password)
+            .unwrap();
     socket
         .send(Message::Binary(login.message.serialize().to_vec().into()))
         .await
@@ -562,7 +607,15 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             .token
             .is_empty()
     );
-    socket.close(None).await.unwrap();
+    a_state.prefs.set("remote_access", false).unwrap();
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(5), socket.next())
+            .await
+            .unwrap(),
+        Some(Ok(Message::Close(Some(frame))))
+            if frame.code == 1008u16.into() && frame.reason == "proxy_auth_failed"
+    ));
+    a_state.prefs.set("remote_access", true).unwrap();
 
     let file = dir.path().join("chat.txt");
     std::fs::write(&file, b"chat attachment").unwrap();

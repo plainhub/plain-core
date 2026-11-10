@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow, ensure};
 use axum::{
     body::Body,
     extract::{FromRequestParts, Query, Request},
-    http::{HeaderMap, HeaderName, Method, StatusCode, header},
+    http::{HeaderMap, HeaderName, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use futures_util::{SinkExt, StreamExt};
@@ -17,98 +17,31 @@ use plain_rs::{
         files::resource_link::{self, Scope},
         services::peers::peer_address,
     },
-    infrastructure::db::{DPeer, SessionRow, chat_store::peers},
+    infrastructure::db::{DPeer, chat_store::peers},
 };
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
-enum Target {
-    Managed(Arc<super::PeerRoute>),
-    Pairing {
-        id: String,
-        base: http_client::Url,
-        peer: Option<DPeer>,
-    },
+struct PairingTarget {
+    id: String,
+    base: http_client::Url,
+    peer: Option<DPeer>,
 }
 
-impl Target {
-    fn base(&self) -> &http_client::Url {
-        match self {
-            Self::Managed(route) => &route.base,
-            Self::Pairing { base, .. } => base,
-        }
-    }
-
+impl PairingTarget {
     fn check_current(&self, state: &ServerState) -> Result<()> {
-        match self {
-            Self::Managed(route) => route.check_current(state),
-            Self::Pairing {
-                id,
-                peer: Some(peer),
-                ..
-            } => peer_address::current(&state.db, id, peer).map(|_| ()),
-            Self::Pairing { id, peer: None, .. } => {
-                ensure!(
-                    state.nearby_devices.contains(id),
-                    "Nearby device unavailable"
-                );
-                Ok(())
-            }
+        if let Some(peer) = &self.peer {
+            peer_address::current(&state.db, &self.id, peer)?;
+        } else {
+            ensure!(
+                state.nearby_devices.contains(&self.id),
+                "Nearby device unavailable"
+            );
         }
+        Ok(())
     }
 }
 
-pub(super) async fn call(
-    state: ServerState,
-    target: &str,
-    path: &str,
-    request: Request,
-) -> Response {
-    let (parts, body) = request.into_parts();
-    let Some((ticket, query)) = parts.uri.query().and_then(|query| {
-        let (first, rest) = query.split_once('&').unwrap_or((query, ""));
-        Some((first.strip_prefix("relay=")?, rest))
-    }) else {
-        return StatusCode::UNAUTHORIZED.into_response();
-    };
-    let Some(raw_path) = upstream_path(&parts.uri) else {
-        return StatusCode::BAD_REQUEST.into_response();
-    };
-    let upstream_path = if query.is_empty() {
-        format!("/{raw_path}")
-    } else {
-        format!("/{raw_path}?{query}")
-    };
-    let Ok(session) = authenticate(&state, ticket, target, &parts.method, &upstream_path) else {
-        return StatusCode::UNAUTHORIZED.into_response();
-    };
-    let target = if parts.method == Method::POST && path == "init" {
-        match pairing_target(&state, target) {
-            Ok(target) => target,
-            Err(status) => return status.into_response(),
-        }
-    } else {
-        let Ok(route) = state.managed_proxy.route(&state, target).await else {
-            return StatusCode::BAD_GATEWAY.into_response();
-        };
-        Target::Managed(route)
-    };
-    let client = match &target {
-        Target::Managed(route) => route.client.clone(),
-        Target::Pairing { .. } => state.lan.client.clone(),
-    };
-    let Ok(url) = target_url(target.base().clone(), raw_path, query) else {
-        return StatusCode::BAD_REQUEST.into_response();
-    };
-    relay(
-        client,
-        url,
-        Request::from_parts(parts, body),
-        Access::Remote(state, session, target),
-    )
-    .await
-}
-
-fn pairing_target(state: &ServerState, target: &str) -> Result<Target, StatusCode> {
+fn pairing_target(state: &ServerState, target: &str) -> Result<PairingTarget, StatusCode> {
     if state.native_client_id().is_ok_and(|id| id == target) {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -121,7 +54,7 @@ fn pairing_target(state: &ServerState, target: &str) -> Result<Target, StatusCod
         )
     }
     .map_err(|_| StatusCode::NOT_FOUND)?;
-    Ok(Target::Pairing {
+    Ok(PairingTarget {
         id: target.to_owned(),
         base,
         peer,
@@ -167,7 +100,7 @@ pub(super) async fn auth(state: ServerState, target: String, request: Request) -
                 current(&state, &session)?;
                 let target = pairing_target(&state, &target)
                     .map_err(|_| anyhow!("Pairing device unavailable"))?;
-                let mut url = target_url(target.base().clone(), "auth", &query)?;
+                let mut url = target_url(target.base.clone(), "auth", &query)?;
                 url.set_scheme("wss")
                     .map_err(|_| anyhow!("Invalid pairing address"))?;
                 let mut upstream = tokio::time::timeout(
@@ -175,8 +108,8 @@ pub(super) async fn auth(state: ServerState, target: String, request: Request) -
                     plain_rs::features::services::peers::status_socket::connect(url.as_str()),
                 )
                 .await??;
-                let access = Access::Remote(state, session, target);
-                ensure!(access.valid(), "Pairing access revoked");
+                current(&state, &session)?;
+                target.check_current(&state)?;
                 tokio::time::timeout(
                     Duration::from_secs(2),
                     socket.send(Message::Binary(ack.into())),
@@ -187,7 +120,8 @@ pub(super) async fn auth(state: ServerState, target: String, request: Request) -
                 loop {
                     let (message, upstream_direction) = tokio::select! {
                         _ = recheck.tick() => {
-                            ensure!(access.valid(), "Pairing access revoked");
+                            current(&state, &session)?;
+                            target.check_current(&state)?;
                             continue;
                         }
                         next = socket.next() => (next, true),
@@ -324,29 +258,18 @@ async fn native_relay(
                 .expect("native proxy HTTP client")
         })
         .clone();
-    relay(client, url, request, Access::Native(state, rediscover)).await
+    relay(client, url, request, NativeAccess { state, rediscover }).await
 }
 
-enum Access {
-    Remote(ServerState, SessionRow, Target),
-    Native(ServerState, bool),
+struct NativeAccess {
+    state: ServerState,
+    rediscover: bool,
 }
 
-impl Access {
-    fn valid(&self) -> bool {
-        match self {
-            Self::Remote(state, session, target) => {
-                current(state, session).is_ok() && target.check_current(state).is_ok()
-            }
-            Self::Native(_, _) => true,
-        }
-    }
-}
-
-impl Drop for Access {
+impl Drop for NativeAccess {
     fn drop(&mut self) {
-        if let Self::Native(state, true) = self {
-            state.mdns.browse_resident();
+        if self.rediscover {
+            self.state.mdns.browse_resident();
         }
     }
 }
@@ -372,11 +295,8 @@ async fn relay(
     client: http_client::Client,
     url: http_client::Url,
     request: Request,
-    access: Access,
+    access: NativeAccess,
 ) -> Response {
-    if !access.valid() {
-        return StatusCode::FORBIDDEN.into_response();
-    }
     let (mut parts, body) = request.into_parts();
     let websocket = parts
         .headers
@@ -411,43 +331,27 @@ async fn relay(
         None
     };
     let upstream = outgoing.send().await;
-    if !access.valid() {
-        return StatusCode::FORBIDDEN.into_response();
-    }
     if let Some(upgrade) = upgrade {
         if let Ok(upstream) = upstream {
             if upstream.status() == StatusCode::SWITCHING_PROTOCOLS {
                 let headers = upstream.headers().clone();
                 if let Ok(upstream) = upstream.upgrade().await {
                     return upgrade.relay(&headers, upstream, async move {
-                        if matches!(&access, Access::Native(_, _)) {
-                            std::future::pending::<()>().await;
-                        }
-                        let mut recheck = tokio::time::interval(Duration::from_secs(1));
-                        recheck.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-                        loop {
-                            recheck.tick().await;
-                            if !access.valid() {
-                                break;
-                            }
-                        }
+                        let _access = access;
+                        std::future::pending::<()>().await;
                     });
                 }
             }
         }
-        return if matches!(access, Access::Native(_, _)) {
-            upgrade.on_upgrade(move |mut socket| async move {
-                let _ = socket
-                    .send(Message::Close(Some(CloseFrame {
-                        code: 1011u16.into(),
-                        reason: "upstream unavailable".into(),
-                    })))
-                    .await;
-                drop(access);
-            })
-        } else {
-            StatusCode::BAD_GATEWAY.into_response()
-        };
+        return upgrade.on_upgrade(move |mut socket| async move {
+            let _ = socket
+                .send(Message::Close(Some(CloseFrame {
+                    code: 1011u16.into(),
+                    reason: "upstream unavailable".into(),
+                })))
+                .await;
+            drop(access);
+        });
     }
     let Ok(upstream) = upstream else {
         return StatusCode::BAD_GATEWAY.into_response();
@@ -458,9 +362,9 @@ async fn relay(
     {
         return StatusCode::BAD_GATEWAY.into_response();
     }
-    let cache = matches!(access, Access::Native(_, _))
-        .then(|| upstream.headers().get(header::CACHE_CONTROL))
-        .flatten()
+    let cache = upstream
+        .headers()
+        .get(header::CACHE_CONTROL)
         .cloned()
         .unwrap_or_else(|| axum::http::HeaderValue::from_static("no-store"));
     let mut response = Response::builder()
@@ -514,30 +418,4 @@ fn blocked_header(headers: &HeaderMap, name: &HeaderName) -> bool {
         .filter_map(|value| value.to_str().ok())
         .flat_map(|value| value.split(','))
         .any(|value| name.as_str().eq_ignore_ascii_case(value.trim()))
-}
-
-fn authenticate(
-    state: &ServerState,
-    ticket: &str,
-    target: &str,
-    method: &Method,
-    path: &str,
-) -> Result<SessionRow> {
-    let (Scope::Session(id), payload) = resource_link::parse(ticket)? else {
-        return Err(anyhow!("Invalid relay scope"));
-    };
-    let session = caller(state, &id)?;
-    let key = decode_key(&session.url_token)?;
-    let purpose = format!("relay:{target}:{method}:{path}");
-    let plain = resource_link::decrypt(&Scope::Session(id), &purpose, &key, payload)?;
-    let issued_at: i64 = serde_json::from_slice(&plain)?;
-    ensure!(
-        (0..=60_000).contains(
-            &chrono::Utc::now()
-                .timestamp_millis()
-                .saturating_sub(issued_at)
-        ),
-        "Relay ticket expired"
-    );
-    Ok(session)
 }
