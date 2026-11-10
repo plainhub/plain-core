@@ -49,18 +49,19 @@ fn private_prepare_uses_persisted_signing_identity_and_current_peer_keys() {
     assert_eq!(result.targets[1].key, channel.key);
     assert_eq!(result.targets[1].channel_id, channel.id);
     let body = wire(&prefs, result.message_type, &result.payload, "").unwrap();
-    let pieces: Vec<_> = body.splitn(3, '|').collect();
+    let pieces: Vec<_> = body.splitn(4, '|').collect();
     assert!(plain_libs::crypto::ed25519_verify(
         &base64_encode(&public),
         crate::infrastructure::transport::auth::signature_payload(
             pieces[1].parse().unwrap(),
             "",
-            pieces[2]
+            pieces[2],
+            pieces[3]
         )
         .as_bytes(),
         pieces[0]
     ));
-    let wire: serde_json::Value = serde_json::from_str(pieces[2]).unwrap();
+    let wire: serde_json::Value = serde_json::from_str(pieces[3]).unwrap();
     assert_eq!(wire["variables"]["type"], "UPDATE");
     let payload: serde_json::Value =
         serde_json::from_str(wire["variables"]["payload"].as_str().unwrap()).unwrap();

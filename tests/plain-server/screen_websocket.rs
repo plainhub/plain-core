@@ -44,14 +44,19 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
     ));
 
     let (mut socket, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
-    let registration = plain_libs::crypto::xchacha_encrypt_raw(
+    let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
         chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        &plain_rs::infrastructure::protocols::websocket::request_aad(
+            "/image_editor",
+            &client,
+            None,
+        ),
     )
     .unwrap();
     let mut stream = plain_rs::infrastructure::protocols::websocket::Stream::new(&registration);
     socket
-        .send(ClientMessage::Binary(registration.into()))
+        .send(ClientMessage::Binary(registration.clone().into()))
         .await
         .unwrap();
     let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else {
@@ -208,15 +213,16 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     ))
     .await
     .unwrap();
-    let registration = plain_libs::crypto::xchacha_encrypt_raw(
+    let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
         chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        &plain_rs::infrastructure::protocols::websocket::request_aad("/screen", &client, None),
     )
     .unwrap();
     let mut screen_stream =
         plain_rs::infrastructure::protocols::websocket::Stream::new(&registration);
     screen
-        .send(ClientMessage::Binary(registration.into()))
+        .send(ClientMessage::Binary(registration.clone().into()))
         .await
         .unwrap();
     screen
@@ -239,9 +245,17 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         plain.extend_from_slice(payload);
         screen
             .send(ClientMessage::Binary(
-                plain_libs::crypto::xchacha_encrypt_raw(&key, &plain)
-                    .unwrap()
-                    .into(),
+                plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+                    &key,
+                    &plain,
+                    &plain_rs::infrastructure::protocols::websocket::request_aad(
+                        "/screen",
+                        &client,
+                        Some(&registration),
+                    ),
+                )
+                .unwrap()
+                .into(),
             ))
             .await
             .unwrap();
@@ -322,7 +336,16 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     .unwrap();
     let mut control = chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
     control.extend_from_slice(br#"{"type":"screenMirrorControl","input":{"action":"HOME"}}"#);
-    let control = plain_libs::crypto::xchacha_encrypt_raw(&key, &control).unwrap();
+    let control = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        &key,
+        &control,
+        &plain_rs::infrastructure::protocols::websocket::request_aad(
+            "/screen",
+            &client,
+            Some(&registration),
+        ),
+    )
+    .unwrap();
     screen
         .send(ClientMessage::Binary(control.clone().into()))
         .await
@@ -388,15 +411,10 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
-async fn screen_rejects_login_modes_missing_clients_invalid_keys_and_disabled_access() {
+async fn screen_rejects_missing_clients_invalid_keys_and_disabled_access() {
     let (_directory, core, prefs) = public_fixture();
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
-    for query in [
-        String::new(),
-        format!("cid={client}&auth=1"),
-        format!("cid={client}&auth=2"),
-        format!("cid={client}"),
-    ] {
+    for query in [String::new(), format!("cid={client}")] {
         let (mut screen, _) = tokio_tungstenite::connect_async(format!(
             "ws://127.0.0.1:{}/screen?{query}",
             core.port

@@ -68,6 +68,7 @@ async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authen
                 device_name: "Remote".into(),
                 device_ip: String::new(),
                 device_port: ports[1],
+                device_public_key: plain_libs::utils::base64::base64_encode(&plain_rs::features::services::peers::peer_wire::signing_keypair(&remote.prefs).unwrap()[32..]),
             },
             ips: vec!["127.0.0.1".into()],
             device: sender,
@@ -86,14 +87,8 @@ async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authen
     })
     .await
     .unwrap();
-    let code = local
-        .pairing_runtime
-        .attempts
-        .get(&attempt.generation)
-        .unwrap()
-        .verification_code
-        .unwrap();
-    assert_eq!(notice["verificationCode"], code);
+    let expected_code = notice["verificationCode"].as_str().unwrap().to_owned();
+    assert_eq!(expected_code.len(), 64);
     assert!(
         plain_rs::infrastructure::db::chat_store::peers::get(&local.db, "remote")
             .unwrap()
@@ -117,15 +112,14 @@ async fn tls_peers_exchange_matching_codes_before_approval_and_commit_the_authen
     )
     .await
     .unwrap();
-    assert_eq!(
-        local
-            .pairing_runtime
-            .attempts
-            .get(&attempt.generation)
-            .unwrap()
-            .phase,
-        PairingPhase::Succeeded
-    );
+    assert_eq!(local.pairing_runtime.attempts.get(&attempt.generation).unwrap().phase, PairingPhase::TrustRequired);
+    assert_eq!(local.pairing_runtime.attempts.get(&attempt.generation).unwrap().verification_code.as_deref(), Some(expected_code.as_str()));
+    plain_rs::features::services::discovery::pairing_confirmation::confirm(&local, &attempt.generation).await.unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while local.pairing_runtime.attempts.get(&attempt.generation).unwrap().phase != PairingPhase::Succeeded {
+            tokio::task::yield_now().await;
+        }
+    }).await.unwrap();
     assert_eq!(
         plain_rs::infrastructure::db::chat_store::peers::get(&local.db, "remote")
             .unwrap()

@@ -63,8 +63,9 @@ pub async fn exchange(
     request: &str,
     limit: usize,
 ) -> Result<Vec<u8>> {
-    let encrypted = crate::infrastructure::transport::http_request::encrypt(key, request)
-        .map_err(|_| anyhow::anyhow!("invalid_session"))?;
+    let encrypted =
+        crate::infrastructure::transport::http_request::encrypt(key, "/graphql", request)
+            .map_err(|_| anyhow::anyhow!("invalid_session"))?;
     let context =
         crate::infrastructure::transport::http_response::Context::new("/graphql", &encrypted);
     let response = outgoing

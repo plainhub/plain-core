@@ -131,6 +131,7 @@ async fn run(state: CoreRuntime, pending: Pending) {
         platform: reply.platform,
         last_seen_at: now_iso(),
         remote_access: reply.remote_access,
+        signature_public_key: reply.signature_public_key,
         discovery_methods: vec![DiscoveryMethod::Ble],
     };
     if let Err(error) = Context::from(&state).seen(device, true, false) {

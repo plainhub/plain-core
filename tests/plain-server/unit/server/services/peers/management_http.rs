@@ -1,6 +1,6 @@
-use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
 use axum::{Router, body::Bytes, http::HeaderMap, routing::post};
+use plain_libs::protocols::http_client;
 use plain_rs::features::services::peers::management_http::*;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
@@ -48,11 +48,9 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
         }),
     );
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
-    let config = plain_rs::infrastructure::tls_identity::config(
-        cert_pem.as_slice(),
-        cert_key.as_slice(),
-    )
-    .unwrap();
+    let config =
+        plain_rs::infrastructure::tls_identity::config(cert_pem.as_slice(), cert_key.as_slice())
+            .unwrap();
     let socket = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let proxy_port = socket.local_addr().unwrap().port();
     let proxy = tokio::spawn(async move {
@@ -109,8 +107,13 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
         let envelopes: Vec<_> = requests
             .iter()
             .map(|body| {
-                String::from_utf8(plain_libs::crypto::xchacha_decrypt_raw(&key, body).unwrap())
-                    .unwrap()
+                String::from_utf8(
+                    plain_rs::infrastructure::transport::http_request::decrypt_raw(
+                        &key, "POST", "/graphql", body,
+                    )
+                    .unwrap(),
+                )
+                .unwrap()
             })
             .collect();
         let nonces: Vec<_> = envelopes

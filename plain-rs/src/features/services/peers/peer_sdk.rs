@@ -165,8 +165,13 @@ pub async fn aware_send(
     key: &[u8],
     body: &str,
 ) -> Result<Value, Failure> {
-    let encrypted = plain_libs::crypto::xchacha_encrypt_raw(key, body.as_bytes())
-        .ok_or_else(|| Failure::Fatal("Invalid peer key".into()))?;
+    let encrypted = crate::infrastructure::transport::http_request::encrypt_raw(
+        key,
+        "POST",
+        "/peer_graphql",
+        body.as_bytes(),
+    )
+    .ok_or_else(|| Failure::Fatal("Invalid peer key".into()))?;
     let context =
         crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &encrypted);
     let response = aware(state, peer, "POST", "/peer_graphql", channel, encrypted).await?;
@@ -231,8 +236,13 @@ pub async fn ble_send(
     key: &[u8],
     body: &str,
 ) -> Result<Value, Failure> {
-    let encrypted = plain_libs::crypto::xchacha_encrypt_raw(key, body.as_bytes())
-        .ok_or_else(|| Failure::Fatal("Invalid peer key".into()))?;
+    let encrypted = crate::infrastructure::transport::http_request::encrypt_raw(
+        key,
+        "POST",
+        "/peer_graphql",
+        body.as_bytes(),
+    )
+    .ok_or_else(|| Failure::Fatal("Invalid peer key".into()))?;
     let context =
         crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &encrypted);
     let response = ble(

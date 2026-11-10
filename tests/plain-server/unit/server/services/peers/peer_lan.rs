@@ -7,7 +7,14 @@ use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::peers;
 use serde_json::json;
 use std::sync::Arc;
-fn root(id: &str) -> (plain_libs::temporary::TempDir, ContentServer, Vec<u8>, String) {
+fn root(
+    id: &str,
+) -> (
+    plain_libs::temporary::TempDir,
+    ContentServer,
+    Vec<u8>,
+    String,
+) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
@@ -37,12 +44,7 @@ async fn direct_tls_peer_exchange_uses_xchacha_and_current_identity_without_host
     let (_b, b, bkp, _) = root("b");
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, https) = b
-        .start_public(
-            0,
-            0,
-            cert_pem.clone(),
-            cert_key.clone(),
-        )
+        .start_public(0, 0, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
     let remote = peer("b", https, &bkp[32..]);
@@ -101,12 +103,7 @@ async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
     let (_b, b, bkp, _) = root("b");
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, https) = b
-        .start_public(
-            0,
-            0,
-            cert_pem.clone(),
-            cert_key.clone(),
-        )
+        .start_public(0, 0, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
     let state = a.runtime_state().core;
@@ -146,6 +143,13 @@ async fn queued_peer_send_uses_refreshed_address_with_unchanged_pairing() {
     assert_eq!(response["data"]["__typename"], "Query");
     let mut without_address = remote.clone();
     without_address.ip.clear();
+    let wire = plain_rs::infrastructure::transport::contract::signed_request(
+        &kp,
+        "query { __typename }",
+        json!({}),
+        "",
+    )
+    .unwrap();
     let response = plain_rs::features::services::peers::peer_transport::send(
         &state,
         &without_address,

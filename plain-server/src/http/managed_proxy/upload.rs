@@ -29,13 +29,19 @@ pub(super) async fn call(
     let Ok(info) = metadata(&mut multipart).await else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    let Some(decrypted) = plain_libs::crypto::xchacha_decrypt_raw(&key, &info) else {
+    let Some(decrypted) = plain_rs::infrastructure::transport::http_request::decrypt_raw(
+        &key,
+        "POST",
+        &format!("/{path}"),
+        &info,
+    ) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let Ok(text) = std::str::from_utf8(&decrypted) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     let Ok(text) = state.main_replay.admit(
+        &state.db,
         &session.client_id,
         text,
         chrono::Utc::now().timestamp_millis(),

@@ -43,10 +43,9 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
     let after = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
     assert!(before.password.is_empty() && after.password.is_empty());
     assert!(
-        plain_rs::features::prefs::security::password_hash(&state.prefs)
+        plain_rs::features::prefs::security::opaque_public_key(&state.prefs)
             .unwrap()
-            .unwrap()
-            .verify(plain_libs::crypto::sha512_hex(&generated).as_bytes())
+            .is_some()
     );
     assert_ne!(before.adb_token, after.adb_token);
     assert_eq!(before.client_id, after.client_id);
@@ -312,10 +311,7 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
         json!(["FILES"])
     );
     let selected = management
-        .get_prefs(&[
-            keys::CLIENT_ID.into(),
-            keys::API_PERMISSIONS.into(),
-        ])
+        .get_prefs(&[keys::CLIENT_ID.into(), keys::API_PERMISSIONS.into()])
         .unwrap();
     assert_eq!(selected.len(), 2);
     assert_eq!(selected[keys::CLIENT_ID], client_id);

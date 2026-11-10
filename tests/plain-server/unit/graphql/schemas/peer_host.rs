@@ -1,5 +1,5 @@
-use plain_libs::protocols::http_client;
 use super::*;
+use plain_libs::protocols::http_client;
 #[tokio::test]
 async fn peer_schema_preserves_required_arguments_and_empty_query() {
     let schema = schema();
@@ -68,15 +68,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     peers::save(&db, &[peer], SaveMode::Insert).unwrap();
     let server = ContentServer::start(dir.path(), &token, prefs.clone()).unwrap();
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
-    let (_, https) = server
-        .start_public(
-            0,
-            0,
-            cert_pem,
-            cert_key,
-        )
-        .await
-        .unwrap();
+    let (_, https) = server.start_public(0, 0, cert_pem, cert_key).await.unwrap();
     let mut host = crate::host::events::TestHost::new(&server);
     let (broadcast_done, broadcast_received) = tokio::sync::oneshot::channel();
     let ble = server.runtime_state().ble_transport.clone();
@@ -117,18 +109,19 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                         &request["params"],
                         &[7; 32],
                     );
-                    let parts: Vec<_> = wire.splitn(3, '|').collect();
+                    let parts: Vec<_> = wire.splitn(4, '|').collect();
                     assert!(plain_libs::crypto::ed25519_verify(
                         &plain_libs::utils::base64::base64_encode(&local_public_key),
                         plain_rs::infrastructure::transport::auth::signature_payload(
                             parts[1].parse().unwrap(),
                             "",
-                            parts[2]
+                            parts[2],
+                            parts[3]
                         )
                         .as_bytes(),
                         parts[0]
                     ));
-                    let document: Value = serde_json::from_str(parts[2]).unwrap();
+                    let document: Value = serde_json::from_str(parts[3]).unwrap();
                     assert_eq!(document["variables"]["type"], "UPDATE");
                     let payload: Value =
                         serde_json::from_str(document["variables"]["payload"].as_str().unwrap())
@@ -170,14 +163,17 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     let wire = |document: Value| {
         let content = document.to_string();
         let ts = plain_rs::features::peers::pairing::now_ms();
+        let nonce = plain_libs::utils::uuid::Uuid::new_v4().into_string();
         let signature = plain_libs::crypto::ed25519_sign(
             &kp,
-            plain_rs::infrastructure::transport::auth::signature_payload(ts, "", &content)
+            plain_rs::infrastructure::transport::auth::signature_payload(ts, "", &nonce, &content)
                 .as_bytes(),
         );
-        plain_libs::crypto::xchacha_encrypt_raw(
+        plain_rs::infrastructure::transport::http_request::encrypt_raw(
             &key,
-            format!("{signature}|{ts}|{content}").as_bytes(),
+            "POST",
+            "/peer_graphql",
+            format!("{signature}|{ts}|{nonce}|{content}").as_bytes(),
         )
         .unwrap()
     };

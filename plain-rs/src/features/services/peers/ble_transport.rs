@@ -71,7 +71,16 @@ pub fn test_peer_wire(runtime: &Runtime, params: &serde_json::Value, key: &[u8])
     let Request::PeerGraphql { body, .. } = runtime.request_for_test(params) else {
         panic!("Expected peer request")
     };
-    String::from_utf8(plain_libs::crypto::xchacha_decrypt_raw(key, &body).unwrap()).unwrap()
+    String::from_utf8(
+        crate::infrastructure::transport::http_request::decrypt_raw(
+            key,
+            "POST",
+            "/peer_graphql",
+            &body,
+        )
+        .unwrap(),
+    )
+    .unwrap()
 }
 #[cfg(any(test, feature = "test-seams"))]
 pub fn test_reply(

@@ -235,13 +235,16 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
     let Ok(body) = to_bytes(request.into_body(), GRAPHQL_LIMIT).await else {
         return StatusCode::PAYLOAD_TOO_LARGE.into_response();
     };
-    let Some(plain) = plain_libs::crypto::xchacha_decrypt_raw(&key, &body) else {
+    let Some(plain) = plain_rs::infrastructure::transport::http_request::decrypt_raw(
+        &key, "POST", "/graphql", &body,
+    ) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let Ok(text) = std::str::from_utf8(&plain) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     let Ok(text) = state.main_replay.admit(
+        &state.db,
         &session.client_id,
         text,
         chrono::Utc::now().timestamp_millis(),

@@ -202,7 +202,7 @@ async fn app_db(ctx: &Context<'_>) -> plain_graphql::Result<SqliteFile> {
         .data::<Arc<plain_rs::infrastructure::db::Db>>()?
         .with_conn(|connection| connection.path().map(std::path::PathBuf::from))
         .unwrap_or_default();
-    Ok(SqliteFile::new(path))
+    Ok(SqliteFile::system(path))
 }
 
 fn has_path(file: &SqliteFile) -> bool {

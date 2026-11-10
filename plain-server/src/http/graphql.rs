@@ -130,8 +130,10 @@ async fn execute(
     };
 
     let request = if token_mode {
-        let decrypted =
-            plain_libs::crypto::xchacha_decrypt_raw(&key, &body).ok_or(StatusCode::UNAUTHORIZED)?;
+        let decrypted = plain_rs::infrastructure::transport::http_request::decrypt_raw(
+            &key, "POST", "/graphql", &body,
+        )
+        .ok_or(StatusCode::UNAUTHORIZED)?;
         if decrypted.is_empty() {
             return Err(StatusCode::UNAUTHORIZED);
         }
@@ -139,7 +141,7 @@ async fn execute(
         let now = chrono::Utc::now().timestamp_millis();
         state
             .main_replay
-            .admit(client_id, &plaintext, now)
+            .admit(&state.db, client_id, &plaintext, now)
             .map_err(|_| StatusCode::BAD_REQUEST)?
             .to_owned()
     } else {
@@ -272,8 +274,13 @@ async fn execute_guest(state: &ServerState, id: &str, body: &[u8]) -> (u16, Vec<
         Ok(key) => key,
         Err(_) => return (500, vec![]),
     };
-    let plain = match plain_libs::crypto::xchacha_decrypt_raw(&key, body)
-        .and_then(|p| String::from_utf8(p).ok())
+    let plain = match plain_rs::infrastructure::transport::http_request::decrypt_raw(
+        &key,
+        "POST",
+        "/guest_graphql",
+        body,
+    )
+    .and_then(|p| String::from_utf8(p).ok())
     {
         Some(p) if !p.is_empty() => p,
         _ => return (401, vec![]),
@@ -281,7 +288,7 @@ async fn execute_guest(state: &ServerState, id: &str, body: &[u8]) -> (u16, Vec<
     let context =
         plain_rs::infrastructure::transport::http_response::Context::new("/guest_graphql", body);
     let now = chrono::Utc::now().timestamp_millis();
-    let body = match state.guest_replay.admit(id, &plain, now) {
+    let body = match state.guest_replay.admit(&state.db, id, &plain, now) {
         Ok(p) => p,
         Err(_) => return (400, vec![]),
     };

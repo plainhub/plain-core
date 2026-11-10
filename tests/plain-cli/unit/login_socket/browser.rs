@@ -33,7 +33,7 @@ async fn browser_login(
 ) {
     use plain_rs::features::services::confirmation_channel::{Client, ConfirmationMode};
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://127.0.0.1:{port}/auth?cid={client_id}&auth=2"
+        "ws://127.0.0.1:{port}/auth?cid={client_id}"
     ))
     .await
     .unwrap();

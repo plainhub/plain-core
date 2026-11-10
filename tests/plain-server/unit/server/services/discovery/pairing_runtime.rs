@@ -73,7 +73,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
     assert_eq!(malformed.text().await.unwrap(), "invalid nearby message");
     let request = client
         .post(format!("https://127.0.0.1:{https_port}/nearby"))
-        .body("PAIR_REQUEST:{\"fromId\":\"peer\",\"fromName\":\"fixture\",\"port\":2443,\"deviceType\":\"PHONE\",\"ecdhPublicKey\":\"\",\"signaturePublicKey\":\"\",\"timestamp\":1,\"ips\":[],\"signature\":\"invalid\",\"awareSupported\":false}")
+        .body("PAIR_REQUEST:{\"toId\":\"local\",\"targetPublicKey\":\"key\",\"fromId\":\"peer\",\"fromName\":\"fixture\",\"port\":2443,\"deviceType\":\"PHONE\",\"ecdhPublicKey\":\"\",\"signaturePublicKey\":\"\",\"timestamp\":1,\"ips\":[],\"signature\":\"invalid\",\"awareSupported\":false}")
         .send()
         .await
         .unwrap();
@@ -116,6 +116,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
         device_name: "Fixture".into(),
         device_ip: "stale".into(),
         device_port: listeners.https_port,
+        device_public_key: plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().1),
     };
     let start = |method| Request::Start {
         methods: vec![
@@ -136,15 +137,12 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     .unwrap();
     assert_eq!(first["sent"], true);
     assert_eq!(first["ticket"]["deviceIp"], "127.0.0.1");
-    let Message::PairRequest(request) = received.recv().await.unwrap() else {
+    let Message::PairRequest(request) = tokio::time::timeout(std::time::Duration::from_secs(5), received.recv()).await.unwrap().unwrap() else {
         panic!()
     };
     assert!(plain_rs::features::peers::pairing::security::verify_request(&request));
     assert_eq!(request.from_id, "local");
-    assert!(matches!(
-        received.recv().await.unwrap(),
-        Message::PairVerification(_)
-    ));
+    assert!(received.try_recv().is_err(), "The first pairing frame contains the full request");
     let second = execute(
         &state,
         start(plain_rs::features::discovery::nearby_devices::DiscoveryMethod::DnsSd),
@@ -152,11 +150,8 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     .await
     .unwrap();
     assert_eq!(second["sent"], true);
-    let _ = received.recv().await.unwrap();
-    assert!(matches!(
-        received.recv().await.unwrap(),
-        Message::PairVerification(_)
-    ));
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), received.recv()).await.unwrap().unwrap();
+    assert!(received.try_recv().is_err(), "The first pairing frame contains the full request");
     assert!(
         execute(
             &state,
@@ -183,7 +178,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     .await
     .unwrap();
     assert!(!canceled.is_null());
-    let Message::PairCancel(cancel) = received.recv().await.unwrap() else {
+    let Message::PairCancel(cancel) = tokio::time::timeout(std::time::Duration::from_secs(5), received.recv()).await.unwrap().unwrap() else {
         panic!()
     };
     assert_eq!(cancel.to_id, "remote");

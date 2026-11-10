@@ -4,6 +4,7 @@ input PairingDeviceInput {
 	mode: PairingMode
 	password: String
 	generation: String
+	confirm: Boolean
 }
 
 enum PairingMode {
@@ -16,6 +17,7 @@ enum PairingPhase {
 	PASSWORD_REQUIRED
 	AUTHENTICATING
 	PAIRING
+	TRUST_REQUIRED
 	WAITING_CONFIRMATION
 	COMMITTING
 	SUCCEEDED
@@ -24,6 +26,8 @@ enum PairingPhase {
 }
 
 input PairingRequestInput {
+	toId: ID!
+	targetPublicKey: String!
 	fromId: ID!
 	fromName: String!
 	port: Int!
@@ -44,6 +48,7 @@ type PairingState {
 	phase: PairingPhase!
 	error: String
 	verificationCode: String
+	identityChanged: Boolean!
 }
 
 input PeerRecordInput {

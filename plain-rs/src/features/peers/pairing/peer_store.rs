@@ -7,7 +7,7 @@ use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::row_to_peer;
 use anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
-#[derive(serde::Deserialize)]
+#[derive(Clone, serde::Deserialize)]
 pub struct Facts {
     pub id: String,
     pub name: String,
@@ -18,6 +18,14 @@ pub struct Facts {
     pub public_key: String,
 }
 pub fn save(db: &Db, facts: Facts) -> Result<DPeer> {
+    save_confirmed(db, facts, None, false)
+}
+pub fn save_confirmed(
+    db: &Db,
+    facts: Facts,
+    previous_identity: Option<&str>,
+    allow_change: bool,
+) -> Result<DPeer> {
     if facts.id.is_empty()
         || plain_libs::utils::base64::base64_decode(&facts.key).len() != 32
         || plain_libs::utils::base64::base64_decode(&facts.public_key).len() != 32
@@ -30,7 +38,10 @@ pub fn save(db: &Db, facts: Facts) -> Result<DPeer> {
             &format!("SELECT {PEER_COLS} FROM peers WHERE id=?1"),
             [&facts.id], row_to_peer,
         ).optional()?;
-        if existing.as_ref().is_some_and(|peer| !peer.public_key.is_empty() && peer.public_key != facts.public_key) {
+        if allow_change && existing.as_ref().map(|peer| peer.public_key.as_str()) != previous_identity {
+            bail!("Peer identity changed while confirming");
+        }
+        if !allow_change && existing.as_ref().is_some_and(|peer| !peer.public_key.is_empty() && peer.public_key != facts.public_key) {
             bail!("Peer identity changed");
         }
         let new = existing.is_none();

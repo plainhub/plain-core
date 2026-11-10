@@ -2,6 +2,7 @@ use crate::http::auth::replay::Replay;
 
 pub(super) fn admit<'a>(
     replay: &Replay,
+    db: &plain_rs::infrastructure::db::Db,
     client: &str,
     frame: &[u8],
     plain: &'a [u8],
@@ -23,7 +24,7 @@ pub(super) fn admit<'a>(
         )
     };
     let nonce = plain_libs::utils::hex::bytes_to_hex(frame.get(..24).ok_or(())?);
-    replay.admit(client, &format!("{timestamp}|{nonce}|"), now)?;
+    replay.admit(db, client, &format!("{timestamp}|{nonce}|"), now)?;
     Ok(payload)
 }
 

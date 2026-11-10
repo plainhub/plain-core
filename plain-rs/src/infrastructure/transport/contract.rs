@@ -8,7 +8,6 @@
 use serde_json::json;
 
 use plain_libs::crypto::ed25519_sign;
-use plain_libs::crypto::xchacha_encrypt_raw;
 use plain_libs::utils::http_url::build_url;
 
 use crate::infrastructure::db::DPeer;
@@ -98,7 +97,7 @@ fn now_ms() -> i64 {
 /// POST a `createChatItem` GraphQL request to `peer_graphql_urls`, trying
 /// each URL in order and returning `Ok(())` on the first successful
 /// delivery. Payload format: XChaCha20-Poly1305 over
-/// `signature|timestamp|GraphQL_JSON`.
+/// `signature|timestamp|nonce|GraphQL_JSON`.
 pub async fn deliver_to_peer<T: PeerTransport>(
     transport: &T,
     peer_graphql_urls: &[String],
@@ -129,7 +128,12 @@ pub async fn deliver_signed<T: PeerTransport + ?Sized>(
     payload: &str,
     channel_id: Option<&str>,
 ) -> Result<(), String> {
-    let Some(encrypted) = xchacha_encrypt_raw(key, payload.as_bytes()) else {
+    let Some(encrypted) = crate::infrastructure::transport::http_request::encrypt_raw(
+        key,
+        "POST",
+        "/peer_graphql",
+        payload.as_bytes(),
+    ) else {
         return Err("encrypt failed".to_string());
     };
 
@@ -203,8 +207,13 @@ pub fn signed_request(
     let graphql_json = serde_json::to_string(&json!({"query":query,"variables":variables}))
         .map_err(|e| e.to_string())?;
     let ts = now_ms();
-    let signed =
-        crate::infrastructure::transport::auth::signature_payload(ts, channel_id, &graphql_json);
+    let nonce = plain_libs::utils::uuid::Uuid::new_v4().into_string();
+    let signed = crate::infrastructure::transport::auth::signature_payload(
+        ts,
+        channel_id,
+        &nonce,
+        &graphql_json,
+    );
     let signature = ed25519_sign(kp_bytes, signed.as_bytes());
     if kp_bytes.len() != 64
         || !plain_libs::crypto::ed25519_verify(
@@ -215,7 +224,7 @@ pub fn signed_request(
     {
         return Err("Invalid peer signing keypair".into());
     }
-    Ok(format!("{signature}|{ts}|{graphql_json}"))
+    Ok(format!("{signature}|{ts}|{nonce}|{graphql_json}"))
 }
 pub fn chat_item_request(
     kp_bytes: &[u8],
@@ -273,7 +282,12 @@ pub async fn deliver_channel_system_message<T: PeerTransport>(
         return false;
     };
 
-    let Some(encrypted) = xchacha_encrypt_raw(key, wire.as_bytes()) else {
+    let Some(encrypted) = crate::infrastructure::transport::http_request::encrypt_raw(
+        key,
+        "POST",
+        "/peer_graphql",
+        wire.as_bytes(),
+    ) else {
         log::warn!("[channel] encrypt failed for {} ({msg_type})", peer.id);
         return false;
     };

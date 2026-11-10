@@ -7,7 +7,7 @@ fn begin(scans: &Scans) -> String {
     id.to_string()
 }
 fn payload(id: &str) -> String {
-    json!({"id":id,"name":"706c6169-2d74-8e53-9a16-f08b62c591d3","deviceType":"PHONE","port":2443,"version":"1","platform":"android"}).to_string()
+    json!({"id":id,"name":"706c6169-2d74-8e53-9a16-f08b62c591d3","deviceType":"PHONE","port":2443,"version":"1","signaturePublicKey":"test-public-key","platform":"android"}).to_string()
 }
 
 #[test]

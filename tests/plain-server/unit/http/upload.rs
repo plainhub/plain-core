@@ -1,5 +1,5 @@
-use plain_libs::protocols::http_client;
 use super::*;
+use plain_libs::protocols::http_client;
 
 #[test]
 fn upload_info_defaults_match_the_desktop_payload() {
@@ -31,7 +31,13 @@ async fn multipart_upload(
         plain_libs::utils::uuid::Uuid::new_v4(),
         info
     );
-    let encrypted = plain_libs::crypto::xchacha_encrypt_raw(key, metadata.as_bytes()).unwrap();
+    let encrypted = plain_rs::infrastructure::transport::http_request::encrypt_raw(
+        key,
+        "POST",
+        endpoint,
+        metadata.as_bytes(),
+    )
+    .unwrap();
     let mut metadata =
         format!("--{boundary}\r\nContent-Disposition: form-data; name=\"info\"\r\n\r\n")
             .into_bytes();
@@ -53,7 +59,9 @@ async fn multipart_upload(
         .chunks(32768)
         .map(|chunk| Ok::<_, std::io::Error>(axum::body::Bytes::copy_from_slice(chunk)))
         .collect::<Vec<_>>();
-    let mut request = http_client::builder().build().unwrap()
+    let mut request = http_client::builder()
+        .build()
+        .unwrap()
         .post(format!("http://127.0.0.1:{}{endpoint}", core.port))
         .header("c-id", client_id)
         .header(
@@ -226,7 +234,10 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
     .await;
     assert_eq!(response.status(), 201);
     assert_eq!(response.text().await.unwrap(), "0:0");
-    assert_eq!(state.upload_chunks.list("empty").await.unwrap(), vec!["0:0"]);
+    assert_eq!(
+        state.upload_chunks.list("empty").await.unwrap(),
+        vec!["0:0"]
+    );
     assert_eq!(
         state.upload_chunks.list("fixture").await.unwrap(),
         vec![format!("0:{}", data.len())]

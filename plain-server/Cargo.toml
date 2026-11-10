@@ -9,7 +9,7 @@ description = "Shared Plain GraphQL, HTTP and native transport adapters"
 "default" = ["core", "http_transport", "media"]
 "media" = ["plain-rs/runtime-media"]
 "http_transport" = ["dep:serde_json", "plain-libs/http-client", "dep:axum", "plain-libs/https", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
-"core" = ["plain-libs/websocket", "plain-libs/multipart", "dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "dep:anyhow", "dep:plain-graphql", "dep:axum", "plain-libs/http-client", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
+"core" = ["plain-libs/auth", "plain-libs/websocket", "plain-libs/multipart", "dep:serde_json", "dep:chrono", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "dep:anyhow", "dep:plain-graphql", "dep:axum", "plain-libs/http-client", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
 
 
 [dependencies]
@@ -31,6 +31,8 @@ plain-graphql = { path = "../plain-graphql", optional = true }
 "plain-rs" = { "path" = "../plain-rs", "default-features" = false }
 
 [dev-dependencies]
+opaque-ke = { version = "=4.1.0-pre.2", default-features = false, features = ["ristretto255", "argon2"] }
+rand_core = { version = "=0.6.4", features = ["getrandom"] }
 "rustls" = { "version" = "0.23", "default-features" = false, "features" = ["ring", "std"] }
 "zip" = { "version" = "9", "default-features" = false, "features" = ["deflate-flate2"] }
 "socket2" = { "version" = "0.6", "features" = ["all"] }

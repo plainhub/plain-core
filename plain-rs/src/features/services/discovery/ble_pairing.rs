@@ -7,7 +7,6 @@ use crate::features::services::discovery::pairing::Device;
 use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::features::services::discovery::pairing_runtime::event;
 use crate::features::services::discovery::pairing_runtime::failed;
-use crate::features::services::discovery::pairing_runtime::success;
 use crate::runtime::Runtime as CoreRuntime;
 use serde_json::{Value, json};
 use std::{collections::HashMap, sync::Mutex, time::Duration};
@@ -55,18 +54,17 @@ pub fn start(
     };
     let ticket: Ticket = serde_json::from_value(value["ticket"].clone())?;
     let request = serde_json::from_value(value["request"].clone())?;
-    let verification = state
+    state
         .pairing_runtime
         .confirmations
-        .begin(&request, &ticket)?
-        .wire()?;
+        .begin(&request, &ticket)?;
     let body = Message::PairRequest(request).wire()?;
     jobs.insert(ticket.target.device_id.clone(), ticket.clone());
     drop(jobs);
     let state = state.clone();
     let returned = ticket.clone();
     tokio::spawn(async move {
-        let result = run(&state, &ticket, &body, &verification).await;
+        let result = run(&state, &ticket, &body).await;
         if let Err(Cause::Failed(error)) = result {
             if state
                 .pairing
@@ -113,12 +111,7 @@ async fn host(
         }
     }
 }
-async fn run(
-    state: &CoreRuntime,
-    ticket: &Ticket,
-    body: &str,
-    verification: &str,
-) -> Result<(), Cause> {
+async fn run(state: &CoreRuntime, ticket: &Ticket, body: &str) -> Result<(), Cause> {
     let facts = json!({"generation":ticket.generation});
     let connect = json!({
         "generation": ticket.generation,
@@ -150,11 +143,6 @@ async fn run(
         WS_PAIRING_STARTED,
         json!({"deviceId":ticket.target.device_id,"deviceName":ticket.target.device_name,"generation":ticket.generation}),
     );
-    let mut verify = facts.clone();
-    verify["body"] = json!(verification);
-    if host(state, ticket, "blePairSend", verify).await? != Value::Bool(true) {
-        return Err(Cause::Failed("Failed to send pairing verification".into()));
-    }
     loop {
         let Some(remaining) = state
             .pairing
@@ -178,80 +166,40 @@ async fn run(
             Ok(message) => message,
             Err(_) => continue,
         };
-        if let Message::PairVerification(verification) = message {
-            match state
-                .pairing_runtime
-                .confirmations
-                .process(state, verification)
-                .map_err(|e| Cause::Failed(e.to_string()))?
-            {
-                crate::features::services::discovery::pairing_confirmation::Action::Send {
-                    ticket: reply_ticket,
-                    message,
-                } => {
-                    if reply_ticket.generation != ticket.generation {
-                        return Err(Cause::Stopped);
-                    }
-                    let mut send = facts.clone();
-                    send["body"] = json!(message.wire().map_err(|e| Cause::Failed(e.to_string()))?);
-                    if host(state, ticket, "blePairSend", send).await? != Value::Bool(true) {
-                        return Err(Cause::Failed("Failed to send pairing verification".into()));
-                    }
+        match message {
+            Message::PairVerification(verification) => {
+                let action = state
+                    .pairing_runtime
+                    .confirmations
+                    .process(state, verification)
+                    .map_err(|e| Cause::Failed(e.to_string()))?;
+                crate::features::services::discovery::pairing_confirmation::deliver(state, action)
+                    .await
+                    .map_err(|e| Cause::Failed(e.to_string()))?;
+                if state
+                    .pairing
+                    .remaining_ms(&ticket.target.device_id, &ticket.generation)
+                    .is_none()
+                {
+                    return Ok(());
                 }
-                _ => return Err(Cause::Failed("Unexpected pairing verification step".into())),
             }
-            continue;
+            Message::PairResponse(response) if response.from_id == ticket.target.device_id => {
+                if let Some(action) = state
+                    .pairing_runtime
+                    .confirmations
+                    .response(state, &response, "")
+                    .map_err(|e| Cause::Failed(e.to_string()))?
+                {
+                    crate::features::services::discovery::pairing_confirmation::deliver(
+                        state, action,
+                    )
+                    .await
+                    .map_err(|e| Cause::Failed(e.to_string()))?;
+                }
+            }
+            _ => {}
         }
-        let Message::PairResponse(response) = message else {
-            continue;
-        };
-        if response.from_id != ticket.target.device_id {
-            continue;
-        }
-        let _commit = state.pairing_runtime.commit.lock().unwrap();
-        if state
-            .pairing_runtime
-            .attempts
-            .get(&ticket.generation)
-            .is_some_and(|s| s.terminal())
-        {
-            return Err(Cause::Stopped);
-        }
-        state
-            .pairing_runtime
-            .confirmations
-            .response(&response)
-            .map_err(|e| Cause::Failed(e.to_string()))?;
-        let result = pairing::complete_checked(
-            &state.db,
-            &state.prefs,
-            &state.pairing,
-            response,
-            "",
-            Some(&ticket.generation),
-        )
-        .map_err(|e| Cause::Failed(e.to_string()))?;
-        if result.is_null() {
-            continue;
-        }
-        if result["peer"].is_null() {
-            failed(
-                state,
-                &ticket.target,
-                result["error"].as_str().unwrap_or("Pairing failed"),
-                Some(&ticket.generation),
-            );
-        } else {
-            state.pairing_runtime.attempts.transition(
-                state,
-                &ticket.generation,
-                PairingPhase::Succeeded,
-                None,
-                None,
-            );
-            success(state, &result["peer"], "");
-        }
-        return Ok(());
     }
 }
 

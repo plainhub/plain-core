@@ -1,1 +1,0 @@
-import{p as e}from"./chunk-native-resource-url-IKw68_dV.js";import{j as t,r as n}from"./chunk-gql-client-C2APrgOK.js";function r(n){return n.address?.baseUrl||t(e(n))}async function i(e,t,i){return n(`${r(e)}/graphql`,e.token,t,i)}export{i as n,r as t};

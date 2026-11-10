@@ -114,6 +114,30 @@ impl Db {
         signature_public_key: &str,
         chat_key: &str,
     ) -> Result<(), String> {
+        self.login_peer_confirmed(
+            id,
+            name,
+            ip,
+            port,
+            device_type,
+            token,
+            signature_public_key,
+            chat_key,
+            signature_public_key,
+        )
+    }
+    pub fn login_peer_confirmed(
+        &self,
+        id: &str,
+        name: &str,
+        ip: &str,
+        port: u16,
+        device_type: DeviceType,
+        token: &str,
+        signature_public_key: &str,
+        chat_key: &str,
+        previous_identity: &str,
+    ) -> Result<(), String> {
         let now = now_iso();
         let conn = self.0.lock().unwrap();
         let result = conn.execute(
@@ -127,8 +151,8 @@ impl Db {
                key=CASE WHEN excluded.key<>'' THEN excluded.key ELSE peers.key END,
                status=CASE WHEN excluded.key<>'' THEN 'PAIRED' ELSE peers.status END,
                updated_at=excluded.updated_at
-             WHERE peers.public_key='' OR excluded.public_key='' OR peers.public_key=excluded.public_key",
-            params![id, name, ip, port as i64, device_type, token, signature_public_key, now, chat_key],
+             WHERE peers.public_key='' OR peers.public_key=?10",
+            params![id, name, ip, port as i64, device_type, token, signature_public_key, now, chat_key, previous_identity],
         );
         if result.map_err(|e| e.to_string())? != 1 {
             return Err("Peer identity changed".into());

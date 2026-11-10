@@ -218,6 +218,8 @@ fn signed_nearby_request() -> (
 ) {
     let (key, public) = plain_libs::crypto::ed25519_generate();
     let mut request = plain_rs::features::peers::pairing::protocol::PairingRequest {
+        to_id: "receiver".into(),
+        target_public_key: plain_libs::utils::base64::base64_encode(&[1u8; 32]),
         from_id: "nearby-peer".into(),
         from_name: "Nearby fixture".into(),
         port: 2443,
@@ -251,7 +253,10 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
             plain_libs::utils::base64::base64_encode(&local_key),
         )
         .unwrap();
-    let (request, _) = signed_nearby_request();
+    let (mut request, requester_key) = signed_nearby_request();
+    request.to_id = state.native_client_id().unwrap();
+    request.target_public_key = plain_libs::utils::base64::base64_encode(&plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()[32..]);
+    request.signature = plain_libs::crypto::ed25519_sign(&requester_key, request.signature_data().as_bytes());
     let mut invalid = request.clone();
     invalid.from_name.push_str("tampered");
     let mut events = state.events.subscribe();
@@ -282,11 +287,7 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     .await
     .unwrap();
     assert_eq!(ble::nearby_body(&ack).unwrap(), b"1");
-    assert!(events.try_recv().is_err());
-    let verification_code =
-        plain_rs::features::services::discovery::pairing_confirmation::test_fixture::verify_incoming(
-            &state, &request,
-        );
+    let verification_code = plain_rs::features::services::discovery::pairing_confirmation::identity_digest(&request).unwrap();
     let event = events.try_recv().unwrap();
     assert_eq!(event.event_type, "PAIRING_REQUEST_RECEIVED");
     let delivered: plain_rs::features::peers::pairing::protocol::PairingRequest =
@@ -364,7 +365,10 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
     use plain_rs::features::peers::pairing::protocol::PairingCancel;
     let (_dir, server) = fixture();
     let state = server.runtime_state();
-    let (request, key) = signed_nearby_request();
+    let (mut request, key) = signed_nearby_request();
+    request.to_id = state.native_client_id().unwrap();
+    request.target_public_key = plain_libs::utils::base64::base64_encode(&plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()[32..]);
+    request.signature = plain_libs::crypto::ed25519_sign(&key, request.signature_data().as_bytes());
     let body = Message::PairRequest(request.clone()).wire().unwrap();
     let ack = incoming_exchange(
         &server,

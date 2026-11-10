@@ -5,7 +5,14 @@ use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::Db;
 use plain_libs::crypto::ed25519_generate;
 use plain_libs::crypto::ed25519_sign;
-use plain_libs::crypto::xchacha_encrypt_raw;
+fn encrypt_peer(key: &[u8], payload: &[u8]) -> Option<Vec<u8>> {
+    crate::infrastructure::transport::http_request::encrypt_raw(
+        key,
+        "POST",
+        "/peer_graphql",
+        payload,
+    )
+}
 use plain_libs::utils::base64::base64_encode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -46,6 +53,8 @@ fn seed_paired_peer(db: &Db) -> (String, [u8; 32], [u8; 64]) {
     ("peer-a".into(), key, kp)
 }
 
+const NONCE: &str = "ad3d447d-9eb5-4f25-a415-726b887159ca";
+
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -56,10 +65,10 @@ fn now_ms() -> i64 {
 /// Build an encrypted+signed request body exactly like the sender side
 /// (`deliver_to_peer` wire format).
 fn build_body(kp: &[u8], key: &[u8; 32], graphql_json: &str, ts: i64) -> Vec<u8> {
-    let sig_data = signature_payload(ts, "", graphql_json);
+    let sig_data = signature_payload(ts, "", NONCE, graphql_json);
     let signature = ed25519_sign(kp, sig_data.as_bytes());
-    let payload = format!("{signature}|{ts}|{graphql_json}");
-    xchacha_encrypt_raw(key, payload.as_bytes()).expect("encrypt")
+    let payload = format!("{signature}|{ts}|{NONCE}|{graphql_json}");
+    encrypt_peer(key, payload.as_bytes()).expect("encrypt")
 }
 
 #[test]
@@ -134,7 +143,7 @@ fn authenticate_rejects_expired_timestamp_and_missing_fields() {
 
     // Missing signature part.
     let payload = format!("|{}|{{}}", now_ms());
-    let body = xchacha_encrypt_raw(&key, payload.as_bytes()).unwrap();
+    let body = encrypt_peer(&key, payload.as_bytes()).unwrap();
     assert!(matches!(
         authenticate(&db, &peer_id, "", &body),
         Err(AuthError::MissingFields)
@@ -162,11 +171,11 @@ fn authenticate_channel_message_uses_channel_key_without_paired_check() {
     let timestamp = now_ms();
     let signature = ed25519_sign(
         &kp,
-        signature_payload(timestamp, "ch-1", graphql_json).as_bytes(),
+        signature_payload(timestamp, "ch-1", NONCE, graphql_json).as_bytes(),
     );
-    let body = xchacha_encrypt_raw(
+    let body = encrypt_peer(
         &channel_key,
-        format!("{signature}|{timestamp}|{graphql_json}").as_bytes(),
+        format!("{signature}|{timestamp}|{NONCE}|{graphql_json}").as_bytes(),
     )
     .unwrap();
 
@@ -199,7 +208,7 @@ fn extreme_timestamp_and_malformed_envelopes_do_not_panic_and_storage_failures_a
             Err(AuthError::TimestampExpired)
         ));
     }
-    let malformed = xchacha_encrypt_raw(&key, b"signature|not-a-number|{}").unwrap();
+    let malformed = encrypt_peer(&key, b"signature|not-a-number|{}").unwrap();
     assert!(matches!(
         authenticate(&db, &id, "", &malformed),
         Err(AuthError::MissingFields)
@@ -233,22 +242,22 @@ fn signed_context_rejects_reencrypted_cross_channel_direct_and_legacy_frames() {
     let timestamp = now_ms();
     let signature = ed25519_sign(
         &kp,
-        signature_payload(timestamp, "first", content).as_bytes(),
+        signature_payload(timestamp, "first", NONCE, content).as_bytes(),
     );
-    let envelope = format!("{signature}|{timestamp}|{content}");
-    let first = xchacha_encrypt_raw(&[41; 32], envelope.as_bytes()).unwrap();
+    let envelope = format!("{signature}|{timestamp}|{NONCE}|{content}");
+    let first = encrypt_peer(&[41; 32], envelope.as_bytes()).unwrap();
     assert!(authenticate(&db, &peer, "first", &first).is_ok());
     for (channel, key) in [("second", vec![42; 32]), ("", key.to_vec())] {
-        let body = xchacha_encrypt_raw(&key, envelope.as_bytes()).unwrap();
+        let body = encrypt_peer(&key, envelope.as_bytes()).unwrap();
         assert!(matches!(
             authenticate(&db, &peer, channel, &body),
             Err(AuthError::BadSignature)
         ));
     }
     let legacy = ed25519_sign(&kp, format!("{timestamp}{content}").as_bytes());
-    let body = xchacha_encrypt_raw(
+    let body = encrypt_peer(
         &[41; 32],
-        format!("{legacy}|{timestamp}|{content}").as_bytes(),
+        format!("{legacy}|{timestamp}|{NONCE}|{content}").as_bytes(),
     )
     .unwrap();
     assert!(matches!(
@@ -257,8 +266,14 @@ fn signed_context_rejects_reencrypted_cross_channel_direct_and_legacy_frames() {
     ));
     let body = build_body(&kp, &key, content, timestamp);
     assert!(authenticate(&db, &peer, "", &body).is_ok());
-    let envelope = plain_libs::crypto::xchacha_decrypt_raw(&key, &body).unwrap();
-    let body = xchacha_encrypt_raw(&[41; 32], &envelope).unwrap();
+    let envelope = crate::infrastructure::transport::http_request::decrypt_raw(
+        &key,
+        "POST",
+        "/peer_graphql",
+        &body,
+    )
+    .unwrap();
+    let body = encrypt_peer(&[41; 32], &envelope).unwrap();
     assert!(matches!(
         authenticate(&db, &peer, "first", &body),
         Err(AuthError::BadSignature)
@@ -284,20 +299,144 @@ fn status_handshake_and_graphql_signatures_cannot_cross_protocols() {
     assert!(authenticate_status(&db, &peer, &body).is_ok());
     assert!(matches!(
         authenticate(&db, &peer, "", &body),
-        Err(AuthError::BadSignature)
+        Err(AuthError::DecryptFailed)
     ));
     let body = build_body(&kp, &key, &peer, now_ms());
     assert!(authenticate(&db, &peer, "", &body).is_ok());
     assert!(matches!(
         authenticate_status(&db, &peer, &body),
-        Err(AuthError::BadSignature)
+        Err(AuthError::DecryptFailed)
     ));
     let timestamp = now_ms();
     let signature = ed25519_sign(&kp, format!("{timestamp}{peer}").as_bytes());
-    let body =
-        xchacha_encrypt_raw(&key, format!("{signature}|{timestamp}|{peer}").as_bytes()).unwrap();
+    let body = plain_libs::crypto::xchacha_encrypt_raw(
+        &key,
+        format!("{signature}|{timestamp}|{peer}").as_bytes(),
+    )
+    .unwrap();
     assert!(matches!(
         authenticate_status(&db, &peer, &body),
         Err(AuthError::BadSignature)
     ));
+}
+
+#[test]
+fn peer_request_rejects_wrong_http_context_and_unbound_ciphertext() {
+    let (db, _path) = unique_db();
+    let (id, key, kp) = seed_paired_peer(&db);
+    let now = now_ms();
+    let content = "{}";
+    let signature = ed25519_sign(&kp, signature_payload(now, "", NONCE, content).as_bytes());
+    let payload = format!("{signature}|{now}|{NONCE}|{content}");
+    for (method, endpoint) in [
+        ("GET", "/peer_graphql"),
+        ("POST", "/graphql"),
+        ("POST", "/guest_graphql"),
+    ] {
+        let body = crate::infrastructure::transport::http_request::encrypt_raw(
+            &key,
+            method,
+            endpoint,
+            payload.as_bytes(),
+        )
+        .unwrap();
+        assert!(matches!(
+            authenticate(&db, &id, "", &body),
+            Err(AuthError::DecryptFailed)
+        ));
+    }
+    let body = plain_libs::crypto::xchacha_encrypt_raw(&key, payload.as_bytes()).unwrap();
+    assert!(matches!(
+        authenticate(&db, &id, "", &body),
+        Err(AuthError::DecryptFailed)
+    ));
+}
+
+#[test]
+fn signed_peer_replay_is_rejected_after_reencryption_and_database_reopen() {
+    let (db, path) = unique_db();
+    let (id, key, kp) = seed_paired_peer(&db);
+    let body = build_body(&kp, &key, "{}", now_ms());
+    let plaintext = crate::infrastructure::transport::http_request::decrypt_raw(
+        &key,
+        "POST",
+        "/peer_graphql",
+        &body,
+    )
+    .unwrap();
+    assert!(authenticate(&db, &id, "", &body).is_ok());
+    assert!(matches!(
+        authenticate(&db, &id, "", &body),
+        Err(AuthError::Replay)
+    ));
+    let reencrypted = encrypt_peer(&key, &plaintext).unwrap();
+    assert_ne!(reencrypted, body);
+    assert!(matches!(
+        authenticate(&db, &id, "", &reencrypted),
+        Err(AuthError::Replay)
+    ));
+    drop(db);
+    let reopened = Db::open(&path).unwrap();
+    assert!(matches!(
+        authenticate(&reopened, &id, "", &reencrypted),
+        Err(AuthError::Replay)
+    ));
+}
+
+#[test]
+fn same_millisecond_identical_requests_have_distinct_signed_nonces() {
+    let (db, _path) = unique_db();
+    let (id, key, kp) = seed_paired_peer(&db);
+    let timestamp = now_ms();
+    let content = "{}";
+    for _ in 0..2 {
+        let nonce = plain_libs::utils::uuid::Uuid::new_v4().into_string();
+        let signature = ed25519_sign(
+            &kp,
+            signature_payload(timestamp, "", &nonce, content).as_bytes(),
+        );
+        let body = encrypt_peer(
+            &key,
+            format!("{signature}|{timestamp}|{nonce}|{content}").as_bytes(),
+        )
+        .unwrap();
+        assert!(authenticate(&db, &id, "", &body).is_ok());
+        let altered = plain_libs::utils::uuid::Uuid::new_v4().into_string();
+        let tampered = encrypt_peer(
+            &key,
+            format!("{signature}|{timestamp}|{altered}|{content}").as_bytes(),
+        )
+        .unwrap();
+        assert!(matches!(
+            authenticate(&db, &id, "", &tampered),
+            Err(AuthError::BadSignature)
+        ));
+    }
+}
+
+#[test]
+fn graphql_freshness_is_one_minute_without_shortening_status_window() {
+    let (db, _path) = unique_db();
+    let (id, key, kp) = seed_paired_peer(&db);
+    let now = now_ms();
+    for offset in [-61_000, 61_000] {
+        let body = build_body(&kp, &key, "{}", now + offset);
+        assert!(matches!(
+            authenticate(&db, &id, "", &body),
+            Err(AuthError::TimestampExpired)
+        ));
+    }
+    for offset in [-59_000, 59_000] {
+        let body = build_body(&kp, &key, "{}", now + offset);
+        assert!(authenticate(&db, &id, "", &body).is_ok());
+    }
+    let timestamp = now - 120_000;
+    let content = "status fixture";
+    let signature = ed25519_sign(&kp, status_signature_payload(timestamp, content).as_bytes());
+    let body = plain_libs::crypto::xchacha_encrypt_raw(
+        &key,
+        format!("{signature}|{timestamp}|{content}").as_bytes(),
+    )
+    .unwrap();
+    assert!(authenticate_status(&db, &id, &body).is_ok());
 }

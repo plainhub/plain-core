@@ -1,0 +1,16 @@
+{
+  "clientId": "fixture-browser",
+  "clientPrivate": "asgvKoKV0jeV7afNZNUrfLLGKIA0JKuN6kBrFOLwXQE=",
+  "fingerprint": "e01aa292bb3ce21d09af8dd3e23da85edfe33f0c88b41f1b675a7d0257f966bc",
+  "key": "PUUhh7AldyqyUNtthzQDaOkruF3/o2yUIxbgv79i+8A=",
+  "request": {
+    "publicKey": "BAvwuy+D/ZP8iJ5YZSeLK7Cv1jGlmTxAqxEuT85b0liHDnB4kgViNVosbkZ6B7FWlvKLP2tMK0vjc4wCKlPkQBQ="
+  },
+  "response": {
+    "deviceId": "fixture-device",
+    "expiresAt": 1700000300000,
+    "serverPublicKey": "BDVs94y9WwggO8JYzo2Fp28c81xMKTLtFEYSEIvWc5N+UPccBrCYO0gvyUtqhJ6nw9o2sce6Zz08CxwEesfTxyw=",
+    "signature": "YBvhBvFSW3txSiqB3RmriXcLumau4oAv/djQiH0XusZtIeBVxNjwsC2dntvMCjbU+pNYRXdl4lBPZdn5S0N/AA=="
+  },
+  "serverIdentity": "x0hC4opMe/lVF4ve1ovfuZ1o89ilPR3FtCdlPtcWReU="
+}

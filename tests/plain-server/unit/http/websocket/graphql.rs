@@ -1,6 +1,6 @@
-use plain_libs::protocols::http_client;
 use super::*;
 use futures_util::SinkExt;
+use plain_libs::protocols::http_client;
 use serde_json::{Value, json};
 use tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClientRequest};
 
@@ -140,11 +140,7 @@ async fn connected_http_clients(pem: &str, origin: &str, count: usize) -> Vec<ht
             .add_root_certificate(certificate.clone())
             .build()
             .unwrap();
-        let ready = client
-            .get(format!("{origin}/health"))
-            .send()
-            .await
-            .unwrap();
+        let ready = client.get(format!("{origin}/health")).send().await.unwrap();
         assert_eq!(ready.status(), StatusCode::OK);
         ready.bytes().await.unwrap();
         clients.push(client);
@@ -165,15 +161,11 @@ async fn fs_burst_and_page_cancellation(
         std::thread::available_parallelism().unwrap().get(),
     )
     .min(300);
-    let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (certificate_pem, certificate_key) =
+        plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let pem = String::from_utf8(certificate_pem).unwrap();
     let (_, port) = server
-        .start_public(
-            0,
-            0,
-            pem.clone().into_bytes(),
-            certificate_key,
-        )
+        .start_public(0, 0, pem.clone().into_bytes(), certificate_key)
         .await
         .unwrap();
     let http = http_client::builder()
@@ -238,7 +230,13 @@ async fn fs_burst_and_page_cancellation(
         plain_libs::utils::uuid::Uuid::new_v4(),
         json!({"query":r#"{noteCount(query:"")} "#})
     );
-    let body = plain_libs::crypto::xchacha_encrypt_raw(key, plaintext.as_bytes()).unwrap();
+    let body = plain_rs::infrastructure::transport::http_request::encrypt_raw(
+        key,
+        "POST",
+        "/graphql",
+        plaintext.as_bytes(),
+    )
+    .unwrap();
     let response = http
         .post(format!("{origin}/graphql"))
         .header("c-id", client)
@@ -317,7 +315,13 @@ async fn fs_burst_and_page_cancellation(
                 plain_libs::utils::uuid::Uuid::new_v4(),
                 json!({"query":r#"{noteCount(query:"")}"#})
             );
-            plain_libs::crypto::xchacha_encrypt_raw(key, plaintext.as_bytes()).unwrap()
+            plain_rs::infrastructure::transport::http_request::encrypt_raw(
+                key,
+                "POST",
+                "/graphql",
+                plaintext.as_bytes(),
+            )
+            .unwrap()
         })
         .collect::<Vec<_>>();
     let configuration = source.path().join("http2.json");

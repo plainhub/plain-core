@@ -28,6 +28,7 @@ async fn native_advertisements_use_current_preferences_without_host_calls() {
     let first = execute(&state, Request::Reply {}).await.unwrap();
     assert_eq!(first["id"], "fixture-root");
     assert_eq!(first["remoteAccess"], true);
+    assert_eq!(plain_libs::utils::base64::base64_decode(first["signaturePublicKey"].as_str().unwrap()).len(), 32);
     assert_eq!(first["deviceType"], "COMPUTER");
     assert_eq!(first["platform"], std::env::consts::OS.to_uppercase());
     state.prefs.set("device_name", "Current device").unwrap();

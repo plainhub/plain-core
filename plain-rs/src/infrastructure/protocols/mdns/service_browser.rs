@@ -46,6 +46,7 @@ pub struct FoundDevice {
     pub version: String,
     pub platform: String,
     pub remote_access: Option<bool>,
+    pub signature_public_key: String,
 }
 
 /// Immutable mDNS info for one service instance, accumulated across packets.
@@ -686,6 +687,7 @@ fn handle_packet(inner: &Inner, data: &[u8], sender: &str) {
             device_type: instance.device_type,
             version: instance.version,
             platform: instance.platform,
+            signature_public_key: instance.txt_records.iter().find_map(|entry| entry.strip_prefix("pk=").map(str::to_owned)).unwrap_or_default(),
             remote_access: instance
                 .txt_records
                 .iter()

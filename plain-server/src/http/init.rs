@@ -33,7 +33,23 @@ pub(crate) async fn init(
     );
     let authenticated = key
         .as_ref()
-        .is_some_and(|key| plain_libs::crypto::xchacha_decrypt_raw(key, &body).is_some());
+        .and_then(|key| {
+            plain_rs::infrastructure::transport::http_request::decrypt_raw(
+                key, "POST", "/init", &body,
+            )
+        })
+        .and_then(|plain| String::from_utf8(plain).ok())
+        .is_some_and(|plain| {
+            state
+                .main_replay
+                .admit(
+                    &state.db,
+                    client_id,
+                    &plain,
+                    chrono::Utc::now().timestamp_millis(),
+                )
+                .is_ok()
+        });
     let password_required = match plain_rs::features::prefs::security::password_type(&state.prefs) {
         Ok(value) => value == PasswordType::Fixed,
         Err(error) => {
@@ -46,6 +62,13 @@ pub(crate) async fn init(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
     let mut result = json!({"signaturePublicKey":plain_libs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required});
+    if password_required {
+        match plain_rs::features::prefs::security::opaque_public_key(&state.prefs) {
+            Ok(Some(key)) => result["opaquePublicKey"] = json!(key),
+            Ok(None) => {}
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
     #[cfg(feature = "http_transport")]
     if let Some(server) = state.public_server.lock().await.as_ref() {
         let pin = &server.tls_certificate_sha256;

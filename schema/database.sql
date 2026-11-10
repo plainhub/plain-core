@@ -348,6 +348,16 @@ CREATE TABLE IF NOT EXISTS pomodoro_items (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS replay_receipts (
+    receipt BLOB PRIMARY KEY NOT NULL,
+    expires_at INTEGER NOT NULL,
+    admitted_at INTEGER NOT NULL
+) STRICT, WITHOUT ROWID;
+
+CREATE INDEX IF NOT EXISTS replay_receipts_expiry ON replay_receipts(expires_at);
+
+CREATE INDEX IF NOT EXISTS replay_receipts_clock ON replay_receipts(admitted_at);
+
 CREATE TABLE IF NOT EXISTS scan_history (
     id TEXT PRIMARY KEY NOT NULL CHECK(length(id)>0),
     text TEXT NOT NULL

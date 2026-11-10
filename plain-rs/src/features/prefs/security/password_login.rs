@@ -24,13 +24,42 @@ fn validate_password(password: &str) -> std::result::Result<(), PasswordError> {
     Ok(())
 }
 
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PasswordCredential {
+    pub setup: String,
+    pub record: String,
+}
+
+impl std::fmt::Debug for PasswordCredential {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PasswordCredential([redacted])")
+    }
+}
+
 pub(super) fn write_password(map: &mut Map<String, Value>, password: &str) -> Result<()> {
+    ensure(map, SIGNATURE_KEY_PAIR, || {
+        plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
+    })?;
+    let pair = plain_libs::utils::base64::base64_decode(&read::<String>(map, SIGNATURE_KEY_PAIR)?);
+    if pair.len() != 64 {
+        return Err(PrefsError::Decode(
+            <serde_json::Error as serde::de::Error>::custom("Invalid signing identity"),
+        ));
+    }
+    let registration =
+        plain_libs::auth::server::register(password.as_bytes(), &pair[32..]).map_err(|_| {
+            PrefsError::Encode(<serde_json::Error as serde::ser::Error>::custom(
+                "Password registration failed",
+            ))
+        })?;
     put(
         map,
         PASSWORD,
-        plain_libs::crypto::password::PasswordHash::new(
-            plain_libs::crypto::sha512_hex(password).as_bytes(),
-        ),
+        PasswordCredential {
+            setup: plain_libs::utils::base64::base64_encode(&registration.setup),
+            record: plain_libs::utils::base64::base64_encode(&registration.record),
+        },
     )
 }
 
@@ -51,18 +80,27 @@ pub fn configure_password_login(prefs: &Prefs) -> Result<()> {
 }
 
 pub fn password_setup_required(prefs: &Prefs) -> Result<bool> {
-    Ok(password_type(prefs)? == PasswordType::Fixed && password_hash(prefs)?.is_none())
+    Ok(password_type(prefs)? == PasswordType::Fixed && password_credential(prefs)?.is_none())
 }
 
-pub fn password_hash(prefs: &Prefs) -> Result<Option<plain_libs::crypto::password::PasswordHash>> {
+pub fn password_credential(prefs: &Prefs) -> Result<Option<PasswordCredential>> {
     prefs.get(PASSWORD)
 }
 
-pub fn valid_password_digest(digest: &str) -> bool {
-    digest.len() == 128
-        && digest
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+pub fn opaque_public_key(prefs: &Prefs) -> Result<Option<String>> {
+    password_credential(prefs)?
+        .map(|credential| {
+            plain_libs::auth::server::public_key(&plain_libs::utils::base64::base64_decode(
+                &credential.setup,
+            ))
+            .map(|key| plain_libs::utils::base64::base64_encode(&key))
+            .map_err(|_| {
+                PrefsError::Decode(<serde_json::Error as serde::de::Error>::custom(
+                    "Invalid password registration",
+                ))
+            })
+        })
+        .transpose()
 }
 
 pub fn set_password_login(prefs: &Prefs, password: &str) -> std::result::Result<(), PasswordError> {

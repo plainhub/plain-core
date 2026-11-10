@@ -13,6 +13,9 @@ fn browse_err(e: browse::SqliteBrowseError) -> anyhow::Error {
 }
 
 fn checked(db: &Db, table: &str) -> Result<()> {
+    if table.eq_ignore_ascii_case("replay_receipts") {
+        bail!("Internal security table");
+    }
     if db.with_conn(|conn| browse::table_exists(conn, table)) {
         Ok(())
     } else {
@@ -22,6 +25,9 @@ fn checked(db: &Db, table: &str) -> Result<()> {
 
 pub fn tables(db: &Db) -> Vec<String> {
     db.with_conn(|conn| browse::tables(conn))
+        .into_iter()
+        .filter(|name| !name.eq_ignore_ascii_case("replay_receipts"))
+        .collect()
 }
 
 pub fn table_row_count(db: &Db, table: &str) -> Result<i64> {
@@ -59,11 +65,22 @@ pub fn delete_table_rows(db: &Db, table: &str, ids: &[String]) -> Result<usize> 
 
 pub struct SqliteFile {
     path: PathBuf,
+    system: bool,
 }
 
 impl SqliteFile {
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
+        Self {
+            path: path.into(),
+            system: false,
+        }
+    }
+
+    pub fn system(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: path.into(),
+            system: true,
+        }
     }
 
     pub fn path(&self) -> &Path {
@@ -75,7 +92,10 @@ impl SqliteFile {
     }
 
     pub fn tables(&self) -> Result<Vec<String>> {
-        Ok(browse::tables(&self.open()?))
+        Ok(browse::tables(&self.open()?)
+            .into_iter()
+            .filter(|name| !self.system || !name.eq_ignore_ascii_case("replay_receipts"))
+            .collect())
     }
 
     pub fn table_row_count(&self, table: &str) -> Result<i64> {
@@ -131,6 +151,9 @@ impl SqliteFile {
     }
 
     fn checked(&self, conn: &Connection, table: &str) -> Result<()> {
+        if self.system && table.eq_ignore_ascii_case("replay_receipts") {
+            bail!("Internal security table");
+        }
         if browse::table_exists(conn, table) {
             Ok(())
         } else {

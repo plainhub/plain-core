@@ -44,7 +44,7 @@ impl Service {
         }
         let prefs = core.shared_preferences().map_err(anyhow::Error::msg)?;
         anyhow::ensure!(
-            plain_rs::features::prefs::security::password_hash(&prefs)?.is_some(),
+            plain_rs::features::prefs::security::password_credential(&prefs)?.is_some(),
             "Admin password is not configured. Run plainapp passwd before starting the service."
         );
         plain_rs::features::prefs::security::configure_password_login(&prefs)?;

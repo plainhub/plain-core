@@ -13,6 +13,7 @@ pub struct Target {
     pub device_name: String,
     pub device_ip: String,
     pub device_port: u16,
+    pub device_public_key: String,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,7 +27,7 @@ pub struct Ticket {
 }
 pub struct Pending {
     pub ticket: Ticket,
-    pub ecdh: EcdhSession,
+    pub ecdh: Option<EcdhSession>,
     started: Instant,
     sent: bool,
 }
@@ -64,11 +65,15 @@ impl Sessions {
         {
             return false;
         }
+        if !incoming.contains_key(&request.from_id) && incoming.len() >= 128 {
+            return false;
+        }
         let new = incoming
             .get(&request.from_id)
             .is_none_or(|p| p.signature != request.signature);
         let target = Target {
             device_id: request.from_id.clone(),
+            device_public_key: request.signature_public_key.clone(),
             device_name: request.from_name.clone(),
             device_ip: request.from_ip.clone(),
             device_port: request.port,
@@ -130,6 +135,14 @@ impl Sessions {
         current.ticket.request_signature = signature.into();
         Some(current.ticket.clone())
     }
+    pub fn shared_key(&self, id: &str, signature: &str, public_key: &[u8]) -> Option<[u8; 32]> {
+        let mut pending = self.0.lock().unwrap();
+        let current = pending.get_mut(id)?;
+        if current.expired() || current.ticket.request_signature != signature {
+            return None;
+        }
+        current.ecdh.take()?.compute_shared_key(public_key)
+    }
     pub fn take_response(
         &self,
         id: &str,
@@ -147,7 +160,11 @@ impl Sessions {
         pending.remove(id)
     }
     pub fn start(&self, target: Target, ecdh: EcdhSession) -> Ticket {
-        self.start_generation(target, ecdh, plain_libs::utils::uuid::Uuid::new_v4().into_string())
+        self.start_generation(
+            target,
+            ecdh,
+            plain_libs::utils::uuid::Uuid::new_v4().into_string(),
+        )
     }
     pub fn start_generation(
         &self,
@@ -165,7 +182,7 @@ impl Sessions {
             ticket.target.device_id.clone(),
             Pending {
                 ticket: ticket.clone(),
-                ecdh,
+                ecdh: Some(ecdh),
                 started: Instant::now(),
                 sent: false,
             },

@@ -138,7 +138,7 @@ async fn scheduled_read_supplies_canonical_request_and_checks_reply_identity() {
             "port": 2443,
             "deviceType": "PHONE",
             "version": "1",
-            "platform": "test",
+            "signaturePublicKey":"test-public-key","platform": "test",
         });
         state
             .host

@@ -81,9 +81,9 @@ pub(crate) async fn acknowledge(
     {
         return Err("Invalid nonce".into());
     }
-    state
-        .main_replay
+    crate::http::auth::replay::Replay::new("subscription")
         .admit(
+            &state.db,
             client,
             &format!("{}|{}|", init.timestamp_millis, init.client_nonce),
             chrono::Utc::now().timestamp_millis(),

@@ -35,7 +35,7 @@ impl Default for Runtime {
             native_sockets: Arc::default(),
             connections: Mutex::default(),
             unauthenticated: Mutex::default(),
-            replay: Default::default(),
+            replay: crate::http::auth::replay::Replay::new("websocket"),
             screen_events: tokio::sync::broadcast::channel(256).0,
         }
     }
@@ -92,6 +92,14 @@ impl Runtime {
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn has_client_connection(&self, client_id: &str) -> bool {
+        self.connections
+            .lock()
+            .unwrap()
+            .values()
+            .any(|connection| connection.client_id == client_id)
+    }
     pub(crate) fn login_pending(&self, request_id: &str) -> bool {
         self.connections.lock().unwrap().values().any(|connection| {
             connection.pending.as_deref() == Some(request_id)
@@ -169,10 +177,10 @@ fn enabled(state: &ServerState) -> bool {
     state.prefs.get_or("remote_access", true)
 }
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Params {
     #[serde(default)]
     cid: String,
-    auth: Option<String>,
 }
 pub(super) fn upgrade(
     state: ServerState,
@@ -220,12 +228,6 @@ async fn run(
     permit: UnauthenticatedConnection,
 ) {
     let mut permit = Some(permit);
-    if (channel == Channel::Auth && !matches!(params.auth.as_deref(), Some("1" | "2")))
-        || (channel != Channel::Auth && params.auth.is_some())
-    {
-        let _ = socket.send(close(1008, "invalid_request")).await;
-        return;
-    }
     if !enabled(&state) || params.cid.is_empty() {
         let reason = if params.cid.is_empty() {
             "`cid` is missing"
@@ -262,12 +264,18 @@ async fn run(
         },
     );
     let mut registered = false;
+    let mut registration_cipher: Option<Vec<u8>> = None;
     let mut stream = None;
     let mut receiver = channel.subscribe(&state);
     let mut pending: Option<String> = None;
     enum LoginHandshake {
         AwaitingCommitment,
-        AwaitingReveal(confirmation_channel::ServerHandshake),
+        Opaque {
+            login: plain_libs::auth::server::Login,
+            context: Vec<u8>,
+            credential: plain_rs::features::prefs::security::PasswordCredential,
+            created: std::time::Instant,
+        },
         Ready(confirmation_channel::Channel),
         Submitted,
     }
@@ -284,14 +292,14 @@ async fn run(
                 let _ = socket.send(close(1008, "timeout")).await;
                 break;
             },
-            _ = &mut deadline, if matches!(params.auth.as_deref(), Some("1" | "2")) => { let _ = socket.send(close(1008, "login_expired")).await; break; },
+            _ = &mut deadline, if channel == Channel::Auth => { let _ = socket.send(close(1008, "login_expired")).await; break; },
             _ = closed.changed() => { let (code, reason) = (*closed.borrow()).unwrap_or((1000, "")); let _ = socket.send(close(code, reason)).await; break; },
             message = outgoing.recv() => match message { Some(message) => message, None => break },
             incoming = socket.next() => {
                 let frame = match incoming {
                     Some(Ok(Message::Binary(frame))) => frame,
                     Some(Ok(Message::Ping(bytes))) => { if socket.send(Message::Pong(bytes)).await.is_err() { break; } continue; },
-                    Some(Ok(Message::Text(text))) if matches!(params.auth.as_deref(), Some("1" | "2")) => {
+                    Some(Ok(Message::Text(text))) if channel == Channel::Auth => {
                         if text.len() > 4096 {
                             let _ = socket.send(close(1008, "invalid_login_request")).await;
                             break;
@@ -300,11 +308,7 @@ async fn run(
                             match std::mem::replace(&mut handshake, LoginHandshake::Submitted) {
                                 LoginHandshake::AwaitingCommitment => {
                                     let password_type = plain_rs::features::prefs::security::password_type(&state.prefs)?;
-                                    let mode = match (params.auth.as_deref(), password_type) {
-                                        (Some("1"), PasswordType::Fixed) => confirmation_channel::ConfirmationMode::Password,
-                                        (Some("2"), PasswordType::None) => confirmation_channel::ConfirmationMode::DeviceConfirmation,
-                                        _ => anyhow::bail!("invalid_login_request"),
-                                    };
+                                    anyhow::ensure!(password_type == PasswordType::None, "invalid_login_request");
                                     anyhow::ensure!(enabled(&state), "remote_access_disabled");
                                     let request = serde_json::from_str::<confirmation_channel::ClientHello>(&text)?;
                                     let device_id = state.prefs.get_or(
@@ -315,20 +319,13 @@ async fn run(
                                     let now = chrono::Utc::now().timestamp_millis() as u64;
                                     let (pending, response) = confirmation_channel::ServerHandshake::start(
                                         &params.cid,
-                                        mode,
                                         &device_id,
                                         &request,
                                         &signing,
                                         now,
                                     )?;
-                                    handshake = LoginHandshake::AwaitingReveal(pending);
+                                    handshake = LoginHandshake::Ready(pending);
                                     Ok(Some(response))
-                                }
-                                LoginHandshake::AwaitingReveal(pending) => {
-                                    let reveal = serde_json::from_str::<confirmation_channel::ClientReveal>(&text)?;
-                                    let now = chrono::Utc::now().timestamp_millis() as u64;
-                                    handshake = LoginHandshake::Ready(pending.finish(&reveal, now)?);
-                                    Ok(None)
                                 }
                                 _ => anyhow::bail!("invalid_login_request"),
                             }
@@ -348,11 +345,44 @@ async fn run(
                     _ => break,
                 };
                 if !enabled(&state) { let _ = socket.send(close(1008,"remote_access_disabled")).await; break; }
-                if matches!(params.auth.as_deref(), Some("1" | "2")) {
+                if channel == Channel::Auth {
                     if let Some(request_id) = pending.take() { let _ = crate::http::auth::ws_login::execute(&state, crate::http::auth::ws_login::Request::Cancel { request_id }).await; }
-                    let LoginHandshake::Ready(channel) = std::mem::replace(&mut handshake, LoginHandshake::Submitted) else {
-                        let _ = socket.send(close(1008, "invalid_login_request")).await;
-                        break;
+                    let previous = std::mem::replace(&mut handshake, LoginHandshake::Submitted);
+                    let resolved = (|| -> anyhow::Result<_> {
+                        use crate::http::auth::ws_login::{LoginChannel, OpaqueChannel};
+                        use plain_rs::features::prefs::security;
+                        match previous {
+                            LoginHandshake::AwaitingCommitment => {
+                                anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed, "invalid_login_request");
+                                let credential = security::password_credential(&state.prefs)?.ok_or_else(|| anyhow::anyhow!("password_setup_required"))?;
+                                let signing = security::signing_keypair(&state.prefs)?;
+                                let identity = plain_libs::crypto::ed25519_public_from_keypair(&signing).ok_or_else(|| anyhow::anyhow!("invalid_identity"))?;
+                                let context = plain_libs::auth::context(&params.cid, &identity);
+                                let setup = plain_libs::utils::base64::base64_decode_checked(&credential.setup)?;
+                                let record = plain_libs::utils::base64::base64_decode_checked(&credential.record)?;
+                                let (login, response) = plain_libs::auth::server::start(&setup, &record, &frame, &context, &identity).map_err(|_| anyhow::anyhow!("invalid_password"))?;
+                                handshake = LoginHandshake::Opaque { login, context, credential, created: std::time::Instant::now() };
+                                Ok(Err(response))
+                            }
+                            LoginHandshake::Opaque { login, context, credential, created } => {
+                                anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed && security::password_credential(&state.prefs)?.as_ref() == Some(&credential), "invalid_password");
+                                let length = plain_libs::auth::server::finalization_len();
+                                anyhow::ensure!(frame.len() > length, "invalid_password");
+                                let session = login.finish(&frame[..length]).map_err(|_| anyhow::anyhow!("invalid_password"))?;
+                                let key = plain_libs::auth::api_key(&session, &context);
+                                Ok(Ok((LoginChannel::Opaque(OpaqueChannel { key, context, credential, created }), frame[length..].to_vec(), true)))
+                            }
+                            LoginHandshake::Ready(channel) => Ok(Ok((LoginChannel::Confirmation(channel), frame.to_vec(), false))),
+                            _ => anyhow::bail!("invalid_login_request"),
+                        }
+                    })();
+                    let (channel, frame, password_login) = match resolved {
+                        Ok(Err(response)) => {
+                            if socket.send(Message::Binary(response.into())).await.is_err() { break; }
+                            continue;
+                        }
+                        Ok(Ok(ready)) => ready,
+                        Err(_) => { let _ = socket.send(close(1008, "invalid_password")).await; break; }
                     };
                     let request = crate::http::auth::ws_login::Request::Issue {
                         client_id: params.cid.clone(),
@@ -376,7 +406,7 @@ async fn run(
                             continue;
                         },
                         Err(error) => {
-                            let reason = match error.to_string().as_str() { "too_many_login_attempts" => "too_many_login_attempts", "remote_access_disabled" => "remote_access_disabled", "login_expired" => "login_expired", _ if params.auth.as_deref() == Some("2") => "invalid_login_request", _ => "invalid_password" };
+                            let reason = match error.to_string().as_str() { "too_many_login_attempts" => "too_many_login_attempts", "remote_access_disabled" => "remote_access_disabled", "login_expired" => "login_expired", _ if password_login => "invalid_password", _ => "invalid_login_request" };
                             let _ = socket.send(close(1013,reason)).await;
                             break;
                         }
@@ -385,9 +415,11 @@ async fn run(
                 let Some(key) = plain_rs::features::services::sessions::local_key(&state, &params.cid)
                     .or_else(|| plain_rs::features::services::sessions::key(&state.db, &params.cid).ok().flatten())
                     else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
-                let plain = plain_libs::crypto::xchacha_decrypt_raw(&key,&frame);
+                let path = match channel { Channel::Screen => "/screen", Channel::ImageEditor => "/image_editor", Channel::Auth => unreachable!() };
+                let aad = plain_rs::infrastructure::protocols::websocket::request_aad(path, &params.cid, registration_cipher.as_deref());
+                let plain = plain_libs::crypto::xchacha_decrypt_raw_with_aad(&key,&frame,&aad);
                 let Some(plain) = plain else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
-                let plain = match super::frames::admit(&state.main_ws.replay, &params.cid, &frame, &plain, registered, chrono::Utc::now().timestamp_millis()) {
+                let plain = match super::frames::admit(&state.main_ws.replay, &state.db, &params.cid, &frame, &plain, registered, chrono::Utc::now().timestamp_millis()) {
                     Ok(payload) => payload,
                     Err(()) => { let _ = socket.send(close(1013,"invalid_request")).await; break; }
                 };
@@ -399,6 +431,7 @@ async fn run(
                             break;
                         }
                     }
+                    registration_cipher = Some(frame.to_vec());
                     stream = Some(plain_rs::infrastructure::protocols::websocket::Stream::new(&frame));
                     registered = true;
                     permit.take();

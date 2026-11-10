@@ -1,9 +1,9 @@
-use plain_libs::protocols::http_client;
 use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::services::discovery::pairing_runtime;
 use crate::features::services::discovery::pairing_runtime::event;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
+use plain_libs::protocols::http_client;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -28,6 +28,7 @@ pub enum PairingPhase {
     PasswordRequired,
     Authenticating,
     Pairing,
+    TrustRequired,
     WaitingConfirmation,
     Committing,
     Succeeded,
@@ -45,6 +46,7 @@ pub struct State {
     pub error: Option<String>,
     #[serde(default)]
     pub verification_code: Option<String>,
+    pub identity_changed: bool,
 }
 impl State {
     pub fn terminal(&self) -> bool {
@@ -61,6 +63,7 @@ struct Attempt {
     started: u64,
     cancel: watch::Sender<bool>,
     password: mpsc::Sender<String>,
+    trusted: watch::Sender<bool>,
 }
 #[derive(Default)]
 pub struct Attempts(
@@ -127,6 +130,7 @@ impl Attempts {
             phase: PairingPhase::Starting,
             error: None,
             verification_code: None,
+            identity_changed: false,
         };
         let (cancel, stopped) = watch::channel(false);
         let (password, passwords) = mpsc::channel(1);
@@ -139,6 +143,7 @@ impl Attempts {
                 started: self.1.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
                 cancel,
                 password,
+                trusted: watch::channel(false).0,
             },
         );
         if let Some(context) = context {
@@ -149,6 +154,36 @@ impl Attempts {
             );
         }
         Ok((state, stopped, passwords))
+    }
+    pub fn trust(&self, generation: &str) -> Result<()> {
+        let attempts = self.0.lock().unwrap();
+        let attempt = attempts
+            .get(generation)
+            .filter(|a| {
+                a.state.mode == Mode::Manage && a.state.phase == PairingPhase::TrustRequired
+            })
+            .ok_or_else(|| anyhow::anyhow!("No pending identity confirmation"))?;
+        attempt.trusted.send_replace(true);
+        Ok(())
+    }
+    pub fn trust_changes(&self, generation: &str) -> Result<watch::Receiver<bool>> {
+        self.0
+            .lock()
+            .unwrap()
+            .get(generation)
+            .map(|a| a.trusted.subscribe())
+            .ok_or_else(|| anyhow::anyhow!("Pairing expired"))
+    }
+    pub fn set_identity_changed(&self, state: &CoreRuntime, generation: &str, changed: bool) {
+        let mut attempts = self.0.lock().unwrap();
+        if let Some(attempt) = attempts.get_mut(generation).filter(|a| !a.state.terminal()) {
+            attempt.state.identity_changed = changed;
+            event(
+                state,
+                "PAIRING_STATE_CHANGED",
+                serde_json::to_value(&attempt.state).unwrap(),
+            );
+        }
     }
     pub fn set_verification_code(&self, state: &CoreRuntime, generation: &str, code: &str) {
         let mut attempts = self.0.lock().unwrap();
@@ -449,7 +484,10 @@ pub(super) struct Resolved {
     pub url: Option<http_client::Url>,
 }
 pub fn nearby_management_address(state: &CoreRuntime, id: &str) -> Result<http_client::Url> {
-    ensure!(state.nearby_devices.contains(id), "Nearby device unavailable");
+    ensure!(
+        state.nearby_devices.contains(id),
+        "Nearby device unavailable"
+    );
     resolve(state, Some(id), None, Mode::Manage)?
         .url
         .ok_or_else(|| anyhow::anyhow!("No management address available"))
@@ -549,6 +587,12 @@ fn resolve(
         target: crate::features::peers::pairing::sessions::Target {
             device_id: id.unwrap_or_default().into(),
             device_name: name,
+            device_public_key: nearby
+                .as_ref()
+                .map(|d| d.signature_public_key.clone())
+                .filter(|key| !key.is_empty())
+                .or_else(|| saved.as_ref().map(|p| p.public_key.clone()))
+                .unwrap_or_default(),
             device_ip: String::new(),
             device_port: port,
         },

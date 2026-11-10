@@ -293,37 +293,43 @@ async fn peer(
     mut commands: mpsc::Receiver<Command>,
     outgoing: &Output,
 ) -> Result<()> {
-    let (route, mut socket, mut stream) = tokio::time::timeout(Duration::from_secs(10), async {
-        let route = state.managed_proxy.peers.route(state, peer_id).await?;
-        let mut url = route.base.join(session.kind.path())?;
-        url.set_scheme("wss")
-            .map_err(|_| anyhow!("Invalid managed address"))?;
-        url.query_pairs_mut().append_pair("cid", &route.client_id);
-        let (mut socket, _) = tokio_tungstenite::connect_async_tls_with_config(
-            url.as_str(),
-            Some(
-                WebSocketConfig::default()
-                    .max_message_size(Some(MAX_SOCKET_FRAME_BYTES + 128))
-                    .max_frame_size(Some(MAX_SOCKET_FRAME_BYTES + 128)),
-            ),
-            false,
-            Some(tokio_tungstenite::Connector::Rustls(Arc::new(
-                plain_libs::protocols::http_client::pinned_tls_config(route.pin)?,
-            ))),
-        )
-        .await?;
-        route.check_current(state)?;
-        let registration = plain_libs::crypto::xchacha_encrypt_raw(
-            &route.key,
-            chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
-        )
-        .ok_or_else(|| anyhow!("Socket registration failed"))?;
-        socket
-            .send(Message::Binary(registration.clone().into()))
+    let (route, mut socket, mut stream, registration) =
+        tokio::time::timeout(Duration::from_secs(10), async {
+            let route = state.managed_proxy.peers.route(state, peer_id).await?;
+            let mut url = route.base.join(session.kind.path())?;
+            url.set_scheme("wss")
+                .map_err(|_| anyhow!("Invalid managed address"))?;
+            url.query_pairs_mut().append_pair("cid", &route.client_id);
+            let (mut socket, _) = tokio_tungstenite::connect_async_tls_with_config(
+                url.as_str(),
+                Some(
+                    WebSocketConfig::default()
+                        .max_message_size(Some(MAX_SOCKET_FRAME_BYTES + 128))
+                        .max_frame_size(Some(MAX_SOCKET_FRAME_BYTES + 128)),
+                ),
+                false,
+                Some(tokio_tungstenite::Connector::Rustls(Arc::new(
+                    plain_libs::protocols::http_client::pinned_tls_config(route.pin)?,
+                ))),
+            )
             .await?;
-        Ok::<_, anyhow::Error>((route, socket, Stream::new(&registration)))
-    })
-    .await??;
+            route.check_current(state)?;
+            let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+                &route.key,
+                chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+                &plain_rs::infrastructure::protocols::websocket::request_aad(
+                    session.kind.path(),
+                    &route.client_id,
+                    None,
+                ),
+            )
+            .ok_or_else(|| anyhow!("Socket registration failed"))?;
+            socket
+                .send(Message::Binary(registration.clone().into()))
+                .await?;
+            Ok::<_, anyhow::Error>((route, socket, Stream::new(&registration), registration))
+        })
+        .await??;
     publish(outgoing, vec![0])?;
     let mut changed = state.db.peer_changes();
     let result = async {
@@ -334,7 +340,7 @@ async fn peer(
                 _ = changed.changed() => { route.check_current(state)?; },
                 command = commands.recv() => {
                     let Some(command) = command else { return Ok(()); };
-                    let result = send_peer(&route, &mut socket, &command.payload).await;
+                    let result = send_peer(&route, &mut socket, session.kind.path(), &registration, &command.payload).await;
                     let failed = result.is_err();
                     let _ = command.result.send(result.map_err(|error| error.to_string()));
                     if failed { return Err(anyhow!("Socket send failed")); }
@@ -361,12 +367,22 @@ async fn send_peer(
     socket: &mut tokio_tungstenite::WebSocketStream<
         tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
     >,
+    path: &str,
+    registration: &[u8],
     payload: &[u8],
 ) -> Result<()> {
     let mut frame = chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
     frame.extend_from_slice(payload);
-    let encrypted = plain_libs::crypto::xchacha_encrypt_raw(&route.key, &frame)
-        .ok_or_else(|| anyhow!("Socket control encryption failed"))?;
+    let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        &route.key,
+        &frame,
+        &plain_rs::infrastructure::protocols::websocket::request_aad(
+            path,
+            &route.client_id,
+            Some(registration),
+        ),
+    )
+    .ok_or_else(|| anyhow!("Socket control encryption failed"))?;
     tokio::time::timeout(
         Duration::from_secs(2),
         socket.send(Message::Binary(encrypted.into())),

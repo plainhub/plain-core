@@ -73,7 +73,10 @@ async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_re
         State(state.clone()),
         ConnectInfo("127.0.0.1:1234".parse().unwrap()),
         headers,
-        Bytes::from(plain_libs::crypto::xchacha_encrypt_raw(&key, b"init").unwrap()),
+        Bytes::from(
+            plain_rs::infrastructure::transport::http_request::encrypt(&key, "/init", "init")
+                .unwrap(),
+        ),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -89,11 +92,11 @@ async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_re
     assert!(!payload["signaturePublicKey"].as_str().unwrap().is_empty());
     assert!(payload.get("needsSetup").is_none());
     assert!(
-        plain_rs::features::prefs::security::password_hash(&state.prefs)
+        plain_rs::features::prefs::security::password_credential(&state.prefs)
             .unwrap()
-            .unwrap()
-            .verify(plain_libs::crypto::sha512_hex("existing-password").as_bytes())
+            .is_some()
     );
+    assert!(payload.get("opaquePublicKey").is_none());
     assert!(state.db.session_get(&id).unwrap().is_none());
     core.stop_core().await;
 }
@@ -116,7 +119,8 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
         let mut events = state.events.subscribe();
         for body in [
             vec![],
-            plain_libs::crypto::xchacha_encrypt_raw(&[9; 32], b"stale-token-probe").unwrap(),
+            plain_rs::infrastructure::transport::http_request::encrypt(&[9; 32], "/init", "init")
+                .unwrap(),
         ] {
             let mut headers = HeaderMap::new();
             headers.insert("c-id", "browser".parse().unwrap());
@@ -137,6 +141,18 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
             assert!(payload.get("password").is_none());
             assert_eq!(payload["authenticated"], false);
             assert_eq!(payload["passwordRequired"], mode == "FIXED");
+            if mode == "FIXED" {
+                assert_eq!(
+                    payload["opaquePublicKey"],
+                    plain_rs::features::prefs::security::opaque_public_key(&state.prefs)
+                        .unwrap()
+                        .unwrap()
+                );
+                assert!(payload.get("setup").is_none());
+                assert!(payload.get("record").is_none());
+            } else {
+                assert!(payload.get("opaquePublicKey").is_none());
+            }
             assert!(!payload.to_string().contains("preserved-password"));
             assert!(
                 !payload

@@ -86,10 +86,13 @@ pub struct PairingDeviceInput {
     pub mode: Option<PairingMode>,
     pub password: Option<String>,
     pub generation: Option<String>,
+    pub confirm: Option<bool>,
 }
 
 #[derive(InputObject, Clone, Debug)]
 pub struct PairingRequestInput {
+    pub to_id: plain_graphql::ID,
+    pub target_public_key: String,
     #[graphql(name = "fromId")]
     pub from_id: plain_graphql::ID,
     #[graphql(name = "fromName")]
@@ -133,6 +136,7 @@ struct PairingState {
     phase: plain_rs::features::services::discovery::pairing_attempts::PairingPhase,
     error: Option<String>,
     verification_code: Option<String>,
+    identity_changed: bool,
 }
 
 #[derive(Default)]
@@ -218,6 +222,15 @@ impl PeersMutation {
             }
             management_login(ctx, core)?;
         }
+        if input.confirm == Some(true) {
+            let generation = input.generation.as_deref().ok_or_else(|| plain_graphql::Error::new("Missing pairing generation"))?;
+            if input.id.is_some() || input.host.is_some() || input.password.is_some() || input.mode.is_some() {
+                return Err(plain_graphql::Error::new("Invalid pairing confirmation"));
+            }
+            plain_rs::features::services::discovery::pairing_confirmation::confirm(core, generation).await?;
+            let state = core.pairing_runtime.attempts.get(generation).ok_or_else(|| plain_graphql::Error::new("Pairing expired"))?;
+            return Ok(serde_json::from_value(serde_json::to_value(state)?)?);
+        }
         let state = plain_rs::features::services::discovery::pairing_attempts::start(
             core,
             input.id.map(|id| id.to_string()),
@@ -299,6 +312,8 @@ impl PeersMutation {
 
 fn request(input: &PairingRequestInput) -> Value {
     json!({
+        "toId": input.to_id,
+        "targetPublicKey": input.target_public_key,
         "fromId": input.from_id.as_str(),
         "fromName": input.from_name,
         "port": input.port,

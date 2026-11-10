@@ -35,6 +35,9 @@ fn target(id: &str) -> Target {
         device_name: id.into(),
         device_ip: "spoofed".into(),
         device_port: 2443,
+        device_public_key: plain_libs::utils::base64::base64_encode(
+            &plain_libs::crypto::ed25519_generate().1,
+        ),
     }
 }
 async fn idle(state: &CoreRuntime) {
@@ -80,57 +83,39 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                             ));
                             body = Some(request.clone());
                             pairing::receive_request(&remote_state.pairing, &request).unwrap();
+                            let incoming = remote_state
+                                .pairing
+                                .incoming_target(&request.from_id, &request.signature)
+                                .unwrap();
                             remote_state
                                 .pairing_runtime
                                 .confirmations
-                                .register(&request)
+                                .register(&remote_state, &request, incoming)
                                 .unwrap();
+                            let response = remote_state
+                                .pairing_runtime
+                                .confirmations
+                                .respond(&remote_state, &request, true, device())
+                                .unwrap();
+                            notifications.push_back("malformed".into());
+                            let mut wrong = response.clone();
+                            wrong.from_id = "unrelated".into();
+                            notifications.push_back(Message::PairResponse(wrong).wire().unwrap());
+                            notifications
+                                .push_back(Message::PairResponse(response).wire().unwrap());
                         }
                         Message::PairVerification(verification) => {
-                            match remote_state
+                            let super::super::pairing_confirmation::Action::Notify {
+                                message, ..
+                            } = remote_state
                                 .pairing_runtime
                                 .confirmations
                                 .process(&remote_state, verification)
                                 .unwrap()
-                            {
-                                super::super::pairing_confirmation::Action::Notify {
-                                    message,
-                                    ..
-                                } => notifications.push_back(message.wire().unwrap()),
-                                super::super::pairing_confirmation::Action::Ready {
-                                    request,
-                                    code,
-                                } => {
-                                    assert_eq!(code.len(), 9);
-                                    let result = pairing::respond(
-                                        &remote_state.db,
-                                        &remote_state.prefs,
-                                        &remote_state.pairing,
-                                        request,
-                                        true,
-                                        device(),
-                                    )
-                                    .unwrap();
-                                    let mut response: crate::features::peers::pairing::protocol::PairingResponse = serde_json::from_value(result["response"].clone()).unwrap();
-                                    remote_state
-                                        .pairing_runtime
-                                        .confirmations
-                                        .seal(&mut response)
-                                        .unwrap();
-                                    notifications.push_back("malformed".into());
-                                    let mut wrong = response.clone();
-                                    wrong.from_id = "unrelated".into();
-                                    notifications
-                                        .push_back(Message::PairResponse(wrong).wire().unwrap());
-                                    let mut invalid = response.clone();
-                                    invalid.signature = "invalid".into();
-                                    notifications
-                                        .push_back(Message::PairResponse(invalid).wire().unwrap());
-                                    notifications
-                                        .push_back(Message::PairResponse(response).wire().unwrap());
-                                }
-                                _ => panic!("Unexpected receiver verification action"),
-                            }
+                            else {
+                                panic!()
+                            };
+                            notifications.push_back(message.wire().unwrap());
                         }
                         _ => panic!("Unexpected pairing wire message"),
                     }
@@ -140,12 +125,35 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                     assert_eq!(local_state.pairing.states()[0].1, "PAIRING");
                     assert!(effect["params"]["timeoutMs"].as_u64().unwrap() <= 1000);
                     step += 1;
+                    if notifications.is_empty() {
+                        let ticket = local_state.pairing.tickets()[0].clone();
+                        if let Ok(super::super::pairing_confirmation::Action::Send {
+                            message: Message::PairVerification(finish),
+                            ..
+                        }) = local_state
+                            .pairing_runtime
+                            .confirmations
+                            .confirm(&local_state, &ticket.generation)
+                        {
+                            let super::super::pairing_confirmation::Action::Notify {
+                                message, ..
+                            } = remote_state
+                                .pairing_runtime
+                                .confirmations
+                                .process(&remote_state, finish)
+                                .unwrap()
+                            else {
+                                panic!()
+                            };
+                            notifications.push_back(message.wire().unwrap());
+                        }
+                    }
                     let notification = notifications.pop_front().unwrap();
                     json!({"connected":true,"notification":notification})
                 }
                 "blePairClose" => {
                     assert!(body.is_some());
-                    assert_eq!(step, 5);
+                    assert_eq!(step, 4);
                     host.reply(generation, json!({"id":effect["id"],"result":true}))
                         .unwrap();
                     break;
@@ -156,9 +164,13 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                 .unwrap();
         }
     });
-    let first = start(&state, target("remote"), device(), None).unwrap();
+    let mut remote_target = target("remote");
+    remote_target.device_public_key = plain_libs::utils::base64::base64_encode(
+        &crate::features::services::peers::peer_wire::signing_keypair(&other.prefs).unwrap()[32..],
+    );
+    let first = start(&state, remote_target.clone(), device(), None).unwrap();
     assert_eq!(state.pairing.states()[0].1, "STARTING");
-    let duplicate = start(&state, target("remote"), device(), None).unwrap();
+    let duplicate = start(&state, remote_target, device(), None).unwrap();
     assert_eq!(
         first["ticket"]["generation"],
         duplicate["ticket"]["generation"]
@@ -183,8 +195,8 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
         events.recv().await.unwrap().event_type,
         crate::features::chat::events::WS_PAIRING_SUCCESS
     );
-    local.shutdown().await;
     remote.shutdown().await;
+    local.shutdown().await;
 }
 #[tokio::test]
 async fn cancellation_interrupts_pending_connect_and_preserves_replacement_generation() {
@@ -220,37 +232,11 @@ async fn cancellation_interrupts_pending_connect_and_preserves_replacement_gener
             .unwrap()
             .is_none()
     );
-    let (_remote_dir, remote) = fixture("remote");
-    let other = remote.runtime_state();
-    let request = serde_json::from_value(replacement["request"].clone()).unwrap();
-    pairing::receive_request(&other.pairing, &request).unwrap();
-    let rejected = pairing::respond(
-        &other.db,
-        &other.prefs,
-        &other.pairing,
-        request,
-        false,
-        device(),
-    )
-    .unwrap();
-    let response = serde_json::from_value(rejected["response"].clone()).unwrap();
-    assert!(
-        pairing::complete_checked(
-            &state.db,
-            &state.prefs,
-            &state.pairing,
-            response,
-            "",
-            old["ticket"]["generation"].as_str()
-        )
-        .unwrap()
-        .is_null()
-    );
+    assert!(state.pairing_runtime.confirmations.confirm(&state, old["ticket"]["generation"].as_str().unwrap()).is_err());
     assert_eq!(
         state.pairing.tickets()[0].generation,
         replacement["ticket"]["generation"].as_str().unwrap()
     );
-    remote.shutdown().await;
     server.shutdown().await;
 }
 #[tokio::test]

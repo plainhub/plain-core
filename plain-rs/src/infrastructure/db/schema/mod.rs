@@ -36,6 +36,7 @@ mod notes;
 mod peer;
 #[cfg(feature = "library")]
 mod pomodoro;
+mod replay;
 mod scan_history;
 #[cfg(feature = "library")]
 mod session;
@@ -49,6 +50,7 @@ mod trashed_sms;
 pub(crate) fn init(conn: &Connection) -> rusqlite::Result<()> {
     plain_libs::kv::schema::init(conn)?;
     scan_history::init(conn)?;
+    replay::init(conn)?;
     #[cfg(feature = "library")]
     audit_event::init(conn)?;
     #[cfg(feature = "library")]

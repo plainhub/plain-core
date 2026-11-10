@@ -94,6 +94,8 @@ pub struct ImageModelsUpdate {
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingRequestNotice {
+    pub to_id: ID,
+    pub target_public_key: String,
     pub from_id: ID,
     pub from_name: String,
     pub port: i32,
@@ -106,6 +108,7 @@ pub struct PairingRequestNotice {
     pub from_ip: String,
     pub aware_supported: bool,
     pub verification_code: String,
+    pub identity_changed: bool,
 }
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]

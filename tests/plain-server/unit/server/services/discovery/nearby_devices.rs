@@ -39,6 +39,7 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
         platform: "test".into(),
         last_seen_at: "1970-01-01T00:00:00.000Z".into(),
         remote_access: None,
+        signature_public_key: String::new(),
         discovery_methods: vec![
             plain_rs::features::discovery::nearby_devices::DiscoveryMethod::Lan,
         ],

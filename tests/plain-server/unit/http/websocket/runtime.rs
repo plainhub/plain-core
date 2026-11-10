@@ -1,6 +1,15 @@
 use super::*;
 use plain_libs::protocols::http_client;
 #[test]
+fn websocket_query_has_no_client_selected_login_mode() {
+    let params: Params = serde_json::from_value(json!({"cid": "browser"})).unwrap();
+    assert_eq!(params.cid, "browser");
+    for auth in ["1", "2"] {
+        assert!(serde_json::from_value::<Params>(json!({"cid": "browser", "auth": auth})).is_err());
+    }
+}
+
+#[test]
 fn upstream_json_keeps_the_control_envelope_registry() {
     let input=controls(br#"{"type":"screenMirrorControl","input":{"action":"SCROLL","x":0.5,"y":0.25,"deltaX":-10,"deltaY":120}}"#);
     assert_eq!(input.len(), 1);
@@ -80,7 +89,6 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         .lock()
         .await;
     use futures_util::SinkExt;
-    use sha2::Digest;
     use tokio_tungstenite::tungstenite::Message as ClientMessage;
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
@@ -89,8 +97,6 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     prefs.set("background_service_enabled", true).unwrap();
     prefs.set("remote_access", true).unwrap();
     prefs.set("login_require_approval", true).unwrap();
-    plain_rs::features::prefs::security::set_entry(&prefs, "password", serde_json::json!("secret"))
-        .unwrap();
     prefs.set("password_type", "FIXED").unwrap();
     prefs.set("client_id", "phone").unwrap();
     let (private, _) = plain_libs::crypto::ed25519_generate();
@@ -99,6 +105,8 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             "signature_key_pair",
             plain_libs::utils::base64::base64_encode(&private),
         )
+        .unwrap();
+    plain_rs::features::prefs::security::set_entry(&prefs, "password", serde_json::json!("secret"))
         .unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
@@ -120,19 +128,16 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     });
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (port, _) = server.start_public(0, 0, cert_pem, cert_key).await.unwrap();
-    let digest = plain_libs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
-    let client = plain_libs::crypto::EcdhSession::generate();
     for (cid, allowed) in [("rejected-browser", false), ("accepted-browser", true)] {
-        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-            "ws://127.0.0.1:{port}/auth?cid={cid}&auth=1"
-        ))
-        .await
-        .unwrap();
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid={cid}"))
+                .await
+                .unwrap();
         let keys = password_keys(&mut socket, &server.runtime_state(), cid).await;
         let request = json!({
-            "password":digest, "loginContext":keys.context,
+
             "appName":"Test", "appVersion":"1", "osName":"Fixture", "osVersion":"1",
-            "isMobile":false, "ecdhPublicKey":plain_libs::utils::base64::base64_encode(&client.public_key_bytes),
+            "isMobile":false,
             "peer":null,
         });
         let inner = serde_json::to_vec(&request).unwrap();
@@ -235,7 +240,6 @@ fn public_fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentSe
 #[tokio::test]
 async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_rotating_clients() {
     use futures_util::SinkExt;
-    use sha2::Digest;
     use tokio_tungstenite::tungstenite::Message as ClientMessage;
 
     let (_directory, core) = public_fixture();
@@ -248,31 +252,25 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
     .unwrap();
     state.prefs.set("password_type", "FIXED").unwrap();
     state.prefs.set("login_require_approval", false).unwrap();
-    let digest = plain_libs::utils::hex::bytes_to_hex(&sha2::Sha512::digest(b"secret"));
-    let client = plain_libs::crypto::EcdhSession::generate();
     for attempt in 0..7 {
         let cid = format!("login-limit-{attempt}");
         let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-            "ws://127.0.0.1:{}/auth?cid={cid}&auth=1",
+            "ws://127.0.0.1:{}/auth?cid={cid}",
             core.port
         ))
         .await
         .unwrap();
         if attempt >= 5 {
-            use plain_rs::features::services::confirmation_channel::{Client, ConfirmationMode};
-            let (_, hello) = Client::start(&cid, ConfirmationMode::Password).unwrap();
             socket
-                .send(ClientMessage::Text(
-                    serde_json::to_string(&hello).unwrap().into(),
-                ))
+                .send(ClientMessage::Binary(vec![0; 32].into()))
                 .await
-                .unwrap();
+                .ok();
         } else {
             let keys = password_keys(&mut socket, &state, &cid).await;
             let request = json!({
-                "password":digest, "loginContext":keys.context,
+
                 "appName":"Test", "appVersion":"1", "osName":"Fixture", "osVersion":"1",
-                "isMobile":false, "ecdhPublicKey":plain_libs::utils::base64::base64_encode(&client.public_key_bytes),
+                "isMobile":false,
                 "peer":null,
             });
             let inner = if attempt == 0 {
@@ -302,7 +300,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                 let plaintext = inner;
                 let result: Value = serde_json::from_slice(&plaintext).unwrap();
                 assert_eq!(result["status"], "COMPLETED");
-                assert_eq!(result["loginContext"], keys.context);
+                assert!(result.get("loginContext").is_none());
                 assert!(state.db.session_get(&cid).unwrap().is_some());
             } else {
                 assert!(
@@ -409,15 +407,14 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     ))
     .await
     .unwrap();
+    let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        &key,
+        chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        &plain_rs::infrastructure::protocols::websocket::request_aad("/screen", &client, None),
+    )
+    .unwrap();
     socket
-        .send(ClientMessage::Binary(
-            plain_libs::crypto::xchacha_encrypt_raw(
-                &key,
-                chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
-            )
-            .unwrap()
-            .into(),
-        ))
+        .send(ClientMessage::Binary(registration.clone().into()))
         .await
         .unwrap();
     let json_control = br#"{"type":"screenMirrorControl","input":{"action":"BACK"}}"#;
@@ -426,7 +423,16 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     for payload in [json_control.as_slice(), touch.as_slice()] {
         let mut plain = chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
         plain.extend_from_slice(payload);
-        last = plain_libs::crypto::xchacha_encrypt_raw(&key, &plain).unwrap();
+        last = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+            &key,
+            &plain,
+            &plain_rs::infrastructure::protocols::websocket::request_aad(
+                "/screen",
+                &client,
+                Some(&registration),
+            ),
+        )
+        .unwrap();
         socket
             .send(ClientMessage::Binary(last.clone().into()))
             .await
@@ -453,6 +459,44 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     })
     .await
     .unwrap();
+    assert!(received.try_recv().is_err());
+    // A fresh control encrypted for the old registration cannot move to a new connection.
+    let (mut next, _) = tokio_tungstenite::connect_async(format!(
+        "ws://127.0.0.1:{}/screen?cid={client}",
+        core.port
+    ))
+    .await
+    .unwrap();
+    let next_registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        &key,
+        chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        &plain_rs::infrastructure::protocols::websocket::request_aad("/screen", &client, None),
+    )
+    .unwrap();
+    next.send(ClientMessage::Binary(next_registration.into()))
+        .await
+        .unwrap();
+    let mut old_bound = chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
+    old_bound.extend_from_slice(json_control);
+    let old_bound = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        &key,
+        &old_bound,
+        &plain_rs::infrastructure::protocols::websocket::request_aad(
+            "/screen",
+            &client,
+            Some(&registration),
+        ),
+    )
+    .unwrap();
+    next.send(ClientMessage::Binary(old_bound.into()))
+        .await
+        .unwrap();
+    let rejected = tokio::time::timeout(Duration::from_secs(3), next.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(matches!(rejected, ClientMessage::Close(_)));
     assert!(received.try_recv().is_err());
     core.shutdown().await;
     state.host.disconnect(generation);
@@ -787,206 +831,113 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
 }
 
 #[cfg(feature = "http_transport")]
+struct PasswordKeys {
+    key: [u8; 32],
+    context: Vec<u8>,
+    ke3: Vec<u8>,
+}
+#[cfg(feature = "http_transport")]
+impl PasswordKeys {
+    fn encrypt_request(&self, bytes: &[u8], _now: u64) -> anyhow::Result<Vec<u8>> {
+        let mut frame = self.ke3.clone();
+        frame.extend(
+            plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+                &self.key,
+                bytes,
+                &plain_libs::auth::auth_aad(&self.context, false),
+            )
+            .unwrap(),
+        );
+        Ok(frame)
+    }
+    fn decrypt_response(&self, bytes: &[u8], _now: u64) -> anyhow::Result<Vec<u8>> {
+        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
+            &self.key,
+            bytes,
+            &plain_libs::auth::auth_aad(&self.context, true),
+        )
+        .ok_or_else(|| anyhow::anyhow!("invalid response"))
+    }
+}
+#[cfg(feature = "http_transport")]
 async fn password_keys(
     socket: &mut tokio_tungstenite::WebSocketStream<
         tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
     >,
     state: &ServerState,
     client_id: &str,
-) -> plain_rs::features::services::confirmation_channel::Channel {
+) -> PasswordKeys {
     use futures_util::{SinkExt, StreamExt};
-    use plain_rs::features::services::confirmation_channel::{Client, ConfirmationMode};
+    use opaque_ke::{ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers};
     use tokio_tungstenite::tungstenite::Message;
-    let (client, hello) = Client::start(client_id, ConfirmationMode::Password).unwrap();
+    let signing = plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
+    let context = plain_libs::auth::context(client_id, &signing[32..]);
+    let client = ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, b"secret").unwrap();
     socket
-        .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
+        .send(Message::Binary(client.message.serialize().to_vec().into()))
         .await
         .unwrap();
-    let response = tokio::time::timeout(Duration::from_secs(3), socket.next())
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
-    let Message::Text(response) = response else {
-        panic!("signed password challenge required")
+    let Message::Binary(ke2) = socket.next().await.unwrap().unwrap() else {
+        panic!("KE2 expected")
     };
-    let signing =
-        plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
-    let (keys, reveal) = client
-        .accept(
-            &serde_json::from_str(&response).unwrap(),
-            &plain_libs::utils::base64::base64_encode(&signing[32..]),
-            &state.native_client_id().unwrap(),
-            chrono::Utc::now().timestamp_millis() as u64,
+    let ksf = plain_libs::auth::ksf();
+    let finish = client
+        .state
+        .finish(
+            &mut rand_core::OsRng,
+            b"secret",
+            CredentialResponse::deserialize(&ke2).unwrap(),
+            ClientLoginFinishParameters {
+                context: Some(&context),
+                identifiers: Identifiers {
+                    client: Some(plain_libs::auth::CLIENT_IDENTITY),
+                    server: Some(&signing[32..]),
+                },
+                ksf: Some(&ksf),
+            },
         )
         .unwrap();
-    socket
-        .send(Message::Text(
-            serde_json::to_string(&reveal).unwrap().into(),
-        ))
-        .await
-        .unwrap();
-    keys
-}
-
-#[test]
-fn unauthenticated_connection_limits_release_only_the_owning_source_slot() {
-    let runtime = Arc::new(Runtime::default());
-    let first: IpAddr = "192.0.2.1".parse().unwrap();
-    let second: IpAddr = "192.0.2.2".parse().unwrap();
-    let mut permits = Vec::new();
-    for _ in 0..MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP {
-        permits.push(runtime.reserve_unauthenticated(first).unwrap());
+    PasswordKeys {
+        key: plain_libs::auth::api_key(&finish.session_key, &context),
+        context,
+        ke3: finish.message.serialize().to_vec(),
     }
-    assert!(runtime.reserve_unauthenticated(first).is_none());
-    let other = runtime.reserve_unauthenticated(second).unwrap();
-    drop(permits.pop());
-    let replacement = runtime.reserve_unauthenticated(first).unwrap();
-    assert_eq!(
-        runtime.unauthenticated.lock().unwrap().get(&second),
-        Some(&1)
-    );
-    drop((permits, other, replacement));
-    assert!(runtime.unauthenticated.lock().unwrap().is_empty());
-}
-
-#[test]
-fn unauthenticated_connections_have_a_global_limit_across_sources() {
-    let runtime = Arc::new(Runtime::default());
-    let mut permits = Vec::new();
-    for source in 0..MAX_UNAUTHENTICATED_CONNECTIONS {
-        let ip = IpAddr::V4(std::net::Ipv4Addr::new(192, 0, 2, source as u8));
-        permits.push(runtime.reserve_unauthenticated(ip).unwrap());
-    }
-    let next: IpAddr = "192.0.2.254".parse().unwrap();
-    assert!(runtime.reserve_unauthenticated(next).is_none());
-    drop(permits.pop());
-    let permit = runtime.reserve_unauthenticated(next).unwrap();
-    drop((permits, permit));
-    assert!(runtime.unauthenticated.lock().unwrap().is_empty());
 }
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
-async fn idle_auth_screen_and_editor_connections_expire_before_authentication() {
-    use futures_util::StreamExt;
-    use tokio_tungstenite::tungstenite::Message;
-    let (_directory, server) = public_fixture();
-    let mut sockets = Vec::new();
-    for path in [
-        "auth?cid=idle&auth=2",
-        "screen?cid=idle",
-        "image_editor?cid=idle",
-    ] {
-        let (socket, _) =
-            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{}/{path}", server.port,))
-                .await
-                .unwrap();
-        sockets.push(socket);
-    }
-    for socket in &mut sockets {
-        let message = tokio::time::timeout(
-            INITIAL_MESSAGE_TIMEOUT + Duration::from_secs(2),
-            socket.next(),
-        )
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
-        assert!(matches!(message, Message::Close(Some(frame)) if frame.reason == "timeout"));
-    }
-    tokio::time::timeout(Duration::from_secs(3), async {
-        while !server
-            .runtime_state()
-            .main_ws
-            .unauthenticated
-            .lock()
-            .unwrap()
-            .is_empty()
-        {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap();
-    server.shutdown().await;
-}
-
-#[cfg(feature = "http_transport")]
-#[tokio::test]
-async fn authenticated_editor_connections_release_unauthenticated_slots() {
+async fn socket_registration_rejects_other_route_and_client_binding() {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
-    let (_directory, server) = public_fixture();
-    let state = server.runtime_state();
-    let client_id = state.native_client_id().unwrap();
-    let key = plain_libs::utils::base64::base64_decode(&plain_libs::utils::base64::base64_encode(
-        &state.url_key,
-    ));
-    let mut sockets = Vec::new();
-    for _ in 0..=MAX_UNAUTHENTICATED_CONNECTIONS_PER_IP {
-        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-            "ws://127.0.0.1:{}/image_editor?cid={client_id}",
-            server.port,
-        ))
-        .await
-        .unwrap();
-        let proof = plain_libs::crypto::xchacha_encrypt_raw(
-            &key,
-            chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
-        )
-        .unwrap();
-        socket.send(Message::Binary(proof.into())).await.unwrap();
-        let response = tokio::time::timeout(Duration::from_secs(3), socket.next())
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap();
-        assert!(matches!(response, Message::Binary(_)));
-        sockets.push(socket);
-    }
-    assert!(state.main_ws.unauthenticated.lock().unwrap().is_empty());
-    for mut socket in sockets {
-        socket.close(None).await.unwrap();
-    }
-    server.shutdown().await;
-}
-
-#[tokio::test]
-async fn native_subscriptions_reject_sms_when_capability_is_unavailable() {
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
-    let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
-    let host = state.host.clone();
-    let responder = tokio::spawn(async move {
-        while let Some(request) = requests.recv().await {
-            assert_eq!(request["method"], "systemCapabilities");
-            host.reply(generation, json!({"id":request["id"],"result":[]}))
-                .unwrap();
-        }
-    });
-    let native = core.native_graphql().unwrap();
-    let id = native
-        .open_subscriptions(
-            plain_rs::infrastructure::host::request_scope::NativeRequestScope::default(),
+    let client = state.native_client_id().unwrap();
+    let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
+    for (path, cid) in [
+        ("/screen", client.as_str()),
+        ("/image_editor", "other-client"),
+    ] {
+        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{}/image_editor?cid={client}",
+            core.port
+        ))
+        .await
+        .unwrap();
+        let frame = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+            &key,
+            chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+            &plain_rs::infrastructure::protocols::websocket::request_aad(path, cid, None),
         )
         .unwrap();
-    let session = native.subscription_session(id).unwrap();
-    session.send(r#"{"type":"subscribe","id":"sms","payload":{"query":"subscription { smsSendResult { requestId } }"}}"#).unwrap();
-    let response: Value = serde_json::from_str(
-        &tokio::time::timeout(Duration::from_secs(3), session.read())
-            .await
-            .unwrap()
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(response["type"], "error");
-    assert_eq!(
-        response["payload"][0]["message"],
-        "unsupported capability TELEPHONY"
-    );
-    native.close_subscriptions(id);
-    state.host.disconnect(generation);
-    responder.await.unwrap();
-    core.stop_core().await;
+        socket.send(Message::Binary(frame.into())).await.unwrap();
+        assert!(matches!(
+            tokio::time::timeout(Duration::from_secs(3), socket.next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap(),
+            Message::Close(_)
+        ));
+    }
+    core.shutdown().await;
 }

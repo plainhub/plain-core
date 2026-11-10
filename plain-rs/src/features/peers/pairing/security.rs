@@ -3,6 +3,9 @@ use crate::features::peers::pairing::protocol::PairingResponse;
 use crate::features::peers::pairing::timestamp_ok;
 pub fn verify_request(request: &PairingRequest) -> bool {
     !request.from_id.is_empty()
+        && !request.to_id.is_empty()
+        && request.to_id != request.from_id
+        && plain_libs::utils::base64::base64_decode(&request.target_public_key).len() == 32
         && timestamp_ok(request.timestamp)
         && plain_libs::crypto::ed25519_verify(
             &request.signature_public_key,

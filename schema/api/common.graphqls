@@ -161,6 +161,8 @@ type PairingProgressNotice {
 }
 
 type PairingRequestNotice {
+	toId: ID!
+	targetPublicKey: String!
 	fromId: ID!
 	fromName: String!
 	port: Int!
@@ -173,6 +175,7 @@ type PairingRequestNotice {
 	fromIp: String!
 	awareSupported: Boolean!
 	verificationCode: String!
+	identityChanged: Boolean!
 }
 
 type Peer {

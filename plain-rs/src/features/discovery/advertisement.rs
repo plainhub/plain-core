@@ -27,6 +27,7 @@ pub fn reply(id: &str, name: &str, port: u16, facts: Facts) -> Result<DiscoverRe
         },
         port,
         remote_access: None,
+        signature_public_key: String::new(),
         device_type: facts.device_type,
         version: facts.version,
         platform: facts.platform,
@@ -50,6 +51,7 @@ pub fn mdns(reply: &DiscoverReply, hostname: &str) -> Result<MdnsServiceInfo> {
         reply.aware_supported,
         reply.aware_running,
     );
+    service.txt_records.push(format!("pk={}", reply.signature_public_key));
     if let Some(enabled) = reply.remote_access {
         service
             .txt_records

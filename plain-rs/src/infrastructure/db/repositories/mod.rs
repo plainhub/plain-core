@@ -52,3 +52,6 @@ pub mod media_play_history;
 
 #[cfg(feature = "library")]
 pub mod image_catalog;
+
+#[cfg(any(feature = "chat", feature = "library"))]
+mod replay;

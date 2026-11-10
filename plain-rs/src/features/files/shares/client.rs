@@ -1,5 +1,5 @@
-use plain_libs::protocols::http_client;
 use anyhow::{Result, ensure};
+use plain_libs::protocols::http_client;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -69,8 +69,13 @@ impl Link {
             crate::features::peers::pairing::now_ms(),
             plain_libs::utils::uuid::Uuid::new_v4()
         );
-        plain_libs::crypto::xchacha_encrypt_raw(&self.key()?, envelope.as_bytes())
-            .ok_or_else(|| anyhow::anyhow!("Cannot encrypt shared request"))
+        crate::infrastructure::transport::http_request::encrypt_raw(
+            &self.key()?,
+            "POST",
+            "/guest_graphql",
+            envelope.as_bytes(),
+        )
+        .ok_or_else(|| anyhow::anyhow!("Cannot encrypt shared request"))
     }
     pub fn response(&self, request: &[u8], bytes: &[u8]) -> Result<Info> {
         let plain = crate::infrastructure::transport::http_response::Context::new(

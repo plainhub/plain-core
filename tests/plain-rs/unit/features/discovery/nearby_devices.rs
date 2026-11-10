@@ -10,6 +10,7 @@ fn device(id: &str, method: DiscoveryMethod) -> Device {
         platform: "test".into(),
         last_seen_at: crate::infrastructure::db::now_iso(),
         remote_access: None,
+        signature_public_key: String::new(),
         discovery_methods: vec![method],
     }
 }

@@ -5,6 +5,8 @@ use crate::features::chat::enums::DeviceType;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingRequest {
+    pub to_id: String,
+    pub target_public_key: String,
     pub from_id: String,
     pub from_name: String,
     pub port: u16,
@@ -25,8 +27,14 @@ pub struct PairingRequest {
 
 impl PairingRequest {
     pub fn signature_data(&self) -> String {
-        format!(
-            "{}|{}|{}|{}|{}|{}|{}|{}",
+        serde_json::json!([
+            "pair-request",
+            "initiator",
+            self.from_id,
+            self.signature_public_key,
+            "responder",
+            self.to_id,
+            self.target_public_key,
             self.from_id,
             self.from_name,
             self.port,
@@ -34,15 +42,16 @@ impl PairingRequest {
             self.ecdh_public_key,
             self.signature_public_key,
             self.timestamp,
-            self.ips.join(",")
-        )
+            self.ips,
+            self.aware_supported,
+        ])
+        .to_string()
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingResponse {
-    pub confirmation_proof: String,
     pub request_signature: String,
     pub from_id: String,
     pub to_id: String,
@@ -62,8 +71,8 @@ pub struct PairingResponse {
 
 impl PairingResponse {
     pub fn signature_data(&self) -> String {
-        format!(
-            "plain-pair-response-v2|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+        serde_json::json!([
+            "pair-response",
             self.request_signature,
             self.from_id,
             self.to_id,
@@ -73,8 +82,10 @@ impl PairingResponse {
             self.signature_public_key,
             self.accepted,
             self.timestamp,
-            self.ips.join(",")
-        )
+            self.ips,
+            self.aware_supported,
+        ])
+        .to_string()
     }
 }
 
@@ -90,14 +101,15 @@ pub struct PairingCancel {
 }
 impl PairingCancel {
     pub fn signature_data(&self) -> String {
-        format!(
-            "plain-pair-cancel-v2|{}|{}|{}|{}|{}",
+        serde_json::json!([
+            "pair-cancel",
             self.from_id,
             self.to_id,
             self.request_signature,
             self.signature_public_key,
-            self.timestamp
-        )
+            self.timestamp,
+        ])
+        .to_string()
     }
 }
 

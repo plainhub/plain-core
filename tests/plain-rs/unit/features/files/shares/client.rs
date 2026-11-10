@@ -1,5 +1,5 @@
-use plain_libs::protocols::http_client;
 use super::*;
+use plain_libs::protocols::http_client;
 #[test]
 fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encoding() {
     let link = Link::new(
@@ -13,9 +13,16 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
     let first = link.request(Some("folder/quoted\" 中文%")).unwrap();
     let second = link.request(None).unwrap();
     assert_ne!(&first[..24], &second[..24]);
-    let plain =
-        String::from_utf8(plain_libs::crypto::xchacha_decrypt_raw(&[7; 32], &first).unwrap())
-            .unwrap();
+    let plain = String::from_utf8(
+        crate::infrastructure::transport::http_request::decrypt_raw(
+            &[7; 32],
+            "POST",
+            "/guest_graphql",
+            &first,
+        )
+        .unwrap(),
+    )
+    .unwrap();
     let parts: Vec<_> = plain.splitn(3, '|').collect();
     assert!(
         parts[0]

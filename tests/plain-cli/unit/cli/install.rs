@@ -16,8 +16,9 @@ fn installation_sets_a_password_and_reinstallation_never_prompts_or_overwrites_i
     let paths = paths(root.path());
     prepare_password(&paths, || Ok("installed password".into())).unwrap();
     let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
-    let hash = security::password_hash(&prefs).unwrap().unwrap();
-    assert!(hash.verify(plain_libs::crypto::sha512_hex("installed password").as_bytes()));
+    let hash = security::password_credential(&prefs).unwrap().unwrap();
+    assert!(!hash.record.is_empty());
+    assert!(security::opaque_public_key(&prefs).unwrap().is_some());
     assert_eq!(
         security::password_type(&prefs).unwrap(),
         security::PasswordType::Fixed
@@ -49,31 +50,8 @@ fn cancelled_or_invalid_installation_never_creates_a_password() {
             .is_err()
         );
         let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
-        assert!(security::password_hash(&prefs).unwrap().is_none());
+        assert!(security::password_credential(&prefs).unwrap().is_none());
     }
-}
-
-#[test]
-fn installation_reuses_shared_bootstrap_to_preserve_an_existing_plaintext_password() {
-    let root = plain_libs::temporary::tempdir().unwrap();
-    let paths = paths(root.path());
-    std::fs::create_dir_all(&paths.data_dir).unwrap();
-    let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
-    prefs.set("password", "existing password").unwrap();
-    prefs.set("password_type", "FIXED").unwrap();
-    prepare_password(&paths, || panic!("Existing password must not prompt")).unwrap();
-    let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
-    assert!(
-        security::password_hash(&prefs)
-            .unwrap()
-            .unwrap()
-            .verify(plain_libs::crypto::sha512_hex("existing password").as_bytes())
-    );
-    assert!(
-        !std::fs::read_to_string(default_path(&paths.data_dir))
-            .unwrap()
-            .contains("existing password")
-    );
 }
 
 #[test]

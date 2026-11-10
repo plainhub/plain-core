@@ -122,6 +122,7 @@ fn phases_have_fixed_wire_names_and_terminal_behavior() {
             phase,
             error: None,
             verification_code: None,
+            identity_changed: false,
         };
         assert_eq!(state.terminal(), terminal);
         let value = serde_json::to_value(&state).unwrap();

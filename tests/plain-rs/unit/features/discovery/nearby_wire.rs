@@ -6,7 +6,7 @@ fn canonical_messages_round_trip_and_reject_unknown_or_malformed_payloads() {
     for value in [
         json!({"kind":"DISCOVER"}),
         json!({"kind":"PAIR_CANCEL","payload":{"fromId":"a","toId":"b","requestSignature":"request","signaturePublicKey":"public","timestamp":1,"signature":"proof"}}),
-        json!({"kind":"DISCOVER_REPLY","payload":{"id":"peer","name":"Fixture","port":1234,"deviceType":"PHONE","version":"1","platform":"test"}}),
+        json!({"kind":"DISCOVER_REPLY","payload":{"id":"peer","name":"Fixture","port":1234,"deviceType":"PHONE","version":"1","signaturePublicKey":"test-public-key","platform":"test"}}),
     ] {
         let message: Message = serde_json::from_value(value).unwrap();
         let expected = serde_json::to_value(&message).unwrap();
@@ -30,7 +30,7 @@ fn canonical_messages_round_trip_and_reject_unknown_or_malformed_payloads() {
 #[test]
 fn discover_identity_matches_the_full_advertised_uuid_before_becoming_a_peer() {
     let id = "706c6169-2d74-8e53-9a16-f08b62c591d3";
-    let body = json!({"id":id,"name":"Fixture","port":1234,"deviceType":"PHONE","version":"1","platform":"test","awareSupported":true,"awareRunning":false}).to_string();
+    let body = json!({"id":id,"name":"Fixture","port":1234,"deviceType":"PHONE","version":"1","signaturePublicKey":"test-public-key","platform":"test","awareSupported":true,"awareRunning":false}).to_string();
     let reply = discover_reply(&body, id).unwrap();
     assert_eq!(reply.id, id);
     assert!(reply.aware_supported);

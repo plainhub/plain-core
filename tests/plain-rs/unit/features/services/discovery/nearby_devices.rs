@@ -27,6 +27,7 @@ async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts(
         platform: "test".into(),
         last_seen_at: "2026-10-10T00:00:00.000Z".into(),
         remote_access: None,
+        signature_public_key: String::new(),
         discovery_methods: vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Ble],
     };
     Context::from(&state)
@@ -89,6 +90,7 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
         platform: "test".into(),
         last_seen_at: "2026-10-10T00:00:00.000Z".into(),
         remote_access: None,
+        signature_public_key: String::new(),
         discovery_methods: vec![crate::features::discovery::nearby_devices::DiscoveryMethod::Lan],
     };
     let context = Context::from(&state);
@@ -165,6 +167,7 @@ async fn bluetooth_pause_does_not_preserve_stale_lan_devices() {
             platform: "test".into(),
             last_seen_at: "1970-01-01T00:00:00.000Z".into(),
             remote_access: None,
+        signature_public_key: String::new(),
             discovery_methods: methods,
         };
         chat_store::nearby::save(&state.db, &device.cache()).unwrap();

@@ -93,7 +93,7 @@ impl LoginAttempts {
             request["password"] = json!("");
             request.as_object_mut().unwrap().remove("verificationCode");
             if let LoginProtection::DeviceConfirmation(channel) = &item.protection {
-                request["verificationCode"] = json!(channel.verification_code);
+                request["verificationCode"] = json!(match channel { LoginChannel::Confirmation(c) => c.verification_code.as_str(), _ => "" });
             }
             json!({"requestId":id,"clientId":item.client_id,"clientIp":item.client_ip,"request":request})
         }).collect();
@@ -129,16 +129,72 @@ struct Pending {
     protection: LoginProtection,
 }
 
+pub(crate) struct OpaqueChannel {
+    pub key: [u8; 32],
+    pub context: Vec<u8>,
+    pub credential: plain_rs::features::prefs::security::PasswordCredential,
+    pub created: Instant,
+}
+pub(crate) enum LoginChannel {
+    Opaque(OpaqueChannel),
+    Confirmation(plain_rs::features::services::confirmation_channel::Channel),
+}
+impl LoginChannel {
+    #[cfg(test)]
+    fn context(&self) -> String {
+        match self {
+            Self::Opaque(c) => plain_libs::utils::base64::base64_encode(&c.context),
+            Self::Confirmation(c) => c.context.clone(),
+        }
+    }
+    fn fresh(&self, now: u64) -> anyhow::Result<()> {
+        match self {
+            Self::Opaque(c) => {
+                anyhow::ensure!(
+                    c.created.elapsed() < Duration::from_secs(300),
+                    "login_expired"
+                );
+                Ok(())
+            }
+            Self::Confirmation(c) => c.fresh(now),
+        }
+    }
+    fn decrypt_request(&self, bytes: &[u8], now: u64) -> anyhow::Result<Vec<u8>> {
+        self.fresh(now)?;
+        match self {
+            Self::Opaque(c) => plain_libs::crypto::xchacha_decrypt_raw_with_aad(
+                &c.key,
+                bytes,
+                &plain_libs::auth::auth_aad(&c.context, false),
+            )
+            .ok_or_else(|| anyhow::anyhow!("invalid_password")),
+            Self::Confirmation(c) => c.decrypt_request(bytes, now),
+        }
+    }
+    fn encrypt_response(&self, bytes: &[u8], now: u64) -> anyhow::Result<Vec<u8>> {
+        self.fresh(now)?;
+        match self {
+            Self::Opaque(c) => plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+                &c.key,
+                bytes,
+                &plain_libs::auth::auth_aad(&c.context, true),
+            )
+            .ok_or_else(|| anyhow::anyhow!("invalid_auth_response")),
+            Self::Confirmation(c) => c.encrypt_response(bytes, now),
+        }
+    }
+}
+
 enum LoginProtection {
     Password {
-        credential: plain_libs::crypto::password::PasswordHash,
-        channel: plain_rs::features::services::confirmation_channel::Channel,
+        credential: plain_rs::features::prefs::security::PasswordCredential,
+        channel: LoginChannel,
     },
-    DeviceConfirmation(plain_rs::features::services::confirmation_channel::Channel),
+    DeviceConfirmation(LoginChannel),
 }
 
 impl LoginProtection {
-    fn channel(&self) -> &plain_rs::features::services::confirmation_channel::Channel {
+    fn channel(&self) -> &LoginChannel {
         match self {
             Self::Password { channel, .. } | Self::DeviceConfirmation(channel) => channel,
         }
@@ -151,17 +207,13 @@ impl LoginProtection {
         );
         let channel = self.channel();
         channel.fresh(now_ms())?;
-        anyhow::ensure!(
-            text(request, "loginContext") == channel.context,
-            "invalid_login_request"
-        );
 
         let password_type = plain_rs::features::prefs::security::password_type(&state.prefs)?;
         match self {
             Self::Password { credential, .. } => anyhow::ensure!(
                 password_type == PasswordType::Fixed
                     && Some(credential)
-                        == plain_rs::features::prefs::security::password_hash(&state.prefs)?
+                        == plain_rs::features::prefs::security::password_credential(&state.prefs)?
                             .as_ref(),
                 "invalid_password"
             ),
@@ -207,9 +259,10 @@ impl LoginAttempts {
                 os_name: display(&text(&request.request, "osName")),
                 os_version: display(&text(&request.request, "osVersion")),
                 verification_code: match &request.protection {
-                    LoginProtection::DeviceConfirmation(channel) => {
-                        Some(channel.verification_code.clone())
-                    }
+                    LoginProtection::DeviceConfirmation(channel) => match channel {
+                        LoginChannel::Confirmation(c) => Some(c.verification_code.clone()),
+                        _ => None,
+                    },
                     LoginProtection::Password { .. } => None,
                 },
             })
@@ -237,7 +290,7 @@ pub(crate) enum Request {
         client_id: String,
         client_ip: String,
         frame: String,
-        channel: plain_rs::features::services::confirmation_channel::Channel,
+        channel: LoginChannel,
     },
     Complete {
         request_id: String,
@@ -327,27 +380,6 @@ fn peer_chat_paired(request: &Value) -> bool {
     port >= 1 && port <= 65535 && plain_libs::utils::base64::base64_decode(&key).len() == 32
 }
 
-fn signature_data(
-    device_client_id: &str,
-    status: &str,
-    ecdh_public_key: &str,
-    timestamp: u64,
-    chat_paired: bool,
-) -> String {
-    let paired = if chat_paired { "|true" } else { "" };
-    format!("{device_client_id}|{status}|{ecdh_public_key}|{timestamp}{paired}")
-}
-
-fn sign(prefs: &plain_rs::features::prefs::Prefs, text: &str) -> anyhow::Result<String> {
-    let keypair = plain_rs::features::services::peers::peer_wire::signing_keypair(prefs)?;
-    let signature = plain_libs::crypto::ed25519_sign(&keypair, text.as_bytes());
-    anyhow::ensure!(
-        !signature.is_empty(),
-        "ed25519 signing produced no signature"
-    );
-    Ok(signature)
-}
-
 async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> {
     let device_client_id = state
         .prefs
@@ -355,35 +387,13 @@ async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> 
         .ok_or_else(|| anyhow::anyhow!("device client id is missing"))?;
     request.protection.validate(state, &request.request)?;
     let chat_paired = peer_chat_paired(&request.request);
-    let keypair = plain_libs::crypto::EcdhSession::generate();
-    let peer_public =
-        plain_libs::utils::base64::base64_decode(&text(&request.request, "ecdhPublicKey"));
-    let ecdh_public_key = plain_libs::utils::base64::base64_encode(&keypair.public_key_bytes);
-    let shared = keypair
-        .compute_shared_key(&peer_public)
-        .ok_or_else(|| anyhow::anyhow!("ECDH shared key computation failed"))?;
+    let shared = match request.protection.channel() {
+        LoginChannel::Opaque(c) => c.key.to_vec(),
+        LoginChannel::Confirmation(c) => c.api_key().to_vec(),
+    };
     let token = plain_libs::utils::base64::base64_encode(&shared);
-    let timestamp = now_ms();
-    let mut signed = signature_data(
-        &device_client_id,
-        "COMPLETED",
-        &ecdh_public_key,
-        timestamp,
-        chat_paired,
-    );
-    let channel = request.protection.channel();
-    signed.push('|');
-    signed.push_str(&channel.context);
-    let signature = sign(&state.prefs, &signed)?;
-    let mut response = json!({
-        "clientId": device_client_id,
-        "status": "COMPLETED",
-        "ecdhPublicKey": ecdh_public_key,
-        "signature": signature,
-        "timestamp": timestamp,
-        "chatPaired": chat_paired,
-    });
-    response["loginContext"] = json!(channel.context);
+    let response =
+        json!({"clientId":device_client_id,"status":"COMPLETED","chatPaired":chat_paired});
     if chat_paired {
         let id = &request.client_id;
         let offered_key = text(&request.request["peer"], "signaturePublicKey");
@@ -400,7 +410,7 @@ async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> 
     persist(state, request, &token)?;
     if chat_paired {
         let peer = &request.request["peer"];
-        let mut material = b"plain-chat-pairing-v1".to_vec();
+        let mut material = b"chat-pairing".to_vec();
         material.extend(&shared);
         let mut ips = vec![request.client_ip.clone()];
         if let Some(extra) = peer["ips"].as_array() {
@@ -510,28 +520,15 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             let frame = plain_libs::utils::base64::base64_decode_checked(&frame)?;
             let bytes = channel.decrypt_request(&frame, now_ms())?;
             let mut request: Value = serde_json::from_slice(&bytes)?;
-            let protection = match channel.mode {
-                plain_rs::features::services::confirmation_channel::ConfirmationMode::Password => {
-                    use plain_rs::features::prefs::security;
-                    anyhow::ensure!(!security::password_setup_required(&state.prefs)?, "password_setup_required");
-                    let credential = security::password_hash(&state.prefs)?
-                        .ok_or_else(|| anyhow::anyhow!("invalid_password"))?;
-                    let digest = text(&request, "password");
-                    anyhow::ensure!(security::valid_password_digest(&digest), "invalid_password");
-                    let verifier = credential.clone();
-                    anyhow::ensure!(tokio::task::spawn_blocking(move || verifier.verify(digest.as_bytes())).await?, "invalid_password");
-                    request.as_object_mut().ok_or_else(|| anyhow::anyhow!("invalid_login_request"))?.remove("password");
+            let protection = match &channel {
+                LoginChannel::Opaque(c) => {
+                    anyhow::ensure!(request.get("password").is_none(), "invalid_login_request");
                     LoginProtection::Password {
-                        credential,
+                        credential: c.credential.clone(),
                         channel,
                     }
                 }
-                plain_rs::features::services::confirmation_channel::ConfirmationMode::ChatPairing => {
-                    anyhow::bail!("Invalid login confirmation mode")
-                }
-                plain_rs::features::services::confirmation_channel::ConfirmationMode::DeviceConfirmation => {
-                    LoginProtection::DeviceConfirmation(channel)
-                }
+                LoginChannel::Confirmation(_) => LoginProtection::DeviceConfirmation(channel),
             };
             for field in ["appName", "appVersion", "osName", "osVersion"] {
                 anyhow::ensure!(
@@ -580,7 +577,8 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             let pairing_requires_approval = peer_chat_paired(&pending.request)
                 && (state.pairing_approval != crate::server::PairingApproval::FollowPasswordLogin
                     || !matches!(&pending.protection, LoginProtection::Password { .. }));
-            if pairing_requires_approval
+            if matches!(&pending.protection, LoginProtection::DeviceConfirmation(_))
+                || pairing_requires_approval
                 || state.prefs.get_or(
                     plain_rs::features::prefs::pref_keys::LOGIN_REQUIRE_APPROVAL,
                     true,
@@ -596,7 +594,10 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                     .unwrap()
                     .remove("verificationCode");
                 if let LoginProtection::DeviceConfirmation(channel) = &pending.protection {
-                    request_facts["verificationCode"] = json!(channel.verification_code);
+                    request_facts["verificationCode"] = json!(match channel {
+                        LoginChannel::Confirmation(c) => c.verification_code.as_str(),
+                        _ => "",
+                    });
                 }
                 {
                     let mut attempts = state
@@ -628,3 +629,7 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
 #[cfg(test)]
 #[path = "../../../../tests/plain-server/unit/http/auth/ws_login.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-server/unit/http/auth/opaque_channel.rs"]
+mod opaque_tests;

@@ -22,10 +22,16 @@ fn actor(prefs: &Prefs) -> Result<String> {
         .filter(|s| !s.is_empty())
         .ok_or_else(|| anyhow::anyhow!("Missing pairing identity"))
 }
-fn request(prefs: &Prefs, device: Device) -> Result<(PairingRequest, EcdhSession)> {
+fn request(
+    prefs: &Prefs,
+    device: Device,
+    target: &Target,
+) -> Result<(PairingRequest, EcdhSession)> {
     let kp = signing_keypair(prefs)?;
     let ecdh = EcdhSession::generate();
     let mut request = PairingRequest {
+        to_id: target.device_id.clone(),
+        target_public_key: target.device_public_key.clone(),
         from_id: actor(prefs)?,
         from_name: device.name,
         port: device.port,
@@ -44,7 +50,7 @@ fn request(prefs: &Prefs, device: Device) -> Result<(PairingRequest, EcdhSession
     }
     Ok((request, ecdh))
 }
-fn response(
+pub(super) fn response(
     prefs: &Prefs,
     request: PairingRequest,
     accepted: bool,
@@ -54,9 +60,13 @@ fn response(
         return Ok(None);
     }
     let kp = signing_keypair(prefs)?;
+    anyhow::ensure!(
+        request.to_id == actor(prefs)?
+            && request.target_public_key == plain_libs::utils::base64::base64_encode(&kp[32..]),
+        "Pairing target identity mismatch"
+    );
     let ecdh = accepted.then(EcdhSession::generate);
     let mut response = PairingResponse {
-        confirmation_proof: String::new(),
         request_signature: request.signature.clone(),
         from_id: actor(prefs)?,
         to_id: request.from_id,
@@ -91,12 +101,9 @@ pub fn validate_response(
         expected,
     ))
 }
-use crate::features::peers::pairing::peer_store;
-use crate::features::peers::pairing::peer_store::Facts;
 use crate::features::peers::pairing::protocol::PairingCancel;
 use crate::features::peers::pairing::sessions::Sessions;
 use crate::features::peers::pairing::sessions::Target;
-use crate::infrastructure::db::Db;
 #[cfg(test)]
 pub fn start(prefs: &Prefs, sessions: &Sessions, target: Target, device: Device) -> Result<Value> {
     start_generation(prefs, sessions, target, device, None)
@@ -111,7 +118,7 @@ pub fn start_generation(
     if target.device_id.is_empty() {
         bail!("Missing pairing target");
     }
-    let (request, ecdh) = request(prefs, device)?;
+    let (request, ecdh) = request(prefs, device, &target)?;
     let ticket = match generation {
         Some(generation) => sessions.start_generation(target, ecdh, generation),
         None => sessions.start(target, ecdh),
@@ -124,116 +131,6 @@ pub fn start_generation(
         )
         .ok_or_else(|| anyhow::anyhow!("Pairing replaced"))?;
     Ok(json!({"request":request,"ticket":ticket}))
-}
-pub fn complete(
-    db: &Db,
-    prefs: &Prefs,
-    sessions: &Sessions,
-    response: PairingResponse,
-    sender_ip: &str,
-) -> Result<Value> {
-    complete_checked(db, prefs, sessions, response, sender_ip, None)
-}
-pub fn complete_checked(
-    db: &Db,
-    prefs: &Prefs,
-    sessions: &Sessions,
-    response: PairingResponse,
-    sender_ip: &str,
-    generation: Option<&str>,
-) -> Result<Value> {
-    if !validate_response(prefs, &response, &response.from_id)? {
-        return Ok(Value::Null);
-    }
-    let Some(pending) =
-        sessions.take_response(&response.from_id, generation, &response.request_signature)
-    else {
-        return Ok(Value::Null);
-    };
-    let ticket = pending.ticket.clone();
-    let result = (|| -> Result<crate::infrastructure::db::DPeer> {
-        if pending.expired() {
-            bail!("Pairing timed out");
-        }
-        if !response.accepted {
-            bail!("Pairing request was rejected");
-        }
-        if let Some(saved) =
-            crate::infrastructure::db::chat_store::peers::get(db, &response.from_id)?
-        {
-            anyhow::ensure!(
-                saved.public_key.is_empty() || saved.public_key == response.signature_public_key,
-                "Peer identity changed"
-            );
-        }
-        let key = pending
-            .ecdh
-            .compute_shared_key(&plain_libs::utils::base64::base64_decode(
-                &response.ecdh_public_key,
-            ))
-            .ok_or_else(|| anyhow::anyhow!("Failed to compute shared key"))?;
-        let mut ips = vec![sender_ip.to_owned()];
-        ips.extend(response.ips);
-        peer_store::save(
-            db,
-            Facts {
-                id: response.from_id,
-                name: ticket.target.device_name.clone(),
-                ips,
-                port: response.port,
-                device_type: response.device_type,
-                key: plain_libs::utils::base64::base64_encode(&key),
-                public_key: response.signature_public_key,
-            },
-        )
-    })();
-    Ok(match result {
-        Ok(peer) => {
-            json!({"ticket":ticket,"peer":crate::features::services::peers::peer_address::view(&peer),"error":""})
-        }
-        Err(error) => json!({"ticket":ticket,"peer":null,"error":error.to_string()}),
-    })
-}
-pub fn respond(
-    db: &Db,
-    prefs: &Prefs,
-    sessions: &Sessions,
-    request: PairingRequest,
-    accepted: bool,
-    device: Device,
-) -> Result<Value> {
-    let Some((response, ecdh)) = response(prefs, request.clone(), accepted, device)? else {
-        return Ok(Value::Null);
-    };
-    let Some(target) = sessions.take_incoming(&request.from_id, &request.signature) else {
-        return Ok(Value::Null);
-    };
-    let peer = if let Some(ecdh) = ecdh {
-        let key = ecdh
-            .compute_shared_key(&plain_libs::utils::base64::base64_decode(
-                &request.ecdh_public_key,
-            ))
-            .ok_or_else(|| anyhow::anyhow!("Failed to compute shared key"))?;
-        let mut ips = vec![target.device_ip];
-        ips.extend(request.ips);
-        Some(peer_store::save(
-            db,
-            Facts {
-                id: request.from_id,
-                name: request.from_name,
-                ips,
-                port: request.port,
-                device_type: request.device_type,
-                key: plain_libs::utils::base64::base64_encode(&key),
-                public_key: request.signature_public_key,
-            },
-        )?)
-    } else {
-        None
-    };
-    Ok(
-        json!({"response":response,"peer":peer.as_ref().map(crate::features::services::peers::peer_address::view)}),
-    )
 }
 pub fn cancel(
     prefs: &Prefs,

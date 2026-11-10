@@ -382,6 +382,7 @@ fn found_device(
         device_type: value("dv="),
         version: value("ver="),
         platform: value("pf="),
+        signature_public_key: value("pk="),
         remote_access: match value("ra=").as_str() {
             "1" => Some(true),
             "0" => Some(false),

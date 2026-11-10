@@ -70,6 +70,7 @@ impl Payload {
             platform: String::new(),
             last_seen_at: crate::infrastructure::db::now_iso(),
             remote_access: None,
+            signature_public_key: String::new(),
             discovery_methods: vec![DiscoveryMethod::Lan, DiscoveryMethod::Qr],
         }
     }

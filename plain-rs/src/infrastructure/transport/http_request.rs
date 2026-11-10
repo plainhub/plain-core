@@ -1,11 +1,25 @@
-pub fn encrypt(key: &[u8], payload: &str) -> Result<Vec<u8>, &'static str> {
+/// AEAD request binding uses the logical destination, also across proxy/BLE/Aware.
+pub fn aad(method: &str, endpoint: &str) -> Vec<u8> {
+    let mut aad = b"http-request\0".to_vec();
+    aad.extend_from_slice(method.as_bytes());
+    aad.push(0);
+    aad.extend_from_slice(endpoint.as_bytes());
+    aad
+}
+pub fn encrypt_raw(key: &[u8], method: &str, endpoint: &str, payload: &[u8]) -> Option<Vec<u8>> {
+    plain_libs::crypto::xchacha_encrypt_raw_with_aad(key, payload, &aad(method, endpoint))
+}
+pub fn decrypt_raw(key: &[u8], method: &str, endpoint: &str, payload: &[u8]) -> Option<Vec<u8>> {
+    plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, payload, &aad(method, endpoint))
+}
+pub fn encrypt(key: &[u8], endpoint: &str, payload: &str) -> Result<Vec<u8>, &'static str> {
     let body = format!(
         "{}|{}|{}",
         chrono::Utc::now().timestamp_millis(),
         plain_libs::utils::uuid::Uuid::new_v4(),
         payload
     );
-    plain_libs::crypto::xchacha_encrypt_raw(key, body.as_bytes()).ok_or("Invalid management key")
+    encrypt_raw(key, "POST", endpoint, body.as_bytes()).ok_or("Invalid management key")
 }
 
 pub fn decrypt_response(

@@ -1,265 +1,244 @@
 use anyhow::{Result, ensure};
 use hmac::{Hmac, KeyInit, Mac};
-use plain_libs::crypto::EcdhSession;
-use plain_libs::crypto::ed25519_sign;
-use plain_libs::crypto::ed25519_verify;
-use plain_libs::crypto::xchacha_decrypt_raw;
-use plain_libs::crypto::xchacha_encrypt_raw;
-use plain_libs::utils::base64::base64_decode;
-use plain_libs::utils::base64::base64_encode;
+use plain_libs::crypto::{
+    EcdhSession, ed25519_public_from_keypair, ed25519_sign, ed25519_verify,
+    xchacha_decrypt_raw_with_aad, xchacha_encrypt_raw_with_aad,
+};
+use plain_libs::utils::base64::{base64_decode, base64_encode};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ConfirmationMode {
-    Password,
-    DeviceConfirmation,
-    ChatPairing,
-}
-
-impl ConfirmationMode {
-    fn domain(self) -> &'static str {
-        match self {
-            Self::Password => "plain-web-password-login-v1",
-            Self::DeviceConfirmation => "plain-web-login-v2",
-            Self::ChatPairing => "plain-chat-pairing-v1",
-        }
-    }
-}
+const DOMAIN: &str = "web-approval";
 const LIFETIME_MS: u64 = 300_000;
 
-pub use crate::features::peers::pairing::confirmation::{ClientHello, ClientReveal, ServerHello};
-
-pub struct Client {
-    mode: ConfirmationMode,
-    client_id: String,
-    key: EcdhSession,
-    nonce: String,
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClientHello {
+    pub public_key: String,
 }
-
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServerHello {
+    pub device_id: String,
+    pub server_public_key: String,
+    pub expires_at: u64,
+    pub signature: String,
+}
+fn request_value(request: &ClientHello) -> serde_json::Value {
+    json!({"publicKey":request.public_key})
+}
+// Struct serialization fixes insertion order independently of serde_json map features.
+fn unsigned_response(response: &ServerHello) -> String {
+    format!(
+        "{{\"deviceId\":{},\"serverPublicKey\":{},\"expiresAt\":{}}}",
+        json!(response.device_id),
+        json!(response.server_public_key),
+        response.expires_at
+    )
+}
+fn response_bytes(response: &ServerHello) -> String {
+    format!(
+        "{},\"signature\":{}}}",
+        unsigned_response(response).trim_end_matches('}'),
+        json!(response.signature)
+    )
+}
+fn signed_bytes(cid: &str, public: &str, request: &ClientHello, response: &ServerHello) -> Vec<u8> {
+    format!(
+        "[{},\"responder\",{},{},\"initiator\",{},{},{}]",
+        json!(DOMAIN),
+        json!(response.device_id),
+        json!(public),
+        json!(cid),
+        request_value(request),
+        unsigned_response(response)
+    )
+    .into_bytes()
+}
+fn transcript(cid: &str, request: &ClientHello, response: &ServerHello) -> Vec<u8> {
+    format!(
+        "[{},{},{},{},{}]",
+        json!(DOMAIN),
+        json!(cid),
+        json!(response.device_id),
+        request_value(request),
+        response_bytes(response)
+    )
+    .into_bytes()
+}
+pub struct Client {
+    cid: String,
+    key: EcdhSession,
+    request: ClientHello,
+}
 impl Client {
-    pub fn start(client_id: &str, mode: ConfirmationMode) -> Result<(Self, ClientHello)> {
-        identity(client_id)?;
-        let client = Self {
-            mode,
-            client_id: client_id.into(),
-            key: EcdhSession::generate(),
-            nonce: nonce(),
+    pub fn start(cid: &str) -> Result<(Self, ClientHello)> {
+        identity(cid)?;
+        let key = EcdhSession::generate();
+        let request = ClientHello {
+            public_key: base64_encode(&key.public_key_bytes),
         };
-        let hello = ClientHello {
-            commitment: client.reveal().commitment(client_id, mode.domain())?,
-        };
-        Ok((client, hello))
+        Ok((
+            Self {
+                cid: cid.into(),
+                key,
+                request: request.clone(),
+            },
+            request,
+        ))
     }
-
-    fn reveal(&self) -> ClientReveal {
-        ClientReveal {
-            public_key: base64_encode(&self.key.public_key_bytes),
-            nonce: self.nonce.clone(),
-        }
-    }
-
     pub fn accept(
         self,
-        hello: &ServerHello,
-        public_key: &str,
-        expected_device: &str,
+        response: &ServerHello,
+        public: &str,
+        device: &str,
         now: u64,
-    ) -> Result<(Channel, ClientReveal)> {
-        let reveal = self.reveal();
-        ensure!(hello.client_id == self.client_id, "invalid_auth_response");
+    ) -> Result<Channel> {
+        identity(&response.device_id)?;
         ensure!(
-            hello.client_commitment == reveal.commitment(&self.client_id, self.mode.domain())?,
-            "invalid_auth_response"
-        );
-        identity(&hello.device_id)?;
-        ensure!(
-            expected_device.is_empty() || expected_device == hello.device_id,
+            device.is_empty() || response.device_id == device,
             "peer_identity_changed"
         );
-        ensure!(hello.expires_at > now, "login_expired");
-        canonical(&hello.server_nonce, 32)?;
-        let server_public = canonical(&hello.server_public_key, 65)?;
-        canonical(public_key, 32)?;
+        ensure!(response.expires_at > now, "login_expired");
+        canonical(public, 32)?;
         ensure!(
             ed25519_verify(
-                public_key,
-                &hello.signed_transcript(self.mode.domain())?,
-                &hello.signature
+                public,
+                &signed_bytes(&self.cid, public, &self.request, response),
+                &response.signature
             ),
             "signature_verification_failed"
         );
         let shared = self
             .key
-            .compute_shared_key(&server_public)
+            .compute_shared_key(&canonical(&response.server_public_key, 65)?)
             .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))?;
-        Ok((
-            Channel::new(
-                &shared,
-                &hello.transcript(&reveal, self.mode.domain())?,
-                self.mode,
-                hello.expires_at.min(now.saturating_add(LIFETIME_MS)),
-            ),
-            reveal,
+        Ok(Channel::new(
+            &shared,
+            &transcript(&self.cid, &self.request, response),
+            response.expires_at.min(now.saturating_add(LIFETIME_MS)),
         ))
     }
 }
-
-pub struct ServerHandshake {
-    mode: ConfirmationMode,
-    key: EcdhSession,
-    hello: ServerHello,
-}
-
+pub struct ServerHandshake;
 impl ServerHandshake {
     pub fn start(
-        client_id: &str,
-        mode: ConfirmationMode,
-        device_id: &str,
-        hello: &ClientHello,
-        signing_key: &[u8],
+        cid: &str,
+        device: &str,
+        request: &ClientHello,
+        signing: &[u8],
         now: u64,
-    ) -> Result<(Self, ServerHello)> {
-        identity(client_id)?;
-        identity(device_id)?;
-        canonical(&hello.commitment, 32)?;
+    ) -> Result<(Channel, ServerHello)> {
+        identity(cid)?;
+        identity(device)?;
+        let client_public = canonical(&request.public_key, 65)?;
         let key = EcdhSession::generate();
+        let public = base64_encode(
+            &ed25519_public_from_keypair(signing)
+                .ok_or_else(|| anyhow::anyhow!("invalid_identity"))?,
+        );
         let mut response = ServerHello {
-            client_id: client_id.into(),
-            device_id: device_id.into(),
-            client_commitment: hello.commitment.clone(),
+            device_id: device.into(),
             server_public_key: base64_encode(&key.public_key_bytes),
-            server_nonce: nonce(),
             expires_at: now
                 .checked_add(LIFETIME_MS)
                 .ok_or_else(|| anyhow::anyhow!("login_expired"))?,
             signature: String::new(),
         };
-        response.signature = ed25519_sign(signing_key, &response.signed_transcript(mode.domain())?);
+        response.signature = ed25519_sign(signing, &signed_bytes(cid, &public, request, &response));
         ensure!(
             !response.signature.is_empty(),
             "signature_verification_failed"
         );
+        let shared = key
+            .compute_shared_key(&client_public)
+            .ok_or_else(|| anyhow::anyhow!("invalid_login_request"))?;
         Ok((
-            Self {
-                mode,
-                key,
-                hello: response.clone(),
-            },
+            Channel::new(
+                &shared,
+                &transcript(cid, request, &response),
+                response.expires_at,
+            ),
             response,
         ))
     }
-
-    pub fn finish(self, reveal: &ClientReveal, now: u64) -> Result<Channel> {
-        ensure!(now < self.hello.expires_at, "login_expired");
-        canonical(&reveal.nonce, 32)?;
-        ensure!(
-            reveal.commitment(&self.hello.client_id, self.mode.domain())?
-                == self.hello.client_commitment,
-            "invalid_login_reveal"
-        );
-        let client_public = canonical(&reveal.public_key, 65)?;
-        let shared = self
-            .key
-            .compute_shared_key(&client_public)
-            .ok_or_else(|| anyhow::anyhow!("invalid_login_reveal"))?;
-        Ok(Channel::new(
-            &shared,
-            &self.hello.transcript(reveal, self.mode.domain())?,
-            self.mode,
-            self.hello.expires_at,
-        ))
-    }
 }
-
 pub struct Channel {
-    pub mode: ConfirmationMode,
-    request_key: [u8; 32],
-    response_key: [u8; 32],
+    key: [u8; 32],
+    hash: [u8; 32],
     pub context: String,
     pub verification_code: String,
     expires_at: u64,
 }
-
 impl Channel {
-    fn new(shared: &[u8; 32], transcript: &[u8], mode: ConfirmationMode, expires_at: u64) -> Self {
-        let context = Sha256::digest(transcript);
-        let domain = mode.domain();
-        let sas = derive(shared, &context, format!("{domain}/sas").as_bytes());
-        let digits = format!(
-            "{:08}",
-            u64::from_be_bytes(sas[..8].try_into().unwrap()) % 100_000_000
-        );
+    fn new(shared: &[u8; 32], transcript: &[u8], expires_at: u64) -> Self {
+        let hash: [u8; 32] = Sha256::digest(transcript).into();
+        let mut extract = Hmac::<sha2_mac::Sha256>::new_from_slice(&hash).unwrap();
+        extract.update(shared);
+        let prk = extract.finalize().into_bytes();
+        let mut expand = Hmac::<sha2_mac::Sha256>::new_from_slice(&prk).unwrap();
+        expand.update(b"api");
+        expand.update(&[1]);
+        let key = expand.finalize().into_bytes().into();
+        let context = plain_libs::utils::hex::bytes_to_hex(&hash);
         Self {
-            mode,
-            request_key: derive(shared, &context, format!("{domain}/request").as_bytes()),
-            response_key: derive(shared, &context, format!("{domain}/response").as_bytes()),
-            context: base64_encode(&context),
-            verification_code: format!("{} {}", &digits[..4], &digits[4..]),
+            key,
+            hash,
+            verification_code: context.clone(),
+            context,
             expires_at,
         }
     }
-
+    pub fn api_key(&self) -> [u8; 32] {
+        self.key
+    }
     pub fn fresh(&self, now: u64) -> Result<()> {
         ensure!(now < self.expires_at, "login_expired");
         Ok(())
     }
-
-    pub fn encrypt_request(&self, bytes: &[u8], now: u64) -> Result<Vec<u8>> {
+    fn aad(&self, response: bool) -> Vec<u8> {
+        let mut a = if response {
+            b"auth-response".to_vec()
+        } else {
+            b"auth-request".to_vec()
+        };
+        a.extend(self.hash);
+        a
+    }
+    pub fn encrypt_request(&self, b: &[u8], now: u64) -> Result<Vec<u8>> {
         self.fresh(now)?;
-        xchacha_encrypt_raw(&self.request_key, bytes)
+        xchacha_encrypt_raw_with_aad(&self.key, b, &self.aad(false))
             .ok_or_else(|| anyhow::anyhow!("invalid_login_request"))
     }
-
-    pub fn decrypt_request(&self, bytes: &[u8], now: u64) -> Result<Vec<u8>> {
+    pub fn decrypt_request(&self, b: &[u8], now: u64) -> Result<Vec<u8>> {
         self.fresh(now)?;
-        xchacha_decrypt_raw(&self.request_key, bytes)
+        xchacha_decrypt_raw_with_aad(&self.key, b, &self.aad(false))
             .ok_or_else(|| anyhow::anyhow!("invalid_login_request"))
     }
-
-    pub fn encrypt_response(&self, bytes: &[u8], now: u64) -> Result<Vec<u8>> {
+    pub fn encrypt_response(&self, b: &[u8], now: u64) -> Result<Vec<u8>> {
         self.fresh(now)?;
-        xchacha_encrypt_raw(&self.response_key, bytes)
+        xchacha_encrypt_raw_with_aad(&self.key, b, &self.aad(true))
             .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))
     }
-
-    pub fn decrypt_response(&self, bytes: &[u8], now: u64) -> Result<Vec<u8>> {
+    pub fn decrypt_response(&self, b: &[u8], now: u64) -> Result<Vec<u8>> {
         self.fresh(now)?;
-        xchacha_decrypt_raw(&self.response_key, bytes)
+        xchacha_decrypt_raw_with_aad(&self.key, b, &self.aad(true))
             .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))
     }
 }
-
-fn identity(value: &str) -> Result<()> {
-    ensure!(
-        !value.is_empty() && value.len() <= 256,
-        "invalid_login_identity"
-    );
+fn identity(s: &str) -> Result<()> {
+    ensure!(!s.is_empty() && s.len() <= 256, "invalid_login_identity");
     Ok(())
 }
-
-fn canonical(value: &str, length: usize) -> Result<Vec<u8>> {
-    let bytes = base64_decode(value);
+fn canonical(s: &str, len: usize) -> Result<Vec<u8>> {
+    let b = base64_decode(s);
     ensure!(
-        bytes.len() == length && base64_encode(&bytes) == value,
+        b.len() == len && base64_encode(&b) == s,
         "invalid_login_key"
     );
-    Ok(bytes)
+    Ok(b)
 }
-
-fn nonce() -> String {
-    plain_libs::crypto::gen_token()
-}
-
-fn derive(shared: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
-    let mut extract = Hmac::<sha2_mac::Sha256>::new_from_slice(salt).unwrap();
-    extract.update(shared);
-    let prk = extract.finalize().into_bytes();
-    let mut expand = Hmac::<sha2_mac::Sha256>::new_from_slice(&prk).unwrap();
-    expand.update(info);
-    expand.update(&[1]);
-    expand.finalize().into_bytes().into()
-}
-
 #[cfg(test)]
 #[path = "../../../../tests/plain-rs/unit/features/services/confirmation_channel.rs"]
 mod tests;

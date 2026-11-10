@@ -1,3 +1,6 @@
+#[cfg(feature = "auth")]
+pub mod auth;
+
 #[cfg(feature = "peg")]
 extern crate alloc;
 
@@ -19,6 +22,7 @@ pub mod media;
 pub mod normalization;
 #[cfg(feature = "phone")]
 pub mod phone;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod platform;
 #[cfg(feature = "time")]
 pub mod local_time;
@@ -26,13 +30,16 @@ pub mod local_time;
 pub mod regex;
 #[cfg(feature = "tls")]
 pub mod tls;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod utils;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod temporary;
 
 #[cfg(any(test, feature = "test-seams"))]
 #[path = "../../tests/plain-libs/support/tempdirs.rs"]
 pub mod test_tempdirs;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod protocols;
 
 #[cfg(feature = "kv")]
@@ -46,8 +53,11 @@ pub mod test_apk;
 
 #[cfg(feature = "compound-file")]
 pub mod compound_file;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod case;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod assertions;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod streams;
 #[cfg(feature = "peg")]
 pub mod peg;

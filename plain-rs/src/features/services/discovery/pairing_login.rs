@@ -1,11 +1,9 @@
-use plain_libs::protocols::http_client;
 use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::features::services::discovery::pairing_attempts::Resolved;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use futures_util::{SinkExt, StreamExt};
-use plain_libs::crypto;
-use plain_libs::crypto::EcdhSession;
+use plain_libs::protocols::http_client;
 use plain_libs::utils::base64::base64_decode;
 use plain_libs::utils::base64::base64_encode;
 use serde_json::{Value, json};
@@ -48,12 +46,9 @@ pub(super) async fn run(
         .filter(|k| base64_decode(k).len() == 32)
         .ok_or_else(|| anyhow::anyhow!("signature_verification_failed"))?
         .to_owned();
-    if let Some(saved) = &saved {
-        check_identity(&saved.id, &saved.public_key, &saved.id, &public_key)?;
-    }
     if let Some(saved) = saved
         .as_ref()
-        .filter(|p| !p.token.is_empty() && p.is_paired())
+        .filter(|p| !p.token.is_empty() && p.is_paired() && p.public_key == public_key)
     {
         if let Ok(metadata) = metadata(state, base, &client_id, &base64_decode(&saved.token)).await
         {
@@ -102,7 +97,36 @@ pub(super) async fn run(
     let password_required = init["passwordRequired"]
         .as_bool()
         .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))?;
-    let digest = if password_required {
+    let changed = saved.as_ref().is_some_and(|p| p.public_key != public_key);
+    if changed || (!password_required && saved.is_none()) {
+        let digest = Sha256::digest(base64_decode(&public_key))
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>();
+        let mut trust = state.pairing_runtime.attempts.trust_changes(generation)?;
+        state
+            .pairing_runtime
+            .attempts
+            .set_identity_changed(state, generation, changed);
+        state
+            .pairing_runtime
+            .attempts
+            .set_verification_code(state, generation, &digest);
+        state.pairing_runtime.attempts.transition(
+            state,
+            generation,
+            PairingPhase::TrustRequired,
+            None,
+            None,
+        );
+        while !*trust.borrow_and_update() {
+            trust
+                .changed()
+                .await
+                .map_err(|_| anyhow::anyhow!("cancelled"))?;
+        }
+    }
+    let password = if password_required {
         let password = match password {
             Some(password) => password,
             None => {
@@ -119,25 +143,20 @@ pub(super) async fn run(
                     .ok_or_else(|| anyhow::anyhow!("cancelled"))?
             }
         };
-        Some(plain_libs::crypto::sha512_hex(&password))
+        Some(password)
     } else {
         None
     };
     let local = crate::features::services::discovery::pairing_runtime::local_device(state).await?;
     ensure!(local.port != 0, "chat_pairing_unavailable");
     let signing = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
-    let ecdh = EcdhSession::generate();
     let startup = state.host.startup();
-    let mut request = json!({
+    let request = json!({
         "appName":"PlainApp","appVersion":startup.app_version,
         "osName":startup.os_name,"osVersion":startup.os_version,
         "isMobile":matches!(startup.device_type, crate::features::chat::enums::DeviceType::Phone | crate::features::chat::enums::DeviceType::Tablet),
-        "ecdhPublicKey":base64_encode(&ecdh.public_key_bytes),
         "peer":{"deviceName":local.name,"port":local.port,"deviceType":local.device_type,"ips":local.ips,"signaturePublicKey":base64_encode(&signing[32..])}
     });
-    if let Some(digest) = &digest {
-        request["password"] = json!(digest);
-    }
     let mut url = base.join("auth")?;
     url.set_scheme(if base.scheme() == "https" {
         "wss"
@@ -145,9 +164,7 @@ pub(super) async fn run(
         "ws"
     })
     .map_err(|_| anyhow::anyhow!("Invalid management address"))?;
-    url.query_pairs_mut()
-        .append_pair("cid", &client_id)
-        .append_pair("auth", if password_required { "1" } else { "2" });
+    url.query_pairs_mut().append_pair("cid", &client_id);
     state.pairing_runtime.attempts.transition(
         state,
         generation,
@@ -158,63 +175,91 @@ pub(super) async fn run(
     let mut socket = crate::features::services::peers::status_socket::connect(url.as_str())
         .await
         .map_err(|_| anyhow::anyhow!("failed_connect_ws"))?;
-    let mode = if password_required {
-        crate::features::services::confirmation_channel::ConfirmationMode::Password
-    } else {
-        crate::features::services::confirmation_channel::ConfirmationMode::DeviceConfirmation
-    };
-    let (client, hello) =
-        crate::features::services::confirmation_channel::Client::start(&client_id, mode)?;
-    socket
-        .send(tokio_tungstenite::tungstenite::Message::Text(
-            serde_json::to_string(&hello)?.into(),
-        ))
-        .await?;
-    let response = loop {
-        use tokio_tungstenite::tungstenite::Message;
-        match socket
-            .next()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("failed_connect_ws"))??
-        {
-            Message::Text(text) => {
-                break serde_json::from_str::<
-                    crate::features::services::confirmation_channel::ServerHello,
-                >(&text)?;
-            }
-            Message::Ping(bytes) => socket.send(Message::Pong(bytes)).await?,
-            _ => anyhow::bail!("invalid_auth_response"),
+    let protection = if let Some(password) = password {
+        let client = plain_libs::auth::client::OpaqueLogin::start(password.into_bytes())
+            .map_err(anyhow::Error::msg)?;
+        socket
+            .send(tokio_tungstenite::tungstenite::Message::Binary(
+                client.request().into(),
+            ))
+            .await?;
+        let reply = next_binary(&mut socket).await?;
+        let result = client
+            .finish(
+                &reply,
+                &client_id,
+                &base64_decode(&public_key),
+                &base64_decode(text(&init, "opaquePublicKey")?),
+            )
+            .map_err(anyhow::Error::msg)?;
+        let key: [u8; 32] = result
+            .api_key
+            .as_slice()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Invalid session key"))?;
+        let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+            &key,
+            &serde_json::to_vec(&request)?,
+            &result.request_aad,
+        )
+        .ok_or_else(|| anyhow::anyhow!("Encryption failed"))?;
+        let mut finish = result.ke3;
+        finish.extend(encrypted);
+        socket
+            .send(tokio_tungstenite::tungstenite::Message::Binary(
+                finish.into(),
+            ))
+            .await?;
+        Protection::Password {
+            key,
+            aad: result.response_aad,
         }
-    };
-    let (channel, reveal) = client.accept(
-        &response,
-        &public_key,
-        &target.target.device_id,
-        chrono::Utc::now().timestamp_millis() as u64,
-    )?;
-    socket
-        .send(tokio_tungstenite::tungstenite::Message::Text(
-            serde_json::to_string(&reveal)?.into(),
-        ))
-        .await?;
-    request["loginContext"] = json!(channel.context);
-    if !password_required {
+    } else {
+        let (client, hello) =
+            crate::features::services::confirmation_channel::Client::start(&client_id)?;
+        socket
+            .send(tokio_tungstenite::tungstenite::Message::Text(
+                serde_json::to_string(&hello)?.into(),
+            ))
+            .await?;
+        let response = loop {
+            use tokio_tungstenite::tungstenite::Message;
+            match socket
+                .next()
+                .await
+                .ok_or_else(|| anyhow::anyhow!("failed_connect_ws"))??
+            {
+                Message::Text(text) => {
+                    break serde_json::from_str::<
+                        crate::features::services::confirmation_channel::ServerHello,
+                    >(&text)?;
+                }
+                Message::Ping(bytes) => socket.send(Message::Pong(bytes)).await?,
+                _ => anyhow::bail!("invalid_auth_response"),
+            }
+        };
+        let channel = client.accept(
+            &response,
+            &public_key,
+            &target.target.device_id,
+            chrono::Utc::now().timestamp_millis() as u64,
+        )?;
         state.pairing_runtime.attempts.set_verification_code(
             state,
             generation,
             &channel.verification_code,
         );
-    }
-
-    let request_bytes = serde_json::to_vec(&request)?;
-    let encrypted =
-        channel.encrypt_request(&request_bytes, chrono::Utc::now().timestamp_millis() as u64)?;
-    socket
-        .send(tokio_tungstenite::tungstenite::Message::Binary(
-            encrypted.into(),
-        ))
-        .await
-        .map_err(|_| anyhow::anyhow!("failed_connect_ws"))?;
+        let encrypted = channel.encrypt_request(
+            &serde_json::to_vec(&request)?,
+            chrono::Utc::now().timestamp_millis() as u64,
+        )?;
+        socket
+            .send(tokio_tungstenite::tungstenite::Message::Binary(
+                encrypted.into(),
+            ))
+            .await?;
+        Protection::Confirmation(channel)
+    };
     let response = loop {
         let frame = socket
             .next()
@@ -224,8 +269,7 @@ pub(super) async fn run(
         use tokio_tungstenite::tungstenite::Message;
         match frame {
             Message::Binary(data) => {
-                let plain = channel
-                    .decrypt_response(&data, chrono::Utc::now().timestamp_millis() as u64)?;
+                let plain = protection.decrypt(&data)?;
                 let response: Value = serde_json::from_slice(&plain)
                     .map_err(|_| anyhow::anyhow!("invalid_auth_response"))?;
                 if response["status"] == "PENDING" {
@@ -256,19 +300,7 @@ pub(super) async fn run(
             _ => anyhow::bail!("invalid_auth_response"),
         }
     };
-    ensure!(
-        response["loginContext"].as_str() == Some(channel.context.as_str()),
-        "invalid_auth_response"
-    );
-    let remote_id = verify_response(
-        &response,
-        &target.target.device_id,
-        &public_key,
-        chrono::Utc::now().timestamp_millis(),
-    )?;
-    if let Some(saved) = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)? {
-        check_identity(&saved.id, &saved.public_key, &remote_id, &public_key)?;
-    }
+    let remote_id = verify_response(&response, &target.target.device_id)?;
     {
         let _commit = state.pairing_runtime.commit.lock().unwrap();
         state
@@ -276,15 +308,13 @@ pub(super) async fn run(
             .attempts
             .claim_identity(Some(state), generation, &remote_id)?;
     }
-    let shared = ecdh
-        .compute_shared_key(&base64_decode(text(&response, "ecdhPublicKey")?))
-        .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))?;
+    let shared = protection.key();
     let metadata = metadata(state, base, &client_id, &shared).await?;
     ensure!(
         text(&metadata, "clientId")? == remote_id,
         "peer_identity_changed"
     );
-    let mut material = b"plain-chat-pairing-v1".to_vec();
+    let mut material = b"chat-pairing".to_vec();
     material.extend(shared);
     let chat_key = base64_encode(&Sha256::digest(material));
     let token = base64_encode(&shared);
@@ -297,9 +327,11 @@ pub(super) async fn run(
             .is_some_and(|s| !matches!(s.phase, PairingPhase::Cancelled | PairingPhase::Failed)),
         "cancelled"
     );
-    if let Some(saved) = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)? {
-        check_identity(&saved.id, &saved.public_key, &remote_id, &public_key)?;
-    }
+    let current = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)?;
+    ensure!(
+        current.as_ref().map(|p| &p.public_key) == saved.as_ref().map(|p| &p.public_key),
+        "peer_identity_changed"
+    );
     state.pairing_runtime.attempts.transition(
         state,
         generation,
@@ -321,7 +353,7 @@ pub(super) async fn run(
     };
     state
         .db
-        .login_peer(
+        .login_peer_confirmed(
             &remote_id,
             text(&metadata, "deviceName")?,
             &target.ips.join(","),
@@ -330,6 +362,10 @@ pub(super) async fn run(
             &token,
             &public_key,
             &chat_key,
+            saved
+                .as_ref()
+                .map(|p| p.public_key.as_str())
+                .unwrap_or_default(),
         )
         .map_err(|_| anyhow::anyhow!("Failed to save paired device"))?;
     state.pairing_runtime.attempts.transition(
@@ -361,7 +397,7 @@ fn check_identity(expected_id: &str, expected_key: &str, id: &str, key: &str) ->
     );
     Ok(())
 }
-fn verify_response(response: &Value, expected: &str, public_key: &str, now: i64) -> Result<String> {
+fn verify_response(response: &Value, expected: &str) -> Result<String> {
     let id = text(response, "clientId")?;
     ensure!(
         !id.is_empty() && id.len() <= 256 && (expected.is_empty() || expected == id),
@@ -371,30 +407,47 @@ fn verify_response(response: &Value, expected: &str, public_key: &str, now: i64)
         response["status"] == "COMPLETED" && response["chatPaired"] == true,
         "chat_pairing_unavailable"
     );
-    let timestamp = response["timestamp"]
-        .as_i64()
-        .ok_or_else(|| anyhow::anyhow!("signature_verification_failed"))?;
-    ensure!(
-        (i128::from(now) - i128::from(timestamp)).abs() <= 300_000,
-        "signature_verification_failed"
-    );
-    let mut data = format!(
-        "{id}|COMPLETED|{}|{timestamp}|true",
-        text(response, "ecdhPublicKey")?
-    );
-    if let Some(context) = response.get("loginContext") {
-        data.push('|');
-        data.push_str(
-            context
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))?,
-        );
-    }
-    ensure!(
-        crypto::ed25519_verify(public_key, data.as_bytes(), text(response, "signature")?),
-        "signature_verification_failed"
-    );
     Ok(id.into())
+}
+enum Protection {
+    Password { key: [u8; 32], aad: Vec<u8> },
+    Confirmation(crate::features::services::confirmation_channel::Channel),
+}
+impl Protection {
+    fn key(&self) -> [u8; 32] {
+        match self {
+            Self::Password { key, .. } => *key,
+            Self::Confirmation(c) => c.api_key(),
+        }
+    }
+    fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
+        match self {
+            Self::Password { key, aad } => {
+                plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, data, aad)
+                    .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))
+            }
+            Self::Confirmation(c) => {
+                c.decrypt_response(data, chrono::Utc::now().timestamp_millis() as u64)
+            }
+        }
+    }
+}
+async fn next_binary<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<Vec<u8>>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    use tokio_tungstenite::tungstenite::Message;
+    loop {
+        match socket
+            .next()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("failed_connect_ws"))??
+        {
+            Message::Binary(bytes) => return Ok(bytes.to_vec()),
+            Message::Ping(bytes) => socket.send(Message::Pong(bytes)).await?,
+            _ => anyhow::bail!("invalid_auth_response"),
+        }
+    }
 }
 async fn metadata(
     state: &CoreRuntime,

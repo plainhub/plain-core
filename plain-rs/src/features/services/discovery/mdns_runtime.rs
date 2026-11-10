@@ -309,6 +309,7 @@ impl Runtime {
                 platform: found.platform,
                 last_seen_at: crate::infrastructure::db::now_iso(),
                 remote_access: found.remote_access,
+                signature_public_key: found.signature_public_key,
                 discovery_methods: vec![DiscoveryMethod::Lan],
             };
             match observer.seen(device, visible.load(Ordering::SeqCst), true) {
@@ -376,6 +377,7 @@ impl Runtime {
                             platform: found.platform,
                             last_seen_at: crate::infrastructure::db::now_iso(),
                             remote_access: found.remote_access,
+                signature_public_key: found.signature_public_key,
                             discovery_methods: vec![DiscoveryMethod::Lan],
                         };
                         match system_observer.seen(

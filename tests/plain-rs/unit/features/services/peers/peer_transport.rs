@@ -43,7 +43,11 @@ fn peer() -> DPeer {
     p.key = plain_libs::utils::base64::base64_encode(&[7; 32]);
     p
 }
-fn state() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core, CoreRuntime) {
+fn state() -> (
+    plain_libs::temporary::TempDir,
+    crate::test_runtime::Core,
+    CoreRuntime,
+) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(crate::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
@@ -178,7 +182,13 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
                     assert_eq!(client_id, "actor");
                     assert_eq!(channel_id, "channel");
                     assert_eq!(
-                        plain_libs::crypto::xchacha_decrypt_raw(&[7; 32], &body).unwrap(),
+                        crate::infrastructure::transport::http_request::decrypt_raw(
+                            &[7; 32],
+                            "POST",
+                            "/peer_graphql",
+                            &body
+                        )
+                        .unwrap(),
                         b"signed request"
                     );
                     let bytes = crate::infrastructure::transport::http_response::Context::new(

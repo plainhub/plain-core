@@ -17,6 +17,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
     let port = state.public_ports().await.map(|ports| ports.1).unwrap_or(0);
     let mut reply = advertisement::reply(&id, &name, port, facts(state).await?)?;
     reply.remote_access = Some(settings.remote_access);
+    reply.signature_public_key = crate::features::prefs::security::snapshot(&state.prefs)?.signature_public_key;
     match request {
         Request::Reply {} => Ok(serde_json::to_value(reply)?),
         Request::Mdns {} => Ok(serde_json::to_value(advertisement::mdns(

@@ -1,8 +1,8 @@
-use plain_libs::protocols::http_client;
 use crate::infrastructure::db::DPeer;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
 use futures_util::StreamExt;
+use plain_libs::protocols::http_client;
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 pub struct Lan {
@@ -51,8 +51,13 @@ pub async fn send(
         .map_err(|e| Failure::Fatal(e.to_string()))?
         .filter(|id| !id.is_empty())
         .ok_or_else(|| Failure::Fatal("Missing peer actor".into()))?;
-    let cipher = plain_libs::crypto::xchacha_encrypt_raw(key, body.as_bytes())
-        .ok_or_else(|| Failure::Fatal("Invalid peer encryption key".into()))?;
+    let cipher = crate::infrastructure::transport::http_request::encrypt_raw(
+        key,
+        "POST",
+        "/peer_graphql",
+        body.as_bytes(),
+    )
+    .ok_or_else(|| Failure::Fatal("Invalid peer encryption key".into()))?;
     let context =
         crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &cipher);
     let response = state

@@ -224,8 +224,8 @@ impl ContentServer {
             #[cfg(feature = "http_transport")]
             public_server: Arc::new(tokio::sync::Mutex::new(None)),
             peer_schema: crate::graphql::schemas::peer::schema(),
-            guest_replay: Arc::new(crate::http::auth::replay::Replay::default()),
-            main_replay: Arc::new(crate::http::auth::replay::Replay::default()),
+            guest_replay: Arc::new(crate::http::auth::replay::Replay::new("guest")),
+            main_replay: Arc::new(crate::http::auth::replay::Replay::new("main")),
             subscription_sessions,
             main_ws,
             login_attempts,

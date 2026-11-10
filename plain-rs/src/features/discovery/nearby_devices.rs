@@ -32,6 +32,7 @@ pub struct Device {
     pub port: u16,
     #[serde(default)]
     pub remote_access: Option<bool>,
+    pub signature_public_key: String,
     pub device_type: crate::features::chat::enums::DeviceType,
     pub version: String,
     pub platform: String,
@@ -157,6 +158,7 @@ impl Devices {
                     platform: d.platform,
                     last_seen_at: d.last_seen_at,
                     remote_access: None,
+                    signature_public_key: String::new(),
                     discovery_methods: vec![DiscoveryMethod::Lan],
                 };
                 s.order.push(device.id.clone());

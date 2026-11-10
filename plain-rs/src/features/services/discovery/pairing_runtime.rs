@@ -78,15 +78,6 @@ impl Runtime {
             .filter(|a| a.signature == signature && a.received.elapsed() < Duration::from_secs(300))
             .map(|a| a.address.clone())
     }
-    fn take(&self, id: &str, signature: &str) -> Option<String> {
-        let mut map = self.associations.lock().unwrap();
-        if !map.get(id).is_some_and(|a| a.signature == signature) {
-            return None;
-        }
-        map.remove(id)
-            .filter(|a| a.received.elapsed() < Duration::from_secs(300))
-            .map(|a| a.address)
-    }
     fn forget(&self, id: &str) {
         self.associations.lock().unwrap().remove(id);
     }
@@ -370,7 +361,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
             };
             let ticket: Ticket = serde_json::from_value(result["ticket"].clone())?;
             let request: PairingRequest = serde_json::from_value(result["request"].clone())?;
-            let verification = state
+            state
                 .pairing_runtime
                 .confirmations
                 .begin(&request, &ticket)?;
@@ -399,15 +390,6 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
                         json!({"deviceId":ticket.target.device_id,"deviceName":ticket.target.device_name,"generation":ticket.generation}),
                     );
                 }
-                anyhow::ensure!(
-                    nearby_http::send(
-                        &ticket.target.device_ip,
-                        ticket.target.device_port,
-                        &verification
-                    )
-                    .await?,
-                    "Failed to send pairing verification"
-                );
             } else if state
                 .pairing
                 .cancel(&ticket.target.device_id, Some(&ticket.generation))
@@ -450,10 +432,21 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
             if !crate::features::peers::pairing::security::verify_request(&request) {
                 return Ok(Value::Null);
             }
+            let local_key =
+                crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
+            if request.to_id != state.native_client_id().map_err(anyhow::Error::msg)?
+                || request.target_public_key
+                    != plain_libs::utils::base64::base64_encode(&local_key[32..])
+            {
+                return Ok(Value::Null);
+            }
             if ble {
                 state.pairing_runtime.check_address(&request, &address)?;
             }
-            let is_new = pairing::receive_request(&state.pairing, &request).unwrap_or(false);
+            let is_new = {
+                let _commit = state.pairing_runtime.commit.lock().unwrap();
+                pairing::receive_request(&state.pairing, &request).unwrap_or(false)
+            };
             if ble
                 && state
                     .pairing
@@ -470,13 +463,53 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
                 }
             }
             if is_new {
-                state.pairing_runtime.confirmations.register(&request)?;
+                let target = state
+                    .pairing
+                    .incoming_target(&request.from_id, &request.signature)
+                    .ok_or_else(|| anyhow::anyhow!("Pairing expired"))?;
+                if state
+                    .pairing_runtime
+                    .confirmations
+                    .register(state, &request, target)?
+                {
+                    let pinned = crate::infrastructure::db::chat_store::peers::get(
+                        &state.db,
+                        &request.from_id,
+                    )?
+                    .is_some_and(|p| p.is_paired() && p.public_key == request.signature_public_key);
+                    if pinned {
+                        Box::pin(respond_device(state, request.clone(), true)).await?;
+                    } else {
+                        crate::features::services::discovery::pairing_confirmation::publish(
+                            state,
+                            request.clone(),
+                        )?;
+                    }
+                }
+            }
+            if !is_new {
+                if let Some(response) = state
+                    .pairing_runtime
+                    .confirmations
+                    .cached_response(&request.signature)?
+                {
+                    if let Some(target) = state
+                        .pairing
+                        .incoming_target(&request.from_id, &request.signature)
+                    {
+                        send_incoming(state, &request, &target, Message::PairResponse(response))
+                            .await?;
+                    }
+                }
             }
             json!(is_new)
         }
         Request::ReceiveCancel { cancel } => {
             let id = cancel.from_id.clone();
-            let result = pairing::receive_cancel(&state.prefs, &state.pairing, cancel)?;
+            let result = {
+                let _commit = state.pairing_runtime.commit.lock().unwrap();
+                pairing::receive_cancel(&state.prefs, &state.pairing, cancel)?
+            };
             if !result.is_null() {
                 state.pairing_runtime.forget(&id);
                 event(
@@ -491,53 +524,15 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
             response,
             sender_ip,
         } => {
-            let _commit = state.pairing_runtime.commit.lock().unwrap();
-            if state
-                .pairing
-                .tickets()
-                .into_iter()
-                .find(|t| t.target.device_id == response.from_id)
-                .is_some_and(|t| {
-                    state
-                        .pairing_runtime
-                        .attempts
-                        .get(&t.generation)
-                        .is_some_and(|s| s.terminal())
-                })
+            if let Some(action) = state
+                .pairing_runtime
+                .confirmations
+                .response(state, &response, &sender_ip)?
             {
-                return Ok(Value::Null);
+                crate::features::services::discovery::pairing_confirmation::deliver(state, action)
+                    .await?;
             }
-            state.pairing_runtime.confirmations.response(&response)?;
-            let result = pairing::complete(
-                &state.db,
-                &state.prefs,
-                &state.pairing,
-                response,
-                &sender_ip,
-            )?;
-            if !result.is_null() {
-                if result["peer"].is_null() {
-                    let ticket: Ticket = serde_json::from_value(result["ticket"].clone())?;
-                    failed(
-                        state,
-                        &ticket.target,
-                        result["error"].as_str().unwrap_or("Pairing failed"),
-                        Some(&ticket.generation),
-                    );
-                } else {
-                    if let Some(generation) = result["ticket"]["generation"].as_str() {
-                        state.pairing_runtime.attempts.transition(
-                            state,
-                            generation,
-                            PairingPhase::Succeeded,
-                            None,
-                            None,
-                        );
-                    }
-                    success(state, &result["peer"], &sender_ip);
-                }
-            }
-            result
+            Value::Null
         }
         Request::Respond {
             request,
@@ -548,31 +543,18 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
                 .pairing
                 .incoming_target(&request.from_id, &request.signature)
                 .ok_or_else(|| anyhow::anyhow!("Pairing request expired or no longer available"))?;
-            state.pairing_runtime.confirmations.ready(&request)?;
-            let mut result = pairing::respond(
-                &state.db,
-                &state.prefs,
-                &state.pairing,
-                request.clone(),
-                accepted,
-                device,
-            )?;
-            if result.is_null() {
-                anyhow::bail!("Pairing request expired or no longer available");
-            }
-            let mut response: PairingResponse = serde_json::from_value(result["response"].clone())?;
-            state.pairing_runtime.confirmations.seal(&mut response)?;
-            result["response"] = serde_json::to_value(&response)?;
-            if !result["peer"].is_null() {
-                success(state, &result["peer"], &target.device_ip);
-            } else {
-                failed(state, &target, "Pairing request was rejected", None);
-            }
-            send_incoming(state, &request, &target, Message::PairResponse(response)).await?;
-            state
+            let response = state
                 .pairing_runtime
-                .take(&request.from_id, &request.signature);
-            result
+                .confirmations
+                .respond(state, &request, accepted, device)?;
+            send_incoming(
+                state,
+                &request,
+                &target,
+                Message::PairResponse(response.clone()),
+            )
+            .await?;
+            json!({"response":response})
         }
     })
 }

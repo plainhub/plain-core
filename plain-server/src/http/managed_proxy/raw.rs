@@ -132,16 +132,12 @@ fn pairing_target(state: &ServerState, target: &str) -> Result<Target, StatusCod
 #[serde(deny_unknown_fields)]
 struct AuthQuery {
     cid: String,
-    auth: Option<String>,
 }
 
 pub(super) async fn auth(state: ServerState, target: String, request: Request) -> Response {
     let Ok(Query(parameters)) = Query::<AuthQuery>::try_from_uri(request.uri()) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    if !matches!(parameters.auth.as_deref(), Some("1" | "2")) {
-        return StatusCode::BAD_REQUEST.into_response();
-    }
     let Ok(session) = caller(&state, &parameters.cid) else {
         return StatusCode::UNAUTHORIZED.into_response();
     };

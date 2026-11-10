@@ -4,8 +4,8 @@ mod password_login;
 mod update;
 pub use command::Command;
 pub use password_login::{
-    PasswordError, configure_password_login, password_hash, password_setup_required,
-    set_password_login, valid_password_digest,
+    PasswordCredential, PasswordError, configure_password_login, opaque_public_key,
+    password_credential, password_setup_required, set_password_login,
 };
 pub use update::{ReleaseInfo, UpdateInfo, UpdatePatch};
 
@@ -81,14 +81,6 @@ pub fn bootstrap(prefs: &Prefs) -> Result<()> {
             plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
         })?;
         ensure(map, MASTER_SECRET, plain_libs::crypto::gen_token)?;
-        if let Some(Value::String(password)) = map.get(PASSWORD) {
-            let password = password.clone();
-            if password.is_empty() {
-                map.remove(PASSWORD);
-            } else {
-                password_login::write_password(map, &password)?;
-            }
-        }
         ensure(map, ADB_TOKEN, || random_password(32))?;
         ensure(map, MDNS_HOSTNAME, generate_mdns_hostname)?;
         if !map.contains_key(PASSWORD_TYPE) {
@@ -239,7 +231,11 @@ pub fn get_entry(prefs: &Prefs, key: &str) -> anyhow::Result<Option<Value>> {
                 .get::<bool>(key)?
                 .unwrap_or(DEFAULT_LOGIN_REQUIRE_APPROVAL)
         ),
-        API_PERMISSIONS => json!(prefs.get::<Vec<crate::features::access::AccessFeature>>(key)?.unwrap_or_default()),
+        API_PERMISSIONS => json!(
+            prefs
+                .get::<Vec<crate::features::access::AccessFeature>>(key)?
+                .unwrap_or_default()
+        ),
         AUTO_CHECK_UPDATE => json!(prefs.get::<bool>(key)?.unwrap_or(true)),
         SIGNATURE_PUBLIC_KEY => json!(signature_public_key(prefs)?),
         _ => return Ok(None),

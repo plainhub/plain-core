@@ -9,7 +9,10 @@ use plain_libs::crypto::xchacha_decrypt_raw;
 use plain_libs::utils::base64::base64_decode;
 use rusqlite::OptionalExtension;
 use std::time::{SystemTime, UNIX_EPOCH};
+// Existing chat receipt lifetime; independent of HTTP request freshness.
 pub(crate) const TIMESTAMP_WINDOW_MS: u64 = 5 * 60 * 1000;
+const GRAPHQL_WINDOW_MS: u64 = 60_000;
+const STATUS_WINDOW_MS: u64 = 300_000;
 
 pub struct AuthenticatedPeer {
     pub peer: DPeer,
@@ -19,6 +22,7 @@ pub struct AuthenticatedPeer {
     pub graphql_json: String,
 }
 pub struct Envelope {
+    pub nonce: String,
     pub signature_b64: String,
     pub timestamp: i64,
     pub content: String,
@@ -34,6 +38,7 @@ pub enum AuthError {
     MissingFields,
     NoChannelKey,
     Storage,
+    Replay,
 }
 impl AuthError {
     pub fn reason(&self) -> &'static str {
@@ -47,12 +52,13 @@ impl AuthError {
             Self::MissingFields => "missing fields",
             Self::NoChannelKey => "no channel key",
             Self::Storage => "peer storage failed",
+            Self::Replay => "replayed request",
         }
     }
     pub fn http_status(&self) -> u16 {
         match self {
             Self::NotPaired => 403,
-            Self::TimestampExpired | Self::MissingFields => 400,
+            Self::TimestampExpired | Self::MissingFields | Self::Replay => 400,
             Self::Storage => 500,
             _ => 401,
         }
@@ -63,23 +69,11 @@ enum Purpose {
     Graphql,
     Status,
 }
-fn signature_payload_for(
-    purpose: Purpose,
-    timestamp: i64,
-    channel_id: &str,
-    content: &str,
-) -> String {
-    let domain = match purpose {
-        Purpose::Graphql => "plain-peer-v2",
-        Purpose::Status => "plain-status-v2",
-    };
-    serde_json::json!([domain, channel_id, timestamp.to_string(), content]).to_string()
-}
-pub fn signature_payload(timestamp: i64, channel_id: &str, content: &str) -> String {
-    signature_payload_for(Purpose::Graphql, timestamp, channel_id, content)
+pub fn signature_payload(timestamp: i64, channel_id: &str, nonce: &str, content: &str) -> String {
+    serde_json::json!(["peer", channel_id, timestamp.to_string(), nonce, content]).to_string()
 }
 pub(crate) fn status_signature_payload(timestamp: i64, content: &str) -> String {
-    signature_payload_for(Purpose::Status, timestamp, "", content)
+    serde_json::json!(["status", "", timestamp.to_string(), content]).to_string()
 }
 fn decrypt(
     key: &[u8],
@@ -88,11 +82,36 @@ fn decrypt(
     body: &[u8],
     purpose: Purpose,
 ) -> Result<Envelope, AuthError> {
-    let plaintext = xchacha_decrypt_raw(key, body).ok_or(AuthError::DecryptFailed)?;
+    let plaintext = match purpose {
+        Purpose::Graphql => super::http_request::decrypt_raw(key, "POST", "/peer_graphql", body),
+        Purpose::Status => xchacha_decrypt_raw(key, body),
+    }
+    .ok_or(AuthError::DecryptFailed)?;
     let plaintext = std::str::from_utf8(&plaintext).map_err(|_| AuthError::NotUtf8)?;
-    let mut parts = plaintext.splitn(3, '|');
+    let mut parts = plaintext.splitn(
+        if matches!(purpose, Purpose::Graphql) {
+            4
+        } else {
+            3
+        },
+        '|',
+    );
     let signature_b64 = parts.next().unwrap_or_default();
     let raw_timestamp = parts.next().ok_or(AuthError::MissingFields)?;
+    let nonce = if matches!(purpose, Purpose::Graphql) {
+        let nonce = parts.next().ok_or(AuthError::MissingFields)?;
+        if nonce.len() != 36 {
+            return Err(AuthError::MissingFields);
+        }
+        let parsed = plain_libs::utils::uuid::Uuid::parse_str(nonce)
+            .map_err(|_| AuthError::MissingFields)?;
+        if parsed.to_string() != nonce {
+            return Err(AuthError::MissingFields);
+        }
+        nonce
+    } else {
+        ""
+    };
     let content = parts
         .next()
         .filter(|s| !s.is_empty())
@@ -107,17 +126,27 @@ fn decrypt(
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as i64;
-    if now.abs_diff(timestamp) > TIMESTAMP_WINDOW_MS {
+    if now.abs_diff(timestamp)
+        > match purpose {
+            Purpose::Graphql => GRAPHQL_WINDOW_MS,
+            Purpose::Status => STATUS_WINDOW_MS,
+        }
+    {
         return Err(AuthError::TimestampExpired);
     }
     if !ed25519_verify(
         public_key,
-        signature_payload_for(purpose, timestamp, channel_id, content).as_bytes(),
+        match purpose {
+            Purpose::Graphql => signature_payload(timestamp, channel_id, nonce, content),
+            Purpose::Status => status_signature_payload(timestamp, content),
+        }
+        .as_bytes(),
         signature_b64,
     ) {
         return Err(AuthError::BadSignature);
     }
     Ok(Envelope {
+        nonce: nonce.into(),
         signature_b64: signature_b64.into(),
         timestamp,
         content: content.into(),
@@ -175,6 +204,25 @@ fn authenticate_for(
         Ok((peer, key))
     })?;
     let envelope = decrypt(&key, &peer.public_key, channel_id, body, purpose)?;
+    if matches!(purpose, Purpose::Graphql) {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        let admitted = db
+            .admit_request(
+                &format!("peer_graphql:{channel_id}"),
+                client_id,
+                envelope.timestamp,
+                &envelope.nonce,
+                now,
+                GRAPHQL_WINDOW_MS as i64,
+            )
+            .map_err(|_| AuthError::Storage)?;
+        if !admitted {
+            return Err(AuthError::Replay);
+        }
+    }
     Ok(AuthenticatedPeer {
         peer,
         key,

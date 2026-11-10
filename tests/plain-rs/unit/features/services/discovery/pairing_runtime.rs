@@ -4,16 +4,16 @@ use serde_json::json;
 #[test]
 fn ble_associations_match_signature_and_cleanup_without_consuming_replacements() {
     let runtime = Runtime::default();
-    let mut request:PairingRequest=serde_json::from_value(json!({"fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false})).unwrap();
+    let mut request:PairingRequest=serde_json::from_value(json!({"toId":"local","targetPublicKey":"key","fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false})).unwrap();
     runtime.remember(&request, "mac-first").unwrap();
     request.signature = "second".into();
     runtime.remember(&request, "mac-second").unwrap();
-    assert!(runtime.take("peer", "first").is_none());
-    assert_eq!(runtime.take("peer", "second").unwrap(), "mac-second");
-    assert!(runtime.take("peer", "second").is_none());
+    assert!(runtime.address("peer", "first").is_none());
+    assert_eq!(runtime.address("peer", "second").unwrap(), "mac-second");
+    assert_eq!(runtime.address("peer", "second").unwrap(), "mac-second");
     runtime.remember(&request, "mac-second").unwrap();
     runtime.forget("peer");
-    assert!(runtime.take("peer", "second").is_none());
+    assert!(runtime.address("peer", "second").is_none());
 }
 
 fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::test_runtime::Core) {
@@ -54,6 +54,10 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
     let remote_state = remote.runtime_state();
     let target = Target {
         device_id: "local".into(),
+        device_public_key: plain_libs::utils::base64::base64_encode(
+            &crate::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
+                [32..],
+        ),
         device_name: "Local".into(),
         device_ip: "127.0.0.1".into(),
         device_port: 2443,
@@ -61,6 +65,13 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
     let started =
         pairing::start(&remote_state.prefs, &remote_state.pairing, target, device()).unwrap();
     let request: PairingRequest = serde_json::from_value(started["request"].clone()).unwrap();
+    let ticket: crate::features::peers::pairing::sessions::Ticket =
+        serde_json::from_value(started["ticket"].clone()).unwrap();
+    remote_state
+        .pairing_runtime
+        .confirmations
+        .begin(&request, &ticket)
+        .unwrap();
     execute(
         &state,
         Request::ReceiveRequest {
@@ -71,9 +82,6 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
     )
     .await
     .unwrap();
-    crate::features::services::discovery::pairing_confirmation::test_fixture::verify_incoming(
-        &state, &request,
-    );
     state.pairing.age_incoming_for_test(
         &request.from_id,
         crate::features::peers::pairing::sessions::RESPONSE_TIMEOUT,
@@ -110,6 +118,10 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     let remote_state = remote.runtime_state();
     let target = Target {
         device_id: "local".into(),
+        device_public_key: plain_libs::utils::base64::base64_encode(
+            &crate::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
+                [32..],
+        ),
         device_name: "Local".into(),
         device_ip: String::new(),
         device_port: 2443,
@@ -117,6 +129,13 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     let started =
         pairing::start(&remote_state.prefs, &remote_state.pairing, target, device()).unwrap();
     let request: PairingRequest = serde_json::from_value(started["request"].clone()).unwrap();
+    let ticket: crate::features::peers::pairing::sessions::Ticket =
+        serde_json::from_value(started["ticket"].clone()).unwrap();
+    remote_state
+        .pairing_runtime
+        .confirmations
+        .begin(&request, &ticket)
+        .unwrap();
     assert_eq!(
         execute(
             &state,
@@ -172,9 +191,6 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         .await
         .is_err()
     );
-    crate::features::services::discovery::pairing_confirmation::test_fixture::verify_incoming(
-        &state, &request,
-    );
     let (generation, mut calls) = state.host.connect();
     let host = state.host.clone();
     let responder = tokio::spawn(async move {
@@ -201,15 +217,50 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     .await
     .unwrap();
     let response = responder.await.unwrap();
-    let completed = pairing::complete(
-        &remote_state.db,
-        &remote_state.prefs,
-        &remote_state.pairing,
-        response,
-        "",
-    )
-    .unwrap();
-    assert_eq!(accepted["peer"]["key"], completed["peer"]["key"]);
+    assert!(accepted.get("peer").is_none() || accepted["peer"].is_null());
+    assert!(
+        remote_state
+            .pairing_runtime
+            .confirmations
+            .response(&remote_state, &response, "")
+            .unwrap()
+            .is_none()
+    );
+    let action = remote_state
+        .pairing_runtime
+        .confirmations
+        .confirm(&remote_state, &ticket.generation)
+        .unwrap();
+    let crate::features::services::discovery::pairing_confirmation::Action::Send {
+        message: Message::PairVerification(finish),
+        ..
+    } = action
+    else {
+        panic!()
+    };
+    let crate::features::services::discovery::pairing_confirmation::Action::Notify {
+        message: Message::PairVerification(ack),
+        ..
+    } = state
+        .pairing_runtime
+        .confirmations
+        .process(&state, finish)
+        .unwrap()
+    else {
+        panic!()
+    };
+    remote_state
+        .pairing_runtime
+        .confirmations
+        .process(&remote_state, ack)
+        .unwrap();
+    let a = crate::infrastructure::db::chat_store::peers::get(&state.db, "remote")
+        .unwrap()
+        .unwrap();
+    let b = crate::infrastructure::db::chat_store::peers::get(&remote_state.db, "local")
+        .unwrap()
+        .unwrap();
+    assert_eq!(a.key, b.key);
     for accepted in [true, false] {
         let error = execute(
             &state,
@@ -226,11 +277,12 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
             "Pairing request expired or no longer available"
         );
     }
-    assert!(
+    assert_eq!(
         state
             .pairing_runtime
-            .take("remote", &request.signature)
-            .is_none()
+            .address("remote", &request.signature)
+            .as_deref(),
+        Some("fixture-mac")
     );
     local.shutdown().await;
     remote.shutdown().await;
@@ -352,13 +404,14 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
 async fn incoming_ble_message_succeeds_when_lan_address_is_invalid() {
     let (_directory, server) = fixture("local");
     let state = server.runtime_state();
-    let request: PairingRequest = serde_json::from_value(json!({"fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false})).unwrap();
+    let request: PairingRequest = serde_json::from_value(json!({"toId":"local","targetPublicKey":"key","fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false})).unwrap();
     state
         .pairing_runtime
         .remember(&request, "fixture-ble")
         .unwrap();
     let target = Target {
         device_id: "peer".into(),
+        device_public_key: String::new(),
         device_name: "Fixture".into(),
         device_ip: "invalid host".into(),
         device_port: 2443,

@@ -123,7 +123,7 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
         prefs.set("api_permissions", &configured).unwrap();
         plain_rs::features::prefs::security::set_password_login(&prefs, "owned fixture password")
             .unwrap();
-        let password = plain_rs::features::prefs::security::password_hash(&prefs).unwrap();
+        let password = plain_rs::features::prefs::security::password_credential(&prefs).unwrap();
         let mut identity = None;
         for _ in 0..2 {
             let service = Service::start(
@@ -192,7 +192,7 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
                 Some(&expected_access)
             );
             assert_eq!(
-                plain_rs::features::prefs::security::password_hash(&prefs).unwrap(),
+                plain_rs::features::prefs::security::password_credential(&prefs).unwrap(),
                 password
             );
             let current = prefs.get::<String>("client_id").unwrap();
@@ -362,7 +362,7 @@ async fn unconfigured_service_fails_before_listeners_or_passwordless_access() {
     ))
     .unwrap();
     assert!(
-        plain_rs::features::prefs::security::password_hash(&prefs)
+        plain_rs::features::prefs::security::password_credential(&prefs)
             .unwrap()
             .is_none()
     );

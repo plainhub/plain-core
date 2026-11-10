@@ -34,29 +34,57 @@ fn signing_current_peer_and_channel_keys_and_authenticated_crypto_roundtrip() {
         },
     )
     .unwrap();
-    let split: Vec<_> = first.body.splitn(3, '|').collect();
+    let split: Vec<_> = first.body.splitn(4, '|').collect();
     assert!(plain_libs::crypto::ed25519_verify(
         &base64_encode(&public),
         crate::infrastructure::transport::auth::signature_payload(
             split[1].parse().unwrap(),
             "",
-            split[2]
+            split[2],
+            split[3]
         )
         .as_bytes(),
         split[0]
     ));
-    let gql: serde_json::Value = serde_json::from_str(split[2]).unwrap();
+    let gql: serde_json::Value = serde_json::from_str(split[3]).unwrap();
     assert_eq!(gql["variables"]["content"], content);
     assert_eq!(first.key, peer.key);
     let decoded_key = plain_libs::utils::base64::base64_decode(&first.key);
-    let encrypted =
-        plain_libs::crypto::xchacha_encrypt_raw(&decoded_key, first.body.as_bytes()).unwrap();
+    let encrypted = crate::infrastructure::transport::http_request::encrypt_raw(
+        &decoded_key,
+        "POST",
+        "/peer_graphql",
+        first.body.as_bytes(),
+    )
+    .unwrap();
     assert_eq!(
-        plain_libs::crypto::xchacha_decrypt_raw(&decoded_key, &encrypted).unwrap(),
+        crate::infrastructure::transport::http_request::decrypt_raw(
+            &decoded_key,
+            "POST",
+            "/peer_graphql",
+            &encrypted
+        )
+        .unwrap(),
         first.body.as_bytes()
     );
-    assert!(plain_libs::crypto::xchacha_decrypt_raw(&[8; 32], &encrypted).is_none());
-    assert!(plain_libs::crypto::xchacha_decrypt_raw(&decoded_key, b"plaintext").is_none());
+    assert!(
+        crate::infrastructure::transport::http_request::decrypt_raw(
+            &[8; 32],
+            "POST",
+            "/peer_graphql",
+            &encrypted
+        )
+        .is_none()
+    );
+    assert!(
+        crate::infrastructure::transport::http_request::decrypt_raw(
+            &decoded_key,
+            "POST",
+            "/peer_graphql",
+            b"plaintext"
+        )
+        .is_none()
+    );
     let mut channel = DChannel::new("group", "owner");
     channel.key = base64_encode(&[9; 32]);
     channels::save(&db, &[channel.clone()], SaveMode::Insert).unwrap();
@@ -90,7 +118,23 @@ fn signing_current_peer_and_channel_keys_and_authenticated_crypto_roundtrip() {
         )
         .is_err()
     );
-    assert!(plain_libs::crypto::xchacha_encrypt_raw(b"bad", b"text").is_none());
-    assert!(plain_libs::crypto::xchacha_decrypt_raw(b"bad", &encrypted).is_none());
+    assert!(
+        crate::infrastructure::transport::http_request::encrypt_raw(
+            b"bad",
+            "POST",
+            "/peer_graphql",
+            b"text"
+        )
+        .is_none()
+    );
+    assert!(
+        crate::infrastructure::transport::http_request::decrypt_raw(
+            b"bad",
+            "POST",
+            "/peer_graphql",
+            &encrypted
+        )
+        .is_none()
+    );
     std::fs::remove_dir_all(dir).unwrap();
 }

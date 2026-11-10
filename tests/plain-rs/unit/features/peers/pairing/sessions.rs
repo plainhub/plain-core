@@ -2,6 +2,7 @@ use super::*;
 fn target() -> Target {
     Target {
         device_id: "peer".into(),
+        device_public_key: plain_libs::utils::base64::base64_encode(&[1u8; 32]),
         device_name: "Fixture".into(),
         device_ip: "127.0.0.1".into(),
         device_port: 1,
@@ -95,6 +96,8 @@ fn remaining_deadline_and_checked_take_follow_current_generation() {
 
 fn incoming_request() -> crate::features::peers::pairing::protocol::PairingRequest {
     crate::features::peers::pairing::protocol::PairingRequest {
+        to_id: "receiver".into(),
+        target_public_key: plain_libs::utils::base64::base64_encode(&[1u8; 32]),
         from_id: "peer".into(),
         from_name: "Fixture".into(),
         port: 2443,

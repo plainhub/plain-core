@@ -142,7 +142,15 @@ async fn encrypted_delivery_requires_a_true_acknowledgement() {
             body: &'a [u8],
         ) -> impl std::future::Future<Output = Result<Vec<u8>, String>> + Send {
             async move {
-                assert!(plain_libs::crypto::xchacha_decrypt_raw(&[7; 32], body).is_some());
+                assert!(
+                    crate::infrastructure::transport::http_request::decrypt_raw(
+                        &[7; 32],
+                        "POST",
+                        "/peer_graphql",
+                        body
+                    )
+                    .is_some()
+                );
                 Ok(
                     crate::infrastructure::transport::http_response::Context::new(
                         "/peer_graphql",

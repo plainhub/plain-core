@@ -10,6 +10,8 @@ fn target() -> Target {
         device_name: "Fixture".into(),
         device_ip: "127.0.0.1".into(),
         device_port: 1,
+        device_public_key: String::new(),
+
     }
 }
 

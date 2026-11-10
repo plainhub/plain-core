@@ -115,7 +115,8 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         StatusCode::OK
     );
     let key = decode_key(&browser.token).unwrap();
-    let body = http_request::encrypt(&key, r#"{"query":"{ app { clientId } }"}"#).unwrap();
+    let body =
+        http_request::encrypt(&key, "/graphql", r#"{"query":"{ app { clientId } }"}"#).unwrap();
     let response = http
         .post(format!("{proxy}/graphql"))
         .header("c-id", &browser.client_id)
@@ -147,6 +148,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
 
     let secret = http_request::encrypt(
         &key,
+        "/graphql",
         r#"{"query":"{ app { ...Fields } } fragment Fields on App { alias: urlToken }"}"#,
     )
     .unwrap();
@@ -196,7 +198,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     );
     let data = b"managed upload fixture";
     let upload = |path, metadata: String| {
-        let metadata = http_request::encrypt(&key, &metadata).unwrap();
+        let metadata = http_request::encrypt(&key, &format!("/{path}"), &metadata).unwrap();
         http.post(format!("{proxy}/{path}"))
             .header("c-id", &browser.client_id)
             .header(
@@ -232,6 +234,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     };
     let chunks = http_request::encrypt(
         &key,
+        "/graphql",
         r#"{"query":"{ uploadedChunks(fileId: \"fixture\") }"}"#,
     )
     .unwrap();
@@ -246,6 +249,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     );
     let clean = http_request::encrypt(
         &key,
+        "/graphql",
         r#"{"query":"mutation { deleteChunks(fileId: \"fixture\") }"}"#,
     )
     .unwrap();
@@ -320,6 +324,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     );
     let chunks = http_request::encrypt(
         &key,
+        "/graphql",
         r#"{"query":"{ uploadedChunks(fileId: \"fixture\") }"}"#,
     )
     .unwrap();
@@ -337,13 +342,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
 
 #[tokio::test]
 async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
-    use plain_rs::features::{
-        prefs::security,
-        services::{
-            confirmation_channel::{Client, ConfirmationMode},
-            peers::peer_wire,
-        },
-    };
+    use plain_rs::features::{prefs::security, services::peers::peer_wire};
     let dir = plain_libs::temporary::tempdir().unwrap();
     let a = start(&dir.path().join("a"), "device-a");
     let b = start(&dir.path().join("b"), "device-b");
@@ -395,7 +394,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     assert_eq!(init["signaturePublicKey"], peer.public_key);
     assert_eq!(init["authenticated"], false);
 
-    let socket_path = format!("/proxy/{b_id}/auth?cid={}&auth=1", browser.client_id);
+    let socket_path = format!("/proxy/{b_id}/auth?cid={}", browser.client_id);
     let pin = decode_pin(
         &a_state
             .public_server
@@ -434,7 +433,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let (mut rejected, _) = connect().await.unwrap();
     rejected
         .send(Message::Binary(
-            init_frame(&socket_path.replace("auth=1", "auth=2")).into(),
+            init_frame(&socket_path.replace(&browser.client_id, "wrong-client")).into(),
         ))
         .await
         .unwrap();
@@ -487,47 +486,51 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             .unwrap(),
         Some(Ok(Message::Close(_)))
     ));
-    let (client, hello) = Client::start(&browser.client_id, ConfirmationMode::Password).unwrap();
+    let password = b"fixture-password";
+    let login = opaque_ke::ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, password)
+        .unwrap();
     socket
-        .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
+        .send(Message::Binary(login.message.serialize().to_vec().into()))
         .await
         .unwrap();
-    let Message::Text(hello) = tokio::time::timeout(Duration::from_secs(5), socket.next())
+    let Message::Binary(ke2) = tokio::time::timeout(Duration::from_secs(5), socket.next())
         .await
         .unwrap()
         .unwrap()
         .unwrap()
     else {
-        panic!("Signed B hello required");
+        panic!("OPAQUE KE2 required");
     };
-    let now = || chrono::Utc::now().timestamp_millis() as u64;
-    let (channel, reveal) = client
-        .accept(
-            &serde_json::from_str(&hello).unwrap(),
-            &peer.public_key,
-            &b_id,
-            now(),
+    let identity = plain_libs::utils::base64::base64_decode(&peer.public_key);
+    let context = plain_libs::auth::context(&browser.client_id, &identity);
+    let ksf = plain_libs::auth::ksf();
+    let finish = login
+        .state
+        .finish(
+            &mut rand_core::OsRng,
+            password,
+            opaque_ke::CredentialResponse::<plain_libs::auth::Suite>::deserialize(&ke2).unwrap(),
+            opaque_ke::ClientLoginFinishParameters::new(
+                Some(&context),
+                opaque_ke::Identifiers {
+                    client: Some(plain_libs::auth::CLIENT_IDENTITY),
+                    server: Some(&identity),
+                },
+                Some(&ksf),
+            ),
         )
         .unwrap();
-    socket
-        .send(Message::Text(
-            serde_json::to_string(&reveal).unwrap().into(),
-        ))
-        .await
-        .unwrap();
-    let ecdh = plain_libs::crypto::EcdhSession::generate();
-    let request = json!({
-        "password":plain_libs::crypto::sha512_hex("fixture-password"), "loginContext":channel.context,
-        "appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1", "isMobile":false,
-        "ecdhPublicKey":plain_libs::utils::base64::base64_encode(&ecdh.public_key_bytes),
-    });
-    let encrypted = channel
-        .encrypt_request(&serde_json::to_vec(&request).unwrap(), now())
-        .unwrap();
-    socket
-        .send(Message::Binary(encrypted.into()))
-        .await
-        .unwrap();
+    let login_key = plain_libs::auth::api_key(&finish.session_key, &context);
+    let request = json!({"appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1", "isMobile":false});
+    let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        &login_key,
+        &serde_json::to_vec(&request).unwrap(),
+        &plain_libs::auth::auth_aad(&context, false),
+    )
+    .unwrap();
+    let mut frame = finish.message.serialize().to_vec();
+    frame.extend(encrypted);
+    socket.send(Message::Binary(frame.into())).await.unwrap();
     let Message::Binary(response) = tokio::time::timeout(Duration::from_secs(5), socket.next())
         .await
         .unwrap()
@@ -536,7 +539,12 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     else {
         panic!("Encrypted B login result required");
     };
-    let plaintext = channel.decrypt_response(&response, now()).unwrap();
+    let plaintext = plain_libs::crypto::xchacha_decrypt_raw_with_aad(
+        &login_key,
+        &response,
+        &plain_libs::auth::auth_aad(&context, true),
+    )
+    .unwrap();
     let response: serde_json::Value = serde_json::from_slice(&plaintext).unwrap();
     assert_eq!(response["status"], "COMPLETED", "{response}");
     assert!(

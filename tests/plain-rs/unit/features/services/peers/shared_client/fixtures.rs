@@ -42,11 +42,9 @@ pub(super) async fn tls() -> (
         routing::{get, post},
     };
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
-    let config = crate::infrastructure::tls_identity::config(
-        cert_pem.as_slice(),
-        cert_key.as_slice(),
-    )
-    .unwrap();
+    let config =
+        crate::infrastructure::tls_identity::config(cert_pem.as_slice(), cert_key.as_slice())
+            .unwrap();
     let socket = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = socket.local_addr().unwrap().port();
     let count = Arc::new(AtomicUsize::new(0));
@@ -61,7 +59,7 @@ pub(super) async fn tls() -> (
         let release = release.clone();
         async move {
             assert_eq!(headers["c-id"], "fixture");
-            let plain = plain_libs::crypto::xchacha_decrypt_raw(&[7;32], &body).unwrap();
+            let plain = crate::infrastructure::transport::http_request::decrypt_raw(&[7;32], "POST", "/guest_graphql", &body).unwrap();
             let plain = String::from_utf8(plain).unwrap();
             let parts: Vec<_> = plain.splitn(3, '|').collect();
             assert!(plain_libs::utils::uuid::Uuid::parse_str(parts[1]).is_ok());

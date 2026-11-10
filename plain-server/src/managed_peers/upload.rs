@@ -49,7 +49,8 @@ pub(crate) fn request(
     );
     let filename = filename.replace('"', "\\\"");
     let boundary = plain_libs::utils::uuid::Uuid::new_v4().to_string();
-    let encrypted = http_request::encrypt(&route.key, metadata).map_err(anyhow::Error::msg)?;
+    let encrypted = http_request::encrypt(&route.key, &format!("/{path}"), metadata)
+        .map_err(anyhow::Error::msg)?;
     let mut prefix =
         format!("--{boundary}\r\nContent-Disposition: form-data; name=\"info\"\r\n\r\n")
             .into_bytes();

@@ -35,8 +35,11 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     let key = plain_libs::utils::base64::base64_decode_checked(&service.token(&share.id).unwrap())
         .unwrap();
     let wrap = |nonce: &str, query: &str| {
-        plain_libs::crypto::xchacha_encrypt_raw(
+        let nonce = nonce.repeat(32);
+        plain_rs::infrastructure::transport::http_request::encrypt_raw(
             &key,
+            "POST",
+            "/guest_graphql",
             format!("{}|{nonce}|{query}", chrono::Utc::now().timestamp_millis()).as_bytes(),
         )
         .unwrap()

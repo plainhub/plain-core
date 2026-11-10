@@ -2,6 +2,8 @@ use super::*;
 
 fn sample_request() -> PairingRequest {
     PairingRequest {
+        to_id: "receiver".into(),
+        target_public_key: plain_libs::utils::base64::base64_encode(&[1u8; 32]),
         from_id: "client-a".to_string(),
         from_name: "Mac".to_string(),
         port: 8443,
@@ -16,30 +18,28 @@ fn sample_request() -> PairingRequest {
     }
 }
 
-/// Lock the wire format of `PairingRequest::signature_data` — it must stay
-/// byte-identical to plain-app's Kotlin canonicalization (pipe-joined, 8
-/// fields, `fromIp` excluded, ips comma-joined).
 #[test]
 fn request_signature_data_format_is_locked() {
     let req = sample_request();
-    assert_eq!(
-        req.signature_data(),
-        "client-a|Mac|8443|COMPUTER|ECDH|SIGPK|1700000000000|203.0.113.10,203.0.113.11"
-    );
+    let signed: serde_json::Value = serde_json::from_str(&req.signature_data()).unwrap();
+    assert_eq!(signed[0], "pair-request");
+    assert_eq!(signed[1], "initiator");
+    assert_eq!(signed[4], "responder");
+    assert_eq!(signed[5], req.to_id);
+    assert_eq!(signed[6], req.target_public_key);
     // `from_ip` is stamped by the receiver and must not affect the signature.
     let mut stamped = req.clone();
     stamped.from_ip = "203.0.113.99".to_string();
     assert_eq!(stamped.signature_data(), req.signature_data());
-    // `aware_supported` is not part of the signature either.
+    // Sender-owned capability claims are authenticated.
     let mut aware = req.clone();
     aware.aware_supported = true;
-    assert_eq!(aware.signature_data(), req.signature_data());
+    assert_ne!(aware.signature_data(), req.signature_data());
 }
 
 #[test]
 fn response_signature_data_format_is_locked() {
     let resp = PairingResponse {
-        confirmation_proof: String::new(),
         request_signature: "REQUEST_SIGNATURE".into(),
         from_id: "client-b".to_string(),
         to_id: "client-a".to_string(),
@@ -55,7 +55,7 @@ fn response_signature_data_format_is_locked() {
     };
     assert_eq!(
         resp.signature_data(),
-        "plain-pair-response-v2|REQUEST_SIGNATURE|client-b|client-a|2443|PHONE|ECDH2|SIGPK2|true|1700000000500|"
+        r#"["pair-response","REQUEST_SIGNATURE","client-b","client-a",2443,"PHONE","ECDH2","SIGPK2",true,1700000000500,[],false]"#
     );
 }
 
@@ -103,11 +103,22 @@ fn request_device_enums_preserve_wire_and_signature_values() {
         assert_eq!(decoded.device_type, kind);
         assert_eq!(decoded.signature_data(), request.signature_data());
         assert_eq!(
-            request.signature_data().split('|').nth(3).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&request.signature_data()).unwrap()[10],
             kind.as_str()
         );
     }
     let mut wire = serde_json::to_value(sample_request()).unwrap();
     wire["deviceType"] = serde_json::json!("FUTURE_DEVICE");
     assert!(serde_json::from_value::<PairingRequest>(wire).is_err());
+}
+
+#[test]
+fn delimiters_cannot_move_between_signed_fields() {
+    let mut a = sample_request();
+    a.from_id = "a|b".into();
+    a.from_name = "c".into();
+    let mut b = a.clone();
+    b.from_id = "a".into();
+    b.from_name = "b|c".into();
+    assert_ne!(a.signature_data(), b.signature_data());
 }

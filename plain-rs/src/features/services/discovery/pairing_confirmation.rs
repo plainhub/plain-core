@@ -1,409 +1,657 @@
 use crate::features::discovery::nearby_wire::Message;
 use crate::features::peers::pairing::{
     confirmation::Verification,
+    peer_store::{self, Facts},
     protocol::{PairingRequest, PairingResponse},
-    sessions::{RESPONSE_TIMEOUT, Ticket},
+    sessions::{RESPONSE_TIMEOUT, Target, Ticket},
 };
-use crate::features::services::confirmation_channel::{
-    Channel, Client, ConfirmationMode, ServerHandshake,
+use crate::features::services::discovery::{
+    pairing, pairing_attempts::PairingPhase, pairing_runtime,
 };
-use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::runtime::Runtime as CoreRuntime;
 use anyhow::{Result, ensure};
-use plain_libs::utils::base64::base64_encode;
-use serde::Serialize;
+use hmac::{Hmac, KeyInit, Mac};
+use plain_libs::utils::base64::{base64_decode, base64_encode};
 use sha2::{Digest, Sha256};
-use std::{collections::HashMap, sync::Mutex, time::Instant};
+use std::{
+    collections::HashMap,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
 #[derive(Default)]
 pub struct Confirmations(Mutex<HashMap<String, Entry>>);
 struct Entry {
     started: Instant,
+    request: PairingRequest,
+    previous_identity: Option<String>,
     phase: Phase,
 }
 enum Phase {
     Client {
-        handshake: Client,
         ticket: Ticket,
+        channel: Option<Channel>,
+        facts: Option<Facts>,
+        finish: Option<String>,
+        completed: bool,
+        delivery_started: bool,
     },
-    ServerRequest(PairingRequest),
     Server {
-        handshake: ServerHandshake,
-        request: PairingRequest,
+        target: Target,
+        channel: Option<Channel>,
+        facts: Option<Facts>,
+        response: Option<PairingResponse>,
+        ack: Option<String>,
     },
-    ClientReady {
-        public_key: String,
-        channel: Channel,
-    },
-    ServerReady {
-        channel: Channel,
-    },
+}
+struct Channel {
+    key: [u8; 32],
+    finish_key: [u8; 32],
+    ack_key: [u8; 32],
+    context: Vec<u8>,
+}
+fn derive(input: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
+    let mut extract = Hmac::<sha2_mac::Sha256>::new_from_slice(salt).unwrap();
+    extract.update(input);
+    let mut expand =
+        Hmac::<sha2_mac::Sha256>::new_from_slice(&extract.finalize().into_bytes()).unwrap();
+    expand.update(info);
+    expand.update(&[1]);
+    expand.finalize().into_bytes().into()
+}
+impl Channel {
+    fn new(shared: &[u8; 32], request: &PairingRequest, response: &PairingResponse) -> Self {
+        let context = Sha256::digest(
+            serde_json::json!([
+                "pairing",
+                request.signature_data(),
+                request.signature,
+                response.signature_data(),
+                response.signature
+            ])
+            .to_string()
+            .as_bytes(),
+        )
+        .to_vec();
+        Self {
+            key: derive(shared, &context, b"api"),
+            finish_key: derive(shared, &context, b"pair-finish"),
+            ack_key: derive(shared, &context, b"pair-ack"),
+            context,
+        }
+    }
+    fn proof(&self, ack: bool) -> Result<String> {
+        Ok(base64_encode(
+            &plain_libs::crypto::xchacha_encrypt_raw(
+                if ack { &self.ack_key } else { &self.finish_key },
+                &self.context,
+            )
+            .ok_or_else(|| anyhow::anyhow!("Pairing encryption failed"))?,
+        ))
+    }
+    fn verify(&self, proof: &str, ack: bool) -> Result<()> {
+        let plain = plain_libs::crypto::xchacha_decrypt_raw(
+            if ack { &self.ack_key } else { &self.finish_key },
+            &base64_decode(proof),
+        )
+        .ok_or_else(|| anyhow::anyhow!("Invalid pairing confirmation"))?;
+        ensure!(plain == self.context, "Pairing transcript mismatch");
+        Ok(())
+    }
+}
+pub fn identity_digest(request: &PairingRequest) -> Result<String> {
+    let a = base64_decode(&request.signature_public_key);
+    let b = base64_decode(&request.target_public_key);
+    ensure!(a.len() == 32 && b.len() == 32, "Invalid pairing identity");
+    let mut hash = Sha256::new();
+    hash.update(b"pairing-identity\0initiator\0");
+    hash.update(a);
+    hash.update(b"\0responder\0");
+    hash.update(b);
+    Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 pub enum Action {
     Notify {
         request: PairingRequest,
+        target: Target,
         message: Message,
     },
     Send {
         ticket: Ticket,
         message: Message,
     },
-    Ready {
-        request: PairingRequest,
-        code: String,
-    },
-}
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct VerifiedRequest {
-    #[serde(flatten)]
-    request: PairingRequest,
-    verification_code: String,
-}
-fn context(request: &PairingRequest) -> String {
-    base64_encode(&Sha256::digest(request.signature_data().as_bytes()))
+    Done,
 }
 impl Confirmations {
     fn with<T>(&self, f: impl FnOnce(&mut HashMap<String, Entry>) -> Result<T>) -> Result<T> {
         let mut entries = self.0.lock().unwrap();
-        entries.retain(|_, entry| entry.started.elapsed() < RESPONSE_TIMEOUT);
+        entries.retain(|_, e| e.started.elapsed() < Duration::from_secs(610));
         f(&mut entries)
     }
-    pub fn begin(&self, request: &PairingRequest, ticket: &Ticket) -> Result<Message> {
-        let (handshake, hello) = Client::start(&context(request), ConfirmationMode::ChatPairing)?;
+    pub fn begin(&self, request: &PairingRequest, ticket: &Ticket) -> Result<()> {
         self.with(|entries| {
+            ensure!(entries.len() < 128, "Pairing capacity exceeded");
             entries.insert(
                 request.signature.clone(),
                 Entry {
                     started: Instant::now(),
+                    request: request.clone(),
+                    previous_identity: None,
                     phase: Phase::Client {
-                        handshake,
                         ticket: ticket.clone(),
+                        channel: None,
+                        facts: None,
+                        finish: None,
+                        completed: false,
+                        delivery_started: false,
                     },
                 },
             );
             Ok(())
-        })?;
-        Ok(Message::PairVerification(Verification::Hello {
-            from_id: request.from_id.clone(),
-            request_signature: request.signature.clone(),
-            hello,
-        }))
+        })
     }
-    pub fn register(&self, request: &PairingRequest) -> Result<()> {
+    pub fn register(
+        &self,
+        state: &CoreRuntime,
+        request: &PairingRequest,
+        target: Target,
+    ) -> Result<bool> {
+        let key = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
+        ensure!(
+            request.to_id == state.native_client_id().map_err(anyhow::Error::msg)?
+                && request.target_public_key == base64_encode(&key[32..]),
+            "Pairing target identity mismatch"
+        );
+        let previous_identity =
+            crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?
+                .map(|p| p.public_key);
         self.with(|entries| {
+            if entries.contains_key(&request.signature) {
+                return Ok(false);
+            }
+            ensure!(entries.len() < 128, "Pairing capacity exceeded");
+            ensure!(
+                !entries
+                    .values()
+                    .any(|e| e.request.from_id == request.from_id
+                        && e.started.elapsed() < RESPONSE_TIMEOUT
+                        && !matches!(
+                            &e.phase,
+                            Phase::Server { ack: Some(_), .. }
+                                | Phase::Client {
+                                    completed: true,
+                                    ..
+                                }
+                        )),
+                "Pairing already pending"
+            );
             entries.insert(
                 request.signature.clone(),
                 Entry {
                     started: Instant::now(),
-                    phase: Phase::ServerRequest(request.clone()),
+                    request: request.clone(),
+                    previous_identity,
+                    phase: Phase::Server {
+                        target,
+                        channel: None,
+                        facts: None,
+                        response: None,
+                        ack: None,
+                    },
                 },
             );
-            Ok(())
+            Ok(true)
         })
     }
-    pub fn response(&self, response: &PairingResponse) -> Result<()> {
+    pub fn cached_response(&self, signature: &str) -> Result<Option<PairingResponse>> {
         self.with(|entries| {
-            let Some(Phase::ClientReady {
-                public_key,
+            Ok(entries.get(signature).and_then(|e| match &e.phase {
+                Phase::Server { response, .. } => response.clone(),
+                _ => None,
+            }))
+        })
+    }
+    pub fn respond(
+        &self,
+        state: &CoreRuntime,
+        request: &PairingRequest,
+        accepted: bool,
+        device: pairing::Device,
+    ) -> Result<PairingResponse> {
+        self.with(|entries| {
+            let e = entries
+                .get_mut(&request.signature)
+                .ok_or_else(|| anyhow::anyhow!("Pairing expired"))?;
+            ensure!(e.started.elapsed() < RESPONSE_TIMEOUT, "Pairing expired");
+            ensure!(
+                e.request.signature_data() == request.signature_data(),
+                "Pairing request changed"
+            );
+            let Phase::Server {
+                target,
                 channel,
-            }) = entries
-                .get(&response.request_signature)
-                .map(|entry| &entry.phase)
+                facts,
+                response,
+                ..
+            } = &mut e.phase
             else {
-                anyhow::bail!("Pairing verification required");
+                anyhow::bail!("Unexpected pairing role")
             };
-            ensure!(
-                public_key == &response.signature_public_key,
-                "Peer identity changed"
-            );
-            let proof = channel.decrypt_response(
-                &plain_libs::utils::base64::base64_decode(&response.confirmation_proof),
-                crate::features::peers::pairing::now_ms() as u64,
-            )?;
-            ensure!(
-                proof == response.signature_data().as_bytes(),
-                "Pairing verification failed"
-            );
-            Ok(())
+            if let Some(response) = response {
+                return Ok(response.clone());
+            }
+            let (reply, ecdh) =
+                pairing::response(&state.prefs, e.request.clone(), accepted, device)?
+                    .ok_or_else(|| anyhow::anyhow!("Invalid pairing request"))?;
+            if let Some(ecdh) = ecdh {
+                let shared = ecdh
+                    .compute_shared_key(&base64_decode(&request.ecdh_public_key))
+                    .ok_or_else(|| anyhow::anyhow!("Invalid pairing key"))?;
+                let c = Channel::new(&shared, request, &reply);
+                let mut ips = vec![target.device_ip.clone()];
+                ips.extend(request.ips.clone());
+                *facts = Some(Facts {
+                    id: request.from_id.clone(),
+                    name: request.from_name.clone(),
+                    ips,
+                    port: request.port,
+                    device_type: request.device_type,
+                    key: base64_encode(&c.key),
+                    public_key: request.signature_public_key.clone(),
+                });
+                *channel = Some(c);
+            }
+            *response = Some(reply.clone());
+            Ok(reply)
         })
     }
-    pub fn seal(&self, response: &mut PairingResponse) -> Result<()> {
+    pub fn response(
+        &self,
+        state: &CoreRuntime,
+        response: &PairingResponse,
+        sender_ip: &str,
+    ) -> Result<Option<Action>> {
         self.with(|entries| {
-            let Some(Phase::ServerReady { channel }) = entries
-                .get(&response.request_signature)
-                .map(|entry| &entry.phase)
+            let e = entries
+                .get_mut(&response.request_signature)
+                .ok_or_else(|| anyhow::anyhow!("Unknown pairing response"))?;
+            ensure!(e.started.elapsed() < RESPONSE_TIMEOUT, "Pairing expired");
+            let Phase::Client {
+                ticket,
+                channel,
+                facts,
+                finish,
+                ..
+            } = &mut e.phase
             else {
-                anyhow::bail!("Pairing verification required");
+                anyhow::bail!("Unexpected pairing role")
             };
-            response.confirmation_proof = base64_encode(&channel.encrypt_response(
-                response.signature_data().as_bytes(),
-                crate::features::peers::pairing::now_ms() as u64,
-            )?);
-            Ok(())
+            ensure!(
+                pairing::validate_response(&state.prefs, response, &ticket.target.device_id)?
+                    && response.signature_public_key == e.request.target_public_key,
+                "Pairing identity mismatch"
+            );
+            if !response.accepted {
+                state
+                    .pairing
+                    .cancel(&ticket.target.device_id, Some(&ticket.generation));
+                pairing_runtime::failed(
+                    state,
+                    &ticket.target,
+                    "Pairing rejected",
+                    Some(&ticket.generation),
+                );
+                return Ok(None);
+            }
+            if let Some(proof) = finish {
+                return Ok(Some(Action::Send {
+                    ticket: ticket.clone(),
+                    message: Message::PairVerification(Verification::Finish {
+                        request_signature: response.request_signature.clone(),
+                        proof: proof.clone(),
+                    }),
+                }));
+            }
+            if channel.is_some() {
+                return Ok(None);
+            }
+            if channel.is_none() {
+                let shared = state
+                    .pairing
+                    .shared_key(
+                        &ticket.target.device_id,
+                        &response.request_signature,
+                        &base64_decode(&response.ecdh_public_key),
+                    )
+                    .ok_or_else(|| anyhow::anyhow!("Pairing expired"))?;
+                let c = Channel::new(&shared, &e.request, response);
+                let mut ips = vec![sender_ip.to_owned()];
+                ips.extend(response.ips.clone());
+                *facts = Some(Facts {
+                    id: response.from_id.clone(),
+                    name: ticket.target.device_name.clone(),
+                    ips,
+                    port: response.port,
+                    device_type: response.device_type,
+                    key: base64_encode(&c.key),
+                    public_key: response.signature_public_key.clone(),
+                });
+                *channel = Some(c);
+            }
+            let saved =
+                crate::infrastructure::db::chat_store::peers::get(&state.db, &response.from_id)?;
+            let pinned = saved
+                .as_ref()
+                .is_some_and(|p| p.is_paired() && p.public_key == response.signature_public_key);
+            e.previous_identity = saved.map(|p| p.public_key);
+            if pinned {
+                return Self::finish(e).map(Some);
+            }
+            state.pairing_runtime.attempts.set_identity_changed(
+                state,
+                &ticket.generation,
+                e.previous_identity.is_some(),
+            );
+            state.pairing_runtime.attempts.set_verification_code(
+                state,
+                &ticket.generation,
+                &identity_digest(&e.request)?,
+            );
+            state.pairing_runtime.attempts.transition(
+                state,
+                &ticket.generation,
+                PairingPhase::TrustRequired,
+                None,
+                None,
+            );
+            Ok(None)
         })
     }
-    pub fn ready(&self, request: &PairingRequest) -> Result<()> {
+    fn finish(e: &mut Entry) -> Result<Action> {
+        ensure!(e.started.elapsed() < RESPONSE_TIMEOUT, "Pairing expired");
+        let Phase::Client {
+            ticket,
+            channel,
+            finish,
+            ..
+        } = &mut e.phase
+        else {
+            anyhow::bail!("Unexpected pairing role")
+        };
+        let c = channel
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Pairing response required"))?;
+        let proof = match finish {
+            Some(p) => p.clone(),
+            None => {
+                let p = c.proof(false)?;
+                *finish = Some(p.clone());
+                p
+            }
+        };
+        Ok(Action::Send {
+            ticket: ticket.clone(),
+            message: Message::PairVerification(Verification::Finish {
+                request_signature: e.request.signature.clone(),
+                proof,
+            }),
+        })
+    }
+    pub fn confirm(&self, state: &CoreRuntime, generation: &str) -> Result<Action> {
         self.with(|entries| {
-            ensure!(
-                matches!(
-                    entries.get(&request.signature).map(|entry| &entry.phase),
-                    Some(Phase::ServerReady { .. })
-                ),
-                "Pairing verification required"
-            );
-            Ok(())
+            let e=entries.values_mut().find(|e|matches!(&e.phase,Phase::Client{ticket,..} if ticket.generation==generation)).ok_or_else(||anyhow::anyhow!("Pairing expired"))?;
+            let Phase::Client{ticket,..}=&e.phase else {unreachable!()};
+            ensure!(state.pairing.remaining_ms(&ticket.target.device_id,generation).is_some(),"Pairing cancelled"); Self::finish(e)
+        })
+    }
+    fn start_delivery(&self, generation: &str) -> Result<bool> {
+        self.with(|entries| {
+            let Some(entry) = entries.values_mut().find(
+                |e| matches!(&e.phase,Phase::Client{ticket,..} if ticket.generation==generation),
+            ) else {
+                return Ok(false);
+            };
+            let Phase::Client {
+                delivery_started, ..
+            } = &mut entry.phase
+            else {
+                unreachable!()
+            };
+            let first = !*delivery_started;
+            *delivery_started = true;
+            Ok(first)
         })
     }
     pub fn process(&self, state: &CoreRuntime, verification: Verification) -> Result<Action> {
-        self.with(|entries| match verification {
-            Verification::Hello {
-                from_id,
-                request_signature,
-                hello,
-            } => {
-                ensure!(
-                    state
-                        .pairing
-                        .incoming_target(&from_id, &request_signature)
-                        .is_some(),
-                    "Pairing request expired"
-                );
-                let entry = entries
-                    .remove(&request_signature)
-                    .ok_or_else(|| anyhow::anyhow!("Unknown pairing verification"))?;
-                let Phase::ServerRequest(request) = entry.phase else {
-                    anyhow::bail!("Unexpected pairing verification step");
-                };
-                let key =
-                    crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
-                let id = state.native_client_id().map_err(anyhow::Error::msg)?;
-                let (handshake, hello) = ServerHandshake::start(
-                    &context(&request),
-                    ConfirmationMode::ChatPairing,
-                    &id,
-                    &hello,
-                    &key,
-                    crate::features::peers::pairing::now_ms() as u64,
-                )?;
-                let message = Message::PairVerification(Verification::Challenge {
-                    request_signature: request_signature.clone(),
-                    hello,
-                    signature_public_key: base64_encode(&key[32..]),
-                });
-                entries.insert(
+        let _commit = state.pairing_runtime.commit.lock().unwrap();
+        self.with(|entries| {
+            let (signature, proof, ack) = match verification {
+                Verification::Finish {
                     request_signature,
-                    Entry {
-                        started: entry.started,
-                        phase: Phase::Server {
-                            handshake,
-                            request: request.clone(),
-                        },
-                    },
-                );
-                Ok(Action::Notify { request, message })
-            }
-            Verification::Challenge {
-                request_signature,
-                hello,
-                signature_public_key,
-            } => {
-                let entry = entries
-                    .remove(&request_signature)
-                    .ok_or_else(|| anyhow::anyhow!("Unknown pairing verification"))?;
-                let Phase::Client { handshake, ticket } = entry.phase else {
-                    anyhow::bail!("Unexpected pairing verification step");
-                };
-                ensure!(
-                    state
-                        .pairing
-                        .remaining_ms(&ticket.target.device_id, &ticket.generation)
-                        .is_some(),
-                    "Pairing expired"
-                );
-                if let Some(saved) = crate::infrastructure::db::chat_store::peers::get(
-                    &state.db,
-                    &ticket.target.device_id,
-                )? {
-                    ensure!(
-                        saved.public_key.is_empty() || saved.public_key == signature_public_key,
-                        "Peer identity changed"
-                    );
+                    proof,
+                } => (request_signature, proof, false),
+                Verification::Ack {
+                    request_signature,
+                    proof,
+                } => (request_signature, proof, true),
+            };
+            let e = entries
+                .get_mut(&signature)
+                .ok_or_else(|| anyhow::anyhow!("Pairing expired"))?;
+            match &mut e.phase {
+                Phase::Server {
+                    target,
+                    channel,
+                    facts,
+                    ack: cached,
+                    ..
+                } if !ack => {
+                    let c = channel
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Pairing approval required"))?;
+                    c.verify(&proof, false)?;
+                    if cached.is_none() {
+                        ensure!(
+                            e.started.elapsed() < RESPONSE_TIMEOUT
+                                && state
+                                    .pairing
+                                    .incoming_target(&e.request.from_id, &signature)
+                                    .is_some(),
+                            "Pairing expired or cancelled"
+                        );
+                        let receipt = c.proof(true)?;
+                        let peer = peer_store::save_confirmed(
+                            &state.db,
+                            facts
+                                .as_ref()
+                                .cloned()
+                                .ok_or_else(|| anyhow::anyhow!("Pairing already consumed"))?,
+                            e.previous_identity.as_deref(),
+                            true,
+                        )?;
+                        *cached = Some(receipt);
+                        state.pairing.take_incoming(&e.request.from_id, &signature);
+                        pairing_runtime::success(
+                            state,
+                            &serde_json::to_value(
+                                crate::features::services::peers::peer_address::view(&peer),
+                            )?,
+                            &target.device_ip,
+                        );
+                    }
+                    Ok(Action::Notify {
+                        request: e.request.clone(),
+                        target: target.clone(),
+                        message: Message::PairVerification(Verification::Ack {
+                            request_signature: signature,
+                            proof: cached.clone().unwrap(),
+                        }),
+                    })
                 }
-                let (channel, reveal) = handshake.accept(
-                    &hello,
-                    &signature_public_key,
-                    &ticket.target.device_id,
-                    crate::features::peers::pairing::now_ms() as u64,
-                )?;
-                state.pairing_runtime.attempts.set_verification_code(
-                    state,
-                    &ticket.generation,
-                    &channel.verification_code,
-                );
-                state.pairing_runtime.attempts.transition(
-                    state,
-                    &ticket.generation,
-                    PairingPhase::WaitingConfirmation,
-                    None,
-                    None,
-                );
-                entries.insert(
-                    request_signature.clone(),
-                    Entry {
-                        started: entry.started,
-                        phase: Phase::ClientReady {
-                            public_key: signature_public_key,
-                            channel,
-                        },
-                    },
-                );
-                let message = Message::PairVerification(Verification::Reveal {
-                    from_id: state.native_client_id().map_err(anyhow::Error::msg)?,
-                    request_signature,
-                    reveal,
-                });
-                Ok(Action::Send { ticket, message })
-            }
-            Verification::Reveal {
-                from_id,
-                request_signature,
-                reveal,
-            } => {
-                ensure!(
-                    state
-                        .pairing
-                        .incoming_target(&from_id, &request_signature)
-                        .is_some(),
-                    "Pairing request expired"
-                );
-                let entry = entries
-                    .remove(&request_signature)
-                    .ok_or_else(|| anyhow::anyhow!("Unknown pairing verification"))?;
-                let Phase::Server { handshake, request } = entry.phase else {
-                    anyhow::bail!("Unexpected pairing verification step");
-                };
-                let channel =
-                    handshake.finish(&reveal, crate::features::peers::pairing::now_ms() as u64)?;
-                let code = channel.verification_code.clone();
-                entries.insert(
-                    request_signature,
-                    Entry {
-                        started: entry.started,
-                        phase: Phase::ServerReady { channel },
-                    },
-                );
-                Ok(Action::Ready { request, code })
+                Phase::Client {
+                    ticket,
+                    channel,
+                    facts,
+                    finish,
+                    completed,
+                    ..
+                } if ack => {
+                    ensure!(finish.is_some(), "Pairing not confirmed");
+                    channel
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Pairing response required"))?
+                        .verify(&proof, true)?;
+                    if !*completed {
+                        ensure!(
+                            e.started.elapsed() < RESPONSE_TIMEOUT
+                                && state
+                                    .pairing
+                                    .remaining_ms(&ticket.target.device_id, &ticket.generation)
+                                    .is_some(),
+                            "Pairing expired or cancelled"
+                        );
+                        let peer = peer_store::save_confirmed(
+                            &state.db,
+                            facts
+                                .as_ref()
+                                .cloned()
+                                .ok_or_else(|| anyhow::anyhow!("Pairing already consumed"))?,
+                            e.previous_identity.as_deref(),
+                            true,
+                        )?;
+                        *completed = true;
+                        state.pairing.take_response(
+                            &ticket.target.device_id,
+                            Some(&ticket.generation),
+                            &signature,
+                        );
+                        state.pairing_runtime.attempts.transition(
+                            state,
+                            &ticket.generation,
+                            PairingPhase::Succeeded,
+                            None,
+                            None,
+                        );
+                        pairing_runtime::success(
+                            state,
+                            &serde_json::to_value(
+                                crate::features::services::peers::peer_address::view(&peer),
+                            )?,
+                            &ticket.target.device_ip,
+                        );
+                    }
+                    Ok(Action::Done)
+                }
+                _ => anyhow::bail!("Unexpected pairing confirmation role"),
             }
         })
     }
 }
-
-pub async fn handle(state: &CoreRuntime, verification: Verification) -> Result<()> {
-    match state
-        .pairing_runtime
-        .confirmations
-        .process(state, verification)?
-    {
-        Action::Notify { request, message } => {
-            let target = state
-                .pairing
-                .incoming_target(&request.from_id, &request.signature)
-                .ok_or_else(|| anyhow::anyhow!("Pairing expired"))?;
-            crate::features::services::discovery::pairing_runtime::send_incoming(
-                state, &request, &target, message,
-            )
-            .await?;
-        }
+pub async fn deliver(state: &CoreRuntime, action: Action) -> Result<()> {
+    match action {
+        Action::Notify {
+            request,
+            target,
+            message,
+        } => pairing_runtime::send_incoming(state, &request, &target, message).await?,
         Action::Send { ticket, message } => {
-            ensure!(
-                crate::features::discovery::nearby_http::send(
-                    &ticket.target.device_ip,
-                    ticket.target.device_port,
-                    &message
-                )
-                .await?,
-                "Failed to send pairing verification"
-            );
+            if state
+                .pairing_runtime
+                .confirmations
+                .start_delivery(&ticket.generation)?
+            {
+                let state = state.clone();
+                tokio::spawn(async move {
+                    let mut stop = state.stop.clone();
+                    while state
+                        .pairing
+                        .remaining_ms(&ticket.target.device_id, &ticket.generation)
+                        .is_some()
+                    {
+                        if let Err(error) = send_finish(&state, &ticket, &message).await {
+                            log::warn!("Pairing confirmation delivery failed: {error}");
+                        }
+                        tokio::select! {_=tokio::time::sleep(Duration::from_secs(2))=>{},_=stop.changed()=>break}
+                    }
+                });
+            }
         }
-        Action::Ready { request, code } => publish(state, request, code)?,
+        Action::Done => {}
     }
     Ok(())
 }
-pub fn publish(state: &CoreRuntime, request: PairingRequest, code: String) -> Result<()> {
-    crate::features::services::discovery::pairing_runtime::event(
+async fn send_finish(state: &CoreRuntime, ticket: &Ticket, message: &Message) -> Result<()> {
+    if ticket.target.device_ip.is_empty() {
+        ensure!(
+            state
+                .host
+                .call(
+                    "blePairSend",
+                    serde_json::json!({"generation":ticket.generation,"body":message.wire()?})
+                )
+                .await
+                .map_err(anyhow::Error::msg)?
+                == serde_json::Value::Bool(true),
+            "Failed to send pairing confirmation"
+        );
+    } else {
+        ensure!(
+            crate::features::discovery::nearby_http::send(
+                &ticket.target.device_ip,
+                ticket.target.device_port,
+                message
+            )
+            .await?,
+            "Failed to send pairing confirmation"
+        );
+    }
+    Ok(())
+}
+pub async fn handle(state: &CoreRuntime, verification: Verification) -> Result<()> {
+    let action = state
+        .pairing_runtime
+        .confirmations
+        .process(state, verification)?;
+    deliver(state, action).await
+}
+pub async fn confirm(state: &CoreRuntime, generation: &str) -> Result<()> {
+    if state
+        .pairing_runtime
+        .attempts
+        .get(generation)
+        .is_some_and(|s| {
+            s.mode == crate::features::services::discovery::pairing_attempts::Mode::Manage
+        })
+    {
+        return state.pairing_runtime.attempts.trust(generation);
+    }
+    let action = state
+        .pairing_runtime
+        .confirmations
+        .confirm(state, generation)?;
+    state.pairing_runtime.attempts.transition(
+        state,
+        generation,
+        PairingPhase::Authenticating,
+        None,
+        None,
+    );
+    deliver(state, action).await
+}
+pub fn publish(state: &CoreRuntime, request: PairingRequest) -> Result<()> {
+    let changed = crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?
+        .is_some_and(|p| p.public_key != request.signature_public_key);
+    let mut value = serde_json::to_value(&request)?;
+    value["identityChanged"] = serde_json::json!(changed);
+    value["verificationCode"] = serde_json::json!(identity_digest(&request)?);
+    pairing_runtime::event(
         state,
         crate::features::chat::events::WS_PAIRING_REQUEST_RECEIVED,
-        serde_json::to_value(VerifiedRequest {
-            request,
-            verification_code: code,
-        })?,
+        value,
     );
     Ok(())
 }
 
 #[cfg(test)]
 #[path = "../../../../../tests/plain-rs/unit/features/services/discovery/pairing_confirmation.rs"]
-pub(crate) mod tests;
-
-#[cfg(any(test, feature = "test-seams"))]
-pub mod test_fixture {
-    use super::*;
-
-    pub fn verify_incoming(state: &CoreRuntime, request: &PairingRequest) -> String {
-        let (client, hello) =
-            Client::start(&context(request), ConfirmationMode::ChatPairing).unwrap();
-        let Action::Notify {
-            message:
-                Message::PairVerification(Verification::Challenge {
-                    hello,
-                    signature_public_key,
-                    ..
-                }),
-            ..
-        } = state
-            .pairing_runtime
-            .confirmations
-            .process(
-                state,
-                Verification::Hello {
-                    from_id: request.from_id.clone(),
-                    request_signature: request.signature.clone(),
-                    hello,
-                },
-            )
-            .unwrap()
-        else {
-            panic!()
-        };
-        let (channel, reveal) = client
-            .accept(
-                &hello,
-                &signature_public_key,
-                &state.native_client_id().unwrap(),
-                crate::features::peers::pairing::now_ms() as u64,
-            )
-            .unwrap();
-        let Action::Ready {
-            request: verified,
-            code,
-        } = state
-            .pairing_runtime
-            .confirmations
-            .process(
-                state,
-                Verification::Reveal {
-                    from_id: request.from_id.clone(),
-                    request_signature: request.signature.clone(),
-                    reveal,
-                },
-            )
-            .unwrap()
-        else {
-            panic!()
-        };
-        assert_eq!(code, channel.verification_code);
-        publish(state, verified, code.clone()).unwrap();
-        code
-    }
-}
+mod tests;

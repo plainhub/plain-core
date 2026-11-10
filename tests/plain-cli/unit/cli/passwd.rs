@@ -14,10 +14,9 @@ fn password_command_writes_shared_system_credentials() {
     ))
     .unwrap();
     assert!(
-        plain_rs::features::prefs::security::password_hash(&prefs)
+        plain_rs::features::prefs::security::opaque_public_key(&prefs)
             .unwrap()
-            .unwrap()
-            .verify(plain_libs::crypto::sha512_hex("example-password").as_bytes())
+            .is_some()
     );
     let stored =
         std::fs::read_to_string(plain_rs::features::prefs::default_path(directory.path())).unwrap();

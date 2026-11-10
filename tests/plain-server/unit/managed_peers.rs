@@ -483,7 +483,10 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
                 let calls = calls.clone();
                 let arrived = arrived.clone();
                 async move {
-                    let plaintext = plain_libs::crypto::xchacha_decrypt_raw(&key, &body).unwrap();
+                    let plaintext = plain_rs::infrastructure::transport::http_request::decrypt_raw(
+                        &key, "POST", "/graphql", &body,
+                    )
+                    .unwrap();
                     let text = std::str::from_utf8(&plaintext).unwrap();
                     let document: serde_json::Value =
                         serde_json::from_str(text.splitn(3, '|').nth(2).unwrap()).unwrap();
@@ -622,7 +625,10 @@ async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_ses
             let key = key.clone();
             let arrived = arrived.clone();
             async move {
-                let plaintext = plain_libs::crypto::xchacha_decrypt_raw(&key, &body).unwrap();
+                let plaintext = plain_rs::infrastructure::transport::http_request::decrypt_raw(
+                    &key, "POST", "/graphql", &body,
+                )
+                .unwrap();
                 let text = std::str::from_utf8(&plaintext).unwrap();
                 let document: serde_json::Value =
                     serde_json::from_str(text.splitn(3, '|').nth(2).unwrap()).unwrap();

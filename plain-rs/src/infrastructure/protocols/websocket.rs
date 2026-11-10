@@ -3,6 +3,22 @@ use plain_libs::crypto::xchacha_encrypt_raw_with_aad;
 use plain_libs::utils::base64::base64_decode;
 use sha2::{Digest, Sha256};
 
+/// Client frames bind the route and client, then controls bind this connection.
+pub fn request_aad(path: &str, client_id: &str, registration: Option<&[u8]>) -> Vec<u8> {
+    let mut aad = b"ws-request\0".to_vec();
+    aad.extend_from_slice(path.as_bytes());
+    aad.push(0);
+    aad.extend_from_slice(client_id.as_bytes());
+    aad.push(0);
+    if let Some(registration) = registration {
+        aad.extend_from_slice(b"control\0");
+        aad.extend_from_slice(&Sha256::digest(registration));
+    } else {
+        aad.extend_from_slice(b"register");
+    }
+    aad
+}
+
 pub fn encode_raw(event_name: &str, payload: &[u8]) -> Option<Vec<u8>> {
     if !valid_name(event_name) {
         return None;

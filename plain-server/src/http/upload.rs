@@ -83,26 +83,31 @@ async fn read_info<T: for<'de> Deserialize<'de>>(
     client: &str,
     key: &[u8],
     field: Field<'_>,
+    endpoint: &str,
 ) -> anyhow::Result<T> {
     let bytes = field
         .bytes()
         .await
         .map_err(|error| anyhow::Error::msg(error.to_string()))?;
-    let plaintext = plain_libs::crypto::xchacha_decrypt_raw(key, &bytes)
-        .ok_or_else(|| anyhow::anyhow!("Unauthorized"))?;
+    let plaintext = plain_rs::infrastructure::transport::http_request::decrypt_raw(
+        key, "POST", endpoint, &bytes,
+    )
+    .ok_or_else(|| anyhow::anyhow!("Unauthorized"))?;
     let plaintext = std::str::from_utf8(&plaintext)?;
     let payload = state
         .main_replay
-        .admit(client, plaintext, chrono::Utc::now().timestamp_millis())
+        .admit(
+            &state.db,
+            client,
+            plaintext,
+            chrono::Utc::now().timestamp_millis(),
+        )
         .map_err(|_| anyhow::anyhow!("invalid or replayed upload metadata"))?;
     Ok(serde_json::from_str(payload)?)
 }
 
 /// Streams one multipart part into `destination`, returning the byte count.
-async fn stream_to_file(
-    field: &mut Field<'_>,
-    destination: &Path,
-) -> anyhow::Result<u64> {
+async fn stream_to_file(field: &mut Field<'_>, destination: &Path) -> anyhow::Result<u64> {
     if let Some(parent) = destination.parent() {
         tokio::fs::create_dir_all(parent)
             .await
@@ -217,7 +222,7 @@ pub(crate) async fn upload(State(state): State<ServerState>, request: Request) -
         let name = field.name().unwrap_or_default().to_owned();
         let mut field = field;
         match name.as_str() {
-            "info" => match read_info(&state, &client, &key, field).await {
+            "info" => match read_info(&state, &client, &key, field, "/upload").await {
                 Ok(value) => info = Some(value),
                 Err(error) if error.to_string() == "Unauthorized" => {
                     return plain(StatusCode::UNAUTHORIZED, "unauthorized");
@@ -450,7 +455,7 @@ pub(crate) async fn upload_chunk(State(state): State<ServerState>, request: Requ
         let name = field.name().unwrap_or_default().to_owned();
         let mut field = field;
         match name.as_str() {
-            "info" => match read_info(&state, &client, &key, field).await {
+            "info" => match read_info(&state, &client, &key, field, "/upload_chunk").await {
                 Ok(value) => info = Some(value),
                 Err(error) if error.to_string() == "Unauthorized" => {
                     failure = Some(plain(StatusCode::UNAUTHORIZED, "unauthorized"));

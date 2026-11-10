@@ -173,3 +173,75 @@ fn noble_event_vectors_match_rust_authentication_and_exact_cipher_bytes() {
         );
     }
 }
+
+#[test]
+fn client_frames_bind_route_client_and_current_registration() {
+    let key = [7; 32];
+    let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        &key,
+        b"timestamp",
+        &request_aad("/screen", "client", None),
+    )
+    .unwrap();
+    assert!(
+        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
+            &key,
+            &registration,
+            &request_aad("/screen", "client", None)
+        )
+        .is_some()
+    );
+    assert!(
+        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
+            &key,
+            &registration,
+            &request_aad("/image_editor", "client", None)
+        )
+        .is_none()
+    );
+    assert!(
+        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
+            &key,
+            &registration,
+            &request_aad("/screen", "other", None)
+        )
+        .is_none()
+    );
+    let control = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        &key,
+        b"control",
+        &request_aad("/screen", "client", Some(&registration)),
+    )
+    .unwrap();
+    assert!(
+        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
+            &key,
+            &control,
+            &request_aad("/screen", "client", Some(&registration))
+        )
+        .is_some()
+    );
+    let next = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        &key,
+        b"timestamp",
+        &request_aad("/screen", "client", None),
+    )
+    .unwrap();
+    assert_ne!(next, registration);
+    assert!(
+        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
+            &key,
+            &control,
+            &request_aad("/screen", "client", Some(&next))
+        )
+        .is_none()
+    );
+    assert!(
+        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
+            &key,
+            &control,
+            &request_aad("/screen", "client", None)
+        )
+        .is_none()
+    );
+}
