@@ -65,7 +65,7 @@ impl Channel {
             serde_json::json!([
                 "pairing",
                 request.signature_data(),
-                request.signature,
+                request.payload.signature,
                 response.signature_data(),
                 response.signature
             ])
@@ -100,7 +100,7 @@ impl Channel {
     }
 }
 pub fn identity_digest(request: &PairingRequest) -> Result<String> {
-    let a = base64_decode(&request.signature_public_key);
+    let a = base64_decode(&request.payload.signature_public_key);
     let b = base64_decode(&request.target_public_key);
     ensure!(a.len() == 32 && b.len() == 32, "Invalid pairing identity");
     let mut hash = Sha256::new();
@@ -132,7 +132,7 @@ impl Confirmations {
         self.with(|entries| {
             ensure!(entries.len() < 128, "Pairing capacity exceeded");
             entries.insert(
-                request.signature.clone(),
+                request.payload.signature.clone(),
                 Entry {
                     started: Instant::now(),
                     request: request.clone(),
@@ -166,7 +166,7 @@ impl Confirmations {
             crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?
                 .map(|p| p.public_key);
         self.with(|entries| {
-            if entries.contains_key(&request.signature) {
+            if entries.contains_key(&request.payload.signature) {
                 return Ok(false);
             }
             ensure!(entries.len() < 128, "Pairing capacity exceeded");
@@ -186,7 +186,7 @@ impl Confirmations {
                 "Pairing already pending"
             );
             entries.insert(
-                request.signature.clone(),
+                request.payload.signature.clone(),
                 Entry {
                     started: Instant::now(),
                     request: request.clone(),
@@ -220,7 +220,7 @@ impl Confirmations {
     ) -> Result<PairingResponse> {
         self.with(|entries| {
             let e = entries
-                .get_mut(&request.signature)
+                .get_mut(&request.payload.signature)
                 .ok_or_else(|| anyhow::anyhow!("Pairing expired"))?;
             ensure!(e.started.elapsed() < RESPONSE_TIMEOUT, "Pairing expired");
             ensure!(
@@ -245,19 +245,19 @@ impl Confirmations {
                     .ok_or_else(|| anyhow::anyhow!("Invalid pairing request"))?;
             if let Some(ecdh) = ecdh {
                 let shared = ecdh
-                    .compute_shared_key(&base64_decode(&request.ecdh_public_key))
+                    .compute_shared_key(&base64_decode(&request.payload.ecdh_public_key))
                     .ok_or_else(|| anyhow::anyhow!("Invalid pairing key"))?;
                 let c = Channel::new(&shared, request, &reply);
                 let mut ips = vec![target.device_ip.clone()];
-                ips.extend(request.ips.clone());
+                ips.extend(request.payload.ips.clone());
                 *facts = Some(Facts {
                     id: request.from_id.clone(),
-                    name: request.from_name.clone(),
+                    name: request.payload.from_name.clone(),
                     ips,
-                    port: request.port,
-                    device_type: request.device_type,
+                    port: request.payload.port,
+                    device_type: request.payload.device_type,
                     key: base64_encode(&c.key),
-                    public_key: request.signature_public_key.clone(),
+                    public_key: request.payload.signature_public_key.clone(),
                 });
                 *channel = Some(c);
             }
@@ -287,8 +287,10 @@ impl Confirmations {
                 anyhow::bail!("Unexpected pairing role")
             };
             ensure!(
-                pairing::validate_response(&state.prefs, response, &ticket.target.device_id)?
-                    && response.signature_public_key == e.request.target_public_key,
+                crate::features::peers::pairing::security::verify_response(
+                    response,
+                    &ticket.target.device_public_key,
+                ),
                 "Pairing identity mismatch"
             );
             if !response.accepted {
@@ -328,21 +330,23 @@ impl Confirmations {
                 let mut ips = vec![sender_ip.to_owned()];
                 ips.extend(response.ips.clone());
                 *facts = Some(Facts {
-                    id: response.from_id.clone(),
+                    id: ticket.target.device_id.clone(),
                     name: ticket.target.device_name.clone(),
                     ips,
                     port: response.port,
                     device_type: response.device_type,
                     key: base64_encode(&c.key),
-                    public_key: response.signature_public_key.clone(),
+                    public_key: ticket.target.device_public_key.clone(),
                 });
                 *channel = Some(c);
             }
-            let saved =
-                crate::infrastructure::db::chat_store::peers::get(&state.db, &response.from_id)?;
+            let saved = crate::infrastructure::db::chat_store::peers::get(
+                &state.db,
+                &ticket.target.device_id,
+            )?;
             let pinned = saved
                 .as_ref()
-                .is_some_and(|p| p.is_paired() && p.public_key == response.signature_public_key);
+                .is_some_and(|p| p.is_paired() && p.public_key == ticket.target.device_public_key);
             e.previous_identity = saved.map(|p| p.public_key);
             if pinned {
                 return Self::finish(e).map(Some);
@@ -392,7 +396,7 @@ impl Confirmations {
         Ok(Action::Send {
             ticket: ticket.clone(),
             message: Message::PairVerification(Verification::Finish {
-                request_signature: e.request.signature.clone(),
+                request_signature: e.request.payload.signature.clone(),
                 proof,
             }),
         })
@@ -582,12 +586,14 @@ pub async fn deliver(state: &CoreRuntime, action: Action) -> Result<()> {
 }
 async fn send_finish(state: &CoreRuntime, ticket: &Ticket, message: &Message) -> Result<()> {
     if ticket.target.device_ip.is_empty() {
+        let packet =
+            crate::infrastructure::protocols::ble::message(&[], message.wire()?.as_bytes())?;
         ensure!(
             state
                 .host
                 .call(
                     "blePairSend",
-                    serde_json::json!({"generation":ticket.generation,"body":message.wire()?})
+                    serde_json::json!({"generation":ticket.generation,"packet":base64_encode(&packet)})
                 )
                 .await
                 .map_err(anyhow::Error::msg)?
@@ -599,7 +605,8 @@ async fn send_finish(state: &CoreRuntime, ticket: &Ticket, message: &Message) ->
             crate::features::discovery::nearby_http::send(
                 &ticket.target.device_ip,
                 ticket.target.device_port,
-                message
+                message,
+                None,
             )
             .await?,
             "Failed to send pairing confirmation"
@@ -640,7 +647,7 @@ pub async fn confirm(state: &CoreRuntime, generation: &str) -> Result<()> {
 }
 pub fn publish(state: &CoreRuntime, request: PairingRequest) -> Result<()> {
     let changed = crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?
-        .is_some_and(|p| p.public_key != request.signature_public_key);
+        .is_some_and(|p| p.public_key != request.payload.signature_public_key);
     let mut value = serde_json::to_value(&request)?;
     value["identityChanged"] = serde_json::json!(changed);
     value["verificationCode"] = serde_json::json!(identity_digest(&request)?);

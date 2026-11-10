@@ -10,11 +10,17 @@ pub(super) async fn dispatch(
     address: String,
     bytes: &[u8],
 ) -> Result<Vec<u8>> {
-    let body = std::str::from_utf8(ble::nearby_body(bytes)?)?;
+    let (metadata, body) = ble::parts(bytes)?;
+    let body = std::str::from_utf8(body)?;
     let message = match Message::parse(body) {
         Ok(message) => message,
+        Err(error) if !metadata.is_empty() => return Err(error),
         Err(_) => return ble::message(&[], &[]),
     };
+    anyhow::ensure!(
+        metadata.is_empty() || matches!(&message, Message::PairRequest(_)),
+        "Invalid Nearby metadata"
+    );
     let request = match message {
         Message::Discover => {
             let reply =
@@ -31,8 +37,9 @@ pub(super) async fn dispatch(
             .await?;
             return ble::message(&[], &[]);
         }
-        Message::PairRequest(request) => pairing_runtime::Request::ReceiveRequest {
-            request,
+        Message::PairRequest(payload) => pairing_runtime::Request::ReceiveRequest {
+            payload,
+            client_id: std::str::from_utf8(metadata)?.to_owned(),
             address,
             ble: true,
         },

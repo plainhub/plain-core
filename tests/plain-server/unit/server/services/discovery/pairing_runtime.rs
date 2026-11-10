@@ -43,12 +43,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
     let (_dir, server) = fixture("local");
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (_, https_port) = server
-        .start_public(
-            0,
-            0,
-            cert_pem.clone(),
-            cert_key.clone(),
-        )
+        .start_public(0, 0, cert_pem.clone(), cert_key.clone())
         .await
         .unwrap();
     let client = http_client::builder()
@@ -71,26 +66,95 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
         .unwrap();
     assert_eq!(malformed.status(), http_client::StatusCode::BAD_REQUEST);
     assert_eq!(malformed.text().await.unwrap(), "invalid nearby message");
-    let request = client
-        .post(format!("https://127.0.0.1:{https_port}/nearby"))
-        .body("PAIR_REQUEST:{\"toId\":\"local\",\"targetPublicKey\":\"key\",\"fromId\":\"peer\",\"fromName\":\"fixture\",\"port\":2443,\"deviceType\":\"PHONE\",\"ecdhPublicKey\":\"\",\"signaturePublicKey\":\"\",\"timestamp\":1,\"ips\":[],\"signature\":\"invalid\",\"awareSupported\":false}")
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(request.status(), http_client::StatusCode::OK);
-    assert_eq!(request.text().await.unwrap(), "1");
+    let state = server.runtime_state();
+    let recipient_key =
+        plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
+    let (sender_key, sender_public_key) = plain_libs::crypto::ed25519_generate();
+    let encode = plain_libs::utils::base64::base64_encode;
+    let mut request = plain_rs::features::peers::pairing::protocol::PairingRequest {
+        from_id: "peer".into(),
+        to_id: "local".into(),
+        target_public_key: encode(&recipient_key[32..]),
+        from_ip: String::new(),
+        payload: plain_rs::features::peers::pairing::protocol::PairingRequestPayload {
+            from_name: "Fixture".into(),
+            port: 2443,
+            device_type: plain_rs::features::chat::enums::DeviceType::Phone,
+            ecdh_public_key: encode(&plain_libs::crypto::EcdhSession::generate().public_key_bytes),
+            signature_public_key: encode(&sender_public_key),
+            timestamp: plain_rs::features::peers::pairing::now_ms() - 300_001,
+            ips: vec![],
+            signature: String::new(),
+            aware_supported: false,
+        },
+    };
+    for (header, fresh, correct_target, accepted) in [
+        (None, true, true, false),
+        (Some("another-peer"), true, true, false),
+        (Some("peer"), false, true, false),
+        (Some("peer"), true, false, false),
+        (Some("peer"), true, true, true),
+    ] {
+        request.payload.timestamp =
+            plain_rs::features::peers::pairing::now_ms() - if fresh { 0 } else { 300_001 };
+        request.target_public_key = if correct_target {
+            encode(&recipient_key[32..])
+        } else {
+            encode(&sender_public_key)
+        };
+        request.payload.signature =
+            plain_libs::crypto::ed25519_sign(&sender_key, request.signature_data().as_bytes());
+        let body = Message::PairRequest(request.payload.clone())
+            .wire()
+            .unwrap();
+        let mut post = client
+            .post(format!("https://127.0.0.1:{https_port}/nearby"))
+            .body(body);
+        if let Some(header) = header {
+            post = post
+                .header("c-id", header)
+                .header("x-forwarded-for", "192.0.2.20");
+        }
+        let reply = post.send().await.unwrap();
+        assert_eq!(
+            reply.status(),
+            if header.is_some() {
+                http_client::StatusCode::OK
+            } else {
+                http_client::StatusCode::BAD_REQUEST
+            },
+        );
+        let incoming = state
+            .pairing
+            .incoming_target("peer", &request.payload.signature);
+        if accepted {
+            assert_eq!(incoming.unwrap().device_ip, "127.0.0.1");
+        } else {
+            assert!(incoming.is_none());
+        }
+        assert!(
+            state
+                .pairing
+                .incoming_target("another-peer", &request.payload.signature)
+                .is_none()
+        );
+    }
     server.stop_public().await;
 }
 
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacement() {
-    use axum::{Router, body::Bytes, extract::State, routing::post};
+    use axum::{Router, body::Bytes, extract::State, http::HeaderMap, routing::post};
     async fn receive(
         State(sender): State<tokio::sync::mpsc::Sender<Message>>,
+        headers: HeaderMap,
         body: Bytes,
     ) -> &'static str {
         let message = Message::parse(std::str::from_utf8(&body).unwrap()).unwrap();
+        if matches!(&message, Message::PairRequest(_)) {
+            assert_eq!(headers["c-id"], "local");
+        }
         sender.send(message).await.unwrap();
         "1"
     }
@@ -116,7 +180,9 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
         device_name: "Fixture".into(),
         device_ip: "stale".into(),
         device_port: listeners.https_port,
-        device_public_key: plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().1),
+        device_public_key: plain_libs::utils::base64::base64_encode(
+            &plain_libs::crypto::ed25519_generate().1,
+        ),
     };
     let start = |method| Request::Start {
         methods: vec![
@@ -137,12 +203,33 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     .unwrap();
     assert_eq!(first["sent"], true);
     assert_eq!(first["ticket"]["deviceIp"], "127.0.0.1");
-    let Message::PairRequest(request) = tokio::time::timeout(std::time::Duration::from_secs(5), received.recv()).await.unwrap().unwrap() else {
+    let Message::PairRequest(payload) =
+        tokio::time::timeout(std::time::Duration::from_secs(5), received.recv())
+            .await
+            .unwrap()
+            .unwrap()
+    else {
         panic!()
     };
+    let request = plain_rs::features::peers::pairing::protocol::PairingRequest {
+        to_id: target.device_id.clone(),
+        target_public_key: target.device_public_key.clone(),
+        from_id: "local".into(),
+        from_ip: String::new(),
+        payload,
+    };
     assert!(plain_rs::features::peers::pairing::security::verify_request(&request));
-    assert_eq!(request.from_id, "local");
-    assert!(received.try_recv().is_err(), "The first pairing frame contains the full request");
+    let wire = serde_json::to_value(request.payload).unwrap();
+    for removed in ["fromId", "fromIp", "toId", "targetPublicKey"] {
+        assert!(
+            wire.get(removed).is_none(),
+            "{removed} leaked into the body"
+        );
+    }
+    assert!(
+        received.try_recv().is_err(),
+        "The first pairing frame contains the full request"
+    );
     let second = execute(
         &state,
         start(plain_rs::features::discovery::nearby_devices::DiscoveryMethod::DnsSd),
@@ -150,8 +237,14 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     .await
     .unwrap();
     assert_eq!(second["sent"], true);
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), received.recv()).await.unwrap().unwrap();
-    assert!(received.try_recv().is_err(), "The first pairing frame contains the full request");
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), received.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        received.try_recv().is_err(),
+        "The first pairing frame contains the full request"
+    );
     assert!(
         execute(
             &state,
@@ -178,7 +271,12 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     .await
     .unwrap();
     assert!(!canceled.is_null());
-    let Message::PairCancel(cancel) = tokio::time::timeout(std::time::Duration::from_secs(5), received.recv()).await.unwrap().unwrap() else {
+    let Message::PairCancel(cancel) =
+        tokio::time::timeout(std::time::Duration::from_secs(5), received.recv())
+            .await
+            .unwrap()
+            .unwrap()
+    else {
         panic!()
     };
     assert_eq!(cancel.to_id, "remote");

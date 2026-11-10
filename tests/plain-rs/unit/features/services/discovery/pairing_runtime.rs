@@ -6,7 +6,7 @@ fn ble_associations_match_signature_and_cleanup_without_consuming_replacements()
     let runtime = Runtime::default();
     let mut request:PairingRequest=serde_json::from_value(json!({"toId":"local","targetPublicKey":"key","fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false})).unwrap();
     runtime.remember(&request, "mac-first").unwrap();
-    request.signature = "second".into();
+    request.payload.signature = "second".into();
     runtime.remember(&request, "mac-second").unwrap();
     assert!(runtime.address("peer", "first").is_none());
     assert_eq!(runtime.address("peer", "second").unwrap(), "mac-second");
@@ -75,7 +75,8 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
     execute(
         &state,
         Request::ReceiveRequest {
-            request: request.clone(),
+            payload: request.payload.clone(),
+            client_id: request.from_id.clone(),
             address: "127.0.0.1".into(),
             ble: false,
         },
@@ -140,7 +141,8 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         execute(
             &state,
             Request::ReceiveRequest {
-                request: request.clone(),
+                payload: request.payload.clone(),
+                client_id: request.from_id.clone(),
                 address: "fixture-mac".into(),
                 ble: true
             }
@@ -153,7 +155,8 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         execute(
             &state,
             Request::ReceiveRequest {
-                request: request.clone(),
+                payload: request.payload.clone(),
+                client_id: request.from_id.clone(),
                 address: "fixture-mac".into(),
                 ble: true
             }
@@ -174,7 +177,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     assert!(
         state
             .pairing
-            .incoming_target(&request.from_id, &request.signature)
+            .incoming_target(&request.from_id, &request.payload.signature)
             .is_some()
     );
     assert!(
@@ -280,7 +283,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     assert_eq!(
         state
             .pairing_runtime
-            .address("remote", &request.signature)
+            .address("remote", &request.payload.signature)
             .as_deref(),
         Some("fixture-mac")
     );
@@ -429,7 +432,7 @@ async fn incoming_ble_message_succeeds_when_lan_address_is_invalid() {
         &state,
         &request,
         &target,
-        Message::PairRequest(request.clone()),
+        Message::PairRequest(request.payload.clone()),
     )
     .await
     .unwrap();

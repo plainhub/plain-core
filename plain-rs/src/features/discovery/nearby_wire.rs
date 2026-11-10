@@ -1,6 +1,6 @@
 use crate::features::chat::enums::DeviceType;
 use crate::features::peers::pairing::protocol::PairingCancel;
-use crate::features::peers::pairing::protocol::PairingRequest;
+use crate::features::peers::pairing::protocol::PairingRequestPayload;
 use crate::features::peers::pairing::protocol::PairingResponse;
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -34,7 +34,7 @@ pub struct DiscoverReply {
 pub enum Message {
     Discover,
     DiscoverReply(DiscoverReply),
-    PairRequest(PairingRequest),
+    PairRequest(PairingRequestPayload),
     PairResponse(PairingResponse),
     PairCancel(PairingCancel),
     PairVerification(crate::features::peers::pairing::confirmation::Verification),

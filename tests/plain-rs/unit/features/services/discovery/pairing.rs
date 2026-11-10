@@ -25,8 +25,8 @@ fn signed_cancel(prefs: &Prefs, request: &PairingRequest, to: &str) -> PairingCa
     let mut value = PairingCancel {
         from_id: request.from_id.clone(),
         to_id: to.into(),
-        request_signature: request.signature.clone(),
-        signature_public_key: request.signature_public_key.clone(),
+        request_signature: request.payload.signature.clone(),
+        signature_public_key: request.payload.signature_public_key.clone(),
         timestamp: now_ms(),
         signature: String::new(),
     };
@@ -54,8 +54,14 @@ fn signed_request_response_bind_recipient_identity_and_ecdh() {
     let (req, ak) = request(&a, device(), &target(&b, "b")).unwrap();
     assert!(security::verify_request(&req));
     let (reply, bk) = response(&b, req.clone(), true, device()).unwrap().unwrap();
-    assert!(validate_response(&a, &reply, "b").unwrap());
-    assert!(!validate_response(&a, &reply, "c").unwrap());
+    assert!(security::verify_response(
+        &reply,
+        &target(&b, "b").device_public_key
+    ));
+    assert!(!security::verify_response(
+        &reply,
+        &target(&c, "c").device_public_key
+    ));
     assert!(response(&c, req.clone(), true, device()).is_err());
     assert_eq!(
         ak.compute_shared_key(&plain_libs::utils::base64::base64_decode(
@@ -63,7 +69,7 @@ fn signed_request_response_bind_recipient_identity_and_ecdh() {
         )),
         bk.unwrap()
             .compute_shared_key(&plain_libs::utils::base64::base64_decode(
-                &req.ecdh_public_key
+                &req.payload.ecdh_public_key
             ))
     );
     let mut forged = req.clone();
@@ -71,14 +77,17 @@ fn signed_request_response_bind_recipient_identity_and_ecdh() {
     assert!(!security::verify_request(&forged));
     let mut forged = reply;
     forged.accepted = false;
-    assert!(!validate_response(&a, &forged, "b").unwrap());
+    assert!(!security::verify_response(
+        &forged,
+        &target(&b, "b").device_public_key
+    ));
     let (denied, key) = response(&b, req.clone(), false, device()).unwrap().unwrap();
     assert!(!denied.accepted);
     assert!(denied.ecdh_public_key.is_empty());
     assert!(key.is_none());
     for timestamp in [i64::MIN, i64::MAX] {
         let mut bad = req.clone();
-        bad.timestamp = timestamp;
+        bad.payload.timestamp = timestamp;
         assert!(response(&b, bad, true, device()).unwrap().is_none());
     }
 }
@@ -105,7 +114,11 @@ fn incoming_cancel_matches_current_signed_invitation() {
         receive_cancel(&b, &sessions, signed_cancel(&a, &new, "b")).unwrap()["deviceId"],
         "a"
     );
-    assert!(sessions.incoming_target("a", &new.signature).is_none());
+    assert!(
+        sessions
+            .incoming_target("a", &new.payload.signature)
+            .is_none()
+    );
 }
 #[test]
 fn cancellation_is_bound_to_generation_and_private_key_never_serialized() {

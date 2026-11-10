@@ -61,7 +61,7 @@ impl Sessions {
             .retain(|_, pending| crate::features::peers::pairing::timestamp_ok(pending.timestamp));
         if incoming
             .get(&request.from_id)
-            .is_some_and(|p| p.timestamp > request.timestamp)
+            .is_some_and(|p| p.timestamp > request.payload.timestamp)
         {
             return false;
         }
@@ -70,29 +70,29 @@ impl Sessions {
         }
         let new = incoming
             .get(&request.from_id)
-            .is_none_or(|p| p.signature != request.signature);
+            .is_none_or(|p| p.signature != request.payload.signature);
         let target = Target {
             device_id: request.from_id.clone(),
-            device_public_key: request.signature_public_key.clone(),
-            device_name: request.from_name.clone(),
+            device_public_key: request.payload.signature_public_key.clone(),
+            device_name: request.payload.from_name.clone(),
             device_ip: request.from_ip.clone(),
-            device_port: request.port,
+            device_port: request.payload.port,
         };
         if !new && target.device_ip.is_empty() {
             return false;
         }
         let received = incoming
             .get(&request.from_id)
-            .filter(|pending| pending.signature == request.signature)
+            .filter(|pending| pending.signature == request.payload.signature)
             .map(|pending| pending.received)
             .unwrap_or_else(Instant::now);
         incoming.insert(
             request.from_id.clone(),
             Incoming {
-                signature: request.signature.clone(),
-                public_key: request.signature_public_key.clone(),
+                signature: request.payload.signature.clone(),
+                public_key: request.payload.signature_public_key.clone(),
                 target,
-                timestamp: request.timestamp,
+                timestamp: request.payload.timestamp,
                 received,
             },
         );

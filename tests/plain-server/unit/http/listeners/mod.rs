@@ -184,12 +184,12 @@ async fn nearby_client_handles_probe_accept_reject_timeout_and_offline() {
         })
     };
     assert!(
-        send("127.0.0.1", server.https_port, &cancel("accept"))
+        send("127.0.0.1", server.https_port, &cancel("accept"), None)
             .await
             .unwrap()
     );
     assert!(
-        !send("127.0.0.1", server.https_port, &cancel("reject"))
+        !send("127.0.0.1", server.https_port, &cancel("reject"), None)
             .await
             .unwrap()
     );
@@ -197,7 +197,8 @@ async fn nearby_client_handles_probe_accept_reject_timeout_and_offline() {
         !post_url(
             &url("127.0.0.1", server.https_port).unwrap(),
             "slow".into(),
-            Duration::from_millis(10)
+            Duration::from_millis(10),
+            None
         )
         .await
         .unwrap()

@@ -55,7 +55,7 @@ fn begin(a: &CoreRuntime, b: &CoreRuntime) -> (PairingRequest, Ticket) {
     assert_eq!(pairing::receive_request(&b.pairing, &request), Some(true));
     let target = b
         .pairing
-        .incoming_target(&request.from_id, &request.signature)
+        .incoming_target(&request.from_id, &request.payload.signature)
         .unwrap();
     b.pairing_runtime
         .confirmations
@@ -170,7 +170,7 @@ async fn replayed_request_and_reflected_finish_do_not_activate() {
     assert!(peer(a, "b").is_none());
     let target = b
         .pairing
-        .incoming_target(&request.from_id, &request.signature)
+        .incoming_target(&request.from_id, &request.payload.signature)
         .unwrap();
     assert!(
         !b.pairing_runtime
@@ -213,7 +213,7 @@ async fn cancellation_prevents_late_finish_and_preserves_active_key() {
             .unwrap(),
     );
     b.pairing
-        .take_incoming(&request.from_id, &request.signature);
+        .take_incoming(&request.from_id, &request.payload.signature);
     assert!(b.pairing_runtime.confirmations.process(b, finish).is_err());
     assert!(peer(b, "a").is_none());
 }
@@ -234,7 +234,7 @@ async fn transcript_and_roles_change_key_and_full_digest() {
     assert_ne!(channel.key, Channel::new(&[3; 32], &request, &changed).key);
     let mut swapped = request.clone();
     std::mem::swap(
-        &mut swapped.signature_public_key,
+        &mut swapped.payload.signature_public_key,
         &mut swapped.target_public_key,
     );
     assert_ne!(
@@ -315,7 +315,7 @@ async fn target_change_and_concurrent_pin_change_cannot_commit() {
         .respond(&b, &request, true, device())
         .unwrap();
     let mut forged = response.clone();
-    forged.signature_public_key = base64_encode(&[9; 32]);
+    forged.signature = base64_encode(&[9; 64]);
     assert!(
         a.pairing_runtime
             .confirmations

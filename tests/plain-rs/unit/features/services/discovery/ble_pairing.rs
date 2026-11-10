@@ -76,8 +76,23 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                     json!(true)
                 }
                 "blePairSend" => {
-                    match Message::parse(effect["params"]["body"].as_str().unwrap()).unwrap() {
-                        Message::PairRequest(request) => {
+                    let packet = plain_libs::utils::base64::base64_decode(
+                        effect["params"]["packet"].as_str().unwrap(),
+                    );
+                    let (metadata, body_bytes) =
+                        crate::infrastructure::protocols::ble::parts(&packet).unwrap();
+                    match Message::parse(std::str::from_utf8(body_bytes).unwrap()).unwrap() {
+                        Message::PairRequest(payload) => {
+                            assert_eq!(metadata, b"local");
+                            let request = crate::features::peers::pairing::protocol::PairingRequest {
+                                to_id: "remote".into(),
+                                target_public_key: plain_libs::utils::base64::base64_encode(
+                                    &crate::features::services::peers::peer_wire::signing_keypair(&remote_state.prefs).unwrap()[32..],
+                                ),
+                                from_id: "local".into(),
+                                from_ip: String::new(),
+                                payload,
+                            };
                             assert!(crate::features::peers::pairing::security::verify_request(
                                 &request
                             ));
@@ -85,7 +100,7 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                             pairing::receive_request(&remote_state.pairing, &request).unwrap();
                             let incoming = remote_state
                                 .pairing
-                                .incoming_target(&request.from_id, &request.signature)
+                                .incoming_target(&request.from_id, &request.payload.signature)
                                 .unwrap();
                             remote_state
                                 .pairing_runtime
@@ -99,7 +114,7 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                                 .unwrap();
                             notifications.push_back("malformed".into());
                             let mut wrong = response.clone();
-                            wrong.from_id = "unrelated".into();
+                            wrong.request_signature = "unrelated".into();
                             notifications.push_back(Message::PairResponse(wrong).wire().unwrap());
                             notifications
                                 .push_back(Message::PairResponse(response).wire().unwrap());
@@ -232,7 +247,13 @@ async fn cancellation_interrupts_pending_connect_and_preserves_replacement_gener
             .unwrap()
             .is_none()
     );
-    assert!(state.pairing_runtime.confirmations.confirm(&state, old["ticket"]["generation"].as_str().unwrap()).is_err());
+    assert!(
+        state
+            .pairing_runtime
+            .confirmations
+            .confirm(&state, old["ticket"]["generation"].as_str().unwrap())
+            .is_err()
+    );
     assert_eq!(
         state.pairing.tickets()[0].generation,
         replacement["ticket"]["generation"].as_str().unwrap()

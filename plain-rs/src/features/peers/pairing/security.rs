@@ -6,25 +6,19 @@ pub fn verify_request(request: &PairingRequest) -> bool {
         && !request.to_id.is_empty()
         && request.to_id != request.from_id
         && plain_libs::utils::base64::base64_decode(&request.target_public_key).len() == 32
-        && timestamp_ok(request.timestamp)
+        && timestamp_ok(request.payload.timestamp)
         && plain_libs::crypto::ed25519_verify(
-            &request.signature_public_key,
+            &request.payload.signature_public_key,
             request.signature_data().as_bytes(),
-            &request.signature,
+            &request.payload.signature,
         )
 }
-pub fn verify_response(response: &PairingResponse, actor: &str, expected: &str) -> bool {
-    !response.request_signature.is_empty()
-        && response.to_id == actor
-        && response.from_id == expected
-        && !actor.is_empty()
-        && !expected.is_empty()
-        && timestamp_ok(response.timestamp)
-        && plain_libs::crypto::ed25519_verify(
-            &response.signature_public_key,
-            response.signature_data().as_bytes(),
-            &response.signature,
-        )
+pub fn verify_response(response: &PairingResponse, public_key: &str) -> bool {
+    plain_libs::crypto::ed25519_verify(
+        public_key,
+        response.signature_data().as_bytes(),
+        &response.signature,
+    )
 }
 
 pub fn verify_cancel(

@@ -1,6 +1,6 @@
 pub use crate::features::discovery::nearby_wire::Message;
-use plain_libs::protocols::http_client;
 use anyhow::Result;
+use plain_libs::protocols::http_client;
 use std::{sync::OnceLock, time::Duration};
 
 fn client() -> Result<&'static http_client::Client> {
@@ -32,24 +32,38 @@ pub fn url(ip: &str, port: u16) -> Result<String> {
 }
 /// POST a raw wire body; `false` on transport failure, timeout or a
 /// non-success status. `timeout` is the per-call deadline.
-pub async fn post_url(url: &str, body: String, timeout: Duration) -> Result<bool> {
-    let result = client()?
+pub async fn post_url(
+    url: &str,
+    body: String,
+    timeout: Duration,
+    client_id: Option<&str>,
+) -> Result<bool> {
+    let mut request = client()?
         .post(url)
         .header(http_client::header::CONTENT_TYPE, "application/json")
         .timeout(timeout)
-        .body(body)
-        .send()
-        .await;
+        .body(body);
+    if let Some(client_id) = client_id {
+        request = request.header("c-id", client_id);
+    }
+    let result = request.send().await;
     Ok(result.is_ok_and(|response| response.status().is_success()))
 }
-pub async fn send(ip: &str, port: u16, message: &Message) -> Result<bool> {
-    post_url(&url(ip, port)?, message.wire()?, Duration::from_secs(5)).await
+pub async fn send(ip: &str, port: u16, message: &Message, client_id: Option<&str>) -> Result<bool> {
+    post_url(
+        &url(ip, port)?,
+        message.wire()?,
+        Duration::from_secs(5),
+        client_id,
+    )
+    .await
 }
 pub async fn probe(ip: &str, port: u16) -> Result<bool> {
     post_url(
         &url(ip, port)?,
         "DISCOVER:".into(),
         Duration::from_millis(2500),
+        None,
     )
     .await
 }

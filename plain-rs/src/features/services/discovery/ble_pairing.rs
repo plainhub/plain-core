@@ -8,6 +8,7 @@ use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::features::services::discovery::pairing_runtime::event;
 use crate::features::services::discovery::pairing_runtime::failed;
 use crate::runtime::Runtime as CoreRuntime;
+use plain_libs::utils::base64::base64_encode;
 use serde_json::{Value, json};
 use std::{collections::HashMap, sync::Mutex, time::Duration};
 #[derive(Default)]
@@ -58,13 +59,18 @@ pub fn start(
         .pairing_runtime
         .confirmations
         .begin(&request, &ticket)?;
-    let body = Message::PairRequest(request).wire()?;
+    let body = Message::PairRequest(request.payload).wire()?;
+    let packet = crate::infrastructure::protocols::ble::message(
+        request.from_id.as_bytes(),
+        body.as_bytes(),
+    )?;
+    let packet = base64_encode(&packet);
     jobs.insert(ticket.target.device_id.clone(), ticket.clone());
     drop(jobs);
     let state = state.clone();
     let returned = ticket.clone();
     tokio::spawn(async move {
-        let result = run(&state, &ticket, &body).await;
+        let result = run(&state, &ticket, &packet).await;
         if let Err(Cause::Failed(error)) = result {
             if state
                 .pairing
@@ -111,7 +117,7 @@ async fn host(
         }
     }
 }
-async fn run(state: &CoreRuntime, ticket: &Ticket, body: &str) -> Result<(), Cause> {
+async fn run(state: &CoreRuntime, ticket: &Ticket, packet: &str) -> Result<(), Cause> {
     let facts = json!({"generation":ticket.generation});
     let connect = json!({
         "generation": ticket.generation,
@@ -121,7 +127,7 @@ async fn run(state: &CoreRuntime, ticket: &Ticket, body: &str) -> Result<(), Cau
         return Err(Cause::Failed("Connection failed".into()));
     }
     let mut send = facts.clone();
-    send["body"] = json!(body);
+    send["packet"] = json!(packet);
     if host(state, ticket, "blePairSend", send).await? != Value::Bool(true) {
         return Err(Cause::Failed("Failed to send pairing request".into()));
     }
@@ -184,7 +190,9 @@ async fn run(state: &CoreRuntime, ticket: &Ticket, body: &str) -> Result<(), Cau
                     return Ok(());
                 }
             }
-            Message::PairResponse(response) if response.from_id == ticket.target.device_id => {
+            Message::PairResponse(response)
+                if response.request_signature == ticket.request_signature =>
+            {
                 if let Some(action) = state
                     .pairing_runtime
                     .confirmations

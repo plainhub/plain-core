@@ -2,7 +2,7 @@ use crate::server::ServerState;
 use axum::{
     body::Bytes,
     extract::{ConnectInfo, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use std::net::SocketAddr;
@@ -10,6 +10,7 @@ use std::net::SocketAddr;
 pub(crate) async fn call(
     State(state): State<ServerState>,
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Response {
     let body = match std::str::from_utf8(&body) {
@@ -19,7 +20,8 @@ pub(crate) async fn call(
     match plain_rs::features::services::discovery::pairing_runtime::handle_nearby_post(
         &state,
         body,
-        &remote.ip().to_string(),
+        remote.ip(),
+        headers.get("c-id").and_then(|value| value.to_str().ok()),
     )
     .await
     {

@@ -1,6 +1,6 @@
 use crate::features::peers::pairing::now_ms;
-use crate::features::peers::pairing::protocol::PairingRequest;
 use crate::features::peers::pairing::protocol::PairingResponse;
+use crate::features::peers::pairing::protocol::{PairingRequest, PairingRequestPayload};
 use crate::features::peers::pairing::security;
 use crate::features::prefs::Prefs;
 use crate::features::services::peers::peer_wire::signing_keypair;
@@ -33,18 +33,21 @@ fn request(
         to_id: target.device_id.clone(),
         target_public_key: target.device_public_key.clone(),
         from_id: actor(prefs)?,
-        from_name: device.name,
-        port: device.port,
-        device_type: device.device_type,
-        ecdh_public_key: plain_libs::utils::base64::base64_encode(&ecdh.public_key_bytes),
-        signature_public_key: plain_libs::utils::base64::base64_encode(&kp[32..]),
-        timestamp: now_ms(),
-        ips: device.ips,
-        signature: String::new(),
-        aware_supported: device.aware_supported,
         from_ip: String::new(),
+        payload: PairingRequestPayload {
+            from_name: device.name,
+            port: device.port,
+            device_type: device.device_type,
+            ecdh_public_key: plain_libs::utils::base64::base64_encode(&ecdh.public_key_bytes),
+            signature_public_key: plain_libs::utils::base64::base64_encode(&kp[32..]),
+            timestamp: now_ms(),
+            ips: device.ips,
+            signature: String::new(),
+            aware_supported: device.aware_supported,
+        },
     };
-    request.signature = plain_libs::crypto::ed25519_sign(&kp, request.signature_data().as_bytes());
+    request.payload.signature =
+        plain_libs::crypto::ed25519_sign(&kp, request.signature_data().as_bytes());
     if !security::verify_request(&request) {
         bail!("Invalid pairing signing identity");
     }
@@ -67,39 +70,21 @@ pub(super) fn response(
     );
     let ecdh = accepted.then(EcdhSession::generate);
     let mut response = PairingResponse {
-        request_signature: request.signature.clone(),
-        from_id: actor(prefs)?,
-        to_id: request.from_id,
+        request_signature: request.payload.signature.clone(),
         port: device.port,
         device_type: device.device_type,
         ecdh_public_key: ecdh
             .as_ref()
             .map(|e| plain_libs::utils::base64::base64_encode(&e.public_key_bytes))
             .unwrap_or_default(),
-        signature_public_key: plain_libs::utils::base64::base64_encode(&kp[32..]),
         accepted,
-        timestamp: now_ms(),
         ips: device.ips,
         signature: String::new(),
         aware_supported: device.aware_supported,
     };
     response.signature =
         plain_libs::crypto::ed25519_sign(&kp, response.signature_data().as_bytes());
-    if !security::verify_response(&response, &response.to_id, &response.from_id) {
-        bail!("Invalid pairing signing identity");
-    }
     Ok(Some((response, ecdh)))
-}
-pub fn validate_response(
-    prefs: &Prefs,
-    response: &PairingResponse,
-    expected: &str,
-) -> Result<bool> {
-    Ok(security::verify_response(
-        response,
-        &actor(prefs)?,
-        expected,
-    ))
 }
 use crate::features::peers::pairing::protocol::PairingCancel;
 use crate::features::peers::pairing::sessions::Sessions;
@@ -127,7 +112,7 @@ pub fn start_generation(
         .bind_request(
             &ticket.target.device_id,
             &ticket.generation,
-            &request.signature,
+            &request.payload.signature,
         )
         .ok_or_else(|| anyhow::anyhow!("Pairing replaced"))?;
     Ok(json!({"request":request,"ticket":ticket}))
@@ -155,6 +140,7 @@ pub fn cancel(
         plain_libs::crypto::ed25519_sign(&keypair, cancel.signature_data().as_bytes());
     Ok(json!({"ticket":ticket,"cancel":cancel}))
 }
+#[cfg(test)]
 pub fn receive_request(sessions: &Sessions, request: &PairingRequest) -> Option<bool> {
     security::verify_request(request).then(|| sessions.receive(request))
 }

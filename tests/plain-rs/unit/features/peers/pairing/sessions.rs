@@ -99,16 +99,18 @@ fn incoming_request() -> crate::features::peers::pairing::protocol::PairingReque
         to_id: "receiver".into(),
         target_public_key: plain_libs::utils::base64::base64_encode(&[1u8; 32]),
         from_id: "peer".into(),
-        from_name: "Fixture".into(),
-        port: 2443,
-        device_type: crate::features::chat::enums::DeviceType::Phone,
-        ecdh_public_key: String::new(),
-        signature_public_key: "identity".into(),
-        timestamp: crate::features::peers::pairing::now_ms(),
-        ips: vec![],
-        signature: "request".into(),
-        aware_supported: false,
         from_ip: "127.0.0.1".into(),
+        payload: crate::features::peers::pairing::protocol::PairingRequestPayload {
+            from_name: "Fixture".into(),
+            port: 2443,
+            device_type: crate::features::chat::enums::DeviceType::Phone,
+            ecdh_public_key: String::new(),
+            signature_public_key: "identity".into(),
+            timestamp: crate::features::peers::pairing::now_ms(),
+            ips: vec![],
+            signature: "request".into(),
+            aware_supported: false,
+        },
     }
 }
 
@@ -121,7 +123,7 @@ fn incoming_approval_expires_at_response_deadline_and_replay_cannot_extend_it() 
     sessions.1.lock().unwrap().get_mut("peer").unwrap().received =
         Instant::now() - RESPONSE_TIMEOUT;
     assert!(crate::features::peers::pairing::timestamp_ok(
-        request.timestamp
+        request.payload.timestamp
     ));
     assert!(sessions.incoming_target("peer", "request").is_none());
     assert!(sessions.take_incoming("peer", "request").is_none());
@@ -129,8 +131,8 @@ fn incoming_approval_expires_at_response_deadline_and_replay_cannot_extend_it() 
     assert!(!sessions.receive(&request));
     assert!(sessions.incoming_target("peer", "request").is_none());
     assert!(sessions.take_incoming("peer", "request").is_none());
-    request.signature = "replacement".into();
-    request.timestamp += 1;
+    request.payload.signature = "replacement".into();
+    request.payload.timestamp += 1;
     assert!(sessions.receive(&request));
     assert!(sessions.take_incoming("peer", "request").is_none());
     assert_eq!(

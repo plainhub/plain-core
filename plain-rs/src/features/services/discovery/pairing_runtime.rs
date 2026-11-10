@@ -2,8 +2,8 @@ use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::discovery::nearby_http;
 use crate::features::discovery::nearby_http::Message;
 use crate::features::peers::pairing::protocol::PairingCancel;
-use crate::features::peers::pairing::protocol::PairingRequest;
 use crate::features::peers::pairing::protocol::PairingResponse;
+use crate::features::peers::pairing::protocol::{PairingRequest, PairingRequestPayload};
 use crate::features::peers::pairing::sessions::Target;
 use crate::features::peers::pairing::sessions::Ticket;
 use crate::features::services::discovery::pairing;
@@ -14,6 +14,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, HashMap},
+    net::IpAddr,
     sync::Mutex,
     time::{Duration, Instant},
 };
@@ -63,7 +64,7 @@ impl Runtime {
         map.insert(
             request.from_id.clone(),
             Association {
-                signature: request.signature.clone(),
+                signature: request.payload.signature.clone(),
                 address: address.into(),
                 received: Instant::now(),
             },
@@ -105,7 +106,8 @@ pub enum Request {
         generation: Option<String>,
     },
     ReceiveRequest {
-        request: PairingRequest,
+        payload: PairingRequestPayload,
+        client_id: String,
         address: String,
         ble: bool,
     },
@@ -368,7 +370,8 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
             let sent = nearby_http::send(
                 &ticket.target.device_ip,
                 ticket.target.device_port,
-                &Message::PairRequest(request),
+                &Message::PairRequest(request.payload),
+                Some(&request.from_id),
             )
             .await
             .unwrap_or(false);
@@ -415,6 +418,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
                         &ticket.target.device_ip,
                         ticket.target.device_port,
                         &Message::PairCancel(cancel),
+                        None,
                     )
                     .await;
                 }
@@ -422,22 +426,25 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
             value
         }
         Request::ReceiveRequest {
-            mut request,
+            payload,
+            client_id,
             address,
             ble,
         } => {
-            if !ble {
-                request.from_ip = address.clone();
-            }
-            if !crate::features::peers::pairing::security::verify_request(&request) {
-                return Ok(Value::Null);
-            }
+            anyhow::ensure!(
+                !client_id.is_empty() && client_id.len() <= 256,
+                "Invalid pairing client ID"
+            );
             let local_key =
                 crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
-            if request.to_id != state.native_client_id().map_err(anyhow::Error::msg)?
-                || request.target_public_key
-                    != plain_libs::utils::base64::base64_encode(&local_key[32..])
-            {
+            let request = PairingRequest {
+                to_id: state.native_client_id().map_err(anyhow::Error::msg)?,
+                target_public_key: plain_libs::utils::base64::base64_encode(&local_key[32..]),
+                from_id: client_id,
+                from_ip: if ble { String::new() } else { address.clone() },
+                payload,
+            };
+            if !crate::features::peers::pairing::security::verify_request(&request) {
                 return Ok(Value::Null);
             }
             if ble {
@@ -445,19 +452,19 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
             }
             let is_new = {
                 let _commit = state.pairing_runtime.commit.lock().unwrap();
-                pairing::receive_request(&state.pairing, &request).unwrap_or(false)
+                state.pairing.receive(&request)
             };
             if ble
                 && state
                     .pairing
-                    .incoming_target(&request.from_id, &request.signature)
+                    .incoming_target(&request.from_id, &request.payload.signature)
                     .is_some()
             {
                 if let Err(error) = state.pairing_runtime.remember(&request, &address) {
                     if is_new {
                         state
                             .pairing
-                            .take_incoming(&request.from_id, &request.signature);
+                            .take_incoming(&request.from_id, &request.payload.signature);
                     }
                     return Err(error);
                 }
@@ -465,7 +472,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
             if is_new {
                 let target = state
                     .pairing
-                    .incoming_target(&request.from_id, &request.signature)
+                    .incoming_target(&request.from_id, &request.payload.signature)
                     .ok_or_else(|| anyhow::anyhow!("Pairing expired"))?;
                 if state
                     .pairing_runtime
@@ -476,7 +483,9 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
                         &state.db,
                         &request.from_id,
                     )?
-                    .is_some_and(|p| p.is_paired() && p.public_key == request.signature_public_key);
+                    .is_some_and(|p| {
+                        p.is_paired() && p.public_key == request.payload.signature_public_key
+                    });
                     if pinned {
                         Box::pin(respond_device(state, request.clone(), true)).await?;
                     } else {
@@ -491,11 +500,11 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
                 if let Some(response) = state
                     .pairing_runtime
                     .confirmations
-                    .cached_response(&request.signature)?
+                    .cached_response(&request.payload.signature)?
                 {
                     if let Some(target) = state
                         .pairing
-                        .incoming_target(&request.from_id, &request.signature)
+                        .incoming_target(&request.from_id, &request.payload.signature)
                     {
                         send_incoming(state, &request, &target, Message::PairResponse(response))
                             .await?;
@@ -541,7 +550,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
         } => {
             let target = state
                 .pairing
-                .incoming_target(&request.from_id, &request.signature)
+                .incoming_target(&request.from_id, &request.payload.signature)
                 .ok_or_else(|| anyhow::anyhow!("Pairing request expired or no longer available"))?;
             let response = state
                 .pairing_runtime
@@ -562,7 +571,8 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
 pub async fn handle_nearby_post(
     state: &CoreRuntime,
     body: &str,
-    remote_ip: &str,
+    remote_ip: IpAddr,
+    client_id: Option<&str>,
 ) -> anyhow::Result<bool> {
     use crate::features::discovery::nearby_wire::Message;
     let kind = body
@@ -581,12 +591,13 @@ pub async fn handle_nearby_post(
         return Ok(false);
     }
     match Message::parse(body)? {
-        Message::PairRequest(request) => {
+        Message::PairRequest(payload) => {
             execute(
                 state,
                 Request::ReceiveRequest {
-                    request,
-                    address: remote_ip.to_owned(),
+                    payload,
+                    client_id: client_id.unwrap_or_default().to_owned(),
+                    address: remote_ip.to_string(),
                     ble: false,
                 },
             )
@@ -597,7 +608,7 @@ pub async fn handle_nearby_post(
                 state,
                 Request::Complete {
                     response,
-                    sender_ip: remote_ip.to_owned(),
+                    sender_ip: remote_ip.to_string(),
                 },
             )
             .await?;
@@ -613,6 +624,7 @@ pub async fn handle_nearby_post(
     }
     Ok(true)
 }
+
 pub async fn accept_report(state: &CoreRuntime, kind: &str, payload: &str) -> anyhow::Result<bool> {
     let request = match kind {
         "PAIRING_REQUEST_REPORTED" => {
@@ -624,7 +636,8 @@ pub async fn accept_report(state: &CoreRuntime, kind: &str, payload: &str) -> an
             }
             let report: Report = serde_json::from_str(payload)?;
             Request::ReceiveRequest {
-                request: report.request,
+                payload: report.request.payload,
+                client_id: report.request.from_id,
                 address: report.address,
                 ble: true,
             }
@@ -650,13 +663,13 @@ pub async fn send_incoming(
 ) -> anyhow::Result<()> {
     let address = state
         .pairing_runtime
-        .address(&request.from_id, &request.signature);
+        .address(&request.from_id, &request.payload.signature);
     let body = message.wire()?;
     let lan = async {
         if target.device_ip.is_empty() {
             return Ok(false);
         }
-        nearby_http::send(&target.device_ip, target.device_port, &message).await
+        nearby_http::send(&target.device_ip, target.device_port, &message, None).await
     };
     let ble = async {
         match address {

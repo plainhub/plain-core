@@ -221,20 +221,23 @@ fn signed_nearby_request() -> (
         to_id: "receiver".into(),
         target_public_key: plain_libs::utils::base64::base64_encode(&[1u8; 32]),
         from_id: "nearby-peer".into(),
-        from_name: "Nearby fixture".into(),
-        port: 2443,
-        device_type: plain_rs::features::chat::enums::DeviceType::Phone,
-        ecdh_public_key: plain_libs::utils::base64::base64_encode(
-            &plain_libs::crypto::EcdhSession::generate().public_key_bytes,
-        ),
-        signature_public_key: plain_libs::utils::base64::base64_encode(&public),
-        timestamp: plain_rs::features::peers::pairing::now_ms(),
-        ips: vec![],
-        signature: String::new(),
-        aware_supported: false,
         from_ip: String::new(),
+        payload: plain_rs::features::peers::pairing::protocol::PairingRequestPayload {
+            from_name: "Nearby fixture".into(),
+            port: 2443,
+            device_type: plain_rs::features::chat::enums::DeviceType::Phone,
+            ecdh_public_key: plain_libs::utils::base64::base64_encode(
+                &plain_libs::crypto::EcdhSession::generate().public_key_bytes,
+            ),
+            signature_public_key: plain_libs::utils::base64::base64_encode(&public),
+            timestamp: plain_rs::features::peers::pairing::now_ms(),
+            ips: vec![],
+            signature: String::new(),
+            aware_supported: false,
+        },
     };
-    request.signature = plain_libs::crypto::ed25519_sign(&key, request.signature_data().as_bytes());
+    request.payload.signature =
+        plain_libs::crypto::ed25519_sign(&key, request.signature_data().as_bytes());
     (request, key)
 }
 
@@ -255,17 +258,21 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
         .unwrap();
     let (mut request, requester_key) = signed_nearby_request();
     request.to_id = state.native_client_id().unwrap();
-    request.target_public_key = plain_libs::utils::base64::base64_encode(&plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()[32..]);
-    request.signature = plain_libs::crypto::ed25519_sign(&requester_key, request.signature_data().as_bytes());
+    request.target_public_key = plain_libs::utils::base64::base64_encode(
+        &plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
+            [32..],
+    );
+    request.payload.signature =
+        plain_libs::crypto::ed25519_sign(&requester_key, request.signature_data().as_bytes());
     let mut invalid = request.clone();
-    invalid.from_name.push_str("tampered");
+    invalid.payload.from_name.push_str("tampered");
     let mut events = state.events.subscribe();
-    let body = Message::PairRequest(invalid).wire().unwrap();
+    let body = Message::PairRequest(invalid.payload).wire().unwrap();
     let ack = incoming_exchange(
         &server,
         ble::NEARBY_CHAR_UUID,
         "untrusted-route",
-        ble::message(&[], body.as_bytes()).unwrap(),
+        ble::message(request.from_id.as_bytes(), body.as_bytes()).unwrap(),
     )
     .await
     .unwrap();
@@ -273,33 +280,38 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     assert!(
         state
             .pairing
-            .incoming_target(&request.from_id, &request.signature)
+            .incoming_target(&request.from_id, &request.payload.signature)
             .is_none()
     );
     assert!(events.try_recv().is_err());
-    let body = Message::PairRequest(request.clone()).wire().unwrap();
+    let body = Message::PairRequest(request.payload.clone())
+        .wire()
+        .unwrap();
     let ack = incoming_exchange(
         &server,
         ble::NEARBY_CHAR_UUID,
         "actual-radio-source",
-        ble::message(&[], body.as_bytes()).unwrap(),
+        ble::message(request.from_id.as_bytes(), body.as_bytes()).unwrap(),
     )
     .await
     .unwrap();
     assert_eq!(ble::nearby_body(&ack).unwrap(), b"1");
-    let verification_code = plain_rs::features::services::discovery::pairing_confirmation::identity_digest(&request).unwrap();
+    let verification_code =
+        plain_rs::features::services::discovery::pairing_confirmation::identity_digest(&request)
+            .unwrap();
     let event = events.try_recv().unwrap();
     assert_eq!(event.event_type, "PAIRING_REQUEST_RECEIVED");
     let delivered: plain_rs::features::peers::pairing::protocol::PairingRequest =
         serde_json::from_str(&event.payload).unwrap();
-    assert_eq!(delivered.signature, request.signature);
+    assert_eq!(delivered.payload.signature, request.payload.signature);
     let notice: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
     assert_eq!(notice["verificationCode"], verification_code);
     assert_eq!(delivered.from_ip, "");
     assert!(plain_rs::features::peers::pairing::security::verify_request(&delivered));
     let (generation, mut calls) = state.host.connect();
     let responding = state.clone();
-    let expected_signature = request.signature.clone();
+    let expected_signature = request.payload.signature.clone();
+    let requester_target_key = request.target_public_key.clone();
     let task = tokio::spawn(async move {
         pairing_runtime::execute(
             &responding,
@@ -334,8 +346,7 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     assert!(
         plain_rs::features::peers::pairing::security::verify_response(
             &response,
-            "nearby-peer",
-            "actor"
+            &requester_target_key,
         )
     );
     state
@@ -367,14 +378,20 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
     let state = server.runtime_state();
     let (mut request, key) = signed_nearby_request();
     request.to_id = state.native_client_id().unwrap();
-    request.target_public_key = plain_libs::utils::base64::base64_encode(&plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()[32..]);
-    request.signature = plain_libs::crypto::ed25519_sign(&key, request.signature_data().as_bytes());
-    let body = Message::PairRequest(request.clone()).wire().unwrap();
+    request.target_public_key = plain_libs::utils::base64::base64_encode(
+        &plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap()
+            [32..],
+    );
+    request.payload.signature =
+        plain_libs::crypto::ed25519_sign(&key, request.signature_data().as_bytes());
+    let body = Message::PairRequest(request.payload.clone())
+        .wire()
+        .unwrap();
     let ack = incoming_exchange(
         &server,
         ble::NEARBY_CHAR_UUID,
         "radio-source",
-        ble::message(&[], body.as_bytes()).unwrap(),
+        ble::message(request.from_id.as_bytes(), body.as_bytes()).unwrap(),
     )
     .await
     .unwrap();
@@ -383,13 +400,13 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
         from_id: request.from_id.clone(),
         to_id: "actor".into(),
         request_signature: "another-request".into(),
-        signature_public_key: request.signature_public_key.clone(),
+        signature_public_key: request.payload.signature_public_key.clone(),
         timestamp: plain_rs::features::peers::pairing::now_ms(),
         signature: String::new(),
     };
     for matching in [false, true] {
         if matching {
-            cancel.request_signature = request.signature.clone();
+            cancel.request_signature = request.payload.signature.clone();
         }
         cancel.signature =
             plain_libs::crypto::ed25519_sign(&key, cancel.signature_data().as_bytes());
@@ -406,7 +423,7 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
         assert_eq!(
             state
                 .pairing
-                .incoming_target(&request.from_id, &request.signature)
+                .incoming_target(&request.from_id, &request.payload.signature)
                 .is_none(),
             matching
         );
