@@ -29,18 +29,14 @@ impl PairingRequest {
     pub fn signature_data(&self) -> String {
         serde_json::json!([
             "pair-request",
-            "initiator",
             self.from_id,
             self.signature_public_key,
-            "responder",
             self.to_id,
             self.target_public_key,
-            self.from_id,
             self.from_name,
             self.port,
             self.device_type.as_str(),
             self.ecdh_public_key,
-            self.signature_public_key,
             self.timestamp,
             self.ips,
             self.aware_supported,

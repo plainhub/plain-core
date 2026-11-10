@@ -21,12 +21,10 @@ fn sample_request() -> PairingRequest {
 #[test]
 fn request_signature_data_format_is_locked() {
     let req = sample_request();
-    let signed: serde_json::Value = serde_json::from_str(&req.signature_data()).unwrap();
-    assert_eq!(signed[0], "pair-request");
-    assert_eq!(signed[1], "initiator");
-    assert_eq!(signed[4], "responder");
-    assert_eq!(signed[5], req.to_id);
-    assert_eq!(signed[6], req.target_public_key);
+    assert_eq!(
+        req.signature_data(),
+        r#"["pair-request","client-a","SIGPK","receiver","AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","Mac",8443,"COMPUTER","ECDH",1700000000000,["203.0.113.10","203.0.113.11"],false]"#
+    );
     // `from_ip` is stamped by the receiver and must not affect the signature.
     let mut stamped = req.clone();
     stamped.from_ip = "203.0.113.99".to_string();
@@ -103,7 +101,7 @@ fn request_device_enums_preserve_wire_and_signature_values() {
         assert_eq!(decoded.device_type, kind);
         assert_eq!(decoded.signature_data(), request.signature_data());
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&request.signature_data()).unwrap()[10],
+            serde_json::from_str::<serde_json::Value>(&request.signature_data()).unwrap()[7],
             kind.as_str()
         );
     }
