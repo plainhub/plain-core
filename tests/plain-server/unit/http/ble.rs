@@ -264,6 +264,14 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     );
     request.payload.signature =
         plain_libs::crypto::ed25519_sign(&requester_key, request.signature_data().as_bytes());
+    let mut pinned = plain_rs::infrastructure::db::DPeer::new(
+        &request.from_id, "Fixture", "192.0.2.1", None,
+        plain_rs::features::chat::enums::DeviceType::Phone,
+    );
+    pinned.public_key = request.payload.signature_public_key.clone();
+    plain_rs::infrastructure::db::chat_store::peers::save(
+        &state.db, &[pinned], plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
+    ).unwrap();
     let mut invalid = request.clone();
     invalid.payload.from_name.push_str("tampered");
     let mut events = state.events.subscribe();
@@ -296,21 +304,21 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     .await
     .unwrap();
     assert_eq!(ble::nearby_body(&ack).unwrap(), b"1");
-    let verification_code =
-        plain_rs::features::services::discovery::pairing_confirmation::identity_digest(&request)
-            .unwrap();
+
     let event = events.try_recv().unwrap();
     assert_eq!(event.event_type, "PAIRING_REQUEST_RECEIVED");
     let delivered: plain_rs::features::peers::pairing::protocol::PairingRequest =
         serde_json::from_str(&event.payload).unwrap();
     assert_eq!(delivered.payload.signature, request.payload.signature);
     let notice: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
-    assert_eq!(notice["verificationCode"], verification_code);
+    let code = notice["verificationCode"].as_str().unwrap();
+    assert_eq!(code.len(), 8);
+    assert!(code.bytes().all(|byte| byte.is_ascii_digit()));
     assert_eq!(delivered.from_ip, "");
     assert!(plain_rs::features::peers::pairing::security::verify_request(&delivered));
     let (generation, mut calls) = state.host.connect();
     let responding = state.clone();
-    let expected_signature = request.payload.signature.clone();
+    let expected_request_id = request.payload.request_id();
     let requester_target_key = request.target_public_key.clone();
     let task = tokio::spawn(async move {
         pairing_runtime::execute(
@@ -341,7 +349,7 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     else {
         panic!("Expected pairing response")
     };
-    assert_eq!(response.request_signature, expected_signature);
+    assert_eq!(response.request_id, expected_request_id);
     assert!(!response.accepted);
     assert!(
         plain_rs::features::peers::pairing::security::verify_response(
@@ -362,9 +370,8 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
             .unwrap()
     );
     assert!(
-        plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "nearby-peer")
-            .unwrap()
-            .is_none()
+        !plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "nearby-peer")
+            .unwrap().unwrap().is_paired()
     );
     state.host.disconnect(generation);
     server.shutdown().await;
@@ -384,6 +391,14 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
     );
     request.payload.signature =
         plain_libs::crypto::ed25519_sign(&key, request.signature_data().as_bytes());
+    let mut pinned = plain_rs::infrastructure::db::DPeer::new(
+        &request.from_id, "Fixture", "192.0.2.1", None,
+        plain_rs::features::chat::enums::DeviceType::Phone,
+    );
+    pinned.public_key = request.payload.signature_public_key.clone();
+    plain_rs::infrastructure::db::chat_store::peers::save(
+        &state.db, &[pinned], plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
+    ).unwrap();
     let body = Message::PairRequest(request.payload.clone())
         .wire()
         .unwrap();
@@ -429,9 +444,8 @@ async fn nearby_cancel_requires_the_matching_signed_request() {
         );
     }
     assert!(
-        plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "nearby-peer")
-            .unwrap()
-            .is_none()
+        !plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "nearby-peer")
+            .unwrap().unwrap().is_paired()
     );
     server.shutdown().await;
 }

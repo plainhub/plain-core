@@ -10,7 +10,11 @@ use crate::features::services::discovery::pairing_runtime::failed;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::utils::base64::base64_encode;
 use serde_json::{Value, json};
-use std::{collections::HashMap, sync::Mutex, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 #[derive(Default)]
 pub struct Pairings(Mutex<HashMap<String, Ticket>>);
 enum Cause {
@@ -22,6 +26,7 @@ pub fn start(
     mut target: Target,
     device: Device,
     generation: Option<String>,
+
 ) -> anyhow::Result<Value> {
     let mut jobs = state.ble_pairing.0.lock().unwrap();
     if let Some(ticket) = jobs.get(&target.device_id) {
@@ -51,14 +56,20 @@ pub fn start(
         }) {
             return Ok(Value::Null);
         }
-        pairing::start_generation(&state.prefs, &state.pairing, target, device, generation)?
+        pairing::start_generation(
+            &state.prefs,
+            &state.pairing,
+            target,
+            device,
+            generation,
+        )?
     };
     let ticket: Ticket = serde_json::from_value(value["ticket"].clone())?;
     let request = serde_json::from_value(value["request"].clone())?;
     state
         .pairing_runtime
         .confirmations
-        .begin(&request, &ticket)?;
+        .begin(state, &request, &ticket)?;
     let body = Message::PairRequest(request.payload).wire()?;
     let packet = crate::infrastructure::protocols::ble::message(
         request.from_id.as_bytes(),
@@ -128,7 +139,7 @@ async fn run(state: &CoreRuntime, ticket: &Ticket, packet: &str) -> Result<(), C
     }
     let mut send = facts.clone();
     send["packet"] = json!(packet);
-    if host(state, ticket, "blePairSend", send).await? != Value::Bool(true) {
+    if host(state, ticket, "blePairSend", send.clone()).await? != Value::Bool(true) {
         return Err(Cause::Failed("Failed to send pairing request".into()));
     }
     if !state
@@ -149,6 +160,7 @@ async fn run(state: &CoreRuntime, ticket: &Ticket, packet: &str) -> Result<(), C
         WS_PAIRING_STARTED,
         json!({"deviceId":ticket.target.device_id,"deviceName":ticket.target.device_name,"generation":ticket.generation}),
     );
+    let mut last_send = Instant::now();
     loop {
         let Some(remaining) = state
             .pairing
@@ -156,6 +168,17 @@ async fn run(state: &CoreRuntime, ticket: &Ticket, packet: &str) -> Result<(), C
         else {
             return Err(Cause::Stopped);
         };
+        if last_send.elapsed() >= Duration::from_secs(3)
+            && state
+                .pairing_runtime
+                .confirmations
+                .awaiting_response(state, ticket)
+        {
+            if host(state, ticket, "blePairSend", send.clone()).await? != Value::Bool(true) {
+                return Err(Cause::Failed("Failed to resend pairing request".into()));
+            }
+            last_send = Instant::now();
+        }
         let mut wait = facts.clone();
         wait["timeoutMs"] = json!(remaining.min(1000));
         let response = host(state, ticket, "blePairWait", wait).await?;
@@ -172,41 +195,17 @@ async fn run(state: &CoreRuntime, ticket: &Ticket, packet: &str) -> Result<(), C
             Ok(message) => message,
             Err(_) => continue,
         };
-        match message {
-            Message::PairVerification(verification) => {
-                let action = state
-                    .pairing_runtime
-                    .confirmations
-                    .process(state, verification)
-                    .map_err(|e| Cause::Failed(e.to_string()))?;
-                crate::features::services::discovery::pairing_confirmation::deliver(state, action)
-                    .await
-                    .map_err(|e| Cause::Failed(e.to_string()))?;
-                if state
-                    .pairing
-                    .remaining_ms(&ticket.target.device_id, &ticket.generation)
-                    .is_none()
-                {
-                    return Ok(());
-                }
-            }
-            Message::PairResponse(response)
-                if response.request_signature == ticket.request_signature =>
-            {
-                if let Some(action) = state
+        if let Message::PairResponse(response) = message {
+            if response.request_id == crate::features::peers::pairing::protocol::request_id(&ticket.request_signature) {
+                match state
                     .pairing_runtime
                     .confirmations
                     .response(state, &response, "")
-                    .map_err(|e| Cause::Failed(e.to_string()))?
                 {
-                    crate::features::services::discovery::pairing_confirmation::deliver(
-                        state, action,
-                    )
-                    .await
-                    .map_err(|e| Cause::Failed(e.to_string()))?;
+                    Ok(()) => return Ok(()),
+                    Err(error) => log::warn!("BLE pairing response rejected: {error}"),
                 }
             }
-            _ => {}
         }
     }
 }

@@ -37,7 +37,6 @@ pub enum Message {
     PairRequest(PairingRequestPayload),
     PairResponse(PairingResponse),
     PairCancel(PairingCancel),
-    PairVerification(crate::features::peers::pairing::confirmation::Verification),
 }
 impl Message {
     pub fn wire(&self) -> Result<String> {

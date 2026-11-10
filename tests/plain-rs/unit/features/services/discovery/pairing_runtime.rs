@@ -62,15 +62,30 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
         device_ip: "127.0.0.1".into(),
         device_port: 2443,
     };
-    let started =
-        pairing::start(&remote_state.prefs, &remote_state.pairing, target, device()).unwrap();
+    let started = pairing::start_generation(
+        &remote_state.prefs,
+        &remote_state.pairing,
+        target,
+        device(),
+        None,
+    )
+    .unwrap();
     let request: PairingRequest = serde_json::from_value(started["request"].clone()).unwrap();
+    let mut pinned = crate::infrastructure::db::DPeer::new(
+        &request.from_id, "Fixture", "192.0.2.1", None,
+        crate::features::chat::enums::DeviceType::Phone,
+    );
+    pinned.public_key = request.payload.signature_public_key.clone();
+    crate::infrastructure::db::chat_store::peers::save(
+        &state.db, &[pinned], crate::infrastructure::db::chat_store::SaveMode::Insert,
+    ).unwrap();
+
     let ticket: crate::features::peers::pairing::sessions::Ticket =
         serde_json::from_value(started["ticket"].clone()).unwrap();
     remote_state
         .pairing_runtime
         .confirmations
-        .begin(&request, &ticket)
+        .begin(&remote_state, &request, &ticket)
         .unwrap();
     execute(
         &state,
@@ -104,9 +119,8 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
         );
     }
     assert!(
-        crate::infrastructure::db::chat_store::peers::all(&state.db)
-            .unwrap()
-            .is_empty()
+        !crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)
+            .unwrap().unwrap().is_paired()
     );
     local.shutdown().await;
     remote.shutdown().await;
@@ -127,15 +141,30 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         device_ip: String::new(),
         device_port: 2443,
     };
-    let started =
-        pairing::start(&remote_state.prefs, &remote_state.pairing, target, device()).unwrap();
+    let started = pairing::start_generation(
+        &remote_state.prefs,
+        &remote_state.pairing,
+        target,
+        device(),
+        None,
+    )
+    .unwrap();
     let request: PairingRequest = serde_json::from_value(started["request"].clone()).unwrap();
+    let mut pinned = crate::infrastructure::db::DPeer::new(
+        &request.from_id, "Fixture", "192.0.2.1", None,
+        crate::features::chat::enums::DeviceType::Phone,
+    );
+    pinned.public_key = request.payload.signature_public_key.clone();
+    crate::infrastructure::db::chat_store::peers::save(
+        &state.db, &[pinned], crate::infrastructure::db::chat_store::SaveMode::Insert,
+    ).unwrap();
+
     let ticket: crate::features::peers::pairing::sessions::Ticket =
         serde_json::from_value(started["ticket"].clone()).unwrap();
     remote_state
         .pairing_runtime
         .confirmations
-        .begin(&request, &ticket)
+        .begin(&remote_state, &request, &ticket)
         .unwrap();
     assert_eq!(
         execute(
@@ -197,7 +226,15 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     let (generation, mut calls) = state.host.connect();
     let host = state.host.clone();
     let responder = tokio::spawn(async move {
-        let call = calls.recv().await.unwrap();
+        let call = loop {
+            let call = calls.recv().await.unwrap();
+            if call["method"] == "pairingNotification" {
+                break call;
+            }
+            assert_eq!(call["method"], "pairingSucceeded");
+            host.reply(generation, json!({"id":call["id"],"result":true}))
+                .unwrap();
+        };
         assert_eq!(call["method"], "pairingNotification");
         assert_eq!(call["params"]["address"], "fixture-mac");
         let Message::PairResponse(response) =
@@ -221,41 +258,10 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     .unwrap();
     let response = responder.await.unwrap();
     assert!(accepted.get("peer").is_none() || accepted["peer"].is_null());
-    assert!(
-        remote_state
-            .pairing_runtime
-            .confirmations
-            .response(&remote_state, &response, "")
-            .unwrap()
-            .is_none()
-    );
-    let action = remote_state
-        .pairing_runtime
-        .confirmations
-        .confirm(&remote_state, &ticket.generation)
-        .unwrap();
-    let crate::features::services::discovery::pairing_confirmation::Action::Send {
-        message: Message::PairVerification(finish),
-        ..
-    } = action
-    else {
-        panic!()
-    };
-    let crate::features::services::discovery::pairing_confirmation::Action::Notify {
-        message: Message::PairVerification(ack),
-        ..
-    } = state
-        .pairing_runtime
-        .confirmations
-        .process(&state, finish)
-        .unwrap()
-    else {
-        panic!()
-    };
     remote_state
         .pairing_runtime
         .confirmations
-        .process(&remote_state, ack)
+        .response(&remote_state, &response, "")
         .unwrap();
     let a = crate::infrastructure::db::chat_store::peers::get(&state.db, "remote")
         .unwrap()
@@ -264,22 +270,44 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         .unwrap()
         .unwrap();
     assert_eq!(a.key, b.key);
-    for accepted in [true, false] {
-        let error = execute(
+    let (generation, mut calls) = state.host.connect();
+    let host = state.host.clone();
+    let cached = response.signature.clone();
+    let retry = tokio::spawn(async move {
+        let call = loop {
+            let call = calls.recv().await.unwrap();
+            if call["method"] == "pairingNotification" {
+                break call;
+            }
+            assert_eq!(call["method"], "pairingSucceeded");
+            host.reply(generation, json!({"id":call["id"],"result":true}))
+                .unwrap();
+        };
+        assert_eq!(call["method"], "pairingNotification");
+        let Message::PairResponse(reply) =
+            Message::parse(call["params"]["body"].as_str().unwrap()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(reply.signature, cached);
+        host.reply(generation, json!({"id":call["id"],"result":true}))
+            .unwrap();
+    });
+    assert_eq!(
+        execute(
             &state,
-            Request::Respond {
-                request: request.clone(),
-                accepted,
-                device: device(),
-            },
+            Request::ReceiveRequest {
+                payload: request.payload.clone(),
+                client_id: request.from_id.clone(),
+                address: "fixture-mac".into(),
+                ble: true,
+            }
         )
         .await
-        .unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "Pairing request expired or no longer available"
-        );
-    }
+        .unwrap(),
+        false
+    );
+    retry.await.unwrap();
     assert_eq!(
         state
             .pairing_runtime
@@ -332,6 +360,7 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
             &state,
             &json!({"id":"peer","name":"Phone","key":"fixture-secret"}),
             "127.0.0.1",
+            None,
         );
         let public = events.recv().await.unwrap();
         assert_eq!(

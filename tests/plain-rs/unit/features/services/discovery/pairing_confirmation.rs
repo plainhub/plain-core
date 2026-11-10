@@ -50,351 +50,169 @@ fn begin(a: &CoreRuntime, b: &CoreRuntime) -> (PairingRequest, Ticket) {
     let ticket: Ticket = serde_json::from_value(value["ticket"].clone()).unwrap();
     a.pairing_runtime
         .confirmations
-        .begin(&request, &ticket)
+        .begin(a, &request, &ticket)
         .unwrap();
     assert_eq!(pairing::receive_request(&b.pairing, &request), Some(true));
-    let target = b
-        .pairing
-        .incoming_target(&request.from_id, &request.payload.signature)
-        .unwrap();
     b.pairing_runtime
         .confirmations
-        .register(b, &request, target)
+        .register(b, &request)
         .unwrap();
     (request, ticket)
-}
-fn verification(action: Action) -> Verification {
-    match action {
-        Action::Send {
-            message: Message::PairVerification(v),
-            ..
-        }
-        | Action::Notify {
-            message: Message::PairVerification(v),
-            ..
-        } => v,
-        _ => panic!("expected verification"),
-    }
 }
 fn peer(state: &CoreRuntime, id: &str) -> Option<crate::infrastructure::db::DPeer> {
     crate::infrastructure::db::chat_store::peers::get(&state.db, id).unwrap()
 }
+
 #[tokio::test]
-async fn four_flights_require_both_approvals_and_new_key_possession() {
+async fn signed_reply_commits_both_peers_and_retries_keep_original_key() {
     let (_ad, a) = fixture("a");
     let (_bd, b) = fixture("b");
-    let a = &a.runtime_state();
-    let b = &b.runtime_state();
-    let (request, ticket) = begin(a, b);
-    let digest = identity_digest(&request).unwrap();
-    assert_eq!(digest.len(), 64);
-    let response = b
+    let a = a.runtime_state();
+    let b = b.runtime_state();
+    let (request, ticket) = begin(&a, &b);
+    let code = a
+        .pairing_runtime
+        .attempts
+        .get(&ticket.generation)
+        .unwrap()
+        .verification_code
+        .unwrap();
+    assert_eq!(code, verification_code(&request));
+    assert_eq!(code.len(), 8);
+    assert!(code.bytes().all(|byte| byte.is_ascii_digit()));
+    assert!(peer(&a, "b").is_none());
+    assert!(peer(&b, "a").is_none());
+
+    let (reply, _) = b
         .pairing_runtime
         .confirmations
-        .respond(b, &request, true, device())
+        .respond(&b, &request, true, device())
         .unwrap();
-    assert!(peer(a, "b").is_none());
-    assert!(peer(b, "a").is_none());
-    assert!(
-        a.pairing_runtime
-            .confirmations
-            .response(a, &response, "")
-            .unwrap()
-            .is_none()
-    );
-    assert!(peer(a, "b").is_none());
-    assert!(peer(b, "a").is_none());
-    let finish = verification(
-        a.pairing_runtime
-            .confirmations
-            .confirm(a, &ticket.generation)
-            .unwrap(),
-    );
-    let serialized = serde_json::to_string(&finish).unwrap();
-    let ack = verification(b.pairing_runtime.confirmations.process(b, finish).unwrap());
-    assert!(peer(a, "b").is_none());
-    assert!(peer(b, "a").is_some());
-    let cached = verification(
-        b.pairing_runtime
-            .confirmations
-            .process(b, serde_json::from_str(&serialized).unwrap())
-            .unwrap(),
-    );
+    let b_peer = peer(&b, "a").unwrap();
+    assert!(peer(&a, "b").is_none());
+    let (retried, _) = b
+        .pairing_runtime
+        .confirmations
+        .respond(&b, &request, false, device())
+        .unwrap();
     assert_eq!(
-        serde_json::to_string(&cached).unwrap(),
-        serde_json::to_string(&ack).unwrap()
+        serde_json::to_vec(&retried).unwrap(),
+        serde_json::to_vec(&reply).unwrap()
     );
-    a.pairing_runtime.confirmations.process(a, ack).unwrap();
-    assert_eq!(peer(a, "b").unwrap().key, peer(b, "a").unwrap().key);
-}
-#[tokio::test]
-async fn replayed_request_and_reflected_finish_do_not_activate() {
-    let (_ad, a) = fixture("a");
-    let (_bd, b) = fixture("b");
-    let a = &a.runtime_state();
-    let b = &b.runtime_state();
-    let (request, ticket) = begin(a, b);
-    let response = b
-        .pairing_runtime
-        .confirmations
-        .respond(b, &request, true, device())
-        .unwrap();
-    a.pairing_runtime
-        .confirmations
-        .response(a, &response, "")
-        .unwrap();
-    let Verification::Finish {
-        request_signature,
-        proof,
-    } = verification(
-        a.pairing_runtime
-            .confirmations
-            .confirm(a, &ticket.generation)
-            .unwrap(),
-    )
-    else {
-        panic!()
-    };
-    assert!(
-        a.pairing_runtime
-            .confirmations
-            .process(
-                a,
-                Verification::Ack {
-                    request_signature: request_signature.clone(),
-                    proof: proof.clone()
-                }
-            )
-            .is_err()
-    );
-    assert!(peer(a, "b").is_none());
-    let target = b
-        .pairing
-        .incoming_target(&request.from_id, &request.payload.signature)
-        .unwrap();
-    assert!(
-        !b.pairing_runtime
-            .confirmations
-            .register(b, &request, target)
-            .unwrap()
-    );
-    assert!(peer(b, "a").is_none());
-    b.pairing_runtime
-        .confirmations
-        .process(
-            b,
-            Verification::Finish {
-                request_signature,
-                proof,
-            },
-        )
-        .unwrap();
-}
-#[tokio::test]
-async fn cancellation_prevents_late_finish_and_preserves_active_key() {
-    let (_ad, a) = fixture("a");
-    let (_bd, b) = fixture("b");
-    let a = &a.runtime_state();
-    let b = &b.runtime_state();
-    let (request, ticket) = begin(a, b);
-    let response = b
-        .pairing_runtime
-        .confirmations
-        .respond(b, &request, true, device())
-        .unwrap();
-    a.pairing_runtime
-        .confirmations
-        .response(a, &response, "")
-        .unwrap();
-    let finish = verification(
-        a.pairing_runtime
-            .confirmations
-            .confirm(a, &ticket.generation)
-            .unwrap(),
-    );
-    b.pairing
-        .take_incoming(&request.from_id, &request.payload.signature);
-    assert!(b.pairing_runtime.confirmations.process(b, finish).is_err());
-    assert!(peer(b, "a").is_none());
-}
-#[tokio::test]
-async fn transcript_and_roles_change_key_and_full_digest() {
-    let (_ad, a) = fixture("a");
-    let (_bd, b) = fixture("b");
-    let (request, _) = begin(&a.runtime_state(), &b.runtime_state());
-    let response = b
-        .runtime_state()
-        .pairing_runtime
-        .confirmations
-        .respond(&b.runtime_state(), &request, true, device())
-        .unwrap();
-    let channel = Channel::new(&[3; 32], &request, &response);
-    let mut changed = response.clone();
-    changed.aware_supported = !changed.aware_supported;
-    assert_ne!(channel.key, Channel::new(&[3; 32], &request, &changed).key);
-    let mut swapped = request.clone();
-    std::mem::swap(
-        &mut swapped.payload.signature_public_key,
-        &mut swapped.target_public_key,
-    );
-    assert_ne!(
-        identity_digest(&request).unwrap(),
-        identity_digest(&swapped).unwrap()
-    );
-}
+    assert_eq!(peer(&b, "a").unwrap().updated_at, b_peer.updated_at);
 
-#[tokio::test]
-async fn database_failure_keeps_old_active_key_and_confirmation_retryable() {
-    let (_ad, a) = fixture("a");
-    let (_bd, b) = fixture("b");
-    let a = a.runtime_state();
-    let b = b.runtime_state();
-    let public = crate::features::services::peers::peer_wire::signing_keypair(&a.prefs).unwrap();
-    peer_store::save(
-        &b.db,
-        Facts {
-            id: "a".into(),
-            name: "Old".into(),
-            ips: vec![],
-            port: 2443,
-            device_type: crate::features::chat::enums::DeviceType::Phone,
-            key: base64_encode(&[42; 32]),
-            public_key: base64_encode(&public[32..]),
-        },
-    )
-    .unwrap();
-    let (request, ticket) = begin(&a, &b);
-    let response = b
-        .pairing_runtime
-        .confirmations
-        .respond(&b, &request, true, device())
-        .unwrap();
-    assert_eq!(peer(&b, "a").unwrap().key, base64_encode(&[42; 32]));
-    a.pairing_runtime
-        .confirmations
-        .response(&a, &response, "")
-        .unwrap();
-    let finish = verification(
-        a.pairing_runtime
-            .confirmations
-            .confirm(&a, &ticket.generation)
-            .unwrap(),
-    );
-    let wire = serde_json::to_string(&finish).unwrap();
-    b.db.with_conn(|c|c.execute_batch("CREATE TRIGGER reject_pair BEFORE UPDATE ON peers BEGIN SELECT RAISE(ABORT, 'fixture'); END;")).unwrap();
-    assert!(b.pairing_runtime.confirmations.process(&b, finish).is_err());
-    assert_eq!(peer(&b, "a").unwrap().key, base64_encode(&[42; 32]));
-    b.db.with_conn(|c| c.execute_batch("DROP TRIGGER reject_pair;"))
-        .unwrap();
-    let ack = verification(
-        b.pairing_runtime
-            .confirmations
-            .process(&b, serde_json::from_str(&wire).unwrap())
-            .unwrap(),
-    );
-    a.pairing_runtime.confirmations.process(&a, ack).unwrap();
-    assert_ne!(peer(&b, "a").unwrap().key, base64_encode(&[42; 32]));
-    let active = peer(&b, "a").unwrap().key;
-    b.pairing_runtime
-        .confirmations
-        .process(&b, serde_json::from_str(&wire).unwrap())
-        .unwrap();
-    assert_eq!(peer(&b, "a").unwrap().key, active);
-}
-
-#[tokio::test]
-async fn target_change_and_concurrent_pin_change_cannot_commit() {
-    let (_ad, a) = fixture("a");
-    let (_bd, b) = fixture("b");
-    let a = a.runtime_state();
-    let b = b.runtime_state();
-    let (request, ticket) = begin(&a, &b);
-    let response = b
-        .pairing_runtime
-        .confirmations
-        .respond(&b, &request, true, device())
-        .unwrap();
-    let mut forged = response.clone();
-    forged.signature = base64_encode(&[9; 64]);
+    let mut forged = reply.clone();
+    forged.signature = base64_encode(&[0; 64]);
     assert!(
         a.pairing_runtime
             .confirmations
             .response(&a, &forged, "")
             .is_err()
     );
+    assert!(peer(&a, "b").is_none());
     a.pairing_runtime
         .confirmations
-        .response(&a, &response, "")
+        .response(&a, &retried, "")
         .unwrap();
-    let finish = verification(
+    let a_peer = peer(&a, "b").unwrap();
+    assert_eq!(a_peer.key, b_peer.key);
+    assert_eq!(
         a.pairing_runtime
-            .confirmations
-            .confirm(&a, &ticket.generation)
-            .unwrap(),
+            .attempts
+            .get(&ticket.generation)
+            .unwrap()
+            .phase,
+        PairingPhase::Succeeded
     );
-    peer_store::save(
-        &b.db,
-        Facts {
-            id: "a".into(),
-            name: "Other".into(),
-            ips: vec![],
-            port: 2443,
-            device_type: crate::features::chat::enums::DeviceType::Phone,
-            key: base64_encode(&[42; 32]),
-            public_key: base64_encode(&[9; 32]),
-        },
-    )
-    .unwrap();
-    assert!(b.pairing_runtime.confirmations.process(&b, finish).is_err());
-    assert_eq!(peer(&b, "a").unwrap().key, base64_encode(&[42; 32]));
+    a.pairing_runtime
+        .confirmations
+        .response(&a, &reply, "")
+        .unwrap();
+    assert_eq!(peer(&a, "b").unwrap().updated_at, a_peer.updated_at);
 }
 
 #[tokio::test]
-async fn activation_holds_generation_lock_through_database_commit() {
+async fn a_cancelled_attempt_cannot_commit_a_late_reply() {
     let (_ad, a) = fixture("a");
     let (_bd, b) = fixture("b");
     let a = a.runtime_state();
     let b = b.runtime_state();
     let (request, ticket) = begin(&a, &b);
-    let response = b
+    let (reply, _) = b
         .pairing_runtime
         .confirmations
         .respond(&b, &request, true, device())
         .unwrap();
-    a.pairing_runtime
-        .confirmations
-        .response(&a, &response, "")
-        .unwrap();
-    let finish = verification(
+    a.pairing.cancel("b", Some(&ticket.generation)).unwrap();
+    assert!(
         a.pairing_runtime
             .confirmations
-            .confirm(&a, &ticket.generation)
-            .unwrap(),
+            .response(&a, &reply, "")
+            .is_err()
     );
-    let pairing = b.pairing_runtime.clone();
-    let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let observed = count.clone();
-    b.db.with_conn(|c| {
-        c.progress_handler(
-            1,
-            Some(move || {
-                assert!(
-                    pairing.commit.try_lock().is_err(),
-                    "generation replacement must not interleave with activation"
-                );
-                observed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                false
-            }),
-        );
-        Ok::<_, anyhow::Error>(())
-    })
-    .unwrap();
-    let result = b.pairing_runtime.confirmations.process(&b, finish);
-    b.db.with_conn(|c| {
-        c.progress_handler(0, None::<fn() -> bool>);
-        Ok::<_, anyhow::Error>(())
-    })
-    .unwrap();
-    assert!(result.is_ok());
-    assert!(count.load(std::sync::atomic::Ordering::Relaxed) > 0);
+    assert!(peer(&a, "b").is_none());
+}
+
+#[tokio::test]
+async fn declined_reply_is_cached_and_does_not_write_peers() {
+    let (_ad, a) = fixture("a");
+    let (_bd, b) = fixture("b");
+    let a = a.runtime_state();
+    let b = b.runtime_state();
+    let (request, ticket) = begin(&a, &b);
+    let (reply, _) = b
+        .pairing_runtime
+        .confirmations
+        .respond(&b, &request, false, device())
+        .unwrap();
+    let cached = b
+        .pairing_runtime
+        .confirmations
+        .cached_response(&request)
+        .unwrap()
+        .unwrap();
+    assert_eq!(cached.signature, reply.signature);
+    a.pairing_runtime
+        .confirmations
+        .response(&a, &cached, "")
+        .unwrap();
+    assert_eq!(
+        a.pairing_runtime
+            .attempts
+            .get(&ticket.generation)
+            .unwrap()
+            .phase,
+        PairingPhase::Failed
+    );
+    assert!(peer(&a, "b").is_none());
+    assert!(peer(&b, "a").is_none());
+}
+
+#[tokio::test]
+async fn failed_peer_write_retries_the_same_signed_reply() {
+    let (_ad, a) = fixture("a");
+    let (_bd, b) = fixture("b");
+    let a = a.runtime_state();
+    let b = b.runtime_state();
+    let (request, _) = begin(&a, &b);
+    let (reply, _) = b
+        .pairing_runtime
+        .confirmations
+        .respond(&b, &request, true, device())
+        .unwrap();
+    a.db.with_conn(|c| c.execute_batch("CREATE TEMP TRIGGER fail_pair BEFORE INSERT ON peers BEGIN SELECT RAISE(FAIL, 'test failure'); END;")).unwrap();
+    assert!(
+        a.pairing_runtime
+            .confirmations
+            .response(&a, &reply, "")
+            .is_err()
+    );
+    assert!(peer(&a, "b").is_none());
+    a.db.with_conn(|c| c.execute_batch("DROP TRIGGER fail_pair"))
+        .unwrap();
+    a.pairing_runtime
+        .confirmations
+        .response(&a, &reply, "")
+        .unwrap();
+    assert_eq!(peer(&a, "b").unwrap().key, peer(&b, "a").unwrap().key);
 }

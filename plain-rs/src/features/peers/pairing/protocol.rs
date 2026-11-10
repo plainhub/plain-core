@@ -31,10 +31,21 @@ pub struct PairingRequestPayload {
     pub aware_supported: bool,
 }
 
+impl PairingRequestPayload {
+    pub fn request_id(&self) -> String {
+        request_id(&self.signature)
+    }
+}
+
+pub fn request_id(signature: &str) -> String {
+    use sha2::{Digest, Sha256};
+    plain_libs::utils::base64::base64_encode(&Sha256::digest(signature.as_bytes()))
+}
+
 impl PairingRequest {
     pub fn signature_data(&self) -> String {
         serde_json::json!([
-            "pair-request",
+            "chat-pair-request",
             self.from_id,
             self.payload.signature_public_key,
             self.to_id,
@@ -54,7 +65,11 @@ impl PairingRequest {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PairingResponse {
-    pub request_signature: String,
+    pub request_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature_public_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_name: Option<String>,
     pub port: u16,
     pub device_type: DeviceType,
     pub ecdh_public_key: String,
@@ -70,8 +85,10 @@ pub struct PairingResponse {
 impl PairingResponse {
     pub fn signature_data(&self) -> String {
         serde_json::json!([
-            "pair-response",
-            self.request_signature,
+            "chat-pair-response",
+            self.request_id,
+            self.signature_public_key,
+            self.from_name,
             self.port,
             self.device_type.as_str(),
             self.ecdh_public_key,

@@ -1,61 +1,41 @@
 use super::*;
-use crate::features::chat::enums::DeviceType;
+use plain_libs::{
+    crypto::{EcdhSession, ed25519_generate, ed25519_sign},
+    utils::base64::base64_encode,
+};
 
 #[test]
-fn pairing_code_preserves_identity_and_decodes_utf8_plus_and_repeated_addresses() {
-    let value = parse("plainapp://pair?v=1&id=fixture&name=%E4%B8%AD%E6%96%87+device&ips=192.0.2.1,192.0.2.2&ips=2001%3Adb8%3A%3A1&port=8443").unwrap();
-    assert_eq!(value.name, "中文 device");
-    assert_eq!(value.ips, ["192.0.2.1", "192.0.2.2", "2001:db8::1"]);
-    let device = value.into_device();
-    assert_eq!(device.id, "fixture");
-    assert_eq!(device.port, 8443);
-    assert_eq!(device.device_type, DeviceType::Computer);
-    assert_eq!(
-        device.discovery_methods,
-        [
-            crate::features::discovery::nearby_devices::DiscoveryMethod::Lan,
-            crate::features::discovery::nearby_devices::DiscoveryMethod::Qr
-        ]
-    );
-    device.validate().unwrap();
-}
-
-#[test]
-fn non_pairing_codes_and_incomplete_or_out_of_range_targets_are_rejected() {
-    for code in [
-        "hello",
-        "https://example.com/pair?v=1",
-        "plainapp://pair?v=1&name=Device&ips=192.0.2.1&port=8443",
-        "plainapp://pair?id=fixture&name=Device&ips=&port=8443",
-        "plainapp://pair?id=fixture&name=Device&ips=192.0.2.1&port=invalid",
-        "plainapp://pair?id=fixture&name=Device&ips=192.0.2.1&port=65536",
-        "plainapp://pair?id=fixture&name=Device&ips=192.0.2.1&port=0",
-    ] {
-        assert!(parse(code).is_none(), "{code}");
-    }
-}
-
-#[test]
-fn repeated_scalar_fields_follow_the_last_value() {
-    let value =
-        parse("plainapp://pair?id=old&id=current&name=Device&ips=192.0.2.1&port=80&port=443")
-            .unwrap();
-    assert_eq!(value.id, "current");
-    assert_eq!(value.port, 443);
-}
-
-#[test]
-fn generated_codes_round_trip_reserved_characters_and_ipv6_without_platform_logic() {
-    let value = Payload {
-        id: "id+&value".into(),
-        name: "Device α + &? /".into(),
-        ips: vec!["192.0.2.4".into(), "2001:db8::1".into()],
-        port: 8443,
+fn qr_carries_a_signed_request_and_rejects_legacy_or_modified_codes() {
+    let (key, public) = ed25519_generate();
+    let mut request = PairingRequest {
+        from_id: "id+&value".into(),
+        from_ip: String::new(),
+        to_id: String::new(),
+        target_public_key: String::new(),
+        payload: PairingRequestPayload {
+            from_name: "Device α + &? /".into(),
+            device_type: crate::features::chat::enums::DeviceType::Phone,
+            ips: vec!["192.0.2.4".into(), "2001:db8::1".into()],
+            port: 8443,
+            signature_public_key: base64_encode(&public),
+            ecdh_public_key: base64_encode(&EcdhSession::generate().public_key_bytes),
+            timestamp: crate::features::peers::pairing::now_ms(),
+            signature: String::new(),
+            aware_supported: false,
+        },
     };
-    let code = format(&value).unwrap();
-    assert_eq!(parse(&code).unwrap(), value);
-    assert!(code.contains("name=Device%20%CE%B1%20%2B%20%26%3F%20%2F"));
-    assert!(!code.contains("name=Device "));
-    let no_listener = Payload { port: 0, ..value };
-    assert!(format(&no_listener).is_none());
+    request.payload.signature = ed25519_sign(&key, request.signature_data().as_bytes());
+    let code = format(&request).unwrap();
+    let parsed = parse(&code).unwrap().into_request();
+    assert_eq!(request.signature_data(), parsed.signature_data());
+    assert_eq!(request.payload.signature, parsed.payload.signature);
+    assert_eq!(
+        parse(&code).unwrap().into_device().device_type,
+        request.payload.device_type
+    );
+    assert!(parse("plainapp://pair?v=2&id=fixture&name=Device&ips=192.0.2.1&port=8443").is_err());
+    assert!(parse(&code.replace("8443", "9443")).is_err());
+    request.payload.timestamp -= 300_001;
+    request.payload.signature = ed25519_sign(&key, request.signature_data().as_bytes());
+    assert!(parse(&format(&request).unwrap()).is_err());
 }

@@ -15,6 +15,17 @@ pub struct Target {
     pub device_port: u16,
     pub device_public_key: String,
 }
+impl From<&crate::features::peers::pairing::protocol::PairingRequest> for Target {
+    fn from(request: &crate::features::peers::pairing::protocol::PairingRequest) -> Self {
+        Self {
+            device_id: request.from_id.clone(),
+            device_public_key: request.payload.signature_public_key.clone(),
+            device_name: request.payload.from_name.clone(),
+            device_ip: request.from_ip.clone(),
+            device_port: request.payload.port,
+        }
+    }
+}
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Ticket {
@@ -71,13 +82,7 @@ impl Sessions {
         let new = incoming
             .get(&request.from_id)
             .is_none_or(|p| p.signature != request.payload.signature);
-        let target = Target {
-            device_id: request.from_id.clone(),
-            device_public_key: request.payload.signature_public_key.clone(),
-            device_name: request.payload.from_name.clone(),
-            device_ip: request.from_ip.clone(),
-            device_port: request.payload.port,
-        };
+        let target = Target::from(request);
         if !new && target.device_ip.is_empty() {
             return false;
         }

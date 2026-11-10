@@ -29,14 +29,6 @@ pub(super) async fn dispatch(
             return ble::message(&[], reply.to_string().as_bytes());
         }
         Message::DiscoverReply(_) => return ble::message(&[], &[]),
-        Message::PairVerification(verification) => {
-            plain_rs::features::services::discovery::pairing_confirmation::handle(
-                state,
-                verification,
-            )
-            .await?;
-            return ble::message(&[], &[]);
-        }
         Message::PairRequest(payload) => pairing_runtime::Request::ReceiveRequest {
             payload,
             client_id: std::str::from_utf8(metadata)?.to_owned(),

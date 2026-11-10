@@ -116,6 +116,9 @@ pub struct PairingCompletedNotice {
     pub device_id: ID,
     pub device_name: String,
     pub ip: String,
+    pub port: Option<i32>,
+    pub device_type: Option<plain_rs::features::services::device::types::DeviceType>,
+    pub request_id: Option<String>,
 }
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]

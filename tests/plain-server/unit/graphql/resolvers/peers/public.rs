@@ -137,18 +137,19 @@ async fn an_empty_sim_list_is_not_an_error() {
 }
 
 #[tokio::test]
-async fn pairing_sends_the_device_the_contract_described() {
+async fn first_chat_pairing_requires_a_scanned_request() {
     let (_dir, schema) = fixture();
     let paired = query(
         &schema,
         r#"mutation { pairDevice(input: { id: "peer-9" }) { deviceId generation mode phase } }"#,
     )
     .await;
-    assert_eq!(
-        paired["data"]["pairDevice"]["deviceId"], "peer-9",
+    assert!(
+        paired["errors"]
+            .to_string()
+            .contains("A trusted pairing QR is required"),
         "{paired}"
     );
-    assert_eq!(paired["data"]["pairDevice"]["mode"], "CHAT");
 }
 
 #[tokio::test]
@@ -166,9 +167,7 @@ async fn responding_requires_a_verified_current_pairing_request() {
     )
     .await;
     assert!(
-        responded["errors"]
-            .to_string()
-            .contains("Pairing request expired or no longer available"),
+        responded["errors"].to_string().contains("Pairing expired"),
         "{responded}"
     );
 }
@@ -196,10 +195,24 @@ async fn cancelling_and_unpairing_both_acknowledge() {
 #[tokio::test]
 async fn unsupported_transport_does_not_call_native_pairing() {
     let (_dir, schema) = fixture();
+    let mut peer = plain_rs::infrastructure::db::DPeer::new(
+        "no-route",
+        "Fixture",
+        "",
+        None,
+        plain_rs::features::chat::enums::DeviceType::Phone,
+    );
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[2; 32]);
+    plain_rs::infrastructure::db::chat_store::peers::save(
+        &schema.state.db,
+        &[peer],
+        plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
+    )
+    .unwrap();
     let mut events = schema.state.events.subscribe();
     let paired = query(
         &schema,
-        r#"mutation { pairDevice(input: { id: "peer-9" }) { deviceId generation mode phase } }"#,
+        r#"mutation { pairDevice(input: { id: "no-route" }) { deviceId generation mode phase } }"#,
     )
     .await;
     assert!(

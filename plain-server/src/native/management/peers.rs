@@ -1,23 +1,11 @@
 use super::NativeManagement;
 
 impl NativeManagement {
-    pub async fn pairing_code(&self) -> Result<String, String> {
-        self.state.native_client_id()?;
-        let reply = plain_rs::features::services::discovery::discovery_advertisement::execute(
-            &self.state,
-            plain_rs::features::services::discovery::discovery_advertisement::Request::Reply {},
-        )
-        .await
-        .map_err(|error| error.to_string())?;
-        let mut payload: plain_rs::features::discovery::pairing_code::Payload =
-            serde_json::from_value(reply).map_err(|error| error.to_string())?;
-        payload.ips.retain(|address| {
-            address
-                .parse::<std::net::IpAddr>()
-                .is_ok_and(|address| !address.is_loopback() && !address.is_unspecified())
-        });
-        plain_rs::features::discovery::pairing_code::format(&payload)
-            .ok_or_else(|| "Reachable pairing address and active listener required".to_owned())
+    pub async fn pairing_code(&self) -> Result<serde_json::Value, String> {
+        let code = plain_rs::features::services::discovery::pairing_qr::display(&self.state)
+            .await
+            .map_err(|error| error.to_string())?;
+        serde_json::to_value(code).map_err(|error| error.to_string())
     }
 
     pub fn is_pairing_request_current(

@@ -11,6 +11,7 @@ pub mod nearby_devices;
 pub mod pairing;
 
 pub mod pairing_runtime;
+pub mod pairing_qr;
 
 pub mod pairing_timeout;
 

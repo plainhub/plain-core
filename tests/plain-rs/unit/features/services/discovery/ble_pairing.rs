@@ -98,39 +98,22 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                             ));
                             body = Some(request.clone());
                             pairing::receive_request(&remote_state.pairing, &request).unwrap();
-                            let incoming = remote_state
-                                .pairing
-                                .incoming_target(&request.from_id, &request.payload.signature)
-                                .unwrap();
                             remote_state
                                 .pairing_runtime
                                 .confirmations
-                                .register(&remote_state, &request, incoming)
+                                .register(&remote_state, &request)
                                 .unwrap();
-                            let response = remote_state
+                            let (response, _) = remote_state
                                 .pairing_runtime
                                 .confirmations
                                 .respond(&remote_state, &request, true, device())
                                 .unwrap();
                             notifications.push_back("malformed".into());
                             let mut wrong = response.clone();
-                            wrong.request_signature = "unrelated".into();
+                            wrong.request_id = "unrelated".into();
                             notifications.push_back(Message::PairResponse(wrong).wire().unwrap());
                             notifications
                                 .push_back(Message::PairResponse(response).wire().unwrap());
-                        }
-                        Message::PairVerification(verification) => {
-                            let super::super::pairing_confirmation::Action::Notify {
-                                message, ..
-                            } = remote_state
-                                .pairing_runtime
-                                .confirmations
-                                .process(&remote_state, verification)
-                                .unwrap()
-                            else {
-                                panic!()
-                            };
-                            notifications.push_back(message.wire().unwrap());
                         }
                         _ => panic!("Unexpected pairing wire message"),
                     }
@@ -140,35 +123,12 @@ async fn ble_initiator_signs_filters_notifications_commits_shared_key_and_closes
                     assert_eq!(local_state.pairing.states()[0].1, "PAIRING");
                     assert!(effect["params"]["timeoutMs"].as_u64().unwrap() <= 1000);
                     step += 1;
-                    if notifications.is_empty() {
-                        let ticket = local_state.pairing.tickets()[0].clone();
-                        if let Ok(super::super::pairing_confirmation::Action::Send {
-                            message: Message::PairVerification(finish),
-                            ..
-                        }) = local_state
-                            .pairing_runtime
-                            .confirmations
-                            .confirm(&local_state, &ticket.generation)
-                        {
-                            let super::super::pairing_confirmation::Action::Notify {
-                                message, ..
-                            } = remote_state
-                                .pairing_runtime
-                                .confirmations
-                                .process(&remote_state, finish)
-                                .unwrap()
-                            else {
-                                panic!()
-                            };
-                            notifications.push_back(message.wire().unwrap());
-                        }
-                    }
                     let notification = notifications.pop_front().unwrap();
                     json!({"connected":true,"notification":notification})
                 }
                 "blePairClose" => {
                     assert!(body.is_some());
-                    assert_eq!(step, 4);
+                    assert_eq!(step, 3);
                     host.reply(generation, json!({"id":effect["id"],"result":true}))
                         .unwrap();
                     break;
@@ -246,13 +206,6 @@ async fn cancellation_interrupts_pending_connect_and_preserves_replacement_gener
         crate::infrastructure::db::chat_store::peers::get(&state.db, "remote")
             .unwrap()
             .is_none()
-    );
-    assert!(
-        state
-            .pairing_runtime
-            .confirmations
-            .confirm(&state, old["ticket"]["generation"].as_str().unwrap())
-            .is_err()
     );
     assert_eq!(
         state.pairing.tickets()[0].generation,

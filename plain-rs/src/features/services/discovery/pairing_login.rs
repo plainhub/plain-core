@@ -380,6 +380,7 @@ pub(super) async fn run(
             state,
             &serde_json::to_value(crate::features::services::peers::peer_address::view(&peer))?,
             &peer.ip,
+            None,
         );
     }
     Ok(())

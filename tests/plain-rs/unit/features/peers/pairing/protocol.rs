@@ -25,7 +25,7 @@ fn request_signature_data_format_is_locked() {
     let req = sample_request();
     assert_eq!(
         req.signature_data(),
-        r#"["pair-request","client-a","SIGPK","receiver","AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","Mac",8443,"COMPUTER","ECDH",1700000000000,["203.0.113.10","203.0.113.11"],false]"#
+        r#"["chat-pair-request","client-a","SIGPK","receiver","AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","Mac",8443,"COMPUTER","ECDH",1700000000000,["203.0.113.10","203.0.113.11"],false]"#
     );
     // `from_ip` is stamped by the receiver and must not affect the signature.
     let mut stamped = req.clone();
@@ -40,7 +40,9 @@ fn request_signature_data_format_is_locked() {
 #[test]
 fn response_signature_data_format_is_locked() {
     let resp = PairingResponse {
-        request_signature: "REQUEST_SIGNATURE".into(),
+        request_id: "REQUEST_ID".into(),
+        signature_public_key: None,
+        from_name: None,
         port: 2443,
         device_type: crate::features::chat::enums::DeviceType::Phone,
         ecdh_public_key: "ECDH2".to_string(),
@@ -51,7 +53,7 @@ fn response_signature_data_format_is_locked() {
     };
     assert_eq!(
         resp.signature_data(),
-        r#"["pair-response","REQUEST_SIGNATURE",2443,"PHONE","ECDH2",true,[],false]"#
+        r#"["chat-pair-response","REQUEST_ID",null,null,2443,"PHONE","ECDH2",true,[],false]"#
     );
 }
 

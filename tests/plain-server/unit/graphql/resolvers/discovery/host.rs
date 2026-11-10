@@ -83,7 +83,19 @@ async fn pairing_code_query_returns_a_lan_ready_model_without_starting_discovery
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let native = core.native_graphql().unwrap();
-    let response = native.execute(plain_graphql::Request::new("{ parsePairingCode(code: \"plainapp://pair?id=fixture&name=Device&ips=192.0.2.1&port=8443\") { id name port deviceType discoveryMethods } }")).await;
+    let display = plain_rs::features::services::discovery::pairing_qr::create_display(
+        &core.runtime_state().core,
+        "fixture".into(),
+        plain_rs::features::services::discovery::pairing::Device {
+            name: "Device".into(), port: 8443,
+            device_type: plain_rs::features::chat::enums::DeviceType::Computer,
+            ips: vec!["192.0.2.1".into()], aware_supported: false,
+        },
+    ).unwrap();
+    let encoded = serde_json::to_string(&display.payload).unwrap();
+    let response = native.execute(plain_graphql::Request::new(format!(
+        "{{ parsePairingCode(code: {encoded}) {{ id name port deviceType discoveryMethods }} }}"
+    ))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["parsePairingCode"],

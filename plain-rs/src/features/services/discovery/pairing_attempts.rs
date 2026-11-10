@@ -383,7 +383,18 @@ pub async fn start(
         mode == Mode::Manage || password.is_none(),
         "Chat pairing does not accept a password"
     );
-    let target = resolve(state, id.as_deref(), host.as_deref(), mode)?;
+    let qr = host.as_deref()
+        .filter(|host| host.starts_with("plainapp://pair?"))
+        .map(crate::features::discovery::pairing_code::parse)
+        .transpose()?;
+    let (id, host, target) = if let Some(qr) = &qr {
+        ensure!(mode == Mode::Chat, "Invalid chat pairing QR");
+        ensure!(id.as_ref().is_none_or(|id| id == &qr.from_id), "Pairing QR identity mismatch");
+        (Some(qr.from_id.clone()), None, None)
+    } else {
+        let target = resolve(state, id.as_deref(), host.as_deref(), mode)?;
+        (id, host, Some(target))
+    };
     let (initial, mut cancelled, passwords) = {
         let _commit = state.pairing_runtime.commit.lock().unwrap();
         if let Some(id) = id.as_deref() {
@@ -399,6 +410,10 @@ pub async fn start(
     tokio::spawn(async move {
         let mut stop = state.stop.clone();
         let work = async {
+            if let Some(qr) = qr {
+                return super::pairing_qr::respond(&state, qr, &generation).await;
+            }
+            let target = target.unwrap();
             match mode {
                 Mode::Manage => {
                     crate::features::services::discovery::pairing_login::run(
@@ -583,16 +598,25 @@ fn resolve(
         mode != Mode::Chat || id.is_some(),
         "Chat pairing requires an expected peer identity"
     );
+    let public_key = if mode == Mode::Chat {
+        saved
+            .as_ref()
+            .map(|peer| peer.public_key.clone())
+            .filter(|key| !key.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("A trusted pairing QR is required"))?
+    } else {
+        nearby
+            .as_ref()
+            .map(|device| device.signature_public_key.clone())
+            .filter(|key| !key.is_empty())
+            .or_else(|| saved.as_ref().map(|peer| peer.public_key.clone()))
+            .unwrap_or_default()
+    };
     Ok(Resolved {
         target: crate::features::peers::pairing::sessions::Target {
             device_id: id.unwrap_or_default().into(),
             device_name: name,
-            device_public_key: nearby
-                .as_ref()
-                .map(|d| d.signature_public_key.clone())
-                .filter(|key| !key.is_empty())
-                .or_else(|| saved.as_ref().map(|p| p.public_key.clone()))
-                .unwrap_or_default(),
+            device_public_key: public_key,
             device_ip: String::new(),
             device_port: port,
         },

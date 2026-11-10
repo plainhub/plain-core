@@ -53,7 +53,7 @@ impl EcdhSession {
     /// Compute SHA-256(ECDH raw shared secret) from the peer's X9.63
     /// uncompressed public key bytes (65 bytes: 0x04 || X || Y).
     /// Returns `None` if the peer public key is malformed.
-    pub fn compute_shared_key(self, peer_pub_bytes: &[u8]) -> Option<[u8; 32]> {
+    pub fn compute_shared_key(&self, peer_pub_bytes: &[u8]) -> Option<[u8; 32]> {
         // plain-app sends X9.63 uncompressed point (65 bytes). Try SEC1 first,
         // fall back to X.509 SPKI DER for backwards compatibility.
         let peer_pub = P256PublicKey::from_sec1_bytes(peer_pub_bytes)

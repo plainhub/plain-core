@@ -152,6 +152,9 @@ type PairingCompletedNotice {
 	deviceId: ID!
 	deviceName: String!
 	ip: String!
+	port: Int
+	deviceType: DeviceType
+	requestId: String
 }
 
 type PairingProgressNotice {

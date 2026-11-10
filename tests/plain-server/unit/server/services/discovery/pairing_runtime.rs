@@ -88,12 +88,13 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
             aware_supported: false,
         },
     };
-    for (header, fresh, correct_target, accepted) in [
-        (None, true, true, false),
-        (Some("another-peer"), true, true, false),
-        (Some("peer"), false, true, false),
-        (Some("peer"), true, false, false),
-        (Some("peer"), true, true, true),
+    for (header, fresh, correct_target, pinned, accepted) in [
+        (None, true, true, false, false),
+        (Some("another-peer"), true, true, false, false),
+        (Some("peer"), false, true, false, false),
+        (Some("peer"), true, false, false, false),
+        (Some("peer"), true, true, false, false),
+        (Some("peer"), true, true, true, true),
     ] {
         request.payload.timestamp =
             plain_rs::features::peers::pairing::now_ms() - if fresh { 0 } else { 300_001 };
@@ -104,6 +105,16 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
         };
         request.payload.signature =
             plain_libs::crypto::ed25519_sign(&sender_key, request.signature_data().as_bytes());
+        if pinned {
+            let mut pinned = plain_rs::infrastructure::db::DPeer::new(
+                &request.from_id, "Fixture", "192.0.2.1", None,
+                plain_rs::features::chat::enums::DeviceType::Phone,
+            );
+            pinned.public_key = request.payload.signature_public_key.clone();
+            plain_rs::infrastructure::db::chat_store::peers::save(
+                &state.db, &[pinned], plain_rs::infrastructure::db::chat_store::SaveMode::Insert,
+            ).unwrap();
+        }
         let body = Message::PairRequest(request.payload.clone())
             .wire()
             .unwrap();

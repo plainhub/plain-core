@@ -26,7 +26,7 @@ fn request(
     prefs: &Prefs,
     device: Device,
     target: &Target,
-) -> Result<(PairingRequest, EcdhSession)> {
+ ) -> Result<(PairingRequest, EcdhSession)> {
     let kp = signing_keypair(prefs)?;
     let ecdh = EcdhSession::generate();
     let mut request = PairingRequest {
@@ -63,14 +63,17 @@ pub(super) fn response(
         return Ok(None);
     }
     let kp = signing_keypair(prefs)?;
+    let local_key = plain_libs::utils::base64::base64_encode(&kp[32..]);
     anyhow::ensure!(
         request.to_id == actor(prefs)?
-            && request.target_public_key == plain_libs::utils::base64::base64_encode(&kp[32..]),
+            && request.target_public_key == local_key,
         "Pairing target identity mismatch"
     );
     let ecdh = accepted.then(EcdhSession::generate);
     let mut response = PairingResponse {
-        request_signature: request.payload.signature.clone(),
+        request_id: request.payload.request_id(),
+        signature_public_key: None,
+        from_name: None,
         port: device.port,
         device_type: device.device_type,
         ecdh_public_key: ecdh

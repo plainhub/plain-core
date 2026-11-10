@@ -11,6 +11,7 @@ pub struct DiscoveryHostQuery;
 impl DiscoveryHostQuery {
     fn parse_pairing_code(&self, code: String) -> Option<NearbyDevice> {
         plain_rs::features::discovery::pairing_code::parse(&code)
+            .ok()
             .map(|payload| NearbyDevice::from_snapshot_device(payload.into_device()))
     }
     fn nearby_devices(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<NearbyDevice>> {
