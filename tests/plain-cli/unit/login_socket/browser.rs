@@ -29,15 +29,14 @@ async fn browser_login(
 ) -> (
     Socket,
     plain_rs::features::services::confirmation_channel::Channel,
-    plain_libs::crypto::EcdhSession,
 ) {
-    use plain_rs::features::services::confirmation_channel::{Client, ConfirmationMode};
+    use plain_rs::features::services::confirmation_channel::Client;
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
         "ws://127.0.0.1:{port}/auth?cid={client_id}"
     ))
     .await
     .unwrap();
-    let (client, hello) = Client::start(client_id, ConfirmationMode::DeviceConfirmation).unwrap();
+    let (client, hello) = Client::start(client_id).unwrap();
     socket
         .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
         .await
@@ -48,7 +47,7 @@ async fn browser_login(
     let state = core.runtime();
     let public =
         plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
-    let (channel, reveal) = client
+    let channel = client
         .accept(
             &serde_json::from_str(&hello).unwrap(),
             &plain_libs::utils::base64::base64_encode(&public[32..]),
@@ -56,14 +55,7 @@ async fn browser_login(
             now_ms(),
         )
         .unwrap();
-    socket
-        .send(Message::Text(
-            serde_json::to_string(&reveal).unwrap().into(),
-        ))
-        .await
-        .unwrap();
-    let session = plain_libs::crypto::EcdhSession::generate();
-    let request = json!({"appName":"Fixture","appVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"ecdhPublicKey":plain_libs::utils::base64::base64_encode(&session.public_key_bytes),"loginContext":channel.context});
+    let request = json!({"appName":"Fixture","appVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false});
     let encrypted = channel
         .encrypt_request(&serde_json::to_vec(&request).unwrap(), now_ms())
         .unwrap();
@@ -77,7 +69,7 @@ async fn browser_login(
     let pending: Value =
         serde_json::from_slice(&channel.decrypt_response(&pending, now_ms()).unwrap()).unwrap();
     assert_eq!(pending["status"], "PENDING");
-    (socket, channel, session)
+    (socket, channel)
 }
 
 #[tokio::test]
@@ -105,7 +97,7 @@ async fn local_approval_socket_controls_real_passwordless_browser_sessions() {
         } else {
             "local-denied"
         };
-        let (mut socket, channel, session) = browser_login(&core, port, client_id).await;
+        let (mut socket, channel) = browser_login(&core, port, client_id).await;
         let page = requests(directory.path(), None).await.unwrap();
         assert_eq!(page.requests.len(), 1);
         let request = &page.requests[0];
@@ -127,11 +119,9 @@ async fn local_approval_socket_controls_real_passwordless_browser_sessions() {
                 serde_json::from_slice(&channel.decrypt_response(&bytes, now_ms()).unwrap())
                     .unwrap();
             assert_eq!(completed["status"], "COMPLETED");
-            let shared = session
-                .compute_shared_key(&plain_libs::utils::base64::base64_decode(
-                    completed["ecdhPublicKey"].as_str().unwrap(),
-                ))
-                .unwrap();
+            assert!(completed.get("ecdhPublicKey").is_none());
+            assert!(completed.get("token").is_none());
+            let shared = channel.api_key();
             assert_eq!(
                 state.db.session_get(client_id).unwrap().unwrap().token,
                 plain_libs::utils::base64::base64_encode(&shared)
