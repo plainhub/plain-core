@@ -157,6 +157,7 @@ async fn responding_requires_a_verified_current_pairing_request() {
     let responded = query(
         &schema,
         r#"mutation { respondToPairing(input: {
+            toId: "local", targetPublicKey: "local-signing",
             fromId: "peer-9", fromName: "Tablet", port: 4321, deviceType: TABLET,
             ecdhPublicKey: "ecdh", signaturePublicKey: "sig", timestamp: 1767322,
             ips: ["192.0.2.5"], signature: "signed", fromIp: "192.0.2.5",

@@ -869,7 +869,7 @@ fn closed_fields_keep_named_enums_and_required_wrappers() {
         ("SessionType", "LOGIN API_TOKEN"),
         (
             "PairingPhase",
-            "STARTING PASSWORD_REQUIRED AUTHENTICATING PAIRING WAITING_CONFIRMATION COMMITTING SUCCEEDED FAILED CANCELLED",
+            "STARTING TRUST_REQUIRED PASSWORD_REQUIRED AUTHENTICATING PAIRING WAITING_CONFIRMATION COMMITTING SUCCEEDED FAILED CANCELLED",
         ),
         (
             "ImageSearchStatusType",

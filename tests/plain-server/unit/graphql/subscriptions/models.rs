@@ -23,7 +23,7 @@ fn image_update_events_preserve_all_statuses_and_reject_unknown_statuses() {
 #[test]
 fn pairing_notices_preserve_device_enums_and_reject_unknown_values() {
     use plain_rs::features::services::device::types::DeviceType;
-    let source = |kind| json!({"fromId":"peer","fromName":"Fixture","port":8443,"deviceType":kind,"ecdhPublicKey":"ecdh","signaturePublicKey":"signing","timestamp":5000000000_i64,"ips":["127.0.0.1"],"signature":"signature","fromIp":"127.0.0.1","awareSupported":false,"verificationCode":"123456789"});
+    let source = |kind| json!({"toId":"local","targetPublicKey":"local-signing","fromId":"peer","fromName":"Fixture","port":8443,"deviceType":kind,"ecdhPublicKey":"ecdh","signaturePublicKey":"signing","timestamp":5000000000_i64,"ips":["127.0.0.1"],"signature":"signature","fromIp":"127.0.0.1","awareSupported":false,"verificationCode":"123456789","identityChanged":false});
     for expected in [
         DeviceType::Computer,
         DeviceType::Phone,
@@ -34,6 +34,9 @@ fn pairing_notices_preserve_device_enums_and_reject_unknown_values() {
     ] {
         let value: PairingRequestNotice =
             serde_json::from_value(source(expected.as_str())).unwrap();
+        assert_eq!(value.to_id.as_str(), "local");
+        assert_eq!(value.target_public_key, "local-signing");
+        assert!(!value.identity_changed);
         assert_eq!(value.device_type, expected);
         assert_eq!(value.timestamp, Long(5000000000));
         assert_eq!(value.signature, "signature");
