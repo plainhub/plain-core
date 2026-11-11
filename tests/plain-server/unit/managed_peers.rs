@@ -489,7 +489,7 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
                     .unwrap();
                     let text = std::str::from_utf8(&plaintext).unwrap();
                     let document: plain_libs::serde_json::Value =
-                        plain_libs::serde_json::from_str(text.splitn(3, '|').nth(2).unwrap()).unwrap();
+                        plain_libs::serde_json::from_str(text).unwrap();
                     assert_eq!(
                         document["query"],
                         "mutation { deleteChunks(fileId: \"fixture\") }"
@@ -631,7 +631,7 @@ async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_ses
                 .unwrap();
                 let text = std::str::from_utf8(&plaintext).unwrap();
                 let document: plain_libs::serde_json::Value =
-                    plain_libs::serde_json::from_str(text.splitn(3, '|').nth(2).unwrap()).unwrap();
+                    plain_libs::serde_json::from_str(text).unwrap();
                 assert!(
                     document["query"]
                         .as_str()

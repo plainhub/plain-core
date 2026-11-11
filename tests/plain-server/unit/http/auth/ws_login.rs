@@ -837,15 +837,10 @@ async fn first_password_login_completes_without_owner_approval() {
             .token,
         saved.token
     );
-    async fn check(state: ServerState, key: &[u8; 32]) {
+    async fn check(state: ServerState, key: &[u8; 32], expected: plain_libs::axum::http::StatusCode) {
         let mut headers = plain_libs::axum::http::HeaderMap::new();
         headers.insert("c-id", "first-browser".parse().unwrap());
-        let payload = format!(
-            "{}|{}|{}",
-            now_ms(),
-            plain_libs::utils::uuid::Uuid::new_v4(),
-            json!({"query":r#"{noteCount(query:"")}"#})
-        );
+        let payload = json!({"requestId": plain_rs::features::record_id::generate(), "query":r#"{noteCount(query:"")}"#}).to_string();
         for (method, path) in [("POST", "/guest_graphql"), ("GET", "/graphql")] {
             let wrong = plain_rs::infrastructure::transport::http_request::encrypt_raw(
                 key,
@@ -876,14 +871,17 @@ async fn first_password_login_completes_without_owner_approval() {
             plain_libs::axum::body::Bytes::from(frame),
         )
         .await;
-        assert_eq!(response.status(), plain_libs::axum::http::StatusCode::OK);
+        assert_eq!(response.status(), expected);
+        if expected != plain_libs::axum::http::StatusCode::OK {
+            return;
+        }
         let body = plain_libs::axum::body::to_bytes(response.into_body(), 1024 * 1024)
             .await
             .unwrap();
         let body = context.decrypt(key, &body).unwrap();
         assert!(plain_libs::serde_json::from_slice::<Value>(&body).unwrap()["errors"].is_null());
     }
-    check(state.clone(), &key).await;
+    check(state.clone(), &key, plain_libs::axum::http::StatusCode::OK).await;
     assert!(state.login_attempts.lock().unwrap().pending.is_empty());
     server.shutdown().await;
     let reopened = crate::server::ContentServer::open(directory.path()).unwrap();
@@ -897,8 +895,15 @@ async fn first_password_login_completes_without_owner_approval() {
             .token,
         saved.token
     );
-    check(reopened.runtime_state(), &key).await;
-    reopened.stop_core().await;
+    check(reopened.runtime_state(), &key, plain_libs::axum::http::StatusCode::UNAUTHORIZED).await;
+    let (cert, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (port, _) = reopened.start_public(0, 0, cert, cert_key).await.unwrap();
+    let (mut socket, channel, _, _) = browser_login(&reopened.runtime_state(), port, "first-browser", Some("owned-password")).await;
+    let LoginChannel::Opaque(channel) = &channel.inner else { panic!("OPAQUE expected") };
+    assert_ne!(channel.key, key);
+    check(reopened.runtime_state(), &channel.key, plain_libs::axum::http::StatusCode::OK).await;
+    socket.close(None).await.unwrap();
+    reopened.shutdown().await;
 }
 
 #[cfg(feature = "http_transport")]

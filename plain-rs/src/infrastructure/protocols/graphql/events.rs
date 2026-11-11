@@ -150,7 +150,13 @@ pub const EVENTS: &[EventSpec] = &[
         aliases: &[],
         invalidation: false,
         selection: "{ types }",
-        access: &[AccessFeature::Images, AccessFeature::Videos, AccessFeature::Audio, AccessFeature::Docs, AccessFeature::Files],
+        access: &[
+            AccessFeature::Images,
+            AccessFeature::Videos,
+            AccessFeature::Audio,
+            AccessFeature::Docs,
+            AccessFeature::Files,
+        ],
         capability: None,
     },
     EventSpec {

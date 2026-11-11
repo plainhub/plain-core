@@ -1,9 +1,9 @@
-use crate::infrastructure::protocols::graphql;
-use crate::infrastructure::protocols::graphql::Role;
 use crate::infrastructure::protocols::graphql::events as registry;
 use crate::infrastructure::protocols::graphql::events::EventSpec;
 use crate::infrastructure::protocols::graphql::messages::ClientMessage;
 use crate::infrastructure::protocols::graphql::messages::ServerMessage;
+use crate::infrastructure::protocols::websocket;
+use crate::infrastructure::protocols::websocket::Role;
 use plain_libs::anyhow::{Result, anyhow, ensure};
 
 pub(super) fn operations() -> impl Iterator<Item = &'static EventSpec> {
@@ -20,23 +20,28 @@ pub(super) fn operations() -> impl Iterator<Item = &'static EventSpec> {
         )
     })
 }
-pub(super) fn registration(key: &[u8], client: &str, timestamp: i64) -> Result<Vec<u8>> {
-    let init = crate::infrastructure::protocols::graphql::Init {
-        timestamp_millis: timestamp,
+pub(super) fn registration(key: &[u8], client: &str) -> Result<Vec<u8>> {
+    let init = crate::infrastructure::protocols::websocket::Init {
         client_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(32)),
     };
-    graphql::seal_init(key, client, &plain_libs::serde_json::to_vec(&init)?)
-        .ok_or_else(|| anyhow!("Invalid management session key"))
+    websocket::seal_init(
+        key,
+        client,
+        "/graphql",
+        &plain_libs::serde_json::to_vec(&init)?,
+    )
+    .ok_or_else(|| anyhow!("Invalid management session key"))
 }
 pub(super) fn acknowledge(
     key: &[u8],
     client: &str,
     init: &[u8],
     ack: &[u8],
-) -> Result<graphql::Stream> {
-    let plain = graphql::open_ack(key, client, init, ack)
+) -> Result<websocket::Stream> {
+    let plain = websocket::open_ack(key, client, "/graphql", init, ack)
         .ok_or_else(|| anyhow!("Invalid management acknowledgement"))?;
-    let ack_body: crate::infrastructure::protocols::graphql::Ack = plain_libs::serde_json::from_slice(&plain)?;
+    let ack_body: crate::infrastructure::protocols::websocket::Ack =
+        plain_libs::serde_json::from_slice(&plain)?;
     ensure!(
         ack_body.server_nonce.len() == 64
             && ack_body
@@ -45,13 +50,13 @@ pub(super) fn acknowledge(
                 .all(|byte| byte.is_ascii_hexdigit()),
         "Invalid management nonce"
     );
-    graphql::Stream::new(client, init, ack, Role::Client)
+    websocket::Stream::new("/graphql", client, init, ack, Role::Client)
         .ok_or_else(|| anyhow!("Invalid management binding"))
 }
 pub(super) fn encode(
     message: &ClientMessage,
     key: &[u8],
-    stream: &mut graphql::Stream,
+    stream: &mut websocket::Stream,
 ) -> Result<Vec<u8>> {
     stream
         .encode(&plain_libs::serde_json::to_vec(message)?, key)
@@ -63,7 +68,7 @@ pub(super) enum Incoming {
     Ready,
     Rejected(String),
 }
-pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut graphql::Stream) -> Result<Incoming> {
+pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut websocket::Stream) -> Result<Incoming> {
     let plain = stream
         .decode(frame, key)
         .ok_or_else(|| anyhow!("Invalid management event authentication"))?;

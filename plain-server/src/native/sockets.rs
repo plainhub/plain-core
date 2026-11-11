@@ -1,8 +1,10 @@
 use crate::{http::websocket::runtime, managed_peers::PeerRoute, server::ServerState};
-use plain_libs::anyhow::{Result, anyhow, ensure};
 use futures_util::{SinkExt, StreamExt};
+use plain_libs::anyhow::{Result, anyhow, ensure};
+use plain_libs::tokio_tungstenite::tungstenite::{Message, protocol::WebSocketConfig};
 use plain_rs::infrastructure::{
-    host::request_scope::NativeRequestScope, protocols::websocket::Stream,
+    host::request_scope::NativeRequestScope,
+    protocols::websocket::{self, Role, Stream},
 };
 use serde::Deserialize;
 use std::{
@@ -11,10 +13,9 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{mpsc, oneshot, watch};
-use plain_libs::tokio_tungstenite::tungstenite::{Message, protocol::WebSocketConfig};
 
 pub const MAX_SOCKET_FRAME_BYTES: usize = 16 * 1024 * 1024;
-pub const MAX_SOCKET_CONTROL_BYTES: usize = 65536 - 48;
+pub const MAX_SOCKET_CONTROL_BYTES: usize = 65536 - 49;
 const QUEUE_CAPACITY: usize = 8;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -254,7 +255,9 @@ async fn local(
     mut commands: mpsc::Receiver<Command>,
     outgoing: &Output,
 ) -> Result<()> {
-    let client = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
+    let client = state
+        .native_client_id()
+        .map_err(plain_libs::anyhow::Error::msg)?;
     if session.kind == SocketKind::Screen {
         plain_rs::features::services::capabilities::require(&state.host, "SCREEN_MIRROR").await?;
     }
@@ -293,43 +296,70 @@ async fn peer(
     mut commands: mpsc::Receiver<Command>,
     outgoing: &Output,
 ) -> Result<()> {
-    let (route, mut socket, mut stream, registration) =
-        tokio::time::timeout(Duration::from_secs(10), async {
-            let route = state.managed_proxy.peers.route(state, peer_id).await?;
-            let mut url = route.base.join(session.kind.path())?;
-            url.set_scheme("wss")
-                .map_err(|_| anyhow!("Invalid managed address"))?;
-            url.query_pairs_mut().append_pair("cid", &route.client_id);
-            let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async_tls_with_config(
-                url.as_str(),
-                Some(
-                    WebSocketConfig::default()
-                        .max_message_size(Some(MAX_SOCKET_FRAME_BYTES + 128))
-                        .max_frame_size(Some(MAX_SOCKET_FRAME_BYTES + 128)),
-                ),
-                false,
-                Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(
-                    plain_libs::protocols::http_client::pinned_tls_config(route.pin)?,
-                ))),
-            )
+    let (route, mut socket, mut stream) = tokio::time::timeout(Duration::from_secs(10), async {
+        let route = state.managed_proxy.peers.route(state, peer_id).await?;
+        let mut url = route.base.join(session.kind.path())?;
+        url.set_scheme("wss")
+            .map_err(|_| anyhow!("Invalid managed address"))?;
+        url.query_pairs_mut().append_pair("cid", &route.client_id);
+        let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async_tls_with_config(
+            url.as_str(),
+            Some(
+                WebSocketConfig::default()
+                    .max_message_size(Some(MAX_SOCKET_FRAME_BYTES + 128))
+                    .max_frame_size(Some(MAX_SOCKET_FRAME_BYTES + 128)),
+            ),
+            false,
+            Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(
+                plain_libs::protocols::http_client::pinned_tls_config(route.pin)?,
+            ))),
+        )
+        .await?;
+        route.check_current(state)?;
+        let path = session.kind.path();
+        let init = websocket::Init {
+            client_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(
+                32,
+            )),
+        };
+        let registration = websocket::seal_init(
+            &route.key,
+            &route.client_id,
+            path,
+            &plain_libs::serde_json::to_vec(&init)?,
+        )
+        .ok_or_else(|| anyhow!("Socket registration failed"))?;
+        socket
+            .send(Message::Binary(registration.clone().into()))
             .await?;
-            route.check_current(state)?;
-            let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-                &route.key,
-                plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
-                &plain_rs::infrastructure::protocols::websocket::request_aad(
-                    session.kind.path(),
-                    &route.client_id,
-                    None,
-                ),
-            )
-            .ok_or_else(|| anyhow!("Socket registration failed"))?;
-            socket
-                .send(Message::Binary(registration.clone().into()))
-                .await?;
-            Ok::<_, plain_libs::anyhow::Error>((route, socket, Stream::new(&registration), registration))
-        })
-        .await??;
+        let Message::Binary(ack) = socket
+            .next()
+            .await
+            .ok_or_else(|| anyhow!("Socket handshake closed"))??
+        else {
+            return Err(anyhow!("Encrypted socket acknowledgement required"));
+        };
+        let plain = websocket::open_ack(&route.key, &route.client_id, path, &registration, &ack)
+            .ok_or_else(|| anyhow!("Invalid socket acknowledgement"))?;
+        let body: websocket::Ack = plain_libs::serde_json::from_slice(&plain)?;
+        ensure!(
+            body.server_nonce.len() == 64
+                && body
+                    .server_nonce
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit()),
+            "Invalid socket nonce"
+        );
+        let mut stream = Stream::new(path, &route.client_id, &registration, &ack, Role::Client)
+            .ok_or_else(|| anyhow!("Invalid socket binding"))?;
+        let confirmation = stream
+            .encode(&[], &route.key)
+            .ok_or_else(|| anyhow!("Socket confirmation failed"))?;
+        socket.send(Message::Binary(confirmation.into())).await?;
+        route.check_current(state)?;
+        Ok::<_, plain_libs::anyhow::Error>((route, socket, stream))
+    })
+    .await??;
     publish(outgoing, vec![0])?;
     let mut changed = state.db.peer_changes();
     let result = async {
@@ -340,7 +370,7 @@ async fn peer(
                 _ = changed.changed() => { route.check_current(state)?; },
                 command = commands.recv() => {
                     let Some(command) = command else { return Ok(()); };
-                    let result = send_peer(&route, &mut socket, session.kind.path(), &registration, &command.payload).await;
+                    let result = send_peer(&route, &mut socket, &mut stream, &command.payload).await;
                     let failed = result.is_err();
                     let _ = command.result.send(result.map_err(|error| error.to_string()));
                     if failed { return Err(anyhow!("Socket send failed")); }
@@ -348,8 +378,9 @@ async fn peer(
                 message = socket.next() => match message {
                     Some(Ok(Message::Binary(bytes))) => {
                         route.check_current(state)?;
-                        let (kind, payload) = stream.decode(&bytes, &route.key).ok_or_else(|| anyhow!("Invalid socket frame"))?;
-                        publish(outgoing, session.kind.frame(&kind, &payload)?)?;
+                        let plain = stream.decode(&bytes, &route.key).ok_or_else(|| anyhow!("Invalid socket frame"))?;
+                        let (kind, payload) = websocket::decode_raw(&plain).ok_or_else(|| anyhow!("Invalid socket event"))?;
+                        publish(outgoing, session.kind.frame(kind, payload)?)?;
                     },
                     Some(Ok(Message::Ping(bytes))) => { socket.send(Message::Pong(bytes)).await?; },
                     Some(Ok(Message::Pong(_))) => {},
@@ -367,22 +398,12 @@ async fn send_peer(
     socket: &mut plain_libs::tokio_tungstenite::WebSocketStream<
         plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
     >,
-    path: &str,
-    registration: &[u8],
+    stream: &mut Stream,
     payload: &[u8],
 ) -> Result<()> {
-    let mut frame = plain_libs::chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
-    frame.extend_from_slice(payload);
-    let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-        &route.key,
-        &frame,
-        &plain_rs::infrastructure::protocols::websocket::request_aad(
-            path,
-            &route.client_id,
-            Some(registration),
-        ),
-    )
-    .ok_or_else(|| anyhow!("Socket control encryption failed"))?;
+    let encrypted = stream
+        .encode(payload, &route.key)
+        .ok_or_else(|| anyhow!("Socket control encryption failed"))?;
     tokio::time::timeout(
         Duration::from_secs(2),
         socket.send(Message::Binary(encrypted.into())),

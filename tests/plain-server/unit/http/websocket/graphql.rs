@@ -2,7 +2,9 @@ use super::*;
 use futures_util::SinkExt;
 use plain_libs::protocols::http_client;
 use plain_libs::serde_json::{Value, json};
-use plain_libs::tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClientRequest};
+use plain_libs::tokio_tungstenite::tungstenite::{
+    Message as ClientMessage, client::IntoClientRequest,
+};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypted_socket() {
@@ -37,14 +39,13 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         let serving = tokio::spawn(async { plain_libs::axum::serve(listener, app).await.unwrap() });
         let request = format!("ws://{address}/graphql?cid={client}").into_client_request().unwrap();
         let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(request).await.unwrap();
-        let init = graphql::seal_init(&key, &client, &plain_libs::serde_json::to_vec(&Init {
-            timestamp_millis: plain_libs::chrono::Utc::now().timestamp_millis(),
+        let init = graphql::seal_init(&key, &client, "/graphql", &plain_libs::serde_json::to_vec(&Init {
             client_nonce: "ab".repeat(32),
         }).unwrap()).unwrap();
         socket.send(ClientMessage::Binary(init.clone().into())).await.unwrap();
         let ClientMessage::Binary(ack) = socket.next().await.unwrap().unwrap() else { panic!("encrypted acknowledgement required") };
-        graphql::open_ack(&key, &client, &init, &ack).unwrap();
-        let mut cipher = graphql::Stream::new(&client, &init, &ack, Role::Client).unwrap();
+        graphql::open_ack(&key, &client, "/graphql", &init, &ack).unwrap();
+        let mut cipher = graphql::Stream::new("/graphql", &client, &init, &ack, Role::Client).unwrap();
         for (id, query) in [("scan", "subscription { mediaScanProgress { indexed state } }"), ("media", "subscription { mediaLibraryUpdated { types } }")] {
             let frame = cipher.encode(json!({"type":"subscribe","id":id,"payload":{"query":query}}).to_string().as_bytes(), &key).unwrap();
             socket.send(ClientMessage::Binary(frame.into())).await.unwrap();
@@ -103,8 +104,9 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
     }).await.unwrap();
 }
 
-type TestSocket =
-    plain_libs::tokio_tungstenite::WebSocketStream<plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+type TestSocket = plain_libs::tokio_tungstenite::WebSocketStream<
+    plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+>;
 
 async fn heartbeat(socket: &mut TestSocket, cipher: &mut graphql::Stream, key: &[u8]) {
     let frame = cipher
@@ -225,17 +227,10 @@ async fn fs_burst_and_page_cancellation(
             .status(),
         StatusCode::OK
     );
-    let plaintext = format!(
-        "{}|{}|{}",
-        plain_libs::chrono::Utc::now().timestamp_millis(),
-        plain_libs::utils::uuid::Uuid::new_v4(),
-        json!({"query":r#"{noteCount(query:"")} "#})
-    );
-    let body = plain_rs::infrastructure::transport::http_request::encrypt_raw(
+    let body = plain_rs::infrastructure::transport::http_request::encrypt(
         key,
-        "POST",
         "/graphql",
-        plaintext.as_bytes(),
+        &json!({"query":r#"{noteCount(query:"")}"#}).to_string(),
     )
     .unwrap();
     let response = http
@@ -309,17 +304,10 @@ async fn fs_burst_and_page_cancellation(
     heartbeat(socket, cipher, key).await;
     let requests = (0..300)
         .map(|_| {
-            let plaintext = format!(
-                "{}|{}|{}",
-                plain_libs::chrono::Utc::now().timestamp_millis(),
-                plain_libs::utils::uuid::Uuid::new_v4(),
-                json!({"query":r#"{noteCount(query:"")}"#})
-            );
-            plain_rs::infrastructure::transport::http_request::encrypt_raw(
+            plain_rs::infrastructure::transport::http_request::encrypt(
                 key,
-                "POST",
                 "/graphql",
-                plaintext.as_bytes(),
+                &json!({"query":r#"{noteCount(query:"")}"#}).to_string(),
             )
             .unwrap()
         })

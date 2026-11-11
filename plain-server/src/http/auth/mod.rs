@@ -5,6 +5,9 @@ pub mod public_gate;
 pub mod replay;
 
 #[cfg(feature = "core")]
+pub(crate) mod graphql_replay;
+
+#[cfg(feature = "core")]
 pub mod ws_login;
 
 #[cfg(feature = "core")]

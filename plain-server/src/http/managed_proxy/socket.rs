@@ -1,11 +1,11 @@
 use super::{PeerRoute, authorize_graphql, caller, current, decode_key};
 use crate::server::ServerState;
+use futures_util::{SinkExt, StreamExt};
 use plain_libs::axum::{
     extract::{FromRequestParts, Query, Request},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use futures_util::{SinkExt, StreamExt};
 use plain_libs::protocols::websocket::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
 use plain_rs::{
     features::services::peers::subscriptions::PeerSubscription,
@@ -13,9 +13,10 @@ use plain_rs::{
         db::SessionRow,
         host::request_scope::NativeRequestScope,
         protocols::graphql::{
-            PeerSubscriptionTarget, Stream,
+            PeerSubscriptionTarget,
             messages::{ClientMessage, ServerMessage},
         },
+        protocols::websocket::Stream,
     },
 };
 use std::{collections::HashSet, time::Duration};
@@ -54,13 +55,21 @@ async fn run(
     key: Vec<u8>,
 ) {
     let result = async {
-        let (stream, acknowledgement) = crate::http::websocket::graphql::handshake(
-            &mut socket,
-            &state,
-            &session.client_id,
-            &key,
-        )
-        .await?;
+        let (mut stream, acknowledgement) =
+            crate::http::websocket::graphql::handshake(&mut socket, &session.client_id, &key)
+                .await?;
+        send(&mut socket, Message::Binary(acknowledgement.into())).await?;
+        let first = tokio::time::timeout(Duration::from_secs(10), socket.next())
+            .await
+            .map_err(|_| "Subscription handshake timeout")?
+            .ok_or("Subscription closed")?
+            .map_err(|error| error.to_string())?;
+        let Message::Binary(first) = first else {
+            return Err("Encrypted subscription frame required".into());
+        };
+        let first = stream
+            .decode(&first, &key)
+            .ok_or("Invalid encrypted frame")?;
         let route = state
             .managed_proxy
             .route(&state, &target)
@@ -78,7 +87,6 @@ async fn run(
             Some(route.pin),
         )?;
         let result = async {
-            send(&mut socket, Message::Binary(acknowledgement.into())).await?;
             relay(
                 &mut socket,
                 &state,
@@ -87,6 +95,7 @@ async fn run(
                 &upstream,
                 stream,
                 &key,
+                first,
             )
             .await
         }
@@ -94,8 +103,13 @@ async fn run(
         scope.close();
         upstream.close();
         result
-    }
-    .await;
+    };
+    let mut stop = state.stop.clone();
+    let result = tokio::select! {
+        biased;
+        _ = stop.wait_for(|stopped| *stopped) => Err("Server stopped".to_owned()),
+        result = result => result,
+    };
     let _ = send(
         &mut socket,
         Message::Close(Some(CloseFrame {
@@ -119,7 +133,9 @@ async fn relay(
     upstream: &PeerSubscription,
     mut stream: Stream,
     key: &[u8],
+    first: Vec<u8>,
 ) -> Result<(), String> {
+    let mut first = Some(first);
     let mut active = HashSet::<String>::new();
     let mut recheck = tokio::time::interval(Duration::from_secs(1));
     recheck.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -130,36 +146,40 @@ async fn relay(
             .map_err(|_| "Management session revoked")?;
         tokio::select! {
             _ = recheck.tick() => {}
-            incoming = socket.next() => {
-                match incoming {
-                    Some(Ok(Message::Binary(frame))) => {
-                        let plain = stream.decode(&frame, key).ok_or("Invalid encrypted frame")?;
-                        let message = plain_libs::serde_json::from_slice::<ClientMessage>(&plain).map_err(|_| "Invalid subscription request")?;
-                        match &message {
-                            ClientMessage::Subscribe { id, payload } => {
-                                if active.len() >= 64 || active.contains(id) {
-                                    return Err("Subscription limit reached".into());
-                                }
-                                authorize_graphql(payload, true).map_err(|_| "Subscription denied")?;
-                                active.insert(id.clone());
-                            }
-                            ClientMessage::Complete { id } => { active.remove(id); }
-                            ClientMessage::Ping { payload } => {
-                                let pong = plain_libs::serde_json::to_vec(&ServerMessage::Pong { payload: payload.clone() })
-                                    .map_err(|error| error.to_string())?;
-                                let frame = stream.encode(&pong, key).ok_or("Sequence exhausted")?;
-                                send(socket, Message::Binary(frame.into())).await?;
-                                continue;
-                            }
-                            ClientMessage::Pong { .. } => continue,
-                        }
-                        upstream.send(std::str::from_utf8(&plain).map_err(|_| "Invalid subscription request")?)?;
+            incoming = async {
+                if first.is_some() { None } else { socket.next().await }
+            } => {
+                let plain = if let Some(plain) = first.take() {
+                    plain
+                } else {
+                    match incoming {
+                        Some(Ok(Message::Binary(frame))) => stream.decode(&frame, key).ok_or("Invalid encrypted frame")?,
+                        Some(Ok(Message::Ping(bytes))) => { send(socket, Message::Pong(bytes)).await?; continue; },
+                        Some(Ok(Message::Pong(_))) => continue,
+                        Some(Ok(Message::Close(_))) | None => return Ok(()),
+                        _ => return Err("Invalid subscription frame".into()),
                     }
-                    Some(Ok(Message::Ping(bytes))) => send(socket, Message::Pong(bytes)).await?,
-                    Some(Ok(Message::Pong(_))) => {}
-                    Some(Ok(Message::Close(_))) | None => return Ok(()),
-                    _ => return Err("Invalid subscription frame".into()),
+                };
+                let message = plain_libs::serde_json::from_slice::<ClientMessage>(&plain).map_err(|_| "Invalid subscription request")?;
+                match &message {
+                    ClientMessage::Subscribe { id, payload } => {
+                        if active.len() >= 64 || active.contains(id) {
+                            return Err("Subscription limit reached".into());
+                        }
+                        authorize_graphql(payload, true).map_err(|_| "Subscription denied")?;
+                        active.insert(id.clone());
+                    }
+                    ClientMessage::Complete { id } => { active.remove(id); }
+                    ClientMessage::Ping { payload } => {
+                        let pong = plain_libs::serde_json::to_vec(&ServerMessage::Pong { payload: payload.clone() })
+                            .map_err(|error| error.to_string())?;
+                        let frame = stream.encode(&pong, key).ok_or("Sequence exhausted")?;
+                        send(socket, Message::Binary(frame.into())).await?;
+                        continue;
+                    }
+                    ClientMessage::Pong { .. } => continue,
                 }
+                upstream.send(std::str::from_utf8(&plain).map_err(|_| "Invalid subscription request")?)?;
             }
             message = upstream.read() => {
                 let message = message?;

@@ -243,14 +243,9 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
     let Ok(text) = std::str::from_utf8(&plain) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    let Ok(text) = state.main_replay.admit(
-        &state.db,
-        &session.client_id,
-        text,
-        plain_libs::chrono::Utc::now().timestamp_millis(),
-    ) else {
-        return StatusCode::BAD_REQUEST.into_response();
-    };
+    if let Err(status) = state.graphql_replay.admit(&state.db, &session, text) {
+        return status.into_response();
+    }
     let Ok(query) = plain_libs::serde_json::from_str::<plain_graphql::Request>(text) else {
         return StatusCode::BAD_REQUEST.into_response();
     };

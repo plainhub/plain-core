@@ -1,38 +1,83 @@
 [
   {
-    "key": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
-    "registration": "Zml4ZWQgZW5jcnlwdGVkIHJlZ2lzdHJhdGlvbiBieXRlcw==",
-    "name": "CLIPBOARD_CHANGED",
-    "payload": "eyJ0ZXh0IjoiZml4dHVyZSIsInNlbnNpdGl2ZSI6ZmFsc2V9",
-    "frame": "Q0xJUEJPQVJEX0NIQU5HRUQAAAAAAAAAAAAAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhfTNd/ggmh5nweh6D+Sl93JffoaZHGZRBiHdMHkuPby9m9N6hHZQnR9fNdKqX+hpjNi9j4A",
-    "nativeFrame": "Q0xJUEJPQVJEX0NIQU5HRUQAAAECAwQFBgcICQoLDA0ODxAREhMUFRYX0zXf4IJoeZ8Hoeg/kpfdyX36GmRxmUQYh3TB5Lj28vZvTeoRUlAQ8z4OVf432+n6i8moSQ==",
-    "aadHex": "706c61696e2d77732d6576656e742d7631000742884550a1e8355bc723c14853ded76d00826a986432edffcc1f071c0145b10000000000000000434c4950424f4152445f4348414e474544"
+    "key": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",
+    "client": "fixture-browser",
+    "path": "/graphql",
+    "init": "AQoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCrYA1oCwT5ywTNnq8r4fbESTpe3cSleZexQ9CdN1+fnmKrZlP59k2Xz15Z6ktpcfnKYwXW0kXI3qqa87w6fVGRfrLnhl65oXByoUQQHrh8VzjluooRj1UZrMgalpm5vuIN4i",
+    "ack": "ARQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFJIeIkGhor0SEf9XikRPOpvmK36A57lQFZtlImQWIVaqhkkzau/khVAZqojYyS8VxfS/ZpoXLPdW/H5X+jAsRRKtQVG633jrpZ8X4S+4m6ikF4VRM7JNPe52QKqrCVAKA3Jh",
+    "clientFrames": [
+      {
+        "plain": "eyJ0eXBlIjoicGluZyJ9",
+        "frame": "AQAAAAAAAAABHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fXlbmCC8PLBx0kQFHUn50YfhxWgsBeRJ8If2cGLjVgg=="
+      },
+      {
+        "plain": "eyJ0eXBlIjoiY29tcGxldGUiLCJpZCI6ImZpeHR1cmUifQ==",
+        "frame": "AQAAAAAAAAACICAgICAgICAgICAgICAgICAgICAgICAg7Meij3x73u/uunn0nyBY08eAHXyayfMKoxraqkUPolwn5Fe/zqnbVSAOKf+NHxdBf8Y="
+      }
+    ],
+    "serverFrames": [
+      {
+        "plain": "eyJ0eXBlIjoicG9uZyJ9",
+        "frame": "AQAAAAAAAAABIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMj4SUXBZJ1ftd8Kaa7+0YzE9/fmLrb/jElMfnIrEOGMw=="
+      },
+      {
+        "plain": "eyJ0eXBlIjoiY29tcGxldGUiLCJpZCI6ImZpeHR1cmUifQ==",
+        "frame": "AQAAAAAAAAACJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkc5KPVwcWVT0h0uLTumwCYoU7kIP/zsKiJy1b5rL5HxIF+LmyUrBPZtYtSZLDWs3EVWw="
+      }
+    ]
   },
   {
-    "key": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
-    "registration": "Zml4ZWQgZW5jcnlwdGVkIHJlZ2lzdHJhdGlvbiBieXRlcw==",
-    "name": "SCREEN_MIRROR_VIDEO",
-    "payload": "AAH/AAQ=",
-    "frame": "U0NSRUVOX01JUlJPUl9WSURFTwAAAAAAAAAAAQECAwQFBgcICQoLDA0ODxAREhMUFRYXGELEoeAr5JUb0mKb7F6H+31sLy7yZg==",
-    "nativeFrame": "U0NSRUVOX01JUlJPUl9WSURFTwABAgMEBQYHCAkKCwwNDg8QERITFBUWFxhCxKHgK3QKec8QStsxTcY1kuEXmFE=",
-    "aadHex": "706c61696e2d77732d6576656e742d7631000742884550a1e8355bc723c14853ded76d00826a986432edffcc1f071c0145b1000000000000000153435245454e5f4d4952524f525f564944454f"
+    "key": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ=",
+    "client": "fixture-browser",
+    "path": "/screen",
+    "init": "AQsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLC63h2MFRlNNsOt34s8ILrG94Xb0/IOLZ1QCtDSeZcEn/ATV0OqTwab4SKZ5aShiKqFftD2o43uqe9LsL/kEkE756a2xKnmzix+uqsPsB7X7JznSY9ItS/rJ0v+OBad/2rrDb",
+    "ack": "ARUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFQlSGR2c3+UBH1Yt5QsPxfPVy0/UGhYFZwdNiD3yCbdPp2xN/bSHC96ClBQYi8NnYPOp+e6C1VlyNqaT5EK1hEXTtEd7rGwpCXLqVwSaOX0dcJFNOzX4Gl5PZeNuPzJ5nXlO",
+    "clientFrames": [
+      {
+        "plain": "",
+        "frame": "AQAAAAAAAAABKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpW+VbSQkUjeFG0bIC41gM/A=="
+      },
+      {
+        "plain": "VAD/AQID",
+        "frame": "AQAAAAAAAAACKioqKioqKioqKioqKioqKioqKioqKioqlFqkAuCAWY9mLeWg50fhrDJqrGeZZg=="
+      }
+    ],
+    "serverFrames": [
+      {
+        "plain": "U0NSRUVOX01JUlJPUl9WSURFTwAA/wEC",
+        "frame": "AQAAAAAAAAABLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tqy+39hpsLG2cCYWYrk9RMT+jBDseDrH0kDC1rP9zOsi2VXkpUN+vdA=="
+      },
+      {
+        "plain": "U0NSRUVOX01JUlJPUl9BVURJTwADAP4=",
+        "frame": "AQAAAAAAAAACLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uF3+NomEWX2AslgRVt8lxXYZ6dsv8Hmfunm/ARpUFlBkZAs0HSu7F"
+      }
+    ]
   },
   {
-    "key": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
-    "registration": "Zml4ZWQgZW5jcnlwdGVkIHJlZ2lzdHJhdGlvbiBieXRlcw==",
-    "name": "SCREEN_MIRROR_AUDIO",
-    "payload": "/wACAQ==",
-    "frame": "U0NSRUVOX01JUlJPUl9BVURJTwAAAAAAAAAAAgIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGcw0PRmIaOtvo1WSvEjWAR9ZRKPU",
-    "nativeFrame": "U0NSRUVOX01JUlJPUl9BVURJTwACAwQFBgcICQoLDA0ODxAREhMUFRYXGBnMND0Zk2MvSNNAmSRtEittKGEHZA==",
-    "aadHex": "706c61696e2d77732d6576656e742d7631000742884550a1e8355bc723c14853ded76d00826a986432edffcc1f071c0145b1000000000000000253435245454e5f4d4952524f525f415544494f"
-  },
-  {
-    "key": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
-    "registration": "Zml4ZWQgZW5jcnlwdGVkIHJlZ2lzdHJhdGlvbiBieXRlcw==",
-    "name": "IMAGE_EDITOR_UPDATE",
-    "payload": "A2lkMQD/Bw==",
-    "frame": "SU1BR0VfRURJVE9SX1VQREFURQAAAAAAAAAAAwMEBQYHCAkKCwwNDg8QERITFBUWFxgZGjulRnPzOgCz63GNlAXXYpjd/wtukF9f",
-    "nativeFrame": "SU1BR0VfRURJVE9SX1VQREFURQADBAUGBwgJCgsMDQ4PEBESExQVFhcYGRo7pUZz8zoA2X5oNs85xSrNPKq9r8qM/A==",
-    "aadHex": "706c61696e2d77732d6576656e742d7631000742884550a1e8355bc723c14853ded76d00826a986432edffcc1f071c0145b10000000000000003494d4147455f454449544f525f555044415445"
+    "key": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU=",
+    "client": "fixture-browser",
+    "path": "/image_editor",
+    "init": "AQwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDDyaplPHW8zgSWVOH8Ya9IGhxV23gtVWjRZPLiL/QKIo5eAk7uUUfCYGlur3/keRH5kkdcQ1vZHnQ6Qk2qyKDWtI9BDgpz0bbS7aqz8dZcW9iXABN08cBx3sfdRQ/gnFGOa9",
+    "ack": "ARYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFiKwdVQEex/1TErmIy20rdq9Xwmn/zAdpMrFvFqGHkuMPI5gva4Ryr0LSkXczKc3RRF58oM3TWBrBCyXMYR2+fpMtql8Bqza2UKGYYeEn9HkN38YfoqMpVMg9WZKuI7lQEkR",
+    "clientFrames": [
+      {
+        "plain": "",
+        "frame": "AQAAAAAAAAABMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzbUdUo15U7AO3fV+SB9m4Xg=="
+      },
+      {
+        "plain": "VAD/AQID",
+        "frame": "AQAAAAAAAAACNDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0o6knTM0dcdv4sT/PbObXLrkKsNvvhg=="
+      }
+    ],
+    "serverFrames": [
+      {
+        "plain": "SU1BR0VfRURJVE9SX1JFQURZAA==",
+        "frame": "AQAAAAAAAAABNzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Aq/6wlXVjaqR9DUcGTQ//PMR3R8SgsCSlc2ChQBClXbC5Q0="
+      },
+      {
+        "plain": "SU1BR0VfRURJVE9SX1VQREFURQAA//4B",
+        "frame": "AQAAAAAAAAACODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4YfNZIK4oQqpKlAWu8FBJmL8fh44IXeX6rkhiJ5Yb61l4tPZ1TE56WA=="
+      }
+    ]
   }
 ]

@@ -1,22 +1,148 @@
 use plain_libs::crypto::xchacha_decrypt_raw_with_aad;
 use plain_libs::crypto::xchacha_encrypt_raw_with_aad;
-use plain_libs::utils::base64::base64_decode;
 use sha2::{Digest, Sha256};
 
-/// Client frames bind the route and client, then controls bind this connection.
-pub fn request_aad(path: &str, client_id: &str, registration: Option<&[u8]>) -> Vec<u8> {
-    let mut aad = b"ws-request\0".to_vec();
-    aad.extend_from_slice(path.as_bytes());
-    aad.push(0);
-    aad.extend_from_slice(client_id.as_bytes());
-    aad.push(0);
-    if let Some(registration) = registration {
-        aad.extend_from_slice(b"control\0");
-        aad.extend_from_slice(&Sha256::digest(registration));
-    } else {
-        aad.extend_from_slice(b"register");
+fn fields(values: &[&[u8]]) -> Option<Vec<u8>> {
+    let mut encoded = Vec::new();
+    for value in values {
+        encoded.extend_from_slice(&u32::try_from(value.len()).ok()?.to_be_bytes());
+        encoded.extend_from_slice(value);
     }
-    aad
+    Some(encoded)
+}
+fn init_aad(client: &str, path: &str) -> Option<Vec<u8>> {
+    fields(&[b"plain-ws-init", path.as_bytes(), client.as_bytes()])
+}
+pub fn seal_init(key: &[u8], client: &str, path: &str, plain: &[u8]) -> Option<Vec<u8>> {
+    let mut frame = vec![1];
+    frame.extend_from_slice(&xchacha_encrypt_raw_with_aad(
+        key,
+        plain,
+        &init_aad(client, path)?,
+    )?);
+    Some(frame)
+}
+pub fn open_init(key: &[u8], client: &str, path: &str, frame: &[u8]) -> Option<Vec<u8>> {
+    if frame.first() != Some(&1) {
+        return None;
+    }
+    xchacha_decrypt_raw_with_aad(key, frame.get(1..)?, &init_aad(client, path)?)
+}
+fn ack_aad(client: &str, path: &str, init: &[u8]) -> Option<Vec<u8>> {
+    fields(&[
+        b"plain-ws-ack",
+        path.as_bytes(),
+        client.as_bytes(),
+        &Sha256::digest(init),
+    ])
+}
+pub fn seal_ack(
+    key: &[u8],
+    client: &str,
+    path: &str,
+    init: &[u8],
+    plain: &[u8],
+) -> Option<Vec<u8>> {
+    let mut frame = vec![1];
+    frame.extend_from_slice(&xchacha_encrypt_raw_with_aad(
+        key,
+        plain,
+        &ack_aad(client, path, init)?,
+    )?);
+    Some(frame)
+}
+pub fn open_ack(
+    key: &[u8],
+    client: &str,
+    path: &str,
+    init: &[u8],
+    frame: &[u8],
+) -> Option<Vec<u8>> {
+    if frame.first() != Some(&1) {
+        return None;
+    }
+    xchacha_decrypt_raw_with_aad(key, frame.get(1..)?, &ack_aad(client, path, init)?)
+}
+#[derive(Clone, Copy)]
+pub enum Role {
+    Client,
+    Server,
+}
+pub struct Stream {
+    path: String,
+    client: String,
+    binding: [u8; 32],
+    role: Role,
+    sent: u64,
+    received: u64,
+}
+impl Stream {
+    pub fn new(path: &str, client: &str, init: &[u8], ack: &[u8], role: Role) -> Option<Self> {
+        Some(Self {
+            path: path.into(),
+            client: client.into(),
+            binding: Sha256::digest(fields(&[init, ack])?).into(),
+            role,
+            sent: 0,
+            received: 0,
+        })
+    }
+    fn aad(&self, sending: bool, sequence: u64) -> Option<Vec<u8>> {
+        let client_direction = matches!(
+            (self.role, sending),
+            (Role::Client, true) | (Role::Server, false)
+        );
+        fields(&[
+            b"plain-ws-frame",
+            self.path.as_bytes(),
+            self.client.as_bytes(),
+            &self.binding,
+            if client_direction {
+                b"client"
+            } else {
+                b"server"
+            },
+            &sequence.to_be_bytes(),
+        ])
+    }
+    pub fn encode(&mut self, plain: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+        let next = self.sent.checked_add(1)?;
+        let mut frame = vec![1];
+        frame.extend_from_slice(&next.to_be_bytes());
+        frame.extend_from_slice(&xchacha_encrypt_raw_with_aad(
+            key,
+            plain,
+            &self.aad(true, next)?,
+        )?);
+        self.sent = next;
+        Some(frame)
+    }
+    pub fn decode(&mut self, frame: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+        if frame.first() != Some(&1) {
+            return None;
+        }
+        let sequence = u64::from_be_bytes(frame.get(1..9)?.try_into().ok()?);
+        let next = self.received.checked_add(1)?;
+        if sequence != next {
+            return None;
+        }
+        let plain =
+            xchacha_decrypt_raw_with_aad(key, frame.get(9..)?, &self.aad(false, sequence)?)?;
+        self.received = next;
+        Some(plain)
+    }
+}
+
+use serde::{Deserialize, Serialize};
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Init {
+    pub client_nonce: String,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Ack {
+    pub server_nonce: String,
 }
 
 pub fn encode_raw(event_name: &str, payload: &[u8]) -> Option<Vec<u8>> {
@@ -44,82 +170,6 @@ fn valid_name(name: &str) -> bool {
         && name
             .bytes()
             .all(|byte| byte.is_ascii_uppercase() || byte == b'_')
-}
-
-pub fn encode(event_name: &str, payload: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-    encode_raw(
-        event_name,
-        &xchacha_encrypt_raw_with_aad(key, payload, &event_aad(event_name))?,
-    )
-}
-
-pub fn decode(frame: &[u8], key: &[u8]) -> Option<(String, Vec<u8>)> {
-    let (name, encrypted) = decode_raw(frame)?;
-    Some((
-        name.to_owned(),
-        xchacha_decrypt_raw_with_aad(key, encrypted, &event_aad(name))?,
-    ))
-}
-
-fn event_aad(name: &str) -> Vec<u8> {
-    let mut aad = b"plain-event-v1\0".to_vec();
-    aad.extend_from_slice(name.as_bytes());
-    aad
-}
-
-pub struct Stream {
-    binding: [u8; 32],
-    next: u64,
-}
-
-impl Stream {
-    pub fn new(registration: &[u8]) -> Self {
-        Self {
-            binding: Sha256::digest(registration).into(),
-            next: 0,
-        }
-    }
-
-    fn aad(&self, name: &str, sequence: u64) -> Vec<u8> {
-        let mut aad = b"plain-ws-event-v1\0".to_vec();
-        aad.extend_from_slice(&self.binding);
-        aad.extend_from_slice(&sequence.to_be_bytes());
-        aad.extend_from_slice(name.as_bytes());
-        aad
-    }
-
-    pub fn encode(&mut self, name: &str, payload: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-        if !valid_name(name) {
-            return None;
-        }
-        let next = self.next.checked_add(1)?;
-        let cipher = xchacha_encrypt_raw_with_aad(key, payload, &self.aad(name, self.next))?;
-        let mut body = self.next.to_be_bytes().to_vec();
-        body.extend_from_slice(&cipher);
-        let frame = encode_raw(name, &body)?;
-        self.next = next;
-        Some(frame)
-    }
-
-    pub fn decode(&mut self, frame: &[u8], key: &[u8]) -> Option<(String, Vec<u8>)> {
-        let (name, body) = decode_raw(frame)?;
-        let sequence = u64::from_be_bytes(body.get(..8)?.try_into().ok()?);
-        if sequence != self.next {
-            return None;
-        }
-        let next = self.next.checked_add(1)?;
-        let payload = xchacha_decrypt_raw_with_aad(key, body.get(8..)?, &self.aad(name, sequence))?;
-        self.next = next;
-        Some((name.to_owned(), payload))
-    }
-}
-
-pub fn encode_with_token(event_name: &str, payload: &[u8], token_b64: &str) -> Option<Vec<u8>> {
-    encode(event_name, payload, &base64_decode(token_b64))
-}
-
-pub fn decode_with_token(frame: &[u8], token_b64: &str) -> Option<(String, Vec<u8>)> {
-    decode(frame, &base64_decode(token_b64))
 }
 
 #[cfg(test)]

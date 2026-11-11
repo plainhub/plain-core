@@ -5,12 +5,12 @@ use crate::infrastructure::protocols::graphql::PeerSubscriptionTarget;
 use crate::infrastructure::protocols::graphql::messages::ClientMessage;
 use crate::infrastructure::protocols::graphql::messages::ServerMessage;
 use crate::runtime::Runtime as CoreRuntime;
-use plain_libs::anyhow::{Result, anyhow, ensure};
 use futures_util::{SinkExt, StreamExt};
+use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_libs::protocols::http_client;
+use plain_libs::tokio_tungstenite::tungstenite::Message;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{mpsc, watch};
-use plain_libs::tokio_tungstenite::tungstenite::Message;
 
 pub struct PeerSubscription {
     state: CoreRuntime,
@@ -122,7 +122,8 @@ impl PeerSubscription {
         if encoded.len() > 1024 * 1024 - 49 {
             return Err("Subscription request too large".into());
         }
-        let message = plain_libs::serde_json::from_str(encoded).map_err(|error| error.to_string())?;
+        let message =
+            plain_libs::serde_json::from_str(encoded).map_err(|error| error.to_string())?;
         self.commands
             .try_send(message)
             .map_err(|_| "Subscription command backpressure".into())
@@ -163,11 +164,8 @@ impl PeerSubscription {
             ),
         )
         .await??;
-        let init = crate::features::services::peers::management_wire::registration(
-            &key,
-            &self.client,
-            plain_libs::chrono::Utc::now().timestamp_millis(),
-        )?;
+        let init =
+            crate::features::services::peers::management_wire::registration(&key, &self.client)?;
         socket.send(Message::Binary(init.clone().into())).await?;
         let ack = tokio::time::timeout(Duration::from_secs(10), socket.next())
             .await?
@@ -181,11 +179,18 @@ impl PeerSubscription {
             &init,
             &ack,
         )?;
+        self.current()?;
+        let confirmation = crate::features::services::peers::management_wire::encode(
+            &ClientMessage::Ping { payload: None },
+            &key,
+            &mut stream,
+        )?;
+        socket.send(Message::Binary(confirmation.into())).await?;
         let mut heartbeat = tokio::time::interval_at(
             tokio::time::Instant::now() + Duration::from_secs(20),
             Duration::from_secs(20),
         );
-        let mut pong_deadline = None;
+        let mut pong_deadline = Some(tokio::time::Instant::now() + Duration::from_secs(10));
         loop {
             self.current()?;
             tokio::select! {

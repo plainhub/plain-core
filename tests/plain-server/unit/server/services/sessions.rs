@@ -75,7 +75,7 @@ fn offer(
 }
 
 #[tokio::test]
-async fn approved_web_login_encrypted_response_and_token_auth_survive_restart() {
+async fn approved_web_login_persists_credentials_and_executes_encrypted_graphql() {
     let (dir, server) = fixture();
     let state = server.runtime_state();
     let (request, keys) = offer(&state, Value::Null);
@@ -123,18 +123,11 @@ async fn approved_web_login_encrypted_response_and_token_auth_survive_restart() 
     assert!(issued["response"].get("signature").is_none());
     let mut headers = HeaderMap::new();
     headers.insert("c-id", "browser".parse().unwrap());
-    let plaintext = format!(
-        "{}|{}|{{\"query\":\"{{noteCount(query:\\\"\\\")}}\"}}",
-        plain_libs::chrono::Utc::now().timestamp_millis(),
-        plain_libs::utils::uuid::Uuid::new_v4()
-    );
-    let encrypted = plain_rs::infrastructure::transport::http_request::encrypt_raw(
+    let encrypted = plain_rs::infrastructure::transport::http_request::encrypt(
         &shared,
-        "POST",
         "/graphql",
-        plaintext.as_bytes(),
-    )
-    .unwrap();
+        &json!({"query":r#"{noteCount(query:"")}"#}).to_string(),
+    ).unwrap();
     let context = plain_rs::infrastructure::transport::http_response::Context::new(&encrypted);
     let response = graphql::call(
         State(state.clone()),

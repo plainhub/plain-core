@@ -1,7 +1,7 @@
 use super::*;
 use crate::{server::ContentServer, test_support::HostRequests};
-use plain_rs::infrastructure::events::WsEvent;
 use plain_libs::serde_json::json;
+use plain_rs::infrastructure::events::WsEvent;
 
 fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -332,6 +332,15 @@ async fn paired_screen_uses_pinned_transport_for_binary_controls_and_releases_re
         .unwrap();
     assert_eq!(effect["method"], "systemScreenMirrorControls");
     assert_eq!(effect["params"]["inputs"][0]["action"], "BACK");
+    session
+        .send(br#"{"type":"screenMirrorControl","input":{"action":"HOME"}}"#.to_vec())
+        .await
+        .unwrap();
+    let effect = tokio::time::timeout(Duration::from_secs(3), effects.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(effect["params"]["inputs"][0]["action"], "HOME");
     remote_state
         .main_ws
         .screen_events
@@ -351,4 +360,18 @@ async fn paired_screen_uses_pinned_transport_for_binary_controls_and_releases_re
     local.stop_core().await;
     remote.stop_core().await;
     host.abort();
+}
+
+#[test]
+fn control_payload_limit_includes_sequence_and_encryption_overhead() {
+    let key = [7; 32];
+    let mut stream = Stream::new("/screen", "client", b"init", b"ack", Role::Client).unwrap();
+    let frame = stream
+        .encode(&vec![0; MAX_SOCKET_CONTROL_BYTES], &key)
+        .unwrap();
+    assert_eq!(frame.len(), 65536);
+    let oversized = stream
+        .encode(&vec![0; MAX_SOCKET_CONTROL_BYTES + 1], &key)
+        .unwrap();
+    assert_eq!(oversized.len(), 65537);
 }

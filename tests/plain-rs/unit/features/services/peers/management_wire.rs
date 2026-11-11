@@ -1,30 +1,33 @@
 use super::*;
 
-fn streams(key: &[u8], client: &str) -> (graphql::Stream, graphql::Stream) {
-    let init = registration(key, client, 1_700_000_000_123).unwrap();
-    let ack = graphql::seal_ack(
+fn streams(key: &[u8], client: &str) -> (websocket::Stream, websocket::Stream) {
+    let init = registration(key, client).unwrap();
+    let ack = websocket::seal_ack(
         key,
         client,
+        "/graphql",
         &init,
         br#"{"serverNonce":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}"#,
     )
     .unwrap();
     (
-        graphql::Stream::new(client, &init, &ack, Role::Server).unwrap(),
+        websocket::Stream::new("/graphql", client, &init, &ack, Role::Server).unwrap(),
         acknowledge(key, client, &init, &ack).unwrap(),
     )
 }
 
 #[test]
-fn registration_binds_identity_and_keeps_timestamp() {
+fn registration_binds_identity_and_path_without_timestamp() {
     let key = [7; 32];
-    let init = registration(&key, "client", 1_700_000_000_123).unwrap();
-    let plain = graphql::open_init(&key, "client", &init).unwrap();
+    let init = registration(&key, "client").unwrap();
+    let plain = websocket::open_init(&key, "client", "/graphql", &init).unwrap();
     let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&plain).unwrap();
-    assert_eq!(value["timestampMillis"], 1_700_000_000_123i64);
-    assert!(graphql::open_init(&key, "other", &init).is_none());
-    assert!(graphql::open_init(&[8; 32], "client", &init).is_none());
-    assert!(registration(&[7; 31], "client", 0).is_err());
+    assert!(value.get("timestampMillis").is_none());
+    assert_eq!(value["clientNonce"].as_str().unwrap().len(), 64);
+    assert!(websocket::open_init(&key, "client", "/screen", &init).is_none());
+    assert!(websocket::open_init(&key, "other", "/graphql", &init).is_none());
+    assert!(websocket::open_init(&[8; 32], "client", "/graphql", &init).is_none());
+    assert!(registration(&[7; 31], "client").is_err());
 }
 
 #[test]

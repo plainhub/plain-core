@@ -1,11 +1,15 @@
 use super::*;
 use plain_libs::protocols::http_client;
+use plain_rs::infrastructure::protocols::websocket as wire;
 #[test]
 fn websocket_query_has_no_client_selected_login_mode() {
     let params: Params = plain_libs::serde_json::from_value(json!({"cid": "browser"})).unwrap();
     assert_eq!(params.cid, "browser");
     for auth in ["1", "2"] {
-        assert!(plain_libs::serde_json::from_value::<Params>(json!({"cid": "browser", "auth": auth})).is_err());
+        assert!(
+            plain_libs::serde_json::from_value::<Params>(json!({"cid": "browser", "auth": auth}))
+                .is_err()
+        );
     }
 }
 
@@ -106,8 +110,12 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             plain_libs::utils::base64::base64_encode(&private),
         )
         .unwrap();
-    plain_rs::features::prefs::security::set_entry(&prefs, "password", plain_libs::serde_json::json!("secret"))
-        .unwrap();
+    plain_rs::features::prefs::security::set_entry(
+        &prefs,
+        "password",
+        plain_libs::serde_json::json!("secret"),
+    )
+    .unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
         &plain_libs::utils::base64::base64_encode(&[3; 32]),
@@ -129,10 +137,11 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let (port, _) = server.start_public(0, 0, cert_pem, cert_key).await.unwrap();
     for (cid, allowed) in [("rejected-browser", false), ("accepted-browser", true)] {
-        let (mut socket, _) =
-            plain_libs::tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid={cid}"))
-                .await
-                .unwrap();
+        let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/auth?cid={cid}"
+        ))
+        .await
+        .unwrap();
         let keys = password_keys(&mut socket, &server.runtime_state(), cid).await;
         let request = json!({
 
@@ -142,7 +151,10 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         });
         let inner = plain_libs::serde_json::to_vec(&request).unwrap();
         let frame = keys
-            .encrypt_request(&inner, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
+            .encrypt_request(
+                &inner,
+                plain_libs::chrono::Utc::now().timestamp_millis() as u64,
+            )
             .unwrap();
         socket
             .send(ClientMessage::Binary(frame.clone().into()))
@@ -174,7 +186,10 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
                 panic!("expected completed auth frame")
             };
             let inner = keys
-                .decrypt_response(&frame, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
+                .decrypt_response(
+                    &frame,
+                    plain_libs::chrono::Utc::now().timestamp_millis() as u64,
+                )
                 .unwrap();
             let decrypted = inner;
             let result: Value = plain_libs::serde_json::from_slice(&decrypted).unwrap();
@@ -279,7 +294,10 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                 b"invalid".to_vec()
             };
             let frame = keys
-                .encrypt_request(&inner, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
+                .encrypt_request(
+                    &inner,
+                    plain_libs::chrono::Utc::now().timestamp_millis() as u64,
+                )
                 .unwrap();
             socket
                 .send(ClientMessage::Binary(frame.into()))
@@ -295,7 +313,10 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                     panic!("expected completed login")
                 };
                 let inner = keys
-                    .decrypt_response(&frame, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
+                    .decrypt_response(
+                        &frame,
+                        plain_libs::chrono::Utc::now().timestamp_millis() as u64,
+                    )
                     .unwrap();
                 let plaintext = inner;
                 let result: Value = plain_libs::serde_json::from_slice(&plaintext).unwrap();
@@ -348,8 +369,11 @@ async fn root_serves_the_spa_and_old_ws_path_never_upgrades() {
         assert!(response.text().await.unwrap().contains("fixture"));
     }
     for path in ["/?cid=browser", "/ws?cid=browser"] {
-        let denied =
-            plain_libs::tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{}{path}", core.port)).await;
+        let denied = plain_libs::tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{}{path}",
+            core.port
+        ))
+        .await;
         match denied {
             Err(plain_libs::tokio_tungstenite::tungstenite::Error::Http(response)) => {
                 assert_eq!(response.status(), 200)
@@ -373,7 +397,7 @@ async fn confirm_login(
 }
 
 #[tokio::test]
-async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_refuse_replay() {
+async fn sequenced_controls_preserve_order_without_clock_or_database_replay_receipts() {
     use futures_util::SinkExt;
     use plain_libs::tokio_tungstenite::tungstenite::Message as ClientMessage;
     let (_directory, core) = public_fixture();
@@ -405,36 +429,76 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     ))
     .await
     .unwrap();
-    let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+    let registration = wire::seal_init(
         &key,
-        plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
-        &plain_rs::infrastructure::protocols::websocket::request_aad("/screen", &client, None),
+        &client,
+        "/screen",
+        json!({"clientNonce":"00".repeat(32)})
+            .to_string()
+            .as_bytes(),
     )
     .unwrap();
+    let receipts = || {
+        state
+            .db
+            .with_conn(|conn| {
+                conn.query_row("SELECT COUNT(*) FROM replay_receipts", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+            })
+            .unwrap()
+    };
+    assert!(
+        state
+            .db
+            .admit_request(
+                "http-fixture",
+                &client,
+                4_000_000_000_000,
+                "fixture",
+                4_000_000_000_000,
+                1
+            )
+            .unwrap()
+    );
+    let before = receipts();
     socket
         .send(ClientMessage::Binary(registration.clone().into()))
+        .await
+        .unwrap();
+    let ClientMessage::Binary(ack) = socket.next().await.unwrap().unwrap() else {
+        panic!("Expected acknowledgement")
+    };
+    let ack_plain = wire::open_ack(&key, &client, "/screen", &registration, &ack).unwrap();
+    let ack_value: wire::Ack = plain_libs::serde_json::from_slice(&ack_plain).unwrap();
+    assert_eq!(ack_value.server_nonce.len(), 64);
+    assert!(
+        !state
+            .main_ws
+            .connections
+            .lock()
+            .unwrap()
+            .values()
+            .any(|connection| connection.registered)
+    );
+    let mut stream =
+        wire::Stream::new("/screen", &client, &registration, &ack, wire::Role::Client).unwrap();
+    let confirmation = stream.encode(b"", &key).unwrap();
+    socket
+        .send(ClientMessage::Binary(confirmation.clone().into()))
         .await
         .unwrap();
     let json_control = br#"{"type":"screenMirrorControl","input":{"action":"BACK"}}"#;
     let touch = [0x54, 1, 0xff, 0xff, 0, 7, 0x34, 0x12, 0x78, 0x56, 0, 0];
     let mut last = Vec::new();
     for payload in [json_control.as_slice(), touch.as_slice()] {
-        let mut plain = plain_libs::chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
-        plain.extend_from_slice(payload);
-        last = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-            &key,
-            &plain,
-            &plain_rs::infrastructure::protocols::websocket::request_aad(
-                "/screen",
-                &client,
-                Some(&registration),
-            ),
-        )
-        .unwrap();
+        last = stream.encode(payload, &key).unwrap();
         socket
             .send(ClientMessage::Binary(last.clone().into()))
             .await
             .unwrap();
+    }
+    for payload in [json_control.as_slice(), touch.as_slice()] {
         let inputs = tokio::time::timeout(Duration::from_secs(3), received.recv())
             .await
             .unwrap()
@@ -448,7 +512,7 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     tokio::time::timeout(Duration::from_secs(3), async {
         while let Some(message) = socket.next().await {
             if let ClientMessage::Close(Some(close)) = message.unwrap() {
-                assert_eq!(u16::from(close.code), 1013);
+                assert_eq!(u16::from(close.code), 1008);
                 assert_eq!(close.reason, "invalid_request");
                 return;
             }
@@ -458,44 +522,40 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     .await
     .unwrap();
     assert!(received.try_recv().is_err());
-    // A fresh control encrypted for the old registration cannot move to a new connection.
-    let (mut next, _) = plain_libs::tokio_tungstenite::connect_async(format!(
-        "ws://127.0.0.1:{}/screen?cid={client}",
-        core.port
-    ))
-    .await
-    .unwrap();
-    let next_registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-        &key,
-        plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
-        &plain_rs::infrastructure::protocols::websocket::request_aad("/screen", &client, None),
-    )
-    .unwrap();
-    next.send(ClientMessage::Binary(next_registration.into()))
+    // Replaying the exact init gets a fresh server nonce, so neither old proof can register.
+    let old_control = stream.encode(json_control, &key).unwrap();
+    for proof in [confirmation, old_control] {
+        let (mut next, _) = plain_libs::tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{}/screen?cid={client}",
+            core.port
+        ))
         .await
         .unwrap();
-    let mut old_bound = plain_libs::chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
-    old_bound.extend_from_slice(json_control);
-    let old_bound = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-        &key,
-        &old_bound,
-        &plain_rs::infrastructure::protocols::websocket::request_aad(
-            "/screen",
-            &client,
-            Some(&registration),
-        ),
-    )
-    .unwrap();
-    next.send(ClientMessage::Binary(old_bound.into()))
-        .await
-        .unwrap();
-    let rejected = tokio::time::timeout(Duration::from_secs(3), next.next())
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
-    assert!(matches!(rejected, ClientMessage::Close(_)));
-    assert!(received.try_recv().is_err());
+        next.send(ClientMessage::Binary(registration.clone().into()))
+            .await
+            .unwrap();
+        let ClientMessage::Binary(next_ack) = next.next().await.unwrap().unwrap() else {
+            panic!("Expected fresh acknowledgement")
+        };
+        let next_plain =
+            wire::open_ack(&key, &client, "/screen", &registration, &next_ack).unwrap();
+        let next_value: wire::Ack = plain_libs::serde_json::from_slice(&next_plain).unwrap();
+        assert_ne!(ack_value.server_nonce, next_value.server_nonce);
+        assert_ne!(ack, next_ack);
+        next.send(ClientMessage::Binary(proof.into()))
+            .await
+            .unwrap();
+        let rejected = tokio::time::timeout(Duration::from_secs(3), next.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(
+            matches!(rejected, ClientMessage::Close(Some(frame)) if frame.reason == "invalid_request")
+        );
+        assert!(received.try_recv().is_err());
+    }
+    assert_eq!(receipts(), before);
     core.shutdown().await;
     state.host.disconnect(generation);
     tokio::time::timeout(Duration::from_secs(3), responder)
@@ -677,8 +737,18 @@ async fn online_clients_follow_authenticated_graphql_connections() {
             let request = format!("ws://127.0.0.1:{port}/graphql?cid={client}")
                 .into_client_request()
                 .unwrap();
-            let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(request).await.unwrap();
-            let init = plain_rs::infrastructure::protocols::graphql::seal_init(&key, &client, json!({"timestampMillis": plain_libs::chrono::Utc::now().timestamp_millis(), "clientNonce": nonce.repeat(32)}).to_string().as_bytes()).unwrap();
+            let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(request)
+                .await
+                .unwrap();
+            let init = plain_rs::infrastructure::protocols::websocket::seal_init(
+                &key,
+                &client,
+                "/graphql",
+                json!({"clientNonce": nonce.repeat(32)})
+                    .to_string()
+                    .as_bytes(),
+            )
+            .unwrap();
             socket
                 .send(Frame::Binary(init.clone().into()))
                 .await
@@ -687,14 +757,26 @@ async fn online_clients_follow_authenticated_graphql_connections() {
                 panic!("Expected encrypted acknowledgement")
             };
             assert!(
-                plain_rs::infrastructure::protocols::graphql::open_ack(&key, &client, &init, &ack)
-                    .is_some()
+                plain_rs::infrastructure::protocols::websocket::open_ack(
+                    &key, &client, "/graphql", &init, &ack
+                )
+                .is_some()
             );
-            socket.send(Frame::Ping(vec![1].into())).await.unwrap();
-            assert!(matches!(
-                socket.next().await.unwrap().unwrap(),
-                Frame::Pong(_)
-            ));
+            let mut stream =
+                wire::Stream::new("/graphql", &client, &init, &ack, wire::Role::Client).unwrap();
+            socket
+                .send(Frame::Binary(
+                    stream.encode(br#"{"type":"ping"}"#, &key).unwrap().into(),
+                ))
+                .await
+                .unwrap();
+            let Frame::Binary(response) = socket.next().await.unwrap().unwrap() else {
+                panic!("Expected encrypted pong")
+            };
+            let response: Value =
+                plain_libs::serde_json::from_slice(&stream.decode(&response, &key).unwrap())
+                    .unwrap();
+            assert_eq!(response["type"], "pong");
             socket
         }
     };
@@ -764,7 +846,8 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
     session.send(r#"{"type":"subscribe","id":"public","payload":{"query":"subscription { pairingCompleted { deviceId deviceName ip } }"}}"#).unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
-            let response: Value = plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
+            let response: Value =
+                plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
             if response["payload"]["extensions"]["subscriptionReady"] == true {
                 break;
             }
@@ -793,7 +876,8 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
     session.send(r#"{"type":"subscribe","id":"channels","payload":{"query":"subscription { channelsChanged { changed invite { channelId channelName ownerPeerId ownerPeerName } cancel { channelId } } }"}}"#).unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
-            let response: Value = plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
+            let response: Value =
+                plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
             if response["id"] == "channels"
                 && response["payload"]["extensions"]["subscriptionReady"] == true
             {
@@ -860,7 +944,8 @@ async fn password_keys(
     use plain_libs::tokio_tungstenite::tungstenite::Message;
     let signing = plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     let context = plain_libs::auth::context(client_id, &signing[32..]);
-    let client = ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, b"secret").unwrap();
+    let client =
+        ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, b"secret").unwrap();
     socket
         .send(Message::Binary(client.message.serialize().to_vec().into()))
         .await
@@ -911,10 +996,13 @@ async fn socket_registration_rejects_other_route_and_client_binding() {
         ))
         .await
         .unwrap();
-        let frame = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
+        let frame = wire::seal_init(
             &key,
-            plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
-            &plain_rs::infrastructure::protocols::websocket::request_aad(path, cid, None),
+            cid,
+            path,
+            json!({"clientNonce":"01".repeat(32)})
+                .to_string()
+                .as_bytes(),
         )
         .unwrap();
         socket.send(Message::Binary(frame.into())).await.unwrap();

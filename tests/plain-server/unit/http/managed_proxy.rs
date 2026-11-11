@@ -1,7 +1,9 @@
 use super::*;
 use crate::server::ContentServer;
-use plain_libs::axum::body::Bytes;
 use futures_util::{SinkExt, StreamExt};
+use plain_libs::axum::body::Bytes;
+use plain_libs::serde_json::json;
+use plain_libs::tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 use plain_rs::infrastructure::db::{DPeer, chat_store::peers};
 use plain_rs::{
     features::{
@@ -9,11 +11,11 @@ use plain_rs::{
         prefs::{Prefs, pref_keys},
         services::sessions,
     },
-    infrastructure::{db::chat_store::SaveMode, protocols::graphql, transport::http_request},
+    infrastructure::{
+        db::chat_store::SaveMode, protocols::websocket as graphql, transport::http_request,
+    },
 };
-use plain_libs::serde_json::json;
 use std::time::Duration;
-use plain_libs::tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 
 fn start(path: &std::path::Path, id: &str) -> ContentServer {
     std::fs::create_dir_all(path).unwrap();
@@ -112,7 +114,8 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
             &Scope::Session(browser.client_id.clone()),
             &format!("relay:{b_id}:{method}:{path}"),
             &decode_key(&browser.url_token).unwrap(),
-            &plain_libs::serde_json::to_vec(&plain_libs::chrono::Utc::now().timestamp_millis()).unwrap(),
+            &plain_libs::serde_json::to_vec(&plain_libs::chrono::Utc::now().timestamp_millis())
+                .unwrap(),
         )
         .unwrap();
         let (path, query) = path.split_once('?').unwrap_or((path, ""));
@@ -146,7 +149,8 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let response =
         http_request::decrypt_response(&key, &body, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
-        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&response).unwrap()["data"]["app"]["clientId"],
+        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&response).unwrap()["data"]
+            ["app"]["clientId"],
         b_id
     );
     let first = a_state.managed_proxy.route(&a_state, &b_id).await.unwrap();
@@ -239,7 +243,8 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         &Scope::Session(browser.client_id.clone()),
         &format!("managed:{b_id}:zip/dir:download"),
         &decode_key(&browser.url_token).unwrap(),
-        &plain_libs::serde_json::to_vec(&Resource::reference(archive_dir.to_str().unwrap())).unwrap(),
+        &plain_libs::serde_json::to_vec(&Resource::reference(archive_dir.to_str().unwrap()))
+            .unwrap(),
     )
     .unwrap();
     let response = http
@@ -251,7 +256,8 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()[header::CONTENT_TYPE], "application/zip");
     let mut archive =
-        plain_libs::zip::ZipArchive::new(std::io::Cursor::new(response.bytes().await.unwrap())).unwrap();
+        plain_libs::zip::ZipArchive::new(std::io::Cursor::new(response.bytes().await.unwrap()))
+            .unwrap();
     assert_eq!(archive.len(), 1);
     let mut entry = Vec::new();
     std::io::Read::read_to_end(&mut archive.by_name("entry.txt").unwrap(), &mut entry).unwrap();
@@ -304,7 +310,8 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let plaintext =
         http_request::decrypt_response(&key, &chunks, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
-        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["data"]["uploadedChunks"],
+        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["data"]
+            ["uploadedChunks"],
         json!([format!("0:{}", data.len())])
     );
     let clean = http_request::encrypt(
@@ -317,7 +324,8 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let plaintext =
         http_request::decrypt_response(&key, &clean, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
-        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["data"]["deleteChunks"],
+        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["data"]
+            ["deleteChunks"],
         true
     );
 
@@ -371,7 +379,11 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         ),
         format!("ws://127.0.0.1:{a_http}/proxy/unknown/graphql?cid={a_id}"),
     ] {
-        assert!(plain_libs::tokio_tungstenite::connect_async(url).await.is_err());
+        assert!(
+            plain_libs::tokio_tungstenite::connect_async(url)
+                .await
+                .is_err()
+        );
     }
     b_state
         .prefs
@@ -391,7 +403,8 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let plaintext =
         http_request::decrypt_response(&key, &chunks, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
-        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["errors"][0]["message"],
+        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["errors"]
+            [0]["message"],
         "no_permission"
     );
     a.stop_core().await;
@@ -451,17 +464,18 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             format!("wss://localhost:{a_port}{socket_path}"),
             None,
             false,
-            Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(tls.clone()))),
+            Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(
+                tls.clone(),
+            ))),
         )
     };
     let session_key = decode_key(&browser.token).unwrap();
     let init_frame = |path: &str| {
-        graphql::seal_init_for(
+        graphql::seal_init(
             &session_key,
             &browser.client_id,
             path,
             &plain_libs::serde_json::to_vec(&graphql::Init {
-                timestamp_millis: plain_libs::chrono::Utc::now().timestamp_millis(),
                 client_nonce: plain_libs::utils::hex::bytes_to_hex(
                     &plain_libs::crypto::random_bytes(32),
                 ),
@@ -506,7 +520,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         panic!("A must acknowledge the session before forwarding B frames");
     };
     assert!(
-        graphql::open_ack_for(
+        graphql::open_ack(
             &session_key,
             &browser.client_id,
             &socket_path,
@@ -515,9 +529,30 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         )
         .is_some()
     );
+    let mut binding = graphql::Stream::new(
+        &socket_path,
+        &browser.client_id,
+        &registration,
+        &ack,
+        graphql::Role::Client,
+    )
+    .unwrap();
+    let confirmation = binding.encode(&[], &session_key).unwrap();
+    socket
+        .send(Message::Binary(confirmation.clone().into()))
+        .await
+        .unwrap();
     let (mut replayed, _) = connect().await.unwrap();
     replayed
-        .send(Message::Binary(registration.into()))
+        .send(Message::Binary(registration.clone().into()))
+        .await
+        .unwrap();
+    let Message::Binary(replay_ack) = replayed.next().await.unwrap().unwrap() else {
+        panic!("Replayed init must get a fresh connection challenge");
+    };
+    assert_ne!(ack, replay_ack);
+    replayed
+        .send(Message::Binary(confirmation.into()))
         .await
         .unwrap();
     assert!(matches!(
@@ -526,6 +561,30 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             .unwrap(),
         Some(Ok(Message::Close(_)))
     ));
+    let (mut reconnected, _) = connect().await.unwrap();
+    reconnected
+        .send(Message::Binary(registration.clone().into()))
+        .await
+        .unwrap();
+    let Message::Binary(reconnect_ack) = reconnected.next().await.unwrap().unwrap() else {
+        panic!("Reconnect must receive a fresh challenge");
+    };
+    let mut binding = graphql::Stream::new(
+        &socket_path,
+        &browser.client_id,
+        &registration,
+        &reconnect_ack,
+        graphql::Role::Client,
+    )
+    .unwrap();
+    reconnected
+        .send(Message::Binary(
+            binding.encode(&[], &session_key).unwrap().into(),
+        ))
+        .await
+        .unwrap();
+    socket.close(None).await.unwrap();
+    let mut socket = reconnected;
     let password = b"fixture-password";
     let login =
         opaque_ke::ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, password)
@@ -586,7 +645,8 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         &plain_libs::auth::auth_aad(&context, true),
     )
     .unwrap();
-    let response: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&plaintext).unwrap();
+    let response: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_slice(&plaintext).unwrap();
     assert_eq!(response["status"], "COMPLETED", "{response}");
     assert!(
         b_state
@@ -660,7 +720,8 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         &native_scope,
         "native-proxy",
         &plain_rs::features::sessions::token_key(&a_state.native_url_token().unwrap()).unwrap(),
-        &plain_libs::serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}")})).unwrap(),
+        &plain_libs::serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}")}))
+            .unwrap(),
     )
     .unwrap();
     let native_base = format!("http://127.0.0.1:{a_http}/proxy/{ticket}");
@@ -832,7 +893,11 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
     request
         .headers_mut()
         .insert(header::ORIGIN, "tauri://localhost".parse().unwrap());
-    assert!(plain_libs::tokio_tungstenite::connect_async(request).await.is_err());
+    assert!(
+        plain_libs::tokio_tungstenite::connect_async(request)
+            .await
+            .is_err()
+    );
     serve.abort();
     a.stop_core().await;
 }
@@ -860,15 +925,17 @@ async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
         request,
         None,
         false,
-        Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(tls))),
+        Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(
+            tls,
+        ))),
     )
     .await
     .unwrap();
     let init = graphql::seal_init(
         key,
         client,
+        "/graphql",
         &plain_libs::serde_json::to_vec(&graphql::Init {
-            timestamp_millis: plain_libs::chrono::Utc::now().timestamp_millis(),
             client_nonce: "ab".repeat(32),
         })
         .unwrap(),
@@ -881,8 +948,9 @@ async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
     let Message::Binary(ack) = socket.next().await.unwrap().unwrap() else {
         panic!("Missing acknowledgement")
     };
-    assert!(graphql::open_ack(key, client, &init, &ack).is_some());
-    let mut cipher = graphql::Stream::new(client, &init, &ack, graphql::Role::Client).unwrap();
+    assert!(graphql::open_ack(key, client, "/graphql", &init, &ack).is_some());
+    let mut cipher =
+        graphql::Stream::new("/graphql", client, &init, &ack, graphql::Role::Client).unwrap();
     for (message, expected) in [
         (json!({"type":"ping"}), "pong"),
         (
@@ -896,11 +964,212 @@ async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
             panic!("Missing subscription frame")
         };
         let received = cipher.decode(&frame, key).unwrap();
-        let message: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&received).unwrap();
+        let message: plain_libs::serde_json::Value =
+            plain_libs::serde_json::from_slice(&received).unwrap();
         assert_eq!(message["type"], expected, "{message}");
         if expected == "next" {
             assert_eq!(message["payload"]["extensions"]["subscriptionReady"], true);
         }
     }
     socket.close(None).await.unwrap();
+}
+
+#[tokio::test]
+async fn auth_proxy_requires_fresh_confirmation_before_opening_upstream() {
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let core = start(dir.path(), "proxy-device");
+    core.runtime_state().management.shutdown().await;
+    let (cert, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (_, port) = core.start_public(0, 0, cert, key).await.unwrap();
+    let state = core.runtime_state();
+    let browser = login(&state, "proxy-browser");
+    let upstream = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let target = DPeer::new(
+        "proxy-target",
+        "Fixture",
+        "127.0.0.1",
+        Some(upstream.local_addr().unwrap().port()),
+        DeviceType::Phone,
+    );
+    peers::save(&state.db, &[target], SaveMode::Insert).unwrap();
+    let key = decode_key(&browser.token).unwrap();
+    let path = format!("/proxy/proxy-target/auth?cid={}", browser.client_id);
+    let pin = decode_pin(
+        &state
+            .public_server
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .tls_certificate_sha256,
+    )
+    .unwrap();
+    let tls = http_client::pinned_tls_config(pin).unwrap();
+    let connect = || {
+        plain_libs::tokio_tungstenite::connect_async_tls_with_config(
+            format!("wss://localhost:{port}{path}"),
+            None,
+            false,
+            Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(
+                tls.clone(),
+            ))),
+        )
+    };
+    let init = graphql::seal_init(
+        &key,
+        &browser.client_id,
+        &path,
+        &plain_libs::serde_json::to_vec(&graphql::Init {
+            client_nonce: "ab".repeat(32),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    let (mut first, _) = connect().await.unwrap();
+    first
+        .send(Message::Binary(init.clone().into()))
+        .await
+        .unwrap();
+    let Message::Binary(ack) = tokio::time::timeout(Duration::from_secs(2), first.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+    else {
+        panic!("Missing challenge before upstream connection");
+    };
+    let mut binding = graphql::Stream::new(
+        &path,
+        &browser.client_id,
+        &init,
+        &ack,
+        graphql::Role::Client,
+    )
+    .unwrap();
+    let old_confirmation = binding.encode(&[], &key).unwrap();
+    first.close(None).await.unwrap();
+    let (mut replayed, _) = connect().await.unwrap();
+    replayed
+        .send(Message::Binary(init.clone().into()))
+        .await
+        .unwrap();
+    let Message::Binary(new_ack) = replayed.next().await.unwrap().unwrap() else {
+        panic!("Missing fresh challenge")
+    };
+    assert_ne!(ack, new_ack);
+    replayed
+        .send(Message::Binary(old_confirmation.into()))
+        .await
+        .unwrap();
+    assert!(matches!(replayed.next().await, Some(Ok(Message::Close(_)))));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), upstream.accept())
+            .await
+            .is_err(),
+        "An init or stale confirmation must never open the upstream"
+    );
+    let (mut current, _) = connect().await.unwrap();
+    current
+        .send(Message::Binary(init.clone().into()))
+        .await
+        .unwrap();
+    let Message::Binary(ack) = current.next().await.unwrap().unwrap() else {
+        panic!("Missing reconnect challenge")
+    };
+    let mut binding = graphql::Stream::new(
+        &path,
+        &browser.client_id,
+        &init,
+        &ack,
+        graphql::Role::Client,
+    )
+    .unwrap();
+    current
+        .send(Message::Binary(binding.encode(&[], &key).unwrap().into()))
+        .await
+        .unwrap();
+    let (connection, _) = tokio::time::timeout(Duration::from_secs(2), upstream.accept())
+        .await
+        .unwrap()
+        .unwrap();
+    drop(connection);
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn idle_peer_subscription_confirms_before_the_first_command() {
+    use plain_rs::features::services::peers::subscriptions::PeerSubscription;
+    use plain_rs::infrastructure::protocols::graphql::PeerSubscriptionTarget;
+    let dir = plain_libs::temporary::tempdir().unwrap();
+    let local = start(&dir.path().join("local"), "idle-local");
+    let remote = start(&dir.path().join("remote"), "idle-remote");
+    let local_state = local.runtime_state();
+    let remote_state = remote.runtime_state();
+    local_state.management.shutdown().await;
+    remote_state.management.shutdown().await;
+    let (cert, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let (_, port) = remote.start_public(0, 0, cert, cert_key).await.unwrap();
+    let client = local_state.native_client_id().unwrap();
+    let remote_id = remote_state.native_client_id().unwrap();
+    let login = login(&remote_state, &client);
+    let mut peer = DPeer::new(
+        &remote_id,
+        "Fixture",
+        "127.0.0.1",
+        Some(port),
+        DeviceType::Phone,
+    );
+    peer.status = PeerStatus::Paired;
+    peer.public_key = plain_libs::utils::base64::base64_encode(&[7; 32]);
+    peer.token = login.token;
+    peers::save(&local_state.db, &[peer.clone()], SaveMode::Insert).unwrap();
+    let pin = decode_pin(
+        &remote_state
+            .public_server
+            .lock()
+            .await
+            .as_ref()
+            .unwrap()
+            .tls_certificate_sha256,
+    )
+    .unwrap();
+    assert!(
+        !remote_state
+            .subscription_sessions
+            .snapshot()
+            .contains(&client)
+    );
+    let scope = plain_rs::infrastructure::host::request_scope::NativeRequestScope::default();
+    let subscription = PeerSubscription::open_with_pin(
+        local_state.core.clone(),
+        PeerSubscriptionTarget {
+            peer_id: remote_id,
+            public_key: peer.public_key,
+        },
+        scope.clone(),
+        Some(pin),
+    )
+    .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !remote_state
+            .subscription_sessions
+            .snapshot()
+            .contains(&client)
+        {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("Idle open must authenticate before any command, not wait for the heartbeat");
+    subscription.send(r#"{"type":"subscribe","id":"access","payload":{"query":"subscription { accessUpdated }"}}"#).unwrap();
+    let ready = tokio::time::timeout(Duration::from_secs(5), subscription.read())
+        .await
+        .unwrap()
+        .unwrap();
+    let ready: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&ready).unwrap();
+    assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
+    scope.close();
+    subscription.close();
+    local.stop_core().await;
+    remote.stop_core().await;
 }

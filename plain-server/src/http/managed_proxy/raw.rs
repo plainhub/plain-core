@@ -1,5 +1,6 @@
 use super::{caller, current, decode_key};
 use crate::server::ServerState;
+use futures_util::{SinkExt, StreamExt};
 use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_libs::axum::{
     body::Body,
@@ -7,7 +8,6 @@ use plain_libs::axum::{
     http::{HeaderMap, HeaderName, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use futures_util::{SinkExt, StreamExt};
 use plain_libs::protocols::{
     http_client,
     websocket::{CloseFrame, Message, WebSocketUpgrade},
@@ -47,7 +47,8 @@ fn pairing_target(state: &ServerState, target: &str) -> Result<PairingTarget, St
     }
     let peer = peers::get(&state.db, target).map_err(|_| StatusCode::BAD_GATEWAY)?;
     let base = if let Some(peer) = &peer {
-        http_client::Url::parse(&peer_address::address(peer).base_url).map_err(plain_libs::anyhow::Error::from)
+        http_client::Url::parse(&peer_address::address(peer).base_url)
+            .map_err(plain_libs::anyhow::Error::from)
     } else {
         plain_rs::features::services::discovery::pairing_attempts::nearby_management_address(
             state, target,
@@ -88,15 +89,39 @@ pub(super) async fn auth(state: ServerState, target: String, request: Request) -
         .max_frame_size(65536)
         .on_upgrade(move |mut socket| async move {
             let result = async {
-                let (_, ack) = crate::http::websocket::graphql::acknowledge(
+                let (init, ack) = crate::http::websocket::graphql::acknowledge(
                     &mut socket,
-                    &state,
                     &session.client_id,
                     &key,
                     &binding,
                 )
                 .await
                 .map_err(plain_libs::anyhow::Error::msg)?;
+                let mut stream = plain_rs::infrastructure::protocols::websocket::Stream::new(
+                    &binding,
+                    &session.client_id,
+                    &init,
+                    &ack,
+                    plain_rs::infrastructure::protocols::websocket::Role::Server,
+                )
+                .ok_or_else(|| anyhow!("Invalid proxy binding"))?;
+                tokio::time::timeout(
+                    Duration::from_secs(2),
+                    socket.send(Message::Binary(ack.into())),
+                )
+                .await??;
+                let confirmation = tokio::time::timeout(Duration::from_secs(10), socket.next())
+                    .await?
+                    .ok_or_else(|| anyhow!("Missing proxy confirmation"))??;
+                let Message::Binary(confirmation) = confirmation else {
+                    return Err(anyhow!("Invalid proxy confirmation"));
+                };
+                ensure!(
+                    stream
+                        .decode(&confirmation, &key)
+                        .is_some_and(|plain| plain.is_empty()),
+                    "Invalid proxy confirmation"
+                );
                 current(&state, &session)?;
                 let target = pairing_target(&state, &target)
                     .map_err(|_| anyhow!("Pairing device unavailable"))?;
@@ -110,11 +135,6 @@ pub(super) async fn auth(state: ServerState, target: String, request: Request) -
                 .await??;
                 current(&state, &session)?;
                 target.check_current(&state)?;
-                tokio::time::timeout(
-                    Duration::from_secs(2),
-                    socket.send(Message::Binary(ack.into())),
-                )
-                .await??;
                 let mut recheck = tokio::time::interval(Duration::from_secs(1));
                 recheck.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                 loop {
@@ -150,8 +170,13 @@ pub(super) async fn auth(state: ServerState, target: String, request: Request) -
                     }
                 }
                 Ok::<_, plain_libs::anyhow::Error>(())
-            }
-            .await;
+            };
+            let mut stop = state.stop.clone();
+            let result = tokio::select! {
+                biased;
+                _ = stop.wait_for(|stopped| *stopped) => Err(anyhow!("Server stopped")),
+                result = result => result,
+            };
             if result.is_err() {
                 let _ = socket
                     .close(Some(CloseFrame {

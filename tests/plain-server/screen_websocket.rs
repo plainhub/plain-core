@@ -1,7 +1,8 @@
 #![cfg(all(feature = "core", feature = "http_transport"))]
 use futures_util::StreamExt;
-use plain_server::server::ContentServer;
 use plain_libs::serde_json::json;
+use plain_rs::infrastructure::protocols::websocket as wire;
+use plain_server::server::ContentServer;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 
@@ -25,7 +26,46 @@ fn public_fixture() -> (
     (directory, core, prefs)
 }
 use futures_util::SinkExt;
-use plain_libs::tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClientRequest};
+use plain_libs::tokio_tungstenite::tungstenite::{
+    Message as ClientMessage, client::IntoClientRequest,
+};
+
+async fn resource_handshake(
+    socket: &mut plain_libs::tokio_tungstenite::WebSocketStream<
+        plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+    key: &[u8],
+    client: &str,
+    path: &str,
+) -> wire::Stream {
+    let init = wire::seal_init(
+        key,
+        client,
+        path,
+        json!({"clientNonce":"01".repeat(32)})
+            .to_string()
+            .as_bytes(),
+    )
+    .unwrap();
+    socket
+        .send(ClientMessage::Binary(init.clone().into()))
+        .await
+        .unwrap();
+    let ClientMessage::Binary(ack) = socket.next().await.unwrap().unwrap() else {
+        panic!("Expected handshake acknowledgement")
+    };
+    let ack_plain = wire::open_ack(key, client, path, &init, &ack).unwrap();
+    let ack_value: wire::Ack = plain_libs::serde_json::from_slice(&ack_plain).unwrap();
+    assert_eq!(ack_value.server_nonce.len(), 64);
+    let mut stream = wire::Stream::new(path, client, &init, &ack, wire::Role::Client).unwrap();
+    socket
+        .send(ClientMessage::Binary(
+            stream.encode(b"", key).unwrap().into(),
+        ))
+        .await
+        .unwrap();
+    stream
+}
 
 #[tokio::test]
 async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
@@ -33,7 +73,9 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
     let key = plain_libs::utils::base64::base64_decode(&core.runtime().token);
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
     let url = format!("ws://127.0.0.1:{}/image_editor?cid={client}", core.port);
-    let (mut denied, _) = plain_libs::tokio_tungstenite::connect_async(&url).await.unwrap();
+    let (mut denied, _) = plain_libs::tokio_tungstenite::connect_async(&url)
+        .await
+        .unwrap();
     denied
         .send(ClientMessage::Binary(vec![1, 2, 3].into()))
         .await
@@ -43,31 +85,16 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
         ClientMessage::Close(_)
     ));
 
-    let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(&url).await.unwrap();
-    let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-        &key,
-        plain_libs::chrono::Utc::now()
-            .timestamp_millis()
-            .to_string()
-            .as_bytes(),
-        &plain_rs::infrastructure::protocols::websocket::request_aad(
-            "/image_editor",
-            &client,
-            None,
-        ),
-    )
-    .unwrap();
-    let mut stream = plain_rs::infrastructure::protocols::websocket::Stream::new(&registration);
-    socket
-        .send(ClientMessage::Binary(registration.clone().into()))
+    let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(&url)
         .await
         .unwrap();
+    let mut stream = resource_handshake(&mut socket, &key, &client, "/image_editor").await;
     let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else {
         panic!("Expected encrypted ready")
     };
     assert_eq!(
-        stream.decode(&frame, &key).unwrap(),
-        ("IMAGE_EDITOR_READY".into(), vec![])
+        wire::decode_raw(&stream.decode(&frame, &key).unwrap()).unwrap(),
+        ("IMAGE_EDITOR_READY", b"".as_slice())
     );
     let request = plain_graphql::Request::new("mutation($id: ID!, $update: String!) { broadcastImageEditorUpdate(id: $id, update: $update) }")
         .variables(plain_graphql::Variables::from_json(json!({"id":"project", "update":"AQID"})));
@@ -82,12 +109,90 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
         panic!("Expected encrypted update")
     };
     assert_eq!(
-        stream.decode(&frame, &key).unwrap(),
-        (
-            "IMAGE_EDITOR_UPDATE".into(),
-            b"\x07project\x01\x02\x03".to_vec()
-        )
+        wire::decode_raw(&stream.decode(&frame, &key).unwrap()).unwrap(),
+        ("IMAGE_EDITOR_UPDATE", b"\x07project\x01\x02\x03".as_slice())
     );
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn image_editor_reconnect_requires_fresh_confirmation_before_ready() {
+    let (_directory, core, prefs) = public_fixture();
+    let key = plain_libs::utils::base64::base64_decode(&core.runtime().token);
+    let client = prefs.get::<String>("client_id").unwrap().unwrap();
+    let url = format!("ws://127.0.0.1:{}/image_editor?cid={client}", core.port);
+    let init = wire::seal_init(
+        &key,
+        &client,
+        "/image_editor",
+        json!({"clientNonce":"ff".repeat(32)})
+            .to_string()
+            .as_bytes(),
+    )
+    .unwrap();
+    let mut previous_ack = None;
+    let mut previous_confirmation = None;
+    for replay in [false, true, false] {
+        let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(&url)
+            .await
+            .unwrap();
+        socket
+            .send(ClientMessage::Binary(init.clone().into()))
+            .await
+            .unwrap();
+        let ClientMessage::Binary(ack) = socket.next().await.unwrap().unwrap() else {
+            panic!("Expected acknowledgement")
+        };
+        let plain = wire::open_ack(&key, &client, "/image_editor", &init, &ack).unwrap();
+        let response: wire::Ack = plain_libs::serde_json::from_slice(&plain).unwrap();
+        assert_eq!(response.server_nonce.len(), 64);
+        if let Some(old_ack) = previous_ack.replace(ack.clone()) {
+            assert_ne!(ack, old_ack);
+        }
+        socket
+            .send(ClientMessage::Ping(vec![7].into()))
+            .await
+            .unwrap();
+        assert!(
+            matches!(
+                socket.next().await.unwrap().unwrap(),
+                ClientMessage::Pong(_)
+            ),
+            "Ready must not be sent before encrypted confirmation"
+        );
+        let mut stream =
+            wire::Stream::new("/image_editor", &client, &init, &ack, wire::Role::Client).unwrap();
+        let confirmation = stream.encode(b"", &key).unwrap();
+        let proof = if replay {
+            previous_confirmation.clone().unwrap()
+        } else {
+            confirmation.clone()
+        };
+        socket
+            .send(ClientMessage::Binary(proof.into()))
+            .await
+            .unwrap();
+        let response = tokio::time::timeout(Duration::from_secs(3), socket.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        if replay {
+            assert!(
+                matches!(response, ClientMessage::Close(Some(frame)) if frame.reason == "invalid_request")
+            );
+        } else {
+            let ClientMessage::Binary(frame) = response else {
+                panic!("Expected ready after confirmation")
+            };
+            assert_eq!(
+                wire::decode_raw(&stream.decode(&frame, &key).unwrap()).unwrap(),
+                ("IMAGE_EDITOR_READY", b"".as_slice())
+            );
+            previous_confirmation = Some(confirmation);
+            socket.close(None).await.unwrap();
+        }
+    }
     core.shutdown().await;
 }
 
@@ -142,12 +247,15 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     let request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
         .into_client_request()
         .unwrap();
-    let (mut subscriptions, _) = plain_libs::tokio_tungstenite::connect_async(request).await.unwrap();
-    let init = plain_rs::infrastructure::protocols::graphql::seal_init(
+    let (mut subscriptions, _) = plain_libs::tokio_tungstenite::connect_async(request)
+        .await
+        .unwrap();
+    let init = plain_rs::infrastructure::protocols::websocket::seal_init(
         &key,
         &client,
+        "/graphql",
         plain_libs::serde_json::to_string(&json!({
-            "timestampMillis":plain_libs::chrono::Utc::now().timestamp_millis(), "clientNonce":"01".repeat(32)
+            "clientNonce":"01".repeat(32)
         }))
         .unwrap()
         .as_bytes(),
@@ -161,14 +269,17 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         panic!("Expected encrypted acknowledgement")
     };
     assert!(
-        plain_rs::infrastructure::protocols::graphql::open_ack(&key, &client, &init, &ack)
-            .is_some()
+        plain_rs::infrastructure::protocols::websocket::open_ack(
+            &key, &client, "/graphql", &init, &ack
+        )
+        .is_some()
     );
-    let mut subscription_stream = plain_rs::infrastructure::protocols::graphql::Stream::new(
+    let mut subscription_stream = plain_rs::infrastructure::protocols::websocket::Stream::new(
+        "/graphql",
         &client,
         &init,
         &ack,
-        plain_rs::infrastructure::protocols::graphql::Role::Client,
+        plain_rs::infrastructure::protocols::websocket::Role::Client,
     )
     .unwrap();
     for (id, query) in [
@@ -201,7 +312,8 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
             panic!("Expected subscription frame")
         };
         let value: plain_libs::serde_json::Value =
-            plain_libs::serde_json::from_slice(&subscription_stream.decode(&frame, &key).unwrap()).unwrap();
+            plain_libs::serde_json::from_slice(&subscription_stream.decode(&frame, &key).unwrap())
+                .unwrap();
         if value["payload"]["extensions"]["subscriptionReady"] == true {
             ready += 1;
         }
@@ -212,21 +324,7 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     ))
     .await
     .unwrap();
-    let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-        &key,
-        plain_libs::chrono::Utc::now()
-            .timestamp_millis()
-            .to_string()
-            .as_bytes(),
-        &plain_rs::infrastructure::protocols::websocket::request_aad("/screen", &client, None),
-    )
-    .unwrap();
-    let mut screen_stream =
-        plain_rs::infrastructure::protocols::websocket::Stream::new(&registration);
-    screen
-        .send(ClientMessage::Binary(registration.clone().into()))
-        .await
-        .unwrap();
+    let mut screen_stream = resource_handshake(&mut screen, &key, &client, "/screen").await;
     screen
         .send(ClientMessage::Ping(vec![1].into()))
         .await
@@ -243,24 +341,9 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         br#"{"type":"screenMirrorControl","input":{"action":"BACK"}}"#.as_slice(),
         &[0x54, 1, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0],
     ] {
-        let mut plain = plain_libs::chrono::Utc::now()
-            .timestamp_millis()
-            .to_be_bytes()
-            .to_vec();
-        plain.extend_from_slice(payload);
         screen
             .send(ClientMessage::Binary(
-                plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-                    &key,
-                    &plain,
-                    &plain_rs::infrastructure::protocols::websocket::request_aad(
-                        "/screen",
-                        &client,
-                        Some(&registration),
-                    ),
-                )
-                .unwrap()
-                .into(),
+                screen_stream.encode(payload, &key).unwrap().into(),
             ))
             .await
             .unwrap();
@@ -313,8 +396,8 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
             native_bytes
         );
         assert_eq!(
-            screen_stream.decode(&bytes, &key).unwrap(),
-            (kind.to_owned(), payload)
+            wire::decode_raw(&screen_stream.decode(&bytes, &key).unwrap()).unwrap(),
+            (kind, payload.as_slice())
         );
     }
     *mirror.lock().unwrap() = json!({"running":false,"codec":{"annexB":"fixture"}});
@@ -330,8 +413,10 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
             let ClientMessage::Binary(frame) = subscriptions.next().await.unwrap().unwrap() else {
                 panic!("Expected codec subscription")
             };
-            let value: plain_libs::serde_json::Value =
-                plain_libs::serde_json::from_slice(&subscription_stream.decode(&frame, &key).unwrap()).unwrap();
+            let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(
+                &subscription_stream.decode(&frame, &key).unwrap(),
+            )
+            .unwrap();
             if value["payload"]["data"]["screenMirrorVideoCodec"]["annexB"] == "fixture" {
                 break;
             }
@@ -339,21 +424,12 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     })
     .await
     .unwrap();
-    let mut control = plain_libs::chrono::Utc::now()
-        .timestamp_millis()
-        .to_be_bytes()
-        .to_vec();
-    control.extend_from_slice(br#"{"type":"screenMirrorControl","input":{"action":"HOME"}}"#);
-    let control = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-        &key,
-        &control,
-        &plain_rs::infrastructure::protocols::websocket::request_aad(
-            "/screen",
-            &client,
-            Some(&registration),
-        ),
-    )
-    .unwrap();
+    let control = screen_stream
+        .encode(
+            br#"{"type":"screenMirrorControl","input":{"action":"HOME"}}"#,
+            &key,
+        )
+        .unwrap();
     screen
         .send(ClientMessage::Binary(control.clone().into()))
         .await
@@ -404,8 +480,10 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
             let ClientMessage::Binary(frame) = subscriptions.next().await.unwrap().unwrap() else {
                 panic!("Expected mirror state subscription")
             };
-            let value: plain_libs::serde_json::Value =
-                plain_libs::serde_json::from_slice(&subscription_stream.decode(&frame, &key).unwrap()).unwrap();
+            let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(
+                &subscription_stream.decode(&frame, &key).unwrap(),
+            )
+            .unwrap();
             if value["payload"]["data"]["screenMirrorState"]["running"] == true {
                 break;
             }
@@ -473,12 +551,15 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
     let request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
         .into_client_request()
         .unwrap();
-    let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(request).await.unwrap();
-    let init = plain_rs::infrastructure::protocols::graphql::seal_init(
+    let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(request)
+        .await
+        .unwrap();
+    let init = plain_rs::infrastructure::protocols::websocket::seal_init(
         &key,
         &client,
+        "/graphql",
         json!({
-            "timestampMillis":plain_libs::chrono::Utc::now().timestamp_millis(), "clientNonce":"02".repeat(32)
+            "clientNonce":"02".repeat(32)
         })
         .to_string()
         .as_bytes(),
@@ -492,14 +573,17 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
         panic!("Expected encrypted acknowledgement")
     };
     assert!(
-        plain_rs::infrastructure::protocols::graphql::open_ack(&key, &client, &init, &ack)
-            .is_some()
+        plain_rs::infrastructure::protocols::websocket::open_ack(
+            &key, &client, "/graphql", &init, &ack
+        )
+        .is_some()
     );
-    let mut stream = plain_rs::infrastructure::protocols::graphql::Stream::new(
+    let mut stream = plain_rs::infrastructure::protocols::websocket::Stream::new(
+        "/graphql",
         &client,
         &init,
         &ack,
-        plain_rs::infrastructure::protocols::graphql::Role::Client,
+        plain_rs::infrastructure::protocols::websocket::Role::Client,
     )
     .unwrap();
     let query = json!({"type":"subscribe","id":"private","payload":{"query":"subscription { pairingSucceeded { deviceId key } }"}}).to_string();

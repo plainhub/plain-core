@@ -13,12 +13,25 @@ pub fn decrypt_raw(key: &[u8], method: &str, endpoint: &str, payload: &[u8]) -> 
     plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, payload, &aad(method, endpoint))
 }
 pub fn encrypt(key: &[u8], endpoint: &str, payload: &str) -> Result<Vec<u8>, &'static str> {
-    let body = format!(
-        "{}|{}|{}",
-        plain_libs::chrono::Utc::now().timestamp_millis(),
-        plain_libs::utils::uuid::Uuid::new_v4(),
-        payload
-    );
+    let body = if endpoint == "/graphql" {
+        let mut request: plain_libs::serde_json::Value =
+            plain_libs::serde_json::from_str(payload).map_err(|_| "Invalid GraphQL request")?;
+        request
+            .as_object_mut()
+            .ok_or("Invalid GraphQL request")?
+            .insert(
+                "requestId".into(),
+                crate::features::record_id::generate().into(),
+            );
+        request.to_string()
+    } else {
+        format!(
+            "{}|{}|{}",
+            plain_libs::chrono::Utc::now().timestamp_millis(),
+            plain_libs::utils::uuid::Uuid::new_v4(),
+            payload
+        )
+    };
     encrypt_raw(key, "POST", endpoint, body.as_bytes()).ok_or("Invalid management key")
 }
 

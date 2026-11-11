@@ -1,13 +1,13 @@
-use plain_libs::protocols::http_client;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
-use plain_libs::anyhow::{Result, anyhow, ensure};
 use futures_util::{SinkExt, StreamExt};
+use plain_libs::anyhow::{Result, anyhow, ensure};
+use plain_libs::protocols::http_client;
 use plain_libs::rusqlite::OptionalExtension;
+use plain_libs::tokio_tungstenite::tungstenite::Message;
 use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tokio::{sync::watch, task::JoinHandle};
-use plain_libs::tokio_tungstenite::tungstenite::Message;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Identity {
@@ -88,7 +88,9 @@ impl Runtime {
         }
     }
     pub fn start(&self, state: CoreRuntime) -> Result<()> {
-        let actor = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
+        let actor = state
+            .native_client_id()
+            .map_err(plain_libs::anyhow::Error::msg)?;
         let mut slot = self
             .coordinator
             .lock()
@@ -348,7 +350,9 @@ pub async fn refresh_data(
         };
     let clipboard = app.as_ref().ok().map(|app| {
         app.capabilities.iter().any(|value| value == "CLIPBOARD")
-            && app.access.contains(&crate::features::access::AccessFeature::Clipboard)
+            && app
+                .access
+                .contains(&crate::features::access::AccessFeature::Clipboard)
     });
     if let Some(access) = clipboard_access {
         access.send_replace(clipboard);
@@ -439,11 +443,7 @@ async fn connection_loop(
                     .find(|(name, _)| name == "cid")
                     .map(|(_, value)| value.into_owned())
                     .ok_or_else(|| anyhow!("Management client missing"))?;
-                let registration = management_wire::registration(
-                    &key,
-                    &client,
-                    plain_libs::chrono::Utc::now().timestamp_millis(),
-                )?;
+                let registration = management_wire::registration(&key, &client)?;
                 socket
                     .send(Message::Binary(registration.clone().into()))
                     .await?;

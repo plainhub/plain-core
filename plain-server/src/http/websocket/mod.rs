@@ -15,6 +15,3 @@ pub(crate) mod runtime;
 
 #[cfg(feature = "core")]
 pub(crate) mod graphql;
-
-#[cfg(feature = "core")]
-mod frames;

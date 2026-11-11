@@ -116,9 +116,8 @@ async fn execute(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let (token_mode, key) = if authorization.is_none() {
-        let key = plain_rs::features::services::sessions::key(&state.db, client_id)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+        let key = plain_rs::features::sessions::token_key(&session.token)
+            .map_err(|_| StatusCode::UNAUTHORIZED)?.to_vec();
         (true, key)
     } else {
         if session.r#type != plain_rs::features::sessions::SessionType::ApiToken
@@ -137,13 +136,9 @@ async fn execute(
         if decrypted.is_empty() {
             return Err(StatusCode::UNAUTHORIZED);
         }
-        let plaintext = String::from_utf8_lossy(&decrypted).into_owned();
-        let now = plain_libs::chrono::Utc::now().timestamp_millis();
-        state
-            .main_replay
-            .admit(&state.db, client_id, &plaintext, now)
-            .map_err(|_| StatusCode::BAD_REQUEST)?
-            .to_owned()
+        let plaintext = String::from_utf8(decrypted).map_err(|_| StatusCode::BAD_REQUEST)?;
+        state.graphql_replay.admit(&state.db, &session, &plaintext)?;
+        plaintext
     } else {
         String::from_utf8(body.to_vec()).map_err(|_| StatusCode::BAD_REQUEST)?
     };

@@ -1,247 +1,171 @@
 use super::*;
 
-#[test]
-fn named_frames_round_trip_without_numeric_type_headers() {
-    let key = [7u8; 32];
-    let frame = encode("PAIRING_REQUEST_RECEIVED", b"{}", &key).unwrap();
-    assert!(frame.starts_with(b"PAIRING_REQUEST_RECEIVED\0"));
-    assert_eq!(
-        decode(&frame, &key).unwrap(),
-        ("PAIRING_REQUEST_RECEIVED".into(), b"{}".to_vec())
-    );
-    let token = plain_libs::utils::base64::base64_encode(&key);
-    let frame = encode_with_token("MESSAGE_CREATED", b"[]", &token).unwrap();
-    assert_eq!(
-        decode_with_token(&frame, &token).unwrap(),
-        ("MESSAGE_CREATED".into(), b"[]".to_vec())
-    );
+fn pair(path: &str) -> (Stream, Stream) {
+    (
+        Stream::new(path, "client", b"init", b"ack", Role::Client).unwrap(),
+        Stream::new(path, "client", b"init", b"ack", Role::Server).unwrap(),
+    )
 }
 
 #[test]
-fn raw_media_frames_keep_all_payload_bytes() {
-    for kind in [
+fn raw_media_frames_keep_names_and_every_binary_byte() {
+    for name in [
         "SCREEN_MIRROR_VIDEO",
         "SCREEN_MIRROR_AUDIO",
         "IMAGE_EDITOR_UPDATE",
     ] {
         let payload = [0, 1, 255, 0, 4];
-        let frame = encode_raw(kind, &payload).unwrap();
-        let (name, bytes) = decode_raw(&frame).unwrap();
-        assert_eq!(name, kind);
-        assert_eq!(bytes, payload);
+        let frame = encode_raw(name, &payload).unwrap();
+        assert_eq!(decode_raw(&frame).unwrap(), (name, payload.as_slice()));
     }
-}
-
-#[test]
-fn malformed_names_numeric_frames_and_wrong_keys_are_rejected() {
-    for name in [
-        "",
-        "pairing_started",
-        "PAIRING-STARTED",
-        "22",
-        "MESSAGE\0CREATED",
-    ] {
-        assert!(encode_raw(name, b"x").is_none());
+    for name in ["", "bad_name", "BAD-NAME", "22", "NAME\0OTHER"] {
+        assert!(encode_raw(name, b"data").is_none());
     }
     for frame in [
         b"".as_slice(),
-        b"MESSAGE_CREATED",
+        b"NAME",
         b"\0payload",
         b"22\0payload",
-        b"message_created\0payload",
-        &[0, 0, 0, 22, 1, 2],
         &[255, 0, 1],
     ] {
         assert!(decode_raw(frame).is_none());
     }
-    let frame = encode("MESSAGE_CREATED", b"x", &[1; 32]).unwrap();
-    assert!(decode(&frame, &[2; 32]).is_none());
-    assert!(decode(b"MESSAGE_CREATED\0", &[1; 32]).is_none());
 }
 
 #[test]
-fn an_authenticated_payload_cannot_be_renamed_or_use_the_old_unbound_cipher() {
+fn counters_are_independent_strict_and_authenticated() {
     let key = [7; 32];
-    let frame = encode("CLIPBOARD_CHANGED", br#"{"text":"fixture"}"#, &key).unwrap();
-    let (_, body) = decode_raw(&frame).unwrap();
-    let renamed = encode_raw("DEVICE_NAME_UPDATED", body).unwrap();
-    assert!(decode(&renamed, &key).is_none());
-    let legacy = plain_libs::crypto::xchacha_encrypt_raw(&key, b"{}").unwrap();
-    assert!(decode(&encode_raw("CLIPBOARD_CHANGED", &legacy).unwrap(), &key).is_none());
-}
-
-#[test]
-fn network_events_authenticate_registration_order_name_and_binary_payload_before_advancing() {
-    let key = [7; 32];
-    let mut sender = Stream::new(b"first registration");
-    let mut receiver = Stream::new(b"first registration");
-    let first = sender
-        .encode("CLIPBOARD_CHANGED", br#"{"text":"fixture"}"#, &key)
-        .unwrap();
-    let second = sender
-        .encode("SCREEN_MIRROR_VIDEO", &[0, 1, 255, 0, 4], &key)
-        .unwrap();
-    assert!(receiver.decode(&second, &key).is_none());
-    assert!(
-        Stream::new(b"other registration")
-            .decode(&first, &key)
-            .is_none()
-    );
-    assert!(receiver.decode(&first, &[8; 32]).is_none());
-    let (_, body) = decode_raw(&first).unwrap();
-    let renamed = encode_raw("DEVICE_NAME_UPDATED", body).unwrap();
-    assert!(receiver.decode(&renamed, &key).is_none());
-    let mut tampered = first.clone();
-    *tampered.last_mut().unwrap() ^= 1;
-    assert!(receiver.decode(&tampered, &key).is_none());
+    let (mut client, mut server) = pair("/screen");
+    let first = client.encode(b"first", &key).unwrap();
+    let second = client.encode(b"second", &key).unwrap();
+    assert_eq!(&first[1..9], &1u64.to_be_bytes());
+    assert_eq!(&second[1..9], &2u64.to_be_bytes());
+    assert!(server.decode(&second, &key).is_none());
+    let mut changed = first.clone();
+    changed[8] = 2;
+    assert!(server.decode(&changed, &key).is_none());
+    changed[8] = 1;
+    *changed.last_mut().unwrap() ^= 1;
+    assert!(server.decode(&changed, &key).is_none());
+    assert!(server.decode(&first, &[8; 32]).is_none());
     for length in 0..first.len() {
-        assert!(receiver.decode(&first[..length], &key).is_none());
+        assert!(server.decode(&first[..length], &key).is_none());
     }
-    assert_eq!(
-        receiver.decode(&first, &key).unwrap(),
-        (
-            "CLIPBOARD_CHANGED".into(),
-            br#"{"text":"fixture"}"#.to_vec()
-        )
-    );
-    assert!(receiver.decode(&first, &key).is_none());
-    assert_eq!(
-        receiver.decode(&second, &key).unwrap(),
-        ("SCREEN_MIRROR_VIDEO".into(), vec![0, 1, 255, 0, 4])
-    );
-    assert!(decode(&first, &key).is_none());
-    let old = encode("CLIPBOARD_CHANGED", b"{}", &key).unwrap();
-    assert!(
-        Stream::new(b"first registration")
-            .decode(&old, &key)
-            .is_none()
-    );
-    assert!(sender.encode("invalid", b"x", &key).is_none());
-    assert!(sender.encode("CONTENT_CHANGED", b"x", &[7; 31]).is_none());
-    assert_eq!(sender.next, 2);
-    sender.next = u64::MAX;
-    assert!(sender.encode("CONTENT_CHANGED", b"x", &key).is_none());
+    assert_eq!(server.decode(&first, &key).unwrap(), b"first");
+    assert!(server.decode(&first, &key).is_none());
+    assert_eq!(server.decode(&second, &key).unwrap(), b"second");
+    let response = server.encode(b"response", &key).unwrap();
+    assert_eq!(&response[1..9], &1u64.to_be_bytes());
+    assert_eq!(client.decode(&response, &key).unwrap(), b"response");
 }
 
 #[test]
-fn noble_event_vectors_match_rust_authentication_and_exact_cipher_bytes() {
-    use chacha20poly1305::{
-        XChaCha20Poly1305, XNonce,
-        aead::{Aead, KeyInit, Payload},
-    };
+fn frames_cannot_cross_connections_routes_clients_or_directions() {
+    let key = [7; 32];
+    let (mut client, _) = pair("/screen");
+    let frame = client.encode(b"control", &key).unwrap();
+    for (path, owner, init, ack, role) in [
+        (
+            "/screen",
+            "client",
+            b"init".as_slice(),
+            b"new ack".as_slice(),
+            Role::Server,
+        ),
+        ("/screen", "client", b"new init", b"ack", Role::Server),
+        ("/image_editor", "client", b"init", b"ack", Role::Server),
+        ("/screen", "other", b"init", b"ack", Role::Server),
+        ("/screen", "client", b"init", b"ack", Role::Client),
+    ] {
+        let mut receiver = Stream::new(path, owner, init, ack, role).unwrap();
+        assert!(receiver.decode(&frame, &key).is_none());
+        assert_eq!(receiver.received, 0);
+    }
+}
+
+#[test]
+fn sequence_overflow_fails_without_wrapping_or_consuming_state() {
+    let key = [7; 32];
+    let (mut client, mut server) = pair("/graphql");
+    client.sent = u64::MAX - 1;
+    server.received = u64::MAX - 1;
+    let final_frame = client.encode(b"last", &key).unwrap();
+    assert_eq!(&final_frame[1..9], &u64::MAX.to_be_bytes());
+    assert_eq!(server.decode(&final_frame, &key).unwrap(), b"last");
+    assert!(client.encode(b"overflow", &key).is_none());
+    assert!(server.decode(&final_frame, &key).is_none());
+    assert_eq!(client.sent, u64::MAX);
+    assert_eq!(server.received, u64::MAX);
+    let (mut client, _) = pair("/graphql");
+    assert!(client.encode(b"bad key", &[0; 2]).is_none());
+    assert_eq!(client.sent, 0);
+}
+
+#[test]
+fn handshake_binds_both_authenticated_fresh_frames_without_time() {
+    let key = [7; 32];
+    let body = plain_libs::serde_json::to_vec(&Init {
+        client_nonce: "ab".repeat(32),
+    })
+    .unwrap();
+    let init = seal_init(&key, "client", "/graphql", &body).unwrap();
+    assert_eq!(open_init(&key, "client", "/graphql", &init).unwrap(), body);
+    assert!(open_init(&key, "other", "/graphql", &init).is_none());
+    assert!(open_init(&key, "client", "/screen", &init).is_none());
+    assert!(
+        plain_libs::serde_json::from_str::<Init>(r#"{"clientNonce":"ab","timestampMillis":0}"#)
+            .is_err()
+    );
+    let response = plain_libs::serde_json::to_vec(&Ack {
+        server_nonce: "cd".repeat(32),
+    })
+    .unwrap();
+    let ack = seal_ack(&key, "client", "/graphql", &init, &response).unwrap();
+    let new_ack = seal_ack(&key, "client", "/graphql", &init, &response).unwrap();
+    assert_ne!(ack, new_ack);
+    assert_eq!(
+        open_ack(&key, "client", "/graphql", &init, &ack).unwrap(),
+        response
+    );
+    let other_init = seal_init(&key, "client", "/graphql", &body).unwrap();
+    assert!(open_ack(&key, "client", "/graphql", &other_init, &ack).is_none());
+    let mut old = Stream::new("/graphql", "client", &init, &ack, Role::Client).unwrap();
+    let frame = old.encode(b"old request", &key).unwrap();
+    let mut reconnected = Stream::new("/graphql", "client", &init, &new_ack, Role::Server).unwrap();
+    assert!(reconnected.decode(&frame, &key).is_none());
+}
+
+#[test]
+fn independent_cross_language_vectors_match_the_complete_wire_contract() {
     let vectors: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(include_str!(
         "../../../../../plain-rs/testdata/crypto/websocket-event-vectors.json"
     ))
     .unwrap();
-    let vectors = vectors.as_array().unwrap();
-    let registration =
-        plain_libs::utils::base64::base64_decode(vectors[0]["registration"].as_str().unwrap());
-    let mut stream = Stream::new(&registration);
-    for (sequence, vector) in vectors.iter().enumerate() {
-        let bytes =
-            |field: &str| plain_libs::utils::base64::base64_decode(vector[field].as_str().unwrap());
-        let key = bytes("key");
-        let frame = bytes("frame");
-        let payload = bytes("payload");
-        let name = vector["name"].as_str().unwrap();
-        let aad = stream.aad(name, sequence as u64);
-        assert_eq!(
-            plain_libs::utils::hex::bytes_to_hex(&aad),
-            vector["aadHex"].as_str().unwrap()
-        );
-        assert_eq!(
-            stream.decode(&frame, &key).unwrap(),
-            (name.to_owned(), payload.clone())
-        );
-        assert_eq!(
-            decode(&bytes("nativeFrame"), &key).unwrap(),
-            (name.to_owned(), payload.clone())
-        );
-        let (_, body) = decode_raw(&frame).unwrap();
-        assert_eq!(
-            XChaCha20Poly1305::new_from_slice(&key)
-                .unwrap()
-                .encrypt(
-                    XNonce::from_slice(&body[8..32]),
-                    Payload {
-                        msg: &payload,
-                        aad: &aad
-                    }
-                )
-                .unwrap(),
-            body[32..]
-        );
+    for vector in vectors.as_array().unwrap() {
+        let bytes = |value: &plain_libs::serde_json::Value| {
+            plain_libs::utils::base64::base64_decode(value.as_str().unwrap())
+        };
+        let key = bytes(&vector["key"]);
+        let path = vector["path"].as_str().unwrap();
+        let client = vector["client"].as_str().unwrap();
+        let init = bytes(&vector["init"]);
+        let ack = bytes(&vector["ack"]);
+        let _: Init =
+            plain_libs::serde_json::from_slice(&open_init(&key, client, path, &init).unwrap())
+                .unwrap();
+        let _: Ack =
+            plain_libs::serde_json::from_slice(&open_ack(&key, client, path, &init, &ack).unwrap())
+                .unwrap();
+        for (name, role) in [
+            ("clientFrames", Role::Server),
+            ("serverFrames", Role::Client),
+        ] {
+            let mut stream = Stream::new(path, client, &init, &ack, role).unwrap();
+            for entry in vector[name].as_array().unwrap() {
+                let frame = bytes(&entry["frame"]);
+                assert_eq!(stream.decode(&frame, &key).unwrap(), bytes(&entry["plain"]));
+                assert!(stream.decode(&frame, &key).is_none());
+            }
+        }
     }
-}
-
-#[test]
-fn client_frames_bind_route_client_and_current_registration() {
-    let key = [7; 32];
-    let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-        &key,
-        b"timestamp",
-        &request_aad("/screen", "client", None),
-    )
-    .unwrap();
-    assert!(
-        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
-            &key,
-            &registration,
-            &request_aad("/screen", "client", None)
-        )
-        .is_some()
-    );
-    assert!(
-        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
-            &key,
-            &registration,
-            &request_aad("/image_editor", "client", None)
-        )
-        .is_none()
-    );
-    assert!(
-        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
-            &key,
-            &registration,
-            &request_aad("/screen", "other", None)
-        )
-        .is_none()
-    );
-    let control = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-        &key,
-        b"control",
-        &request_aad("/screen", "client", Some(&registration)),
-    )
-    .unwrap();
-    assert!(
-        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
-            &key,
-            &control,
-            &request_aad("/screen", "client", Some(&registration))
-        )
-        .is_some()
-    );
-    let next = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
-        &key,
-        b"timestamp",
-        &request_aad("/screen", "client", None),
-    )
-    .unwrap();
-    assert_ne!(next, registration);
-    assert!(
-        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
-            &key,
-            &control,
-            &request_aad("/screen", "client", Some(&next))
-        )
-        .is_none()
-    );
-    assert!(
-        plain_libs::crypto::xchacha_decrypt_raw_with_aad(
-            &key,
-            &control,
-            &request_aad("/screen", "client", None)
-        )
-        .is_none()
-    );
 }

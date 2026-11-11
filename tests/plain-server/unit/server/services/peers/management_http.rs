@@ -118,11 +118,11 @@ async fn a_captured_response_cannot_answer_a_fresh_encrypted_request() {
             .collect();
         let nonces: Vec<_> = envelopes
             .iter()
-            .map(|body| body.splitn(3, '|').nth(1).unwrap())
+            .map(|body| plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(body).unwrap()["requestId"].as_str().unwrap().to_owned())
             .collect();
         assert_ne!(nonces[0], nonces[1]);
         for nonce in nonces {
-            assert!(plain_libs::utils::uuid::Uuid::parse_str(nonce).is_ok());
+            assert!(plain_libs::utils::uuid::Uuid::parse_str(&nonce).is_ok());
         }
     }
     proxy.abort();

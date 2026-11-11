@@ -43,7 +43,7 @@ fn noble_vectors_match_the_shared_response_context_and_wire_bytes() {
 #[test]
 fn responses_require_the_exact_request_key_and_response_purpose() {
     let key = [7; 32];
-    let request = super::super::http_request::encrypt(&key, "/graphql", "first").unwrap();
+    let request = super::super::http_request::encrypt(&key, "/graphql", r#"{"query":"{ first }"}"#).unwrap();
     let context = Context::new(&request);
     assert_eq!(&context.0[..2], b"r\0");
     assert_eq!(&context.0[2..], &Sha256::digest(&request)[..]);
@@ -62,7 +62,7 @@ fn responses_require_the_exact_request_key_and_response_purpose() {
         );
     }
     for endpoint in ["/graphql", "/guest_graphql", "/peer_graphql"] {
-        let other_request = super::super::http_request::encrypt(&key, endpoint, "first").unwrap();
+        let other_request = super::super::http_request::encrypt(&key, endpoint, r#"{"query":"{ first }"}"#).unwrap();
         assert!(
             Context::new(&other_request)
                 .decrypt(&key, &response)

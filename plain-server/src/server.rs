@@ -25,6 +25,7 @@ pub(crate) struct ServerState {
     pub(crate) web_bundle: Arc<std::sync::RwLock<Option<crate::http::web_bundle::SharedWebBundle>>>,
     pub(crate) public: crate::graphql::schemas::public::PublicSchema,
     pub(crate) guest_replay: Arc<crate::http::auth::replay::Replay>,
+    pub(crate) graphql_replay: Arc<crate::http::auth::graphql_replay::GraphqlReplay>,
     pub(crate) main_replay: Arc<crate::http::auth::replay::Replay>,
     pub(crate) peer_schema: crate::graphql::schemas::peer::PeerSchema,
     pub(crate) subscription_sessions: Arc<crate::graphql::subscriptions::session::Sessions>,
@@ -213,6 +214,7 @@ impl ContentServer {
         });
         let (core, stop) =
             plain_rs::runtime::Runtime::open(directory, token, prefs, host, clients)?;
+        let graphql_replay = Arc::new(crate::http::auth::graphql_replay::GraphqlReplay::new(&core.db)?);
         let public = crate::graphql::schemas::public::build_with_runtime(core.clone());
         let receiver = core.stop.clone();
         let build_debug = core.host.startup().debug;
@@ -224,6 +226,7 @@ impl ContentServer {
             #[cfg(feature = "http_transport")]
             public_server: Arc::new(tokio::sync::Mutex::new(None)),
             peer_schema: crate::graphql::schemas::peer::schema(),
+            graphql_replay,
             guest_replay: Arc::new(crate::http::auth::replay::Replay::new("guest")),
             main_replay: Arc::new(crate::http::auth::replay::Replay::new("main")),
             subscription_sessions,

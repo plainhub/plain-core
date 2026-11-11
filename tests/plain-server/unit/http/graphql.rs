@@ -190,3 +190,6 @@ async fn native_identity_without_the_private_transport_token_cannot_claim_local_
     );
     core.stop_core().await;
 }
+
+#[path = "graphql/replay.rs"]
+mod replay;

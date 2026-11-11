@@ -1,15 +1,15 @@
 use crate::server::ServerState;
+use futures_util::{SinkExt, StreamExt};
 use plain_libs::axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use futures_util::{SinkExt, StreamExt};
 use plain_libs::protocols::websocket::{CloseFrame, Message, WebSocket, WebSocketUpgrade};
+use plain_libs::serde_json::{Value, json};
 use plain_rs::features::prefs::security::PasswordType;
 use plain_rs::features::services::confirmation_channel;
 use plain_rs::infrastructure::events::WsEvent;
 use serde::Deserialize;
-use plain_libs::serde_json::{Value, json};
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
@@ -27,7 +27,6 @@ pub(crate) struct Runtime {
     pub(crate) screen_events: tokio::sync::broadcast::Sender<WsEvent>,
     connections: Mutex<HashMap<String, Connection>>,
     unauthenticated: Mutex<HashMap<IpAddr, usize>>,
-    replay: crate::http::auth::replay::Replay,
 }
 impl Default for Runtime {
     fn default() -> Self {
@@ -35,7 +34,6 @@ impl Default for Runtime {
             native_sockets: Arc::default(),
             connections: Mutex::default(),
             unauthenticated: Mutex::default(),
-            replay: crate::http::auth::replay::Replay::new("websocket"),
             screen_events: tokio::sync::broadcast::channel(256).0,
         }
     }
@@ -254,7 +252,9 @@ async fn run(
             } else {
                 "invalid_login_request"
             };
-            let _ = socket.send(login_failure(&state, &params.cid, 1013, reason)).await;
+            let _ = socket
+                .send(login_failure(&state, &params.cid, 1013, reason))
+                .await;
             return;
         }
     }
@@ -274,8 +274,7 @@ async fn run(
         },
     );
     let mut registered = false;
-    let mut registration_cipher: Option<Vec<u8>> = None;
-    let mut stream = None;
+    let mut stream: Option<plain_rs::infrastructure::protocols::websocket::Stream> = None;
     let mut receiver = channel.subscribe(&state);
     let mut pending: Option<String> = None;
     enum LoginHandshake {
@@ -426,14 +425,21 @@ async fn run(
                     .or_else(|| plain_rs::features::services::sessions::key(&state.db, &params.cid).ok().flatten())
                     else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
                 let path = match channel { Channel::Screen => "/screen", Channel::ImageEditor => "/image_editor", Channel::Auth => unreachable!() };
-                let aad = plain_rs::infrastructure::protocols::websocket::request_aad(path, &params.cid, registration_cipher.as_deref());
-                let plain = plain_libs::crypto::xchacha_decrypt_raw_with_aad(&key,&frame,&aad);
-                let Some(plain) = plain else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
-                let plain = match super::frames::admit(&state.main_ws.replay, &state.db, &params.cid, &frame, &plain, registered, plain_libs::chrono::Utc::now().timestamp_millis()) {
-                    Ok(payload) => payload,
-                    Err(()) => { let _ = socket.send(close(1013,"invalid_request")).await; break; }
+                if stream.is_none() {
+                    let ack = match super::graphql::acknowledge_frame(&params.cid, &key, path, &frame) {
+                        Ok(ack) => ack,
+                        Err(_) => { let _ = socket.send(close(1008, "invalid_request")).await; break; }
+                    };
+                    stream = plain_rs::infrastructure::protocols::websocket::Stream::new(path, &params.cid, &frame, &ack, plain_rs::infrastructure::protocols::websocket::Role::Server);
+                    if socket.send(Message::Binary(ack.into())).await.is_err() { break; }
+                    continue;
+                }
+                let Some(plain) = stream.as_mut().and_then(|stream| stream.decode(&frame, &key)) else {
+                    let _ = socket.send(close(1008, "invalid_request")).await;
+                    break;
                 };
                 if !registered {
+                    if !plain.is_empty() { let _ = socket.send(close(1008, "invalid_request")).await; break; }
                     if channel == Channel::Screen {
                         if let Err(error) = plain_rs::features::services::capabilities::require(&state.host, "SCREEN_MIRROR").await {
                             log::warn!("Screen mirror connection: {error}");
@@ -441,13 +447,11 @@ async fn run(
                             break;
                         }
                     }
-                    registration_cipher = Some(frame.to_vec());
-                    stream = Some(plain_rs::infrastructure::protocols::websocket::Stream::new(&frame));
                     registered = true;
                     permit.take();
                     if let Some(c) = state.main_ws.connections.lock().unwrap().get_mut(&id) { c.registered = true; }
                     if channel == Channel::ImageEditor {
-                        let Some(bytes) = stream.as_mut().and_then(|stream| stream.encode("IMAGE_EDITOR_READY", b"", &key)) else { break; };
+                        let Some(bytes) = stream.as_mut().and_then(|stream| stream.encode(&plain_rs::infrastructure::protocols::websocket::encode_raw("IMAGE_EDITOR_READY", b"")?, &key)) else { break; };
                         if socket.send(Message::Binary(bytes.into())).await.is_err() { break; }
                     }
                 } else {
@@ -476,7 +480,7 @@ async fn run(
                 } else {
                     event.payload.into_bytes()
                 };
-                let Some(bytes) = stream.as_mut().and_then(|stream| stream.encode(event.event_type, &payload, &key)) else { break; };
+                let Some(bytes) = stream.as_mut().and_then(|stream| stream.encode(&plain_rs::infrastructure::protocols::websocket::encode_raw(event.event_type, &payload)?, &key)) else { break; };
                 Message::Binary(bytes.into())
             }
         };
@@ -492,11 +496,24 @@ async fn run(
     if let Some(request_id) = pending {
         if let Err(error) = crate::http::auth::ws_login::execute(
             &state,
-            crate::http::auth::ws_login::Request::Cancel { request_id, reason: cancel_reason },
+            crate::http::auth::ws_login::Request::Cancel {
+                request_id,
+                reason: cancel_reason,
+            },
         )
-        .await { log::error!("Cannot record login cancellation: {error}"); }
-    } else if channel == Channel::Auth && matches!(handshake, LoginHandshake::Ready(_) | LoginHandshake::Opaque { .. }) {
-        if let Err(error) = crate::http::auth::ws_login::record_failure(&state, &params.cid, cancel_reason) {
+        .await
+        {
+            log::error!("Cannot record login cancellation: {error}");
+        }
+    } else if channel == Channel::Auth
+        && matches!(
+            handshake,
+            LoginHandshake::Ready(_) | LoginHandshake::Opaque { .. }
+        )
+    {
+        if let Err(error) =
+            crate::http::auth::ws_login::record_failure(&state, &params.cid, cancel_reason)
+        {
             log::error!("Cannot record incomplete login: {error}");
         }
     }
