@@ -15,7 +15,7 @@ mod cow;
 mod ext;
 mod memchr;
 pub mod memmem;
-mod vector;
+pub(crate) mod vector;
 
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/memchr.rs"]

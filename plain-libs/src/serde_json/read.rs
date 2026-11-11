@@ -1,3 +1,4 @@
+mod scan;
 use crate::serde_json::error::{Error, ErrorCode, Result};
 use crate::serde_json::io;
 use crate::serde_json::iter::LineColIterator;
@@ -282,6 +283,10 @@ impl<'a> SliceRead<'a> {
             self.index += crate::memchr::memchr2(b'"', b'\\', rest).unwrap_or(rest.len());
             return;
         }
+        if let Some(offset) = scan::find_escape(rest) {
+            self.index += offset;
+            return;
+        }
         #[cfg(any(
             target_pointer_width = "64",
             target_arch = "aarch64",
@@ -386,6 +391,8 @@ impl<'a> Read<'a> for SliceRead<'a> {
     }
     #[inline]
     fn peek(&mut self) -> Result<Option<u8>> {
+        #[cfg(test)]
+        tests::record_peek(self.index);
         Ok(if self.index < self.slice.len() {
             Some(self.slice[self.index])
         } else {
@@ -785,3 +792,7 @@ fn decode_four_hex_digits(a: u8, b: u8, c: u8, d: u8) -> Option<u16> {
         None
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/plain-libs/unit/serde_json/read.rs"]
+mod tests;

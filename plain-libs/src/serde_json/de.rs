@@ -160,12 +160,12 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             }
             b'-' => {
                 self.eat_char();
-                match self.parse_any_number(false) {
+                match self.parse_integer(false) {
                     Ok(n) => n.invalid_type(exp),
                     Err(err) => return err,
                 }
             }
-            b'0'..=b'9' => match self.parse_any_number(true) {
+            b'0'..=b'9' => match self.parse_integer(true) {
                 Ok(n) => n.invalid_type(exp),
                 Err(err) => return err,
             },
@@ -305,11 +305,14 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                 return Err(self.error(ErrorCode::EofWhileParsingValue));
             }
         };
-        match next {
-            b'0' => match tri!(self.peek_or_null()) {
-                b'0'..=b'9' => Err(self.peek_error(ErrorCode::InvalidNumber)),
-                _ => self.parse_number(positive, 0),
-            },
+        let (significand, next) = match next {
+            b'0' => {
+                let next = tri!(self.peek_or_null());
+                if matches!(next, b'0'..=b'9') {
+                    return Err(self.peek_error(ErrorCode::InvalidNumber));
+                }
+                (0, next)
+            }
             c @ b'1'..=b'9' => {
                 let mut significand = (c - b'0') as u64;
                 loop {
@@ -324,17 +327,13 @@ impl<'de, R: Read<'de>> Deserializer<R> {
                             self.eat_char();
                             significand = significand * 10 + digit;
                         }
-                        _ => {
-                            return self.parse_number(positive, significand);
-                        }
+                        next => break (significand, next),
                     }
                 }
             }
-            _ => Err(self.error(ErrorCode::InvalidNumber)),
-        }
-    }
-    fn parse_number(&mut self, positive: bool, significand: u64) -> Result<ParserNumber> {
-        Ok(match tri!(self.peek_or_null()) {
+            _ => return Err(self.error(ErrorCode::InvalidNumber)),
+        };
+        Ok(match next {
             b'.' => ParserNumber::F64(tri!(self.parse_decimal(positive, significand, 0))),
             b'e' | b'E' => ParserNumber::F64(tri!(self.parse_exponent(positive, significand, 0))),
             _ => {
@@ -525,9 +524,9 @@ impl<'de, R: Read<'de>> Deserializer<R> {
         let value = match peek {
             b'-' => {
                 self.eat_char();
-                self.parse_any_number(false)
+                self.parse_integer(false)
             }
-            b'0'..=b'9' => self.parse_any_number(true),
+            b'0'..=b'9' => self.parse_integer(true),
             _ => Err(self.peek_error(ErrorCode::InvalidNumber)),
         };
         let value = match tri!(self.peek()) {
@@ -538,9 +537,6 @@ impl<'de, R: Read<'de>> Deserializer<R> {
             Ok(value) => Ok(value),
             Err(err) => Err(self.fix_position(err)),
         }
-    }
-    fn parse_any_number(&mut self, positive: bool) -> Result<ParserNumber> {
-        self.parse_integer(positive)
     }
     fn parse_object_colon(&mut self) -> Result<()> {
         match tri!(self.parse_whitespace()) {
@@ -831,9 +827,9 @@ impl<'de, R: Read<'de>> de::Deserializer<'de> for &mut Deserializer<R> {
             }
             b'-' => {
                 self.eat_char();
-                tri!(self.parse_any_number(false)).visit(visitor)
+                tri!(self.parse_integer(false)).visit(visitor)
             }
-            b'0'..=b'9' => tri!(self.parse_any_number(true)).visit(visitor),
+            b'0'..=b'9' => tri!(self.parse_integer(true)).visit(visitor),
             b'"' => {
                 self.eat_char();
                 self.scratch.clear();
