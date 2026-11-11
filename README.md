@@ -2,155 +2,21 @@
 
 Shared Rust code for PlainApp desktop, mobile and command-line hosts.
 
-```text
-plain-core/
-├── Cargo.toml                Builds and tests the four packages together
-├── plain-libs/               Business-independent algorithms, formats, files and native primitives
-├── plain-rs/                 Domain services, application storage and runtime composition
-├── plain-server/             GraphQL, HTTP and native transport adapters
-├── plain-cli/                The plainapp command-line executable
-├── tests/                    Tests grouped by package; unit paths mirror src/
-├── assets/                   Shared Web bundle and canonical file icons
-├── schema/                   GraphQL and SQLite definitions
-└── scripts/                  Development tools
-```
+## Workspace
 
-Tests live under `tests/plain-libs/`, `tests/plain-rs/`, `tests/plain-server/` and `tests/plain-cli/`.
-Each contains its own unit tests and any shared fixtures or support code.
-Unit tests remain compiled inside their owning package; HTTP integration tests
-are registered explicitly in that package's `Cargo.toml`.
+| Directory | Purpose |
+| --- | --- |
+| [`plain-libs/`](plain-libs/) | Reusable algorithms, formats and native primitives |
+| [`plain-rs/`](plain-rs/) | Domain services, storage and core runtime |
+| [`plain-server/`](plain-server/) | GraphQL, HTTP, WebSocket and BLE adapters |
+| [`plain-cli/`](plain-cli/) | The `plainapp` executable and CLI host adapters |
+| [`plain-graphql/`](plain-graphql/) | GraphQL engine and macros |
+| [`tests/`](tests/) | Tests grouped by package; unit paths mirror `src/` |
+| [`schema/`](schema/) | Generated GraphQL and SQLite contracts |
+| [`assets/`](assets/) | Embedded Web UI and file icons |
 
-`plain-libs` owns reusable components and depends only on third-party libraries.
-Its optional Cargo features select components without importing application state,
-models, host commands or GraphQL. `plain-rs` owns product behavior in `features/`
-and application storage, host contracts and protocol policy in `infrastructure/`.
-Callers import reusable components directly, such as `plain_libs::crypto`, and
-application modules through `plain_rs::features` or `plain_rs::infrastructure`.
-Unit-test paths mirror each package's source tree under `tests/<package>/unit/`.
-
-Each `plain-*` directory is a Rust package managed by the root `Cargo.toml`.
-Desktop shell and mobile JNI/C ABI code live in plain-desktop and plain-app, respectively.
-
-## Source layout
-
-HTTP entry points are named after the resources they serve. Start with
-[`plain-server/src/http/router.rs`](plain-server/src/http/router.rs) to find a URL's
-method, handler, request limits and middleware.
-
-```text
-plain-rs/src/
-├── lib.rs                  Public module entry points and compilation gates
-├── runtime.rs              Core construction and worker lifecycle
-├── features/               Product behavior and domain operations
-│   ├── chat/               Chat delivery and message operations
-│   ├── files/              File operations and resource references
-│   ├── media/              Media library, playback and catalog state
-│   ├── prefs/              Application preferences and identity
-│   └── services/           Runtime operations by domain
-│       └── files/          Browsing, previews, indexing and transfers
-└── infrastructure/         Application storage, host contracts and protocol policy
-    ├── db/                 Product schema, models and repositories
-    ├── host/               Application host commands, scopes and resource streams
-    ├── platform/           Application startup, host facts and system coordination
-    ├── protocols/          Peer framing and product discovery policy
-    ├── transport/          Authenticated peer transport
-    └── data_paths/         Application data roots and ownership
-
-plain-libs/src/
-├── crypto/                 Encryption, signatures, hashes and key formats
-├── media/                  Format parsing, decoding and thumbnails
-├── ai_image_search/        Model validation, preprocessing and inference
-├── apk/                    Android binary XML and resource parsing
-├── tls/                    Certificates and PKCS#12
-├── dlna/                   UPnP/DLNA parsing and protocol encoding
-├── protocols/mdns/         DNS/mDNS wire codecs and records
-├── phone/                  Number parsing and offline metadata lookup
-├── filesystem/             File operations and native watching
-├── kv.rs                   Generic SQLite key-value storage
-├── platform/               Native network, volume and filesystem primitives
-└── utils/                  Parsing, encoding, time and file utilities
-
-plain-cli/src/
-├── bootstrap.rs            Process initialization and command dispatch
-├── cli/                    Command parsing and terminal interaction
-├── service.rs              Background service startup, shutdown and failure handling
-├── host.rs                 CLI host capabilities and event handling
-├── host/linux.rs           Linux host command adapters
-├── login_socket.rs         Local login approval socket server and client
-└── storage.rs              Startup media sources and mount event wiring
-
-plain-server/
-├── src/
-│   ├── server.rs             Compose core runtime, schemas and transport state
-│   ├── http/
-│   │   ├── router.rs         All HTTP route registrations
-│   │   ├── fs.rs             /fs: files and previews
-│   │   ├── file_response.rs  Shared file streaming, Range and response headers
-│   │   ├── zip.rs            /zip/dir and /zip/files
-│   │   ├── upload.rs         /upload and /upload_chunk
-│   │   ├── managed_proxy.rs  /proxy/{peerId}/*: GraphQL, files, uploads and sockets to known devices
-│   │   ├── managed_proxy/    Raw relay, attachment, upload and socket proxy transports
-│   │   ├── graphql.rs        Main, peer and guest GraphQL HTTP adapters
-│   │   ├── init.rs           /init
-│   │   ├── nearby.rs         /nearby
-│   │   ├── health.rs         Health handler
-│   │   ├── dlna.rs           DLNA description, control, events, media and callbacks
-│   │   ├── static_files.rs   Web UI fallback and static files
-│   │   ├── web_bundle.rs     Embedded Web asset access
-│   │   ├── ble.rs            BLE adapter for the shared transfer routes
-│   │   ├── ble/nearby.rs     BLE nearby-device request handling
-│   │   ├── auth/            HTTP authorization and CORS middleware
-│   │   ├── listeners/       HTTP/TLS sockets and listener lifecycle
-│   │   └── websocket/       WebSocket entry points and transport
-│   │       ├── auth.rs      /auth upgrade
-│   │       ├── graphql.rs   /graphql upgrade and subscriptions
-│   │       ├── status.rs    /status and peer status connections
-│   │       ├── screen.rs    /screen upgrade
-│   │       ├── image_editor.rs  /image_editor upgrade
-│   │       ├── runtime.rs   Shared auth, screen and image-editor connections
-│   │       └── frames.rs    WebSocket frame encoding
-│   ├── graphql/
-│   │   ├── schemas/         Main, peer and guest schema construction
-│   │   ├── resolvers/       GraphQL queries and mutations by domain
-│   │   │   └── mobile/      Mobile GraphQL adapters (contacts and call log)
-│   │   ├── subscriptions/   GraphQL subscriptions
-│   │   ├── types/           GraphQL types
-│   │   └── executor.rs      Shared schema execution
-│   ├── host/events.rs        Host event dispatch into the core services
-│   └── native/              Native API entry points
-
-```
-
-For example, `/fs` is registered in `http/router.rs`, handled by
-[`http/fs.rs`](plain-server/src/http/fs.rs), and uses
-[`http/file_response.rs`](plain-server/src/http/file_response.rs) for local file
-streaming and Range responses. The handler parses HTTP options, calls
-[`plain-rs/features/services/files/links.rs`](plain-rs/src/features/services/files/links.rs) and
-[`plain-rs/features/services/files/content.rs`](plain-rs/src/features/services/files/content.rs), then
-maps the result to an HTTP response. Conversions and temporary-file ownership live in
-[`plain-rs/features/services/files/previews.rs`](plain-rs/src/features/services/files/previews.rs).
-[`plain-rs/features/services/files/references.rs`](plain-rs/src/features/services/files/references.rs)
-resolves local paths, `app://` paths and `fid:` references. HTTP Range, thumbnail
-ETag/304 responses and download headers stay in `http/file_response.rs`.
-GraphQL HTTP extraction and response handling belong to `http/graphql.rs`;
-schema definitions and resolvers belong to `graphql/`. Native and HTTP use the same main schema on every host. Capabilities and
-permissions control operation support and authorization.
-
-`plain-rs/src/runtime.rs` owns each core service once. `plain-server/src/server.rs`
-adds schemas and transport connections to that runtime. HTTP listener startup and
-configuration live in `http/listeners/public_server.rs`, failure monitoring and
-shutdown in `lifecycle.rs`, and restart commands in `control.rs`. There is no
-separate assembly directory or duplicate service container.
-
-`plain-cli/src/service.rs` combines the server with CLI host adapters and local
-approval. Linux mounting and disk formatting implementations remain in
-`plain-rs/src/infrastructure/platform/linux/`. `plain-server` contains no CLI/headless runtime;
-its native APIs and `ContentServer::runtime()` provide the in-process entry points
-used by CLI, desktop and mobile hosts.
-
-`router.rs::transfer_routes` contains the `/fs`, `/peer_graphql` and
-`/guest_graphql` routes shared by HTTP and BLE. `http/ble.rs` reuses that router;
-it does not maintain a second set of handlers.
+Desktop UI and OS adapters live in plain-desktop; mobile UI and JNI/C ABI adapters live in plain-app.
+Native and HTTP callers use the same main GraphQL schema.
 
 ## Build
 
@@ -174,39 +40,37 @@ artifact and stage it in the usual build output without running Python.
 For a single prepared runtime already in place, set `PLAIN_ONNX_RUNTIME_DIR` and `PLAIN_ONNX_RUNTIME_SHA256` instead.
 
 ```sh
-cargo check --workspace --locked    # Check all packages for compile errors
-cargo test --workspace --locked     # Test Rust functionality in all packages
-cargo run -p plainapp -- run --help  # Build plainapp and show run-command help
+cargo check --workspace --locked
+cargo test --workspace --locked
+cargo run -p plainapp -- run --help
 ```
 
-The dev profile uses incremental compilation without optimization for domain services,
-server adapters and the CLI. Reusable components and third-party dependencies retain
-their configured optimization levels. Use release builds for runtime performance measurements.
-Consumer workspaces must configure their own profiles; dependency profiles are not inherited.
+Use release builds for performance measurements. Consumer workspaces must configure their own Cargo profiles.
 
 ## Generated contracts
 
-Regenerate GraphQL and SQLite artifacts from the current Rust implementation with Node.js and Rust:
+Regenerate the contracts with Node.js and Rust:
 
 ```sh
 node scripts/gen-schema.mjs --write
 ```
 
-The command writes `schema/database.sql`, the main schema fragments in `schema/api/`, and `schema/guest-api.graphqls` and `schema/peer-api.graphqls`. It builds and runs the three schema snapshot checks. Omit `--write` to verify the generated files without updating them.
-
-Desktop consumes these same fragments. After a contract change, run `yarn graphql:codegen` in the sibling `plain-desktop` checkout to refresh its operation types. Mobile reads the Core schema directly and keeps no separate SDL copy.
+This updates `schema/database.sql`, `schema/api/`, `schema/guest-api.graphqls` and `schema/peer-api.graphqls`. Omit `--write` to check them.
+After API changes, run `yarn graphql:codegen` in plain-desktop. Mobile reads the Core schema directly.
 
 ## Deploy the CLI
 
-`plainapp` is a single executable with the web UI compiled into it, and a Linux host runs it as the systemd service `plainapp`.
+`plainapp` embeds the Web UI and runs as a Linux systemd service.
 
-### One-line install (recommended)
+### Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/plainhub/plain-core/main/install.sh | bash
 ```
 
-It detects the architecture, downloads the matching release, prompts for an admin password before installing the dependencies and systemd unit, starts the service, and prints the addresses to open. Password entry uses the controlling terminal without echo, including when this script is piped to Bash. Reinstalling preserves an existing password. A first installation without a terminal fails; automated installers can provision a password first using the existing `plainapp passwd --stdin` command with protected standard input, never a command-line password.
+The installer downloads the matching release, installs dependencies and starts the service.
+First installation requires an admin password entered through a terminal; reinstalling preserves it.
+For unattended installation, provision it first with `plainapp passwd --stdin` using protected standard input.
 
 ```bash
 sudo plainapp passwd   # change the admin password while the service is stopped
@@ -224,25 +88,34 @@ sudo plainapp install                     # admin password, ffmpeg and Avahi
 sudo systemctl enable --now plainapp
 ```
 
-`plainapp install` writes `/etc/systemd/system/plainapp.service`, whose `ExecStart` is `/usr/local/bin/plainapp run`, so that path is required. It does not copy the binary, and it neither enables nor starts the service. A new installation requires a nonempty password entered twice. An existing password is kept unchanged. `plainapp run` refuses to open listeners until a password is configured.
+`plainapp install` configures the password, dependencies and `/etc/systemd/system/plainapp.service`.
+The unit runs `/usr/local/bin/plainapp run`; copy the binary and enable the service as shown above.
+Listeners require a configured password.
 
-The Web UI is compiled into `plain-server` and shared by the CLI and mobile libraries. From the sibling `plain-desktop` checkout, run `bash build.sh` to build directly into `plain-core/assets/web`, then commit the generated assets with the corresponding core changes. Consumers receive the assets through their pinned core Git dependency; no separate mobile Web resource copy is needed.
+### Web UI
 
-Set `PLAIN_WEB_DIST` to an absolute frontend build directory to override the embedded build input. Mobile Gradle builds also accept `-PplainWebDist=/absolute/path/to/dist`. Explicit inputs must exist and contain `index.html`; invalid inputs fail the build. A checkout without the default `assets/web` directory and without an override builds with API support only.
+Run `bash build.sh` in plain-desktop to regenerate `assets/web`, then commit the assets with the Core changes.
+CLI and mobile builds embed this bundle.
+
+To embed another bundle, set `PLAIN_WEB_DIST` to its absolute directory, or use `-PplainWebDist=...` for mobile Gradle builds.
+The directory must contain `index.html`. Without `assets/web` or an override, the build provides APIs only.
+For local frontend tests, `run --web-root <directory>` serves files from disk without rebuilding.
 
 ### Configuration
 
-For local frontend tests, `run --web-root <directory>` serves a bundle from disk instead of the compiled one without rebuilding the server.
-
-Ports come from user settings and default to `8080` and `8443`. Data defaults to `$HOME/.plainapp/data`; cache uses an application directory under the OS cache location. The installed service runs as root.
+The service runs as root. Data defaults to `$HOME/.plainapp/data`; cache uses the OS cache location. Ports default to `8080` and `8443` and can be changed in user settings.
 
 Linux root services automatically mount eligible unmounted filesystems at stable `/mnt/usbX` paths and monitor block-device changes.
 
-Configure paths with the `PLAINAPP_DATA_DIR`, `PLAINAPP_CACHE_DIR`, `PLAINAPP_TLS_CERT` and `PLAINAPP_TLS_KEY` environment variables. For isolated test instances, `run` accepts `--data-dir`, `--cache-dir`, repeated `--media-dir` and `--web-root`. `passwd` accepts data/cache directories; `uninstall` and `login` accept a data directory. Installation, update and benchmark commands accept no path overrides. System service installation also rejects data/cache environment overrides because its unit uses the default directories.
+Environment variables: `PLAINAPP_DATA_DIR`, `PLAINAPP_CACHE_DIR`, `PLAINAPP_TLS_CERT` and `PLAINAPP_TLS_KEY`.
+System service installation requires default data/cache paths and rejects those two environment overrides.
+
+For isolated instances, `run` accepts `--data-dir`, `--cache-dir`, repeated `--media-dir` and `--web-root`.
+Use `<command> --help` for options on other commands.
 
 ### Upgrade and removal
 
-`plainapp update` only reports that self-update is not implemented, so an upgrade replaces the executable and restarts the service:
+Self-update is not implemented. Replace the executable and restart:
 
 ```sh
 install -m 0755 new/plainapp /usr/local/bin/plainapp
@@ -257,7 +130,7 @@ A `v*` tag builds the frontend from plain-desktop, compiles it into `plainapp` f
 
 ## Work on desktop or app
 
-Keep plain-core next to plain-desktop or plain-app. Run these commands in the desktop or app repository; its `scripts/core` calls the shared Node.js tool in `plain-core/scripts/core-dependencies.mjs`.
+Keep plain-core next to plain-desktop or plain-app. In the consumer repository:
 
 ```bash
 ./scripts/core local        # Use local plain-core
