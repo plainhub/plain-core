@@ -70,17 +70,17 @@ fn schema_host(schema: &PublicSchema) -> Arc<Host> {
 
 #[test]
 fn android_data_codes_map_to_the_contract_enums() {
-    assert_eq!(PhoneType::from_android(0), PhoneType::Custom);
-    assert_eq!(PhoneType::from_android(2), PhoneType::Mobile);
-    assert_eq!(PhoneType::from_android(19), PhoneType::Assistant);
+    assert_eq!(ContactPhoneType::from_android(0), ContactPhoneType::Custom);
+    assert_eq!(ContactPhoneType::from_android(2), ContactPhoneType::Mobile);
+    assert_eq!(ContactPhoneType::from_android(19), ContactPhoneType::Assistant);
     // Unknown codes fall back to CUSTOM so the label keeps carrying the value.
-    assert_eq!(PhoneType::from_android(99), PhoneType::Custom);
-    assert_eq!(EmailType::from_android(4), EmailType::Mobile);
-    assert_eq!(EventType::from_android(2), EventType::Birthday);
-    assert_eq!(ImProtocol::from_android(6), ImProtocol::GoogleTalk);
+    assert_eq!(ContactPhoneType::from_android(99), ContactPhoneType::Custom);
+    assert_eq!(ContactEmailType::from_android(4), ContactEmailType::Mobile);
+    assert_eq!(ContactEventType::from_android(2), ContactEventType::Birthday);
+    assert_eq!(ContactImProtocol::from_android(6), ContactImProtocol::GoogleTalk);
     // Every member must round-trip: the write path sends the code back.
     for kind in 0..=19 {
-        assert_eq!(PhoneType::from_android(kind).android(), kind);
+        assert_eq!(ContactPhoneType::from_android(kind).android(), kind);
     }
 }
 
@@ -109,28 +109,28 @@ async fn detail_enum_names_are_exactly_the_members_the_schema_publishes() {
         codes.map(name).collect::<Vec<_>>()
     };
     assert_eq!(
-        members("PhoneType"),
-        all(0..=19, |code| PhoneType::from_android(code).name())
+        members("ContactPhoneType"),
+        all(0..=19, |code| ContactPhoneType::from_android(code).name())
     );
     assert_eq!(
-        members("EmailType"),
-        all(0..=4, |code| EmailType::from_android(code).name())
+        members("ContactEmailType"),
+        all(0..=4, |code| ContactEmailType::from_android(code).name())
     );
     assert_eq!(
-        members("PostalType"),
-        all(0..=3, |code| PostalType::from_android(code).name())
+        members("ContactPostalType"),
+        all(0..=3, |code| ContactPostalType::from_android(code).name())
     );
     assert_eq!(
-        members("EventType"),
-        all(0..=3, |code| EventType::from_android(code).name())
+        members("ContactEventType"),
+        all(0..=3, |code| ContactEventType::from_android(code).name())
     );
     assert_eq!(
-        members("WebsiteType"),
-        all(0..=6, |code| WebsiteType::from_android(code).name())
+        members("ContactWebsiteType"),
+        all(0..=6, |code| ContactWebsiteType::from_android(code).name())
     );
     assert_eq!(
-        members("ImProtocol"),
-        all(0..=9, |code| ImProtocol::from_android(code).name())
+        members("ContactImProtocol"),
+        all(0..=9, |code| ContactImProtocol::from_android(code).name())
     );
 }
 

@@ -297,6 +297,7 @@ pub(crate) enum Request {
     },
     Cancel {
         request_id: String,
+        reason: &'static str,
     },
 }
 
@@ -345,6 +346,7 @@ impl Confirmation {
                 &self.state,
                 Request::Cancel {
                     request_id: request_id.into(),
+                    reason: "rejected",
                 },
             )
             .await
@@ -435,6 +437,13 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
 }
 
 fn persist(state: &ServerState, request: &Pending, token: &str) -> plain_libs::anyhow::Result<()> {
+    plain_libs::anyhow::ensure!(
+        request.client_id
+            != state
+                .native_client_id()
+                .map_err(plain_libs::anyhow::Error::msg)?,
+        "invalid_login_request"
+    );
     let existing = state
         .db
         .session_get(&request.client_id)
@@ -474,7 +483,40 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> plain_libs::a
     Ok(())
 }
 
+pub(crate) fn record_failure(state: &ServerState, client_id: &str, reason: &str) -> plain_libs::anyhow::Result<()> {
+    state.db.audit_event_add("login_failed", reason, Some(client_id))?;
+    Ok(())
+}
+
 pub(crate) async fn execute(state: &ServerState, request: Request) -> plain_libs::anyhow::Result<Value> {
+    let client = match &request {
+        Request::Issue { client_id, .. } => Some(client_id.clone()),
+        Request::Complete { request_id } => state.login_attempts.lock()
+            .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?
+            .pending.get(request_id).map(|pending| pending.client_id.clone()),
+        Request::Cancel { .. } => None,
+    };
+    let result = execute_request(state, request).await;
+    match &result {
+        Ok(value) if value["status"] == "COMPLETED" => {
+            state.db.audit_event_add("login", &text(&value["request"], "appName"), client.as_deref())?;
+        }
+        Err(error) => if let Some(client) = client {
+            let reason = match error.to_string().as_str() {
+                "invalid_password" => "invalid_password",
+                "remote_access_disabled" => "remote_access_disabled",
+                "Login confirmation expired" | "login_expired" => "login_expired",
+                "too_many_login_attempts" => "too_many_login_attempts",
+                _ => "invalid_login_request",
+            };
+            record_failure(state, &client, reason)?;
+        },
+        _ => {}
+    }
+    result
+}
+
+async fn execute_request(state: &ServerState, request: Request) -> plain_libs::anyhow::Result<Value> {
     if matches!(&request, Request::Issue { .. } | Request::Complete { .. }) {
         plain_libs::anyhow::ensure!(
             state.prefs.get_or("remote_access", true),
@@ -482,13 +524,16 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> plain_libs
         );
     }
     let (pending, request_id) = match request {
-        Request::Cancel { request_id } => {
-            let mut attempts = state
-                .login_attempts
-                .lock()
-                .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?;
-            if attempts.pending.remove(&request_id).is_some() {
-                notify_closed(state, &mut attempts, &request_id);
+        Request::Cancel { request_id, reason } => {
+            let pending = {
+                let mut attempts = state.login_attempts.lock()
+                    .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?;
+                let pending = attempts.pending.remove(&request_id);
+                if pending.is_some() { notify_closed(state, &mut attempts, &request_id); }
+                pending
+            };
+            if let Some(pending) = pending {
+                record_failure(state, &pending.client_id, reason)?;
             }
             return Ok(json!({"cancelled":true}));
         }

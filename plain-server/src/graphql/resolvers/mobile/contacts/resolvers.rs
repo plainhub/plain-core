@@ -345,38 +345,38 @@ fn contact(fact: &Value) -> Contact {
         phone_numbers: list(fact, "phoneNumbers", |item| ContactPhoneNumber {
             type_code: integer(item, "type") as i32,
             value: text(item, "value"),
-            r#type: PhoneType::from_android(integer(item, "type")),
+            r#type: ContactPhoneType::from_android(integer(item, "type")),
             label: text(item, "label"),
             normalized_number: text(item, "normalizedNumber"),
         }),
         emails: list(fact, "emails", |item| ContactEmail {
             type_code: integer(item, "type") as i32,
             value: text(item, "value"),
-            r#type: EmailType::from_android(integer(item, "type")),
+            r#type: ContactEmailType::from_android(integer(item, "type")),
             label: text(item, "label"),
         }),
         addresses: list(fact, "addresses", |item| ContactAddress {
             type_code: integer(item, "type") as i32,
             value: text(item, "value"),
-            r#type: PostalType::from_android(integer(item, "type")),
+            r#type: ContactPostalType::from_android(integer(item, "type")),
             label: text(item, "label"),
         }),
         events: list(fact, "events", |item| ContactEvent {
             type_code: integer(item, "type") as i32,
             value: text(item, "value"),
-            r#type: EventType::from_android(integer(item, "type")),
+            r#type: ContactEventType::from_android(integer(item, "type")),
             label: text(item, "label"),
         }),
         websites: list(fact, "websites", |item| ContactWebsite {
             type_code: integer(item, "type") as i32,
             value: text(item, "value"),
-            r#type: WebsiteType::from_android(integer(item, "type")),
+            r#type: ContactWebsiteType::from_android(integer(item, "type")),
             label: text(item, "label"),
         }),
         ims: list(fact, "ims", |item| ContactIm {
             type_code: integer(item, "type") as i32,
             value: text(item, "value"),
-            protocol: ImProtocol::from_android(integer(item, "type")),
+            protocol: ContactImProtocol::from_android(integer(item, "type")),
             custom_protocol: text(item, "label"),
         }),
         source: text(fact, "source"),
@@ -391,9 +391,9 @@ fn contact(fact: &Value) -> Contact {
     }
 }
 
-fn organization(fact: &Value) -> Option<Organization> {
+fn organization(fact: &Value) -> Option<ContactOrganization> {
     let org = fact["organization"].as_object()?;
-    Some(Organization {
+    Some(ContactOrganization {
         company: text(&Value::Object(org.clone()), "company"),
         title: text(&Value::Object(org.clone()), "title"),
     })

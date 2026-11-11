@@ -207,6 +207,15 @@ pub(super) fn upgrade(
         .into_response()
 }
 
+fn login_failure(state: &ServerState, client_id: &str, code: u16, reason: &'static str) -> Message {
+    match crate::http::auth::ws_login::record_failure(state, client_id, reason) {
+        Ok(()) => close(code, reason),
+        Err(error) => {
+            log::error!("Cannot record login failure: {error}");
+            close(1011, "event_storage_failed")
+        }
+    }
+}
 async fn completed(state: &ServerState, result: &Value) {
     let mut request = result["request"].clone();
     if let Some(request) = request.as_object_mut() {
@@ -228,6 +237,7 @@ async fn run(
     permit: UnauthenticatedConnection,
 ) {
     let mut permit = Some(permit);
+    let mut cancel_reason = "cancelled";
     if !enabled(&state) || params.cid.is_empty() {
         let reason = if params.cid.is_empty() {
             "`cid` is missing"
@@ -244,7 +254,7 @@ async fn run(
             } else {
                 "invalid_login_request"
             };
-            let _ = socket.send(close(1013, reason)).await;
+            let _ = socket.send(login_failure(&state, &params.cid, 1013, reason)).await;
             return;
         }
     }
@@ -292,8 +302,8 @@ async fn run(
                 let _ = socket.send(close(1008, "timeout")).await;
                 break;
             },
-            _ = &mut deadline, if channel == Channel::Auth => { let _ = socket.send(close(1008, "login_expired")).await; break; },
-            _ = closed.changed() => { let (code, reason) = (*closed.borrow()).unwrap_or((1000, "")); let _ = socket.send(close(code, reason)).await; break; },
+            _ = &mut deadline, if channel == Channel::Auth => { cancel_reason = "login_expired"; let _ = socket.send(close(1008, "login_expired")).await; break; },
+            _ = closed.changed() => { let (code, reason) = (*closed.borrow()).unwrap_or((1000, "")); if !reason.is_empty() { cancel_reason = reason; } let _ = socket.send(close(code, reason)).await; break; },
             message = outgoing.recv() => match message { Some(message) => message, None => break },
             incoming = socket.next() => {
                 let frame = match incoming {
@@ -335,7 +345,7 @@ async fn run(
                             Ok(None) => {}
                             Err(error) => {
                                 let reason = if error.to_string() == "too_many_login_attempts" { "too_many_login_attempts" } else { "invalid_login_request" };
-                                let _ = socket.send(close(1008, reason)).await;
+                                let _ = socket.send(login_failure(&state, &params.cid, 1008, reason)).await;
                                 break;
                             }
                         }
@@ -346,7 +356,7 @@ async fn run(
                 };
                 if !enabled(&state) { let _ = socket.send(close(1008,"remote_access_disabled")).await; break; }
                 if channel == Channel::Auth {
-                    if let Some(request_id) = pending.take() { let _ = crate::http::auth::ws_login::execute(&state, crate::http::auth::ws_login::Request::Cancel { request_id }).await; }
+                    if let Some(request_id) = pending.take() { if let Err(error) = crate::http::auth::ws_login::execute(&state, crate::http::auth::ws_login::Request::Cancel { request_id, reason: "cancelled" }).await { log::error!("Cannot record login cancellation: {error}"); } }
                     let previous = std::mem::replace(&mut handshake, LoginHandshake::Submitted);
                     let resolved = (|| -> plain_libs::anyhow::Result<_> {
                         use crate::http::auth::ws_login::{LoginChannel, OpaqueChannel};
@@ -382,7 +392,7 @@ async fn run(
                             continue;
                         }
                         Ok(Ok(ready)) => ready,
-                        Err(_) => { let _ = socket.send(close(1008, "invalid_password")).await; break; }
+                        Err(_) => { let _ = socket.send(login_failure(&state, &params.cid, 1008, "invalid_password")).await; break; }
                     };
                     let request = crate::http::auth::ws_login::Request::Issue {
                         client_id: params.cid.clone(),
@@ -480,11 +490,15 @@ async fn run(
         }
     }
     if let Some(request_id) = pending {
-        let _ = crate::http::auth::ws_login::execute(
+        if let Err(error) = crate::http::auth::ws_login::execute(
             &state,
-            crate::http::auth::ws_login::Request::Cancel { request_id },
+            crate::http::auth::ws_login::Request::Cancel { request_id, reason: cancel_reason },
         )
-        .await;
+        .await { log::error!("Cannot record login cancellation: {error}"); }
+    } else if channel == Channel::Auth && matches!(handshake, LoginHandshake::Ready(_) | LoginHandshake::Opaque { .. }) {
+        if let Err(error) = crate::http::auth::ws_login::record_failure(&state, &params.cid, cancel_reason) {
+            log::error!("Cannot record incomplete login: {error}");
+        }
     }
     remove_connection(&state, &id).await;
     let _ = tokio::time::timeout(Duration::from_secs(1), socket.close(None)).await;

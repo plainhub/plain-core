@@ -484,6 +484,10 @@ async fn passwordless_browser_requires_approval_when_enabled_and_only_approval_i
         assert_eq!(saved.os_name, "macOS");
         assert_eq!(saved.os_version, "27.2.0");
     }
+    let records = state.db.audit_events(0, 10, None).unwrap();
+    assert_eq!(records.len(), 2);
+    assert!(records.iter().any(|row| row.r#type == "login" && row.client_id.as_deref() == Some("approved-browser")));
+    assert!(records.iter().any(|row| row.r#type == "login_failed" && row.message == "rejected" && row.client_id.as_deref() == Some("rejected-browser")));
     server.shutdown().await;
 }
 
@@ -683,7 +687,16 @@ async fn signed_login_rejects_missing_and_repeated_hellos_before_any_grant() {
                 .unwrap();
         }
         assert!(matches!(login_frame(&mut socket).await, Message::Close(_)));
-        assert!(state.db.session_list().unwrap().is_empty());
+        assert_eq!(
+            state
+                .db
+                .session_list()
+                .unwrap()
+                .iter()
+                .map(|row| row.client_id.clone())
+                .collect::<Vec<_>>(),
+            vec![state.native_client_id().unwrap()]
+        );
         assert!(state.login_attempts.lock().unwrap().pending.is_empty());
         server.shutdown().await;
     }
@@ -797,6 +810,13 @@ async fn first_password_login_completes_without_owner_approval() {
     let key = c.key;
     let saved = state.db.session_get("first-browser").unwrap().unwrap();
     assert_eq!(saved.token, plain_libs::utils::base64::base64_encode(&key));
+    let records = state.db.audit_events(0, 10, None).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].r#type, "login");
+    assert_eq!(records[0].client_id.as_deref(), Some("first-browser"));
+    assert_eq!(records[0].message, "Fixture");
+    assert!(!records[0].message.contains("owned-password"));
+    assert!(!records[0].message.contains(&saved.token));
     socket.close(None).await.unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
@@ -928,7 +948,16 @@ async fn password_login_rejects_frames_without_a_key_exchange_and_without_outer_
         assert!(matches!(login_frame(&mut socket).await, Message::Close(_)));
         assert!(state.db.session_get(client_id).unwrap().is_none());
     }
-    assert!(state.db.session_list().unwrap().is_empty());
+    assert_eq!(
+        state
+            .db
+            .session_list()
+            .unwrap()
+            .iter()
+            .map(|row| row.client_id.clone())
+            .collect::<Vec<_>>(),
+        vec![state.native_client_id().unwrap()]
+    );
     server.shutdown().await;
 }
 
@@ -1046,7 +1075,17 @@ async fn idle_connections_consume_the_login_budget_before_any_message() {
     })
     .await
     .unwrap();
-    assert!(server.runtime_state().db.session_list().unwrap().is_empty());
+    assert_eq!(
+        server
+            .runtime_state()
+            .db
+            .session_list()
+            .unwrap()
+            .iter()
+            .map(|row| row.client_id.clone())
+            .collect::<Vec<_>>(),
+        vec![server.runtime_state().native_client_id().unwrap()]
+    );
     server.shutdown().await;
 }
 
@@ -1073,7 +1112,17 @@ async fn a_signed_hello_does_not_extend_the_initial_exchange_deadline() {
         .unwrap()
         .unwrap();
     assert!(matches!(response, Message::Close(Some(frame)) if frame.reason == "timeout"));
-    assert!(server.runtime_state().db.session_list().unwrap().is_empty());
+    assert_eq!(
+        server
+            .runtime_state()
+            .db
+            .session_list()
+            .unwrap()
+            .iter()
+            .map(|row| row.client_id.clone())
+            .collect::<Vec<_>>(),
+        vec![server.runtime_state().native_client_id().unwrap()]
+    );
     server.shutdown().await;
 }
 
@@ -1144,4 +1193,33 @@ async fn relogin_rotates_the_session_url_token_and_keeps_the_session_identity() 
     assert_eq!(first.client_id, second.client_id);
     assert_eq!(first.created_at, second.created_at);
     assert_eq!(second.token, "second-token");
+}
+
+#[path = "login_events.rs"]
+mod event_tests;
+
+#[tokio::test]
+async fn web_login_cannot_replace_the_native_transport_session() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let server = crate::server::ContentServer::open(directory.path()).unwrap();
+    let state = server.runtime_state();
+    let id = state.native_client_id().unwrap();
+    let stored = state.db.session_get(&id).unwrap().unwrap();
+    let request = Pending {
+        client_id: id.clone(),
+        client_ip: "fixture".into(),
+        request: json!({"appName":"Browser"}),
+        at: Instant::now(),
+        protection: password_protection(None),
+    };
+    assert_eq!(
+        persist(&state, &request, "untrusted-token")
+            .unwrap_err()
+            .to_string(),
+        "invalid_login_request"
+    );
+    let current = state.db.session_get(&id).unwrap().unwrap();
+    assert_eq!(current.token, stored.token);
+    assert_eq!(current.url_token, stored.url_token);
+    server.shutdown().await;
 }

@@ -7,15 +7,24 @@ type AppUpdate {
 	url: String
 }
 
-type AuditEvent {
+type Disk {
 	id: ID!
-	type: AuditEventType!
+	name: String!
+	path: String!
+	sizeBytes: Long!
+	removable: Boolean!
+	model: String
+}
+
+type Event {
+	id: ID!
+	type: EventType!
 	message: String!
 	clientId: String
 	createdAt: Instant!
 }
 
-enum AuditEventType {
+enum EventType {
 	LOGIN
 	LOGIN_FAILED
 	LOGOUT
@@ -29,15 +38,6 @@ enum AuditEventType {
 	FORMAT_DISK_FAILED
 }
 
-type Disk {
-	id: ID!
-	name: String!
-	path: String!
-	sizeBytes: Long!
-	removable: Boolean!
-	model: String
-}
-
 type Mutation {
 	clearAppCache: Boolean!
 	formatDisk(path: String!): Boolean!
@@ -48,6 +48,6 @@ type Mutation {
 type Query {
 	appCacheSize: Long!
 	appUpdate: AppUpdate!
-	auditEvents(query: String!, offset: Int!, limit: Int!): [AuditEvent!]!
 	disks: [Disk!]!
+	events(query: String!, offset: Int!, limit: Int!): [Event!]!
 }

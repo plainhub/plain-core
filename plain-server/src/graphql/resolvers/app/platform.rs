@@ -12,14 +12,14 @@ pub struct PlatformQuery;
 
 #[Object]
 impl PlatformQuery {
-    fn audit_events(
+    fn events(
         &self,
         ctx: &Context<'_>,
         query: String,
         offset: i32,
         limit: i32,
-    ) -> Result<Vec<crate::graphql::resolvers::app::capability_types::AuditEvent>> {
-        use crate::graphql::resolvers::app::capability_types::{AuditEvent, AuditEventType};
+    ) -> Result<Vec<crate::graphql::resolvers::app::capability_types::Event>> {
+        use crate::graphql::resolvers::app::capability_types::{Event, EventType};
         let state = ctx.data::<ServerState>()?;
         let needle = plain_libs::utils::search_dsl::parse(&query)
             .into_iter()
@@ -33,10 +33,10 @@ impl PlatformQuery {
         )?;
         rows.into_iter()
             .filter_map(|row| {
-                let kind = AuditEventType::from_kind(&row.r#type)?;
+                let kind = EventType::from_kind(&row.r#type)?;
                 Some(
                     plain_libs::chrono::DateTime::parse_from_rfc3339(&row.created_at)
-                        .map(|at| AuditEvent {
+                        .map(|at| Event {
                             id: row.id.into(),
                             r#type: kind,
                             message: row.message,

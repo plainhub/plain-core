@@ -21,7 +21,7 @@ type Contact {
 	thumbnailId: String!
 	notes: String!
 	groups: [ContactGroup!]!
-	organization: Organization
+	organization: ContactOrganization
 	websites: [ContactWebsite!]!
 	ims: [ContactIm!]!
 	ringtone: String!
@@ -32,40 +32,55 @@ type Contact {
 type ContactAddress {
 	typeCode: Int!
 	value: String!
-	type: PostalType!
+	type: ContactPostalType!
 	label: String!
 }
 
 input ContactAddressInput {
 	value: String!
-	type: PostalType!
+	type: ContactPostalType!
 	label: String!
 }
 
 type ContactEmail {
 	typeCode: Int!
 	value: String!
-	type: EmailType!
+	type: ContactEmailType!
 	label: String!
 }
 
 input ContactEmailInput {
 	value: String!
-	type: EmailType!
+	type: ContactEmailType!
 	label: String!
+}
+
+enum ContactEmailType {
+	CUSTOM
+	HOME
+	WORK
+	OTHER
+	MOBILE
 }
 
 type ContactEvent {
 	typeCode: Int!
 	value: String!
-	type: EventType!
+	type: ContactEventType!
 	label: String!
 }
 
 input ContactEventInput {
 	value: String!
-	type: EventType!
+	type: ContactEventType!
 	label: String!
+}
+
+enum ContactEventType {
+	CUSTOM
+	ANNIVERSARY
+	BIRTHDAY
+	OTHER
 }
 
 type ContactGroup {
@@ -77,14 +92,27 @@ type ContactGroup {
 type ContactIm {
 	typeCode: Int!
 	value: String!
-	protocol: ImProtocol!
+	protocol: ContactImProtocol!
 	customProtocol: String!
 }
 
 input ContactImInput {
 	value: String!
-	protocol: ImProtocol!
+	protocol: ContactImProtocol!
 	customProtocol: String!
+}
+
+enum ContactImProtocol {
+	CUSTOM
+	AIM
+	MSN
+	YAHOO
+	SKYPE
+	QQ
+	GOOGLE_TALK
+	ICQ
+	JABBER
+	NETMEETING
 }
 
 input ContactInput {
@@ -102,82 +130,36 @@ input ContactInput {
 	starred: Boolean!
 	notes: String!
 	groupIds: [ID!]!
-	organization: OrganizationInput
+	organization: ContactOrganizationInput
 	websites: [ContactWebsiteInput!]!
 	ims: [ContactImInput!]!
 }
 
+type ContactOrganization {
+	company: String!
+	title: String!
+}
+
+input ContactOrganizationInput {
+	company: String!
+	title: String!
+}
+
 input ContactPhoneInput {
 	value: String!
-	type: PhoneType!
+	type: ContactPhoneType!
 	label: String!
 }
 
 type ContactPhoneNumber {
 	typeCode: Int!
 	value: String!
-	type: PhoneType!
+	type: ContactPhoneType!
 	label: String!
 	normalizedNumber: String!
 }
 
-type ContactSource {
-	name: String!
-	type: String!
-}
-
-type ContactWebsite {
-	typeCode: Int!
-	value: String!
-	type: WebsiteType!
-	label: String!
-}
-
-input ContactWebsiteInput {
-	value: String!
-	type: WebsiteType!
-	label: String!
-}
-
-enum EmailType {
-	CUSTOM
-	HOME
-	WORK
-	OTHER
-	MOBILE
-}
-
-enum EventType {
-	CUSTOM
-	ANNIVERSARY
-	BIRTHDAY
-	OTHER
-}
-
-enum ImProtocol {
-	CUSTOM
-	AIM
-	MSN
-	YAHOO
-	SKYPE
-	QQ
-	GOOGLE_TALK
-	ICQ
-	JABBER
-	NETMEETING
-}
-
-type Organization {
-	company: String!
-	title: String!
-}
-
-input OrganizationInput {
-	company: String!
-	title: String!
-}
-
-enum PhoneType {
+enum ContactPhoneType {
 	CUSTOM
 	HOME
 	MOBILE
@@ -200,14 +182,32 @@ enum PhoneType {
 	ASSISTANT
 }
 
-enum PostalType {
+enum ContactPostalType {
 	CUSTOM
 	HOME
 	WORK
 	OTHER
 }
 
-enum WebsiteType {
+type ContactSource {
+	name: String!
+	type: String!
+}
+
+type ContactWebsite {
+	typeCode: Int!
+	value: String!
+	type: ContactWebsiteType!
+	label: String!
+}
+
+input ContactWebsiteInput {
+	value: String!
+	type: ContactWebsiteType!
+	label: String!
+}
+
+enum ContactWebsiteType {
 	CUSTOM
 	HOMEPAGE
 	BLOG

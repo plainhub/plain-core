@@ -55,7 +55,7 @@ macro_rules! data_kind {
     };
 }
 
-data_kind!(PhoneType {
+data_kind!(ContactPhoneType {
     Home = 1,
     Mobile = 2,
     Work = 3,
@@ -77,26 +77,26 @@ data_kind!(PhoneType {
     Assistant = 19,
 });
 
-data_kind!(EmailType {
+data_kind!(ContactEmailType {
     Home = 1,
     Work = 2,
     Other = 3,
     Mobile = 4,
 });
 
-data_kind!(PostalType {
+data_kind!(ContactPostalType {
     Home = 1,
     Work = 2,
     Other = 3,
 });
 
-data_kind!(EventType {
+data_kind!(ContactEventType {
     Anniversary = 1,
     Birthday = 2,
     Other = 3,
 });
 
-data_kind!(WebsiteType {
+data_kind!(ContactWebsiteType {
     Homepage = 1,
     Blog = 2,
     Ftp = 3,
@@ -105,7 +105,7 @@ data_kind!(WebsiteType {
     Other = 6,
 });
 
-data_kind!(ImProtocol {
+data_kind!(ContactImProtocol {
     Aim = 1,
     Msn = 2,
     Yahoo = 3,
@@ -121,7 +121,7 @@ data_kind!(ImProtocol {
 pub struct ContactPhoneNumber {
     pub type_code: i32,
     pub value: String,
-    pub r#type: PhoneType,
+    pub r#type: ContactPhoneType,
     pub label: String,
     #[graphql(name = "normalizedNumber")]
     pub normalized_number: String,
@@ -131,7 +131,7 @@ pub struct ContactPhoneNumber {
 pub struct ContactEmail {
     pub type_code: i32,
     pub value: String,
-    pub r#type: EmailType,
+    pub r#type: ContactEmailType,
     pub label: String,
 }
 
@@ -139,7 +139,7 @@ pub struct ContactEmail {
 pub struct ContactAddress {
     pub type_code: i32,
     pub value: String,
-    pub r#type: PostalType,
+    pub r#type: ContactPostalType,
     pub label: String,
 }
 
@@ -147,7 +147,7 @@ pub struct ContactAddress {
 pub struct ContactEvent {
     pub type_code: i32,
     pub value: String,
-    pub r#type: EventType,
+    pub r#type: ContactEventType,
     pub label: String,
 }
 
@@ -155,7 +155,7 @@ pub struct ContactEvent {
 pub struct ContactWebsite {
     pub type_code: i32,
     pub value: String,
-    pub r#type: WebsiteType,
+    pub r#type: ContactWebsiteType,
     pub label: String,
 }
 
@@ -163,13 +163,13 @@ pub struct ContactWebsite {
 pub struct ContactIm {
     pub type_code: i32,
     pub value: String,
-    pub protocol: ImProtocol,
+    pub protocol: ContactImProtocol,
     #[graphql(name = "customProtocol")]
     pub custom_protocol: String,
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-pub struct Organization {
+pub struct ContactOrganization {
     pub company: String,
     pub title: String,
 }
@@ -219,7 +219,7 @@ pub struct Contact {
     pub thumbnail_id: String,
     pub notes: String,
     pub groups: Vec<ContactGroup>,
-    pub organization: Option<Organization>,
+    pub organization: Option<ContactOrganization>,
     pub websites: Vec<ContactWebsite>,
     pub ims: Vec<ContactIm>,
     pub ringtone: String,
@@ -242,48 +242,48 @@ impl Contact {
 #[derive(InputObject, Clone, Debug)]
 pub struct ContactPhoneInput {
     pub value: String,
-    pub r#type: PhoneType,
+    pub r#type: ContactPhoneType,
     pub label: String,
 }
 
 #[derive(InputObject, Clone, Debug)]
 pub struct ContactEmailInput {
     pub value: String,
-    pub r#type: EmailType,
+    pub r#type: ContactEmailType,
     pub label: String,
 }
 
 #[derive(InputObject, Clone, Debug)]
 pub struct ContactAddressInput {
     pub value: String,
-    pub r#type: PostalType,
+    pub r#type: ContactPostalType,
     pub label: String,
 }
 
 #[derive(InputObject, Clone, Debug)]
 pub struct ContactEventInput {
     pub value: String,
-    pub r#type: EventType,
+    pub r#type: ContactEventType,
     pub label: String,
 }
 
 #[derive(InputObject, Clone, Debug)]
 pub struct ContactWebsiteInput {
     pub value: String,
-    pub r#type: WebsiteType,
+    pub r#type: ContactWebsiteType,
     pub label: String,
 }
 
 #[derive(InputObject, Clone, Debug)]
 pub struct ContactImInput {
     pub value: String,
-    pub protocol: ImProtocol,
+    pub protocol: ContactImProtocol,
     #[graphql(name = "customProtocol")]
     pub custom_protocol: String,
 }
 
 #[derive(InputObject, Clone, Debug)]
-pub struct OrganizationInput {
+pub struct ContactOrganizationInput {
     pub company: String,
     pub title: String,
 }
@@ -309,7 +309,7 @@ pub struct ContactInput {
     pub notes: String,
     #[graphql(name = "groupIds")]
     pub group_ids: Vec<ID>,
-    pub organization: Option<OrganizationInput>,
+    pub organization: Option<ContactOrganizationInput>,
     pub websites: Vec<ContactWebsiteInput>,
     pub ims: Vec<ContactImInput>,
 }

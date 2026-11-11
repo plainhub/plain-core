@@ -15,7 +15,7 @@ pub struct Disk {
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
-pub enum AuditEventType {
+pub enum EventType {
     LOGIN,
     LOGIN_FAILED,
     LOGOUT,
@@ -29,7 +29,7 @@ pub enum AuditEventType {
     FORMAT_DISK_FAILED,
 }
 
-impl AuditEventType {
+impl EventType {
     pub fn from_kind(kind: &str) -> Option<Self> {
         match kind {
             "login" => Some(Self::LOGIN),
@@ -49,9 +49,9 @@ impl AuditEventType {
 }
 
 #[derive(SimpleObject, Clone, Debug)]
-pub struct AuditEvent {
+pub struct Event {
     pub id: ID,
-    pub r#type: AuditEventType,
+    pub r#type: EventType,
     pub message: String,
     pub client_id: Option<String>,
     pub created_at: Instant,

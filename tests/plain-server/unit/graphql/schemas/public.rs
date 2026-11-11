@@ -926,3 +926,6 @@ fn access_feature_contract_has_exact_values_and_wrappers() {
     assert!(sdl.contains("access: [AccessFeature!]!"));
     assert!(sdl.contains("requestAccess(feature: AccessFeature!): Boolean!"));
 }
+
+#[path = "event_contract.rs"]
+mod event_contract;

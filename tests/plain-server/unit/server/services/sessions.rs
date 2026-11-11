@@ -194,6 +194,7 @@ async fn confirmation_is_once_only_and_cancel_or_revoke_prevents_issuance() {
             ws_login::execute(
                 &state,
                 ws_login::Request::Cancel {
+                    reason: "cancelled",
                     request_id: id.clone(),
                 },
             )
@@ -259,7 +260,16 @@ async fn native_management_public_auth_and_revoke_share_one_database_without_hos
             .status(),
         StatusCode::UNAUTHORIZED
     );
-    assert!(state.db.session_list().unwrap().is_empty());
+    assert_eq!(
+        state
+            .db
+            .session_list()
+            .unwrap()
+            .iter()
+            .map(|session| session.client_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["phone"]
+    );
     let unauthorized = state.public.execute("{ sessions { clientId } }").await;
     assert!(!unauthorized.errors.is_empty());
 }
@@ -383,7 +393,15 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     assert!(settings.get("url_token").is_none());
     assert_eq!(local["peers"][0]["key"], "peer-secret");
     assert_eq!(local["chatChannels"][0]["key"], "channel-secret");
-    assert_eq!(local["sessions"][0]["token"], session.token);
+    assert_eq!(
+        local["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["clientId"] == session.client_id)
+            .unwrap()["token"],
+        session.token
+    );
     let mut headers = HeaderMap::new();
     headers.insert("c-id", session.client_id.parse().unwrap());
     headers.insert(
@@ -410,7 +428,12 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
     assert!(metadata.get("errors").is_none(), "{metadata}");
     assert_eq!(metadata["data"]["app"]["urlToken"], session.url_token);
     assert_eq!(
-        metadata["data"]["sessions"][0]["clientId"],
+        metadata["data"]["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["clientId"] == session.client_id)
+            .unwrap()["clientId"],
         session.client_id
     );
     assert_eq!(metadata["data"]["peers"][0]["id"], "peer");

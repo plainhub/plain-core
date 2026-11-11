@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn public_audit_events_read_the_core_database_without_host_or_legacy_store() {
+async fn public_events_read_the_core_database_without_host_or_legacy_store() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -10,12 +10,12 @@ async fn public_audit_events_read_the_core_database_without_host_or_legacy_store
         .audit_event_add("login", "ÄBC", Some("client"))
         .unwrap();
     let result = core.native_graphql().unwrap().execute(plain_graphql::Request::new(
-        r#"{ auditEvents(query:"text:äbc",offset:0,limit:10) { id type message clientId createdAt } }"#
+        r#"{ events(query:"text:äbc",offset:0,limit:10) { id type message clientId createdAt } }"#
     )).await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
-    assert_eq!(data["auditEvents"][0]["id"], id);
-    assert_eq!(data["auditEvents"][0]["clientId"], "client");
+    assert_eq!(data["events"][0]["id"], id);
+    assert_eq!(data["events"][0]["clientId"], "client");
     let system_id = state
         .db
         .audit_event_add("mount", "/mnt/example", None)
@@ -24,13 +24,13 @@ async fn public_audit_events_read_the_core_database_without_host_or_legacy_store
         .native_graphql()
         .unwrap()
         .execute(plain_graphql::Request::new(
-            r#"{ auditEvents(query:"text:/mnt/example",offset:0,limit:10) { id clientId } }"#,
+            r#"{ events(query:"text:/mnt/example",offset:0,limit:10) { id clientId } }"#,
         ))
         .await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
-    assert_eq!(data["auditEvents"][0]["id"], system_id);
-    assert!(data["auditEvents"][0]["clientId"].is_null());
+    assert_eq!(data["events"][0]["id"], system_id);
+    assert!(data["events"][0]["clientId"].is_null());
     state
         .db
         .with_conn(|conn| conn.execute_batch("DROP TABLE audit_events"))
@@ -39,7 +39,7 @@ async fn public_audit_events_read_the_core_database_without_host_or_legacy_store
         .native_graphql()
         .unwrap()
         .execute(plain_graphql::Request::new(
-            r#"{ auditEvents(query:"",offset:0,limit:10) { id } }"#,
+            r#"{ events(query:"",offset:0,limit:10) { id } }"#,
         ))
         .await;
     assert!(!result.errors.is_empty());
