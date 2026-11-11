@@ -75,6 +75,8 @@ pref_keys! {
         APP_HOME_FEATURES = "app_home_features",
     }
     RustOnly {
+        OPAQUE_SERVER_SETUP = "opaque_server_setup",
+        OPAQUE_PASSWORD_RECORD = "opaque_password_record",
         CLIENT_ID = "client_id",
         ADB_TOKEN = "adb_token",
         MASTER_SECRET = "master_secret",

@@ -49,12 +49,8 @@ impl SecurityPreferences<'_> {
         Ok(changed)
     }
 
-    pub fn reset_password(&self) -> anyhow::Result<String> {
-        let password = security::random_password(6);
-        self.apply(Command::SetPassword {
-            password: password.clone(),
-        })?;
-        Ok(password)
+    pub fn generate_password(&self) -> anyhow::Result<String> {
+        Ok(security::random_password(6))
     }
     pub fn reset_adb_token(&self) -> anyhow::Result<bool> {
         self.apply(Command::ResetAdbToken)

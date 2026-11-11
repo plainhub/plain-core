@@ -80,6 +80,13 @@ impl NativeManagement {
         ] {
             values.insert(key.into(), self.get_pref(key)?);
         }
+        values.insert(
+            "passwordConfigured".into(),
+            json!(matches!(
+                plain_rs::features::prefs::security::password_credential(&self.state.prefs),
+                Ok(Some(_))
+            )),
+        );
         Ok(values)
     }
 
@@ -100,9 +107,9 @@ impl NativeManagement {
         })
     }
 
-    pub fn reset_password(&self) -> Result<String, String> {
+    pub fn generate_password(&self) -> Result<String, String> {
         self.security_preferences()?
-            .reset_password()
+            .generate_password()
             .map_err(|error| error.to_string())
     }
 

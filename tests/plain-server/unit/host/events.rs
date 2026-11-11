@@ -369,6 +369,7 @@ async fn preference_updates_send_only_changed_values_and_skip_unchanged_values()
     state.prefs.set("http_port", 8181).unwrap();
     state.prefs.set("feed_auto_refresh_interval", 900).unwrap();
     state.prefs.set("pkg_sort_by", "NAME_DESC").unwrap();
+    core.native_management().unwrap().set_pref("password", json!("fixture-password")).await.unwrap();
     let mut update = Box::pin(bridge.prefs_changed());
     std::future::poll_fn(|context| {
         assert!(std::future::Future::poll(update.as_mut(), context).is_pending());
@@ -381,7 +382,7 @@ async fn preference_updates_send_only_changed_values_and_skip_unchanged_values()
         if is_preferences {
             assert_eq!(
                 request["params"],
-                json!({"values":{"http_port":8181,"feed_auto_refresh_interval":900,"pkg_sort_by":"NAME_DESC"}})
+                json!({"values":{"http_port":8181,"feed_auto_refresh_interval":900,"pkg_sort_by":"NAME_DESC","passwordConfigured":true}})
             );
         }
         bridge

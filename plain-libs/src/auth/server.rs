@@ -8,7 +8,7 @@ use opaque_ke::{
 use rand_core::OsRng;
 use zeroize::Zeroizing;
 
-/// Stored only in the existing protected password preference.
+/// Stored only in Rust-owned credential preferences.
 pub struct Registration {
     pub setup: Zeroizing<Vec<u8>>,
     pub record: Zeroizing<Vec<u8>>,
@@ -97,4 +97,10 @@ pub fn public_key(setup: &[u8]) -> Result<Vec<u8>, ProtocolError> {
 
 pub fn finalization_len() -> usize {
     opaque_ke::generic_array::GenericArray::<u8, opaque_ke::CredentialFinalizationLen<Suite>>::default().len()
+}
+
+pub fn validate_registration(setup: &[u8], record: &[u8]) -> Result<(), ProtocolError> {
+    ServerSetup::<Suite>::deserialize(setup)?;
+    ServerRegistration::<Suite>::deserialize(record)?;
+    Ok(())
 }

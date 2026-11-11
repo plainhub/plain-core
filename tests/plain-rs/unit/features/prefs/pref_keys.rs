@@ -16,7 +16,7 @@ fn every_registered_key_has_the_expected_read_and_write_policy() {
             password password_type login_require_approval
             api_permissions mdns_hostname dev_token log_level auto_check_update skip_version"),
         (PrefAccess::RemoteReadOnly, "app_home_features"),
-        (PrefAccess::RustOnly, "client_id adb_token master_secret signature_key_pair"),
+        (PrefAccess::RustOnly, "opaque_server_setup opaque_password_record client_id adb_token master_secret signature_key_pair"),
     ];
     let expected: Vec<_> = groups
         .iter()
@@ -93,6 +93,8 @@ fn exported_constants_match_the_registered_keys() {
         AUTO_CHECK_UPDATE,
         SKIP_VERSION,
         APP_HOME_FEATURES,
+        OPAQUE_SERVER_SETUP,
+        OPAQUE_PASSWORD_RECORD,
         CLIENT_ID,
         ADB_TOKEN,
         MASTER_SECRET,

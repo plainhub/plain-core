@@ -53,7 +53,7 @@ fn unsupported_stored_credentials_are_not_migrated() {
     let prefs = Prefs::load(&directory.path().join("prefs.json")).unwrap();
     prefs.set(PASSWORD, "unsupported-record").unwrap();
     bootstrap(&prefs).unwrap();
-    assert!(password_credential(&prefs).is_err());
+    assert!(password_credential(&prefs).unwrap().is_none());
     assert_eq!(get_entry(&prefs, PASSWORD).unwrap(), Some(json!("")));
     set_password_login(&prefs, "replacement-password").unwrap();
     assert!(opaque_public_key(&prefs).unwrap().is_some());
@@ -106,7 +106,8 @@ fn authenticate(prefs: &Prefs, password: &str) -> bool {
     let Ok(server_key) = plain_libs::auth::server::public_key(&setup) else {
         return false;
     };
-    let client = plain_libs::auth::client::OpaqueLogin::start(password.as_bytes().to_vec()).unwrap();
+    let client =
+        plain_libs::auth::client::OpaqueLogin::start(password.as_bytes().to_vec()).unwrap();
     let context = plain_libs::auth::context("prefs-test", &identity[32..]);
     let Ok((server, response)) = plain_libs::auth::server::start(
         &setup,
@@ -147,9 +148,7 @@ fn missing_or_replaced_setup_fails_closed_until_local_password_reset() {
     let prefs = Prefs::load(&path).unwrap();
     set_password_login(&prefs, "local-password").unwrap();
     let original = password_credential(&prefs).unwrap().unwrap();
-    prefs
-        .set(PASSWORD, json!({"record":original.record}))
-        .unwrap();
+    prefs.remove(OPAQUE_SERVER_SETUP).unwrap();
     let prefs = Prefs::load(&path).unwrap();
     assert!(password_credential(&prefs).is_err());
     assert!(opaque_public_key(&prefs).is_err());
@@ -157,7 +156,7 @@ fn missing_or_replaced_setup_fails_closed_until_local_password_reset() {
     set_password_login(&prefs, "local-password").unwrap();
     let mut mixed = password_credential(&prefs).unwrap().unwrap();
     mixed.record = original.record;
-    prefs.set(PASSWORD, mixed).unwrap();
+    prefs.set(OPAQUE_PASSWORD_RECORD, mixed.record).unwrap();
     assert!(!authenticate(
         &Prefs::load(&path).unwrap(),
         "local-password"
@@ -181,4 +180,35 @@ fn failed_registration_save_preserves_both_old_setup_and_record() {
     let reloaded = Prefs::load(&path).unwrap();
     assert!(authenticate(&reloaded, "kept-password"));
     assert!(!authenticate(&reloaded, "interrupted-password"));
+}
+
+#[test]
+fn split_storage_does_not_read_the_old_combined_credential() {
+    let prefs = Prefs::in_memory();
+    set_password_login(&prefs, "fixture-password").unwrap();
+    let old = password_credential(&prefs).unwrap().unwrap();
+    prefs.set(PASSWORD, old).unwrap();
+    prefs.remove(OPAQUE_SERVER_SETUP).unwrap();
+    prefs.remove(OPAQUE_PASSWORD_RECORD).unwrap();
+    assert!(password_credential(&prefs).unwrap().is_none());
+    assert!(!authenticate(&prefs, "fixture-password"));
+}
+
+#[test]
+fn either_missing_or_corrupt_credential_half_rejects_login() {
+    let prefs = Prefs::in_memory();
+    set_password_login(&prefs, "fixture-password").unwrap();
+    for key in [OPAQUE_SERVER_SETUP, OPAQUE_PASSWORD_RECORD] {
+        let original = prefs.get::<String>(key).unwrap().unwrap();
+        prefs.remove(key).unwrap();
+        assert!(password_credential(&prefs).is_err());
+        assert!(!authenticate(&prefs, "fixture-password"));
+        for invalid in ["", "%%%", "AAAA"] {
+            prefs.set(key, invalid).unwrap();
+            assert!(password_credential(&prefs).is_err());
+            assert!(!authenticate(&prefs, "fixture-password"));
+        }
+        prefs.set(key, original).unwrap();
+        assert!(authenticate(&prefs, "fixture-password"));
+    }
 }

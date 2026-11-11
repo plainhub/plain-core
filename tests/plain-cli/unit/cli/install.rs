@@ -60,12 +60,12 @@ fn invalid_stored_credentials_fail_without_prompting_or_overwriting_them() {
     let paths = paths(root.path());
     std::fs::create_dir_all(&paths.data_dir).unwrap();
     let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
-    prefs.set("password", 42).unwrap();
+    prefs.set("opaque_server_setup", 42).unwrap();
     assert!(prepare_password(&paths, || panic!("Invalid credentials must not prompt")).is_err());
     assert_eq!(
         Prefs::load(&default_path(&paths.data_dir))
             .unwrap()
-            .get::<u32>("password")
+            .get::<u32>("opaque_server_setup")
             .unwrap(),
         Some(42)
     );

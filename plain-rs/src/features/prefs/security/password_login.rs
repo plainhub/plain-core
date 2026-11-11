@@ -47,19 +47,21 @@ pub(super) fn write_password(map: &mut Map<String, Value>, password: &str) -> Re
             <serde_json::Error as serde::de::Error>::custom("Invalid signing identity"),
         ));
     }
-    let registration =
-        plain_libs::auth::server::register(password.as_bytes(), &pair[32..]).map_err(|_| {
+    let registration = plain_libs::auth::server::register(password.as_bytes(), &pair[32..])
+        .map_err(|_| {
             PrefsError::Encode(<serde_json::Error as serde::ser::Error>::custom(
                 "Password registration failed",
             ))
         })?;
     put(
         map,
-        PASSWORD,
-        PasswordCredential {
-            setup: plain_libs::utils::base64::base64_encode(&registration.setup),
-            record: plain_libs::utils::base64::base64_encode(&registration.record),
-        },
+        OPAQUE_SERVER_SETUP,
+        plain_libs::utils::base64::base64_encode(&registration.setup),
+    )?;
+    put(
+        map,
+        OPAQUE_PASSWORD_RECORD,
+        plain_libs::utils::base64::base64_encode(&registration.record),
     )
 }
 
@@ -84,7 +86,33 @@ pub fn password_setup_required(prefs: &Prefs) -> Result<bool> {
 }
 
 pub fn password_credential(prefs: &Prefs) -> Result<Option<PasswordCredential>> {
-    prefs.get(PASSWORD)
+    let map: Map<String, Value> = prefs.entries().into_iter().collect();
+    let setup: Option<String> = map
+        .get(OPAQUE_SERVER_SETUP)
+        .map(|v| serde_json::from_value(v.clone()).map_err(PrefsError::Decode))
+        .transpose()?;
+    let record: Option<String> = map
+        .get(OPAQUE_PASSWORD_RECORD)
+        .map(|v| serde_json::from_value(v.clone()).map_err(PrefsError::Decode))
+        .transpose()?;
+    let invalid = || {
+        PrefsError::Decode(<serde_json::Error as serde::de::Error>::custom(
+            "Invalid password registration",
+        ))
+    };
+    match (setup, record) {
+        (None, None) => Ok(None),
+        (Some(setup), Some(record)) => {
+            let setup_bytes =
+                plain_libs::utils::base64::base64_decode_checked(&setup).map_err(|_| invalid())?;
+            let record_bytes =
+                plain_libs::utils::base64::base64_decode_checked(&record).map_err(|_| invalid())?;
+            plain_libs::auth::server::validate_registration(&setup_bytes, &record_bytes)
+                .map_err(|_| invalid())?;
+            Ok(Some(PasswordCredential { setup, record }))
+        }
+        _ => Err(invalid()),
+    }
 }
 
 pub fn opaque_public_key(prefs: &Prefs) -> Result<Option<String>> {

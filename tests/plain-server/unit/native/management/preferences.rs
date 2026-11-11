@@ -38,7 +38,20 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
     let management = core.native_management().unwrap();
     let before = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
     let mut events = state.events.subscribe();
-    let generated = management.reset_password().unwrap();
+    let generated = management.generate_password().unwrap();
+    assert_eq!(
+        management.preferences().unwrap()["passwordConfigured"],
+        false
+    );
+    assert!(events.try_recv().is_err());
+    management
+        .set_pref("password", serde_json::json!(&generated))
+        .await
+        .unwrap();
+    assert_eq!(
+        management.preferences().unwrap()["passwordConfigured"],
+        true
+    );
     assert!(management.reset_adb_token().unwrap());
     let after = plain_rs::features::prefs::security::snapshot(&state.prefs).unwrap();
     assert!(before.password.is_empty() && after.password.is_empty());
@@ -406,6 +419,122 @@ async fn derived_native_reads_use_only_their_current_dependencies() {
     assert_eq!(
         management.get_pref(keys::ONBOARDING_COMPLETED).unwrap(),
         json!(true)
+    );
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn password_status_validates_private_storage_and_generation_never_saves() {
+    use plain_rs::features::prefs::{Prefs, pref_keys as keys};
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let core = ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let management = core.native_management().unwrap();
+    let before = state.prefs.entries_sorted();
+    assert_eq!(
+        management.preferences().unwrap()["passwordConfigured"],
+        false
+    );
+    assert_eq!(management.generate_password().unwrap().len(), 6);
+    assert_eq!(state.prefs.entries_sorted(), before);
+    let approval = management.get_pref(keys::LOGIN_REQUIRE_APPROVAL).unwrap();
+    management
+        .set_pref(keys::PASSWORD, serde_json::json!("fixture-password"))
+        .await
+        .unwrap();
+    assert_eq!(
+        management.preferences().unwrap()["passwordConfigured"],
+        true
+    );
+    assert_eq!(management.get_pref(keys::PASSWORD).unwrap(), "");
+    assert_eq!(
+        management.get_pref(keys::LOGIN_REQUIRE_APPROVAL).unwrap(),
+        approval
+    );
+    let unchanged: Vec<_> = state
+        .prefs
+        .entries_sorted()
+        .into_iter()
+        .filter(|(key, _)| key != keys::OPAQUE_SERVER_SETUP && key != keys::OPAQUE_PASSWORD_RECORD)
+        .collect();
+    assert_eq!(unchanged, before);
+    let persisted = Prefs::load(state.prefs.path()).unwrap();
+    assert!(
+        plain_rs::features::prefs::security::password_credential(&persisted)
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        persisted
+            .get::<serde_json::Value>(keys::PASSWORD)
+            .unwrap()
+            .is_none()
+    );
+    for key in [
+        keys::OPAQUE_SERVER_SETUP,
+        keys::OPAQUE_PASSWORD_RECORD,
+        "passwordConfigured",
+    ] {
+        assert!(management.get_pref(key).is_err());
+        assert!(
+            management
+                .set_pref(key, serde_json::json!("forbidden"))
+                .await
+                .is_err()
+        );
+    }
+    for key in [keys::OPAQUE_SERVER_SETUP, keys::OPAQUE_PASSWORD_RECORD] {
+        let original = state.prefs.get::<String>(key).unwrap().unwrap();
+        state.prefs.remove(key).unwrap();
+        assert_eq!(
+            management.preferences().unwrap()["passwordConfigured"],
+            false
+        );
+        state.prefs.set(key, "invalid").unwrap();
+        assert_eq!(
+            management.preferences().unwrap()["passwordConfigured"],
+            false
+        );
+        state.prefs.set(key, original).unwrap();
+        assert_eq!(
+            management.preferences().unwrap()["passwordConfigured"],
+            true
+        );
+    }
+    let before = state.prefs.entries_sorted();
+    let disk = std::fs::read(state.prefs.path()).unwrap();
+    std::fs::create_dir(state.prefs.path().with_extension("json.tmp")).unwrap();
+    assert!(
+        management
+            .set_pref(keys::PASSWORD, serde_json::json!("replacement"))
+            .await
+            .is_err()
+    );
+    assert_eq!(state.prefs.entries_sorted(), before);
+    assert_eq!(std::fs::read(state.prefs.path()).unwrap(), disk);
+    core.stop_core().await;
+}
+
+#[tokio::test]
+async fn invalid_password_registration_does_not_block_startup_or_repair() {
+    use plain_rs::features::prefs::{Prefs, pref_keys as keys};
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let path = plain_rs::features::prefs::default_path(directory.path());
+    let prefs = Prefs::load(&path).unwrap();
+    prefs.set(keys::OPAQUE_SERVER_SETUP, "broken").unwrap();
+    let core = ContentServer::open(directory.path()).unwrap();
+    let management = core.native_management().unwrap();
+    assert_eq!(
+        management.preferences().unwrap()["passwordConfigured"],
+        false
+    );
+    management
+        .set_pref(keys::PASSWORD, serde_json::json!("repaired-password"))
+        .await
+        .unwrap();
+    assert_eq!(
+        management.preferences().unwrap()["passwordConfigured"],
+        true
     );
     core.stop_core().await;
 }

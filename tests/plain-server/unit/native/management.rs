@@ -187,7 +187,7 @@ async fn native_management_handles_reject_every_operation_after_core_shutdown() 
     core.stop_core().await;
     stopped!(core.native_management());
     stopped!(management.restart_http_server(Some(0), Some(0)).await);
-    stopped!(management.reset_password());
+    stopped!(management.generate_password());
     stopped!(management.reset_adb_token());
     stopped!(
         management
@@ -279,6 +279,7 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
                         | plain_rs::features::prefs::pref_keys::UPDATE_INFO
                         | plain_rs::features::prefs::pref_keys::APP_UPDATE_AVAILABLE
                         | plain_rs::features::prefs::pref_keys::ONBOARDING_COMPLETED
+                        | "passwordConfigured"
                 ),
             "Unexpected native preference key: {key}"
         );
@@ -288,6 +289,8 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
         "master_secret",
         "signatureKeyPair",
         "masterSecret",
+        "opaque_server_setup",
+        "opaque_password_record",
     ] {
         assert!(system.get(private).is_none());
     }
