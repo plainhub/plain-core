@@ -392,7 +392,7 @@ fn volume_index_defaults_and_configuration_survive_rebinding_and_disconnect() {
     use crate::infrastructure::db::IndexMode;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("index.db")).unwrap();
-    let id = db.register_volume(directory.path()).unwrap();
+    let id = db.register_volume(directory.path()).unwrap().unwrap();
     let volume = db.volumes().unwrap().remove(0);
     assert_eq!(volume.index_mode, IndexMode::Unconfigured);
     assert!(volume.included_dirs.is_empty());
@@ -404,7 +404,7 @@ fn volume_index_defaults_and_configuration_survive_rebinding_and_disconnect() {
         &["Cache".into()],
     )
     .unwrap();
-    assert_eq!(db.register_volume(directory.path()).unwrap(), id);
+    assert_eq!(db.register_volume(directory.path()).unwrap().unwrap(), id);
     db.with_conn(|conn| conn.execute("UPDATE volumes SET is_available=0 WHERE id=?1", [&id]))
         .unwrap();
     let offline = db.volumes().unwrap().remove(0);
@@ -412,7 +412,7 @@ fn volume_index_defaults_and_configuration_survive_rebinding_and_disconnect() {
     assert_eq!(offline.index_mode, IndexMode::Allowlist);
     assert_eq!(offline.included_dirs, vec!["Photos"]);
     assert_eq!(offline.excluded_dirs, vec!["Cache"]);
-    assert_eq!(db.register_volume(directory.path()).unwrap(), id);
+    assert_eq!(db.register_volume(directory.path()).unwrap().unwrap(), id);
     let online = db.volumes().unwrap().remove(0);
     assert!(online.is_available);
     assert_eq!(online.included_dirs, offline.included_dirs);

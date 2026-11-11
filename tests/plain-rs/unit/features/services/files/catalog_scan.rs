@@ -1200,7 +1200,7 @@ async fn changed_index_directories_refresh_all_shared_media_lists_without_copyin
         .unwrap();
     let catalog = NativeMediaCatalog::new(state.clone());
     catalog.configure_scan_directories(None).unwrap();
-    let volume_id = state.db.register_volume(&folders[0]).unwrap();
+    let volume_id = state.db.register_volume(&folders[0]).unwrap().unwrap();
     for indices in [&[0][..], &[0, 1], &[1]] {
         let included = indices
             .iter()

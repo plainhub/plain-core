@@ -13,7 +13,8 @@ pub fn set_directories(
             .map_err(|error| error.to_string())?;
         let id = db
             .register_volume(&location.path)
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| error.to_string())?
+            .ok_or("Filesystem volume is unavailable")?;
         let relative = crate::infrastructure::db::files::relative_path(
             location
                 .path

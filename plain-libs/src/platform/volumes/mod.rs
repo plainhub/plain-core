@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod apple;
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(any(target_os = "linux", target_os = "android", all(test, unix)))]
 pub mod linux;
 #[cfg(any(target_os = "linux", target_os = "android", test))]
 mod mounts;
@@ -15,6 +15,17 @@ pub struct Volume {
     pub identity: String,
     pub path: PathBuf,
 }
+
+#[derive(Debug)]
+pub struct Unavailable;
+
+impl std::fmt::Display for Unavailable {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Filesystem volume is unavailable")
+    }
+}
+
+impl std::error::Error for Unavailable {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Location {

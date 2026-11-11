@@ -7,8 +7,23 @@ pub fn mounts() -> Result<Vec<Mount>> {
     parse(&std::fs::read_to_string("/proc/self/mountinfo")?)
 }
 
-fn filesystem_uuid(device: &str) -> Result<Option<String>> {
-    let entries = match std::fs::read_dir("/dev/disk/by-uuid") {
+fn device_number(metadata: &std::fs::Metadata) -> String {
+    let device = metadata.rdev() as libc::dev_t;
+    format!("{}:{}", libc::major(device), libc::minor(device))
+}
+
+fn filesystem_uuid(mount: &Mount, directory: &Path) -> Result<Option<String>> {
+    // Anonymous mount devices, such as Btrfs subvolumes, use the source block device number.
+    let device = if mount.device.starts_with("0:") && mount.source.starts_with("/dev/") {
+        match std::fs::metadata(&mount.source) {
+            Ok(metadata) => device_number(&metadata),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        }
+    } else {
+        mount.device.clone()
+    };
+    let entries = match std::fs::read_dir(directory) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error.into()),
@@ -20,12 +35,7 @@ fn filesystem_uuid(device: &str) -> Result<Option<String>> {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(error) => return Err(error.into()),
         };
-        if format!(
-            "{}:{}",
-            libc::major(metadata.rdev()),
-            libc::minor(metadata.rdev())
-        ) == device
-        {
+        if device_number(&metadata) == device {
             return Ok(Some(
                 entry
                     .file_name()
@@ -43,12 +53,23 @@ pub(super) fn containing(path: &Path) -> Result<Volume> {
         .filter(|mount| path.starts_with(&mount.path))
         .max_by_key(|mount| mount.path.components().count())
         .context("No containing filesystem mount")?;
+    volume(
+        mount,
+        Path::new("/dev/disk/by-uuid"),
+        Path::new("/proc/sys/kernel/random/boot_id"),
+    )
+}
+
+fn volume(mount: Mount, uuid_directory: &Path, boot_id: &Path) -> Result<Volume> {
     let identity = if matches!(mount.fs_type.as_str(), "cifs" | "smb3") {
         share_identity(&mount.source)?
-    } else if let Some(uuid) = filesystem_uuid(&mount.device)? {
+    } else if let Some(uuid) = filesystem_uuid(&mount, uuid_directory)? {
         format!("UUID:{}", uuid.to_uppercase())
+    } else if mount.source.starts_with("/dev/") {
+        // Detached block mounts can outlive their device nodes and UUID links.
+        return Err(Unavailable.into());
     } else {
-        let boot = std::fs::read_to_string("/proc/sys/kernel/random/boot_id")?;
+        let boot = std::fs::read_to_string(boot_id)?;
         format!("SESSION:{}:{}", boot.trim(), mount.id)
     };
     let identity = if mount.root == "/" {
@@ -61,3 +82,7 @@ pub(super) fn containing(path: &Path) -> Result<Volume> {
         path: mount.path,
     })
 }
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-libs/unit/platform/volumes/linux.rs"]
+mod tests;

@@ -34,7 +34,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     let native = core.native_graphql().unwrap();
     let source = plain_libs::temporary::tempdir().unwrap();
     let source_path = source.path().canonicalize().unwrap();
-    let id = state.db.register_volume(&source_path).unwrap();
+    let id = state.db.register_volume(&source_path).unwrap().unwrap();
     let query = native.execute(Request::new("{ fileIndexVolumes { id path indexMode includedDirs excludedDirs isAvailable } fileIndexDefaults { excludedDirs excludedNames } }")).await;
     assert!(query.errors.is_empty(), "{:?}", query.errors);
     let data = query.data.into_json().unwrap();

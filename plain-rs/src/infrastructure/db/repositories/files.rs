@@ -92,18 +92,26 @@ pub(crate) fn locate(path: &str) -> rusqlite::Result<Location> {
     volumes::locate(Path::new(path)).map_err(|error| sql_error(error.into_boxed_dyn_error()))
 }
 
+fn available_location(path: &Path) -> rusqlite::Result<Option<Location>> {
+    match volumes::locate(path) {
+        Ok(location) => Ok(Some(location)),
+        Err(error) if error.is::<volumes::Unavailable>() => Ok(None),
+        Err(error) => Err(sql_error(error.into_boxed_dyn_error())),
+    }
+}
+
 fn root_is_current(conn: &Connection, id: &str, old: &Volume) -> rusqlite::Result<bool> {
-    let matches = |path: &Path| {
-        volumes::locate(path)
-            .map(|location| location.volume == *old)
-            .map_err(|error| sql_error(error.into_boxed_dyn_error()))
+    let Some(current) = available_location(&old.path)? else {
+        return Ok(false);
     };
-    if matches(&old.path)? {
+    if current.volume == *old {
         return Ok(true);
     }
     let mut paths = conn.prepare("SELECT path FROM files WHERE volume_id=?1 ORDER BY id")?;
     for path in paths.query_map([id], |row| row.get::<_, String>(0))? {
-        if matches(&old.path.join(path?))? {
+        if available_location(&old.path.join(path?))?
+            .is_some_and(|location| location.volume == *old)
+        {
             return Ok(true);
         }
     }
@@ -542,14 +550,15 @@ impl Db {
             tx.commit()
         })
     }
-    pub fn register_volume(&self, path: &Path) -> rusqlite::Result<String> {
-        let location =
-            volumes::locate(path).map_err(|error| sql_error(error.into_boxed_dyn_error()))?;
+    pub fn register_volume(&self, path: &Path) -> rusqlite::Result<Option<String>> {
+        let Some(location) = available_location(path)? else {
+            return Ok(None);
+        };
         self.with_conn(|conn| {
             let tx = conn.unchecked_transaction()?;
             let (id, _) = bind_volume(&tx, &location)?;
             tx.commit()?;
-            Ok(id)
+            Ok(Some(id))
         })
     }
 
