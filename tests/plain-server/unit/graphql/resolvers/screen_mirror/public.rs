@@ -215,14 +215,14 @@ async fn access_request_carries_the_feature_name() {
     let (_dir, schema) = fixture();
     stub(schema_host(&schema), |method, params| match method {
         "systemRequestAccess" => {
-            assert_eq!(params["feature"], "CALL_LOGS");
+            assert_eq!(params["feature"], "CALLS");
             json!(true)
         }
         "systemOpenAccessibilitySettings" => json!(true),
         other => panic!("unexpected host call {other}"),
     });
     let response = schema
-        .execute(r#"mutation { requestAccess(feature:CALL_LOGS) }"#)
+        .execute(r#"mutation { requestAccess(feature:CALLS) }"#)
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let response = schema
@@ -239,4 +239,18 @@ async fn access_request_requires_a_feature_before_calling_the_host() {
     });
     let response = schema.execute("mutation { requestAccess }").await;
     assert!(!response.errors.is_empty());
+}
+
+#[tokio::test]
+async fn access_feature_rejects_unknown_values_before_host_dispatch() {
+    let (_dir, schema) = fixture();
+    stub(schema_host(&schema), |method, _| {
+        panic!("unexpected host call {method}")
+    });
+    for feature in ["CALL_LOGS", "UNKNOWN"] {
+        let response = schema
+            .execute(format!("mutation {{ requestAccess(feature:{feature}) }}"))
+            .await;
+        assert!(!response.errors.is_empty());
+    }
 }

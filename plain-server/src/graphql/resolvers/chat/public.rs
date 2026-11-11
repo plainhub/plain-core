@@ -112,10 +112,7 @@ pub struct ChatQuery;
 
 #[Object]
 impl ChatQuery {
-    /// Latest-first page of one conversation, returned oldest-to-newest so
-    /// clients can render directly. `target` is the chat target id: a bare
-    /// peer id (an optional `peer:` prefix is accepted), or a
-    /// `channel:<id>` prefixed channel id.
+    /// Messages in chronological order; `target`: `peer:<id>` or `channel:<id>`.
     fn chat_items(
         &self,
         ctx: &Context<'_>,
@@ -157,11 +154,7 @@ pub struct ChatMutation;
 
 #[Object]
 impl ChatMutation {
-    /// Send a chat message. `target` is the chat target id — a bare peer id
-    /// (an optional `peer:` prefix is accepted), or a `channel:<id>`
-    /// prefixed channel id; same value space as the `chatItems` query.
-    /// `content` is the message envelope JSON, same shape as
-    /// `ChatItem.content`.
+    /// Send to `peer:<id>` or `channel:<id>`; `content` uses the `ChatItem.content` JSON envelope.
     async fn send_chat_item(
         &self,
         ctx: &Context<'_>,

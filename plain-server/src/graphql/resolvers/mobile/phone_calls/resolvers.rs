@@ -21,7 +21,7 @@ use plain_rs::infrastructure::host::bridge::Host;
 use serde_json::Value;
 use std::sync::Arc;
 
-const FEATURE: AccessFeature = AccessFeature::CallLogs;
+const FEATURE: AccessFeature = AccessFeature::Calls;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub enum CallType {

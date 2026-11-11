@@ -9,7 +9,7 @@ pub enum AccessFeature {
     Files,
     Contacts,
     Sms,
-    CallLogs,
+    Calls,
     CallPhone,
     PhoneNumber,
     Apps,
@@ -27,7 +27,7 @@ impl AccessFeature {
         Self::Files,
         Self::Contacts,
         Self::Sms,
-        Self::CallLogs,
+        Self::Calls,
         Self::CallPhone,
         Self::PhoneNumber,
         Self::Apps,
@@ -44,7 +44,7 @@ impl AccessFeature {
             Self::Files => "FILES",
             Self::Contacts => "CONTACTS",
             Self::Sms => "SMS",
-            Self::CallLogs => "CALL_LOGS",
+            Self::Calls => "CALLS",
             Self::CallPhone => "CALL_PHONE",
             Self::PhoneNumber => "PHONE_NUMBER",
             Self::Apps => "APPS",
@@ -55,7 +55,7 @@ impl AccessFeature {
     }
     pub fn capability(self) -> Option<&'static str> {
         Some(match self {
-            Self::Contacts | Self::Sms | Self::CallLogs | Self::CallPhone | Self::PhoneNumber => {
+            Self::Contacts | Self::Sms | Self::Calls | Self::CallPhone | Self::PhoneNumber => {
                 "TELEPHONY"
             }
             Self::Apps => "PACKAGES",
@@ -75,3 +75,7 @@ impl AccessFeature {
             .find(|feature| feature.as_str() == value)
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/plain-rs/unit/features/access.rs"]
+mod tests;

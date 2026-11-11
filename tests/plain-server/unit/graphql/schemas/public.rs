@@ -892,3 +892,37 @@ fn closed_fields_keep_named_enums_and_required_wrappers() {
         assert_eq!(actual, expected, "{name}");
     }
 }
+
+#[test]
+fn access_feature_contract_has_exact_values_and_wrappers() {
+    let sdl = sdl();
+    let body = sdl
+        .split("enum AccessFeature {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    let values: Vec<_> = body.split_whitespace().collect();
+    assert_eq!(
+        values,
+        [
+            "IMAGES",
+            "VIDEOS",
+            "AUDIO",
+            "DOCS",
+            "FILES",
+            "CONTACTS",
+            "SMS",
+            "CALLS",
+            "CALL_PHONE",
+            "PHONE_NUMBER",
+            "APPS",
+            "NOTIFICATIONS",
+            "CLIPBOARD",
+            "ADB"
+        ]
+    );
+    assert!(sdl.contains("access: [AccessFeature!]!"));
+    assert!(sdl.contains("requestAccess(feature: AccessFeature!): Boolean!"));
+}
