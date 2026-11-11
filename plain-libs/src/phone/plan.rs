@@ -1,6 +1,6 @@
 use super::number::NumberType;
 use crate::regex::{self, Captures, Regex};
-use crate::compression::read::GzDecoder;
+use crate::compression::bufread::GzDecoder;
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,

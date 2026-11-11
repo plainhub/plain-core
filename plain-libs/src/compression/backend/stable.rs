@@ -74,18 +74,7 @@ impl Inflate {
         self.total_out = 0;
         crate::compression::backend::inflate::reset_with_config(&mut self.inner, config);
     }
-    pub fn decompress(
-        &mut self,
-        input: &[u8],
-        output: &mut [u8],
-        flush: InflateFlush,
-    ) -> Result<Status, InflateError> {
-        self.decompress_uninit(
-            input,
-            unsafe { &mut *(output as *mut _ as *mut [MaybeUninit<u8>]) },
-            flush,
-        )
-    }
+
     pub fn decompress_uninit(
         &mut self,
         input: &[u8],
@@ -199,18 +188,7 @@ impl Deflate {
         self.total_out = 0;
         crate::compression::backend::deflate::reset(&mut self.inner);
     }
-    pub fn compress(
-        &mut self,
-        input: &[u8],
-        output: &mut [u8],
-        flush: DeflateFlush,
-    ) -> Result<Status, DeflateError> {
-        self.compress_uninit(
-            input,
-            unsafe { &mut *(output as *mut _ as *mut [MaybeUninit<u8>]) },
-            flush,
-        )
-    }
+
     pub fn compress_uninit(
         &mut self,
         input: &[u8],

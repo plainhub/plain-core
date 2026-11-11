@@ -123,3 +123,122 @@ fn gzip_size_mismatch_and_truncated_streams_are_rejected() {
         );
     }
 }
+
+#[test]
+fn codecs_write_uninitialized_output_without_clearing_unused_capacity() {
+    use std::mem::MaybeUninit;
+    let mut encoder = Compress::new(Compression::default(), true);
+    let mut compressed = vec![MaybeUninit::new(0xA5u8); PAYLOAD.len() * 2];
+    assert_eq!(
+        encoder
+            .compress_uninit(PAYLOAD, &mut compressed, FlushCompress::Finish)
+            .unwrap(),
+        Status::StreamEnd
+    );
+    assert_eq!(encoder.total_in() as usize, PAYLOAD.len());
+    let written = encoder.total_out() as usize;
+    assert!(
+        compressed[compressed.len() - 4096..]
+            .iter()
+            .all(|b| unsafe { b.assume_init() } == 0xA5)
+    );
+    let encoded = compressed[..written]
+        .iter()
+        .map(|b| unsafe { b.assume_init() })
+        .collect::<Vec<_>>();
+    let mut decoded = Vec::new();
+    read::ZlibDecoder::new(&encoded[..])
+        .read_to_end(&mut decoded)
+        .unwrap();
+    assert_eq!(decoded, PAYLOAD);
+    let mut decoder = Decompress::new(true);
+    let mut output = vec![MaybeUninit::new(0x5Au8); PAYLOAD.len() * 2];
+    assert_eq!(
+        decoder
+            .decompress_uninit(ZLIB, &mut output, FlushDecompress::Finish)
+            .unwrap(),
+        Status::StreamEnd
+    );
+    assert_eq!(decoder.total_in() as usize, ZLIB.len());
+    assert_eq!(decoder.total_out() as usize, PAYLOAD.len());
+    let bytes = output[..PAYLOAD.len()]
+        .iter()
+        .map(|b| unsafe { b.assume_init() })
+        .collect::<Vec<_>>();
+    assert_eq!(bytes, PAYLOAD);
+    assert!(
+        output[output.len() - 4096..]
+            .iter()
+            .all(|b| unsafe { b.assume_init() } == 0x5A)
+    );
+}
+#[test]
+fn codec_adapters_have_no_duplicate_counter_storage() {
+    assert_eq!(
+        std::mem::size_of::<super::ffi::Deflate>(),
+        std::mem::size_of::<super::backend::Deflate>()
+    );
+    assert_eq!(
+        std::mem::size_of::<super::ffi::Inflate>(),
+        std::mem::size_of::<super::backend::Inflate>()
+    );
+}
+#[test]
+fn partial_codec_calls_keep_byte_totals_and_reset_state() {
+    let mut encoder = Compress::new(Compression::fast(), true);
+    let mut compressed = Vec::new();
+    let mut chunk = [0u8; 113];
+    loop {
+        let before = encoder.total_out();
+        let input = encoder.total_in() as usize;
+        let status = encoder
+            .compress(&PAYLOAD[input..], &mut chunk, FlushCompress::Finish)
+            .unwrap();
+        compressed.extend_from_slice(&chunk[..(encoder.total_out() - before) as usize]);
+        assert_eq!(encoder.total_out() as usize, compressed.len());
+        if status == Status::StreamEnd {
+            break;
+        }
+    }
+    assert_eq!(encoder.total_in() as usize, PAYLOAD.len());
+    encoder.reset();
+    assert_eq!((encoder.total_in(), encoder.total_out()), (0, 0));
+    let mut decoder = Decompress::new(true);
+    let mut output = Vec::new();
+    loop {
+        let before = decoder.total_out();
+        let input = decoder.total_in() as usize;
+        let status = decoder
+            .decompress(&compressed[input..], &mut chunk, FlushDecompress::Finish)
+            .unwrap();
+        output.extend_from_slice(&chunk[..(decoder.total_out() - before) as usize]);
+        assert_eq!(decoder.total_out() as usize, output.len());
+        if status == Status::StreamEnd {
+            break;
+        }
+    }
+    assert_eq!(decoder.total_in() as usize, compressed.len());
+    assert_eq!(output, PAYLOAD);
+    decoder.reset(true);
+    assert_eq!((decoder.total_in(), decoder.total_out()), (0, 0));
+}
+
+#[test]
+fn in_memory_readers_borrow_compressed_bytes_and_preserve_the_trailing_slice() {
+    let mut zlib = bufread::ZlibDecoder::new(ZLIB);
+    assert_eq!(zlib.get_ref().as_ptr(), ZLIB.as_ptr());
+    assert_eq!(zlib.get_ref().len(), ZLIB.len());
+    let mut decoded = Vec::new();
+    zlib.read_to_end(&mut decoded).unwrap();
+    assert_eq!(decoded, PAYLOAD);
+    let mut input = GZIP.to_vec();
+    input.extend_from_slice(b"tail");
+    let mut gzip = bufread::GzDecoder::new(input.as_slice());
+    assert_eq!(gzip.get_ref().as_ptr(), input[10..].as_ptr());
+    decoded.clear();
+    gzip.read_to_end(&mut decoded).unwrap();
+    assert_eq!(decoded, PAYLOAD);
+    let tail = gzip.into_inner();
+    assert_eq!(tail, b"tail");
+    assert_eq!(tail.as_ptr(), input[GZIP.len()..].as_ptr());
+}

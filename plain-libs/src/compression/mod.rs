@@ -21,6 +21,8 @@ pub mod write {
 }
 pub mod bufread {
     pub use crate::compression::deflate::bufread::DeflateDecoder;
+    pub use crate::compression::gz::bufread::GzDecoder;
+    pub use crate::compression::zlib::bufread::ZlibDecoder;
 }
 
 pub struct Compression(u32);

@@ -129,3 +129,9 @@ impl ReturnCode {
         }
     }
 }
+
+#[inline]
+pub(super) fn as_uninit(output: &mut [u8]) -> &mut [core::mem::MaybeUninit<u8>] {
+    // Initialized bytes may be borrowed as uninitialized storage with the same layout and lifetime.
+    unsafe { core::slice::from_raw_parts_mut(output.as_mut_ptr().cast(), output.len()) }
+}

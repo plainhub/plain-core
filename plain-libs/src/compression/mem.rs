@@ -91,7 +91,8 @@ impl Compress {
         output: &mut [u8],
         flush: FlushCompress,
     ) -> Result<Status, CompressError> {
-        self.inner.compress(input, output, flush)
+        self.inner
+            .compress_uninit(input, crate::compression::backend::as_uninit(output), flush)
     }
 }
 impl Decompress {
@@ -113,7 +114,8 @@ impl Decompress {
         output: &mut [u8],
         flush: FlushDecompress,
     ) -> Result<Status, DecompressError> {
-        self.inner.decompress(input, output, flush)
+        self.inner
+            .decompress_uninit(input, crate::compression::backend::as_uninit(output), flush)
     }
 
     pub fn reset(&mut self, zlib_header: bool) {

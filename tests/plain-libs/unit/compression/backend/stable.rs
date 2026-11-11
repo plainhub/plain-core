@@ -10,7 +10,11 @@ fn deflate_reset_reuses_state_window_and_hash_allocations() {
     let mut output = vec![0; input.len() * 2 + 1024];
     assert_eq!(
         encoder
-            .compress(&input, &mut output, DeflateFlush::Finish)
+            .compress_uninit(
+                &input,
+                crate::compression::backend::as_uninit(&mut output),
+                DeflateFlush::Finish
+            )
             .unwrap(),
         Status::StreamEnd
     );
@@ -22,7 +26,11 @@ fn deflate_reset_reuses_state_window_and_hash_allocations() {
     assert_eq!(encoder.inner.state.head.as_ptr(), head);
     assert_eq!(
         encoder
-            .compress(&input, &mut output, DeflateFlush::Finish)
+            .compress_uninit(
+                &input,
+                crate::compression::backend::as_uninit(&mut output),
+                DeflateFlush::Finish
+            )
             .unwrap(),
         Status::StreamEnd
     );

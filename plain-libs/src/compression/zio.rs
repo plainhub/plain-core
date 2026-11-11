@@ -10,6 +10,7 @@ pub struct Writer<W: Write, D: Ops> {
     obj: Option<W>,
     pub data: D,
     buf: Vec<u8>,
+    pending_start: usize,
 }
 pub trait Ops {
     type Error: Into<io::Error>;
@@ -154,6 +155,7 @@ impl<W: Write, D: Ops> Writer<W, D> {
             obj: Some(w),
             data: d,
             buf: Vec::with_capacity(32 * 1024),
+            pending_start: 0,
         }
     }
     pub fn finish(&mut self) -> io::Result<()> {
@@ -170,6 +172,7 @@ impl<W: Write, D: Ops> Writer<W, D> {
     }
     pub fn replace(&mut self, w: W) -> W {
         self.buf.clear();
+        self.pending_start = 0;
         mem::replace(self.get_mut(), w)
     }
     pub fn get_ref(&self) -> &W {
@@ -204,13 +207,19 @@ impl<W: Write, D: Ops> Writer<W, D> {
         }
     }
     fn dump(&mut self) -> io::Result<()> {
-        while !self.buf.is_empty() {
-            let n = self.obj.as_mut().unwrap().write(&self.buf)?;
+        while self.pending_start < self.buf.len() {
+            let n = self
+                .obj
+                .as_mut()
+                .unwrap()
+                .write(&self.buf[self.pending_start..])?;
             if n == 0 {
                 return Err(io::ErrorKind::WriteZero.into());
             }
-            self.buf.drain(..n);
+            self.pending_start += n;
         }
+        self.buf.clear();
+        self.pending_start = 0;
         Ok(())
     }
 }
@@ -219,6 +228,9 @@ impl<W: Write, D: Ops> Write for Writer<W, D> {
         self.write_with_status(buf).map(|res| res.0)
     }
     fn flush(&mut self) -> io::Result<()> {
+        if self.pending_start != 0 {
+            self.dump()?;
+        }
         self.data
             .run_vec(&[], &mut self.buf, Flush::sync())
             .map_err(Into::into)?;
@@ -242,3 +254,7 @@ impl<W: Write, D: Ops> Drop for Writer<W, D> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/plain-libs/unit/compression/zio.rs"]
+mod tests;
