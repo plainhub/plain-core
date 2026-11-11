@@ -112,10 +112,9 @@ async fn authenticated_reply_accepts_discovery_refresh_and_rejects_revoked_pairi
             )
             .unwrap();
         }
-        let bytes =
-            crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &body)
-                .encrypt(&[7; 32], br#"{"data":{"message":true}}"#)
-                .unwrap();
+        let bytes = crate::infrastructure::transport::http_response::Context::new(&body)
+            .encrypt(&[7; 32], br#"{"data":{"message":true}}"#)
+            .unwrap();
         let reply = state.ble_transport.reply_for_test(
             &exchange["params"],
             crate::infrastructure::protocols::ble::response(200, &bytes).unwrap(),
@@ -191,15 +190,13 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
                         .unwrap(),
                         b"signed request"
                     );
-                    let bytes = crate::infrastructure::transport::http_response::Context::new(
-                        "/peer_graphql",
-                        &body,
-                    )
-                    .encrypt(
-                        &[7; 32],
-                        br#"{"errors":[{"message":"business rejection"}]}"#,
-                    )
-                    .unwrap();
+                    let bytes =
+                        crate::infrastructure::transport::http_response::Context::new(&body)
+                            .encrypt(
+                                &[7; 32],
+                                br#"{"errors":[{"message":"business rejection"}]}"#,
+                            )
+                            .unwrap();
                     json!({"id":request["id"],"result":ble.reply_for_test(&request["params"],crate::infrastructure::protocols::ble::response(200,&bytes).unwrap())})
                 }
                 _ => panic!("{request}"),

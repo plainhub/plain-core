@@ -137,8 +137,7 @@ pub async fn deliver_signed<T: PeerTransport + ?Sized>(
         return Err("encrypt failed".to_string());
     };
 
-    let context =
-        crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &encrypted);
+    let context = crate::infrastructure::transport::http_response::Context::new(&encrypted);
     let mut errors = Vec::new();
 
     for peer_graphql_url in peer_graphql_urls {
@@ -292,8 +291,7 @@ pub async fn deliver_channel_system_message<T: PeerTransport>(
         return false;
     };
 
-    let context =
-        crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &encrypted);
+    let context = crate::infrastructure::transport::http_response::Context::new(&encrypted);
     for url in peer_graphql_urls(peer) {
         let resp = transport
             .post(&url, client_id, channel_id_opt, &encrypted)

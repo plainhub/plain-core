@@ -152,12 +152,9 @@ async fn encrypted_delivery_requires_a_true_acknowledgement() {
                     .is_some()
                 );
                 Ok(
-                    crate::infrastructure::transport::http_response::Context::new(
-                        "/peer_graphql",
-                        body,
-                    )
-                    .encrypt(&[7; 32], self.0.as_bytes())
-                    .unwrap(),
+                    crate::infrastructure::transport::http_response::Context::new(body)
+                        .encrypt(&[7; 32], self.0.as_bytes())
+                        .unwrap(),
                 )
             }
         }

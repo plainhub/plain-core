@@ -172,8 +172,7 @@ pub async fn aware_send(
         body.as_bytes(),
     )
     .ok_or_else(|| Failure::Fatal("Invalid peer key".into()))?;
-    let context =
-        crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &encrypted);
+    let context = crate::infrastructure::transport::http_response::Context::new(&encrypted);
     let response = aware(state, peer, "POST", "/peer_graphql", channel, encrypted).await?;
     async {
         let status = response.status;
@@ -243,8 +242,7 @@ pub async fn ble_send(
         body.as_bytes(),
     )
     .ok_or_else(|| Failure::Fatal("Invalid peer key".into()))?;
-    let context =
-        crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &encrypted);
+    let context = crate::infrastructure::transport::http_response::Context::new(&encrypted);
     let response = ble(
         state,
         peer,

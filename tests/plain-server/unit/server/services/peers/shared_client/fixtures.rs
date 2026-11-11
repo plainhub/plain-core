@@ -69,7 +69,7 @@ pub(super) async fn tls() -> (
                 release.notified().await;
             }
             let info = json!({"data":{"sharedInfo":{"name":"current","readOnly":true,"requiresPassword":false,"expiresAt":null,"urlToken":plain_libs::utils::base64::base64_encode(&[8;32]),"entries":[{"name":"a 中文.txt","relativePath":"folder/ +?#中文%","isDir":false,"size":8,"mimeType":"text/plain","hasThumb":false}]}}});
-            plain_rs::infrastructure::transport::http_response::Context::new("/guest_graphql", &body).encrypt(&[7;32], info.to_string().as_bytes()).unwrap()
+            plain_rs::infrastructure::transport::http_response::Context::new(&body).encrypt(&[7;32], info.to_string().as_bytes()).unwrap()
         }
     })).route("/fs", get(|Query(params): Query<std::collections::HashMap<String, String>>| async move {
         let (scope,payload)=plain_rs::features::files::resource_link::parse(&params["id"]).unwrap();

@@ -190,10 +190,9 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .await
         .unwrap();
     assert_eq!(response.status(), 200);
-    let content =
-        plain_rs::infrastructure::transport::http_response::Context::new("/peer_graphql", &body)
-            .decrypt(&key, &response.bytes().await.unwrap())
-            .unwrap();
+    let content = plain_rs::infrastructure::transport::http_response::Context::new(&body)
+        .decrypt(&key, &response.bytes().await.unwrap())
+        .unwrap();
     let content: Value = serde_json::from_slice(&content).unwrap();
     assert!(content.get("errors").is_none(), "{content}");
     let id = content["data"]["renamed"][0]["id"].as_str().unwrap();
@@ -223,12 +222,9 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             .await
             .unwrap();
         let content: Value = serde_json::from_slice(
-            &plain_rs::infrastructure::transport::http_response::Context::new(
-                "/peer_graphql",
-                &body,
-            )
-            .decrypt(&key, &response.bytes().await.unwrap())
-            .unwrap(),
+            &plain_rs::infrastructure::transport::http_response::Context::new(&body)
+                .decrypt(&key, &response.bytes().await.unwrap())
+                .unwrap(),
         )
         .unwrap();
         assert_eq!(content["data"]["startAware"], expected);
@@ -243,7 +239,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .await
         .unwrap();
     let content: Value = serde_json::from_slice(
-        &plain_rs::infrastructure::transport::http_response::Context::new("/peer_graphql", &body)
+        &plain_rs::infrastructure::transport::http_response::Context::new(&body)
             .decrypt(&key, &response.bytes().await.unwrap())
             .unwrap(),
     )
@@ -283,7 +279,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .await
         .unwrap();
     let content: Value = serde_json::from_slice(
-        &plain_rs::infrastructure::transport::http_response::Context::new("/peer_graphql", &body)
+        &plain_rs::infrastructure::transport::http_response::Context::new(&body)
             .decrypt(&key, &response.bytes().await.unwrap())
             .unwrap(),
     )

@@ -66,8 +66,7 @@ pub async fn exchange(
     let encrypted =
         crate::infrastructure::transport::http_request::encrypt(key, "/graphql", request)
             .map_err(|_| plain_libs::anyhow::anyhow!("invalid_session"))?;
-    let context =
-        crate::infrastructure::transport::http_response::Context::new("/graphql", &encrypted);
+    let context = crate::infrastructure::transport::http_response::Context::new(&encrypted);
     let response = outgoing
         .header("content-type", "application/octet-stream")
         .body(encrypted)

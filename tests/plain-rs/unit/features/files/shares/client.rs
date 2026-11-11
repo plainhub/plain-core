@@ -84,8 +84,7 @@ fn guest_response_never_accepts_unauthenticated_data_or_invalid_file_tokens() {
     .unwrap();
     let plain=json!({"data":{"sharedInfo":{"name":"share","readOnly":true,"requiresPassword":false,"expiresAt":null,"urlToken":plain_libs::utils::base64::base64_encode(&[8;32]),"entries":[]}}}).to_string();
     let request = link.request(None).unwrap();
-    let context =
-        crate::infrastructure::transport::http_response::Context::new("/guest_graphql", &request);
+    let context = crate::infrastructure::transport::http_response::Context::new(&request);
     assert!(link.response(&request, plain.as_bytes()).is_err());
     assert_eq!(
         link.response(

@@ -144,8 +144,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let response =
-        http_request::decrypt_response(&key, "/graphql", &body, &response.bytes().await.unwrap())
-            .unwrap();
+        http_request::decrypt_response(&key, &body, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&response).unwrap()["data"]["app"]["clientId"],
         b_id
@@ -303,8 +302,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let response = post(chunks.clone()).send().await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let plaintext =
-        http_request::decrypt_response(&key, "/graphql", &chunks, &response.bytes().await.unwrap())
-            .unwrap();
+        http_request::decrypt_response(&key, &chunks, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&plaintext).unwrap()["data"]["uploadedChunks"],
         json!([format!("0:{}", data.len())])
@@ -317,8 +315,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     .unwrap();
     let response = post(clean.clone()).send().await.unwrap();
     let plaintext =
-        http_request::decrypt_response(&key, "/graphql", &clean, &response.bytes().await.unwrap())
-            .unwrap();
+        http_request::decrypt_response(&key, &clean, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&plaintext).unwrap()["data"]["deleteChunks"],
         true
@@ -392,8 +389,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     .unwrap();
     let response = post(chunks.clone()).send().await.unwrap();
     let plaintext =
-        http_request::decrypt_response(&key, "/graphql", &chunks, &response.bytes().await.unwrap())
-            .unwrap();
+        http_request::decrypt_response(&key, &chunks, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&plaintext).unwrap()["errors"][0]["message"],
         "no_permission"

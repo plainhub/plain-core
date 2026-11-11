@@ -498,7 +498,7 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
                     let (release, wait) = oneshot::channel();
                     arrived.send(release).unwrap();
                     let _ = wait.await;
-                    http_response::Context::new("/graphql", &body)
+                    http_response::Context::new(&body)
                         .encrypt(&key, br#"{"data":{"deleteChunks":true}}"#)
                         .unwrap()
                 }

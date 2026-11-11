@@ -135,8 +135,7 @@ async fn approved_web_login_encrypted_response_and_token_auth_survive_restart() 
         plaintext.as_bytes(),
     )
     .unwrap();
-    let context =
-        plain_rs::infrastructure::transport::http_response::Context::new("/graphql", &encrypted);
+    let context = plain_rs::infrastructure::transport::http_response::Context::new(&encrypted);
     let response = graphql::call(
         State(state.clone()),
         headers.clone(),

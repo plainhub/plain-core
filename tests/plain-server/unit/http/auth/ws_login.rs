@@ -869,8 +869,7 @@ async fn first_password_login_completes_without_owner_approval() {
             payload.as_bytes(),
         )
         .unwrap();
-        let context =
-            plain_rs::infrastructure::transport::http_response::Context::new("/graphql", &frame);
+        let context = plain_rs::infrastructure::transport::http_response::Context::new(&frame);
         let response = crate::http::graphql::call(
             axum::extract::State(state),
             headers,

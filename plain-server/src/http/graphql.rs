@@ -160,10 +160,9 @@ async fn execute(
     )
     .await?;
     let mut response = if token_mode {
-        let encrypted =
-            plain_rs::infrastructure::transport::http_response::Context::new("/graphql", &body)
-                .encrypt(&key, &result)
-                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let encrypted = plain_rs::infrastructure::transport::http_response::Context::new(&body)
+            .encrypt(&key, &result)
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
         encrypted.into_response()
     } else {
         result.into_response()
@@ -285,8 +284,7 @@ async fn execute_guest(state: &ServerState, id: &str, body: &[u8]) -> (u16, Vec<
         Some(p) if !p.is_empty() => p,
         _ => return (401, vec![]),
     };
-    let context =
-        plain_rs::infrastructure::transport::http_response::Context::new("/guest_graphql", body);
+    let context = plain_rs::infrastructure::transport::http_response::Context::new(body);
     let now = plain_libs::chrono::Utc::now().timestamp_millis();
     let body = match state.guest_replay.admit(&state.db, id, &plain, now) {
         Ok(p) => p,

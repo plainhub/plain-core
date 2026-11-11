@@ -247,8 +247,7 @@ async fn fs_burst_and_page_cancellation(
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.version(), http_client::Version::HTTP_11);
-    let context =
-        plain_rs::infrastructure::transport::http_response::Context::new("/graphql", &body);
+    let context = plain_rs::infrastructure::transport::http_response::Context::new(&body);
     let bytes = response.bytes().await.unwrap();
     let decoded = context.decrypt(key, &bytes).unwrap();
     let response: Value = serde_json::from_slice(&decoded).unwrap();
@@ -349,10 +348,9 @@ async fn fs_burst_and_page_cancellation(
     for (response, request) in responses.iter().zip(&requests) {
         assert_eq!(response["status"], 200);
         let bytes = plain_libs::utils::base64::base64_decode(response["body"].as_str().unwrap());
-        let decoded =
-            plain_rs::infrastructure::transport::http_response::Context::new("/graphql", request)
-                .decrypt(key, &bytes)
-                .unwrap();
+        let decoded = plain_rs::infrastructure::transport::http_response::Context::new(request)
+            .decrypt(key, &bytes)
+            .unwrap();
         let result: Value = serde_json::from_slice(&decoded).unwrap();
         assert_eq!(result["data"]["noteCount"], 0);
         assert!(result.get("errors").is_none());

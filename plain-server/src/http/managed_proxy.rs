@@ -279,8 +279,7 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
         }
         Err(_) => return StatusCode::BAD_GATEWAY.into_response(),
     };
-    let Some(encrypted) = http_response::Context::new("/graphql", &body).encrypt(&key, &response)
-    else {
+    let Some(encrypted) = http_response::Context::new(&body).encrypt(&key, &response) else {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
     (

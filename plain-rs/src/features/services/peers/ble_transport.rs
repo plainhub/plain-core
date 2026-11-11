@@ -92,9 +92,8 @@ pub fn test_reply(
     let Request::PeerGraphql { body: request, .. } = runtime.request_for_test(params) else {
         panic!("Expected peer request")
     };
-    let body =
-        crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &request)
-            .encrypt(key, value.to_string().as_bytes())
-            .unwrap();
+    let body = crate::infrastructure::transport::http_response::Context::new(&request)
+        .encrypt(key, value.to_string().as_bytes())
+        .unwrap();
     runtime.reply_for_test(params, ble::response(200, &body).unwrap())
 }

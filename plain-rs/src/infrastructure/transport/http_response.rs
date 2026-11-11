@@ -3,10 +3,8 @@ use sha2::{Digest, Sha256};
 pub struct Context(Vec<u8>);
 
 impl Context {
-    pub fn new(endpoint: &str, request: &[u8]) -> Self {
-        let mut aad = b"plain-http-response-v1\0".to_vec();
-        aad.extend_from_slice(endpoint.as_bytes());
-        aad.push(0);
+    pub fn new(request: &[u8]) -> Self {
+        let mut aad = b"r\0".to_vec();
         aad.extend_from_slice(&Sha256::digest(request));
         Self(aad)
     }

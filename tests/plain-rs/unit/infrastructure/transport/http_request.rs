@@ -15,21 +15,20 @@ fn encrypts_the_existing_replay_envelope_with_fresh_nonces() {
 }
 
 #[test]
-fn response_authentication_binds_key_endpoint_and_request() {
+fn response_authentication_binds_key_and_request() {
     let token = plain_libs::crypto::gen_token();
     let key = plain_libs::utils::base64::base64_decode(&token);
     let first = encrypt(&key, "/graphql", "first").unwrap();
     let second = encrypt(&key, "/graphql", "second").unwrap();
-    let response = super::super::http_response::Context::new("/graphql", &first)
+    let response = super::super::http_response::Context::new(&first)
         .encrypt(&key, b"response")
         .unwrap();
     assert_eq!(
-        decrypt_response(&key, "/graphql", &first, &response).unwrap(),
+        decrypt_response(&key, &first, &response).unwrap(),
         b"response"
     );
-    assert!(decrypt_response(&key, "/graphql", &second, &response).is_err());
-    assert!(decrypt_response(&key, "/other", &first, &response).is_err());
-    assert!(decrypt_response(&[8; 32], "/graphql", &first, &response).is_err());
+    assert!(decrypt_response(&key, &second, &response).is_err());
+    assert!(decrypt_response(&[8; 32], &first, &response).is_err());
     assert!(encrypt(b"invalid", "/graphql", "payload").is_err());
 }
 

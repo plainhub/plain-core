@@ -78,12 +78,9 @@ impl Link {
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Cannot encrypt shared request"))
     }
     pub fn response(&self, request: &[u8], bytes: &[u8]) -> Result<Info> {
-        let plain = crate::infrastructure::transport::http_response::Context::new(
-            "/guest_graphql",
-            request,
-        )
-        .decrypt(&self.key()?, bytes)
-        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid shared response authentication"))?;
+        let plain = crate::infrastructure::transport::http_response::Context::new(request)
+            .decrypt(&self.key()?, bytes)
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid shared response authentication"))?;
         let response: Value = serde_json::from_slice(&plain)?;
         if let Some(error) = response
             .get("errors")

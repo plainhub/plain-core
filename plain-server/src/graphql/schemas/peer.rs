@@ -158,8 +158,7 @@ pub(crate) async fn execute(
             channel_id: channel_id.into(),
         }))
         .await;
-    let context =
-        plain_rs::infrastructure::transport::http_response::Context::new("/peer_graphql", body);
+    let context = plain_rs::infrastructure::transport::http_response::Context::new(body);
     match serde_json::to_vec(&response) {
         Ok(body) => context
             .encrypt(&key, &body)

@@ -24,11 +24,10 @@ pub fn encrypt(key: &[u8], endpoint: &str, payload: &str) -> Result<Vec<u8>, &'s
 
 pub fn decrypt_response(
     key: &[u8],
-    endpoint: &str,
     request: &[u8],
     response: &[u8],
 ) -> Result<Vec<u8>, &'static str> {
-    super::http_response::Context::new(endpoint, request)
+    super::http_response::Context::new(request)
         .decrypt(key, response)
         .ok_or("Invalid encrypted HTTP response")
 }

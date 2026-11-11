@@ -58,8 +58,7 @@ pub async fn send(
         body.as_bytes(),
     )
     .ok_or_else(|| Failure::Fatal("Invalid peer encryption key".into()))?;
-    let context =
-        crate::infrastructure::transport::http_response::Context::new("/peer_graphql", &cipher);
+    let context = crate::infrastructure::transport::http_response::Context::new(&cipher);
     let response = state
         .lan
         .client
