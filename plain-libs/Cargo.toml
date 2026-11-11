@@ -18,9 +18,9 @@ description = "Reusable cryptography, media, file, format and native components"
 "html" = []
 "xml" = ["dep:memchr"]
 "regex" = ["dep:memchr"]
-"phone" = ["regex", "dep:flate2", "dep:serde_json"]
+"phone" = ["regex", "compression", "dep:serde_json"]
 "phone-batch" = ["phone", "tokio/rt"]
-"media" = ["time", "dep:encoding_rs", "dep:flate2"]
+"media" = ["time", "encoding", "compression"]
 "thumbnails" = ["dep:heic-rs", "dep:rav1d", "media", "crypto", "image", "tokio/rt", "tokio/process", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util", "dep:thiserror"]
 "filesystem" = ["time", "tokio/fs", "tokio/rt", "tokio/time"]
 "watch" = ["filesystem", "tokio/net"]
@@ -47,17 +47,17 @@ description = "Reusable cryptography, media, file, format and native components"
 "system-metrics" = []
 "windows-video" = ["media"]
 
-"image" = ["dep:bytemuck", "dep:num-traits", "dep:bitflags", "dep:crc32fast", "dep:miniz_oxide", "dep:simd-adler32", "dep:flate2"]
-"zip" = ["dep:crc32fast", "dep:indexmap", "dep:memchr", "dep:flate2"]
+"image" = ["dep:num-traits", "dep:bitflags", "compression"]
+"zip" = ["dep:indexmap", "dep:memchr", "compression"]
+
+"compression" = ["dep:cfg-if"]
+"encoding" = ["dep:cfg-if"]
 
 [dependencies]
-bytemuck = { version = "=1.25.2", default-features = false, features = ["extern_crate_alloc"], optional = true }
+cfg-if = { version = "=1.0.5", optional = true }
 num-traits = { version = "=0.2.19", optional = true }
 bitflags = { version = "=2.13.2", optional = true }
-crc32fast = { version = "=1.5.2", optional = true }
 indexmap = { version = "=2.14.2", optional = true }
-miniz_oxide = { version = "=0.8.9", optional = true }
-simd-adler32 = { version = "=0.3.10", optional = true }
 
 opaque-ke = { version = "=4.1.0-pre.2", default-features = false, features = ["ristretto255", "argon2"], optional = true }
 rand_core = { version = "=0.6.4", features = ["getrandom"], optional = true }
@@ -81,9 +81,7 @@ zeroize = { version = "1.9", optional = true }
 "pbkdf2" = { version = "=0.13.0", default-features = false, features = ["sha2"], optional = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util", "sync"] }
 "rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "backup", "cache"], "optional" = true }
-"flate2" = { version = "1", optional = true }
 "serde_json" = { "version" = "1", "optional" = true }
-"encoding_rs" = { "version" = "=0.8.42", "optional" = true }
 "chacha20poly1305" = { "version" = "0.10", "optional" = true }
 "p256" = { "version" = "0.14", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
 "ed25519-dalek" = { "version" = "2", "optional" = true }
@@ -120,7 +118,6 @@ zeroize = { version = "1.9", optional = true }
 "cc" = { version = "1", optional = true }
 
 [dev-dependencies]
-"flate2" = "=1.1.10"
 "serde_json" = "1"
 "tokio" = { version = "1", features = ["full", "test-util"] }
 

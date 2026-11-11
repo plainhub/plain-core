@@ -1,0 +1,8 @@
+{
+  "package": "zlib-rs",
+  "version": "0.6.8",
+  "repository": "https://github.com/trifectatechfoundation/zlib-rs",
+  "revision": "0254e07204884bfc902d6ebb68c8b703d0ea49cf",
+  "archive_sha256": "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112",
+  "retained_scope": "Shared scalar/SIMD Adler32 implementation reused by compression and PNG deflate."
+}

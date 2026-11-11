@@ -110,7 +110,7 @@ pub(crate) fn guess_format_impl(buffer: &[u8]) -> Option<ImageFormat> {
 
 pub(crate) fn decoder_to_vec<T>(decoder: impl ImageDecoder) -> ImageResult<Vec<T>>
 where
-    T: crate::image::traits::Primitive + bytemuck::Pod,
+    T: crate::image::traits::Primitive + crate::byte_cast::Pod,
 {
     let total_bytes = usize::try_from(decoder.total_bytes());
     if total_bytes.is_err() || total_bytes.unwrap() > isize::MAX as usize {
@@ -119,6 +119,6 @@ where
         )));
     }
     let mut buf = vec![num_traits::Zero::zero(); total_bytes.unwrap() / size_of::<T>()];
-    decoder.read_image(bytemuck::cast_slice_mut(buf.as_mut_slice()))?;
+    decoder.read_image(crate::byte_cast::cast_slice_mut(buf.as_mut_slice()))?;
     Ok(buf)
 }

@@ -282,15 +282,15 @@ impl DynamicImage {
         dynamic_map!(
             *self,
             ref image_buffer,
-            bytemuck::cast_slice(image_buffer.as_raw())
+            crate::byte_cast::cast_slice(image_buffer.as_raw())
         )
     }
     #[must_use]
     pub fn into_bytes(self) -> Vec<u8> {
         dynamic_map!(self, image_buffer, {
-            match bytemuck::allocation::try_cast_vec(image_buffer.into_raw()) {
+            match crate::byte_cast::try_cast_vec(image_buffer.into_raw()) {
                 Ok(vec) => vec,
-                Err((_, vec)) => bytemuck::cast_slice(&vec).to_owned(),
+                Err((_, vec)) => crate::byte_cast::cast_slice(&vec).to_owned(),
             }
         })
     }

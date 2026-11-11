@@ -194,11 +194,11 @@ fn tag_strings(
                 let title = tag.title()?;
                 let artist = tag.artist()?;
                 [
-                    encoding_rs::UTF_8,
-                    encoding_rs::GBK,
-                    encoding_rs::BIG5,
-                    encoding_rs::SHIFT_JIS,
-                    encoding_rs::EUC_KR,
+                    crate::encoding::UTF_8,
+                    crate::encoding::GBK,
+                    crate::encoding::BIG5,
+                    crate::encoding::SHIFT_JIS,
+                    crate::encoding::EUC_KR,
                 ]
                 .into_iter()
                 .find_map(|encoding| {
@@ -261,7 +261,7 @@ fn decode_utf8(text: &str) -> Option<String> {
     String::from_utf8(bytes).ok()
 }
 
-fn decode_legacy(text: &str, encoding: &'static encoding_rs::Encoding) -> Option<String> {
+fn decode_legacy(text: &str, encoding: &'static crate::encoding::Encoding) -> Option<String> {
     let bytes = text
         .chars()
         .map(|c| u8::try_from(c as u32))

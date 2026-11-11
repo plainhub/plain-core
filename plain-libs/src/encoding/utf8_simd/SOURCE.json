@@ -1,0 +1,8 @@
+{
+  "package": "simdutf8",
+  "version": "0.1.5",
+  "repository": "https://github.com/rusticstuff/simdutf8",
+  "revision": "87ee8d9d20b849eae1974a82b248ee6fe7491bcc",
+  "archive_sha256": "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e",
+  "retained_scope": "Actual production paths; inactive feature/compatibility/test code removed. See module callers and project tests."
+}

@@ -1,4 +1,4 @@
-use crc32fast::Hasher;
+use crate::checksum::crc32::Hasher;
 use std::io::{self, Read};
 #[derive(Debug)]
 pub struct Crc32Reader<R> {

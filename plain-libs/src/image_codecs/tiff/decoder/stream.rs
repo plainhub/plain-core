@@ -106,7 +106,7 @@ impl<R: Read> EndianReader<R> {
 // # READERS
 //
 
-pub type DeflateReader<R> = flate2::read::ZlibDecoder<R>;
+pub type DeflateReader<R> = crate::compression::read::ZlibDecoder<R>;
 
 //
 // ## LZW Reader

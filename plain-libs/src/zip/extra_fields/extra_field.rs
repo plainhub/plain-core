@@ -213,7 +213,7 @@ impl ZipFileData {
                 }
                 ExtraField::UnicodeComment(unicode) => {
                     let crc = *orig_comment_crc
-                        .get_or_insert_with(|| crc32fast::hash(self.file_comment.as_bytes()));
+                        .get_or_insert_with(|| crate::checksum::crc32::hash(self.file_comment.as_bytes()));
                     if unicode.crc32 == crc
                         && let Ok(comment) = String::from_utf8(unicode.content.to_vec())
                     {
@@ -221,7 +221,7 @@ impl ZipFileData {
                     }
                 }
                 ExtraField::UnicodePath(unicode) => {
-                    let crc = *orig_name_crc.get_or_insert_with(|| crc32fast::hash(file_name_raw));
+                    let crc = *orig_name_crc.get_or_insert_with(|| crate::checksum::crc32::hash(file_name_raw));
                     if unicode.crc32 == crc && std::str::from_utf8(&unicode.content).is_ok() {
                         *file_name_raw = unicode.content.to_vec();
                         self.flags |= ZipFlags::LanguageEncoding.as_u16();

@@ -1,5 +1,5 @@
 use super::*;
-use flate2::read::GzDecoder;
+use crate::compression::read::GzDecoder;
 use std::io::{BufRead, BufReader};
 use std::sync::atomic::Ordering;
 

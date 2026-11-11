@@ -1,0 +1,8 @@
+{
+  "package": "simd-adler32",
+  "version": "0.3.10",
+  "repository": "https://github.com/mcountryman/simd-adler32",
+  "revision": "d93164f98d7fe2daf883f2e1bec82778dd26199a",
+  "archive_sha256": "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea",
+  "retained_scope": "Canonical NEON Adler32 kernel shared by PNG deflate and compression; replaces the slower duplicate zlib-rs NEON kernel."
+}

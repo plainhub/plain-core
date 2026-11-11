@@ -158,7 +158,7 @@ fn metafile(
         0xFE => body.to_vec(),
         0x00 => {
             let mut out = Vec::with_capacity(size.min(64 << 20));
-            flate2::read::ZlibDecoder::new(body)
+            plain_libs::compression::read::ZlibDecoder::new(body)
                 .take(64 << 20)
                 .read_to_end(&mut out)
                 .ok()?;

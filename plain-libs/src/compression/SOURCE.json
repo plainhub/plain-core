@@ -1,0 +1,8 @@
+{
+  "package": "flate2",
+  "version": "1.1.10",
+  "repository": "https://github.com/rust-lang/flate2-rs",
+  "revision": "ed93d4fc60eaf876c6aded741bf992d524551930",
+  "archive_sha256": "6e634e2e0ebac1ee034020da1ca582e17ffe4e0f5e985823721e168928136dcb",
+  "retained_scope": "Actual production paths; inactive feature/compatibility/test code removed. See module callers and project tests."
+}

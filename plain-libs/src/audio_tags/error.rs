@@ -98,7 +98,7 @@ pub enum Id3v2ErrorKind {
 
     // Compression
     #[cfg(feature = "media")]
-    Decompression(flate2::DecompressError),
+    Decompression(crate::compression::DecompressError),
     #[cfg(not(feature = "media"))]
     CompressedFrameEncountered,
 

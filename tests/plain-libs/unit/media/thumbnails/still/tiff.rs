@@ -112,7 +112,7 @@ fn compressed(data: &[u8], kind: u16) -> Vec<u8> {
             .unwrap(),
         8 => {
             let mut encoder =
-                flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+                crate::compression::write::ZlibEncoder::new(Vec::new(), crate::compression::Compression::fast());
             encoder.write_all(data).unwrap();
             encoder.finish().unwrap()
         }

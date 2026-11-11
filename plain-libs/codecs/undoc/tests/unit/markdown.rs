@@ -173,3 +173,127 @@ fn every_line_of_the_text_is_checked() {
         "first  \n\\# second\nthird"
     );
 }
+
+#[test]
+fn emphasis_span_example_keeps_expected_output() {
+    use crate::markdown::emphasis_span;
+
+    let wrap = |text: &str, before, after| {
+        emphasis_span(text, before, after).map_or(text.to_string(), |r| {
+            format!(
+                "{}*{}*{}",
+                &text[..r.start],
+                &text[r.clone()],
+                &text[r.end..]
+            )
+        })
+    };
+    assert_eq!(wrap(", s", Some('2'), Some(' ')), ", *s*");
+    assert_eq!(wrap("word ", None, Some('x')), "*word* ");
+    assert_eq!(wrap(",", Some('8'), Some('a')), ",");
+    assert_eq!(wrap("(h)", Some(' '), None), "*(h)*");
+}
+
+#[test]
+fn image_example_keeps_expected_output() {
+    use crate::markdown::image;
+
+    assert_eq!(
+        image("A view\n\nof the harbour", "img/1.png", false),
+        "![A view of the harbour](img/1.png)"
+    );
+    assert_eq!(
+        image("a [draft]", "my dir/a.png", false),
+        r"![a \[draft\]](<my dir/a.png>)"
+    );
+    assert_eq!(image("x | y", "a.png", true), r"![x \| y](a.png)");
+}
+
+#[test]
+fn code_span_example_keeps_expected_output() {
+    use crate::markdown::code_span;
+
+    assert_eq!(code_span(r"C:\dir", false), r"`C:\dir`");
+    assert_eq!(code_span("a`b", false), "``a`b``");
+    assert_eq!(code_span("`x`", false), "`` `x` ``");
+    assert_eq!(code_span(" a ", false), "`  a  `");
+    assert_eq!(code_span("a | b", true), r"`a \| b`");
+    assert_eq!(code_span("", false), "");
+}
+
+#[test]
+fn link_example_keeps_expected_output() {
+    use crate::markdown::link;
+
+    assert_eq!(
+        link("see [3]", "https://example.com", None, false),
+        r"[see \[3\]](https://example.com)"
+    );
+    assert_eq!(
+        link("**bold** `a]b`", "u", None, false),
+        "[**bold** `a]b`](u)"
+    );
+    assert_eq!(
+        link("x", "u", Some(r#"say "hi""#), false),
+        r#"[x](u "say \"hi\"")"#
+    );
+    assert_eq!(link("a | b", "u", None, true), r"[a \| b](u)");
+}
+
+#[test]
+fn link_destination_example_keeps_expected_output() {
+    use crate::markdown::link_destination;
+
+    assert_eq!(
+        link_destination("https://example.com/a(b)", false),
+        "https://example.com/a(b)"
+    );
+    assert_eq!(
+        link_destination("my folder/file.png", false),
+        "<my folder/file.png>"
+    );
+    assert_eq!(link_destination("notes).txt", false), "<notes).txt>");
+    assert_eq!(link_destination("a<b>c", false), r"<a\<b\>c>");
+}
+
+#[test]
+fn escape_block_starts_example_keeps_expected_output() {
+    use crate::markdown::escape_block_starts;
+
+    assert_eq!(
+        escape_block_starts("1. A sentence that starts with a number"),
+        r"1\. A sentence that starts with a number"
+    );
+    assert_eq!(escape_block_starts("# not a heading"), r"\# not a heading");
+    assert_eq!(
+        escape_block_starts("* note\n> quoted"),
+        "\\* note\n\\> quoted"
+    );
+    assert_eq!(
+        escape_block_starts("#hashtag, 2024. 10. 14"),
+        "#hashtag, 2024. 10. 14"
+    );
+}
+
+#[test]
+fn escape_html_syntax_example_keeps_expected_output() {
+    use crate::markdown::escape_html_syntax;
+
+    assert_eq!(escape_html_syntax("Vec<String>"), r"Vec\<String>");
+    assert_eq!(escape_html_syntax("a <b>bold</b>"), r"a \<b>bold\</b>");
+    assert_eq!(
+        escape_html_syntax("AT&amp;T, R&D, 1 < 2"),
+        r"AT\&amp;T, R&D, 1 < 2"
+    );
+}
+
+#[test]
+fn emphasis_can_pair_example_keeps_expected_output() {
+    use crate::markdown::emphasis_can_pair;
+
+    assert!(!emphasis_can_pair("0.039***", '*'));
+    assert!(!emphasis_can_pair("*8 ml", '*'));
+    assert!(emphasis_can_pair("x*y*z", '*'));
+    assert!(emphasis_can_pair("a _foo_ b", '_'));
+    assert!(!emphasis_can_pair("snake_case_name", '_'));
+}

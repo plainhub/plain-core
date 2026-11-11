@@ -72,3 +72,23 @@ fn an_io_error_underneath_is_not_the_limit() {
     let err = read_all(Failing, 10).unwrap_err();
     assert!(!is_inflation_limit(&err));
 }
+
+#[test]
+fn inflation_limits_example_keeps_expected_output() {
+    use crate::inflate::{InflateGuard, is_inflation_limit};
+    use std::io::Read;
+
+    let bomb = std::io::repeat(0).take(1 << 20);
+    let err = InflateGuard::new(bomb, 1024)
+        .read_to_end(&mut Vec::new())
+        .unwrap_err();
+    assert!(is_inflation_limit(&err));
+
+    let text = std::io::repeat(b'a').take(1 << 20);
+    assert_eq!(
+        InflateGuard::new(text, 64 * 1024)
+            .read_to_end(&mut Vec::new())
+            .unwrap(),
+        1 << 20
+    );
+}

@@ -90,7 +90,7 @@ pub(crate) fn windows_1252(byte: u8) -> char {
 
 #[cfg(feature = "codepages")]
 fn decode_with_tables(bytes: &[u8], codepage: u16, lossy: bool) -> Option<String> {
-    use encoding_rs::*;
+    use plain_libs::encoding::*;
     let encoding: &'static Encoding = match codepage {
         874 => WINDOWS_874,
         932 => SHIFT_JIS,

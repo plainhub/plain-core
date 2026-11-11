@@ -1,7 +1,7 @@
 use crate::image_codecs::deflate::tables::{
     BITMASKS, HUFFMAN_CODES, HUFFMAN_LENGTHS, LENGTH_TO_LEN_EXTRA, LENGTH_TO_SYMBOL,
 };
-use simd_adler32::Adler32;
+use crate::checksum::Adler32;
 use std::io::{self, Seek, SeekFrom, Write};
 pub struct Compressor<W: Write> {
     checksum: Adler32,

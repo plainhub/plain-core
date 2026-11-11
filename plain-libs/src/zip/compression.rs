@@ -151,7 +151,7 @@ fn instantiate<R: BufRead>(
     match parameters.compression_method {
         CompressionMethod::Stored => Ok(Decompressor::Stored(reader)),
         CompressionMethod::Deflated => Ok(Decompressor::Deflated(
-            flate2::bufread::DeflateDecoder::new(reader),
+            crate::compression::bufread::DeflateDecoder::new(reader),
         )),
         method => {
             let method = method.serialize_to_u16();
@@ -185,7 +185,7 @@ impl<R: BufRead> Read for LazyDecompressor<R> {
 }
 pub(crate) enum Decompressor<R: BufRead> {
     Stored(R),
-    Deflated(flate2::bufread::DeflateDecoder<R>),
+    Deflated(crate::compression::bufread::DeflateDecoder<R>),
 }
 impl<R: BufRead> Debug for Decompressor<R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

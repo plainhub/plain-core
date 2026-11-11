@@ -259,8 +259,8 @@ impl DeflateCompression {
             Compression::NoCompression => Self::NoCompression,
             Compression::Fastest => Self::FdeflateUltraFast,
             Compression::Fast => Self::FdeflateUltraFast,
-            Compression::Balanced => Self::Level(flate2::Compression::default().level() as u8),
-            Compression::High => Self::Level(flate2::Compression::best().level() as u8),
+            Compression::Balanced => Self::Level(crate::compression::Compression::default().level() as u8),
+            Compression::High => Self::Level(crate::compression::Compression::best().level() as u8),
         }
     }
 }

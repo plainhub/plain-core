@@ -10,7 +10,7 @@ use crate::image_codecs::png::common::{
 use crate::image_codecs::png::text_metadata::{ITXtChunk, TEXtChunk, TextDecodingError, ZTXtChunk};
 use crate::image_codecs::png::traits::ReadBytesExt;
 use crate::image_codecs::png::{CodingIndependentCodePoints, Limits};
-use crc32fast::Hasher as Crc32;
+use crate::checksum::crc32::Hasher as Crc32;
 use std::convert::TryInto;
 use std::error;
 use std::fmt;

@@ -57,21 +57,6 @@ pub struct Placement {
 /// further than a row's own spans add up to, since a vertical span from above pushes the row's
 /// cells rightward.
 ///
-/// ```
-/// use crate::grid::{place, Span};
-///
-/// // ┌────────┬───────────┐
-/// // │ Region │   Sales   │
-/// // │        ├─────┬─────┤
-/// // │        │2024 │2025 │
-/// // └────────┴─────┴─────┘
-/// let placement = place([
-///     vec![Span::new(2, 1), Span::new(1, 2)],
-///     vec![Span::single(), Span::single()],
-/// ]);
-/// assert_eq!(placement.columns, vec![vec![0, 1], vec![1, 2]]);
-/// assert_eq!(placement.width, 3);
-/// ```
 pub fn place<R, C>(rows: R) -> Placement
 where
     R: IntoIterator<Item = C>,

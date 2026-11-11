@@ -29,12 +29,12 @@ impl Deref for AlignedBytes {
     type Target = [u8];
     #[inline]
     fn deref(&self) -> &[u8] {
-        &bytemuck::cast_slice(&self.words)[..self.len]
+        &crate::byte_cast::cast_slice(&self.words)[..self.len]
     }
 }
 impl DerefMut for AlignedBytes {
     #[inline]
     fn deref_mut(&mut self) -> &mut [u8] {
-        &mut bytemuck::cast_slice_mut(&mut self.words)[..self.len]
+        &mut crate::byte_cast::cast_slice_mut(&mut self.words)[..self.len]
     }
 }

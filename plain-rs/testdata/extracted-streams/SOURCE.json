@@ -1,0 +1,8 @@
+{
+  "generator": "CPython standard-library zlib/gzip, synthetic arithmetic byte sequence; no personal input.",
+  "length": 65536,
+  "pattern": "((i*17+i//19)^(i//251))&255",
+  "zlib_version": "1.2.12",
+  "gzip_mtime": 0,
+  "purpose": "Independent fixtures for gzip/zlib/raw deflate decoding."
+}

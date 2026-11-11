@@ -1,0 +1,8 @@
+{
+  "package": "encoding_rs",
+  "version": "0.8.42",
+  "repository": "https://github.com/hsivonen/encoding_rs",
+  "revision": "a155adc7271c9e507556d053c95b459186671d2a",
+  "archive_sha256": "8e985e0451871ad22fb8d2b6b076e2028a502a0d3950998c2c5c0a4f9b5d9679",
+  "retained_scope": "Actual production paths; inactive feature/compatibility/test code removed. See module callers and project tests."
+}

@@ -7,17 +7,17 @@ pub trait EncodableLayout: seals::EncodableLayout {
 }
 impl EncodableLayout for [u8] {
     fn as_bytes(&self) -> &[u8] {
-        bytemuck::cast_slice(self)
+        crate::byte_cast::cast_slice(self)
     }
 }
 impl EncodableLayout for [u16] {
     fn as_bytes(&self) -> &[u8] {
-        bytemuck::cast_slice(self)
+        crate::byte_cast::cast_slice(self)
     }
 }
 impl EncodableLayout for [f32] {
     fn as_bytes(&self) -> &[u8] {
-        bytemuck::cast_slice(self)
+        crate::byte_cast::cast_slice(self)
     }
 }
 pub trait Primitive: Copy + NumCast + Num + PartialOrd<Self> + Clone + Bounded {

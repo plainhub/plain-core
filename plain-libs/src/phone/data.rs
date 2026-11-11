@@ -1,4 +1,4 @@
-use flate2::read::GzDecoder;
+use crate::compression::read::GzDecoder;
 use serde::Deserialize;
 use std::collections::{BTreeMap, VecDeque};
 use std::io::Read;

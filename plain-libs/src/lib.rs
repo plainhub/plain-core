@@ -104,3 +104,14 @@ macro_rules! plain_error_ensure {
         }
     };
 }
+
+#[cfg(feature = "image")]
+mod byte_cast;
+#[cfg(feature = "compression")]
+mod checksum;
+#[cfg(feature = "compression")]
+pub mod compression;
+#[cfg(any(feature = "encoding", feature = "compression"))]
+mod cpu_features;
+#[cfg(feature = "encoding")]
+pub mod encoding;

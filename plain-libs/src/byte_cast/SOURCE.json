@@ -1,0 +1,8 @@
+{
+  "package": "bytemuck",
+  "version": "1.25.2",
+  "repository": "https://github.com/Lokathor/bytemuck",
+  "revision": "f363643e951a7ac9e4b9921de982f2b0918902e3",
+  "archive_sha256": "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797",
+  "retained_scope": "Primitive-only slice/vector casts, shared with existing TIFF byte views; no external Pod implementation framework."
+}

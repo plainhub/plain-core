@@ -1,0 +1,107 @@
+const MOD: u32 = 65521;
+const NMAX: usize = 5552;
+const BLOCK_SIZE: usize = 32;
+const CHUNK_SIZE: usize = NMAX / BLOCK_SIZE * BLOCK_SIZE;
+#[cfg(target_arch = "aarch64")]
+use core::arch::aarch64::*;
+#[cfg(target_arch = "arm")]
+use core::arch::arm::*;
+#[target_feature(enable = "neon")]
+pub unsafe fn update(a: u16, b: u16, data: &[u8]) -> (u16, u16) {
+    unsafe {
+        let mut a = a as u32;
+        let mut b = b as u32;
+        let chunks = data.chunks_exact(CHUNK_SIZE);
+        let remainder = chunks.remainder();
+        for chunk in chunks {
+            update_chunk_block(&mut a, &mut b, chunk);
+        }
+        update_block(&mut a, &mut b, remainder);
+        (a as u16, b as u16)
+    }
+}
+#[target_feature(enable = "neon")]
+unsafe fn update_block(a: &mut u32, b: &mut u32, chunk: &[u8]) {
+    unsafe {
+        debug_assert!(
+            chunk.len() <= CHUNK_SIZE,
+            "Unexpected chunk size (expected <= {}, got {})",
+            CHUNK_SIZE,
+            chunk.len()
+        );
+        for byte in reduce_add_blocks(a, b, chunk) {
+            *a += *byte as u32;
+            *b += *a;
+        }
+        *a %= MOD;
+        *b %= MOD;
+    }
+}
+#[target_feature(enable = "neon")]
+unsafe fn update_chunk_block(a: &mut u32, b: &mut u32, chunk: &[u8]) {
+    unsafe {
+        debug_assert_eq!(
+            chunk.len(),
+            CHUNK_SIZE,
+            "Unexpected chunk size (expected {}, got {})",
+            CHUNK_SIZE,
+            chunk.len()
+        );
+        reduce_add_blocks(a, b, chunk);
+    }
+}
+#[target_feature(enable = "neon")]
+unsafe fn reduce_add_blocks<'a>(a: &mut u32, b: &mut u32, chunk: &'a [u8]) -> &'a [u8] {
+    unsafe {
+        if chunk.len() < BLOCK_SIZE {
+            return chunk;
+        }
+        let blocks = chunk.chunks_exact(BLOCK_SIZE);
+        let blocks_remainder = blocks.remainder();
+        unsafe {
+            let mut a_v: uint32x4_t = vdupq_n_u32(0);
+            let mut b_v: uint32x4_t = vdupq_n_u32(0);
+            b_v = vsetq_lane_u32(*a * (blocks.len() as u32), b_v, 3);
+            let mut v_column_sum_1: uint16x8_t = vdupq_n_u16(0);
+            let mut v_column_sum_2: uint16x8_t = vdupq_n_u16(0);
+            let mut v_column_sum_3: uint16x8_t = vdupq_n_u16(0);
+            let mut v_column_sum_4: uint16x8_t = vdupq_n_u16(0);
+            for block in blocks {
+                let block_ptr = block.as_ptr();
+                let bytes1: uint8x16_t = vld1q_u8(block_ptr);
+                let bytes2: uint8x16_t = vld1q_u8(block_ptr.add(16));
+                b_v = vaddq_u32(b_v, a_v);
+                a_v = vpadalq_u16(a_v, vpadalq_u8(vpaddlq_u8(bytes1), bytes2));
+                v_column_sum_1 = vaddw_u8(v_column_sum_1, vget_low_u8(bytes1));
+                v_column_sum_2 = vaddw_u8(v_column_sum_2, vget_high_u8(bytes1));
+                v_column_sum_3 = vaddw_u8(v_column_sum_3, vget_low_u8(bytes2));
+                v_column_sum_4 = vaddw_u8(v_column_sum_4, vget_high_u8(bytes2));
+            }
+            b_v = vshlq_n_u32(b_v, 5);
+            let w1: [u16; 4] = [32, 31, 30, 29];
+            let w2: [u16; 4] = [28, 27, 26, 25];
+            let w3: [u16; 4] = [24, 23, 22, 21];
+            let w4: [u16; 4] = [20, 19, 18, 17];
+            let w5: [u16; 4] = [16, 15, 14, 13];
+            let w6: [u16; 4] = [12, 11, 10, 9];
+            let w7: [u16; 4] = [8, 7, 6, 5];
+            let w8: [u16; 4] = [4, 3, 2, 1];
+            b_v = vmlal_u16(b_v, vget_low_u16(v_column_sum_1), vld1_u16(w1.as_ptr()));
+            b_v = vmlal_u16(b_v, vget_high_u16(v_column_sum_1), vld1_u16(w2.as_ptr()));
+            b_v = vmlal_u16(b_v, vget_low_u16(v_column_sum_2), vld1_u16(w3.as_ptr()));
+            b_v = vmlal_u16(b_v, vget_high_u16(v_column_sum_2), vld1_u16(w4.as_ptr()));
+            b_v = vmlal_u16(b_v, vget_low_u16(v_column_sum_3), vld1_u16(w5.as_ptr()));
+            b_v = vmlal_u16(b_v, vget_high_u16(v_column_sum_3), vld1_u16(w6.as_ptr()));
+            b_v = vmlal_u16(b_v, vget_low_u16(v_column_sum_4), vld1_u16(w7.as_ptr()));
+            b_v = vmlal_u16(b_v, vget_high_u16(v_column_sum_4), vld1_u16(w8.as_ptr()));
+            let sum1: uint32x2_t = vpadd_u32(vget_low_u32(a_v), vget_high_u32(a_v));
+            let sum2: uint32x2_t = vpadd_u32(vget_low_u32(b_v), vget_high_u32(b_v));
+            let sum3: uint32x2_t = vpadd_u32(sum1, sum2);
+            *a += vget_lane_u32(sum3, 0);
+            *b += vget_lane_u32(sum3, 1);
+            *a %= MOD;
+            *b %= MOD;
+            blocks_remainder
+        }
+    }
+}

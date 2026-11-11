@@ -35,19 +35,6 @@ use std::ops::Range;
 /// `text` may already be escaped: a backslash escape (`\*`) is one unit and is never split
 /// across a delimiter. Only escapes of ASCII punctuation are units, as in CommonMark.
 ///
-/// ```
-/// use crate::markdown::emphasis_span;
-///
-/// let wrap = |text: &str, before, after| {
-///     emphasis_span(text, before, after).map_or(text.to_string(), |r| {
-///         format!("{}*{}*{}", &text[..r.start], &text[r.clone()], &text[r.end..])
-///     })
-/// };
-/// assert_eq!(wrap(", s", Some('2'), Some(' ')), ", *s*");
-/// assert_eq!(wrap("word ", None, Some('x')), "*word* ");
-/// assert_eq!(wrap(",", Some('8'), Some('a')), ",");
-/// assert_eq!(wrap("(h)", Some(' '), None), "*(h)*");
-/// ```
 pub fn emphasis_span(
     text: &str,
     before: Option<char>,
@@ -88,16 +75,6 @@ pub fn emphasis_span(
 ///
 /// The destination is written by [`link_destination`].
 ///
-/// ```
-/// use crate::markdown::image;
-///
-/// assert_eq!(
-///     image("A view\n\nof the harbour", "img/1.png", false),
-///     "![A view of the harbour](img/1.png)"
-/// );
-/// assert_eq!(image("a [draft]", "my dir/a.png", false), r"![a \[draft\]](<my dir/a.png>)");
-/// assert_eq!(image("x | y", "a.png", true), r"![x \| y](a.png)");
-/// ```
 pub fn image(alt: &str, destination: &str, in_table_cell: bool) -> String {
     let mut out = String::with_capacity(alt.len() + destination.len() + 5);
     out.push_str("![");
@@ -140,16 +117,6 @@ pub fn image(alt: &str, destination: &str, in_table_cell: bool) -> String {
 ///
 /// Empty text has no code span and gives an empty string.
 ///
-/// ```
-/// use crate::markdown::code_span;
-///
-/// assert_eq!(code_span(r"C:\dir", false), r"`C:\dir`");
-/// assert_eq!(code_span("a`b", false), "``a`b``");
-/// assert_eq!(code_span("`x`", false), "`` `x` ``");
-/// assert_eq!(code_span(" a ", false), "`  a  `");
-/// assert_eq!(code_span("a | b", true), r"`a \| b`");
-/// assert_eq!(code_span("", false), "");
-/// ```
 pub fn code_span(text: &str, in_table_cell: bool) -> String {
     if text.is_empty() {
         return String::new();
@@ -195,14 +162,6 @@ pub fn code_span(text: &str, in_table_cell: bool) -> String {
 /// character after it is doubled, an `&` that would start a character reference is escaped,
 /// a line ending becomes a space, and inside a table cell `|` is escaped.
 ///
-/// ```
-/// use crate::markdown::link;
-///
-/// assert_eq!(link("see [3]", "https://example.com", None, false), r"[see \[3\]](https://example.com)");
-/// assert_eq!(link("**bold** `a]b`", "u", None, false), "[**bold** `a]b`](u)");
-/// assert_eq!(link("x", "u", Some(r#"say "hi""#), false), r#"[x](u "say \"hi\"")"#);
-/// assert_eq!(link("a | b", "u", None, true), r"[a \| b](u)");
-/// ```
 pub fn link(label: &str, destination: &str, title: Option<&str>, in_table_cell: bool) -> String {
     let mut out = String::with_capacity(label.len() + destination.len() + 4);
     out.push('[');
@@ -315,14 +274,6 @@ fn closing_backticks(chars: &[char], from: usize, len: usize) -> Option<usize> {
 ///
 /// A link that is not in a table cell passes `in_table_cell: false`.
 ///
-/// ```
-/// use crate::markdown::link_destination;
-///
-/// assert_eq!(link_destination("https://example.com/a(b)", false), "https://example.com/a(b)");
-/// assert_eq!(link_destination("my folder/file.png", false), "<my folder/file.png>");
-/// assert_eq!(link_destination("notes).txt", false), "<notes).txt>");
-/// assert_eq!(link_destination("a<b>c", false), r"<a\<b\>c>");
-/// ```
 pub fn link_destination(url: &str, in_table_cell: bool) -> String {
     let bare = !url.is_empty()
         && !url
@@ -385,14 +336,6 @@ pub fn link_destination(url: &str, in_table_cell: bool) -> String {
 /// is already escaped (`\*`) opens nothing and is left as it is. Not for table cells, where
 /// no block can start.
 ///
-/// ```
-/// use crate::markdown::escape_block_starts;
-///
-/// assert_eq!(escape_block_starts("1. A sentence that starts with a number"), r"1\. A sentence that starts with a number");
-/// assert_eq!(escape_block_starts("# not a heading"), r"\# not a heading");
-/// assert_eq!(escape_block_starts("* note\n> quoted"), "\\* note\n\\> quoted");
-/// assert_eq!(escape_block_starts("#hashtag, 2024. 10. 14"), "#hashtag, 2024. 10. 14");
-/// ```
 pub fn escape_block_starts(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 4);
     for (n, line) in text.split('\n').enumerate() {
@@ -426,13 +369,6 @@ pub fn escape_block_starts(text: &str) -> String {
 ///
 /// `text` may already be escaped for Markdown (`\\` for a backslash); apply this after that.
 ///
-/// ```
-/// use crate::markdown::escape_html_syntax;
-///
-/// assert_eq!(escape_html_syntax("Vec<String>"), r"Vec\<String>");
-/// assert_eq!(escape_html_syntax("a <b>bold</b>"), r"a \<b>bold\</b>");
-/// assert_eq!(escape_html_syntax("AT&amp;T, R&D, 1 < 2"), r"AT\&amp;T, R&D, 1 < 2");
-/// ```
 pub fn escape_html_syntax(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 2);
     for (i, c) in text.char_indices() {
@@ -463,15 +399,6 @@ pub fn escape_html_syntax(text: &str) -> String {
 /// The answer errs toward `true`: the rule of three (§6.2, rules 9–10) is not applied, so a
 /// pair it would forbid still counts as one.
 ///
-/// ```
-/// use crate::markdown::emphasis_can_pair;
-///
-/// assert!(!emphasis_can_pair("0.039***", '*'));
-/// assert!(!emphasis_can_pair("*8 ml", '*'));
-/// assert!(emphasis_can_pair("x*y*z", '*'));
-/// assert!(emphasis_can_pair("a _foo_ b", '_'));
-/// assert!(!emphasis_can_pair("snake_case_name", '_'));
-/// ```
 pub fn emphasis_can_pair(text: &str, delimiter: char) -> bool {
     let chars: Vec<char> = text.chars().collect();
     let mut opener_seen = false;

@@ -1,4 +1,3 @@
-mod bytecast;
 pub mod decoder;
 mod directory;
 #[cfg(all())]

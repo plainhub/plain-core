@@ -1,0 +1,8 @@
+{
+  "package": "crc32fast",
+  "version": "1.5.2",
+  "repository": "https://github.com/srijs/rust-crc32fast",
+  "revision": "7eb0b8a2c9b246d27dc4cb5a53d3fc3b43a4bb83",
+  "archive_sha256": "01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78",
+  "retained_scope": "Actual production paths; inactive feature/compatibility/test code removed. See module callers and project tests."
+}

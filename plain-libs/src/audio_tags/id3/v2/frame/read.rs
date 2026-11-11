@@ -215,8 +215,8 @@ impl ParsedFrame<'_> {
 
 #[cfg(feature = "media")]
 
-fn handle_compression<R: Read>(reader: R) -> Result<flate2::read::ZlibDecoder<R>> {
-    Ok(flate2::read::ZlibDecoder::new(reader))
+fn handle_compression<R: Read>(reader: R) -> Result<crate::compression::read::ZlibDecoder<R>> {
+    Ok(crate::compression::read::ZlibDecoder::new(reader))
 }
 
 #[cfg(not(feature = "media"))]

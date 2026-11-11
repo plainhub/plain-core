@@ -67,7 +67,7 @@ fn a_picf_past_the_stream_is_none() {
 fn a_compressed_emf_blip_is_inflated() {
     use std::io::Write;
     let emf = b" EMF metafile bytes".repeat(4);
-    let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+    let mut z = plain_libs::compression::write::ZlibEncoder::new(Vec::new(), plain_libs::compression::Compression::default());
     z.write_all(&emf).unwrap();
     let packed = z.finish().unwrap();
 

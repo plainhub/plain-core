@@ -377,7 +377,7 @@ impl ZipFileData {
     pub(crate) fn drop_unicode_path_renaming(&mut self, file_name_raw: &[u8]) {
         const UNICODE_PATH: u16 =
             crate::zip::format::extra_fields::ExtraFieldId::UnicodePath.as_u16();
-        let crc = crc32fast::hash(file_name_raw);
+        let crc = crate::checksum::crc32::hash(file_name_raw);
         self.extra_fields.inner.retain(|field| match field {
             ExtraField::UnicodePath(unicode) => {
                 unicode.crc32 != crc || *unicode.content == *file_name_raw

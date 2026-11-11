@@ -10,8 +10,8 @@ use crate::image_codecs::png::text_metadata::{
 };
 use crate::image_codecs::png::traits::WriteBytesExt;
 use borrow::Cow;
-use crc32fast::Hasher as Crc32;
-use flate2::write::ZlibEncoder;
+use crate::checksum::crc32::Hasher as Crc32;
+use crate::compression::write::ZlibEncoder;
 use io::{Read, Write};
 use ops::{Deref, DerefMut};
 use std::{borrow, error, fmt, io, mem, ops, result};
@@ -385,7 +385,7 @@ impl<W: Write> Writer<W> {
         data.try_reserve_exact(chunk_size)
             .map_err(|_| EncodingError::LimitsExceeded)?;
         data.extend(profile_name.into_iter().chain([0, 0]));
-        let mut encoder = ZlibEncoder::new(data, flate2::Compression::default());
+        let mut encoder = ZlibEncoder::new(data, crate::compression::Compression::default());
         encoder.write_all(icc_profile)?;
         self.write_chunk(chunk::iCCP, &encoder.finish()?)
     }
@@ -496,7 +496,7 @@ impl<W: Write> Writer<W> {
             DeflateCompression::Level(level) => {
                 let mut current = vec![0; in_len];
                 let mut zlib =
-                    ZlibEncoder::new(Vec::new(), flate2::Compression::new(u32::from(level)));
+                    ZlibEncoder::new(Vec::new(), crate::compression::Compression::new(u32::from(level)));
                 for line in data.chunks(in_len) {
                     let filter_type = filter(filter_method, bpp, prev, line, &mut current);
                     zlib.write_all(&[filter_type as u8])?;
@@ -797,14 +797,14 @@ impl<'a, W: Write> Wrapper<'a, W> {
     fn from_level(writer: ChunkWriter<'a, W>, compression: DeflateCompression) -> io::Result<Self> {
         Ok(match compression {
             DeflateCompression::NoCompression => {
-                Wrapper::Flate2(ZlibEncoder::new(writer, flate2::Compression::none()))
+                Wrapper::Flate2(ZlibEncoder::new(writer, crate::compression::Compression::none()))
             }
             DeflateCompression::FdeflateUltraFast => {
                 Wrapper::FDeflate(crate::image_codecs::deflate::Compressor::new(writer)?)
             }
             DeflateCompression::Level(level) => Wrapper::Flate2(ZlibEncoder::new(
                 writer,
-                flate2::Compression::new(u32::from(level)),
+                crate::compression::Compression::new(u32::from(level)),
             )),
         })
     }

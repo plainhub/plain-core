@@ -91,7 +91,7 @@ struct Case {
 
 #[test]
 fn parser_matches_the_independent_google_syntax_and_region_replay() {
-    use flate2::read::GzDecoder;
+    use crate::compression::read::GzDecoder;
     use sha2::{Digest, Sha256};
     use std::io::{BufRead, BufReader};
     let corpus = include_bytes!("../../../../plain-rs/testdata/phone/parser-reference.jsonl.gz");

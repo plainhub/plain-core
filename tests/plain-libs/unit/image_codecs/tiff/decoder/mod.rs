@@ -1,6 +1,5 @@
 use super::Decoder;
 use crate::image_codecs::tiff::{
-    bytecast,
     tags::{ByteOrder, Tag, ValueBuffer},
 };
 
@@ -34,7 +33,7 @@ fn equivalence_of_tag_readers() {
             .expect("must have BitsPerSample");
 
         value.set_byte_order(ByteOrder::native());
-        assert_eq!(value.as_bytes(), bytecast::u16_as_ne_bytes(&[8, 8, 8]));
+        assert_eq!(value.as_bytes(), crate::byte_cast::cast_slice::<u16, u8>(&[8, 8, 8]));
     }
 
     {
@@ -46,7 +45,7 @@ fn equivalence_of_tag_readers() {
         let byte_len = ifd
             .find_tag_bytes(
                 Tag::BitsPerSample,
-                bytecast::u16_as_ne_mut_bytes(&mut by_bytes),
+                crate::byte_cast::cast_slice_mut(&mut by_bytes),
                 0,
             )
             .unwrap()
@@ -55,7 +54,7 @@ fn equivalence_of_tag_readers() {
 
         file_bo.convert(
             entry.field_type(),
-            bytecast::u16_as_ne_mut_bytes(&mut by_bytes[..3]),
+            crate::byte_cast::cast_slice_mut(&mut by_bytes[..3]),
             ByteOrder::native(),
         );
         assert_eq!(&by_bytes[..3], &[8, 8, 8]);

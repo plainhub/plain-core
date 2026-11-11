@@ -1,7 +1,7 @@
 use crate::image_codecs::deflate::BoundedDecompressionError;
 use crate::image_codecs::png::{DecodingError, EncodingError, chunk, encoder};
-use flate2::Compression;
-use flate2::write::ZlibEncoder;
+use crate::compression::Compression;
+use crate::compression::write::ZlibEncoder;
 use std::{convert::TryFrom, io::Write};
 pub const DECOMPRESSION_LIMIT: usize = 2097152;
 #[derive(Debug, Clone, Copy)]

@@ -184,15 +184,12 @@ fn legacy_id3v1_encodings_require_matching_filename() {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../plain-rs/testdata/audio-untagged.mp3"),
     )
     .unwrap();
-    for (encoding, artist, title) in [
-        (encoding_rs::SHIFT_JIS, "歌手", "日本の歌"),
-        (encoding_rs::EUC_KR, "가수", "노래"),
-        (encoding_rs::BIG5, "歌手", "繁體歌曲"),
-        (encoding_rs::UTF_8, "Björk", "é"),
+    for (legacy, artist, title, artist_bytes, title_bytes) in [
+        (true,"歌手","日本の歌",&[137,204,142,232][..],&[147,250,150,123,130,204,137,204][..]),
+        (true,"가수","노래",&[176,161,188,246][..],&[179,235,183,161][..]),
+        (true,"歌手","繁體歌曲",&[186,113,164,226][..],&[193,99,197,233,186,113,166,177][..]),
+        (false,"Björk","é",&[66,106,195,182,114,107][..],&[195,169][..]),
     ] {
-        let (artist_bytes, _, artist_errors) = encoding.encode(artist);
-        let (title_bytes, _, title_errors) = encoding.encode(title);
-        assert!(!artist_errors && !title_errors);
         let mut tag = [0u8; 128];
         tag[..3].copy_from_slice(b"TAG");
         tag[3..3 + title_bytes.len()].copy_from_slice(&title_bytes);
@@ -209,7 +206,7 @@ fn legacy_id3v1_encodings_require_matching_filename() {
         let path = directory.path().join("unrelated.mp3");
         std::fs::write(&path, &bytes).unwrap();
         let result = probe_media(path.to_str().unwrap(), "audio");
-        if encoding != encoding_rs::UTF_8 {
+        if legacy {
             assert_ne!(
                 (result.artist.as_str(), result.title.as_str()),
                 (artist, title)

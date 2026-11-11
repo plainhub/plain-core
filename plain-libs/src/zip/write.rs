@@ -20,7 +20,7 @@ use core::default::Default;
 use core::fmt::{Debug, Formatter};
 use core::mem::{self, offset_of, size_of};
 use core::str::{Utf8Error, from_utf8};
-use crc32fast::Hasher;
+use crate::checksum::crc32::Hasher;
 use indexmap::IndexMap;
 use std::io::Cursor;
 use std::io::ErrorKind;
@@ -90,7 +90,7 @@ impl<W: Write> Write for MaybeEncrypted<W> {
 enum GenericZipWriter<W: Write + Seek> {
     Closed,
     Storer(MaybeEncrypted<W>),
-    Deflater(flate2::write::DeflateEncoder<MaybeEncrypted<W>>),
+    Deflater(crate::compression::write::DeflateEncoder<MaybeEncrypted<W>>),
 }
 impl<W: Write + Seek> Debug for GenericZipWriter<W> {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
@@ -403,7 +403,7 @@ impl<W: Write + Seek> ZipWriter<W> {
                 if x.header_id
                     == crate::zip::format::extra_fields::ExtraFieldId::UnicodePath.as_u16()
                     && let Some(content) = x.data.get(5..)
-                    && x.data[1..5] == crc32fast::hash(file_name_raw).to_le_bytes()
+                    && x.data[1..5] == crate::checksum::crc32::hash(file_name_raw).to_le_bytes()
                     && core::str::from_utf8(content).is_ok()
                     && content != file_name_raw
                 {
@@ -953,7 +953,7 @@ type SwitchWriterFunction<W> =
     Box<dyn FnOnce(MaybeEncrypted<W>, &mut DeflateCache<W>) -> ZipResult<GenericZipWriter<W>>>;
 pub(crate) struct DeflateCache<W: Write> {
     level: u32,
-    idle: Option<flate2::write::DeflateEncoder<MaybeEncrypted<W>>>,
+    idle: Option<crate::compression::write::DeflateEncoder<MaybeEncrypted<W>>>,
 }
 impl<W: Write> Default for DeflateCache<W> {
     fn default() -> Self {
@@ -976,7 +976,7 @@ impl<W: Write> DeflateCache<W> {
         &mut self,
         bare: MaybeEncrypted<W>,
         level: u32,
-    ) -> io::Result<flate2::write::DeflateEncoder<MaybeEncrypted<W>>> {
+    ) -> io::Result<crate::compression::write::DeflateEncoder<MaybeEncrypted<W>>> {
         let cached_level = mem::replace(&mut self.level, level);
         match self.idle.take() {
             Some(mut encoder) if cached_level == level => {
@@ -984,22 +984,22 @@ impl<W: Write> DeflateCache<W> {
                     MaybeEncrypted::Closed { .. } => Ok(encoder),
                     other => {
                         let bare = mem::replace(encoder.get_mut(), other);
-                        Ok(flate2::write::DeflateEncoder::new(
+                        Ok(crate::compression::write::DeflateEncoder::new(
                             bare,
-                            flate2::Compression::new(level),
+                            crate::compression::Compression::new(level),
                         ))
                     }
                 }
             }
-            _ => Ok(flate2::write::DeflateEncoder::new(
+            _ => Ok(crate::compression::write::DeflateEncoder::new(
                 bare,
-                flate2::Compression::new(level),
+                crate::compression::Compression::new(level),
             )),
         }
     }
     fn park(
         &mut self,
-        mut encoder: flate2::write::DeflateEncoder<MaybeEncrypted<W>>,
+        mut encoder: crate::compression::write::DeflateEncoder<MaybeEncrypted<W>>,
     ) -> io::Result<MaybeEncrypted<W>> {
         let bare = encoder.reset(MaybeEncrypted::Closed { bytes_written: 0 })?;
         self.idle = Some(encoder);
@@ -1027,7 +1027,7 @@ impl<W: Write + Seek> GenericZipWriter<W> {
                 }
             }
             CompressionMethod::Deflated => {
-                let default = { { i64::from(flate2::Compression::default().level()) } };
+                let default = { { i64::from(crate::compression::Compression::default().level()) } };
                 let level = validate_value_in_range(
                     compression_level.unwrap_or(default),
                     deflate_compression_level_range(),
@@ -1223,8 +1223,8 @@ impl Debug for PreparedZipFile {
     }
 }
 fn deflate_compression_level_range() -> std::ops::RangeInclusive<u32> {
-    let min = { { flate2::Compression::fast().level() } };
-    let max = { { flate2::Compression::best().level() } };
+    let min = { { crate::compression::Compression::fast().level() } };
+    let max = { { crate::compression::Compression::best().level() } };
     min..=max
 }
 fn validate_value_in_range<T: Ord + Copy, U: Ord + Copy + TryFrom<T>>(

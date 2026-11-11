@@ -5,7 +5,7 @@ use crate::image_codecs::deflate::{
         FIXED_LITLEN_TABLE, LEN_SYM_TO_LEN_BASE, LEN_SYM_TO_LEN_EXTRA, LITLEN_TABLE_ENTRIES,
     },
 };
-use simd_adler32::Adler32;
+use crate::checksum::Adler32;
 #[derive(Debug, PartialEq)]
 pub enum DecompressionError {
     BadZlibHeader,

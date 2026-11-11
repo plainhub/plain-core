@@ -9,7 +9,6 @@ use crate::image_codecs::tiff::tags::{
 };
 use crate::image_codecs::tiff::{
     ColorType, Directory, TiffError, TiffFormatError, TiffResult, TiffUnsupportedError, UsageError,
-    bytecast,
 };
 
 use self::image::Image;
@@ -152,32 +151,32 @@ impl<'a> DecodingBuffer<'a> {
     pub fn as_bytes(&self) -> &[u8] {
         match self {
             DecodingBuffer::U8(buf) => buf,
-            DecodingBuffer::I8(buf) => bytecast::i8_as_ne_bytes(buf),
-            DecodingBuffer::U16(buf) => bytecast::u16_as_ne_bytes(buf),
-            DecodingBuffer::I16(buf) => bytecast::i16_as_ne_bytes(buf),
-            DecodingBuffer::U32(buf) => bytecast::u32_as_ne_bytes(buf),
-            DecodingBuffer::I32(buf) => bytecast::i32_as_ne_bytes(buf),
-            DecodingBuffer::U64(buf) => bytecast::u64_as_ne_bytes(buf),
-            DecodingBuffer::I64(buf) => bytecast::i64_as_ne_bytes(buf),
-            DecodingBuffer::F16(buf) => bytecast::u16_as_ne_bytes(buf),
-            DecodingBuffer::F32(buf) => bytecast::f32_as_ne_bytes(buf),
-            DecodingBuffer::F64(buf) => bytecast::f64_as_ne_bytes(buf),
+            DecodingBuffer::I8(buf) => crate::byte_cast::cast_slice(buf),
+            DecodingBuffer::U16(buf) => crate::byte_cast::cast_slice(buf),
+            DecodingBuffer::I16(buf) => crate::byte_cast::cast_slice(buf),
+            DecodingBuffer::U32(buf) => crate::byte_cast::cast_slice(buf),
+            DecodingBuffer::I32(buf) => crate::byte_cast::cast_slice(buf),
+            DecodingBuffer::U64(buf) => crate::byte_cast::cast_slice(buf),
+            DecodingBuffer::I64(buf) => crate::byte_cast::cast_slice(buf),
+            DecodingBuffer::F16(buf) => crate::byte_cast::cast_slice(buf),
+            DecodingBuffer::F32(buf) => crate::byte_cast::cast_slice(buf),
+            DecodingBuffer::F64(buf) => crate::byte_cast::cast_slice(buf),
         }
     }
 
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
         match self {
             DecodingBuffer::U8(buf) => buf,
-            DecodingBuffer::I8(buf) => bytecast::i8_as_ne_mut_bytes(buf),
-            DecodingBuffer::U16(buf) => bytecast::u16_as_ne_mut_bytes(buf),
-            DecodingBuffer::I16(buf) => bytecast::i16_as_ne_mut_bytes(buf),
-            DecodingBuffer::U32(buf) => bytecast::u32_as_ne_mut_bytes(buf),
-            DecodingBuffer::I32(buf) => bytecast::i32_as_ne_mut_bytes(buf),
-            DecodingBuffer::U64(buf) => bytecast::u64_as_ne_mut_bytes(buf),
-            DecodingBuffer::I64(buf) => bytecast::i64_as_ne_mut_bytes(buf),
-            DecodingBuffer::F16(buf) => bytecast::u16_as_ne_mut_bytes(buf),
-            DecodingBuffer::F32(buf) => bytecast::f32_as_ne_mut_bytes(buf),
-            DecodingBuffer::F64(buf) => bytecast::f64_as_ne_mut_bytes(buf),
+            DecodingBuffer::I8(buf) => crate::byte_cast::cast_slice_mut(buf),
+            DecodingBuffer::U16(buf) => crate::byte_cast::cast_slice_mut(buf),
+            DecodingBuffer::I16(buf) => crate::byte_cast::cast_slice_mut(buf),
+            DecodingBuffer::U32(buf) => crate::byte_cast::cast_slice_mut(buf),
+            DecodingBuffer::I32(buf) => crate::byte_cast::cast_slice_mut(buf),
+            DecodingBuffer::U64(buf) => crate::byte_cast::cast_slice_mut(buf),
+            DecodingBuffer::I64(buf) => crate::byte_cast::cast_slice_mut(buf),
+            DecodingBuffer::F16(buf) => crate::byte_cast::cast_slice_mut(buf),
+            DecodingBuffer::F32(buf) => crate::byte_cast::cast_slice_mut(buf),
+            DecodingBuffer::F64(buf) => crate::byte_cast::cast_slice_mut(buf),
         }
     }
 

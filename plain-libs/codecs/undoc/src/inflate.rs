@@ -24,20 +24,6 @@
 //! with [`InflateLimits::check`]. [`is_inflation_limit`] tells the error apart from an I/O
 //! error, so a caller can classify it (an archive error, not a failing disk).
 //!
-//! ```
-//! use std::io::Read;
-//! use unparser_shared::inflate::{is_inflation_limit, InflateGuard};
-//!
-//! // 1 MiB of output claimed by a 1 KiB entry: past 100 KiB it is a bomb.
-//! let bomb = std::io::repeat(0).take(1 << 20);
-//! let err = InflateGuard::new(bomb, 1024).read_to_end(&mut Vec::new()).unwrap_err();
-//! assert!(is_inflation_limit(&err));
-//!
-//! // The same output from 64 KiB of input is an ordinary 16-fold compression.
-//! let text = std::io::repeat(b'a').take(1 << 20);
-//! assert_eq!(InflateGuard::new(text, 64 * 1024).read_to_end(&mut Vec::new()).unwrap(), 1 << 20);
-//! ```
-
 use std::fmt;
 use std::io::{self, Read};
 
