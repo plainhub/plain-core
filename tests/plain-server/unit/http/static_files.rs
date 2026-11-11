@@ -114,12 +114,54 @@ fn hashed_asset_prefixes_are_immutable_and_the_shell_is_not() {
 
 #[test]
 fn server_time_is_injected_into_the_spa_shell() {
-    let html = inject_server_time("<html><head><title>x</title></head></html>", 42);
+    let html = inject_bootstrap("<html><head><title>x</title></head></html>", 42, false);
     assert!(html.starts_with("<html><head><script>window.__SERVER_TIME__=42</script>"));
     // A shell without <head> still gets the bootstrap rather than losing it.
     assert!(
-        inject_server_time("<div/>", 7).starts_with("<script>window.__SERVER_TIME__=7</script>")
+        inject_bootstrap("<div/>", 7, false)
+            .starts_with("<script>window.__SERVER_TIME__=7</script>")
     );
+}
+
+#[tokio::test]
+async fn developer_logging_is_injected_from_current_preferences() {
+    let disk = bundle();
+    let memory = embedded();
+    let prefs =
+        plain_rs::features::prefs::Prefs::load(&disk.dir.path().join("prefs.json")).unwrap();
+    for enabled in [false, true, false] {
+        prefs
+            .set("developer_mode", serde_json::json!(enabled))
+            .unwrap();
+        for root in [Some(disk.root.as_path()), None] {
+            for path in ["/", "/index.html", "/settings/device-info"] {
+                let response = serve(&prefs, root, Some(&memory), &Method::GET, path)
+                    .await
+                    .expect("the shell");
+                assert_eq!(
+                    response.headers()[header::CACHE_CONTROL],
+                    "no-cache, no-store"
+                );
+                let body = text(response).await;
+                assert!(body.contains("<head><script>window.__SERVER_TIME__="));
+                assert_eq!(
+                    body.contains(";window.__PLAIN_LOG__=true</script>"),
+                    enabled
+                );
+            }
+            let asset = serve(&prefs, root, Some(&memory), &Method::GET, "/assets/app.js")
+                .await
+                .expect("a script asset");
+            assert_eq!(
+                text(asset).await,
+                if root.is_some() {
+                    "console.log(1)"
+                } else {
+                    "console.log(2)"
+                }
+            );
+        }
+    }
 }
 
 #[test]

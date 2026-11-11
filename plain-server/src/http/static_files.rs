@@ -119,10 +119,13 @@ async fn read(source: &Source<'_>, relative: &Path) -> Option<Vec<u8>> {
     }
 }
 
-/// The SPA shell must learn the server time before the app boots, so the
-/// script is injected right after `<head>` exactly like the Kotlin path did.
-fn inject_server_time(html: &str, now_ms: i64) -> String {
-    let script = format!("<script>window.__SERVER_TIME__={now_ms}</script>");
+fn inject_bootstrap(html: &str, now_ms: i64, developer_mode: bool) -> String {
+    let logging = if developer_mode {
+        ";window.__PLAIN_LOG__=true"
+    } else {
+        ""
+    };
+    let script = format!("<script>window.__SERVER_TIME__={now_ms}{logging}</script>");
     match html.find("<head>") {
         Some(index) => {
             let (head, tail) = html.split_at(index + "<head>".len());
@@ -172,7 +175,12 @@ pub(crate) async fn serve(
     };
     let (body, cache) = if resource.ends_with(".html") {
         (
-            inject_server_time(&String::from_utf8_lossy(&bytes), now_ms()).into_bytes(),
+            inject_bootstrap(
+                &String::from_utf8_lossy(&bytes),
+                now_ms(),
+                prefs.get_or(plain_rs::features::prefs::pref_keys::DEVELOPER_MODE, false),
+            )
+            .into_bytes(),
             "no-cache, no-store",
         )
     } else {
