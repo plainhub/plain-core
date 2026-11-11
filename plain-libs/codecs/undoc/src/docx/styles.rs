@@ -113,7 +113,7 @@ impl StyleMap {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(e)) => {
+                Ok(plain_libs::xml::events::Event::Start(e)) => {
                     let name = e.name();
                     match name.as_ref() {
                         "w:style" => {
@@ -166,7 +166,7 @@ impl StyleMap {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(e)) => {
+                Ok(plain_libs::xml::events::Event::Empty(e)) => {
                     let name = e.name();
                     if let Some(ref mut style) = current_style {
                         match name.as_ref() {
@@ -250,7 +250,7 @@ impl StyleMap {
                         }
                     }
                 }
-                Ok(quick_xml::events::Event::End(e)) => match e.name().as_ref() {
+                Ok(plain_libs::xml::events::Event::End(e)) => match e.name().as_ref() {
                     "w:style" => {
                         if let Some(style) = current_style.take() {
                             map.styles.insert(style.id.clone(), style);
@@ -267,7 +267,7 @@ impl StyleMap {
                     }
                     _ => {}
                 },
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }
@@ -328,7 +328,7 @@ impl StyleMap {
 }
 
 /// Helper to get a boolean attribute value.
-fn get_bool_attr(e: &quick_xml::events::BytesStart, key: &str) -> Option<bool> {
+fn get_bool_attr(e: &plain_libs::xml::events::BytesStart, key: &str) -> Option<bool> {
     for attr in e.attributes().flatten() {
         if attr.key.as_ref() == key {
             let val = attr.value.as_ref();

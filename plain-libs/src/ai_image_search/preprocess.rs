@@ -2,7 +2,7 @@ use crate::ai_image_search::models::manifest::Interpolation;
 use crate::ai_image_search::models::manifest::Layout;
 use crate::ai_image_search::models::manifest::Preprocess;
 use crate::ai_image_search::models::manifest::Resize;
-use image::{ImageDecoder, ImageReader, imageops::FilterType};
+use crate::image::{ImageDecoder, ImageReader, imageops::FilterType};
 use std::path::Path;
 
 pub fn tensor(path: &Path, config: &Preprocess) -> Result<Option<Vec<f32>>, String> {
@@ -19,7 +19,7 @@ pub fn tensor_reader(
     let mut reader = ImageReader::new(source)
         .with_guessed_format()
         .map_err(|error| error.to_string())?;
-    let mut limits = image::Limits::default();
+    let mut limits = crate::image::Limits::default();
     limits.max_alloc = Some(128 * 1024 * 1024);
     limits.max_image_width = Some(32768);
     limits.max_image_height = Some(32768);
@@ -29,7 +29,7 @@ pub fn tensor_reader(
         Err(_) => return Ok(None),
     };
     let orientation = decoder.orientation().map_err(|e| e.to_string())?;
-    let mut image = match image::DynamicImage::from_decoder(decoder) {
+    let mut image = match crate::image::DynamicImage::from_decoder(decoder) {
         Ok(value) => value,
         Err(_) => return Ok(None),
     };

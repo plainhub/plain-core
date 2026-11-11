@@ -248,9 +248,9 @@ fn test_zip_magic_still_reaches_the_archive_layer() {
 /// A package whose only content is its main part, declared under `content_type`.
 fn package(main_part: &str, content_type: &str) -> Vec<u8> {
     use std::io::Write;
-    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let mut zip = plain_libs::zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
     zip.start_file("[Content_Types].xml", options).unwrap();
     write!(
         zip,

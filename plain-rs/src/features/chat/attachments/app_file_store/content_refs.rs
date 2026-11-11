@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, Transaction, params};
 use serde_json::Value;
 use std::{
@@ -40,17 +40,17 @@ pub fn claim(tx: &Transaction<'_>, additions: BTreeMap<String, i64>) -> Result<(
                 r.get(0)
             })
             .optional()?
-            .ok_or_else(|| anyhow::anyhow!("Unknown app file reference"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown app file reference"))?;
         let used: i64 = tx.query_row("SELECT count(*) FROM chats c,json_tree(c.content) j WHERE j.type='text' AND ((json_extract(c.content,'$.type') IN ('FILES','IMAGES') AND j.key='uri' AND j.path LIKE '$.value.items[%]') OR (json_extract(c.content,'$.type')='TEXT' AND j.key='imageLocalPath' AND j.path LIKE '$.value.linkPreviews[%]')) AND substr(j.atom,1,4)='fid:' AND (CASE WHEN instr(substr(j.atom,5),'.')=0 THEN substr(j.atom,5) ELSE substr(j.atom,5,instr(substr(j.atom,5),'.')-1) END)=?1",[&id],|r|r.get(0))?;
         let reserved = refs
             .checked_sub(used)
             .filter(|n| *n >= 0)
-            .ok_or_else(|| anyhow::anyhow!("App file reference accounting failed"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("App file reference accounting failed"))?;
         let extra = count.saturating_sub(reserved).max(0);
         let next = refs
             .checked_add(extra)
             .filter(|n| *n <= i64::from(i32::MAX))
-            .ok_or_else(|| anyhow::anyhow!("App file reference count overflow"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("App file reference count overflow"))?;
         if extra > 0 {
             tx.execute(
                 "UPDATE app_files SET ref_count=?2,updated_at=?3 WHERE id=?1",

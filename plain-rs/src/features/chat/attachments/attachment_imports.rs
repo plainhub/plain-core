@@ -2,7 +2,7 @@ use crate::features::chat::attachments::app_file_store;
 use crate::features::chat::attachments::app_file_store::ImportResult;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::chat_store::messages as chats;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use serde::Serialize;
 use serde_json::Value;
 use std::{
@@ -40,12 +40,12 @@ impl Imports {
         let mut pending = self
             .0
             .lock()
-            .map_err(|_| anyhow::anyhow!("Attachment lock unavailable"))?;
+            .map_err(|_| plain_libs::anyhow::anyhow!("Attachment lock unavailable"))?;
         if pending.len() >= 128 {
             bail!("Too many attachment transfers");
         }
         let chat =
-            chats::get(db, message_id)?.ok_or_else(|| anyhow::anyhow!("Message unavailable"))?;
+            chats::get(db, message_id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Message unavailable"))?;
         let content: Value = serde_json::from_str(&chat.content)?;
         if !matches!(content["type"].as_str(), Some("FILES" | "IMAGES"))
             || !uri.starts_with("fsid:")
@@ -59,14 +59,14 @@ impl Imports {
                     item["id"].as_str() == Some(id) && item["uri"].as_str() == Some(uri)
                 })
             })
-            .ok_or_else(|| anyhow::anyhow!("Attachment changed or unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Attachment changed or unavailable"))?;
         let size = item["size"]
             .as_i64()
             .filter(|n| *n >= 0)
-            .ok_or_else(|| anyhow::anyhow!("Invalid attachment size"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment size"))?;
         let file_name = item["fileName"]
             .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Invalid attachment name"))?
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment name"))?
             .to_owned();
         let root = temp_root(directory)?;
         let token = plain_libs::utils::uuid::Uuid::new_v4().into_string();
@@ -96,10 +96,10 @@ impl Imports {
         let mut pending = self
             .0
             .lock()
-            .map_err(|_| anyhow::anyhow!("Attachment lock unavailable"))?;
+            .map_err(|_| plain_libs::anyhow::anyhow!("Attachment lock unavailable"))?;
         let transfer = pending
             .remove(token)
-            .ok_or_else(|| anyhow::anyhow!("Attachment ticket unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Attachment ticket unavailable"))?;
         let path = Path::new(&transfer.ticket.path);
         let result = (|| {
             let root = temp_root(directory)?;
@@ -127,7 +127,7 @@ impl Imports {
         let transfer = self
             .0
             .lock()
-            .map_err(|_| anyhow::anyhow!("Attachment lock unavailable"))?
+            .map_err(|_| plain_libs::anyhow::anyhow!("Attachment lock unavailable"))?
             .remove(token);
         if let Some(transfer) = transfer {
             let _ = fs::remove_file(transfer.ticket.path);

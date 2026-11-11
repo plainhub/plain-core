@@ -136,8 +136,8 @@ fn creation_time(data: &[u8]) -> Option<String> {
     }
     let seconds = i64::try_from(time).ok()?.checked_sub(2_082_844_800)?;
     Some(
-        chrono::DateTime::from_timestamp(seconds, 0)?
-            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        crate::chrono::DateTime::from_timestamp(seconds, 0)?
+            .to_rfc3339_opts(crate::chrono::SecondsFormat::Millis, true),
     )
 }
 

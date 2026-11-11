@@ -150,7 +150,7 @@ fn image_reader(mut reader: impl Read + Seek) -> Result<Value, String> {
         reader
             .seek(SeekFrom::Start(0))
             .map_err(|error| error.to_string())?;
-        if let Some((width, height)) = image::ImageReader::new(BufReader::new(reader))
+        if let Some((width, height)) = plain_libs::image::ImageReader::new(BufReader::new(reader))
             .with_guessed_format()
             .ok()
             .and_then(|reader| reader.into_dimensions().ok())
@@ -216,16 +216,16 @@ fn normalize_video(facts: &mut Value) {
     facts["bitrate"] = json!(bitrate);
 }
 fn taken_at(raw: &str) -> Option<String> {
-    chrono::DateTime::parse_from_rfc3339(raw)
+    plain_libs::chrono::DateTime::parse_from_rfc3339(raw)
         .ok()
         .or_else(|| {
             ["%Y%m%dT%H%M%S%.f%#z", "%Y%m%dT%H%M%S%#z"]
                 .into_iter()
-                .find_map(|format| chrono::DateTime::parse_from_str(raw, format).ok())
+                .find_map(|format| plain_libs::chrono::DateTime::parse_from_str(raw, format).ok())
         })
         .map(|date| {
-            date.with_timezone(&chrono::Utc)
-                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+            date.with_timezone(&plain_libs::chrono::Utc)
+                .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
         })
 }
 

@@ -107,7 +107,7 @@ pub fn parse_chart_xml(xml: &str) -> Result<ChartData> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Start(ref e)) => {
+            Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                 let local_name = e.name().local_name();
                 match local_name.as_ref() {
                     "title" => {
@@ -147,7 +147,7 @@ pub fn parse_chart_xml(xml: &str) -> Result<ChartData> {
                     _ => {}
                 }
             }
-            Ok(quick_xml::events::Event::End(ref e)) => {
+            Ok(plain_libs::xml::events::Event::End(ref e)) => {
                 let local_name = e.name().local_name();
                 match local_name.as_ref() {
                     "title" => {
@@ -233,15 +233,15 @@ pub fn parse_chart_xml(xml: &str) -> Result<ChartData> {
                     _ => {}
                 }
             }
-            Ok(quick_xml::events::Event::Text(ref e)) if in_text_node => {
+            Ok(plain_libs::xml::events::Event::Text(ref e)) if in_text_node => {
                 current_text.push_str(&crate::decode::decode_text_lossy(e));
             }
             // quick-xml 0.40+ delivers entity refs as separate events; mirror the
             // Text arm so a series name like "R&amp;D" keeps its ampersand.
-            Ok(quick_xml::events::Event::GeneralRef(ref e)) if in_text_node => {
+            Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if in_text_node => {
                 current_text.push_str(&crate::decode::resolve_general_ref(e));
             }
-            Ok(quick_xml::events::Event::Eof) => break,
+            Ok(plain_libs::xml::events::Event::Eof) => break,
             Err(e) => return Err(e.into()),
             _ => {}
         }

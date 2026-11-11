@@ -1,4 +1,4 @@
-use anyhow::{Result, bail, ensure};
+use plain_libs::anyhow::{Result, bail, ensure};
 
 pub fn parse(encoded: &str) -> Result<(String, String)> {
     if let Some(id) = encoded.strip_prefix("channel:") {

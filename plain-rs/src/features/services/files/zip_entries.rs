@@ -18,7 +18,7 @@ pub fn extract(cache: &Path, reference: &str) -> Result<PathBuf, String> {
     }
     let file = File::open(archive).map_err(|error| error.to_string())?;
     let metadata = file.metadata().map_err(|error| error.to_string())?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|error| error.to_string())?;
+    let mut zip = plain_libs::zip::ZipArchive::new(file).map_err(|error| error.to_string())?;
     let index = zip
         .index_for_name(name)
         .or_else(|| zip.index_for_name(&format!("/{name}")))

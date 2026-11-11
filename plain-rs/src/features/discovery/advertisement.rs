@@ -1,7 +1,7 @@
 use crate::features::chat::enums::DeviceType;
 use crate::features::discovery::nearby_wire::DiscoverReply;
 use crate::infrastructure::protocols::mdns::service_info::build_service_info;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use plain_libs::protocols::mdns::records::MdnsServiceInfo;
 use serde::{Deserialize, Serialize};
 

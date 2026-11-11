@@ -1,5 +1,5 @@
 use crate::apk::input::Bytes;
-use anyhow::{Result, anyhow, ensure};
+use crate::anyhow::{Result, anyhow, ensure};
 use std::io::{Read, Seek};
 
 pub(super) const MANIFEST_LIMIT: u64 = 16 * 1024 * 1024;
@@ -270,13 +270,13 @@ pub fn read(reader: impl Read + Seek) -> Result<Metadata> {
     root(&bytes(reader)?)
 }
 fn entry<R: Read + Seek>(
-    archive: &mut zip::ZipArchive<R>,
+    archive: &mut crate::zip::ZipArchive<R>,
     name: &str,
     limit: u64,
 ) -> Result<Option<Vec<u8>>> {
     let mut entry = match archive.by_name(name) {
         Ok(entry) => entry,
-        Err(zip::result::ZipError::FileNotFound) => return Ok(None),
+        Err(crate::zip::result::ZipError::FileNotFound) => return Ok(None),
         Err(error) => return Err(error.into()),
     };
     ensure!(entry.size() <= limit, "APK entry {name} is too large");
@@ -290,12 +290,12 @@ fn entry<R: Read + Seek>(
     Ok(Some(bytes))
 }
 pub(super) fn bytes(reader: impl Read + Seek) -> Result<Vec<u8>> {
-    let mut archive = zip::ZipArchive::new(reader)?;
+    let mut archive = crate::zip::ZipArchive::new(reader)?;
     entry(&mut archive, "AndroidManifest.xml", MANIFEST_LIMIT)?
         .ok_or_else(|| anyhow!("APK manifest not found"))
 }
 pub fn xml(reader: impl Read + Seek) -> Result<String> {
-    let mut archive = zip::ZipArchive::new(reader)?;
+    let mut archive = crate::zip::ZipArchive::new(reader)?;
     let bytes = entry(&mut archive, "AndroidManifest.xml", MANIFEST_LIMIT)?
         .ok_or_else(|| anyhow!("APK manifest not found"))?;
     if !crate::apk::xml::needs_resources(&bytes)? {
@@ -304,9 +304,9 @@ pub fn xml(reader: impl Read + Seek) -> Result<String> {
     let (size, stored) = match archive.by_name("resources.arsc") {
         Ok(entry) => (
             entry.size(),
-            entry.compression() == zip::CompressionMethod::Stored,
+            entry.compression() == crate::zip::CompressionMethod::Stored,
         ),
-        Err(zip::result::ZipError::FileNotFound) => {
+        Err(crate::zip::result::ZipError::FileNotFound) => {
             return crate::apk::xml::render_with(&bytes, None);
         }
         Err(error) => return Err(error.into()),

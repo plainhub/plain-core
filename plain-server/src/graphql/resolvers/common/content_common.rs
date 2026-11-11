@@ -1,5 +1,5 @@
 use crate::graphql::resolvers::tags::domain_types::Tag;
-use chrono::{DateTime, Utc};
+use plain_libs::chrono::{DateTime, Utc};
 use plain_graphql::{Context, ID};
 use plain_rs::infrastructure::types::Instant;
 use std::sync::Arc;

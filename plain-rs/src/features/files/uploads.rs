@@ -17,7 +17,7 @@ pub type Completion = Arc<
     dyn Fn(
             PathBuf,
         )
-            -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>>
+            -> std::pin::Pin<Box<dyn std::future::Future<Output = plain_libs::anyhow::Result<()>> + Send>>
         + Send
         + Sync,
 >;
@@ -35,14 +35,14 @@ impl Drop for Runtime {
         }
     }
 }
-pub fn chunk_dir(base: &Path, id: &str) -> anyhow::Result<PathBuf> {
-    anyhow::ensure!(
+pub fn chunk_dir(base: &Path, id: &str) -> plain_libs::anyhow::Result<PathBuf> {
+    plain_libs::anyhow::ensure!(
         !id.is_empty() && id != "." && id != ".." && !id.contains(['/', '\\', '\0']),
         "Invalid fileId"
     );
     Ok(base.join(id))
 }
-pub async fn chunks(base: &Path, id: &str) -> anyhow::Result<Vec<(u32, u64)>> {
+pub async fn chunks(base: &Path, id: &str) -> plain_libs::anyhow::Result<Vec<(u32, u64)>> {
     let dir = chunk_dir(base, id)?;
     let mut reader = match tokio::fs::read_dir(dir).await {
         Ok(reader) => reader,
@@ -66,15 +66,15 @@ pub async fn chunks(base: &Path, id: &str) -> anyhow::Result<Vec<(u32, u64)>> {
     items.sort_by_key(|item| item.0);
     Ok(items)
 }
-pub async fn list(base: &Path, id: &str) -> anyhow::Result<Vec<String>> {
+pub async fn list(base: &Path, id: &str) -> plain_libs::anyhow::Result<Vec<String>> {
     Ok(chunks(base, id)
         .await?
         .into_iter()
         .map(|(index, size)| format!("{index}:{size}"))
         .collect())
 }
-pub fn chunk_path(base: &Path, id: &str, index: i64) -> anyhow::Result<PathBuf> {
-    anyhow::ensure!(
+pub fn chunk_path(base: &Path, id: &str, index: i64) -> plain_libs::anyhow::Result<PathBuf> {
+    plain_libs::anyhow::ensure!(
         (0..=i64::from(i32::MAX)).contains(&index),
         "Invalid chunk index"
     );
@@ -85,7 +85,7 @@ pub async fn save_chunk(
     id: &str,
     index: i64,
     bytes: &[u8],
-) -> anyhow::Result<PathBuf> {
+) -> plain_libs::anyhow::Result<PathBuf> {
     let path = chunk_path(base, id, index)?;
     tokio::fs::create_dir_all(path.parent().unwrap()).await?;
     tokio::fs::write(&path, bytes).await?;
@@ -97,7 +97,7 @@ impl Runtime {
         completed: impl Fn(
             PathBuf,
         ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>,
+            Box<dyn std::future::Future<Output = plain_libs::anyhow::Result<()>> + Send>,
         > + Send
         + Sync
         + 'static,
@@ -114,7 +114,7 @@ impl Runtime {
             .cloned()
             .unwrap_or_else(|| json!({"status":"NONE"}))
     }
-    pub async fn delete(&self, base: &Path, id: &str) -> anyhow::Result<bool> {
+    pub async fn delete(&self, base: &Path, id: &str) -> plain_libs::anyhow::Result<bool> {
         let dir = chunk_dir(base, id)?;
         let _guard = self.lifecycle.lock().await;
         let task = self.tasks.lock().unwrap().remove(id);
@@ -138,11 +138,11 @@ impl Runtime {
         size: i64,
         kind: Kind,
         events: broadcast::Sender<WsEvent>,
-    ) -> anyhow::Result<Value> {
+    ) -> plain_libs::anyhow::Result<Value> {
         let dir = chunk_dir(&base, &id)?;
-        anyhow::ensure!(count > 0 && size >= 0, "Invalid merge arguments");
+        plain_libs::anyhow::ensure!(count > 0 && size >= 0, "Invalid merge arguments");
         if let Kind::File { path, .. } = &kind {
-            anyhow::ensure!(!path.as_os_str().is_empty(), "Destination is required");
+            plain_libs::anyhow::ensure!(!path.as_os_str().is_empty(), "Destination is required");
         }
         let _guard = self.lifecycle.lock().await;
         let exists = tokio::fs::try_exists(&dir).await?;
@@ -154,7 +154,7 @@ impl Runtime {
             {
                 return Ok(value.clone());
             }
-            anyhow::ensure!(exists, "No chunks found for {id}");
+            plain_libs::anyhow::ensure!(exists, "No chunks found for {id}");
             if jobs.len() > 1024 {
                 jobs.retain(|_, value| value["status"] == "MERGING");
             }
@@ -176,7 +176,7 @@ impl Runtime {
             if let (Ok((value, _)), Some(parent), Some(completed)) = (&outcome, parent, completed) {
                 let path = parent.join(value);
                 if let Err(error) = completed(path.clone()).await {
-                    outcome = Err(anyhow::anyhow!(
+                    outcome = Err(plain_libs::anyhow::anyhow!(
                         "Uploaded file saved at {} but completion failed: {error}",
                         path.display()
                     ));
@@ -210,13 +210,13 @@ impl Drop for Temp {
         let _ = std::fs::remove_file(&self.0);
     }
 }
-pub async fn concatenate(dir: &Path, count: i32, output: &Path) -> anyhow::Result<u64> {
+pub async fn concatenate(dir: &Path, count: i32, output: &Path) -> plain_libs::anyhow::Result<u64> {
     let mut out = tokio::fs::File::create(output).await?;
     let mut written = 0;
     for index in 0..count {
         let mut input = tokio::fs::File::open(dir.join(format!("chunk_{index}")))
             .await
-            .map_err(|error| anyhow::anyhow!("Missing chunk {index}: {error}"))?;
+            .map_err(|error| plain_libs::anyhow::anyhow!("Missing chunk {index}: {error}"))?;
         written += tokio::io::copy(&mut input, &mut out).await?;
     }
     out.flush().await?;
@@ -228,26 +228,26 @@ pub async fn merge(
     count: i32,
     size: i64,
     kind: Kind,
-) -> anyhow::Result<(String, u64)> {
-    anyhow::ensure!(count > 0, "Invalid totalChunks");
+) -> plain_libs::anyhow::Result<(String, u64)> {
+    plain_libs::anyhow::ensure!(count > 0, "Invalid totalChunks");
     let mut expected = 0u64;
     for index in 0..count {
         let metadata = tokio::fs::metadata(dir.join(format!("chunk_{index}")))
             .await
-            .map_err(|error| anyhow::anyhow!("Missing chunk {index}: {error}"))?;
-        anyhow::ensure!(metadata.is_file(), "Invalid chunk {index}");
+            .map_err(|error| plain_libs::anyhow::anyhow!("Missing chunk {index}: {error}"))?;
+        plain_libs::anyhow::ensure!(metadata.is_file(), "Invalid chunk {index}");
         expected = expected
             .checked_add(metadata.len())
-            .ok_or_else(|| anyhow::anyhow!("Chunk size overflow"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Chunk size overflow"))?;
     }
     if expected != size as u64 {
         // A stale chunk set must be discarded, matching the mobile upload contract.
         let _ = tokio::fs::remove_dir_all(dir).await;
-        anyhow::bail!("Chunk total size {expected} != file size {size}");
+        plain_libs::anyhow::bail!("Chunk total size {expected} != file size {size}");
     }
     let temp = Temp(dir.join(format!(".merge_{}", plain_libs::utils::uuid::Uuid::new_v4())));
     let written = concatenate(dir, count, &temp.0).await?;
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         written == expected,
         "Merge integrity failed: expected {expected}, got {written}"
     );
@@ -258,14 +258,14 @@ pub async fn merge(
         }
         Kind::AppFile { name } => {
             let record = store
-                .ok_or_else(|| anyhow::anyhow!("App file store is required"))?
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("App file store is required"))?
                 .import(temp.0.clone(), name, String::new(), true)
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             Path::new(&record.real_path)
                 .file_name()
                 .and_then(|name| name.to_str())
-                .ok_or_else(|| anyhow::anyhow!("Invalid imported path"))?
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid imported path"))?
                 .to_owned()
         }
         Kind::File { path, replace } => {

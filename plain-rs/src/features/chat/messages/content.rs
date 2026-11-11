@@ -51,7 +51,7 @@ pub fn to_peer_content(content: &str, token: &str) -> String {
     v.to_string()
 }
 
-pub fn peer_content(content: &str, token: &str) -> anyhow::Result<String> {
+pub fn peer_content(content: &str, token: &str) -> plain_libs::anyhow::Result<String> {
     let mut value: Value = serde_json::from_str(content)?;
     if !matches!(
         value.get("type").and_then(Value::as_str),
@@ -60,24 +60,24 @@ pub fn peer_content(content: &str, token: &str) -> anyhow::Result<String> {
         return Ok(content.into());
     }
     if plain_libs::utils::base64::base64_decode(token).len() != 32 {
-        anyhow::bail!("Invalid URL token");
+        plain_libs::anyhow::bail!("Invalid URL token");
     }
     let items = value
         .get_mut("value")
         .and_then(|v| v.get_mut("items"))
         .and_then(Value::as_array_mut)
-        .ok_or_else(|| anyhow::anyhow!("Invalid attachment items"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment items"))?;
     for item in items {
         let uri = item
             .get("uri")
             .and_then(Value::as_str)
-            .ok_or_else(|| anyhow::anyhow!("Missing attachment URI"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing attachment URI"))?;
         let file_id = make_file_id(uri, token);
         if file_id.is_empty() {
-            anyhow::bail!("Attachment encryption failed");
+            plain_libs::anyhow::bail!("Attachment encryption failed");
         }
         item.as_object_mut()
-            .ok_or_else(|| anyhow::anyhow!("Invalid attachment"))?
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment"))?
             .insert("uri".into(), Value::String(format!("fsid:{file_id}")));
     }
     Ok(value.to_string())

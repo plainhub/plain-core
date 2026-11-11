@@ -11,7 +11,7 @@ use crate::features::files::tasks::Service;
 use crate::features::services::files::platform::FilePlatform;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::events::WsEvent;
-use anyhow::{Result, anyhow, bail};
+use plain_libs::anyhow::{Result, anyhow, bail};
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -273,7 +273,7 @@ impl FileTasks {
         name: String,
     ) -> Result<Option<String>> {
         let directory = named_directory(&directory, &name)?;
-        let src = plain_libs::utils::file_uri::local_path(&src).map_err(anyhow::Error::msg)?;
+        let src = plain_libs::utils::file_uri::local_path(&src).map_err(plain_libs::anyhow::Error::msg)?;
         let destination = directory.join(name);
         let destination = tokio::task::spawn_blocking(move || {
             plain_libs::utils::unique_path::unique_sibling(&destination)

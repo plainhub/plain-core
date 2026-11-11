@@ -1,14 +1,14 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub struct Instant(pub chrono::DateTime<chrono::Utc>);
+pub struct Instant(pub plain_libs::chrono::DateTime<plain_libs::chrono::Utc>);
 
 #[cfg(feature = "graphql")]
 #[plain_graphql::Scalar]
 impl plain_graphql::ScalarType for Instant {
     fn parse(value: plain_graphql::Value) -> plain_graphql::InputValueResult<Self> {
         if let plain_graphql::Value::String(s) = &value
-            && let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s)
+            && let Ok(dt) = plain_libs::chrono::DateTime::parse_from_rfc3339(s)
         {
-            return Ok(Instant(dt.with_timezone(&chrono::Utc)));
+            return Ok(Instant(dt.with_timezone(&plain_libs::chrono::Utc)));
         }
         Err(plain_graphql::InputValueError::expected_type(value))
     }
@@ -20,7 +20,7 @@ impl plain_graphql::ScalarType for Instant {
 
 impl Instant {
     fn wire(&self) -> String {
-        self.0.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+        self.0.to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
     }
 }
 impl serde::Serialize for Instant {
@@ -32,8 +32,8 @@ impl serde::Serialize for Instant {
 impl<'de> serde::Deserialize<'de> for Instant {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = <String as serde::Deserialize>::deserialize(deserializer)?;
-        chrono::DateTime::parse_from_rfc3339(&value)
-            .map(|value| Self(value.with_timezone(&chrono::Utc)))
+        plain_libs::chrono::DateTime::parse_from_rfc3339(&value)
+            .map(|value| Self(value.with_timezone(&plain_libs::chrono::Utc)))
             .map_err(serde::de::Error::custom)
     }
 }

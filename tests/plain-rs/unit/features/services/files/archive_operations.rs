@@ -6,12 +6,12 @@ fn running_state() -> (watch::Sender<bool>, watch::Receiver<bool>, AtomicBool) {
 }
 
 fn archive(path: &Path, name: &str, bytes: &[u8]) {
-    let mut writer = zip::ZipWriter::new(File::create(path).unwrap());
+    let mut writer = plain_libs::zip::ZipWriter::new(File::create(path).unwrap());
     writer
         .start_file(
             name,
-            zip::write::SimpleFileOptions::default()
-                .compression_method(zip::CompressionMethod::Stored),
+            plain_libs::zip::write::SimpleFileOptions::default()
+                .compression_method(plain_libs::zip::CompressionMethod::Stored),
         )
         .unwrap();
     writer.write_all(bytes).unwrap();
@@ -41,7 +41,7 @@ fn directory_round_trip_preserves_structure_bytes_and_modified_time() {
     )
     .unwrap()
     .keep();
-    let mut zip = zip::ZipArchive::new(File::open(&packed).unwrap()).unwrap();
+    let mut zip = plain_libs::zip::ZipArchive::new(File::open(&packed).unwrap()).unwrap();
     assert!(zip.by_name("source/empty/").unwrap().is_dir());
     assert!(zip.by_name("source/nested/note.txt").unwrap().is_file());
     let (extracted, files) =
@@ -190,7 +190,7 @@ fn an_archive_inside_its_source_uses_the_snapshot_before_output_creation() {
     .unwrap()
     .keep();
     assert_eq!(output, target);
-    let mut archive = zip::ZipArchive::new(File::open(output).unwrap()).unwrap();
+    let mut archive = plain_libs::zip::ZipArchive::new(File::open(output).unwrap()).unwrap();
     assert!(archive.by_name("source/note.txt").is_ok());
     assert!(archive.by_name("source/packed.zip").is_err());
     assert_eq!(archive.len(), 2);
@@ -228,7 +228,7 @@ fn links_preserve_the_alias_name_and_can_reference_the_same_target_twice() {
         &cancelled,
     )
     .unwrap();
-    let mut archive = zip::ZipArchive::new(File::open(&output.path).unwrap()).unwrap();
+    let mut archive = plain_libs::zip::ZipArchive::new(File::open(&output.path).unwrap()).unwrap();
     for name in ["source/one/note.txt", "source/two/note.txt"] {
         let mut bytes = Vec::new();
         archive

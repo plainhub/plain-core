@@ -5,7 +5,7 @@ use crate::features::chat::attachments::prewarm::Driver;
 use crate::features::services::peers::peer_transport;
 use crate::features::services::peers::peer_wire;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use serde_json::{Value, json};
 
 struct Native<'a>(&'a CoreRuntime);
@@ -13,7 +13,7 @@ impl Driver for Native<'_> {
     async fn capabilities(&self) -> Result<Capabilities> {
         let supported = peer_transport::capabilities(&self.0.host)
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         Ok(Capabilities {
             ble_ready: supported
                 .contains(&crate::infrastructure::transport::router::TransportType::Ble),
@@ -26,7 +26,7 @@ impl Driver for Native<'_> {
             .0
             .host
             .generation()
-            .ok_or_else(|| anyhow::anyhow!("BLE host unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE host unavailable"))?;
         let found: Option<String> = serde_json::from_value(
             self.0
                 .host
@@ -36,16 +36,16 @@ impl Driver for Native<'_> {
                     json!({"clientId":client_id,"timeoutMs":15000}),
                 )
                 .await
-                .map_err(anyhow::Error::msg)?,
+                .map_err(plain_libs::anyhow::Error::msg)?,
         )?;
         let Some(found) = found else {
             return Ok(None);
         };
-        anyhow::ensure!(found == client_id, "Peer prewarm advertisement mismatch");
+        plain_libs::anyhow::ensure!(found == client_id, "Peer prewarm advertisement mismatch");
         let Some(payload) =
             crate::features::services::discovery::ble_scan::read_payload(self.0, owner, client_id)
                 .await
-                .map_err(anyhow::Error::msg)?
+                .map_err(plain_libs::anyhow::Error::msg)?
         else {
             return Ok(None);
         };
@@ -74,7 +74,7 @@ impl Driver for Native<'_> {
             &prepared.body,
         )
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
         started(&response)
     }
 }
@@ -87,7 +87,7 @@ fn started(response: &Value) -> Result<bool> {
     }
     response["data"]["startAware"]
         .as_bool()
-        .ok_or_else(|| anyhow::anyhow!("Invalid peer startAware receipt"))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid peer startAware receipt"))
 }
 fn conversation_peer(
     filter: &crate::infrastructure::db::chat_store::messages::Filter,
@@ -152,7 +152,7 @@ async fn execute(state: &CoreRuntime, id: &str) -> Result<Option<Advertisement>>
     }
     let native = Native(state);
     tokio::select! {
-        _ = stop.changed() => Err(anyhow::anyhow!("Server stopped")),
+        _ = stop.changed() => Err(plain_libs::anyhow::anyhow!("Server stopped")),
         result = prewarm::run(&state.db, &state.prewarmer, id, &native) => result,
     }
 }

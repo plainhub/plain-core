@@ -26,7 +26,7 @@ async fn streamed_archives_preserve_many_entries_and_repeated_source_bytes() {
         }
         assert_eq!(reader.size as usize, bytes.len());
         drop(reader);
-        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let mut archive = plain_libs::zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
         assert_eq!(archive.len(), count + 1);
         for index in 0..count {
             let mut bytes = String::new();
@@ -98,7 +98,7 @@ async fn unnamed_media_entries_use_the_source_basename() {
     while let Some(chunk) = reader.read().await.unwrap() {
         bytes.extend(chunk);
     }
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+    let mut archive = plain_libs::zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
     let mut output = Vec::new();
     archive
         .by_name("original.txt")
@@ -114,9 +114,9 @@ async fn archive_preview_is_readable_without_exposing_private_archive_staging() 
     let core = crate::test_runtime::Core::open(&directory.path().join("data")).unwrap();
     let state = core.runtime_state();
     let source = directory.path().join("owned.zip");
-    let mut archive = zip::ZipWriter::new(std::fs::File::create(&source).unwrap());
+    let mut archive = plain_libs::zip::ZipWriter::new(std::fs::File::create(&source).unwrap());
     archive
-        .start_file("owned.txt", zip::write::SimpleFileOptions::default())
+        .start_file("owned.txt", plain_libs::zip::write::SimpleFileOptions::default())
         .unwrap();
     archive.write_all(b"exact preview bytes").unwrap();
     archive.finish().unwrap();

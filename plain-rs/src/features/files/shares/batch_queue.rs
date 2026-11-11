@@ -3,7 +3,7 @@ use crate::features::files::shares::batch_plan::Plan;
 use crate::features::files::shares::batch_plan::Walker;
 use crate::features::files::shares::client::File;
 use crate::features::files::shares::client::Link;
-use anyhow::{Result, bail, ensure};
+use plain_libs::anyhow::{Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -324,7 +324,7 @@ impl Queue {
             .filter(|t| {
                 t.run.snapshot.status == "DOWNLOADING" && t.run.snapshot.generation == generation
             })
-            .ok_or_else(|| anyhow::anyhow!("Shared batch expired"))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Shared batch expired"))
     }
     pub fn planned(&self, id: &str, generation: &str, plan: Plan) -> Result<()> {
         let mut s = self.state.lock().unwrap();

@@ -44,8 +44,8 @@ impl TryFrom<plain_rs::infrastructure::db::SessionRow> for Session {
             last_seen_at: row
                 .last_seen_at
                 .map(|at| {
-                    chrono::DateTime::parse_from_rfc3339(&at)
-                        .map(|at| Instant(at.with_timezone(&chrono::Utc)))
+                    plain_libs::chrono::DateTime::parse_from_rfc3339(&at)
+                        .map(|at| Instant(at.with_timezone(&plain_libs::chrono::Utc)))
                 })
                 .transpose()?,
             last_active: Instant(value.last_active),

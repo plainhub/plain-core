@@ -108,7 +108,7 @@ async fn completion_failures_keep_the_committed_file_and_report_failure_once_wit
         Box::pin(async move {
             count.fetch_add(1, Ordering::SeqCst);
             assert_eq!(tokio::fs::read(path).await.unwrap(), b"complete");
-            Err(anyhow::anyhow!("scan refused"))
+            Err(plain_libs::anyhow::anyhow!("scan refused"))
         })
     }));
     let (events, mut received) = broadcast::channel(8);
@@ -336,7 +336,7 @@ async fn resource_failure_removes_merged_staging_and_preserves_input_chunks_for_
         name: "fixture.bin".into(),
         write: Arc::new(move |path| {
             *observed.lock().unwrap() = Some(path);
-            Box::pin(async { anyhow::bail!("Fixture resource write failure") })
+            Box::pin(async { plain_libs::anyhow::bail!("Fixture resource write failure") })
         }),
     };
     let error = merge(None, directory.path(), 1, 2, kind).await.unwrap_err();

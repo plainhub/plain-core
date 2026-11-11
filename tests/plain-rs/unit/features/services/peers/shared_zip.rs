@@ -16,7 +16,7 @@ fn zip_roundtrip_validates_names_sources_and_cancellation_and_cleans_temporary()
     )
     .unwrap();
     let path = temporary.0.clone();
-    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut archive = plain_libs::zip::ZipArchive::new(file).unwrap();
     let mut entry = archive.by_name("folder/中文 +?#%.txt").unwrap();
     let mut text = String::new();
     entry.read_to_string(&mut text).unwrap();
@@ -77,7 +77,7 @@ fn archive_preserves_large_files_and_nested_names_without_native_or_http_adapter
     )
     .unwrap();
     let path = temporary.0.clone();
-    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut archive = plain_libs::zip::ZipArchive::new(file).unwrap();
     let mut content = Vec::new();
     archive
         .by_name("root/子目录/a.txt")

@@ -1,0 +1,9 @@
+pub(crate) mod deflate;
+pub(crate) mod gif;
+pub(crate) mod jpeg;
+pub(crate) mod lzw;
+pub(crate) mod png;
+pub(crate) mod quantize;
+pub(crate) mod tiff;
+pub(crate) mod webp;
+pub(crate) mod zune;

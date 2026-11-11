@@ -14,7 +14,6 @@ plain-libs = { path = "../plain-libs", default-features = false }
 plain-rs = { path = "../plain-rs", default-features = false, features = ["unix-platform"] }
 plain_server = { path = "../plain-server", package = "plain-server" }
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "net", "signal", "time", "macros", "io-util", "fs", "sync"] }
-anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
@@ -23,7 +22,6 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 [dev-dependencies]
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 plain-graphql = { path = "../plain-graphql" }
 
 [target.'cfg(target_os = "linux")'.dependencies]

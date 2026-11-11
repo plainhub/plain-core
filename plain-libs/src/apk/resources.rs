@@ -2,7 +2,7 @@ use crate::apk::framework;
 use crate::apk::input::Bytes;
 use crate::apk::manifest::Pool;
 use crate::apk::xml;
-use anyhow::{Result, anyhow, ensure};
+use crate::anyhow::{Result, anyhow, ensure};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},

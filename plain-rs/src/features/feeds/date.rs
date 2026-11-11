@@ -1,4 +1,4 @@
-use chrono::{DateTime, FixedOffset, NaiveDate, TimeZone};
+use plain_libs::chrono::{DateTime, FixedOffset, NaiveDate, TimeZone};
 
 /// Parses the date formats feed publishers actually emit.
 ///

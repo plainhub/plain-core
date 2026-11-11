@@ -30,7 +30,7 @@ impl Workers {
     pub(super) async fn run<T: Send + 'static>(
         &self,
         job: impl FnOnce() -> T + Send + 'static,
-    ) -> anyhow::Result<T> {
+    ) -> crate::anyhow::Result<T> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         self.sender
             .send(Box::new(move || {
@@ -44,11 +44,11 @@ impl Workers {
                             .map(String::as_str)
                             .or_else(|| panic.downcast_ref::<&str>().copied())
                             .unwrap_or("unknown panic payload");
-                        anyhow::anyhow!("thumbnail worker panicked: {message}")
+                        crate::anyhow::anyhow!("thumbnail worker panicked: {message}")
                     });
                 let _ = sender.send(result);
             }))
-            .map_err(|_| anyhow::anyhow!("thumbnail workers stopped"))?;
+            .map_err(|_| crate::anyhow::anyhow!("thumbnail workers stopped"))?;
         receiver.await?
     }
 }

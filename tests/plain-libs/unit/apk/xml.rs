@@ -230,12 +230,12 @@ fn resource_and_framework_style_values_are_rendered_with_their_names() {
     assert!(output.contains("android:label=\"Localized title\""));
     assert!(output.contains("android:theme=\"@android:style/Animation\""));
     for compression in [
-        zip::CompressionMethod::Stored,
-        zip::CompressionMethod::Deflated,
+        crate::zip::CompressionMethod::Stored,
+        crate::zip::CompressionMethod::Deflated,
     ] {
         use std::io::{Cursor, Write};
-        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        let options = zip::write::SimpleFileOptions::default().compression_method(compression);
+        let mut writer = crate::zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let options = crate::zip::write::SimpleFileOptions::default().compression_method(compression);
         writer.start_file("AndroidManifest.xml", options).unwrap();
         writer.write_all(&bytes).unwrap();
         writer.start_file("resources.arsc", options).unwrap();
@@ -329,9 +329,9 @@ fn stored_resource_tables_read_referenced_values_without_buffering_unused_chunks
     let padding = 64 * 1024 * 1024;
     let total = table.len() + 8 + padding;
     table[4..8].copy_from_slice(&(total as u32).to_le_bytes());
-    let mut writer = zip::ZipWriter::new(crate::temporary::tempfile().unwrap());
+    let mut writer = crate::zip::ZipWriter::new(crate::temporary::tempfile().unwrap());
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        crate::zip::write::SimpleFileOptions::default().compression_method(crate::zip::CompressionMethod::Stored);
     writer.start_file("AndroidManifest.xml", options).unwrap();
     writer.write_all(&manifest).unwrap();
     writer.start_file("resources.arsc", options).unwrap();
@@ -348,7 +348,7 @@ fn stored_resource_tables_read_referenced_values_without_buffering_unused_chunks
     let output = super::super::manifest::xml(&mut file).unwrap();
     assert!(output.contains("label=\"Localized title\""));
     let corrupt_at = {
-        let mut archive = zip::ZipArchive::new(&mut file).unwrap();
+        let mut archive = crate::zip::ZipArchive::new(&mut file).unwrap();
         archive
             .by_name("resources.arsc")
             .unwrap()

@@ -6,7 +6,7 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::chat_store::messages;
 use crate::infrastructure::db::chat_store::peers;
 use crate::infrastructure::transport::router::Attempt;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
@@ -85,9 +85,9 @@ impl Queue {
             bail!("Download task capacity exceeded");
         }
         let peer =
-            peers::get(&self.db, peer_id)?.ok_or_else(|| anyhow::anyhow!("Peer unavailable"))?;
+            peers::get(&self.db, peer_id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Peer unavailable"))?;
         let row = messages::get(&self.db, message_id)?
-            .ok_or_else(|| anyhow::anyhow!("Message unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Message unavailable"))?;
         if peer_id != row.from_id && peer_id != row.to_id {
             bail!("Attachment peer does not belong to message");
         }
@@ -99,14 +99,14 @@ impl Queue {
             .as_array()
             .and_then(|items| items.iter().find(|v| v["id"].as_str() == Some(id)))
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Attachment unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Attachment unavailable"))?;
         if !file["uri"].as_str().is_some_and(|v| v.starts_with("fsid:")) {
             bail!("Attachment is already local");
         }
         let total = file["size"]
             .as_u64()
             .filter(|n| *n <= i64::MAX as u64)
-            .ok_or_else(|| anyhow::anyhow!("Invalid attachment size"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment size"))?;
         s.tasks.insert(
             id.into(),
             Task {
@@ -158,9 +158,9 @@ impl Queue {
             return Ok(false);
         }
         let peer =
-            peers::get(&self.db, peer_id)?.ok_or_else(|| anyhow::anyhow!("Peer unavailable"))?;
+            peers::get(&self.db, peer_id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Peer unavailable"))?;
         let row = messages::get(&self.db, message_id)?
-            .ok_or_else(|| anyhow::anyhow!("Message unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Message unavailable"))?;
         if peer_id != row.from_id && peer_id != row.to_id {
             bail!("Attachment peer does not belong to message");
         }
@@ -170,7 +170,7 @@ impl Queue {
         }
         let items = content["value"]["items"]
             .as_array()
-            .ok_or_else(|| anyhow::anyhow!("Invalid message attachments"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid message attachments"))?;
         let mut selected = Vec::new();
         let mut ids = std::collections::HashSet::new();
         for file in items.iter().filter(|file| {
@@ -181,7 +181,7 @@ impl Queue {
             let id = file["id"]
                 .as_str()
                 .filter(|id| !id.is_empty())
-                .ok_or_else(|| anyhow::anyhow!("Invalid attachment identity"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment identity"))?;
             if !ids.insert(id.to_owned()) {
                 bail!("Duplicate attachment identity");
             }
@@ -191,7 +191,7 @@ impl Queue {
             let total = file["size"]
                 .as_u64()
                 .filter(|total| *total <= i64::MAX as u64)
-                .ok_or_else(|| anyhow::anyhow!("Invalid attachment size"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment size"))?;
             selected.push(Snapshot {
                 id: id.into(),
                 message_id: message_id.into(),
@@ -345,11 +345,11 @@ impl Queue {
         let ticket = task
             .ticket
             .take()
-            .ok_or_else(|| anyhow::anyhow!("Missing download ticket"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing download ticket"))?;
         let committed = match error {
             Some(error) => {
                 self.imports.abort(&ticket.token)?;
-                Err(anyhow::anyhow!(error))
+                Err(plain_libs::anyhow::anyhow!(error))
             }
             None => self
                 .imports
@@ -410,10 +410,10 @@ impl Queue {
             };
             let result = (|| {
                 let peer = peers::get(&self.db, &task.snapshot.peer.id)?
-                    .ok_or_else(|| anyhow::anyhow!("Peer unavailable"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Peer unavailable"))?;
                 let uri = task.snapshot.file["uri"]
                     .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("Invalid attachment URI"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment URI"))?;
                 let ticket = self.imports.begin(
                     &self.db,
                     &self.directory,
@@ -425,7 +425,7 @@ impl Queue {
                 task.snapshot.file["fileName"] = json!(ticket.file_name);
                 task.snapshot.file["size"] = json!(ticket.size);
                 task.snapshot.total = ticket.size as u64;
-                Ok::<_, anyhow::Error>(ticket)
+                Ok::<_, plain_libs::anyhow::Error>(ticket)
             })();
             match result {
                 Ok(ticket) => {

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use crate::anyhow::{Context, Result};
 
 pub fn walk_files(
     root: &Path,
@@ -40,7 +40,7 @@ fn walk(
     mut skipped: impl FnMut(&Path),
 ) -> Result<()> {
     if !root.is_absolute() {
-        return Err(anyhow::anyhow!(
+        return Err(crate::anyhow::anyhow!(
             "file walk root is not an absolute path: {}",
             root.display()
         ));
@@ -60,13 +60,13 @@ fn walk(
         }
     };
     if root_meta.file_type().is_symlink() {
-        return Err(anyhow::anyhow!(
+        return Err(crate::anyhow::anyhow!(
             "file walk root is a symlink and is not followed: {}",
             root.display()
         ));
     }
     if !root_meta.is_file() && !root_meta.is_dir() {
-        return Err(anyhow::anyhow!(
+        return Err(crate::anyhow::anyhow!(
             "file walk root is neither a regular file nor a directory: {}",
             root.display()
         ));
@@ -148,8 +148,8 @@ fn walk(
     Ok(())
 }
 
-fn cancelled_error(root: &Path) -> anyhow::Error {
-    anyhow::Error::new(std::io::Error::new(
+fn cancelled_error(root: &Path) -> crate::anyhow::Error {
+    crate::anyhow::Error::new(std::io::Error::new(
         std::io::ErrorKind::Interrupted,
         format!("file walk cancelled: {}", root.display()),
     ))

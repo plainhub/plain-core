@@ -1,9 +1,8 @@
 // Take a look at the license at the top of the repository in the LICENSE file.
 
 #[cfg(feature = "disk-metrics")]
-use core_foundation_sys::{
-    array::CFArrayRef, dictionary::CFDictionaryRef, error::CFErrorRef, string::CFStringRef,
-    url::CFURLRef,
+use crate::platform::apple_device::{
+    CFArrayRef, CFDictionaryRef, CFErrorRef, CFStringRef, CFURLRef,
 };
 
 #[cfg(feature = "disk-metrics")]

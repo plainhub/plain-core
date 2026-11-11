@@ -1035,7 +1035,7 @@ async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {
     use std::sync::atomic::Ordering;
     let sources = directory_scan_fixture();
     let path = sources.path().join("photo.png");
-    image::RgbaImage::from_pixel(768, 768, image::Rgba([40, 90, 150, 128]))
+    plain_libs::image::RgbaImage::from_pixel(768, 768, plain_libs::image::Rgba([40, 90, 150, 128]))
         .save(&path)
         .unwrap();
     let data = plain_libs::temporary::tempdir().unwrap();

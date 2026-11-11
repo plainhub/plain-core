@@ -57,12 +57,12 @@ fn remote_access_allowed(state: &ServerState) -> bool {
 }
 
 /// The session token Rust issued, straight from the `sessions` row.
-async fn session_key(state: &ServerState, headers: &HeaderMap) -> anyhow::Result<Vec<u8>> {
+async fn session_key(state: &ServerState, headers: &HeaderMap) -> plain_libs::anyhow::Result<Vec<u8>> {
     let client_id = headers
         .get("c-id")
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default();
-    anyhow::ensure!(!client_id.is_empty(), "c-id header is missing");
+    plain_libs::anyhow::ensure!(!client_id.is_empty(), "c-id header is missing");
     if state.authenticated(headers) {
         if let Some(key) = plain_rs::features::services::sessions::local_key(state, client_id) {
             return Ok(key);
@@ -71,10 +71,10 @@ async fn session_key(state: &ServerState, headers: &HeaderMap) -> anyhow::Result
     let row = state
         .db
         .session_get(client_id)
-        .map_err(|error| anyhow::Error::msg(error.to_string()))?
-        .ok_or_else(|| anyhow::anyhow!("unknown client"))?;
+        .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("unknown client"))?;
     let key = plain_libs::utils::base64::base64_decode(&row.token);
-    anyhow::ensure!(key.len() == 32, "session token is not a 32-byte key");
+    plain_libs::anyhow::ensure!(key.len() == 32, "session token is not a 32-byte key");
     Ok(key)
 }
 
@@ -84,15 +84,15 @@ async fn read_info<T: for<'de> Deserialize<'de>>(
     key: &[u8],
     field: Field<'_>,
     endpoint: &str,
-) -> anyhow::Result<T> {
+) -> plain_libs::anyhow::Result<T> {
     let bytes = field
         .bytes()
         .await
-        .map_err(|error| anyhow::Error::msg(error.to_string()))?;
+        .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
     let plaintext = plain_rs::infrastructure::transport::http_request::decrypt_raw(
         key, "POST", endpoint, &bytes,
     )
-    .ok_or_else(|| anyhow::anyhow!("Unauthorized"))?;
+    .ok_or_else(|| plain_libs::anyhow::anyhow!("Unauthorized"))?;
     let plaintext = std::str::from_utf8(&plaintext)?;
     let payload = state
         .main_replay
@@ -100,37 +100,37 @@ async fn read_info<T: for<'de> Deserialize<'de>>(
             &state.db,
             client,
             plaintext,
-            chrono::Utc::now().timestamp_millis(),
+            plain_libs::chrono::Utc::now().timestamp_millis(),
         )
-        .map_err(|_| anyhow::anyhow!("invalid or replayed upload metadata"))?;
+        .map_err(|_| plain_libs::anyhow::anyhow!("invalid or replayed upload metadata"))?;
     Ok(serde_json::from_str(payload)?)
 }
 
 /// Streams one multipart part into `destination`, returning the byte count.
-async fn stream_to_file(field: &mut Field<'_>, destination: &Path) -> anyhow::Result<u64> {
+async fn stream_to_file(field: &mut Field<'_>, destination: &Path) -> plain_libs::anyhow::Result<u64> {
     if let Some(parent) = destination.parent() {
         tokio::fs::create_dir_all(parent)
             .await
-            .map_err(|error| anyhow::Error::msg(error.to_string()))?;
+            .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
     }
     let mut file = tokio::fs::File::create(destination)
         .await
-        .map_err(|error| anyhow::Error::msg(error.to_string()))?;
+        .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
     let mut written = 0u64;
     loop {
         let chunk = field
             .chunk()
             .await
-            .map_err(|error| anyhow::Error::msg(error.to_string()))?;
+            .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
         let Some(chunk) = chunk else { break };
         file.write_all(&chunk)
             .await
-            .map_err(|error| anyhow::Error::msg(error.to_string()))?;
+            .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
         written += chunk.len() as u64;
     }
     file.flush()
         .await
-        .map_err(|error| anyhow::Error::msg(error.to_string()))?;
+        .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
     Ok(written)
 }
 
@@ -180,7 +180,7 @@ async fn store_chunk(
     }
 }
 
-pub(crate) async fn upload_tmp_dir(state: &ServerState) -> anyhow::Result<String> {
+pub(crate) async fn upload_tmp_dir(state: &ServerState) -> plain_libs::anyhow::Result<String> {
     Ok(state
         .upload_chunks
         .directory()
@@ -383,7 +383,7 @@ async fn store_app_file(
     name: &str,
     content_type: &str,
     expected: i64,
-) -> anyhow::Result<String> {
+) -> plain_libs::anyhow::Result<String> {
     let directory = state.directory.clone();
     let temp = directory.join(temp_name("chat_upload"));
     let _temporary = Temporary(temp.clone());
@@ -396,7 +396,7 @@ async fn store_app_file(
     };
     if expected > 0 && written != expected as u64 {
         let _ = tokio::fs::remove_file(&temp).await;
-        return Err(anyhow::anyhow!(
+        return Err(plain_libs::anyhow::anyhow!(
             "Size mismatch: expected {expected}, got {written}"
         ));
     }
@@ -412,10 +412,10 @@ async fn store_app_file(
             .file_name()
             .and_then(|value| value.to_str())
             .map(str::to_owned)
-            .ok_or_else(|| anyhow::anyhow!("Failed to import app file")),
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Failed to import app file")),
         Err(error) => {
             let _ = tokio::fs::remove_file(&temp).await;
-            Err(anyhow::anyhow!(error))
+            Err(plain_libs::anyhow::anyhow!(error))
         }
     }
 }

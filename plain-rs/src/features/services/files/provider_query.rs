@@ -51,7 +51,7 @@ impl Plan {
         }
     }
 }
-pub fn index_scope(plan: &mut Plan, db: &Db) -> anyhow::Result<()> {
+pub fn index_scope(plan: &mut Plan, db: &Db) -> plain_libs::anyhow::Result<()> {
     use crate::features::files::index_scope::{absolute_directory, under};
     use crate::infrastructure::db::IndexMode;
     fn within(root: &str, args: &mut Vec<String>) -> String {
@@ -109,7 +109,7 @@ pub fn index_scope(plan: &mut Plan, db: &Db) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn fields(db: &Db, query: &str) -> anyhow::Result<Vec<FilterField>> {
+pub fn fields(db: &Db, query: &str) -> plain_libs::anyhow::Result<Vec<FilterField>> {
     let mut fields = search_dsl::parse(query);
     let tag_ids = fields
         .iter()
@@ -182,7 +182,7 @@ pub fn plan(
     _dates: &Value,
     resolved_parent_id: Option<&str>,
     query_is_empty: bool,
-) -> anyhow::Result<Plan> {
+) -> plain_libs::anyhow::Result<Plan> {
     let mut plan = Plan::default();
 
     if matches!(provider, Provider::Doc) {
@@ -251,7 +251,7 @@ pub fn plan(
             // a delete into a whole-table operation. Say which field instead.
             _ => {
                 if !intentionally_ignored(provider, field.name.as_str()) {
-                    return Err(anyhow::anyhow!(
+                    return Err(plain_libs::anyhow::anyhow!(
                         "unsupported {provider:?} filter: {}",
                         field.name
                     ));
@@ -290,7 +290,7 @@ pub fn prepare(
     provider: Provider,
     query: &str,
     resolved_parent_id: Option<&str>,
-) -> anyhow::Result<Plan> {
+) -> plain_libs::anyhow::Result<Plan> {
     let fields = fields(db, query)?;
     let dates = dates(&fields);
     if matches!(provider, Provider::Call | Provider::Contact) {
@@ -310,12 +310,12 @@ pub fn params(
     provider: Provider,
     query: &str,
     mut params: Value,
-) -> anyhow::Result<Value> {
+) -> plain_libs::anyhow::Result<Value> {
     params["plan"] = serde_json::to_value(prepare(db, provider, query, None)?)?;
     Ok(params)
 }
 
-pub fn media_provider(kind: crate::features::enums::DataType) -> anyhow::Result<Provider> {
+pub fn media_provider(kind: crate::features::enums::DataType) -> plain_libs::anyhow::Result<Provider> {
     use crate::features::enums::DataType;
     match kind {
         DataType::Audio => Ok(Provider::Audio),
@@ -324,7 +324,7 @@ pub fn media_provider(kind: crate::features::enums::DataType) -> anyhow::Result<
         DataType::Doc => Ok(Provider::Doc),
         DataType::Call => Ok(Provider::Call),
         DataType::Contact => Ok(Provider::Contact),
-        _ => anyhow::bail!("unsupported provider: {kind:?}"),
+        _ => plain_libs::anyhow::bail!("unsupported provider: {kind:?}"),
     }
 }
 
@@ -348,11 +348,11 @@ pub fn dates(fields: &[FilterField]) -> Value {
 }
 
 pub fn require_narrowing_with(
-    builder: impl Fn(Provider, &[FilterField], &Value, Option<&str>, bool) -> anyhow::Result<Plan>,
+    builder: impl Fn(Provider, &[FilterField], &Value, Option<&str>, bool) -> plain_libs::anyhow::Result<Plan>,
     db: &Db,
     provider: Provider,
     query: &str,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     // A blank query is the caller's own guard to own, and `all` builds no
     // clause on purpose: it is how a caller says "every row, I mean it".
     if query.trim().is_empty() {
@@ -371,7 +371,7 @@ pub fn require_narrowing_with(
     }
     let baseline = builder(provider, &[], &Value::Null, None, false)?;
     if plan.clauses.len() <= baseline.clauses.len() && plan.ids.is_empty() {
-        return Err(anyhow::anyhow!(
+        return Err(plain_libs::anyhow::anyhow!(
             "query {query:?} selects no {provider:?} row — nothing in it narrows the selection, so \
              the operation would cover the whole table; pass 'all:true' to target every row on \
              purpose"
@@ -379,7 +379,7 @@ pub fn require_narrowing_with(
     }
     Ok(())
 }
-pub fn require_narrowing(db: &Db, provider: Provider, query: &str) -> anyhow::Result<()> {
+pub fn require_narrowing(db: &Db, provider: Provider, query: &str) -> plain_libs::anyhow::Result<()> {
     require_narrowing_with(plan, db, provider, query)
 }
 

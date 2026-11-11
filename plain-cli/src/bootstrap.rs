@@ -1,4 +1,4 @@
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 
 pub fn run() -> Result<()> {
     initialize_tls();
@@ -8,7 +8,7 @@ pub fn run() -> Result<()> {
         crate::version::COMMIT,
         crate::version::BUILD_TIME,
     );
-    plain_rs::infrastructure::platform::system::log::init("info").map_err(anyhow::Error::msg)?;
+    plain_rs::infrastructure::platform::system::log::init("info").map_err(plain_libs::anyhow::Error::msg)?;
 
     let cli = crate::cli::Cli::parse();
     let paths = cli.paths()?;

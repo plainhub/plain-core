@@ -3,9 +3,9 @@ use super::super::{
     scale::Bitmap,
     sniff::{ImageKind, Sniffed},
 };
-use anyhow::{Result, bail, ensure};
+use crate::anyhow::{Result, bail, ensure};
 use std::io::{Read, Seek};
-use tiff::{
+use crate::image_codecs::tiff::{
     ColorType,
     decoder::{Decoder, DecodingResult},
     tags::Tag,
@@ -29,8 +29,8 @@ pub(super) fn probe(reader: impl Read + Seek) -> Result<Sniffed> {
         == 7;
     let compressed_bytes = if jpeg {
         let count_tag = match decoder.get_chunk_type() {
-            tiff::decoder::ChunkType::Strip => Tag::StripByteCounts,
-            tiff::decoder::ChunkType::Tile => Tag::TileByteCounts,
+            crate::image_codecs::tiff::decoder::ChunkType::Strip => Tag::StripByteCounts,
+            crate::image_codecs::tiff::decoder::ChunkType::Tile => Tag::TileByteCounts,
         };
         decoder
             .get_tag_u64_vec(count_tag)?
@@ -62,7 +62,7 @@ pub(super) fn probe(reader: impl Read + Seek) -> Result<Sniffed> {
         (u64::from(width) * u64::from(height)).checked_mul(16)
     }
     .and_then(|pixels| pixels.checked_add(compressed_bytes?))
-    .ok_or_else(|| anyhow::anyhow!("TIFF working memory estimate exceeds integer limits"))?;
+    .ok_or_else(|| crate::anyhow::anyhow!("TIFF working memory estimate exceeds integer limits"))?;
     Ok(Sniffed {
         kind: ImageKind::Tiff,
         width,
@@ -253,8 +253,8 @@ fn decode_decoder<R: Read + Seek>(mut decoder: Decoder<R>) -> Result<Bitmap> {
     }
 }
 fn ycbcr_parameters<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<([f64; 3], [f64; 6])> {
-    fn values(value: tiff::decoder::ifd::Value) -> Result<Vec<f64>> {
-        use tiff::decoder::ifd::Value;
+    fn values(value: crate::image_codecs::tiff::decoder::ifd::Value) -> Result<Vec<f64>> {
+        use crate::image_codecs::tiff::decoder::ifd::Value;
         match value {
             Value::List(values_list) => {
                 let mut out = Vec::new();
@@ -273,13 +273,13 @@ fn ycbcr_parameters<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<([f64; 3
     let coefficients = match decoder.find_tag(Tag::Unknown(529))? {
         Some(v) => values(v)?
             .try_into()
-            .map_err(|_| anyhow::anyhow!("Invalid TIFF YCbCr coefficients"))?,
+            .map_err(|_| crate::anyhow::anyhow!("Invalid TIFF YCbCr coefficients"))?,
         None => [0.299, 0.587, 0.114],
     };
     let reference = match decoder.find_tag(Tag::Unknown(532))? {
         Some(v) => values(v)?
             .try_into()
-            .map_err(|_| anyhow::anyhow!("Invalid TIFF YCbCr reference"))?,
+            .map_err(|_| crate::anyhow::anyhow!("Invalid TIFF YCbCr reference"))?,
         None => [0., 255., 128., 255., 128., 255.],
     };
     ensure!(
@@ -368,7 +368,7 @@ fn stream<R: Read + Seek, const C: usize>(
             decoder.read_chunk_bytes(index, &mut chunk)?;
             let stride = layout
                 .row_stride
-                .ok_or_else(|| anyhow::anyhow!("Missing TIFF chunk stride"))?
+                .ok_or_else(|| crate::anyhow::anyhow!("Missing TIFF chunk stride"))?
                 .get();
             let x0 = tx * tile_w;
             let x1 = width.min((tx + 1) * tile_w);

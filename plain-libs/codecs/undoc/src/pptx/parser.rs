@@ -73,7 +73,7 @@ impl PptxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Empty(e)) | Ok(quick_xml::events::Event::Start(e)) => {
+                Ok(plain_libs::xml::events::Event::Empty(e)) | Ok(plain_libs::xml::events::Event::Start(e)) => {
                     let name = e.name();
                     let local_name = name.local_name();
                     if local_name.as_ref() == "sldId" {
@@ -93,7 +93,7 @@ impl PptxParser {
                         }
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }
@@ -337,7 +337,7 @@ impl PptxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         // p:pic - picture element
@@ -399,7 +399,7 @@ impl PptxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         // Handle self-closing cNvPr
@@ -437,7 +437,7 @@ impl PptxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         "pic" | "sp" if in_pic && (local_name.as_ref() == "sp") == is_shape => {
@@ -470,7 +470,7 @@ impl PptxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }
@@ -594,9 +594,9 @@ impl PptxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e))
+                Ok(plain_libs::xml::events::Event::Start(ref e))
                     if in_paragraph && runs.element(e, false, rels) => {}
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         // a:tbl - table
@@ -655,9 +655,9 @@ impl PptxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e))
+                Ok(plain_libs::xml::events::Event::Empty(ref e))
                     if in_paragraph && runs.element(e, true, rels) => {}
-                Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         // A self-closing a:tc: an empty cell, or a covered position.
@@ -685,14 +685,14 @@ impl PptxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Text(ref e)) if runs.in_text() => {
+                Ok(plain_libs::xml::events::Event::Text(ref e)) if runs.in_text() => {
                     runs.push_text(&crate::decode::decode_text_lossy(e));
                 }
-                Ok(quick_xml::events::Event::GeneralRef(ref e)) if runs.in_text() => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if runs.in_text() => {
                     runs.push_text(&crate::decode::resolve_general_ref(e));
                 }
-                Ok(quick_xml::events::Event::End(ref e)) if in_paragraph && runs.end(e) => {}
-                Ok(quick_xml::events::Event::End(ref e)) => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) if in_paragraph && runs.end(e) => {}
+                Ok(plain_libs::xml::events::Event::End(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         "p" if in_txbody => {
@@ -751,7 +751,7 @@ impl PptxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }
@@ -801,9 +801,9 @@ impl PptxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e))
+                Ok(plain_libs::xml::events::Event::Start(ref e))
                     if in_paragraph && !in_table && runs.element(e, false, rels) => {}
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         // Track table depth to skip table content
@@ -879,9 +879,9 @@ impl PptxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e))
+                Ok(plain_libs::xml::events::Event::Empty(ref e))
                     if in_paragraph && !in_table && runs.element(e, true, rels) => {}
-                Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         "pPr" if in_paragraph && !in_table && !runs.in_run() => {
@@ -916,15 +916,15 @@ impl PptxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Text(ref e)) if runs.in_text() && !in_table => {
+                Ok(plain_libs::xml::events::Event::Text(ref e)) if runs.in_text() && !in_table => {
                     runs.push_text(&crate::decode::decode_text_lossy(e));
                 }
-                Ok(quick_xml::events::Event::GeneralRef(ref e)) if runs.in_text() && !in_table => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if runs.in_text() && !in_table => {
                     runs.push_text(&crate::decode::resolve_general_ref(e));
                 }
-                Ok(quick_xml::events::Event::End(ref e))
+                Ok(plain_libs::xml::events::Event::End(ref e))
                     if in_paragraph && !in_table && runs.end(e) => {}
-                Ok(quick_xml::events::Event::End(ref e)) => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         "tbl" => {
@@ -1004,7 +1004,7 @@ impl PptxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }
@@ -1039,7 +1039,7 @@ impl PptxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     if e.name().local_name().as_ref() == "p" {
                         in_paragraph = true;
                         runs.start_paragraph();
@@ -1047,16 +1047,16 @@ impl PptxParser {
                         runs.element(e, false, rels);
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e)) if in_paragraph => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) if in_paragraph => {
                     runs.element(e, true, rels);
                 }
-                Ok(quick_xml::events::Event::Text(ref e)) if runs.in_text() => {
+                Ok(plain_libs::xml::events::Event::Text(ref e)) if runs.in_text() => {
                     runs.push_text(&crate::decode::decode_text_lossy(e));
                 }
-                Ok(quick_xml::events::Event::GeneralRef(ref e)) if runs.in_text() => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if runs.in_text() => {
                     runs.push_text(&crate::decode::resolve_general_ref(e));
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => {
                     if e.name().local_name().as_ref() == "p" {
                         let runs = runs.finish();
                         if !runs.is_empty() {
@@ -1070,7 +1070,7 @@ impl PptxParser {
                         runs.end(e);
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }
@@ -1366,9 +1366,9 @@ fn parse_placeholder_texts_from_xml(xml: &str) -> Result<HashMap<String, Vec<Par
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Start(ref e))
+            Ok(plain_libs::xml::events::Event::Start(ref e))
                 if in_paragraph && !in_table && runs.element(e, false, &no_links) => {}
-            Ok(quick_xml::events::Event::Start(ref e)) => match e.name().local_name().as_ref() {
+            Ok(plain_libs::xml::events::Event::Start(ref e)) => match e.name().local_name().as_ref() {
                 "tbl" => {
                     in_table = true;
                     table_depth += 1;
@@ -1393,24 +1393,24 @@ fn parse_placeholder_texts_from_xml(xml: &str) -> Result<HashMap<String, Vec<Par
                 }
                 _ => {}
             },
-            Ok(quick_xml::events::Event::Empty(ref e))
+            Ok(plain_libs::xml::events::Event::Empty(ref e))
                 if in_paragraph && !in_table && runs.element(e, true, &no_links) => {}
-            Ok(quick_xml::events::Event::Empty(ref e)) => {
+            Ok(plain_libs::xml::events::Event::Empty(ref e)) => {
                 if e.name().local_name().as_ref() == "ph" && in_shape && !in_table {
                     let placeholder = Placeholder::of(e);
                     current_heading = placeholder.heading();
                     current_ph_key = Some(placeholder.key());
                 }
             }
-            Ok(quick_xml::events::Event::Text(ref e)) if runs.in_text() && !in_table => {
+            Ok(plain_libs::xml::events::Event::Text(ref e)) if runs.in_text() && !in_table => {
                 runs.push_text(&crate::decode::decode_text_lossy(e));
             }
-            Ok(quick_xml::events::Event::GeneralRef(ref e)) if runs.in_text() && !in_table => {
+            Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if runs.in_text() && !in_table => {
                 runs.push_text(&crate::decode::resolve_general_ref(e));
             }
-            Ok(quick_xml::events::Event::End(ref e))
+            Ok(plain_libs::xml::events::Event::End(ref e))
                 if in_paragraph && !in_table && runs.end(e) => {}
-            Ok(quick_xml::events::Event::End(ref e)) => match e.name().local_name().as_ref() {
+            Ok(plain_libs::xml::events::Event::End(ref e)) => match e.name().local_name().as_ref() {
                 "tbl" => {
                     table_depth -= 1;
                     if table_depth == 0 {
@@ -1443,7 +1443,7 @@ fn parse_placeholder_texts_from_xml(xml: &str) -> Result<HashMap<String, Vec<Par
                 }
                 _ => {}
             },
-            Ok(quick_xml::events::Event::Eof) => break,
+            Ok(plain_libs::xml::events::Event::Eof) => break,
             Err(e) => return Err(e.into()),
             _ => {}
         }
@@ -1456,7 +1456,7 @@ fn parse_placeholder_texts_from_xml(xml: &str) -> Result<HashMap<String, Vec<Par
 /// A picture's description (`p:cNvPr descr`) — its alt text — if it has a non-blank one.
 /// The shape's `name` ("Picture 3") is an editing label, not a description.
 /// The list level a paragraph-properties element (`a:pPr`) sets (`lvl`, 0-based).
-fn paragraph_level(e: &quick_xml::events::BytesStart<'_>) -> u8 {
+fn paragraph_level(e: &plain_libs::xml::events::BytesStart<'_>) -> u8 {
     e.attributes()
         .flatten()
         .find(|a| a.key.local_name().as_ref() == "lvl")
@@ -1478,7 +1478,7 @@ fn list_style_level(name: &str) -> Option<u8> {
 /// on the paragraph when the bullet is the paragraph's own, else on the shape's list style
 /// level it sits in.
 fn record_bullet(
-    blip: &quick_xml::events::BytesStart<'_>,
+    blip: &plain_libs::xml::events::BytesStart<'_>,
     rels: &HashMap<String, String>,
     in_paragraph_properties: bool,
     list_style_level: Option<u8>,
@@ -1503,7 +1503,7 @@ fn record_bullet(
 
 /// The media file an `a:blip`'s `r:embed` names, through the part's relationships.
 fn blip_file(
-    blip: &quick_xml::events::BytesStart<'_>,
+    blip: &plain_libs::xml::events::BytesStart<'_>,
     rels: &HashMap<String, String>,
 ) -> Option<String> {
     blip.attributes()
@@ -1518,7 +1518,7 @@ fn media_name(target: &str) -> String {
     target.rsplit('/').next().unwrap_or(target).to_string()
 }
 
-fn picture_description(e: &quick_xml::events::BytesStart<'_>) -> Option<String> {
+fn picture_description(e: &plain_libs::xml::events::BytesStart<'_>) -> Option<String> {
     e.attributes()
         .flatten()
         .find(|a| a.key.local_name().as_ref() == "descr")
@@ -1533,7 +1533,7 @@ fn picture_description(e: &quick_xml::events::BytesStart<'_>) -> Option<String> 
 /// `gridSpan`/`rowSpan`, and the positions it covers are present with `hMerge="1"` or
 /// `vMerge="1"`. The model records the merge once, on the owner, and gives covered
 /// positions no cell.
-fn read_table_cell_merge(e: &quick_xml::events::BytesStart<'_>, cell: &mut Cell) -> bool {
+fn read_table_cell_merge(e: &plain_libs::xml::events::BytesStart<'_>, cell: &mut Cell) -> bool {
     let mut covered = false;
     for attr in e.attributes().flatten() {
         let value = attr.value.as_ref();
@@ -1548,7 +1548,7 @@ fn read_table_cell_merge(e: &quick_xml::events::BytesStart<'_>, cell: &mut Cell)
 }
 
 /// Whether a covered `a:tc` is covered from a row above (`vMerge`).
-fn is_vertically_covered(e: &quick_xml::events::BytesStart<'_>) -> bool {
+fn is_vertically_covered(e: &plain_libs::xml::events::BytesStart<'_>) -> bool {
     e.attributes()
         .flatten()
         .any(|a| a.key.local_name().as_ref() == "vMerge" && is_true(a.value.as_ref()))
@@ -1561,7 +1561,7 @@ fn is_true(value: &str) -> bool {
 /// Apply the formatting an `a:rPr` sets on its run -- bold, italic, underline, strikethrough --
 /// to `style`. One reader for every place a run is read: a table cell's runs once kept only
 /// bold and italic, and lost their underline and strikethrough.
-fn apply_run_properties(e: &quick_xml::events::BytesStart<'_>, style: &mut TextStyle) {
+fn apply_run_properties(e: &plain_libs::xml::events::BytesStart<'_>, style: &mut TextStyle) {
     for attr in e.attributes().flatten() {
         let val = crate::decode::attr_value(&attr);
         match attr.key.local_name().as_ref() {
@@ -1609,7 +1609,7 @@ impl RunReader {
     /// whether it was one of the runs'.
     fn element(
         &mut self,
-        e: &quick_xml::events::BytesStart<'_>,
+        e: &plain_libs::xml::events::BytesStart<'_>,
         empty: bool,
         rels: &HashMap<String, String>,
     ) -> bool {
@@ -1650,7 +1650,7 @@ impl RunReader {
     }
 
     /// Read an element's end, and say whether it was one of the runs'.
-    fn end(&mut self, e: &quick_xml::events::BytesEnd<'_>) -> bool {
+    fn end(&mut self, e: &plain_libs::xml::events::BytesEnd<'_>) -> bool {
         match e.name().local_name().as_ref() {
             "t" if self.in_run => self.in_text = false,
             "r" | "fld" if self.in_run => {
@@ -1701,7 +1701,7 @@ struct Placeholder {
 }
 
 impl Placeholder {
-    fn of(e: &quick_xml::events::BytesStart<'_>) -> Self {
+    fn of(e: &plain_libs::xml::events::BytesStart<'_>) -> Self {
         let mut kind = None;
         let mut idx = None;
         for attr in e.attributes().flatten() {
@@ -1737,7 +1737,7 @@ impl Placeholder {
 /// A jump to another slide of the deck (`ppaction://hlinksldjump`, `ppaction://hlinkshowjump`)
 /// leads to no address the output can point at, and is no link.
 fn link_address(
-    e: &quick_xml::events::BytesStart<'_>,
+    e: &plain_libs::xml::events::BytesStart<'_>,
     rels: &HashMap<String, String>,
 ) -> Option<String> {
     let mut id = None;

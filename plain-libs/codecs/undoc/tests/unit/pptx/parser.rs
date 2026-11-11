@@ -3,7 +3,7 @@ use crate::error::Error;
 
 fn empty_parser() -> PptxParser {
     use std::io::Cursor;
-    let zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let zip = plain_libs::zip::ZipWriter::new(Cursor::new(Vec::new()));
     let bytes = zip.finish().unwrap().into_inner();
     PptxParser {
         container: OoxmlContainer::from_bytes(bytes).unwrap(),
@@ -73,9 +73,9 @@ const EMPTY_RELS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 /// such as media. The single-slide helpers below cannot express either.
 fn deck(slides: &[(&str, &str)], extra_parts: &[(&str, &[u8])]) -> Vec<u8> {
     use std::io::{Cursor, Write};
-    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let mut zip = plain_libs::zip::ZipWriter::new(Cursor::new(Vec::new()));
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     let mut overrides = String::new();
     let mut presentation_rels = String::new();
@@ -1017,9 +1017,9 @@ fn create_minimal_pptx(slide_xml: &str) -> Vec<u8> {
 fn create_minimal_pptx_with_notes(slide_xml: &str, notes_xml: &str) -> Vec<u8> {
     use std::io::{Cursor, Write};
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1082,9 +1082,9 @@ fn create_minimal_pptx_with_relationships(
 ) -> Vec<u8> {
     use std::io::{Cursor, Write};
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     // [Content_Types].xml
     zip.start_file("[Content_Types].xml", options).unwrap();
@@ -1140,7 +1140,7 @@ fn create_minimal_pptx_with_relationships(
 #[test]
 fn test_pptx_chart_invalid_numeric_value_propagates_error() {
     use std::io::{Cursor, Write};
-    use zip::write::SimpleFileOptions;
+    use plain_libs::zip::write::SimpleFileOptions;
 
     let chart_xml = r#"<?xml version="1.0"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
@@ -1182,8 +1182,8 @@ fn test_pptx_chart_invalid_numeric_value_propagates_error() {
 </Relationships>"#;
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
+    let options = SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1234,7 +1234,7 @@ fn test_pptx_chart_invalid_numeric_value_propagates_error() {
 #[test]
 fn test_pptx_missing_chart_part_propagates_error() {
     use std::io::{Cursor, Write};
-    use zip::write::SimpleFileOptions;
+    use plain_libs::zip::write::SimpleFileOptions;
 
     let slide_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -1265,8 +1265,8 @@ fn test_pptx_missing_chart_part_propagates_error() {
 </Relationships>"#;
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
+    let options = SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1430,11 +1430,11 @@ fn test_pptx_rejects_malformed_presentation_relationships() {
 #[test]
 fn test_pptx_non_utf8_presentation_is_error() {
     use std::io::{Cursor, Write};
-    use zip::write::SimpleFileOptions;
+    use plain_libs::zip::write::SimpleFileOptions;
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
+    let options = SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1477,9 +1477,9 @@ fn test_pptx_non_utf8_presentation_is_error() {
 fn create_minimal_pptx_with_malformed_part(malformed_part_path: &str) -> Vec<u8> {
     use std::io::{Cursor, Write};
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1747,9 +1747,9 @@ fn test_pptx_slide_mixed_entities_preserve_legitimate_and_malformed() {
     let mut buf = Vec::new();
     {
         let cursor = std::io::Cursor::new(&mut buf);
-        let mut zip = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let mut zip = plain_libs::zip::ZipWriter::new(cursor);
+        let options = plain_libs::zip::write::SimpleFileOptions::default()
+            .compression_method(plain_libs::zip::CompressionMethod::Stored);
 
         zip.start_file("[Content_Types].xml", options).unwrap();
         zip.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1818,9 +1818,9 @@ fn test_pptx_missing_presentation_surfaces_missing_component() {
     let mut buf = Vec::new();
     {
         let cursor = std::io::Cursor::new(&mut buf);
-        let mut zip = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let mut zip = plain_libs::zip::ZipWriter::new(cursor);
+        let options = plain_libs::zip::write::SimpleFileOptions::default()
+            .compression_method(plain_libs::zip::CompressionMethod::Stored);
 
         zip.start_file("[Content_Types].xml", options).unwrap();
         zip.write_all(

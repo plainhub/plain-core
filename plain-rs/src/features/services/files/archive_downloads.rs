@@ -60,7 +60,7 @@ fn walk_directory(
     root: &Path,
     prefix: &str,
     out: &mut Vec<(PathBuf, String)>,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     let mut pending = vec![root.to_path_buf()];
     while let Some(directory) = pending.pop() {
         for entry in std::fs::read_dir(&directory)? {
@@ -93,9 +93,9 @@ fn collect_archive_entries(
     inner: &str,
     staging: &Staging,
     out: &mut Vec<(PathBuf, String)>,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     let file = std::fs::File::open(archive)?;
-    let mut zip = zip::ZipArchive::new(file)?;
+    let mut zip = plain_libs::zip::ZipArchive::new(file)?;
     for index in 0..zip.len() {
         let mut entry = zip.by_index(index)?;
         if entry.is_dir() {
@@ -263,7 +263,7 @@ fn stored_path(directory: &Path, stored: &str) -> PathBuf {
     }
 }
 
-fn app_file_entries(state: &CoreRuntime, query: &str) -> anyhow::Result<Vec<(PathBuf, String)>> {
+fn app_file_entries(state: &CoreRuntime, query: &str) -> plain_libs::anyhow::Result<Vec<(PathBuf, String)>> {
     let names = crate::features::chat::attachments::app_file_store::file_name_map(
         &state.db.get_all_chats(),
     );
@@ -298,13 +298,13 @@ async fn media_entries(
     state: &CoreRuntime,
     data_type: &str,
     query: &str,
-) -> anyhow::Result<Vec<(PathBuf, String)>> {
+) -> plain_libs::anyhow::Result<Vec<(PathBuf, String)>> {
     let kind = match data_type {
         "AUDIO" => DataType::Audio,
         "VIDEO" => DataType::Video,
         "IMAGE" => DataType::Image,
         "DOC" => DataType::Doc,
-        other => anyhow::bail!("unsupported media catalog type: {other}"),
+        other => plain_libs::anyhow::bail!("unsupported media catalog type: {other}"),
     };
     let rows = crate::features::services::files::catalog::MediaCatalog::new(
         state.db.clone(),
@@ -318,7 +318,7 @@ async fn media_entries(
         0,
     )
     .await
-    .map_err(anyhow::Error::msg)?;
+    .map_err(plain_libs::anyhow::Error::msg)?;
     Ok(rows
         .iter()
         .filter_map(|row| Some((PathBuf::from(row["path"].as_str()?), String::new())))
@@ -328,13 +328,13 @@ async fn media_entries(
 async fn package_entries(
     state: &CoreRuntime,
     query: &str,
-) -> anyhow::Result<Vec<(PathBuf, String)>> {
+) -> plain_libs::anyhow::Result<Vec<(PathBuf, String)>> {
     crate::features::services::capabilities::require(&state.host, "PACKAGES").await?;
     let facts = state
         .host
         .call("systemPackageFacts", json!({}))
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
     let facts: Vec<Value> = serde_json::from_value(facts)?;
     let items =
         crate::features::services::packages::query::packages(&state.db, facts, query, "NAME_ASC")?;
@@ -376,7 +376,7 @@ fn temp_file_entries(state: &CoreRuntime, key: &str) -> Vec<(PathBuf, String)> {
 async fn zip_items(
     state: &CoreRuntime,
     request: &ZipFilesRequest,
-) -> anyhow::Result<Vec<(PathBuf, String)>> {
+) -> plain_libs::anyhow::Result<Vec<(PathBuf, String)>> {
     let data_type: DataType = serde_json::from_value(Value::String(request.r#type.clone()))?;
     match data_type {
         DataType::AppFile => app_file_entries(state, &request.query),
@@ -391,7 +391,7 @@ async fn zip_items(
         }
         DataType::Package => package_entries(state, &request.query).await,
         DataType::File => Ok(temp_file_entries(state, &request.id)),
-        _ => anyhow::bail!("unsupported archive type"),
+        _ => plain_libs::anyhow::bail!("unsupported archive type"),
     }
 }
 

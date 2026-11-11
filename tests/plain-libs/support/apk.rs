@@ -86,11 +86,11 @@ pub fn binary(package: &str, split: Option<&str>, utf8: bool) -> Vec<u8> {
     bytes
 }
 pub fn apk(package: &str, split: Option<&str>) -> Vec<u8> {
-    let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let mut writer = crate::zip::ZipWriter::new(Cursor::new(Vec::new()));
     writer
         .start_file(
             "AndroidManifest.xml",
-            zip::write::SimpleFileOptions::default(),
+            crate::zip::write::SimpleFileOptions::default(),
         )
         .unwrap();
     writer.write_all(&binary(package, split, true)).unwrap();

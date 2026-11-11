@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use std::path::{Component, Path, PathBuf};
 
 pub(crate) fn canonical(path: &Path) -> Result<PathBuf> {

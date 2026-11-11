@@ -13,7 +13,7 @@ pub struct SecurityPreferences<'a> {
 }
 
 impl SecurityPreferences<'_> {
-    pub async fn set(&self, key: &str, value: Value) -> anyhow::Result<bool> {
+    pub async fn set(&self, key: &str, value: Value) -> plain_libs::anyhow::Result<bool> {
         let changed = if matches!(key, AUTO_CHECK_UPDATE | SKIP_VERSION) {
             if let Some(state) = self.server {
                 crate::features::services::settings::updates::set_setting(state, key, value).await?
@@ -35,7 +35,7 @@ impl SecurityPreferences<'_> {
         Ok(changed)
     }
 
-    pub async fn remove(&self, key: &str) -> anyhow::Result<bool> {
+    pub async fn remove(&self, key: &str) -> plain_libs::anyhow::Result<bool> {
         let changed = crate::features::prefs::security::remove_entry(self.prefs, key)?;
         self.notify(changed);
         if changed && key == API_PERMISSIONS {
@@ -49,14 +49,14 @@ impl SecurityPreferences<'_> {
         Ok(changed)
     }
 
-    pub fn generate_password(&self) -> anyhow::Result<String> {
+    pub fn generate_password(&self) -> plain_libs::anyhow::Result<String> {
         Ok(security::random_password(6))
     }
-    pub fn reset_adb_token(&self) -> anyhow::Result<bool> {
+    pub fn reset_adb_token(&self) -> plain_libs::anyhow::Result<bool> {
         self.apply(Command::ResetAdbToken)
     }
 
-    fn apply(&self, command: Command) -> anyhow::Result<bool> {
+    fn apply(&self, command: Command) -> plain_libs::anyhow::Result<bool> {
         let changed = command.apply(self.prefs)?;
         self.notify(changed);
         Ok(changed)

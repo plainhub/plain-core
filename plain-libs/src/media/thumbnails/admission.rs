@@ -43,13 +43,13 @@ impl Admission {
         &self,
         est_bytes: u64,
         job: impl FnOnce() -> T + Send + 'static,
-    ) -> anyhow::Result<T> {
+    ) -> crate::anyhow::Result<T> {
         let permits = self.acquire(est_bytes).await?;
         let pool = self
             .pool
             .get_or_init(|| super::workers::Workers::new(self.workers))
             .as_ref()
-            .map_err(|error| anyhow::anyhow!("start thumbnail workers: {error}"))?;
+            .map_err(|error| crate::anyhow::anyhow!("start thumbnail workers: {error}"))?;
         // Admission bounds queued and running jobs; fixed threads reuse their allocation arenas.
         pool.run(move || {
             let _permits = permits;
@@ -61,10 +61,10 @@ impl Admission {
     /// Acquire CPU + memory permits for a job whose decoded bitmap is
     /// estimated at `est_bytes`. Rejects a job that could never fit the
     /// budget on its own; otherwise queues fairly behind other holders.
-    pub async fn acquire(&self, est_bytes: u64) -> anyhow::Result<Permits> {
+    pub async fn acquire(&self, est_bytes: u64) -> crate::anyhow::Result<Permits> {
         let units = units_for(est_bytes) as usize;
         if units as u64 > self.mem_total && units > 0 {
-            anyhow::bail!(
+            crate::anyhow::bail!(
                 "thumbnail decode estimate {est_bytes} exceeds memory budget {}",
                 self.mem_budget_mb()
             );
@@ -76,14 +76,14 @@ impl Admission {
             .clone()
             .acquire_owned()
             .await
-            .map_err(|_| anyhow::anyhow!("cpu semaphore closed"))?;
+            .map_err(|_| crate::anyhow::anyhow!("cpu semaphore closed"))?;
         let mem = if units > 0 {
             Some(
                 self.mem
                     .clone()
                     .acquire_many_owned(units as u32)
                     .await
-                    .map_err(|_| anyhow::anyhow!("mem semaphore closed"))?,
+                    .map_err(|_| crate::anyhow::anyhow!("mem semaphore closed"))?,
             )
         } else {
             None

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 exclude = ["vendor/native/objc2", "vendor/native/objc2-encode", "vendor/native/block2", "vendor/native/dispatch2", "vendor/native/objc2-foundation", "vendor/native/objc2-av-foundation", "vendor/native/objc2-core-foundation", "vendor/native/objc2-core-media", "vendor/native/objc2-core-video"]
-members = ["plain-libs/codecs/undoc", "plain-libs", "plain-rs", "plain-server", "plain-cli", "plain-graphql", "plain-graphql/macros", "plain-libs/codecs/tiff", "plain-libs/codecs/heic-rs", "plain-libs/codecs/rav1d", "plain-libs/codecs/zerocopy-derive", "plain-libs/codecs/zerocopy"]
+members = ["plain-libs/codecs/undoc", "plain-libs", "plain-rs", "plain-server", "plain-cli", "plain-graphql", "plain-graphql/macros", "plain-libs/codecs/heic-rs", "plain-libs/codecs/rav1d", "plain-libs/codecs/zerocopy-derive", "plain-libs/codecs/zerocopy"]
 
 [profile.dev]
 debug = "line-tables-only"
@@ -13,7 +13,7 @@ debug = false
 opt-level = 3
 
 [profile.dev.package.plain-libs]
-opt-level = 1
+opt-level = 3
 debug = "line-tables-only"
 
 [profile.dev.package.plain-rs]
@@ -43,10 +43,6 @@ opt-level = 3
 debug = false
 
 [profile.dev.package.heic-rs]
-opt-level = 3
-debug = false
-
-[profile.dev.package.tiff]
 opt-level = 3
 debug = false
 

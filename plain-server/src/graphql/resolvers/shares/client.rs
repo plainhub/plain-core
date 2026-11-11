@@ -6,7 +6,7 @@ use plain_graphql::{Context, Object};
 use plain_rs::features::chat::messages::share_card;
 use plain_rs::features::services::peers::shared_client;
 
-fn error(value: anyhow::Error) -> plain_graphql::Error {
+fn error(value: plain_libs::anyhow::Error) -> plain_graphql::Error {
     plain_graphql::Error::new(value.to_string())
 }
 

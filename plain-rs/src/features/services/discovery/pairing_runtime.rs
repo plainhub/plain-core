@@ -38,27 +38,27 @@ struct PendingSuccess {
     running: bool,
 }
 impl Runtime {
-    fn check_address(&self, request: &PairingRequest, address: &str) -> anyhow::Result<()> {
-        anyhow::ensure!(
+    fn check_address(&self, request: &PairingRequest, address: &str) -> plain_libs::anyhow::Result<()> {
+        plain_libs::anyhow::ensure!(
             !address.is_empty() && address.len() <= 256,
             "Invalid BLE sender address"
         );
         let mut map = self.associations.lock().unwrap();
         map.retain(|_, v| v.received.elapsed() < Duration::from_secs(300));
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             map.contains_key(&request.from_id) || map.len() < 128,
             "Incoming BLE pairing capacity exceeded"
         );
         Ok(())
     }
-    fn remember(&self, request: &PairingRequest, address: &str) -> anyhow::Result<()> {
-        anyhow::ensure!(
+    fn remember(&self, request: &PairingRequest, address: &str) -> plain_libs::anyhow::Result<()> {
+        plain_libs::anyhow::ensure!(
             !address.is_empty() && address.len() <= 256,
             "Invalid BLE sender address"
         );
         let mut map = self.associations.lock().unwrap();
         map.retain(|_, v| v.received.elapsed() < Duration::from_secs(300));
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             map.contains_key(&request.from_id) || map.len() < 128,
             "Incoming BLE pairing capacity exceeded"
         );
@@ -238,7 +238,7 @@ async fn deliver_successes(state: CoreRuntime) {
         .unwrap()
         .running = false;
 }
-pub(super) async fn local_device(state: &CoreRuntime) -> anyhow::Result<Device> {
+pub(super) async fn local_device(state: &CoreRuntime) -> plain_libs::anyhow::Result<Device> {
     let reply: crate::features::discovery::nearby_wire::DiscoverReply = serde_json::from_value(
         crate::features::services::discovery::discovery_advertisement::execute(
             state,
@@ -261,7 +261,7 @@ pub async fn start_device(
     methods: Vec<DiscoveryMethod>,
     generation: Option<String>,
 
-) -> anyhow::Result<Value> {
+) -> plain_libs::anyhow::Result<Value> {
     let ble = if methods.iter().any(|method| *method == DiscoveryMethod::Ble)
         && !(methods.iter().any(|method| method.is_lan()) && !ips.is_empty())
     {
@@ -269,7 +269,7 @@ pub async fn start_device(
             .host
             .call("peerTransportCapabilities", json!({}))
             .await
-            .map_err(anyhow::Error::msg)?
+            .map_err(plain_libs::anyhow::Error::msg)?
             .as_array()
             .is_some_and(|items| items.iter().any(|item| item.as_str() == Some("BLE")))
     } else {
@@ -293,7 +293,7 @@ pub async fn respond_device(
     state: &CoreRuntime,
     request: PairingRequest,
     accepted: bool,
-) -> anyhow::Result<Value> {
+) -> plain_libs::anyhow::Result<Value> {
     let device = local_device(state).await?;
     execute(
         state,
@@ -305,7 +305,7 @@ pub async fn respond_device(
     )
     .await
 }
-pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Value> {
+pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyhow::Result<Value> {
     Ok(match request {
         Request::States => json!(state.pairing_runtime.attempts.states()),
         Request::Start {
@@ -478,14 +478,14 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> anyhow::Result<Va
             address,
             ble,
         } => {
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 !client_id.is_empty() && client_id.len() <= 256,
                 "Invalid pairing client ID"
             );
             let local_key =
                 crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
             let request = PairingRequest {
-                to_id: state.native_client_id().map_err(anyhow::Error::msg)?,
+                to_id: state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?,
                 target_public_key: plain_libs::utils::base64::base64_encode(&local_key[32..]),
                 from_id: client_id,
                 from_ip: if ble { String::new() } else { address.clone() },
@@ -605,7 +605,7 @@ pub async fn handle_nearby_post(
     body: &str,
     remote_ip: IpAddr,
     client_id: Option<&str>,
-) -> anyhow::Result<bool> {
+) -> plain_libs::anyhow::Result<bool> {
     use crate::features::discovery::nearby_wire::Message;
     let kind = body
         .split_once(':')
@@ -651,7 +651,7 @@ pub async fn handle_nearby_post(
     Ok(true)
 }
 
-pub async fn accept_report(state: &CoreRuntime, kind: &str, payload: &str) -> anyhow::Result<bool> {
+pub async fn accept_report(state: &CoreRuntime, kind: &str, payload: &str) -> plain_libs::anyhow::Result<bool> {
     let request = match kind {
         "PAIRING_REQUEST_REPORTED" => {
             #[derive(Deserialize)]
@@ -686,7 +686,7 @@ pub async fn send_incoming(
     request: &PairingRequest,
     target: &Target,
     message: Message,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     let address = state
         .pairing_runtime
         .address(&request.from_id, &request.payload.signature);
@@ -707,7 +707,7 @@ pub async fn send_incoming(
                 )
                 .await
                 .map(|value| value == Value::Bool(true))
-                .map_err(anyhow::Error::msg),
+                .map_err(plain_libs::anyhow::Error::msg),
             None => Ok(false),
         }
     };
@@ -715,7 +715,7 @@ pub async fn send_incoming(
     if matches!(&lan, Ok(true)) || matches!(&ble, Ok(true)) {
         return Ok(());
     }
-    anyhow::bail!("Failed to send pairing message: LAN {lan:?}, BLE {ble:?}")
+    plain_libs::anyhow::bail!("Failed to send pairing message: LAN {lan:?}, BLE {ble:?}")
 }
 
 #[cfg(test)]

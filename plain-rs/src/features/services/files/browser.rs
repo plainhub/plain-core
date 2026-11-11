@@ -230,7 +230,7 @@ fn cache_path(root: &Path, path: &str, source: &Source, operation: Operation) ->
     hash.update([0]);
     hash.update(path);
     hash.update(source.size.to_be_bytes());
-    let modified = chrono::DateTime::<chrono::Utc>::from(source.modified);
+    let modified = plain_libs::chrono::DateTime::<plain_libs::chrono::Utc>::from(source.modified);
     hash.update(modified.timestamp().to_be_bytes());
     hash.update(modified.timestamp_subsec_nanos().to_be_bytes());
     let key = plain_libs::utils::hex::bytes_to_hex(&hash.finalize());
@@ -337,7 +337,7 @@ pub async fn encode_android_file(
 
 async fn media_task<F>(encode: F) -> Result<bool, String>
 where
-    F: FnOnce(&std::sync::atomic::AtomicBool) -> anyhow::Result<bool> + Send + 'static,
+    F: FnOnce(&std::sync::atomic::AtomicBool) -> plain_libs::anyhow::Result<bool> + Send + 'static,
 {
     struct Cancellation(Arc<std::sync::atomic::AtomicBool>);
     impl Drop for Cancellation {

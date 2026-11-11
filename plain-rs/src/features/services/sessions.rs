@@ -3,7 +3,7 @@ use crate::infrastructure::db::SessionRow;
 use crate::runtime::Runtime as CoreRuntime;
 
 /// The key a remote client's frames are encrypted with: its session token.
-pub fn key(db: &Db, client_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+pub fn key(db: &Db, client_id: &str) -> plain_libs::anyhow::Result<Option<Vec<u8>>> {
     Ok(db.session_get(client_id)?.and_then(|row| {
         let key = plain_libs::utils::base64::base64_decode(&row.token);
         (key.len() == 32).then_some(key)
@@ -17,8 +17,8 @@ pub fn local_key(state: &CoreRuntime, client_id: &str) -> Option<Vec<u8>> {
     Some(state.url_key.to_vec())
 }
 
-pub fn touch(state: &CoreRuntime, client_id: &str) -> anyhow::Result<()> {
-    let now = chrono::Utc::now().timestamp_millis();
+pub fn touch(state: &CoreRuntime, client_id: &str) -> plain_libs::anyhow::Result<()> {
+    let now = plain_libs::chrono::Utc::now().timestamp_millis();
     state.db.session_touch(&[(
         client_id.to_owned(),
         plain_libs::utils::dbtime::iso_from_unix_millis(now),
@@ -26,7 +26,7 @@ pub fn touch(state: &CoreRuntime, client_id: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn create(state: &CoreRuntime, name: String) -> anyhow::Result<SessionRow> {
+pub fn create(state: &CoreRuntime, name: String) -> plain_libs::anyhow::Result<SessionRow> {
     let now = plain_libs::utils::dbtime::now_iso();
     let row = SessionRow {
         url_token: plain_libs::crypto::gen_token(),
@@ -47,17 +47,17 @@ pub fn create(state: &CoreRuntime, name: String) -> anyhow::Result<SessionRow> {
     Ok(row)
 }
 
-pub fn rename(state: &CoreRuntime, client_id: &str, name: &str) -> anyhow::Result<bool> {
+pub fn rename(state: &CoreRuntime, client_id: &str, name: &str) -> plain_libs::anyhow::Result<bool> {
     Ok(state
         .db
         .session_rename(client_id, name, &plain_libs::utils::dbtime::now_iso())?
         == 1)
 }
 
-pub fn delete(state: &CoreRuntime, client_id: &str) -> anyhow::Result<bool> {
+pub fn delete(state: &CoreRuntime, client_id: &str) -> plain_libs::anyhow::Result<bool> {
     state
         .clients
         .revoke(client_id)
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
     Ok(state.db.session_delete(client_id)? > 0)
 }

@@ -2,7 +2,7 @@ use crate::features::chat::enums::DeviceType;
 use crate::features::peers::pairing::protocol::PairingCancel;
 use crate::features::peers::pairing::protocol::PairingRequestPayload;
 use crate::features::peers::pairing::protocol::PairingResponse;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -55,7 +55,7 @@ impl Message {
     pub fn parse(body: &str) -> Result<Self> {
         let (kind, payload) = body
             .split_once(':')
-            .ok_or_else(|| anyhow::anyhow!("Missing nearby message prefix"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing nearby message prefix"))?;
         let mut value = serde_json::json!({"kind":kind});
         if !payload.is_empty() {
             value["payload"] = serde_json::from_str(payload)?;

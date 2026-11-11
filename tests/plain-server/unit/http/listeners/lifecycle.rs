@@ -259,7 +259,7 @@ async fn stopping_public_discovery_cancels_pending_start_and_runs_withdrawal_onc
         async move {
             let _guard = CancelSignal(Some(cancelled));
             entered.send(()).unwrap();
-            std::future::pending::<anyhow::Result<()>>().await
+            std::future::pending::<plain_libs::anyhow::Result<()>>().await
         },
         async move {
             cancellation.await.unwrap();

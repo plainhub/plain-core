@@ -4,7 +4,7 @@ use crate::features::prefs::security::UpdateInfo;
 use crate::features::services::settings::updates;
 use crate::infrastructure::types::Long;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, anyhow, ensure};
+use plain_libs::anyhow::{Result, anyhow, ensure};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -364,7 +364,7 @@ async fn transfer(
     let total = response.content_length();
     let stream = response
         .bytes_stream()
-        .map(|chunk| chunk.map_err(anyhow::Error::from));
+        .map(|chunk| chunk.map_err(plain_libs::anyhow::Error::from));
     save_stream(state, id, identity, stream, total, cancel).await
 }
 async fn save_stream<B: AsRef<[u8]>>(
@@ -560,7 +560,7 @@ pub mod test_fixture {
         let identity = Identity::from(&updates::info(state)?);
         let total = chunks.iter().map(|chunk| chunk.len() as u64).sum();
         let (_cancel, mut receiver) = watch::channel(false);
-        let stream = futures_util::stream::iter(chunks.into_iter().map(Ok::<_, anyhow::Error>));
+        let stream = futures_util::stream::iter(chunks.into_iter().map(Ok::<_, plain_libs::anyhow::Error>));
         save_stream(state, id, &identity, stream, Some(total), &mut receiver).await
     }
 }

@@ -98,8 +98,8 @@ impl Drop for PublicDiscovery {
 async fn public_discovery_lifetime(
     mut core_stop: watch::Receiver<bool>,
     mut public_stop: watch::Receiver<bool>,
-    start: impl std::future::Future<Output = anyhow::Result<()>>,
-    finish: impl std::future::Future<Output = anyhow::Result<()>>,
+    start: impl std::future::Future<Output = plain_libs::anyhow::Result<()>>,
+    finish: impl std::future::Future<Output = plain_libs::anyhow::Result<()>>,
 ) {
     if *core_stop.borrow() || *public_stop.borrow() {
         return;

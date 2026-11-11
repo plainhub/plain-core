@@ -5,7 +5,7 @@ use crate::infrastructure::db::DChannel;
 use crate::infrastructure::db::chat_store::channels;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde_json::{Value, json};
 
 pub fn rejected(message: impl ToString) -> Value {
@@ -130,13 +130,13 @@ async fn deliver(
                 .channel_delivery
                 .acquire()
                 .await
-                .map_err(|e| anyhow::anyhow!(e))?;
+                .map_err(|e| plain_libs::anyhow::anyhow!(e))?;
             ensure!(
                 current(state, channel, removed)?,
                 "Channel changed before send"
             );
             let peer = peers::get(&state.db, &target.peer.id)?
-                .ok_or_else(|| anyhow::anyhow!("Peer not found"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Peer not found"))?;
             let (key, cid) = if peer.key.is_empty() {
                 (&channel.key, channel.id.as_str())
             } else {
@@ -178,7 +178,7 @@ async fn deliver(
                 },
             )
             .await;
-            Ok::<Value, anyhow::Error>(match response {
+            Ok::<Value, plain_libs::anyhow::Error>(match response {
                 Ok(value)
                     if value["data"]["channelSystemMessage"].as_bool() == Some(true)
                         && value.get("errors").is_none_or(|v| {

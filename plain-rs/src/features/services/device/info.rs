@@ -128,7 +128,7 @@ pub fn startup(host: &Host) -> Result<DeviceInfo, String> {
                 .clone()
                 .ok_or("Missing Android GL ES version")?,
             build_time: Instant(
-                chrono::DateTime::from_timestamp_millis(
+                plain_libs::chrono::DateTime::from_timestamp_millis(
                     config
                         .android_build_time
                         .ok_or("Missing Android build time")?,

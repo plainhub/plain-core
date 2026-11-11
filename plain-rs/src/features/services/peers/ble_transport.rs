@@ -1,6 +1,6 @@
 use crate::infrastructure::protocols::ble;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use std::time::Duration;
 #[derive(Default)]
 pub struct Runtime;
@@ -21,7 +21,7 @@ impl Runtime {
         let generation = state
             .host
             .generation()
-            .ok_or_else(|| anyhow::anyhow!("BLE host unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE host unavailable"))?;
         let request = serde_json::json!({
             "request": plain_libs::utils::base64::base64_encode(&bytes),
             "clientId": peer.id,
@@ -31,16 +31,16 @@ impl Runtime {
         let wait = state.host.call_wait("peerTransportBleExchange", request);
         tokio::pin!(wait);
         let reply = tokio::select! {
-            result = tokio::time::timeout(Duration::from_secs(120), wait) => result.map_err(|_| anyhow::anyhow!("BLE exchange timed out"))?,
-            _ = stop.changed() => return Err(anyhow::anyhow!("BLE core stopped")),
-        }.map_err(anyhow::Error::msg)?;
+            result = tokio::time::timeout(Duration::from_secs(120), wait) => result.map_err(|_| plain_libs::anyhow::anyhow!("BLE exchange timed out"))?,
+            _ = stop.changed() => return Err(plain_libs::anyhow::anyhow!("BLE core stopped")),
+        }.map_err(plain_libs::anyhow::Error::msg)?;
         if !state.host.is_current(generation) {
-            anyhow::bail!("BLE host generation changed");
+            plain_libs::anyhow::bail!("BLE host generation changed");
         }
         let encoded = reply
             .get("response")
             .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| anyhow::anyhow!("BLE exchange returned no response"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE exchange returned no response"))?;
         let bytes = plain_libs::utils::base64::base64_decode(encoded);
         ble::decode_response(&bytes)?;
         Ok(bytes)

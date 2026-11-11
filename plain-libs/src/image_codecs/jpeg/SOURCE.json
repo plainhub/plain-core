@@ -1,0 +1,13 @@
+{
+  "package": "zune-jpeg",
+  "version": "0.5.15",
+  "repository": "https://github.com/etemesi254/zune-image/tree/dev/crates/zune-jpeg",
+  "revision": "31d81fed7551c8ccea456d9d8e2b1fd8bebb6995",
+  "archive_sha256": "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296",
+  "retained_features": [
+    "default",
+    "neon",
+    "std",
+    "x86"
+  ]
+}

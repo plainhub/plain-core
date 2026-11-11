@@ -25,7 +25,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
     let incoming = directory.path().join("ai_models/incoming");
     let original = plain_libs::ai_image_search::models::test_fixture::fixture(&incoming);
     let photo = directory.path().join("photo.png");
-    image::RgbImage::from_pixel(64, 64, image::Rgb([128, 64, 32]))
+    plain_libs::image::RgbImage::from_pixel(64, 64, plain_libs::image::Rgb([128, 64, 32]))
         .save(&photo)
         .unwrap();
     let host = Arc::new(Host::default());

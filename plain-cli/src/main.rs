@@ -1,4 +1,4 @@
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 
 mod bootstrap;
 mod cli;

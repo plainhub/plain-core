@@ -2,7 +2,7 @@ use crate::infrastructure::db::CHAT_COLS;
 use crate::infrastructure::db::DChat;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::row_to_chat;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -25,7 +25,7 @@ pub struct Card {
     #[serde(default)]
     pub total_size: i64,
     #[serde(default)]
-    pub expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub expires_at: Option<plain_libs::chrono::DateTime<plain_libs::chrono::Utc>>,
 }
 fn parse(chat: &DChat) -> Result<(Value, Card)> {
     let value: Value = serde_json::from_str(&chat.content)?;
@@ -35,7 +35,7 @@ fn parse(chat: &DChat) -> Result<(Value, Card)> {
 }
 pub fn current(db: &Db, id: &str, expected: &Card) -> Result<String> {
     let row = crate::infrastructure::db::chat_store::messages::get(db, id)?
-        .ok_or_else(|| anyhow::anyhow!("Share message removed"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Share message removed"))?;
     let (_, card) = parse(&row)?;
     ensure!(card == *expected, "Share card changed");
     Ok(row.content)
@@ -60,7 +60,7 @@ pub fn refresh(
             )
             .optional()?
         else {
-            anyhow::bail!("Share message removed");
+            plain_libs::anyhow::bail!("Share message removed");
         };
         ensure!(row.content == expected_content, "Share card changed");
         let (mut content, current) = parse(&row)?;
@@ -73,8 +73,8 @@ pub fn refresh(
         }
         fresh.expires_at = expires_at
             .map(|ms| {
-                chrono::DateTime::from_timestamp_millis(ms)
-                    .ok_or_else(|| anyhow::anyhow!("Invalid share expiry"))
+                plain_libs::chrono::DateTime::from_timestamp_millis(ms)
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid share expiry"))
             })
             .transpose()?;
         if fresh == current {
@@ -83,7 +83,7 @@ pub fn refresh(
         }
         let value = content["value"]
             .as_object_mut()
-            .ok_or_else(|| anyhow::anyhow!("Invalid share card"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid share card"))?;
         value.insert("name".into(), Value::String(fresh.name.clone()));
         value.insert("expiresAt".into(), serde_json::to_value(fresh.expires_at)?);
         value.insert("peerInfo".into(), serde_json::to_value(&fresh.peer_info)?);

@@ -1,5 +1,5 @@
 pub use crate::features::discovery::nearby_wire::Message;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use plain_libs::protocols::http_client;
 use std::{sync::OnceLock, time::Duration};
 
@@ -15,14 +15,14 @@ fn client() -> Result<&'static http_client::Client> {
                 .map_err(|e| e.to_string())
         })
         .as_ref()
-        .map_err(|e| anyhow::anyhow!(e.to_owned()))
+        .map_err(|e| plain_libs::anyhow::anyhow!(e.to_owned()))
 }
 /// Endpoint the nearby wire speaks to. Shared with the TLS listener
 /// tests in plain-server, which assert against the same URL.
 pub fn url(ip: &str, port: u16) -> Result<String> {
-    anyhow::ensure!(port != 0, "Missing nearby port");
+    plain_libs::anyhow::ensure!(port != 0, "Missing nearby port");
     let host = ip.trim().trim_start_matches('[').trim_end_matches(']');
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         crate::infrastructure::transport::lan::valid_host(host),
         "Invalid nearby host"
     );

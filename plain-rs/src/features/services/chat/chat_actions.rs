@@ -4,7 +4,7 @@ use crate::features::chat::messages::target as message_target;
 use crate::infrastructure::db::DChat;
 use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde_json::json;
 pub fn committed(state: &CoreRuntime, chat: &DChat, event: &'static str) {
     state.previews.request(&chat.id);
@@ -20,7 +20,7 @@ pub async fn deliver(state: &CoreRuntime, row: DChat) -> Result<DChat> {
     crate::features::services::chat::chat_delivery::deliver(state, &row.id, None)
         .await?
         .chat
-        .ok_or_else(|| anyhow::anyhow!("Message removed"))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Message removed"))
 }
 pub async fn send(state: &CoreRuntime, target: &str, content: &str) -> Result<DChat> {
     let (to, channel) = message_target::parse(target)?;
@@ -89,7 +89,7 @@ fn prepare_content(state: &CoreRuntime, content: &str) -> Result<(String, Option
     }
     let text = value["value"]["text"]
         .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Text required"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Text required"))?;
     if text.encode_utf16().count() <= 2048 {
         return Ok((content.to_owned(), None));
     }
@@ -146,10 +146,10 @@ pub async fn retry(state: &CoreRuntime, id: String) -> Result<DChat> {
     tokio::spawn(async move {
         let mut stop = state.stop.clone();
         let result = tokio::select! {
-            _=stop.changed()=>Err(anyhow::anyhow!("Chat service stopped")),
+            _=stop.changed()=>Err(plain_libs::anyhow::anyhow!("Chat service stopped")),
             result=crate::features::services::chat::chat_delivery::deliver_observed(&state,&id,None,crate::infrastructure::transport::router::Attempt::Retry,|chat| {
                 if let Some(sender)=sender.lock().unwrap().take() {let _=sender.send(Ok(chat.clone()));}
-            })=>result.and_then(|receipt|receipt.chat.ok_or_else(||anyhow::anyhow!("Message unavailable"))),
+            })=>result.and_then(|receipt|receipt.chat.ok_or_else(||plain_libs::anyhow::anyhow!("Message unavailable"))),
         };
         if let Some(sender) = sender.lock().unwrap().take() {
             let _ = sender.send(result);

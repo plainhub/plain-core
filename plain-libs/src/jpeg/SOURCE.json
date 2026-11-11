@@ -1,0 +1,8 @@
+{
+  "package": "jpeg-decoder-0.3.2",
+  "repository": "https://github.com/image-rs/jpeg-decoder",
+  "revision": "eb2d7c0f6a2d0298aba7a7f8b9ca1440353e8f8c",
+  "scope": "JPEG scaled decoding, supported color/lossless modes and native worker/CPU paths; no rayon, nightly NEON or metadata API",
+  "security_updates": "Review upstream advisories and changes to retained parser/decoder paths when updating dependencies.",
+  "archive_sha256": "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
+}

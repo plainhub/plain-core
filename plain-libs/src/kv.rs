@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -29,7 +29,7 @@ impl Db {
         let mut opened = OPEN
             .get_or_init(Mutex::default)
             .lock()
-            .map_err(|_| anyhow::anyhow!("Key-value database registry poisoned"))?;
+            .map_err(|_| crate::anyhow::anyhow!("Key-value database registry poisoned"))?;
         if let Some(inner) = opened.get(&path).and_then(Weak::upgrade) {
             return Ok(Self(inner));
         }
@@ -137,7 +137,7 @@ impl Db {
         let previous = values.clone();
         let result = change(&mut values)?;
         for key in values.keys() {
-            anyhow::ensure!(key.starts_with(prefix), "Invalid state key");
+            crate::anyhow::ensure!(key.starts_with(prefix), "Invalid state key");
         }
         if previous != values {
             self.before_write()?;
@@ -182,7 +182,7 @@ impl Db {
             self.0
                 .write_attempts
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            anyhow::ensure!(
+            crate::anyhow::ensure!(
                 !self
                     .0
                     .write_failure
@@ -284,7 +284,7 @@ impl LazyDb {
         let mut stored = self
             .db
             .lock()
-            .map_err(|_| anyhow::anyhow!("Key-value database poisoned"))?;
+            .map_err(|_| crate::anyhow::anyhow!("Key-value database poisoned"))?;
         if stored.is_none() {
             *stored = Some(Arc::new(Db::open(&self.path)?));
         }

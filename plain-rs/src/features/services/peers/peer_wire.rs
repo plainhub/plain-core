@@ -6,7 +6,7 @@ use crate::infrastructure::db::chat_store::peers;
 use crate::infrastructure::transport::contract::START_AWARE;
 use crate::infrastructure::transport::contract::chat_item_request;
 use crate::infrastructure::transport::contract::signed_request;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 #[derive(Deserialize)]
@@ -25,7 +25,7 @@ pub struct Prepared {
     pub channel_id: String,
 }
 pub fn prepare(db: &Db, prefs: &Prefs, id: &str, operation: Operation) -> Result<Prepared> {
-    let peer = peers::get(db, id)?.ok_or_else(|| anyhow::anyhow!("Unknown peer"))?;
+    let peer = peers::get(db, id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown peer"))?;
     let (body, channel_id, key) = match operation {
         Operation::Chat {
             content,
@@ -35,19 +35,19 @@ pub fn prepare(db: &Db, prefs: &Prefs, id: &str, operation: Operation) -> Result
                 peer.key.clone()
             } else {
                 channels::get(db, &channel_id)?
-                    .ok_or_else(|| anyhow::anyhow!("Unknown channel"))?
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel"))?
                     .key
             };
             (
                 chat_item_request(&signing_keypair(prefs)?, &content, &channel_id)
-                    .map_err(anyhow::Error::msg)?,
+                    .map_err(plain_libs::anyhow::Error::msg)?,
                 channel_id,
                 key,
             )
         }
         Operation::StartAware => (
             signed_request(&signing_keypair(prefs)?, START_AWARE, json!({}), "")
-                .map_err(anyhow::Error::msg)?,
+                .map_err(plain_libs::anyhow::Error::msg)?,
             String::new(),
             peer.key.clone(),
         ),

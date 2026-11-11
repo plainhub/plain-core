@@ -20,7 +20,7 @@ async fn exported_logs_are_readable_without_authorizing_private_log_sources() {
         crate::features::services::files::links::authorize_path(&state, path.to_str().unwrap())
             .is_err()
     );
-    let mut archive = zip::ZipArchive::new(std::fs::File::open(&exported).unwrap()).unwrap();
+    let mut archive = plain_libs::zip::ZipArchive::new(std::fs::File::open(&exported).unwrap()).unwrap();
     let mut content = String::new();
     archive
         .by_name("logs/latest.log")
@@ -240,7 +240,7 @@ async fn rust_logs_are_exported_without_app_logs_and_counted_once_for_a_shared_p
         .await
         .unwrap()
         .unwrap();
-    let zip = zip::ZipArchive::new(std::fs::File::open(exported).unwrap()).unwrap();
+    let zip = plain_libs::zip::ZipArchive::new(std::fs::File::open(exported).unwrap()).unwrap();
     let mut names = zip
         .file_names()
         .map(|name| name.unwrap().into_owned())

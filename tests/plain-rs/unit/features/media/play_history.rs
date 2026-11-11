@@ -151,7 +151,7 @@ fn video_progress_preserves_exact_milliseconds_after_restart_and_uses_inclusive_
     drop(db);
     let db = Db::open(&path).unwrap();
     assert_eq!(matching(&db, &[]).unwrap()[0].position_ms, 3_000_000_123);
-    let boundary = chrono::DateTime::parse_from_rfc3339(&played_at).unwrap();
+    let boundary = plain_libs::chrono::DateTime::parse_from_rfc3339(&played_at).unwrap();
     let fields = |time: String| {
         vec![plain_libs::utils::search_dsl::FilterField {
             name: "played_at".into(),
@@ -160,7 +160,7 @@ fn video_progress_preserves_exact_milliseconds_after_restart_and_uses_inclusive_
         }]
     };
     assert_eq!(matching(&db, &fields(played_at)).unwrap().len(), 1);
-    let later = (boundary + chrono::Duration::milliseconds(1)).to_rfc3339();
+    let later = (boundary + plain_libs::chrono::Duration::milliseconds(1)).to_rfc3339();
     assert!(matching(&db, &fields(later)).unwrap().is_empty());
     save(&db, DataType::Video, "video", 0).unwrap();
     assert_eq!(matching(&db, &[]).unwrap()[0].position_ms, 0);

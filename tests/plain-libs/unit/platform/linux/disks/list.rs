@@ -93,7 +93,7 @@ fn a_successful_empty_read_stays_empty() {
 
 #[test]
 fn a_failed_read_is_reported_without_empty_success() {
-    let error = read_with(|_| Err(anyhow::anyhow!("lsblk unavailable"))).unwrap_err();
+    let error = read_with(|_| Err(crate::anyhow::anyhow!("lsblk unavailable"))).unwrap_err();
     assert_eq!(error, "lsblk unavailable");
 }
 

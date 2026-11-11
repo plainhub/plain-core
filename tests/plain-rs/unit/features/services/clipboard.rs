@@ -42,7 +42,7 @@ async fn reports_recheck_permission_deduplicate_and_publish_only_nonsensitive_te
     assert_eq!(
         body,
         json!({"text":item.text,"sensitive":false,
-        "time":chrono::DateTime::parse_from_rfc3339(&item.created_at).unwrap().timestamp_millis()})
+        "time":plain_libs::chrono::DateTime::parse_from_rfc3339(&item.created_at).unwrap().timestamp_millis()})
     );
     report(&state, &payload).unwrap();
     assert_eq!(state.db.clipboard_count_rows().unwrap(), 1);

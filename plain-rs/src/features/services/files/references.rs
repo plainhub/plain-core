@@ -3,7 +3,7 @@ pub fn resolve(
     db: std::sync::Arc<crate::infrastructure::db::Db>,
     directory: PathBuf,
     path: &str,
-) -> anyhow::Result<String> {
+) -> plain_libs::anyhow::Result<String> {
     if path
         .get(..4)
         .is_some_and(|prefix| prefix.eq_ignore_ascii_case("fid:"))
@@ -11,7 +11,7 @@ pub fn resolve(
         return Ok(
             crate::features::files::app_files::FileStore::new(db, directory)
                 .resolve(&path[4..])
-                .map_err(anyhow::Error::msg)?
+                .map_err(plain_libs::anyhow::Error::msg)?
                 .to_string_lossy()
                 .into_owned(),
         );
@@ -20,9 +20,9 @@ pub fn resolve(
         .get(..6)
         .is_some_and(|prefix| prefix.eq_ignore_ascii_case("app://"))
     {
-        anyhow::ensure!(directory.is_absolute(), "Absolute data directory required");
+        plain_libs::anyhow::ensure!(directory.is_absolute(), "Absolute data directory required");
         let suffix = Path::new(&path[6..]);
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             !path[6..].contains(['\\', '\0'])
                 && !suffix.is_absolute()
                 && suffix.components().all(|part| matches!(
@@ -33,11 +33,11 @@ pub fn resolve(
         );
         return Ok(directory.join(suffix).to_string_lossy().into_owned());
     }
-    let path = plain_libs::utils::file_uri::local_path(path).map_err(anyhow::Error::msg)?;
+    let path = plain_libs::utils::file_uri::local_path(path).map_err(plain_libs::anyhow::Error::msg)?;
     if Path::new(&path).is_absolute() || path.contains("://") {
         return Ok(path);
     }
-    anyhow::ensure!(directory.is_absolute(), "Absolute data directory required");
+    plain_libs::anyhow::ensure!(directory.is_absolute(), "Absolute data directory required");
     Ok(directory.join(path).to_string_lossy().into_owned())
 }
 

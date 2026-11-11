@@ -52,8 +52,8 @@ async fn thumbnails_use_shared_content_output_and_not_original_file_bytes() {
     let scope = NativeRequestScope::default();
     let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("fixture.png");
-    image::RgbImage::from_fn(1600, 1200, |x, y| {
-        image::Rgb([(x % 251) as u8, (y % 251) as u8, 97])
+    plain_libs::image::RgbImage::from_fn(1600, 1200, |x, y| {
+        plain_libs::image::Rgb([(x % 251) as u8, (y % 251) as u8, 97])
     })
     .save(&path)
     .unwrap();
@@ -76,7 +76,7 @@ async fn thumbnails_use_shared_content_output_and_not_original_file_bytes() {
         .await
         .unwrap();
     assert_eq!(thumbnail.mime, content::thumbnail_mime(&bytes));
-    let image = image::load_from_memory(&bytes).unwrap();
+    let image = plain_libs::image::load_from_memory(&bytes).unwrap();
     assert!(image.width() <= 256);
     assert!(image.height() <= 256);
     let prepared = core.runtime_state().cache.root().join("native_resources");
@@ -146,8 +146,8 @@ async fn native_archive_entries_use_the_existing_content_materializer_for_previe
     let core = ContentServer::open(root.path()).unwrap();
     let files = plain_libs::temporary::tempdir().unwrap();
     let archive = files.path().join("fixture.zip");
-    let mut zip = zip::ZipWriter::new(std::fs::File::create(&archive).unwrap());
-    zip.start_file("folder/file.txt", zip::write::SimpleFileOptions::default())
+    let mut zip = plain_libs::zip::ZipWriter::new(std::fs::File::create(&archive).unwrap());
+    zip.start_file("folder/file.txt", plain_libs::zip::write::SimpleFileOptions::default())
         .unwrap();
     zip.write_all(b"archive fixture").unwrap();
     zip.finish().unwrap();

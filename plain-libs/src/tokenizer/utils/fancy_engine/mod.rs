@@ -5,7 +5,7 @@ mod error;
 mod parse;
 mod vm;
 
-use regex_automata::{Input as RaInput, meta::Regex as RaRegex};
+use crate::regex_engine::automata::{Input as RaInput, meta::Regex as RaRegex};
 use std::fmt;
 
 use analyze::analyze;

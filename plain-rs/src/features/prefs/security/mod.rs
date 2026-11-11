@@ -112,30 +112,30 @@ pub fn dev_token(prefs: &Prefs) -> Result<String> {
     Ok(prefs.get(DEV_TOKEN)?.unwrap_or_default())
 }
 
-pub fn log_level(prefs: &Prefs) -> anyhow::Result<log::LevelFilter> {
+pub fn log_level(prefs: &Prefs) -> plain_libs::anyhow::Result<log::LevelFilter> {
     let value = prefs
         .get::<String>(LOG_LEVEL)?
         .unwrap_or_else(|| "info".into());
     parse_log_level(&value)
 }
 
-fn parse_log_level(value: &str) -> anyhow::Result<log::LevelFilter> {
+fn parse_log_level(value: &str) -> plain_libs::anyhow::Result<log::LevelFilter> {
     match value {
         "trace" => Ok(log::LevelFilter::Trace),
         "debug" => Ok(log::LevelFilter::Debug),
         "info" => Ok(log::LevelFilter::Info),
         "warn" => Ok(log::LevelFilter::Warn),
         "error" => Ok(log::LevelFilter::Error),
-        _ => anyhow::bail!("Invalid log level"),
+        _ => plain_libs::anyhow::bail!("Invalid log level"),
     }
 }
 
-pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> anyhow::Result<bool> {
+pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> plain_libs::anyhow::Result<bool> {
     if key == AUTO_CHECK_UPDATE {
-        anyhow::ensure!(value.is_boolean(), "Invalid auto check update setting");
+        plain_libs::anyhow::ensure!(value.is_boolean(), "Invalid auto check update setting");
     }
     if key == SKIP_VERSION {
-        anyhow::ensure!(value.is_string(), "Invalid skipped version");
+        plain_libs::anyhow::ensure!(value.is_string(), "Invalid skipped version");
     }
     let command = match key {
         PASSWORD => Some(Command::SetPassword {
@@ -157,7 +157,7 @@ pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> anyhow::Result<bool>
             permissions: serde_json::from_value(value.clone())?,
         }),
         CLIENT_ID | SIGNATURE_KEY_PAIR | MASTER_SECRET | ADB_TOKEN => {
-            anyhow::bail!("Rust-only preference")
+            plain_libs::anyhow::bail!("Rust-only preference")
         }
         _ => None,
     };
@@ -168,10 +168,10 @@ pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> anyhow::Result<bool>
         LOG_LEVEL => Some(parse_log_level(
             value
                 .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Invalid log level"))?,
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid log level"))?,
         )?),
         DEV_TOKEN => {
-            anyhow::ensure!(value.is_string(), "Invalid development token");
+            plain_libs::anyhow::ensure!(value.is_string(), "Invalid development token");
             None
         }
         _ => None,
@@ -191,7 +191,7 @@ pub fn remove_entry(prefs: &Prefs, key: &str) -> Result<bool> {
     Ok(changed)
 }
 
-pub fn ensure_signing_keypair(prefs: &Prefs) -> anyhow::Result<Vec<u8>> {
+pub fn ensure_signing_keypair(prefs: &Prefs) -> plain_libs::anyhow::Result<Vec<u8>> {
     prefs.update(|map| {
         ensure(map, SIGNATURE_KEY_PAIR, || {
             plain_libs::utils::base64::base64_encode(&plain_libs::crypto::ed25519_generate().0)
@@ -200,26 +200,26 @@ pub fn ensure_signing_keypair(prefs: &Prefs) -> anyhow::Result<Vec<u8>> {
     signing_keypair(prefs)
 }
 
-pub fn signing_keypair(prefs: &Prefs) -> anyhow::Result<Vec<u8>> {
+pub fn signing_keypair(prefs: &Prefs) -> plain_libs::anyhow::Result<Vec<u8>> {
     let raw = prefs
         .get::<String>(SIGNATURE_KEY_PAIR)?
-        .ok_or_else(|| anyhow::anyhow!("Missing signing identity"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing signing identity"))?;
     let bytes = plain_libs::utils::base64::base64_decode_checked(&raw)?;
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         plain_libs::crypto::ed25519_public_from_keypair(&bytes).is_some(),
         "Invalid signing identity"
     );
     Ok(bytes)
 }
 
-fn signature_public_key(prefs: &Prefs) -> anyhow::Result<String> {
+fn signature_public_key(prefs: &Prefs) -> plain_libs::anyhow::Result<String> {
     let keypair = signing_keypair(prefs)?;
     Ok(plain_libs::utils::base64::base64_encode(
         &plain_libs::crypto::ed25519_public_from_keypair(&keypair).unwrap(),
     ))
 }
 
-pub fn get_entry(prefs: &Prefs, key: &str) -> anyhow::Result<Option<Value>> {
+pub fn get_entry(prefs: &Prefs, key: &str) -> plain_libs::anyhow::Result<Option<Value>> {
     let value = match key {
         PASSWORD => json!(""),
         ADB_TOKEN | CLIENT_ID | MDNS_HOSTNAME | SKIP_VERSION => {
@@ -243,7 +243,7 @@ pub fn get_entry(prefs: &Prefs, key: &str) -> anyhow::Result<Option<Value>> {
     Ok(Some(value))
 }
 
-pub fn snapshot(prefs: &Prefs) -> anyhow::Result<SecurityState> {
+pub fn snapshot(prefs: &Prefs) -> plain_libs::anyhow::Result<SecurityState> {
     let map: Map<String, Value> = prefs.entries().into_iter().collect();
     Ok(SecurityState {
         password: String::new(),

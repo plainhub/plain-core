@@ -1,5 +1,5 @@
 use super::{Bits, huffman::Codebook};
-use anyhow::{Result, bail};
+use crate::anyhow::{Result, bail};
 use std::sync::{Arc, Mutex};
 const GROUP_BITS: u8 = 13;
 #[cfg(test)]
@@ -118,7 +118,7 @@ impl AcTable {
                 while reader.cnt < i32::from(entry.bits) {
                     reader
                         .refill()
-                        .ok_or_else(|| anyhow::anyhow!("truncated AC value"))?;
+                        .ok_or_else(|| crate::anyhow::anyhow!("truncated AC value"))?;
                 }
                 reader.consume(u32::from(entry.bits));
                 entry.advance
@@ -126,7 +126,7 @@ impl AcTable {
                 let symbol = self.codes.symbol(reader)?;
                 reader
                     .receive(u32::from(symbol & 15))
-                    .ok_or_else(|| anyhow::anyhow!("truncated AC value"))?;
+                    .ok_or_else(|| crate::anyhow::anyhow!("truncated AC value"))?;
                 if symbol == 0 {
                     64
                 } else if symbol == 0xf0 {

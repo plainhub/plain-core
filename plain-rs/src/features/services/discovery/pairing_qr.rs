@@ -17,7 +17,7 @@ use crate::features::{
     services::peers::peer_wire::signing_keypair,
 };
 use crate::runtime::Runtime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use hmac::{Hmac, KeyInit, Mac};
 use plain_libs::{
     crypto::{EcdhSession, ed25519_sign, ed25519_verify},
@@ -70,7 +70,7 @@ fn response_input(
 }
 
 pub async fn display(state: &Runtime) -> Result<Display> {
-    let id = state.native_client_id().map_err(anyhow::Error::msg)?;
+    let id = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
     let mut device = local_device(state).await?;
     device.ips.retain(|ip| {
         ip.parse::<IpAddr>()
@@ -128,7 +128,7 @@ pub async fn respond(
     generation: &str,
 ) -> Result<()> {
     let request = payload.into_request();
-    let sender = state.native_client_id().map_err(anyhow::Error::msg)?;
+    let sender = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
     ensure!(request.from_id != sender, "Cannot pair with this device");
     let address = crate::infrastructure::transport::lan::best_host(
         &request.payload.ips,
@@ -183,7 +183,7 @@ fn prepare_response(
     let ecdh = EcdhSession::generate();
     let shared = ecdh
         .compute_shared_key(&base64_decode(&request.payload.ecdh_public_key))
-        .ok_or_else(|| anyhow::anyhow!("Invalid pairing key"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing key"))?;
     let mut response = PairingResponse {
         request_id: id.clone(),
         signature_public_key: Some(base64_encode(&key[32..])),
@@ -226,7 +226,7 @@ fn commit_scanned(state: &Runtime, request: &PairingRequest, address: &str) -> R
     let mut scanned = state.pairing_runtime.qr.scanned.lock().unwrap();
     let entry = scanned
         .get_mut(&request.payload.request_id())
-        .ok_or_else(|| anyhow::anyhow!("Pairing QR expired"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Pairing QR expired"))?;
     if let Some(facts) = &entry.facts {
         save_peer(
             state,
@@ -254,7 +254,7 @@ pub(super) fn complete(
             entry.request.payload.request_id() == response.request_id
                 && entry.started.elapsed() < RESPONSE_TIMEOUT
         })
-        .ok_or_else(|| anyhow::anyhow!("Pairing QR expired"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Pairing QR expired"))?;
     let request = &entry.request;
     let name = response.from_name.as_deref().unwrap_or_default();
     let key = response.signature_public_key.as_deref().unwrap_or_default();
@@ -279,7 +279,7 @@ pub(super) fn complete(
     let shared = entry
         .ecdh
         .compute_shared_key(&base64_decode(&response.ecdh_public_key))
-        .ok_or_else(|| anyhow::anyhow!("Invalid pairing key"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing key"))?;
     let previous = crate::infrastructure::db::chat_store::peers::get(&state.db, sender)?;
     let address = address.to_string();
     save_peer(

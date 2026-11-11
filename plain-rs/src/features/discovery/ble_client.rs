@@ -14,7 +14,7 @@
 
 use crate::infrastructure::protocols::ble;
 use crate::infrastructure::protocols::ble::Assembler;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use std::{
     sync::Mutex,
     time::{Duration, Instant},
@@ -77,7 +77,7 @@ impl Client {
                     ensure!(write(write_limit, frame).await?, "BLE request write failed");
                     sequence = sequence
                         .checked_add(1)
-                        .ok_or_else(|| anyhow::anyhow!("BLE sequence overflow"))?;
+                        .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE sequence overflow"))?;
                 }
                 None => break,
             }
@@ -89,7 +89,7 @@ impl Client {
             ensure!(!remaining.is_zero(), "BLE request timed out");
             let frame = next_notification(remaining.min(NOTIFICATION_TIMEOUT))
                 .await?
-                .ok_or_else(|| anyhow::anyhow!("BLE notification timed out"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE notification timed out"))?;
             if let Some(result) = assembly.push(&frame)? {
                 let info = assembly.info();
                 ensure!(info >> 32 & 1 == 1, "Unexpected BLE response direction");

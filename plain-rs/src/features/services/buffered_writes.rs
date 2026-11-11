@@ -17,7 +17,7 @@ pub async fn flush(
             (
                 "Session activity",
                 db.flush_session_activity(now, force)
-                    .map_err(anyhow::Error::from),
+                    .map_err(plain_libs::anyhow::Error::from),
             ),
             (
                 "Recent files",

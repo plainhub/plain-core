@@ -3,7 +3,7 @@ use crate::features::services::discovery::nearby_devices::Context;
 use crate::infrastructure::protocols::mdns::host_responder;
 use crate::infrastructure::protocols::mdns::service_browser::MdnsServiceBrowser;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::{
@@ -176,7 +176,7 @@ impl Runtime {
         let hostname = state
             .prefs
             .get::<String>(crate::features::prefs::pref_keys::MDNS_HOSTNAME)?
-            .ok_or_else(|| anyhow::anyhow!("Missing hostname"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing hostname"))?;
         {
             let guard = self.session.lock().unwrap();
             let Some(session) = guard.as_ref() else {
@@ -261,7 +261,7 @@ impl Runtime {
                     .host
                     .call("mdnsMulticast", json!({"acquire":true,"lease":lease}))
                     .await
-                    .map_err(anyhow::Error::msg)?
+                    .map_err(plain_libs::anyhow::Error::msg)?
                     .as_bool()
                     == Some(true),
                 "Multicast permission unavailable"
@@ -279,7 +279,7 @@ impl Runtime {
                 .prefs
                 .get::<String>(crate::features::prefs::pref_keys::MDNS_HOSTNAME)?
                 .filter(|hostname| !hostname.is_empty())
-                .ok_or_else(|| anyhow::anyhow!("Missing mDNS hostname"))?,
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing mDNS hostname"))?,
         ));
         let scanning = Arc::new(AtomicBool::new(false));
         let context = Context::from(state);
@@ -340,7 +340,7 @@ impl Runtime {
             .host
             .call("mdnsMulticast", json!({"acquire":true,"lease":owner.id}))
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         owner.release_multicast = permission.as_bool() == Some(true);
         ensure!(owner.release_multicast, "Multicast permission unavailable");
         owner.acquire_owner()?;
@@ -701,7 +701,7 @@ pub async fn control(state: &CoreRuntime, request: Request) -> Result<Value> {
     let mut stop = state.stop.clone();
     ensure!(!*stop.borrow(), "Server stopped");
     tokio::select! {
-        _ = stop.changed() => Err(anyhow::anyhow!("Server stopped")),
+        _ = stop.changed() => Err(plain_libs::anyhow::anyhow!("Server stopped")),
         result = state.mdns.execute(state, request) => result,
     }
 }

@@ -96,12 +96,12 @@ impl Runtime {
         &self,
         path: &str,
         destination: &std::path::Path,
-    ) -> anyhow::Result<String> {
+    ) -> plain_libs::anyhow::Result<String> {
         if path.starts_with("content://") {
             use tokio::io::AsyncWriteExt;
             let (resources, stop) =
                 self.resources.lock().unwrap().clone().ok_or_else(|| {
-                    anyhow::anyhow!("Native attachment resources are unavailable")
+                    plain_libs::anyhow::anyhow!("Native attachment resources are unavailable")
                 })?;
             let facts = crate::features::services::files::resources::read(
                 &self.host,
@@ -110,11 +110,11 @@ impl Runtime {
                 json!({}),
             )
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
             let mime = match &facts {
                 Value::Null => "",
                 Value::String(mime) => mime.trim(),
-                _ => anyhow::bail!("Invalid resource MIME type"),
+                _ => plain_libs::anyhow::bail!("Invalid resource MIME type"),
             };
             let mime = if mime.is_empty() {
                 "application/octet-stream"
@@ -125,15 +125,15 @@ impl Runtime {
             let mut reader = resources
                 .read_native(path, stop)
                 .await
-                .map_err(|status| anyhow::anyhow!("Attachment resource returned {status}"))?;
+                .map_err(|status| plain_libs::anyhow::anyhow!("Attachment resource returned {status}"))?;
             let mut file = tokio::fs::File::create(destination).await?;
-            while let Some(chunk) = reader.read().await.map_err(anyhow::Error::msg)? {
+            while let Some(chunk) = reader.read().await.map_err(plain_libs::anyhow::Error::msg)? {
                 file.write_all(&chunk).await?;
             }
             file.flush().await?;
             return Ok(mime);
         }
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             tokio::fs::try_exists(path).await?,
             "Attachment file not found: {path}"
         );
@@ -172,9 +172,9 @@ impl Runtime {
             runtime.shutdown().await;
         });
     }
-    pub fn replay(&self) -> anyhow::Result<()> {
+    pub fn replay(&self) -> plain_libs::anyhow::Result<()> {
         let _guard = self.outbox.lock().unwrap();
-        let now = chrono::Utc::now().timestamp_millis();
+        let now = plain_libs::chrono::Utc::now().timestamp_millis();
         let mut terminal: Vec<Value> = self
             .store
             .get()?
@@ -199,8 +199,8 @@ impl Runtime {
         body: String,
         paths: Vec<String>,
         thread_id: String,
-    ) -> anyhow::Result<String> {
-        anyhow::ensure!(!number.trim().is_empty(), "MMS recipient is required");
+    ) -> plain_libs::anyhow::Result<String> {
+        plain_libs::anyhow::ensure!(!number.trim().is_empty(), "MMS recipient is required");
         crate::features::services::capabilities::require(&self.host, "TELEPHONY").await?;
         let _guard = self.send.lock().await;
         let id = format!("pending_mms_{}", plain_libs::utils::uuid::Uuid::new_v4());
@@ -232,7 +232,7 @@ impl Runtime {
         {
             let state = self.state.lock().unwrap();
             let types = normalized_types(attachments.iter().map(|a| a.content_type.as_str()));
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 !state.pending.values().any(|pending| {
                     crate::features::services::sms::addresses::matches(
                         &pending.number,
@@ -256,7 +256,7 @@ impl Runtime {
             .host
             .call("systemMmsLatest", json!({}))
             .await
-            .map_err(anyhow::Error::msg)?
+            .map_err(plain_libs::anyhow::Error::msg)?
             .as_i64()
             .unwrap_or_default();
         let launched = self
@@ -266,10 +266,10 @@ impl Runtime {
                 json!({"number":number,"body":body,"attachments":attachments}),
             )
             .await
-            .map_err(anyhow::Error::msg)?
+            .map_err(plain_libs::anyhow::Error::msg)?
             .as_i64()
-            .ok_or_else(|| anyhow::anyhow!("Invalid MMS launch receipt"))?;
-        anyhow::ensure!(launched > 0, "MMS sending is unavailable on this platform");
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid MMS launch receipt"))?;
+        plain_libs::anyhow::ensure!(launched > 0, "MMS sending is unavailable on this platform");
         let pending = Pending {
             id: id.clone(),
             number,
@@ -278,7 +278,7 @@ impl Runtime {
             attachments,
             launch_time_sec: launched,
             minimum_id: latest,
-            created_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            created_at: plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true),
         };
         let (cancel, receiver) = watch::channel(false);
         {
@@ -338,10 +338,10 @@ impl Runtime {
             json!({"pendingId":pending.id,"success":result_code==0,"resultCode":result_code});
         {
             let _guard = self.outbox.lock().unwrap();
-            let saved = (|| -> anyhow::Result<()> {
+            let saved = (|| -> plain_libs::anyhow::Result<()> {
                 let store = self.store.get()?;
                 store.update_json("mms_send_results", |terminal: &mut Vec<Value>| {
-                    terminal.push(json!({"terminalAtMillis":chrono::Utc::now().timestamp_millis(),"result":result}));
+                    terminal.push(json!({"terminalAtMillis":plain_libs::chrono::Utc::now().timestamp_millis(),"result":result}));
                     if terminal.len() > 500 { terminal.drain(..terminal.len() - 500); }
                     Ok(())
                 })

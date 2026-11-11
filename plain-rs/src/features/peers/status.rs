@@ -1,7 +1,7 @@
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::transport::auth as peer_auth;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use serde_json::{Value, json};
 use std::{collections::HashMap, sync::Mutex};
 
@@ -36,7 +36,7 @@ impl Default for Connections {
 impl Connections {
     pub fn open(&self, db: &Db, id: &str, challenge: &str, body: &[u8]) -> Result<(String, bool)> {
         let authenticated = peer_auth::authenticate_status(db, id, body)
-            .map_err(|e| anyhow::anyhow!(e.reason()))?;
+            .map_err(|e| plain_libs::anyhow::anyhow!(e.reason()))?;
         let proof: Proof = serde_json::from_str(&authenticated.graphql_json)?;
         if proof.client_id != id || proof.challenge != challenge {
             bail!("Status proof does not match connection");
@@ -196,7 +196,7 @@ pub fn handshake(key: &[u8], keypair: &[u8], client_id: &str, challenge: &str) -
         client_id: client_id.to_owned(),
         challenge: challenge.to_owned(),
     })?;
-    let timestamp = chrono::Utc::now().timestamp_millis();
+    let timestamp = plain_libs::chrono::Utc::now().timestamp_millis();
     let signature = plain_libs::crypto::ed25519_sign(
         keypair,
         peer_auth::status_signature_payload(timestamp, &content).as_bytes(),
@@ -208,7 +208,7 @@ pub fn handshake(key: &[u8], keypair: &[u8], client_id: &str, challenge: &str) -
         key,
         format!("{signature}|{timestamp}|{content}").as_bytes(),
     )
-    .ok_or_else(|| anyhow::anyhow!("Invalid peer key"))
+    .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid peer key"))
 }
 
 #[cfg(test)]

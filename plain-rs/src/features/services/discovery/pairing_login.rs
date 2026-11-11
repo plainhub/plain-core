@@ -1,7 +1,7 @@
 use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::features::services::discovery::pairing_attempts::Resolved;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use futures_util::{SinkExt, StreamExt};
 use plain_libs::protocols::http_client;
 use plain_libs::utils::base64::base64_decode;
@@ -21,8 +21,8 @@ pub(super) async fn run(
     let base = target
         .url
         .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("No management address available"))?;
-    let client_id = state.native_client_id().map_err(anyhow::Error::msg)?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("No management address available"))?;
+    let client_id = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
     let saved = if target.target.device_id.is_empty() {
         None
     } else {
@@ -36,7 +36,7 @@ pub(super) async fn run(
         .timeout(Duration::from_secs(10))
         .send()
         .await
-        .map_err(|_| anyhow::anyhow!("failed_connect"))?;
+        .map_err(|_| plain_libs::anyhow::anyhow!("failed_connect"))?;
     ensure!(response.status().is_success(), "remote_access_disabled");
     let init: Value = serde_json::from_slice(
         &crate::features::services::peers::peer_lan::limited(response, 8192).await?,
@@ -44,7 +44,7 @@ pub(super) async fn run(
     let public_key = init["signaturePublicKey"]
         .as_str()
         .filter(|k| base64_decode(k).len() == 32)
-        .ok_or_else(|| anyhow::anyhow!("signature_verification_failed"))?
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("signature_verification_failed"))?
         .to_owned();
     if let Some(saved) = saved
         .as_ref()
@@ -96,7 +96,7 @@ pub(super) async fn run(
     }
     let password_required = init["passwordRequired"]
         .as_bool()
-        .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_auth_response"))?;
     let changed = saved.as_ref().is_some_and(|p| p.public_key != public_key);
     if changed || (!password_required && saved.is_none()) {
         let digest = Sha256::digest(base64_decode(&public_key))
@@ -123,7 +123,7 @@ pub(super) async fn run(
             trust
                 .changed()
                 .await
-                .map_err(|_| anyhow::anyhow!("cancelled"))?;
+                .map_err(|_| plain_libs::anyhow::anyhow!("cancelled"))?;
         }
     }
     let password = if password_required {
@@ -140,7 +140,7 @@ pub(super) async fn run(
                 passwords
                     .recv()
                     .await
-                    .ok_or_else(|| anyhow::anyhow!("cancelled"))?
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("cancelled"))?
             }
         };
         Some(password)
@@ -163,7 +163,7 @@ pub(super) async fn run(
     } else {
         "ws"
     })
-    .map_err(|_| anyhow::anyhow!("Invalid management address"))?;
+    .map_err(|_| plain_libs::anyhow::anyhow!("Invalid management address"))?;
     url.query_pairs_mut().append_pair("cid", &client_id);
     state.pairing_runtime.attempts.transition(
         state,
@@ -174,10 +174,10 @@ pub(super) async fn run(
     );
     let mut socket = crate::features::services::peers::status_socket::connect(url.as_str())
         .await
-        .map_err(|_| anyhow::anyhow!("failed_connect_ws"))?;
+        .map_err(|_| plain_libs::anyhow::anyhow!("failed_connect_ws"))?;
     let protection = if let Some(password) = password {
         let client = plain_libs::auth::client::OpaqueLogin::start(password.into_bytes())
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         socket
             .send(tokio_tungstenite::tungstenite::Message::Binary(
                 client.request().into(),
@@ -191,18 +191,18 @@ pub(super) async fn run(
                 &base64_decode(&public_key),
                 &base64_decode(text(&init, "opaquePublicKey")?),
             )
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         let key: [u8; 32] = result
             .api_key
             .as_slice()
             .try_into()
-            .map_err(|_| anyhow::anyhow!("Invalid session key"))?;
+            .map_err(|_| plain_libs::anyhow::anyhow!("Invalid session key"))?;
         let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
             &key,
             &serde_json::to_vec(&request)?,
             &result.request_aad,
         )
-        .ok_or_else(|| anyhow::anyhow!("Encryption failed"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Encryption failed"))?;
         let mut finish = result.ke3;
         finish.extend(encrypted);
         socket
@@ -227,7 +227,7 @@ pub(super) async fn run(
             match socket
                 .next()
                 .await
-                .ok_or_else(|| anyhow::anyhow!("failed_connect_ws"))??
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("failed_connect_ws"))??
             {
                 Message::Text(text) => {
                     break serde_json::from_str::<
@@ -235,14 +235,14 @@ pub(super) async fn run(
                     >(&text)?;
                 }
                 Message::Ping(bytes) => socket.send(Message::Pong(bytes)).await?,
-                _ => anyhow::bail!("invalid_auth_response"),
+                _ => plain_libs::anyhow::bail!("invalid_auth_response"),
             }
         };
         let channel = client.accept(
             &response,
             &public_key,
             &target.target.device_id,
-            chrono::Utc::now().timestamp_millis() as u64,
+            plain_libs::chrono::Utc::now().timestamp_millis() as u64,
         )?;
         state.pairing_runtime.attempts.set_verification_code(
             state,
@@ -251,7 +251,7 @@ pub(super) async fn run(
         );
         let encrypted = channel.encrypt_request(
             &serde_json::to_vec(&request)?,
-            chrono::Utc::now().timestamp_millis() as u64,
+            plain_libs::chrono::Utc::now().timestamp_millis() as u64,
         )?;
         socket
             .send(tokio_tungstenite::tungstenite::Message::Binary(
@@ -264,14 +264,14 @@ pub(super) async fn run(
         let frame = socket
             .next()
             .await
-            .ok_or_else(|| anyhow::anyhow!("failed_connect_ws"))?
-            .map_err(|_| anyhow::anyhow!("failed_connect_ws"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("failed_connect_ws"))?
+            .map_err(|_| plain_libs::anyhow::anyhow!("failed_connect_ws"))?;
         use tokio_tungstenite::tungstenite::Message;
         match frame {
             Message::Binary(data) => {
                 let plain = protection.decrypt(&data)?;
                 let response: Value = serde_json::from_slice(&plain)
-                    .map_err(|_| anyhow::anyhow!("invalid_auth_response"))?;
+                    .map_err(|_| plain_libs::anyhow::anyhow!("invalid_auth_response"))?;
                 if response["status"] == "PENDING" {
                     state.pairing_runtime.attempts.transition(
                         state,
@@ -287,17 +287,17 @@ pub(super) async fn run(
             Message::Ping(data) => socket
                 .send(Message::Pong(data))
                 .await
-                .map_err(|_| anyhow::anyhow!("failed_connect_ws"))?,
+                .map_err(|_| plain_libs::anyhow::anyhow!("failed_connect_ws"))?,
             Message::Close(reason) => {
                 let reason = reason.map(|r| r.reason.to_string()).unwrap_or_default();
-                anyhow::bail!(match reason.as_str() {
+                plain_libs::anyhow::bail!(match reason.as_str() {
                     "invalid_password" => "invalid_password",
                     "too_many_login_attempts" => "too_many_login_attempts",
                     "rejected" => "rejected",
                     _ => "failed_connect_ws",
                 });
             }
-            _ => anyhow::bail!("invalid_auth_response"),
+            _ => plain_libs::anyhow::bail!("invalid_auth_response"),
         }
     };
     let remote_id = verify_response(&response, &target.target.device_id)?;
@@ -347,7 +347,7 @@ pub(super) async fn run(
             .as_u64()
             .and_then(|port| u16::try_from(port).ok())
             .filter(|port| *port != 0)
-            .ok_or_else(|| anyhow::anyhow!("No secure peer address available"))?
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("No secure peer address available"))?
     } else {
         target.target.device_port
     };
@@ -367,7 +367,7 @@ pub(super) async fn run(
                 .map(|p| p.public_key.as_str())
                 .unwrap_or_default(),
         )
-        .map_err(|_| anyhow::anyhow!("Failed to save paired device"))?;
+        .map_err(|_| plain_libs::anyhow::anyhow!("Failed to save paired device"))?;
     state.pairing_runtime.attempts.transition(
         state,
         generation,
@@ -388,7 +388,7 @@ pub(super) async fn run(
 fn text<'a>(value: &'a Value, field: &str) -> Result<&'a str> {
     value[field]
         .as_str()
-        .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_auth_response"))
 }
 fn check_identity(expected_id: &str, expected_key: &str, id: &str, key: &str) -> Result<()> {
     ensure!(
@@ -425,10 +425,10 @@ impl Protection {
         match self {
             Self::Password { key, aad } => {
                 plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, data, aad)
-                    .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_auth_response"))
             }
             Self::Confirmation(c) => {
-                c.decrypt_response(data, chrono::Utc::now().timestamp_millis() as u64)
+                c.decrypt_response(data, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
             }
         }
     }
@@ -442,11 +442,11 @@ where
         match socket
             .next()
             .await
-            .ok_or_else(|| anyhow::anyhow!("failed_connect_ws"))??
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("failed_connect_ws"))??
         {
             Message::Binary(bytes) => return Ok(bytes.to_vec()),
             Message::Ping(bytes) => socket.send(Message::Pong(bytes)).await?,
-            _ => anyhow::bail!("invalid_auth_response"),
+            _ => plain_libs::anyhow::bail!("invalid_auth_response"),
         }
     }
 }
@@ -467,9 +467,9 @@ async fn metadata(
     .await
     .map_err(|error| {
         if error.downcast_ref::<http_client::Error>().is_some() {
-            anyhow::anyhow!("failed_connect")
+            plain_libs::anyhow::anyhow!("failed_connect")
         } else {
-            anyhow::anyhow!("invalid_session")
+            plain_libs::anyhow::anyhow!("invalid_session")
         }
     })?;
     ensure!(data["app"].is_object(), "invalid_session");

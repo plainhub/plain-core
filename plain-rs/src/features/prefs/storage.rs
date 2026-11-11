@@ -1,6 +1,6 @@
 use super::Prefs;
 use crate::features::prefs::pref_keys::VOLUME_ALIAS;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use serde_json::{Map, Value};
 
 pub fn get_map(prefs: &Prefs) -> Map<String, Value> {

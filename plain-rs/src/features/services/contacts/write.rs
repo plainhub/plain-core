@@ -41,49 +41,49 @@ fn permission_allowed(configured: &[String]) -> bool {
     configured.iter().any(|name| name == "CONTACTS")
 }
 
-fn required<'a>(field: Option<&'a String>, name: &str) -> anyhow::Result<&'a str> {
+fn required<'a>(field: Option<&'a String>, name: &str) -> plain_libs::anyhow::Result<&'a str> {
     let value = field.map(String::as_str).unwrap_or_default().trim();
-    anyhow::ensure!(!value.is_empty(), "{name} is empty");
+    plain_libs::anyhow::ensure!(!value.is_empty(), "{name} is empty");
     Ok(value)
 }
 
-fn bounded(value: &str, max: usize, name: &str) -> anyhow::Result<()> {
-    anyhow::ensure!(value.chars().count() <= max, "{name} is too long");
+fn bounded(value: &str, max: usize, name: &str) -> plain_libs::anyhow::Result<()> {
+    plain_libs::anyhow::ensure!(value.chars().count() <= max, "{name} is too long");
     Ok(())
 }
 
 /// Phone/email/address rows arrive with an empty `value` while the desktop
 /// edit form is still being filled in, so blank rows stay legal here. Only
 /// their shape and size are checked.
-fn entries<'a>(input: &'a Value, field: &str) -> anyhow::Result<&'a [Value]> {
+fn entries<'a>(input: &'a Value, field: &str) -> plain_libs::anyhow::Result<&'a [Value]> {
     let items: &[Value] = match input.get(field) {
         Some(value) => value
             .as_array()
-            .ok_or_else(|| anyhow::anyhow!("{field} must be an array"))?,
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("{field} must be an array"))?,
         None => &[],
     };
-    anyhow::ensure!(items.len() <= MAX_ENTRIES, "{field} has too many items");
+    plain_libs::anyhow::ensure!(items.len() <= MAX_ENTRIES, "{field} has too many items");
     for item in items {
         let object = item
             .as_object()
-            .ok_or_else(|| anyhow::anyhow!("{field} item must be an object"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("{field} item must be an object"))?;
         if let Some(value) = object.get("value") {
             let value = value
                 .as_str()
-                .ok_or_else(|| anyhow::anyhow!("{field} value must be a string"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("{field} value must be a string"))?;
             bounded(value, MAX_VALUE_LEN, &format!("{field} value"))?;
         }
     }
     Ok(items)
 }
 
-fn text_field(input: &Value, field: &str, max: usize) -> anyhow::Result<()> {
+fn text_field(input: &Value, field: &str, max: usize) -> plain_libs::anyhow::Result<()> {
     let Some(value) = input.get(field) else {
         return Ok(());
     };
     let value = value
         .as_str()
-        .ok_or_else(|| anyhow::anyhow!("{field} must be a string"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("{field} must be a string"))?;
     bounded(value, max, field)
 }
 
@@ -91,20 +91,20 @@ fn bounded_field(
     object: &serde_json::Map<String, Value>,
     field: &str,
     max: usize,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     let Some(value) = object.get(field) else {
         return Ok(());
     };
     let value = value
         .as_str()
-        .ok_or_else(|| anyhow::anyhow!("{field} must be a string"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("{field} must be a string"))?;
     bounded(value, max, field)
 }
 
-fn validate_contact_input(input: &Value, require_source: bool) -> anyhow::Result<()> {
+fn validate_contact_input(input: &Value, require_source: bool) -> plain_libs::anyhow::Result<()> {
     let object = input
         .as_object()
-        .ok_or_else(|| anyhow::anyhow!("input must be an object"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("input must be an object"))?;
     for field in [
         "prefix",
         "firstName",
@@ -123,7 +123,7 @@ fn validate_contact_input(input: &Value, require_source: bool) -> anyhow::Result
             .and_then(Value::as_str)
             .unwrap_or_default()
             .trim();
-        anyhow::ensure!(!source.is_empty(), "contact source is empty");
+        plain_libs::anyhow::ensure!(!source.is_empty(), "contact source is empty");
     }
     let phones = entries(input, "phoneNumbers")?;
     let emails = entries(input, "emails")?;
@@ -134,11 +134,11 @@ fn validate_contact_input(input: &Value, require_source: bool) -> anyhow::Result
     if let Some(groups) = object.get("groupIds") {
         let groups = groups
             .as_array()
-            .ok_or_else(|| anyhow::anyhow!("groupIds must be an array"))?;
-        anyhow::ensure!(groups.len() <= MAX_ENTRIES, "groupIds has too many items");
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("groupIds must be an array"))?;
+        plain_libs::anyhow::ensure!(groups.len() <= MAX_ENTRIES, "groupIds has too many items");
     }
     if let Some(organization) = object.get("organization") {
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             organization.is_null() || organization.is_object(),
             "organization must be an object"
         );
@@ -173,32 +173,32 @@ fn validate_contact_input(input: &Value, require_source: bool) -> anyhow::Result
                 .is_some_and(|value| !value.trim().is_empty())
         })
     };
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         named || filled(phones) || filled(emails),
         "contact needs a name, a phone number or an email"
     );
     Ok(())
 }
 
-pub async fn execute(prefs: &Prefs, host: &Host, request: Request) -> anyhow::Result<Value> {
+pub async fn execute(prefs: &Prefs, host: &Host, request: Request) -> plain_libs::anyhow::Result<Value> {
     let configured: Vec<String> = prefs.get_or(
         crate::features::prefs::pref_keys::API_PERMISSIONS,
         Vec::new(),
     );
-    anyhow::ensure!(permission_allowed(&configured), "no_permission");
+    plain_libs::anyhow::ensure!(permission_allowed(&configured), "no_permission");
     capabilities::require(host, "TELEPHONY").await?;
     match request.action {
         Action::CreateContact | Action::UpdateContact => {
             let input = request
                 .input
                 .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("input is missing"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("input is missing"))?;
             let creating = request.action == Action::CreateContact;
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 creating || request.id.is_some(),
                 "updateContact requires an id"
             );
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 !creating || request.id.is_none(),
                 "createContact must not carry an id"
             );
@@ -212,13 +212,13 @@ pub async fn execute(prefs: &Prefs, host: &Host, request: Request) -> anyhow::Re
                 let sources = host
                     .call("systemContactSources", json!({}))
                     .await
-                    .map_err(anyhow::Error::msg)?;
+                    .map_err(plain_libs::anyhow::Error::msg)?;
                 let sources: Vec<Value> = serde_json::from_value(sources)?;
                 let sources = crate::features::services::contacts::projection::sources(sources);
                 let source = sources
                     .iter()
                     .find(|source| source["name"] == input["source"])
-                    .ok_or_else(|| anyhow::anyhow!("Contact source not found"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Contact source not found"))?;
                 params["accountType"] = json!(source["type"].as_str().unwrap_or_default());
             }
             let result = host
@@ -231,12 +231,12 @@ pub async fn execute(prefs: &Prefs, host: &Host, request: Request) -> anyhow::Re
                     params,
                 )
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             if !creating {
                 return Ok(json!({"ok": true}));
             }
             let created = result.as_str().unwrap_or_default().trim().to_owned();
-            anyhow::ensure!(!created.is_empty(), "Failed to create contact");
+            plain_libs::anyhow::ensure!(!created.is_empty(), "Failed to create contact");
             Ok(json!({"id": created}))
         }
         Action::CreateGroup => {
@@ -256,9 +256,9 @@ pub async fn execute(prefs: &Prefs, host: &Host, request: Request) -> anyhow::Re
                     }),
                 )
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             let created = result.as_str().unwrap_or_default().trim().to_owned();
-            anyhow::ensure!(!created.is_empty(), "Failed to create contact group");
+            plain_libs::anyhow::ensure!(!created.is_empty(), "Failed to create contact group");
             Ok(json!({"id": created}))
         }
         Action::UpdateGroup | Action::DeleteGroup => {
@@ -275,7 +275,7 @@ pub async fn execute(prefs: &Prefs, host: &Host, request: Request) -> anyhow::Re
             }
             host.call(method, params)
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             Ok(json!({"ok": true}))
         }
     }

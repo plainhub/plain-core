@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use plain_libs::anyhow::{Result, anyhow};
 use plain_libs::kv::Db;
 use plain_libs::platform::linux::disks::blockdev::flatten_devices;
 use plain_libs::platform::linux::disks::blockdev::run_lsblk;
@@ -129,7 +129,7 @@ pub fn next_free_slot(used: &HashSet<usize>) -> usize {
     i
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg(target_os = "linux")]
 fn is_mountpoint(path: &str) -> bool {
     plain_libs::platform::mountinfo::read_mountinfo()
         .map(|es| es.iter().any(|e| e.mount_point == path))

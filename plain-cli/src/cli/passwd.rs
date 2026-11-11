@@ -1,4 +1,4 @@
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use plain_rs::infrastructure::platform::system::consts::AppPaths;
 
 pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
@@ -9,7 +9,7 @@ pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
     } else {
         prompt_password()?
     };
-    anyhow::ensure!(!password.is_empty(), "Password cannot be empty");
+    plain_libs::anyhow::ensure!(!password.is_empty(), "Password cannot be empty");
     set_password(&paths.data_dir, &paths.cache_dir, &password)?;
     println!("Admin password updated.");
     Ok(())
@@ -19,13 +19,13 @@ pub fn run(paths: &AppPaths, stdin: bool) -> Result<()> {
 pub(super) fn prompt_password() -> Result<String> {
     let password = plain_libs::platform::unix::read_password::prompt_password("New password: ")?;
     let confirm = plain_libs::platform::unix::read_password::prompt_password("Confirm: ")?;
-    anyhow::ensure!(password == confirm, "Passwords do not match");
+    plain_libs::anyhow::ensure!(password == confirm, "Passwords do not match");
     Ok(password)
 }
 
 #[cfg(not(unix))]
 pub(super) fn prompt_password() -> Result<String> {
-    anyhow::bail!("Use passwd --stdin to read a password from standard input on this platform")
+    plain_libs::anyhow::bail!("Use passwd --stdin to read a password from standard input on this platform")
 }
 
 fn set_password(
@@ -35,7 +35,7 @@ fn set_password(
 ) -> Result<()> {
     let _data_directory =
         plain_rs::infrastructure::data_paths::directory::DataDirectory::open(directory, cache)
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
     let prefs = plain_rs::features::prefs::Prefs::load(&plain_rs::features::prefs::default_path(
         directory,
     ))?;

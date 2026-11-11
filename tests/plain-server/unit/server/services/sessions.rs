@@ -48,7 +48,7 @@ fn offer(
     let (login, hello) = Client::start("browser").unwrap();
     let signing =
         plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
-    let now = chrono::Utc::now().timestamp_millis() as u64;
+    let now = plain_libs::chrono::Utc::now().timestamp_millis() as u64;
     let device_id = state.native_client_id().unwrap();
     let (channel, response) =
         ServerHandshake::start("browser", &device_id, &hello, &signing, now).unwrap();
@@ -111,7 +111,7 @@ async fn approved_web_login_encrypted_response_and_token_auth_survive_restart() 
     let encrypted = keys
         .decrypt_response(
             &plain_libs::utils::base64::base64_decode(issued["frame"].as_str().unwrap()),
-            chrono::Utc::now().timestamp_millis() as u64,
+            plain_libs::chrono::Utc::now().timestamp_millis() as u64,
         )
         .unwrap();
     let decrypted = encrypted;
@@ -125,7 +125,7 @@ async fn approved_web_login_encrypted_response_and_token_auth_survive_restart() 
     headers.insert("c-id", "browser".parse().unwrap());
     let plaintext = format!(
         "{}|{}|{{\"query\":\"{{noteCount(query:\\\"\\\")}}\"}}",
-        chrono::Utc::now().timestamp_millis(),
+        plain_libs::chrono::Utc::now().timestamp_millis(),
         plain_libs::utils::uuid::Uuid::new_v4()
     );
     let encrypted = plain_rs::infrastructure::transport::http_request::encrypt_raw(

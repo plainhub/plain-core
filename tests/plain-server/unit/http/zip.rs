@@ -64,7 +64,7 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
     let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
         .unwrap();
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let mut archive = plain_libs::zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
     assert_eq!(archive.len(), 2);
     for index in [0, 2] {
         let mut bytes = String::new();
@@ -127,7 +127,7 @@ async fn shared_directory_download_preserves_empty_directories_and_excludes_outs
         let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
             .await
             .unwrap();
-        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut archive = plain_libs::zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
         let mut names = archive
             .file_names()
             .map(|name| name.unwrap().into_owned())

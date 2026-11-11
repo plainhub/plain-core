@@ -1,0 +1,8 @@
+{
+  "package": "typed-path",
+  "version": "0.13.0",
+  "repository": "https://github.com/chipsenkbeil/typed-path",
+  "revision": "93554f5a6a79a5d98c446fff724967f83cd72b91",
+  "archive_sha256": "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e",
+  "retained": "Forward Windows component parsing and required byte combinators only"
+}

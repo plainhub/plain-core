@@ -1,0 +1,335 @@
+use std::io::{self, BufRead, BufReader, Read, Seek, Take};
+
+#[cfg(all())]
+use crate::image_codecs::tiff::fax::{
+    Color,
+    decoder::{self, DecodeStatus, Group4Decoder},
+};
+pub use crate::image_codecs::tiff::tags::ByteOrder;
+#[derive(Debug)]
+pub struct EndianReader<R> {
+    reader: R,
+    pub(crate) byte_order: ByteOrder,
+}
+
+impl<R: Read> EndianReader<R> {
+    pub fn new(reader: R, byte_order: ByteOrder) -> Self {
+        Self { reader, byte_order }
+    }
+
+    pub fn inner(&mut self) -> &mut R {
+        &mut self.reader
+    }
+
+    pub fn goto_offset(&mut self, offset: u64) -> io::Result<()>
+    where
+        R: Seek,
+    {
+        self.reader.seek(io::SeekFrom::Start(offset))?;
+        Ok(())
+    }
+    #[inline(always)]
+    pub fn read_u16(&mut self) -> Result<u16, io::Error> {
+        let mut n = [0u8; 2];
+        self.reader.read_exact(&mut n)?;
+        Ok(match self.byte_order {
+            ByteOrder::LittleEndian => u16::from_le_bytes(n),
+            ByteOrder::BigEndian => u16::from_be_bytes(n),
+        })
+    }
+    #[inline(always)]
+    pub fn read_i16(&mut self) -> Result<i16, io::Error> {
+        let mut n = [0u8; 2];
+        self.reader.read_exact(&mut n)?;
+        Ok(match self.byte_order {
+            ByteOrder::LittleEndian => i16::from_le_bytes(n),
+            ByteOrder::BigEndian => i16::from_be_bytes(n),
+        })
+    }
+    #[inline(always)]
+    pub fn read_u32(&mut self) -> Result<u32, io::Error> {
+        let mut n = [0u8; 4];
+        self.reader.read_exact(&mut n)?;
+        Ok(match self.byte_order {
+            ByteOrder::LittleEndian => u32::from_le_bytes(n),
+            ByteOrder::BigEndian => u32::from_be_bytes(n),
+        })
+    }
+    #[inline(always)]
+    pub fn read_i32(&mut self) -> Result<i32, io::Error> {
+        let mut n = [0u8; 4];
+        self.reader.read_exact(&mut n)?;
+        Ok(match self.byte_order {
+            ByteOrder::LittleEndian => i32::from_le_bytes(n),
+            ByteOrder::BigEndian => i32::from_be_bytes(n),
+        })
+    }
+    #[inline(always)]
+    pub fn read_u64(&mut self) -> Result<u64, io::Error> {
+        let mut n = [0u8; 8];
+        self.reader.read_exact(&mut n)?;
+        Ok(match self.byte_order {
+            ByteOrder::LittleEndian => u64::from_le_bytes(n),
+            ByteOrder::BigEndian => u64::from_be_bytes(n),
+        })
+    }
+    #[inline(always)]
+    pub fn read_i64(&mut self) -> Result<i64, io::Error> {
+        let mut n = [0u8; 8];
+        self.reader.read_exact(&mut n)?;
+        Ok(match self.byte_order {
+            ByteOrder::LittleEndian => i64::from_le_bytes(n),
+            ByteOrder::BigEndian => i64::from_be_bytes(n),
+        })
+    }
+    #[inline(always)]
+    pub fn read_f32(&mut self) -> Result<f32, io::Error> {
+        let mut n = [0u8; 4];
+        self.reader.read_exact(&mut n)?;
+        Ok(f32::from_bits(match self.byte_order {
+            ByteOrder::LittleEndian => u32::from_le_bytes(n),
+            ByteOrder::BigEndian => u32::from_be_bytes(n),
+        }))
+    }
+    #[inline(always)]
+    pub fn read_f64(&mut self) -> Result<f64, io::Error> {
+        let mut n = [0u8; 8];
+        self.reader.read_exact(&mut n)?;
+        Ok(f64::from_bits(match self.byte_order {
+            ByteOrder::LittleEndian => u64::from_le_bytes(n),
+            ByteOrder::BigEndian => u64::from_be_bytes(n),
+        }))
+    }
+}
+
+//
+// # READERS
+//
+
+pub type DeflateReader<R> = flate2::read::ZlibDecoder<R>;
+
+//
+// ## LZW Reader
+//
+
+pub struct LZWReader<R: Read> {
+    reader: BufReader<Take<R>>,
+    decoder: crate::image_codecs::lzw::decode::Decoder,
+}
+
+impl<R: Read> LZWReader<R> {
+    pub fn new(reader: R, compressed_length: usize) -> LZWReader<R> {
+        let configuration = crate::image_codecs::lzw::decode::Configuration::with_tiff_size_switch(
+            crate::image_codecs::lzw::BitOrder::Msb,
+            8,
+        )
+        .with_yield_on_full_buffer(true);
+        Self {
+            reader: BufReader::with_capacity(
+                (32 * 1024).min(compressed_length),
+                reader.take(u64::try_from(compressed_length).unwrap()),
+            ),
+            decoder: configuration.build(),
+        }
+    }
+}
+
+impl<R: Read> Read for LZWReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        loop {
+            let result = self.decoder.decode_bytes(self.reader.fill_buf()?, buf);
+            self.reader.consume(result.consumed_in);
+
+            match result.status {
+                Ok(crate::image_codecs::lzw::LzwStatus::Ok) => {
+                    if result.consumed_out == 0 {
+                        continue;
+                    } else {
+                        return Ok(result.consumed_out);
+                    }
+                }
+                Ok(crate::image_codecs::lzw::LzwStatus::NoProgress) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "no lzw end code found",
+                    ));
+                }
+                Ok(crate::image_codecs::lzw::LzwStatus::Done) => {
+                    return Ok(result.consumed_out);
+                }
+                Err(err) => return Err(io::Error::new(io::ErrorKind::InvalidData, err)),
+            }
+        }
+    }
+}
+
+//
+// ## PackBits Reader
+//
+enum PackBitsReaderState {
+    Header,
+    Literal,
+    Repeat { value: u8 },
+}
+pub struct PackBitsReader<R: Read> {
+    reader: Take<R>,
+    state: PackBitsReaderState,
+    count: usize,
+}
+
+impl<R: Read> PackBitsReader<R> {
+    pub fn new(reader: R, length: u64) -> Self {
+        Self {
+            reader: reader.take(length),
+            state: PackBitsReaderState::Header,
+            count: 0,
+        }
+    }
+}
+
+impl<R: Read> Read for PackBitsReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        while let PackBitsReaderState::Header = self.state {
+            if self.reader.limit() == 0 {
+                return Ok(0);
+            }
+            let mut header: [u8; 1] = [0];
+            self.reader.read_exact(&mut header)?;
+            let h = header[0] as i8;
+            if (-127..=-1).contains(&h) {
+                let mut data: [u8; 1] = [0];
+                self.reader.read_exact(&mut data)?;
+                self.state = PackBitsReaderState::Repeat { value: data[0] };
+                self.count = (1 - h as isize) as usize;
+            } else if h >= 0 {
+                self.state = PackBitsReaderState::Literal;
+                self.count = h as usize + 1;
+            } else {
+                // h = -128 is a no-op.
+            }
+        }
+
+        let length = buf.len().min(self.count);
+        let actual = match self.state {
+            PackBitsReaderState::Literal => self.reader.read(&mut buf[..length])?,
+            PackBitsReaderState::Repeat { value } => {
+                for b in &mut buf[..length] {
+                    *b = value;
+                }
+
+                length
+            }
+            PackBitsReaderState::Header => unreachable!(),
+        };
+
+        self.count -= actual;
+        if self.count == 0 {
+            self.state = PackBitsReaderState::Header;
+        }
+        Ok(actual)
+    }
+}
+
+#[cfg(all())]
+pub struct Group4Reader<R: Read> {
+    decoder: Group4Decoder<io::Bytes<io::BufReader<io::Take<R>>>>,
+    line_buf: io::Cursor<Vec<u8>>,
+    height: u16,
+    width: u16,
+    y: u16,
+}
+
+#[cfg(all())]
+impl<R: Read> Group4Reader<R> {
+    pub fn new(
+        dimensions: (u32, u32),
+        reader: R,
+        compressed_length: u64,
+    ) -> crate::image_codecs::tiff::TiffResult<Self> {
+        let width = u16::try_from(dimensions.0)?;
+        let height = u16::try_from(dimensions.1)?;
+
+        Ok(Self {
+            decoder: Group4Decoder::new(
+                io::BufReader::new(reader.take(compressed_length)).bytes(),
+                width,
+            )?,
+            line_buf: io::Cursor::new(Vec::with_capacity(width.into())),
+            width,
+            height,
+            y: 0,
+        })
+    }
+}
+
+#[cfg(all())]
+impl<R: Read> Read for Group4Reader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        // Either we have not read any line or we are at the end of a line.
+        if self.line_buf.position() as usize == self.line_buf.get_ref().len()
+            && self.y < self.height
+        {
+            let next = self.decoder.advance().map_err(std::io::Error::other)?;
+
+            match next {
+                DecodeStatus::End => (),
+                DecodeStatus::Incomplete => {
+                    self.y += 1;
+
+                    // We known `transitions` yields exactly `self.width` items (per doc).
+                    // FIXME: performance. We do not need an individual pixel iterator, filling
+                    // memory especially for long runs can be much quicker. The `transitions` are
+                    // the positions at which each run-length ends, i.e. the prefix sum of run
+                    // lengths. Runs in fax4 start with white.
+                    let transitions = decoder::pels(self.decoder.transition(), self.width);
+
+                    let buffer = self.line_buf.get_mut();
+                    buffer.resize(usize::from(self.width).div_ceil(8), 0u8);
+
+                    let target = &mut buffer[..];
+
+                    // Note: it may seem strange to treat black as 0b1 and white as 0b0 despite all
+                    // our streams by default decoding as-if PhotometricInterpretation::BlackIsMin.
+                    // This is however consistent with libtiff. It seems that fax4's "White"
+                    // differs from what libtiff thinks of as "White". For content, a line of data
+                    // is in runlength encoding of white-black-white-black always starting with
+                    // white. In libtiff, the loop always does both colors in one go and the
+                    // structure is:
+                    //
+                    // ```
+                    // for (; runs < erun; runs += 2)
+                    //   // white run
+                    //       do { *lp++ = 0L; } while (…)
+                    //   // black run
+                    //       do { *lp++ = -1L; } while (…)
+                    // ```
+                    //
+                    // So indeed the Fax4::White run is implemented by filling with zeros.
+                    let mut bits = transitions.map(|c| match c {
+                        Color::Black => true,
+                        Color::White => false,
+                    });
+
+                    // Assemble bits in MSB as per our library representation for buffer.
+                    for byte in target {
+                        let mut val = 0;
+
+                        for (idx, bit) in bits.by_ref().take(8).enumerate() {
+                            val |= u8::from(bit) << (7 - idx % 8);
+                        }
+
+                        *byte = val;
+                    }
+
+                    self.line_buf.set_position(0);
+                }
+            }
+        }
+
+        self.line_buf.read(buf)
+    }
+}
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-libs/unit/image_codecs/tiff/decoder/stream_test.rs"]
+mod test;

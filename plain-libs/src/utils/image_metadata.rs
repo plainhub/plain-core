@@ -36,14 +36,14 @@ impl ImageMetadata {
         } else {
             &self.offset_time
         };
-        chrono::DateTime::parse_from_str(
+        crate::chrono::DateTime::parse_from_str(
             &format!("{} {offset}", self.raw_taken_at),
             "%Y:%m:%d %H:%M:%S %:z",
         )
         .ok()
         .map(|date| {
-            date.with_timezone(&chrono::Utc)
-                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+            date.with_timezone(&crate::chrono::Utc)
+                .to_rfc3339_opts(crate::chrono::SecondsFormat::Millis, true)
         })
     }
 }

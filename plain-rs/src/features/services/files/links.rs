@@ -10,8 +10,8 @@ pub enum ReadKind {
 }
 
 impl ReadKind {
-    fn check(self, path: &Path) -> anyhow::Result<()> {
-        anyhow::ensure!(
+    fn check(self, path: &Path) -> plain_libs::anyhow::Result<()> {
+        plain_libs::anyhow::ensure!(
             self != Self::Thumbnail || !requires_foreground_scan(path),
             "Thumbnail requires explicit file access"
         );
@@ -25,35 +25,35 @@ pub struct File {
     pub name: String,
 }
 
-pub(crate) fn key(state: &CoreRuntime, scope: &Scope) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn key(state: &CoreRuntime, scope: &Scope) -> plain_libs::anyhow::Result<Vec<u8>> {
     let token = match scope {
         Scope::Session(id) => {
             state
                 .db
                 .session_get(id)?
-                .ok_or_else(|| anyhow::anyhow!("Session unavailable"))?
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Session unavailable"))?
                 .url_token
         }
         Scope::Global => return Ok(state.url_key.to_vec()),
         Scope::Share(id) => {
             crate::features::files::shares::Service::new(state.db.clone(), state.prefs.clone())
                 .active(id, true)?
-                .ok_or_else(|| anyhow::anyhow!("Share unavailable"))?
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Share unavailable"))?
                 .url_token
         }
     };
     let key = plain_libs::utils::base64::base64_decode_checked(&token)?;
-    anyhow::ensure!(key.len() == 32, "Invalid resource key");
+    plain_libs::anyhow::ensure!(key.len() == 32, "Invalid resource key");
     Ok(key)
 }
 
-pub fn decrypt(state: &CoreRuntime, id: &str, purpose: &str) -> anyhow::Result<Vec<u8>> {
+pub fn decrypt(state: &CoreRuntime, id: &str, purpose: &str) -> plain_libs::anyhow::Result<Vec<u8>> {
     let (scope, payload) = resource_link::parse(id)?;
-    anyhow::ensure!(!matches!(scope, Scope::Share(_)), "Invalid request scope");
+    plain_libs::anyhow::ensure!(!matches!(scope, Scope::Share(_)), "Invalid request scope");
     resource_link::decrypt(&scope, purpose, &key(state, &scope)?, payload)
 }
 
-pub async fn resolve(state: &CoreRuntime, id: &str, kind: ReadKind) -> anyhow::Result<File> {
+pub async fn resolve(state: &CoreRuntime, id: &str, kind: ReadKind) -> plain_libs::anyhow::Result<File> {
     resolve_with_key(state, id, kind, None).await
 }
 
@@ -62,7 +62,7 @@ pub async fn resolve_native(
     id: &str,
     kind: ReadKind,
     key: [u8; 32],
-) -> anyhow::Result<File> {
+) -> plain_libs::anyhow::Result<File> {
     resolve_with_key(state, id, kind, Some(key)).await
 }
 
@@ -70,9 +70,9 @@ pub async fn resolve_native_reference(
     state: &CoreRuntime,
     reference: &str,
     kind: ReadKind,
-) -> anyhow::Result<File> {
-    state.native_client_id().map_err(anyhow::Error::msg)?;
-    anyhow::ensure!(!reference.is_empty(), "Empty resource reference");
+) -> plain_libs::anyhow::Result<File> {
+    state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
+    plain_libs::anyhow::ensure!(!reference.is_empty(), "Empty resource reference");
     let file = resolve_resource(
         state,
         Scope::Global,
@@ -85,7 +85,7 @@ pub async fn resolve_native_reference(
         .split_once("!zip!/")
         .map_or(file.path.as_str(), |(archive, _)| archive);
     state.file_platform.authorize(physical_path, false).await?;
-    state.native_client_id().map_err(anyhow::Error::msg)?;
+    state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
     Ok(file)
 }
 
@@ -94,10 +94,10 @@ async fn resolve_with_key(
     id: &str,
     kind: ReadKind,
     native_key: Option<[u8; 32]>,
-) -> anyhow::Result<File> {
+) -> plain_libs::anyhow::Result<File> {
     let owner = state.clone();
     let id = id.to_owned();
-    let (scope, resource) = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+    let (scope, resource) = tokio::task::spawn_blocking(move || -> plain_libs::anyhow::Result<_> {
         let (scope, payload) = resource_link::parse(&id)?;
         let resource = match (native_key, &scope) {
             (Some(key), Scope::Session(id))
@@ -106,7 +106,7 @@ async fn resolve_with_key(
                 resource_link::open(&scope, &key, payload)?
             }
             (Some(_), Scope::Session(_) | Scope::Share(_)) => {
-                anyhow::bail!("Invalid native resource scope")
+                plain_libs::anyhow::bail!("Invalid native resource scope")
             }
             _ => resource_link::open(&scope, &key(&owner, &scope)?, payload)?,
         };
@@ -121,9 +121,9 @@ async fn resolve_resource(
     scope: Scope,
     resource: resource_link::Resource,
     kind: ReadKind,
-) -> anyhow::Result<File> {
+) -> plain_libs::anyhow::Result<File> {
     let kind = if resource.r#type == ResourceType::ForegroundMediaThumbnail {
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             kind == ReadKind::Thumbnail,
             "Foreground resource requires thumbnail size"
         );
@@ -143,7 +143,7 @@ async fn resolve_resource(
         String::new()
     };
     let state = state.clone();
-    tokio::task::spawn_blocking(move || -> anyhow::Result<File> {
+    tokio::task::spawn_blocking(move || -> plain_libs::anyhow::Result<File> {
         let mut file = File {
             path: media_path,
             media_id: String::new(),
@@ -159,17 +159,17 @@ async fn resolve_resource(
         match resource.r#type {
             ResourceType::SharedFile => {
                 let Scope::Share(share_id) = scope else {
-                    anyhow::bail!("Invalid share scope")
+                    plain_libs::anyhow::bail!("Invalid share scope")
                 };
                 file.path = crate::features::files::shares::Service::new(
                     state.db.clone(),
                     state.prefs.clone(),
                 )
                 .resolve(&share_id, &resource.id, true)?
-                .ok_or_else(|| anyhow::anyhow!("Shared file unavailable"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Shared file unavailable"))?;
             }
             ResourceType::PackageIcon => {
-                anyhow::ensure!(
+                plain_libs::anyhow::ensure!(
                     !resource.id.contains(['/', '\\', '\0']),
                     "Invalid package ID"
                 );
@@ -179,17 +179,17 @@ async fn resolve_resource(
                 let row = state
                     .db
                     .app_file_get(resource.id.split('.').next().unwrap_or_default())?
-                    .ok_or_else(|| anyhow::anyhow!("Attachment unavailable"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Attachment unavailable"))?;
                 let suffix = std::path::Path::new(&row.real_path)
                     .file_name()
                     .and_then(|v| v.to_str())
-                    .ok_or_else(|| anyhow::anyhow!("Invalid attachment path"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment path"))?;
                 file.path = crate::features::files::app_files::FileStore::new(
                     state.db.clone(),
                     state.directory.clone(),
                 )
                 .resolve(suffix)
-                .map_err(anyhow::Error::msg)?
+                .map_err(plain_libs::anyhow::Error::msg)?
                 .to_string_lossy()
                 .into_owned();
                 let names = crate::features::chat::attachments::app_file_store::file_name_map(
@@ -219,7 +219,7 @@ async fn resolve_resource(
     .await?
 }
 
-pub fn authorize_path(state: &CoreRuntime, reference: &str) -> anyhow::Result<()> {
+pub fn authorize_path(state: &CoreRuntime, reference: &str) -> plain_libs::anyhow::Result<()> {
     authorize_path_for_read(state, reference, ReadKind::Original)
 }
 
@@ -227,7 +227,7 @@ fn authorize_path_for_read(
     state: &CoreRuntime,
     reference: &str,
     kind: ReadKind,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     if reference.starts_with("content://") || reference.starts_with("ph://") {
         return Ok(());
     }
@@ -242,10 +242,10 @@ fn authorize_path_for_read(
         .file_platform
         .private_roots
         .as_ref()
-        .map_err(|error| anyhow::anyhow!(error.clone()))?;
+        .map_err(|error| plain_libs::anyhow::anyhow!(error.clone()))?;
     if candidate.starts_with(&cache) {
         let public = ["image_cache", "video_cache", "share_open", "remote_files"];
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             public
                 .iter()
                 .any(|name| candidate.starts_with(cache.join(name))),
@@ -262,20 +262,20 @@ fn authorize_path_for_read(
             let suffix = candidate
                 .file_name()
                 .and_then(|v| v.to_str())
-                .ok_or_else(|| anyhow::anyhow!("Invalid attachment path"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment path"))?;
             let owned = crate::features::files::app_files::FileStore::new(
                 state.db.clone(),
                 state.directory.clone(),
             )
             .resolve(suffix)
-            .map_err(anyhow::Error::msg)?;
-            anyhow::ensure!(
+            .map_err(plain_libs::anyhow::Error::msg)?;
+            plain_libs::anyhow::ensure!(
                 owned.canonicalize()? == candidate,
                 "Invalid attachment path"
             );
             return Ok(());
         }
-        anyhow::bail!("Private application path");
+        plain_libs::anyhow::bail!("Private application path");
     }
     Ok(())
 }

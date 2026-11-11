@@ -8,8 +8,8 @@ pub struct ActionResult {
 }
 
 pub(crate) fn parse_instant(value: &str) -> plain_graphql::Result<Instant> {
-    chrono::DateTime::parse_from_rfc3339(value)
-        .map(|dt| Instant(dt.with_timezone(&chrono::Utc)))
+    plain_libs::chrono::DateTime::parse_from_rfc3339(value)
+        .map(|dt| Instant(dt.with_timezone(&plain_libs::chrono::Utc)))
         .map_err(|e| plain_graphql::Error::new(format!("invalid stored timestamp: {e}")))
 }
 

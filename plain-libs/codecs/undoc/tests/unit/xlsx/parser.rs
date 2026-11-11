@@ -4,9 +4,9 @@ use std::io::{Cursor, Write};
 fn create_test_zip(entries: &[(&str, &str)]) -> Vec<u8> {
     let buf = Vec::new();
     let cursor = Cursor::new(buf);
-    let mut zip = zip::ZipWriter::new(cursor);
+    let mut zip = plain_libs::zip::ZipWriter::new(cursor);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
     for (name, content) in entries {
         zip.start_file(*name, options).unwrap();
         zip.write_all(content.as_bytes()).unwrap();
@@ -494,9 +494,9 @@ fn create_minimal_xlsx_with_parts(
     use std::io::{Cursor, Write};
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(
@@ -1066,11 +1066,11 @@ fn test_xlsx_rejects_malformed_workbook_relationships() {
 #[test]
 fn test_xlsx_non_utf8_workbook_is_error() {
     use std::io::{Cursor, Write};
-    use zip::write::SimpleFileOptions;
+    use plain_libs::zip::write::SimpleFileOptions;
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
+    let options = SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1113,11 +1113,11 @@ fn test_xlsx_non_utf8_workbook_is_error() {
 
 fn create_minimal_xlsx_with_malformed_optional_part(extra_part_path: &str) -> Vec<u8> {
     use std::io::{Cursor, Write};
-    use zip::write::SimpleFileOptions;
+    use plain_libs::zip::write::SimpleFileOptions;
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
+    let options = SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1646,9 +1646,9 @@ fn test_xlsx_inline_str_mixed_entities_preserve_legitimate_and_malformed() {
     let mut buf = Vec::new();
     {
         let cursor = std::io::Cursor::new(&mut buf);
-        let mut zip = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let mut zip = plain_libs::zip::ZipWriter::new(cursor);
+        let options = plain_libs::zip::write::SimpleFileOptions::default()
+            .compression_method(plain_libs::zip::CompressionMethod::Stored);
 
         zip.start_file("[Content_Types].xml", options).unwrap();
         zip.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1716,9 +1716,9 @@ fn test_xlsx_missing_workbook_surfaces_missing_component() {
     let mut buf = Vec::new();
     {
         let cursor = std::io::Cursor::new(&mut buf);
-        let mut zip = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let mut zip = plain_libs::zip::ZipWriter::new(cursor);
+        let options = plain_libs::zip::write::SimpleFileOptions::default()
+            .compression_method(plain_libs::zip::CompressionMethod::Stored);
 
         zip.start_file("[Content_Types].xml", options).unwrap();
         zip.write_all(

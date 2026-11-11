@@ -43,7 +43,7 @@ fn a_namespace_root_on_another_volume_cannot_rebind_the_path() {
             Path::new("/Users/fixture/media"),
             PathBuf::from("/Volumes/owned"),
             "UUID:owned-volume",
-            |_| anyhow::bail!("Volume identity unavailable"),
+            |_| crate::anyhow::bail!("Volume identity unavailable"),
         )
         .is_err()
     );

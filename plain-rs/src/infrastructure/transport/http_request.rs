@@ -15,7 +15,7 @@ pub fn decrypt_raw(key: &[u8], method: &str, endpoint: &str, payload: &[u8]) -> 
 pub fn encrypt(key: &[u8], endpoint: &str, payload: &str) -> Result<Vec<u8>, &'static str> {
     let body = format!(
         "{}|{}|{}",
-        chrono::Utc::now().timestamp_millis(),
+        plain_libs::chrono::Utc::now().timestamp_millis(),
         plain_libs::utils::uuid::Uuid::new_v4(),
         payload
     );

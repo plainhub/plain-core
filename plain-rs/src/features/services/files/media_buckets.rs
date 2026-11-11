@@ -1,7 +1,7 @@
 pub fn platform_plan(
     kind: crate::features::enums::DataType,
-) -> anyhow::Result<crate::features::services::files::provider_query::Plan> {
-    anyhow::ensure!(
+) -> plain_libs::anyhow::Result<crate::features::services::files::provider_query::Plan> {
+    plain_libs::anyhow::ensure!(
         matches!(
             kind,
             crate::features::enums::DataType::Image
@@ -48,7 +48,7 @@ pub struct Bucket {
     sort_name: String,
 }
 
-pub fn aggregate(data_type: &str, items: Vec<ItemFact>) -> anyhow::Result<Vec<Bucket>> {
+pub fn aggregate(data_type: &str, items: Vec<ItemFact>) -> plain_libs::anyhow::Result<Vec<Bucket>> {
     aggregate_with_sort_key(data_type, items, plain_libs::utils::sort_name::sort_name)
 }
 
@@ -56,26 +56,26 @@ fn aggregate_with_sort_key(
     data_type: &str,
     items: Vec<ItemFact>,
     mut sort_key: impl FnMut(&str) -> String,
-) -> anyhow::Result<Vec<Bucket>> {
-    anyhow::ensure!(
+) -> plain_libs::anyhow::Result<Vec<Bucket>> {
+    plain_libs::anyhow::ensure!(
         matches!(data_type, "IMAGE" | "VIDEO" | "AUDIO" | "DOC"),
         "unsupported media bucket type"
     );
     let mut positions = HashMap::<String, usize>::new();
     let mut buckets = Vec::<Bucket>::new();
     for item in items {
-        anyhow::ensure!(item.size >= 0, "invalid media bucket item size");
+        plain_libs::anyhow::ensure!(item.size >= 0, "invalid media bucket item size");
         if let Some(&index) = positions.get(&item.id) {
             let bucket = &mut buckets[index];
-            anyhow::ensure!(bucket.name == item.name, "inconsistent media bucket name");
+            plain_libs::anyhow::ensure!(bucket.name == item.name, "inconsistent media bucket name");
             bucket.item_count = bucket
                 .item_count
                 .checked_add(1)
-                .ok_or_else(|| anyhow::anyhow!("media bucket item count overflow"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("media bucket item count overflow"))?;
             bucket.size = bucket
                 .size
                 .checked_add(item.size)
-                .ok_or_else(|| anyhow::anyhow!("media bucket size overflow"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("media bucket size overflow"))?;
             if bucket.top_items.len() < 4 {
                 bucket.top_items.push(item.path);
             }

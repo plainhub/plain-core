@@ -36,7 +36,7 @@ fn encode_produces_valid_jpeg_header() {
     assert!(out.ends_with(&[0xFF, 0xD9]), "EOI marker");
     assert!(out.len() > 500);
     // Round-trip through the image crate to prove decodability + dims.
-    let img = image::load_from_memory(&out).unwrap();
+    let img = crate::image::load_from_memory(&out).unwrap();
     assert_eq!((img.width(), img.height()), (64, 48));
 }
 
@@ -48,7 +48,7 @@ fn encode_rgba_flattens_alpha() {
     }
     let bm = Bitmap::new_rgba(data, 4, 4);
     let out = encode_jpeg(bm, 90).unwrap();
-    let img = image::load_from_memory(&out).unwrap().to_rgba8();
+    let img = crate::image::load_from_memory(&out).unwrap().to_rgba8();
     // Transparent pixels become white.
     assert_eq!(img.get_pixel(0, 0).0[..3], [255, 255, 255]);
 }
@@ -64,8 +64,8 @@ fn encode_quality_affects_size_and_decodes() {
         small.len(),
         big.len()
     );
-    assert!(image::load_from_memory(&small).is_ok());
-    assert!(image::load_from_memory(&big).is_ok());
+    assert!(crate::image::load_from_memory(&small).is_ok());
+    assert!(crate::image::load_from_memory(&big).is_ok());
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn encode_clamps_quality_rejects_empty_dimensions_and_flattens_partial_alpha() {
     for quality in [75, 90] {
         let image =
             encode_jpeg(Bitmap::new_rgba([255, 0, 0, 128].repeat(81), 9, 9), quality).unwrap();
-        let decoded = image::load_from_memory(&image).unwrap().to_rgb8();
+        let decoded = crate::image::load_from_memory(&image).unwrap().to_rgb8();
         for pixel in decoded.pixels() {
             for (&actual, expected) in pixel.0.iter().zip([255u8, 127, 127]) {
                 assert!(actual.abs_diff(expected) <= 3);
@@ -110,7 +110,7 @@ fn subsampled_noise_and_checkerboards_decode_at_all_low_qualities() {
             })
             .collect();
         let encoded = encode_jpeg(Bitmap::new_rgb(data, 31, 33), quality).unwrap();
-        assert!(image::load_from_memory(&encoded).is_ok());
+        assert!(crate::image::load_from_memory(&encoded).is_ok());
         let checker = (0..31 * 33)
             .flat_map(|i| {
                 if ((i % 31) + i / 31) % 2 == 0 {
@@ -121,7 +121,7 @@ fn subsampled_noise_and_checkerboards_decode_at_all_low_qualities() {
             })
             .collect();
         let encoded = encode_jpeg(Bitmap::new_rgb(checker, 31, 33), quality).unwrap();
-        let mut decoder = jpeg_decoder::Decoder::new(encoded.as_slice());
+        let mut decoder = crate::jpeg::Decoder::new(encoded.as_slice());
         assert!(decoder.decode().is_ok());
     }
 }
@@ -133,7 +133,7 @@ fn png_encoding_preserves_every_rgba_channel() {
     assert_eq!(bytes.capacity(), bytes.len());
     assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
     assert_eq!(
-        image::load_from_memory(&bytes)
+        crate::image::load_from_memory(&bytes)
             .unwrap()
             .into_rgba8()
             .into_raw(),

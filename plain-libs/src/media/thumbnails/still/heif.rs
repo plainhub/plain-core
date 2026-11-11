@@ -3,7 +3,7 @@ use super::super::{
     scale::Bitmap,
     sniff::{ImageKind, Sniffed},
 };
-use anyhow::{Result, bail, ensure};
+use crate::anyhow::{Result, bail, ensure};
 use heic_rs::{
     context::Context,
     hevc::{ChromaFormat, Frame},
@@ -92,7 +92,7 @@ pub(super) fn probe(path: &Path, kind: ImageKind) -> Result<Sniffed> {
         }
         coded_pixels = coded_pixels
             .checked_add(item_pixels)
-            .ok_or_else(|| anyhow::anyhow!("Coded image pixel count overflow"))?;
+            .ok_or_else(|| crate::anyhow::anyhow!("Coded image pixel count overflow"))?;
     }
     ensure!(
         coded_pixels.max(canvas_pixels) <= admission::MAX_SOURCE_PIXELS,

@@ -4,7 +4,7 @@ use crate::infrastructure::protocols::graphql::events as registry;
 use crate::infrastructure::protocols::graphql::events::EventSpec;
 use crate::infrastructure::protocols::graphql::messages::ClientMessage;
 use crate::infrastructure::protocols::graphql::messages::ServerMessage;
-use anyhow::{Result, anyhow, ensure};
+use plain_libs::anyhow::{Result, anyhow, ensure};
 
 pub(super) fn operations() -> impl Iterator<Item = &'static EventSpec> {
     registry::EVENTS.iter().filter(|spec| {

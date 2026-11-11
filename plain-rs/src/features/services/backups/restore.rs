@@ -170,7 +170,7 @@ fn stage_reader(
         .map_err(|error| error.to_string())?;
     let payload = staging.path().join("payload");
     std::fs::create_dir(&payload).map_err(|error| error.to_string())?;
-    let mut zip = zip::ZipArchive::new(source).map_err(|error| error.to_string())?;
+    let mut zip = plain_libs::zip::ZipArchive::new(source).map_err(|error| error.to_string())?;
     let mut names = std::collections::HashSet::new();
     let mut entries = BTreeSet::new();
     for index in 0..zip.len() {

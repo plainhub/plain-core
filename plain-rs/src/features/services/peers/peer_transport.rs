@@ -245,13 +245,13 @@ pub struct AwareConnectionConfig {
 pub fn aware_config_for_peer(
     state: &CoreRuntime,
     peer: &DPeer,
-) -> anyhow::Result<AwareConnectionConfig> {
+) -> plain_libs::anyhow::Result<AwareConnectionConfig> {
     let key = if peer.key.is_empty() {
         Vec::new()
     } else {
         plain_libs::utils::base64::base64_decode_checked(&peer.key)?
     };
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         key.is_empty() || key.len() == 32,
         "Invalid Aware pairing key"
     );
@@ -259,7 +259,7 @@ pub fn aware_config_for_peer(
         .prefs
         .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("Missing local identity"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing local identity"))?;
     Ok(AwareConnectionConfig {
         pmk: if key.is_empty() {
             None

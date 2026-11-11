@@ -1,0 +1,12 @@
+{
+  "package": "weezl",
+  "version": "0.1.12",
+  "repository": "https://github.com/image-rs/weezl",
+  "revision": "c75ea1f6d935cc56bad8674396b7cb0dd7275f99",
+  "archive_sha256": "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88",
+  "retained_features": [
+    "alloc",
+    "default",
+    "std"
+  ]
+}

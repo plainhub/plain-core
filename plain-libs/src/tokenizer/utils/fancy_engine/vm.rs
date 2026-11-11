@@ -1,8 +1,8 @@
-use regex_automata::Anchored;
-use regex_automata::Input;
-use regex_automata::meta::Regex;
-use regex_automata::util::look::LookMatcher;
-use regex_automata::util::primitives::NonMaxUsize;
+use crate::regex_engine::automata::Anchored;
+use crate::regex_engine::automata::Input;
+use crate::regex_engine::automata::meta::Regex;
+use crate::regex_engine::automata::util::look::LookMatcher;
+use crate::regex_engine::automata::util::primitives::NonMaxUsize;
 use std::collections::BTreeSet;
 
 use super::Assertion;

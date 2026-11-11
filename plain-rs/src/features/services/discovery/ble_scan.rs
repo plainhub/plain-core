@@ -70,7 +70,7 @@ impl Runtime {
 /// `chat/nearby` contract is unchanged. The only behavioural change is that a
 /// `Read` step now also schedules the GATT read on the Rust worker; the App no
 /// longer performs the read itself.
-pub async fn seen(state: &CoreRuntime, id: &str, client_id: &str) -> anyhow::Result<Step> {
+pub async fn seen(state: &CoreRuntime, id: &str, client_id: &str) -> plain_libs::anyhow::Result<Step> {
     let step = state.ble_scans.seen(id, client_id)?;
     if let Step::Read { generation } = &step {
         state.ble_scan.schedule(Pending {

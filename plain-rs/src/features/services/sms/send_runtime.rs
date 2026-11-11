@@ -28,7 +28,7 @@ pub fn now() -> u64 {
         .min(u64::MAX as u128) as u64
 }
 impl Runtime {
-    pub fn store(&self) -> anyhow::Result<Arc<plain_libs::kv::Db>> {
+    pub fn store(&self) -> plain_libs::anyhow::Result<Arc<plain_libs::kv::Db>> {
         self.store.get()
     }
     pub fn new(
@@ -46,7 +46,7 @@ impl Runtime {
         id: String,
         client_request_id: Option<String>,
         parts: usize,
-    ) -> anyhow::Result<()> {
+    ) -> plain_libs::anyhow::Result<()> {
         sms_sends::register(
             self.store.get()?.as_ref(),
             id,
@@ -57,12 +57,12 @@ impl Runtime {
         self.changed.notify_one();
         Ok(())
     }
-    pub fn cancel(&self, id: &str) -> anyhow::Result<()> {
+    pub fn cancel(&self, id: &str) -> plain_libs::anyhow::Result<()> {
         sms_sends::cancel(self.store.get()?.as_ref(), id)?;
         self.changed.notify_one();
         Ok(())
     }
-    pub fn report(&self, report: Report) -> anyhow::Result<()> {
+    pub fn report(&self, report: Report) -> plain_libs::anyhow::Result<()> {
         if let Some(result) = sms_sends::record(
             self.store.get()?.as_ref(),
             &report.request_id,
@@ -77,14 +77,14 @@ impl Runtime {
         }
         Ok(())
     }
-    fn publish(&self, outcome: sms_sends::Outcome) -> anyhow::Result<()> {
+    fn publish(&self, outcome: sms_sends::Outcome) -> plain_libs::anyhow::Result<()> {
         let _ = self.events.send(WsEvent::broadcast(
             "SMS_SEND_RESULT",
             serde_json::to_string(&outcome)?,
         ));
         Ok(())
     }
-    pub fn replay(&self) -> anyhow::Result<()> {
+    pub fn replay(&self) -> plain_libs::anyhow::Result<()> {
         sms_sends::tick(self.store.get()?.as_ref(), now())?;
         for value in sms_sends::pending(self.store.get()?.as_ref())? {
             if let Some(result) = value.result() {
@@ -93,7 +93,7 @@ impl Runtime {
         }
         Ok(())
     }
-    fn advance(&self) -> anyhow::Result<()> {
+    fn advance(&self) -> plain_libs::anyhow::Result<()> {
         for result in sms_sends::tick(self.store.get()?.as_ref(), now())? {
             self.publish(result)?;
         }

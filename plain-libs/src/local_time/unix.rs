@@ -12,7 +12,7 @@ use std::{cell::RefCell, collections::hash_map, env, fs, hash::Hasher, time::Sys
 
 use super::tz_info::TimeZone;
 use super::{FixedOffset, NaiveDateTime};
-use chrono::MappedLocalTime;
+use crate::chrono::MappedLocalTime;
 
 pub(super) fn offset_from_utc_datetime(utc: &NaiveDateTime) -> MappedLocalTime<FixedOffset> {
     offset(utc, false)

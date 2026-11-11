@@ -247,7 +247,7 @@ impl DocxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     let name = e.name();
                     match name.as_ref() {
                         "w:body" => {
@@ -310,7 +310,7 @@ impl DocxParser {
                         }
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) => {
                     let name = e.name();
                     // Header/footer references live inside a w:sectPr, which may be
                     // either the final body-level sectPr OR a section-break sectPr
@@ -359,7 +359,7 @@ impl DocxParser {
                         table_xml.push_str("/>");
                     }
                 }
-                Ok(quick_xml::events::Event::Text(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Text(ref e)) => {
                     if in_paragraph {
                         let text = crate::decode::decode_text_lossy(e);
                         paragraph_xml.push_str(&escape_xml(&text));
@@ -372,7 +372,7 @@ impl DocxParser {
                 // is re-serialized XML that gets parsed a second time, so re-emit
                 // the resolved entity through escape_xml — the second pass then sees
                 // "&amp;" again and decodes it via its own GeneralRef arm.
-                Ok(quick_xml::events::Event::GeneralRef(ref e)) => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) => {
                     let decoded = crate::decode::resolve_general_ref(e);
                     if in_paragraph {
                         paragraph_xml.push_str(&escape_xml(&decoded));
@@ -380,7 +380,7 @@ impl DocxParser {
                         table_xml.push_str(&escape_xml(&decoded));
                     }
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => {
                     let name = e.name();
                     match name.as_ref() {
                         "w:body" => {
@@ -426,7 +426,7 @@ impl DocxParser {
                         }
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => {
                     return Err(Error::xml_parse_with_context(
                         e.to_string(),
@@ -519,7 +519,7 @@ impl DocxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     let name = e.name();
                     match name.as_ref() {
                         // A paragraph at any nesting depth (top level or inside a
@@ -545,20 +545,20 @@ impl DocxParser {
                 }
                 // Content events only matter inside a paragraph; outside one (e.g.
                 // between table cells) they are ignored.
-                Ok(quick_xml::events::Event::Empty(ref e)) if in_paragraph => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) if in_paragraph => {
                     push_empty_tag(&mut paragraph_xml, e);
                 }
-                Ok(quick_xml::events::Event::Text(ref e)) if in_paragraph => {
+                Ok(plain_libs::xml::events::Event::Text(ref e)) if in_paragraph => {
                     let text = crate::decode::decode_text_lossy(e);
                     paragraph_xml.push_str(&escape_xml(&text));
                 }
                 // Re-emit resolved entities through escape_xml; the re-parse of this
                 // buffer decodes them again (mirrors the body parser).
-                Ok(quick_xml::events::Event::GeneralRef(ref e)) if in_paragraph => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if in_paragraph => {
                     let decoded = crate::decode::resolve_general_ref(e);
                     paragraph_xml.push_str(&escape_xml(&decoded));
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => {
                     let name = e.name();
                     match name.as_ref() {
                         "w:p" if in_paragraph && para_depth == 0 => {
@@ -585,7 +585,7 @@ impl DocxParser {
                         }
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(_) => break,
                 _ => {}
             }
@@ -637,7 +637,7 @@ impl DocxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => match e.name().as_ref() {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => match e.name().as_ref() {
                     // Skip mc:Fallback branches to avoid duplicating text box content
                     "mc:Fallback" => {
                         mc_fallback_depth += 1;
@@ -696,7 +696,7 @@ impl DocxParser {
                     }
                     _ => {}
                 },
-                Ok(quick_xml::events::Event::Empty(ref e)) => match e.name().as_ref() {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) => match e.name().as_ref() {
                     _ if mc_fallback_depth > 0 || txbx_content_depth > 0 => {} // Skip
                     // A complex field: `begin`, its instruction, `separate`, its result, `end`.
                     "w:fldChar" => {
@@ -1012,7 +1012,7 @@ impl DocxParser {
                     _ => {}
                 },
                 // A field's instruction: read, never shown.
-                Ok(quick_xml::events::Event::Text(ref e))
+                Ok(plain_libs::xml::events::Event::Text(ref e))
                     if in_instr_text && mc_fallback_depth == 0 && txbx_content_depth == 0 =>
                 {
                     if let Some(field) = fields.last_mut().filter(|f| !f.in_result) {
@@ -1021,7 +1021,7 @@ impl DocxParser {
                             .push_str(&crate::decode::decode_text_lossy(e));
                     }
                 }
-                Ok(quick_xml::events::Event::Text(ref e))
+                Ok(plain_libs::xml::events::Event::Text(ref e))
                     if in_run
                         && in_text
                         && !in_instr_text
@@ -1054,7 +1054,7 @@ impl DocxParser {
                 // quick-xml 0.40+ delivers entity refs separately; mirror the Text
                 // arm so a run like "AT&amp;T" keeps its ampersand. The entity
                 // becomes its own run, which concatenates identically on render.
-                Ok(quick_xml::events::Event::GeneralRef(ref e))
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e))
                     if in_run
                         && in_text
                         && !in_instr_text
@@ -1082,7 +1082,7 @@ impl DocxParser {
                         para.runs.push(run);
                     }
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => match e.name().as_ref() {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => match e.name().as_ref() {
                     "mc:Fallback" if mc_fallback_depth > 0 => {
                         mc_fallback_depth -= 1;
                     }
@@ -1119,7 +1119,7 @@ impl DocxParser {
                     "w:del" => in_del = false,
                     _ => {}
                 },
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(Error::xml_parse_with_context(e.to_string(), "paragraph")),
                 _ => {}
             }
@@ -1151,7 +1151,7 @@ impl DocxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     let name = e.name();
                     match name.as_ref() {
                         "mc:Fallback" => {
@@ -1190,7 +1190,7 @@ impl DocxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e)) if in_txbx_para => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) if in_txbx_para => {
                     let name = e.name();
                     txbx_para_xml.push('<');
                     txbx_para_xml.push_str(name.as_ref());
@@ -1203,17 +1203,17 @@ impl DocxParser {
                     }
                     txbx_para_xml.push_str("/>");
                 }
-                Ok(quick_xml::events::Event::Text(ref e)) if in_txbx_para => {
+                Ok(plain_libs::xml::events::Event::Text(ref e)) if in_txbx_para => {
                     let text = crate::decode::decode_text_lossy(e);
                     txbx_para_xml.push_str(&escape_xml(&text));
                 }
                 // Re-serialized buffer (parsed a second time): re-emit the resolved
                 // entity through escape_xml so the second pass decodes it again.
-                Ok(quick_xml::events::Event::GeneralRef(ref e)) if in_txbx_para => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if in_txbx_para => {
                     let decoded = crate::decode::resolve_general_ref(e);
                     txbx_para_xml.push_str(&escape_xml(&decoded));
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => {
                     let name = e.name();
                     match name.as_ref() {
                         "mc:Fallback" if mc_fallback_depth > 0 => {
@@ -1240,7 +1240,7 @@ impl DocxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(_) => break,
                 _ => {}
             }
@@ -1262,10 +1262,10 @@ impl DocxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) if e.name().as_ref() == "w:numPr" => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) if e.name().as_ref() == "w:numPr" => {
                     in_num_pr = true;
                 }
-                Ok(quick_xml::events::Event::Empty(ref e)) if in_num_pr => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) if in_num_pr => {
                     match e.name().as_ref() {
                         "w:numId" => {
                             for attr in e.attributes().flatten() {
@@ -1285,10 +1285,10 @@ impl DocxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::End(ref e)) if e.name().as_ref() == "w:numPr" => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) if e.name().as_ref() == "w:numPr" => {
                     in_num_pr = false;
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 _ => {}
             }
             buf.clear();
@@ -1352,7 +1352,7 @@ impl DocxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     let name = e.name();
 
                     // If we're inside a nested table, just collect XML
@@ -1407,7 +1407,7 @@ impl DocxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) => {
                     let name = e.name();
 
                     // If we're inside a nested table, just collect XML
@@ -1446,7 +1446,7 @@ impl DocxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Text(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Text(ref e)) => {
                     let text = escape_xml(&crate::decode::decode_text_lossy(e));
                     if nested_table_depth > 0 {
                         nested_table_xml.push_str(&text);
@@ -1456,7 +1456,7 @@ impl DocxParser {
                 }
                 // quick-xml 0.40+ delivers entity refs separately: re-emit them resolved, and the
                 // re-parse of the collected XML decodes them again.
-                Ok(quick_xml::events::Event::GeneralRef(ref e)) => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) => {
                     let text = escape_xml(&crate::decode::resolve_general_ref(e));
                     if nested_table_depth > 0 {
                         nested_table_xml.push_str(&text);
@@ -1464,7 +1464,7 @@ impl DocxParser {
                         paragraph_xml.push_str(&text);
                     }
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => {
                     let name = e.name();
 
                     // If we're inside a nested table, collect XML and check for end
@@ -1575,7 +1575,7 @@ impl DocxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(Error::xml_parse_with_context(e.to_string(), "table")),
                 _ => {}
             }
@@ -1738,7 +1738,7 @@ fn parse_notes_xml(xml: &str, note_tag: &str) -> HashMap<String, String> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Start(ref e)) => {
+            Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                 if e.name().as_ref() == note_tag {
                     let mut id = None;
                     let mut note_type = None;
@@ -1770,13 +1770,13 @@ fn parse_notes_xml(xml: &str, note_tag: &str) -> HashMap<String, String> {
                     in_text = true;
                 }
             }
-            Ok(quick_xml::events::Event::Text(ref e)) if in_note && in_text => {
+            Ok(plain_libs::xml::events::Event::Text(ref e)) if in_note && in_text => {
                 current_text.push_str(&crate::decode::decode_text_lossy(e));
             }
-            Ok(quick_xml::events::Event::GeneralRef(ref e)) if in_note && in_text => {
+            Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if in_note && in_text => {
                 current_text.push_str(&crate::decode::resolve_general_ref(e));
             }
-            Ok(quick_xml::events::Event::End(ref e)) => {
+            Ok(plain_libs::xml::events::Event::End(ref e)) => {
                 if e.name().as_ref() == note_tag {
                     if in_note {
                         if let Some(id) = current_id.take() {
@@ -1791,7 +1791,7 @@ fn parse_notes_xml(xml: &str, note_tag: &str) -> HashMap<String, String> {
                     in_text = false;
                 }
             }
-            Ok(quick_xml::events::Event::Eof) => break,
+            Ok(plain_libs::xml::events::Event::Eof) => break,
             Err(_) => break,
             _ => {}
         }
@@ -1808,7 +1808,7 @@ fn parse_notes_xml(xml: &str, note_tag: &str) -> HashMap<String, String> {
 /// conversions) via `w:pict`, and as the visual representation of embedded
 /// OLE objects via `w:object`. VML inside `mc:Fallback` duplicates the
 /// DrawingML `mc:Choice` and is skipped by the callers' fallback guards.
-fn vml_inline_image(e: &quick_xml::events::BytesStart) -> Option<crate::model::InlineImage> {
+fn vml_inline_image(e: &plain_libs::xml::events::BytesStart) -> Option<crate::model::InlineImage> {
     let mut rel_id = None;
     let mut title = None;
     for attr in e.attributes().flatten() {
@@ -1827,7 +1827,7 @@ fn vml_inline_image(e: &quick_xml::events::BytesStart) -> Option<crate::model::I
 }
 
 /// An attribute's value, references resolved (see [`crate::decode::attr_value`]).
-fn get_attr(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
+fn get_attr(e: &plain_libs::xml::events::BytesStart, key: &str) -> Option<String> {
     e.attributes()
         .flatten()
         .find(|attr| attr.key.as_ref() == key)
@@ -1835,7 +1835,7 @@ fn get_attr(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
 }
 
 /// Helper to get a boolean attribute value.
-fn get_bool_attr(e: &quick_xml::events::BytesStart, key: &str) -> Option<bool> {
+fn get_bool_attr(e: &plain_libs::xml::events::BytesStart, key: &str) -> Option<bool> {
     for attr in e.attributes().flatten() {
         if attr.key.as_ref() == key {
             let val = attr.value.as_ref();
@@ -1848,7 +1848,7 @@ fn get_bool_attr(e: &quick_xml::events::BytesStart, key: &str) -> Option<bool> {
 /// Append a re-serialized start tag (`<name attr="val">`) to a buffer that will
 /// be parsed a second time. Text/attribute values are already-decoded, so they
 /// are re-escaped here for the re-parse.
-fn push_start_tag(buf: &mut String, e: &quick_xml::events::BytesStart) {
+fn push_start_tag(buf: &mut String, e: &plain_libs::xml::events::BytesStart) {
     buf.push('<');
     buf.push_str(e.name().as_ref());
     for attr in e.attributes().flatten() {
@@ -1862,7 +1862,7 @@ fn push_start_tag(buf: &mut String, e: &quick_xml::events::BytesStart) {
 }
 
 /// Append a re-serialized empty-element tag (`<name attr="val"/>`) to a buffer.
-fn push_empty_tag(buf: &mut String, e: &quick_xml::events::BytesStart) {
+fn push_empty_tag(buf: &mut String, e: &plain_libs::xml::events::BytesStart) {
     buf.push('<');
     buf.push_str(e.name().as_ref());
     for attr in e.attributes().flatten() {
@@ -1892,7 +1892,7 @@ fn escape_xml(s: &str) -> String {
 }
 
 /// The description of a drawing (`wp:docPr descr`), if it has a non-blank one.
-fn drawing_description(e: &quick_xml::events::BytesStart<'_>) -> Option<String> {
+fn drawing_description(e: &plain_libs::xml::events::BytesStart<'_>) -> Option<String> {
     e.attributes()
         .flatten()
         .find(|a| a.key.as_ref() == "descr")
@@ -1901,7 +1901,7 @@ fn drawing_description(e: &quick_xml::events::BytesStart<'_>) -> Option<String> 
 }
 
 /// The image an `a:blip` shows: its `r:embed` relationship.
-fn blip_image(e: &quick_xml::events::BytesStart<'_>, alt: &Option<String>) -> Option<InlineImage> {
+fn blip_image(e: &plain_libs::xml::events::BytesStart<'_>, alt: &Option<String>) -> Option<InlineImage> {
     let rel_id = e
         .attributes()
         .flatten()

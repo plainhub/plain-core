@@ -47,18 +47,10 @@ unsafe extern "C" {
 
 pub(super) const CF_COMPARE_CASE_INSENSITIVE: usize = 1;
 
-#[repr(C)]
-pub(super) struct CFArrayCallBacks {
-    version: isize,
-    retain: Option<extern "C" fn(*const c_void, *const c_void) -> *const c_void>,
-    release: Option<extern "C" fn(*const c_void, *const c_void)>,
-    copy_description: Option<extern "C" fn(*const c_void) -> *const c_void>,
-    equal: Option<extern "C" fn(*const c_void, *const c_void) -> u8>,
-}
+pub(super) use crate::platform::apple_device::{CFArrayCallBacks, kCFTypeArrayCallBacks};
 
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
-    pub(super) static kCFTypeArrayCallBacks: CFArrayCallBacks;
     pub(super) fn CFArrayCreateMutable(
         allocator: *const c_void,
         capacity: isize,

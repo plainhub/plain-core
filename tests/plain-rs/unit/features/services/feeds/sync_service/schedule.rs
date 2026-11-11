@@ -49,14 +49,14 @@ fn restart_enqueues_one_current_refresh_instead_of_replaying_missed_periods() {
         ..Default::default()
     };
     let last = "2026-01-01T00:00:00Z";
-    let now = chrono::DateTime::parse_from_rfc3339("2026-02-01T00:00:00Z")
+    let now = plain_libs::chrono::DateTime::parse_from_rfc3339("2026-02-01T00:00:00Z")
         .unwrap()
         .timestamp_millis();
     let (tasks, _) = due(&settings, vec![feed(Some(last))], now).unwrap();
     assert_eq!(tasks.len(), 1);
     let mut refreshed = tasks[0].clone();
     refreshed.last_sync_at = Some(
-        chrono::DateTime::from_timestamp_millis(now)
+        plain_libs::chrono::DateTime::from_timestamp_millis(now)
             .unwrap()
             .to_rfc3339(),
     );

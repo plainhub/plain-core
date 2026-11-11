@@ -176,7 +176,7 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
         })
         .unwrap();
         assert!(receive(&db, "peer", &channel.id, TEXT, &signature, timestamp).is_err());
-        db.with_conn(|connection| -> anyhow::Result<()> {
+        db.with_conn(|connection| -> plain_libs::anyhow::Result<()> {
             assert_eq!(
                 connection
                     .query_row("SELECT COUNT(*) FROM chats", [], |row| row.get::<_, i64>(0))?,
@@ -219,7 +219,7 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
         )
         .is_err()
     );
-    db.with_conn(|connection| -> anyhow::Result<()> {
+    db.with_conn(|connection| -> plain_libs::anyhow::Result<()> {
         assert_eq!(
             connection.query_row("SELECT COUNT(*) FROM chats", [], |row| row.get::<_, i64>(0))?,
             1

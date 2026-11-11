@@ -29,11 +29,11 @@ impl Service {
     pub fn new(db: Arc<Db>, prefs: Arc<Prefs>) -> Arc<Self> {
         Arc::new(Self { db, prefs })
     }
-    pub fn roots(row: &ShareRow) -> anyhow::Result<Vec<Root>> {
+    pub fn roots(row: &ShareRow) -> plain_libs::anyhow::Result<Vec<Root>> {
         Ok(serde_json::from_str(&row.data)?)
     }
-    fn build_roots(paths: Vec<String>) -> anyhow::Result<String> {
-        anyhow::ensure!(!paths.is_empty(), "share needs at least one root");
+    fn build_roots(paths: Vec<String>) -> plain_libs::anyhow::Result<String> {
+        plain_libs::anyhow::ensure!(!paths.is_empty(), "share needs at least one root");
         let mut seen = HashSet::new();
         let mut names = HashSet::new();
         let mut roots = Vec::new();
@@ -45,15 +45,15 @@ impl Service {
             let name = path
                 .file_name()
                 .and_then(|n| n.to_str())
-                .ok_or_else(|| anyhow::anyhow!("invalid root name"))?;
-            anyhow::ensure!(names.insert(name.to_owned()), "duplicate root name: {name}");
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid root name"))?;
+            plain_libs::anyhow::ensure!(names.insert(name.to_owned()), "duplicate root name: {name}");
             let meta = path.metadata()?;
-            anyhow::ensure!(meta.is_dir() || meta.is_file(), "unsupported share root");
+            plain_libs::anyhow::ensure!(meta.is_dir() || meta.is_file(), "unsupported share root");
             roots.push(Root {
                 relative_path: format!("{name}{}", if meta.is_dir() { "/" } else { "" }),
                 real_path: path
                     .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("invalid root path"))?
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid root path"))?
                     .to_owned(),
                 is_dir: meta.is_dir(),
             });
@@ -66,9 +66,9 @@ impl Service {
         paths: Vec<String>,
         read_only: bool,
         expires: Option<String>,
-    ) -> anyhow::Result<ShareRow> {
+    ) -> plain_libs::anyhow::Result<ShareRow> {
         validate_expiry(expires.as_deref())?;
-        let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let now = plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true);
         let row = ShareRow {
             id: String::new(),
             name,
@@ -86,14 +86,14 @@ impl Service {
         &self,
         mut row: ShareRow,
         mut new_id: impl FnMut() -> String,
-    ) -> anyhow::Result<ShareRow> {
+    ) -> plain_libs::anyhow::Result<ShareRow> {
         for _ in 0..8 {
             row.id = new_id();
             if self.db.share_insert(&row)? {
                 return Ok(row);
             }
         }
-        anyhow::bail!("Unable to allocate a unique share ID")
+        plain_libs::anyhow::bail!("Unable to allocate a unique share ID")
     }
     pub fn update(
         &self,
@@ -101,24 +101,24 @@ impl Service {
         name: &str,
         expires: Option<String>,
         paths: Option<Vec<String>>,
-    ) -> anyhow::Result<ShareRow> {
+    ) -> plain_libs::anyhow::Result<ShareRow> {
         validate_expiry(expires.as_deref())?;
         let data = paths.map(Self::build_roots).transpose()?;
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             self.db.share_update(
                 id,
                 name,
                 expires.as_deref(),
                 data.as_deref(),
-                &chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+                &plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
             )?,
             "share not found"
         );
         self.db
             .share_get(id)?
-            .ok_or_else(|| anyhow::anyhow!("share not found"))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("share not found"))
     }
-    pub fn active(&self, id: &str, guest: bool) -> anyhow::Result<Option<ShareRow>> {
+    pub fn active(&self, id: &str, guest: bool) -> plain_libs::anyhow::Result<Option<ShareRow>> {
         if guest
             && !self
                 .prefs
@@ -133,18 +133,18 @@ impl Service {
             .filter(|r| match r.expires_at.as_deref() {
                 None => true,
                 Some(t) => {
-                    chrono::DateTime::parse_from_rfc3339(t).is_ok_and(|t| t > chrono::Utc::now())
+                    plain_libs::chrono::DateTime::parse_from_rfc3339(t).is_ok_and(|t| t > plain_libs::chrono::Utc::now())
                 }
             }))
     }
-    pub fn token(&self, id: &str) -> anyhow::Result<String> {
-        anyhow::ensure!(self.db.share_get(id)?.is_some(), "share not found");
+    pub fn token(&self, id: &str) -> plain_libs::anyhow::Result<String> {
+        plain_libs::anyhow::ensure!(self.db.share_get(id)?.is_some(), "share not found");
         let secret = self
             .prefs
             .get::<String>(crate::features::prefs::pref_keys::MASTER_SECRET)?
-            .ok_or_else(|| anyhow::anyhow!("master secret not initialized"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("master secret not initialized"))?;
         let key = plain_libs::utils::base64::base64_decode_checked(&secret)?;
-        anyhow::ensure!(key.len() == 32, "invalid master secret");
+        plain_libs::anyhow::ensure!(key.len() == 32, "invalid master secret");
         let mut mac = Hmac::<sha2_mac::Sha256>::new_from_slice(&key)?;
         mac.update(id.as_bytes());
         Ok(plain_libs::utils::base64::base64_encode_url_safe(
@@ -156,13 +156,13 @@ impl Service {
         id: &str,
         relative_path: &str,
         guest: bool,
-    ) -> anyhow::Result<Option<String>> {
+    ) -> plain_libs::anyhow::Result<Option<String>> {
         let Some(row) = self.active(id, guest)? else {
             return Ok(None);
         };
         Self::resolve_row(&row, relative_path)
     }
-    fn resolve_row(row: &ShareRow, relative_path: &str) -> anyhow::Result<Option<String>> {
+    fn resolve_row(row: &ShareRow, relative_path: &str) -> plain_libs::anyhow::Result<Option<String>> {
         let roots = Self::roots(row)?;
         let normalized = relative_path.trim().trim_start_matches('/');
         let (top, rest) = normalized.split_once('/').unwrap_or((normalized, ""));
@@ -207,10 +207,10 @@ impl Service {
         };
         Ok(candidate.to_str().map(str::to_owned))
     }
-    pub fn browse(&self, id: &str, relative_path: &str) -> anyhow::Result<(ShareRow, Vec<Root>)> {
+    pub fn browse(&self, id: &str, relative_path: &str) -> plain_libs::anyhow::Result<(ShareRow, Vec<Root>)> {
         let row = self
             .active(id, true)?
-            .ok_or_else(|| anyhow::anyhow!("share inactive"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("share inactive"))?;
         let mut entries = Vec::new();
         if relative_path.trim().trim_matches('/').is_empty() {
             for root in Self::roots(&row)? {
@@ -220,7 +220,7 @@ impl Service {
             }
         } else {
             let path = Self::resolve_row(&row, relative_path)?
-                .ok_or_else(|| anyhow::anyhow!("path not allowed"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("path not allowed"))?;
             if Path::new(&path).is_dir() {
                 let parent = relative_path.trim().trim_matches('/');
                 for entry in std::fs::read_dir(path)? {
@@ -251,16 +251,16 @@ impl Service {
         Ok((row, entries))
     }
 
-    pub fn archive(&self, id: &str, encrypted: &str) -> anyhow::Result<Vec<Root>> {
+    pub fn archive(&self, id: &str, encrypted: &str) -> plain_libs::anyhow::Result<Vec<Root>> {
         let path = self
             .resolve_file(id, encrypted)?
-            .ok_or_else(|| anyhow::anyhow!("share path not allowed"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("share path not allowed"))?;
         let base = PathBuf::from(path);
-        anyhow::ensure!(base.is_dir(), "shared path is not a directory");
+        plain_libs::anyhow::ensure!(base.is_dir(), "shared path is not a directory");
         let mut pending = vec![base.clone()];
         let mut result = Vec::new();
         while let Some(dir) = pending.pop() {
-            anyhow::ensure!(self.active(id, true)?.is_some(), "share inactive");
+            plain_libs::anyhow::ensure!(self.active(id, true)?.is_some(), "share inactive");
             for entry in std::fs::read_dir(dir)? {
                 let entry = entry?;
                 let path = entry.path();
@@ -269,34 +269,34 @@ impl Service {
                     continue;
                 }
                 let canonical = std::fs::canonicalize(&path)?;
-                anyhow::ensure!(canonical.starts_with(&base), "archive path outside root");
+                plain_libs::anyhow::ensure!(canonical.starts_with(&base), "archive path outside root");
                 if meta.is_dir() {
-                    anyhow::ensure!(result.len() < 100_000, "too many archive entries");
+                    plain_libs::anyhow::ensure!(result.len() < 100_000, "too many archive entries");
                     result.push(Root {
                         relative_path: format!(
                             "{}/",
                             path.strip_prefix(&base)?
                                 .to_str()
-                                .ok_or_else(|| anyhow::anyhow!("invalid entry name"))?
+                                .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid entry name"))?
                         ),
                         real_path: canonical
                             .to_str()
-                            .ok_or_else(|| anyhow::anyhow!("invalid entry path"))?
+                            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid entry path"))?
                             .into(),
                         is_dir: true,
                     });
                     pending.push(canonical);
                 } else if meta.is_file() {
-                    anyhow::ensure!(result.len() < 100_000, "too many archive files");
+                    plain_libs::anyhow::ensure!(result.len() < 100_000, "too many archive files");
                     result.push(Root {
                         relative_path: path
                             .strip_prefix(&base)?
                             .to_str()
-                            .ok_or_else(|| anyhow::anyhow!("invalid entry name"))?
+                            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid entry name"))?
                             .into(),
                         real_path: canonical
                             .to_str()
-                            .ok_or_else(|| anyhow::anyhow!("invalid entry path"))?
+                            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid entry path"))?
                             .into(),
                         is_dir: false,
                     });
@@ -307,7 +307,7 @@ impl Service {
         Ok(result)
     }
 
-    pub fn resolve_file(&self, id: &str, encrypted: &str) -> anyhow::Result<Option<String>> {
+    pub fn resolve_file(&self, id: &str, encrypted: &str) -> plain_libs::anyhow::Result<Option<String>> {
         let Some(row) = self.active(id, true)? else {
             return Ok(None);
         };
@@ -325,9 +325,9 @@ impl Service {
         Self::resolve_row(&row, &resource.id)
     }
 }
-fn validate_expiry(value: Option<&str>) -> anyhow::Result<()> {
+fn validate_expiry(value: Option<&str>) -> plain_libs::anyhow::Result<()> {
     if let Some(v) = value {
-        chrono::DateTime::parse_from_rfc3339(v)?;
+        plain_libs::chrono::DateTime::parse_from_rfc3339(v)?;
     }
     Ok(())
 }

@@ -1,0 +1,5 @@
+macro_rules! log {
+    ($ ($ tt : tt) *) => {};
+}
+macro_rules ! debug { ($ ($ tt : tt) *) => { log ! (log :: debug ! ($ ($ tt) *)) } }
+macro_rules ! trace { ($ ($ tt : tt) *) => { log ! (log :: trace ! ($ ($ tt) *)) } }

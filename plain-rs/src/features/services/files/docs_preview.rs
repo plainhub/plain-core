@@ -20,17 +20,17 @@ pub fn supports_mime(mime: &str) -> bool {
     })
 }
 
-pub async fn read(state: &Runtime, path: &str) -> anyhow::Result<String> {
+pub async fn read(state: &Runtime, path: &str) -> plain_libs::anyhow::Result<String> {
     let permit = CONVERSIONS.acquire().await?;
     if path.starts_with("content://") || path.starts_with("ph://") {
         let mut input = state
             .resources
             .read_native(path, state.stop.clone())
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         let mut bytes = Vec::new();
-        while let Some(chunk) = input.read().await.map_err(anyhow::Error::msg)? {
-            anyhow::ensure!(
+        while let Some(chunk) = input.read().await.map_err(plain_libs::anyhow::Error::msg)? {
+            plain_libs::anyhow::ensure!(
                 chunk.len() <= undoc::limits::MAX_INPUT_BYTES - bytes.len(),
                 "Document exceeds the 32 MiB input limit"
             );
@@ -50,11 +50,11 @@ pub async fn read(state: &Runtime, path: &str) -> anyhow::Result<String> {
     .await?
 }
 
-fn convert(path: &Path) -> anyhow::Result<String> {
+fn convert(path: &Path) -> plain_libs::anyhow::Result<String> {
     render(undoc::parse_file(path)?)
 }
 
-fn render(document: undoc::Document) -> anyhow::Result<String> {
+fn render(document: undoc::Document) -> plain_libs::anyhow::Result<String> {
     Ok(undoc::render::to_markdown(
         &document,
         &undoc::render::RenderOptions::default().with_images(false),

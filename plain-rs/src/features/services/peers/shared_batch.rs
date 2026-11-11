@@ -6,7 +6,7 @@ use crate::features::files::shares::batch_queue::Run;
 use crate::features::services::peers::shared_transfer::operation;
 use crate::features::services::peers::shared_transfer::{BlockingWork, cleanup};
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde_json::json;
 use std::{
     collections::HashMap,
@@ -34,7 +34,7 @@ pub fn downloads_directory(
     );
     Ok(directory
         .to_str()
-        .ok_or_else(|| anyhow::anyhow!("Invalid downloads directory encoding"))?
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid downloads directory encoding"))?
         .to_owned())
 }
 

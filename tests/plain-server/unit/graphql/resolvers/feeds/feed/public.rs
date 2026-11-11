@@ -356,7 +356,7 @@ async fn opml_round_trips_through_export_and_import() {
 async fn graphql_feed_entry_joins_and_counts() {
     let (_dir, schema) = fixture();
     let db = database(&schema).clone();
-    let at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let at = plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true);
     db.feed_save("feed", "News", "https://example.org/rss", false, &at)
         .unwrap();
     db.feed_entries_insert(&[FeedEntryRow {

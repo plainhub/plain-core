@@ -4,7 +4,7 @@ use super::*;
 /// be a real (empty) ZIP archive: zero bytes are not one, and the tests that built their
 /// container from them returned early, unchecked, every time.
 fn empty_container() -> crate::container::OoxmlContainer {
-    let bytes = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()))
+    let bytes = plain_libs::zip::ZipWriter::new(std::io::Cursor::new(Vec::new()))
         .finish()
         .expect("an empty archive")
         .into_inner();
@@ -594,9 +594,9 @@ fn test_parse_header_footer_xml_empty() {
 /// path a lenient stream takes when the whole document cannot be parsed.
 fn docx_with_unreadable_document() -> Vec<u8> {
     use std::io::{Cursor, Write};
-    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let mut zip = plain_libs::zip::ZipWriter::new(Cursor::new(Vec::new()));
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -824,9 +824,9 @@ fn create_minimal_docx_with_document_rels(
 ) -> Vec<u8> {
     use std::io::{Cursor, Write};
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     // [Content_Types].xml
     zip.start_file("[Content_Types].xml", options).unwrap();
@@ -866,9 +866,9 @@ fn create_minimal_docx_with_document_rels(
 fn create_minimal_docx_with_malformed_optional_part(extra_part_path: &str) -> Vec<u8> {
     use std::io::{Cursor, Write};
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1523,7 +1523,7 @@ fn test_textbox_multiple_paragraphs() {
 #[test]
 fn test_docx_chart_invalid_numeric_value_propagates_error() {
     use std::io::{Cursor, Write};
-    use zip::write::SimpleFileOptions;
+    use plain_libs::zip::write::SimpleFileOptions;
 
     let chart_xml = r#"<?xml version="1.0"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
@@ -1556,8 +1556,8 @@ fn test_docx_chart_invalid_numeric_value_propagates_error() {
 </Relationships>"#;
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
+    let options = SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1601,7 +1601,7 @@ fn test_docx_chart_invalid_numeric_value_propagates_error() {
 #[test]
 fn test_docx_missing_chart_part_propagates_error() {
     use std::io::{Cursor, Write};
-    use zip::write::SimpleFileOptions;
+    use plain_libs::zip::write::SimpleFileOptions;
 
     let document_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -1623,8 +1623,8 @@ fn test_docx_missing_chart_part_propagates_error() {
 </Relationships>"#;
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
+    let options = SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1666,9 +1666,9 @@ fn test_docx_body_mixed_entities_preserve_legitimate_and_malformed() {
     let mut buf = Vec::new();
     {
         let cursor = std::io::Cursor::new(&mut buf);
-        let mut zip = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let mut zip = plain_libs::zip::ZipWriter::new(cursor);
+        let options = plain_libs::zip::write::SimpleFileOptions::default()
+            .compression_method(plain_libs::zip::CompressionMethod::Stored);
 
         zip.start_file("[Content_Types].xml", options).unwrap();
         zip.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1722,9 +1722,9 @@ fn test_docx_ampersand_midword_renders_intact() {
     let mut buf = Vec::new();
     {
         let cursor = std::io::Cursor::new(&mut buf);
-        let mut zip = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let mut zip = plain_libs::zip::ZipWriter::new(cursor);
+        let options = plain_libs::zip::write::SimpleFileOptions::default()
+            .compression_method(plain_libs::zip::CompressionMethod::Stored);
 
         zip.start_file("[Content_Types].xml", options).unwrap();
         zip.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1776,9 +1776,9 @@ fn test_docx_core_metadata_preserves_fragmented_ampersand() {
     let mut buf = Vec::new();
     {
         let cursor = std::io::Cursor::new(&mut buf);
-        let mut zip = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
+        let mut zip = plain_libs::zip::ZipWriter::new(cursor);
+        let options = plain_libs::zip::write::SimpleFileOptions::default()
+            .compression_method(plain_libs::zip::CompressionMethod::Stored);
 
         zip.start_file("[Content_Types].xml", options).unwrap();
         zip.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1994,9 +1994,9 @@ fn create_docx_with_parts(
 ) -> Vec<u8> {
     use std::io::{Cursor, Write};
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     zip.start_file("[Content_Types].xml", options).unwrap();
     zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?>

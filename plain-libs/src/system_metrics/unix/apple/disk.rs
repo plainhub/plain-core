@@ -1,14 +1,13 @@
+use crate::platform::apple_device::{
+    CF_NUMBER_SINT64_TYPE, CFArrayCreate, CFBooleanRef, CFDictionaryGetValueIfPresent,
+    CFDictionaryRef, CFNumberGetValue, CFStringRef, kCFAllocatorDefault, kCFBooleanTrue,
+    kCFTypeArrayCallBacks,
+};
 // Take a look at the license at the top of the repository in the LICENSE file.
 
 use crate::platform::apple_device::{OwnedCF, cf_file_url};
 use crate::system_metrics::Disk;
 use crate::system_metrics::sys::ffi;
-
-use core_foundation_sys::array::CFArrayCreate;
-use core_foundation_sys::base::kCFAllocatorDefault;
-use core_foundation_sys::dictionary::{CFDictionaryGetValueIfPresent, CFDictionaryRef};
-use core_foundation_sys::number::{CFBooleanRef, CFNumberGetValue, kCFBooleanTrue};
-use core_foundation_sys::string::CFStringRef;
 
 use libc::c_void;
 
@@ -117,15 +116,15 @@ unsafe fn get_list(container: &mut Vec<Disk>) {
     }
 }
 
-type RetainedCFArray = OwnedCF<core_foundation_sys::array::__CFArray>;
-type RetainedCFDictionary = OwnedCF<core_foundation_sys::dictionary::__CFDictionary>;
+type RetainedCFArray = OwnedCF<std::ffi::c_void>;
+type RetainedCFDictionary = OwnedCF<std::ffi::c_void>;
 
 unsafe fn build_requested_properties(properties: &[CFStringRef]) -> Option<RetainedCFArray> {
     OwnedCF::from_owned(CFArrayCreate(
         ptr::null_mut(),
         properties.as_ptr() as *const *const c_void,
         properties.len() as _,
-        &core_foundation_sys::array::kCFTypeArrayCallBacks,
+        &kCFTypeArrayCallBacks,
     ))
 }
 
@@ -186,9 +185,10 @@ unsafe fn get_int_value(dict: CFDictionaryRef, key: CFStringRef) -> Option<i64> 
         let mut val: i64 = 0;
         if CFNumberGetValue(
             v.cast(),
-            core_foundation_sys::number::kCFNumberSInt64Type,
+            CF_NUMBER_SINT64_TYPE,
             &mut val as *mut i64 as *mut c_void,
-        ) {
+        ) != 0
+        {
             Some(val)
         } else {
             None

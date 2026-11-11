@@ -2,7 +2,7 @@ use crate::infrastructure::db::DNearbyDeviceCache;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::repositories::chat_store::validate;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use rusqlite::params;
 pub fn all(db: &Db) -> Result<Vec<DNearbyDeviceCache>> {
     Ok(db.with_conn(|c|{

@@ -9,7 +9,7 @@
 //! `ffmpeg` CLI remains the fallback for non-ISO containers (Matroska, WebM)
 //! and the transcode path.
 
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 
 fn probe_iso_bmff_video_fourcc(path: &std::path::Path) -> Option<String> {
     plain_libs::media::isobmff::tracks(path)?.first_video_codec
@@ -94,7 +94,7 @@ pub async fn transcode_browser_video(
         .stderr(std::process::Stdio::piped())
         .output()
         .await?;
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         result.status.success(),
         "Video encoder failed: {}",
         String::from_utf8_lossy(&result.stderr)
@@ -126,7 +126,7 @@ pub async fn encode_3gp(input: &std::path::Path, output: &std::path::Path) -> Re
         .stderr(std::process::Stdio::piped())
         .output()
         .await?;
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         result.status.success(),
         "Video encoder failed: {}",
         String::from_utf8_lossy(&result.stderr)

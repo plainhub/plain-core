@@ -1,6 +1,6 @@
 use crate::features::prefs::Prefs;
 use crate::features::prefs::pref_keys::CLIPBOARD_DIRECTIONS;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -38,7 +38,7 @@ fn direction(prefs: &Prefs, peer_id: &str) -> Result<String> {
         {
             Ok(direction.clone())
         }
-        _ => anyhow::bail!("Invalid clipboard direction"),
+        _ => plain_libs::anyhow::bail!("Invalid clipboard direction"),
     }
 }
 
@@ -52,7 +52,7 @@ pub fn prepare(
         return Ok(false);
     }
     ensure!(!item.id.is_empty(), "Missing clipboard item identity");
-    super::validate_text(&item.text).map_err(anyhow::Error::msg)?;
+    super::validate_text(&item.text).map_err(plain_libs::anyhow::Error::msg)?;
     Ok(
         store.update_json(APPLIED, |map: &mut serde_json::Map<String, Value>| {
             let mut applied: std::collections::BTreeMap<String, String> =

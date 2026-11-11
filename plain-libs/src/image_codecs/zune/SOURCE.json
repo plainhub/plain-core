@@ -1,0 +1,10 @@
+{
+  "package": "zune-core",
+  "version": "0.5.3",
+  "repository": "https://github.com/etemesi254/zune-image",
+  "revision": "de5dfc800cfa063116eb695edb6ccd01cb96ea7a",
+  "archive_sha256": "d56377fd46368984a170bc5aac5567e52ca5da874caa60bea39fcbca78fb658b",
+  "retained_features": [
+    "std"
+  ]
+}

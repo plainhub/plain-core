@@ -75,7 +75,7 @@ impl ShareHostMutation {
                     name,
                     real_paths,
                     read_only,
-                    expires_at.map(|i| i.0.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
+                    expires_at.map(|i| i.0.to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)),
                 )
             })
             .await?,
@@ -95,7 +95,7 @@ impl ShareHostMutation {
                 service.update(
                     &id,
                     &name,
-                    expires_at.map(|i| i.0.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
+                    expires_at.map(|i| i.0.to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)),
                     real_paths,
                 )
             })
@@ -108,7 +108,7 @@ impl ShareHostMutation {
 }
 
 async fn blocking<T: Send + 'static>(
-    operation: impl FnOnce() -> anyhow::Result<T> + Send + 'static,
+    operation: impl FnOnce() -> plain_libs::anyhow::Result<T> + Send + 'static,
 ) -> plain_graphql::Result<T> {
     tokio::task::spawn_blocking(operation)
         .await?

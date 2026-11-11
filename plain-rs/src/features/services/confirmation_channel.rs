@@ -1,4 +1,4 @@
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use hmac::{Hmac, KeyInit, Mac};
 use plain_libs::crypto::{
     EcdhSession, ed25519_public_from_keypair, ed25519_sign, ed25519_verify,
@@ -113,7 +113,7 @@ impl Client {
         let shared = self
             .key
             .compute_shared_key(&canonical(&response.server_public_key, 65)?)
-            .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_auth_response"))?;
         Ok(Channel::new(
             &shared,
             &transcript(&self.cid, &self.request, response),
@@ -136,14 +136,14 @@ impl ServerHandshake {
         let key = EcdhSession::generate();
         let public = base64_encode(
             &ed25519_public_from_keypair(signing)
-                .ok_or_else(|| anyhow::anyhow!("invalid_identity"))?,
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_identity"))?,
         );
         let mut response = ServerHello {
             device_id: device.into(),
             server_public_key: base64_encode(&key.public_key_bytes),
             expires_at: now
                 .checked_add(LIFETIME_MS)
-                .ok_or_else(|| anyhow::anyhow!("login_expired"))?,
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("login_expired"))?,
             signature: String::new(),
         };
         response.signature = ed25519_sign(signing, &signed_bytes(cid, &public, request, &response));
@@ -153,7 +153,7 @@ impl ServerHandshake {
         );
         let shared = key
             .compute_shared_key(&client_public)
-            .ok_or_else(|| anyhow::anyhow!("invalid_login_request"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_login_request"))?;
         Ok((
             Channel::new(
                 &shared,
@@ -209,22 +209,22 @@ impl Channel {
     pub fn encrypt_request(&self, b: &[u8], now: u64) -> Result<Vec<u8>> {
         self.fresh(now)?;
         xchacha_encrypt_raw_with_aad(&self.key, b, &self.aad(false))
-            .ok_or_else(|| anyhow::anyhow!("invalid_login_request"))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_login_request"))
     }
     pub fn decrypt_request(&self, b: &[u8], now: u64) -> Result<Vec<u8>> {
         self.fresh(now)?;
         xchacha_decrypt_raw_with_aad(&self.key, b, &self.aad(false))
-            .ok_or_else(|| anyhow::anyhow!("invalid_login_request"))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_login_request"))
     }
     pub fn encrypt_response(&self, b: &[u8], now: u64) -> Result<Vec<u8>> {
         self.fresh(now)?;
         xchacha_encrypt_raw_with_aad(&self.key, b, &self.aad(true))
-            .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_auth_response"))
     }
     pub fn decrypt_response(&self, b: &[u8], now: u64) -> Result<Vec<u8>> {
         self.fresh(now)?;
         xchacha_decrypt_raw_with_aad(&self.key, b, &self.aad(true))
-            .ok_or_else(|| anyhow::anyhow!("invalid_auth_response"))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_auth_response"))
     }
 }
 fn identity(s: &str) -> Result<()> {

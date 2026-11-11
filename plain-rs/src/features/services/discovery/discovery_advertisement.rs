@@ -1,7 +1,7 @@
 use crate::features::discovery::advertisement;
 use crate::features::discovery::advertisement::Facts;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use serde_json::{Value, json};
 pub enum Request {
     Reply {},
@@ -39,10 +39,10 @@ async fn aware_flags(state: &CoreRuntime) -> Result<(bool, bool)> {
         .host
         .call("systemProperties", json!({"names":["wifiAwareRunning"]}))
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
     let running = sample["wifiAwareRunning"]
         .as_bool()
-        .ok_or_else(|| anyhow::anyhow!("Invalid Wi-Fi Aware state reading"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid Wi-Fi Aware state reading"))?;
     Ok((true, running))
 }
 async fn facts(state: &CoreRuntime) -> Result<Facts> {
@@ -53,7 +53,7 @@ async fn facts(state: &CoreRuntime) -> Result<Facts> {
         async {
             crate::infrastructure::platform::network::host::lan_ipv4_addresses(&state.host)
                 .await
-                .map_err(anyhow::Error::msg)
+                .map_err(plain_libs::anyhow::Error::msg)
         },
         aware_flags(state),
     )?;

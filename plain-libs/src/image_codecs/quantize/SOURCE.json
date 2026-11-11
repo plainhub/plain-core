@@ -1,0 +1,8 @@
+{
+  "package": "color_quant",
+  "version": "1.1.0",
+  "repository": "https://github.com/image-rs/color_quant.git",
+  "revision": "6c302d2d1540496584476d513dd75b815f14e7a1",
+  "archive_sha256": "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b",
+  "retained_features": []
+}

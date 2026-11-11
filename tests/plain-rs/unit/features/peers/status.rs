@@ -26,7 +26,7 @@ fn status_proof_is_bound_to_connection_and_rejects_old_signed_content() {
             .open(&db, "peer", &second, &reencrypted)
             .is_err()
     );
-    let timestamp = chrono::Utc::now().timestamp_millis();
+    let timestamp = plain_libs::chrono::Utc::now().timestamp_millis();
     let signature = plain_libs::crypto::ed25519_sign(
         &keypair,
         peer_auth::status_signature_payload(timestamp, "peer").as_bytes(),

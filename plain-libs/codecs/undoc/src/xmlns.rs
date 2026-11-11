@@ -16,9 +16,9 @@
 //! prefixes that occur inside attribute values (`mc:Ignorable="w14"`), which no reader here
 //! consumes.
 
-use quick_xml::events::Event;
-use quick_xml::name::{QName, ResolveResult};
-use quick_xml::reader::NsReader;
+use plain_libs::xml::events::Event;
+use plain_libs::xml::name::{QName, ResolveResult};
+use plain_libs::xml::reader::NsReader;
 
 /// Conventional prefix and the namespace URIs (ECMA-376 transitional, then strict) it stands
 /// for. Only namespaces whose elements or attributes a reader matches by prefix are listed.

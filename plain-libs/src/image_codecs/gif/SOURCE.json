@@ -1,0 +1,13 @@
+{
+  "package": "gif",
+  "version": "0.14.2",
+  "repository": "https://github.com/image-rs/image-gif",
+  "revision": "a0127e2acbef333398414bb61d097c19c1b09d8a",
+  "archive_sha256": "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159",
+  "retained_features": [
+    "color_quant",
+    "default",
+    "raii_no_panic",
+    "std"
+  ]
+}

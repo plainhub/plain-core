@@ -354,7 +354,7 @@ impl Plan {
     }
 }
 fn millis(time: SystemTime) -> i64 {
-    chrono::DateTime::<chrono::Utc>::from(time).timestamp_millis()
+    crate::chrono::DateTime::<crate::chrono::Utc>::from(time).timestamp_millis()
 }
 
 #[cfg(test)]

@@ -35,14 +35,14 @@ impl PlatformQuery {
             .filter_map(|row| {
                 let kind = AuditEventType::from_kind(&row.r#type)?;
                 Some(
-                    chrono::DateTime::parse_from_rfc3339(&row.created_at)
+                    plain_libs::chrono::DateTime::parse_from_rfc3339(&row.created_at)
                         .map(|at| AuditEvent {
                             id: row.id.into(),
                             r#type: kind,
                             message: row.message,
                             client_id: row.client_id,
                             created_at: plain_rs::infrastructure::types::Instant(
-                                at.with_timezone(&chrono::Utc),
+                                at.with_timezone(&plain_libs::chrono::Utc),
                             ),
                         })
                         .map_err(|error| plain_graphql::Error::new(error.to_string())),

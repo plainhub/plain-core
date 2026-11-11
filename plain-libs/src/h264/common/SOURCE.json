@@ -1,0 +1,10 @@
+{
+  "package": "rusty_h264-common",
+  "version": "0.16.0",
+  "repository": "https://github.com/remade-with-rust/rusty_h264",
+  "revision": "63b527c4019a6584eb30d8b181b62ba085c04fef",
+  "archive_sha256": "aaf982ae23ecf8f13015ec1c5576fe2935f4e4296b097ebc4233b5872623af2a",
+  "retained_features": [
+    "std"
+  ]
+}

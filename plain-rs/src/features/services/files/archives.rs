@@ -80,7 +80,7 @@ impl Archives {
             let _permit = permit;
             let (file, staging) = build_archive(&directory, items)?;
             let size = file.metadata()?.len();
-            Ok::<_, anyhow::Error>((file, staging, size, _permit))
+            Ok::<_, plain_libs::anyhow::Error>((file, staging, size, _permit))
         })
         .await
         .map_err(|error| error.to_string())?
@@ -152,8 +152,8 @@ fn ensure_running(stop: &watch::Receiver<bool>) -> Result<(), String> {
 fn build_archive(
     directory: &Path,
     items: Vec<(PathBuf, String)>,
-) -> anyhow::Result<(std::fs::File, StagedFile)> {
-    anyhow::ensure!(!items.is_empty(), "nothing to zip");
+) -> plain_libs::anyhow::Result<(std::fs::File, StagedFile)> {
+    plain_libs::anyhow::ensure!(!items.is_empty(), "nothing to zip");
     let items = items
         .into_iter()
         .map(|(source, name)| {
@@ -161,12 +161,12 @@ fn build_archive(
                 source
                     .file_name()
                     .and_then(|name| name.to_str())
-                    .ok_or_else(|| anyhow::anyhow!("Invalid archive entry name"))?
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid archive entry name"))?
                     .to_owned()
             } else {
                 name
             };
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 !name.is_empty()
                     && !name.contains(['\\', '\0', ':'])
                     && name.split('/').all(|part| !matches!(part, "." | ".."))
@@ -177,7 +177,7 @@ fn build_archive(
             );
             Ok((source, name))
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<plain_libs::anyhow::Result<Vec<_>>>()?;
     std::fs::create_dir_all(directory)?;
     let path = directory.join(format!("archive-{}.tmp", plain_libs::utils::uuid::Uuid::new_v4()));
     let staging = StagedFile(path.clone());
@@ -186,9 +186,9 @@ fn build_archive(
         .write(true)
         .create_new(true)
         .open(&path)?;
-    let mut writer = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let mut writer = plain_libs::zip::ZipWriter::new(file);
+    let options = plain_libs::zip::write::SimpleFileOptions::default()
+        .compression_method(plain_libs::zip::CompressionMethod::Deflated);
     let mut buffer = vec![0; 64 * 1024];
     for (source, entry_name) in items {
         if source.is_dir() {

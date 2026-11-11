@@ -43,14 +43,14 @@ impl Pending {
 fn key(id: &str) -> String {
     format!("{PREFIX}{id}")
 }
-fn decode(value: Value) -> anyhow::Result<Pending> {
+fn decode(value: Value) -> plain_libs::anyhow::Result<Pending> {
     Ok(serde_json::from_value(value)?)
 }
-fn encode(value: &Pending) -> anyhow::Result<Value> {
+fn encode(value: &Pending) -> plain_libs::anyhow::Result<Value> {
     Ok(serde_json::to_value(value)?)
 }
 
-pub fn pending(store: &Db) -> anyhow::Result<Vec<Pending>> {
+pub fn pending(store: &Db) -> plain_libs::anyhow::Result<Vec<Pending>> {
     store
         .scan_prefix(PREFIX)
         .map(|entry| {
@@ -66,7 +66,7 @@ pub fn register(
     client_request_id: Option<String>,
     part_count: usize,
     now: u64,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     let value = Pending {
         request_id,
         client_request_id,
@@ -80,7 +80,7 @@ pub fn register(
     store.set_json(&key(&value.request_id), &value)?;
     Ok(())
 }
-pub fn cancel(store: &Db, id: &str) -> anyhow::Result<()> {
+pub fn cancel(store: &Db, id: &str) -> plain_libs::anyhow::Result<()> {
     store.remove(&key(id))?;
     Ok(())
 }
@@ -104,7 +104,7 @@ pub fn record(
     success: bool,
     code: i32,
     now: u64,
-) -> anyhow::Result<Option<Outcome>> {
+) -> plain_libs::anyhow::Result<Option<Outcome>> {
     store.update_json_prefix(PREFIX, |map| {
         let name = key(id);
         let Some(raw) = map.get(&name).cloned() else {
@@ -129,7 +129,7 @@ pub fn record(
         Ok(outcome)
     })
 }
-fn tick_map(map: &mut Map<String, Value>, now: u64) -> anyhow::Result<Vec<Outcome>> {
+fn tick_map(map: &mut Map<String, Value>, now: u64) -> plain_libs::anyhow::Result<Vec<Outcome>> {
     let names = map
         .keys()
         .filter(|name| name.starts_with(PREFIX))
@@ -150,7 +150,7 @@ fn tick_map(map: &mut Map<String, Value>, now: u64) -> anyhow::Result<Vec<Outcom
     }
     Ok(outcomes)
 }
-pub fn tick(store: &Db, now: u64) -> anyhow::Result<Vec<Outcome>> {
+pub fn tick(store: &Db, now: u64) -> plain_libs::anyhow::Result<Vec<Outcome>> {
     store.update_json_prefix(PREFIX, |map| tick_map(map, now))
 }
 

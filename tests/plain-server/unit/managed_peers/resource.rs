@@ -240,8 +240,8 @@ async fn peer_resources_reject_a_wrong_tls_pin_without_switching_transport() {
 async fn peer_generated_thumbnails_preserve_seekable_bytes_when_http_uses_a_full_body() {
     let fixture = Fixture::new().await;
     let path = fixture.root.path().join("image.png");
-    image::RgbImage::from_fn(800, 600, |x, y| {
-        image::Rgb([(x % 251) as u8, (y % 251) as u8, 20])
+    plain_libs::image::RgbImage::from_fn(800, 600, |x, y| {
+        plain_libs::image::Rgb([(x % 251) as u8, (y % 251) as u8, 20])
     })
     .save(&path)
     .unwrap();
@@ -263,7 +263,7 @@ async fn peer_generated_thumbnails_preserve_seekable_bytes_when_http_uses_a_full
     let resource = registry.get(&scope, &info.id).unwrap();
     let bytes = resource.read_range(0, info.size).await.unwrap();
     assert_eq!(resource.read_range(3, 11).await.unwrap(), bytes[3..14]);
-    let decoded = image::load_from_memory(&bytes).unwrap();
+    let decoded = plain_libs::image::load_from_memory(&bytes).unwrap();
     assert!(decoded.width() <= 256 && decoded.height() <= 256);
     let prepared = fixture
         .local

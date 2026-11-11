@@ -36,10 +36,10 @@ unsafe extern "C" {
         all(target_os = "macos", feature = "native-watch")
     ))]
     pub(crate) fn CFURLCopyFileSystemPath(url: *const c_void, style: isize) -> *const c_void;
-    fn CFRelease(value: *const std::ffi::c_void);
+    pub(crate) fn CFRelease(value: *const std::ffi::c_void);
     fn CFStringGetLength(value: *const std::ffi::c_void) -> isize;
     fn CFStringGetMaximumSizeForEncoding(length: isize, encoding: u32) -> isize;
-    fn CFStringGetCString(
+    pub(crate) fn CFStringGetCString(
         value: *const std::ffi::c_void,
         buffer: *mut std::ffi::c_char,
         size: isize,
@@ -226,3 +226,42 @@ pub fn kernel_version() -> Result<String, String> {
 #[cfg(test)]
 #[path = "../../../tests/plain-libs/unit/platform/apple_device.rs"]
 mod tests;
+
+// CoreFoundation ABI declarations retained from core-foundation-sys 0.8.7; see apple_ffi/SOURCE.json.
+pub(crate) type CFArrayRef = *const c_void;
+pub(crate) type CFDictionaryRef = *const c_void;
+pub(crate) type CFStringRef = *const c_void;
+pub(crate) type CFURLRef = *const c_void;
+pub(crate) type CFErrorRef = *const c_void;
+pub(crate) type CFBooleanRef = *const c_void;
+pub(crate) const CF_NUMBER_SINT64_TYPE: isize = 4;
+pub(crate) const CF_STRING_ENCODING_UTF8: u32 = 0x08000100;
+#[repr(C)]
+pub(crate) struct CFArrayCallBacks {
+    version: isize,
+    retain: Option<extern "C" fn(*const c_void, *const c_void) -> *const c_void>,
+    release: Option<extern "C" fn(*const c_void, *const c_void)>,
+    copy_description: Option<extern "C" fn(*const c_void) -> CFStringRef>,
+    equal: Option<extern "C" fn(*const c_void, *const c_void) -> u8>,
+}
+#[link(name = "CoreFoundation", kind = "framework")]
+unsafe extern "C" {
+    pub(crate) static kCFTypeArrayCallBacks: CFArrayCallBacks;
+    pub(crate) static kCFAllocatorDefault: *const c_void;
+    pub(crate) static kCFBooleanTrue: CFBooleanRef;
+    pub(crate) fn CFArrayCreate(
+        allocator: *const c_void,
+        values: *const *const c_void,
+        count: isize,
+        callbacks: *const CFArrayCallBacks,
+    ) -> CFArrayRef;
+    pub(crate) fn CFDictionaryGetValueIfPresent(
+        dictionary: CFDictionaryRef,
+        key: *const c_void,
+        value: *mut *const c_void,
+    ) -> u8;
+    pub(crate) fn CFNumberGetValue(number: *const c_void, kind: isize, value: *mut c_void) -> u8;
+    pub(crate) fn CFTimeZoneResetSystem();
+    pub(crate) fn CFTimeZoneCopySystem() -> *const c_void;
+    pub(crate) fn CFTimeZoneGetName(zone: *const c_void) -> CFStringRef;
+}

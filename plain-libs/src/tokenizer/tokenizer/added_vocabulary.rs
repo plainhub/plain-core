@@ -1,7 +1,7 @@
 use super::{
     Model, NormalizedString, Normalizer, Offsets, PreTokenizedString, Token, normalizer::Range,
 };
-use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
+use crate::regex_engine::aho::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use crate::regex::{self, Regex};
 use serde::{Deserialize, Serialize, Serializer, ser::SerializeSeq};
 use std::collections::HashMap;

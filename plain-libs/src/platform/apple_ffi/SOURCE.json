@@ -1,0 +1,8 @@
+{
+  "package": "core-foundation-sys",
+  "version": "0.8.7",
+  "repository": "https://github.com/servo/core-foundation-rs",
+  "revision": "652bab0a62d87df8a974ffad2ad9f7be218a8b56",
+  "archive_sha256": "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b",
+  "retained": "Only timezone, array, dictionary and number ABI declarations merged into platform/apple_device.rs"
+}

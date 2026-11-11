@@ -285,7 +285,7 @@ fn image_search_plan(
     query: &str,
     ids: &[String],
     include_text: bool,
-) -> anyhow::Result<crate::features::services::files::provider_query::Plan> {
+) -> plain_libs::anyhow::Result<crate::features::services::files::provider_query::Plan> {
     use crate::features::services::files::provider_query::{self as query, Provider};
     use std::collections::HashSet;
 

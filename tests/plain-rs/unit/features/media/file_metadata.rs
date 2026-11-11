@@ -5,14 +5,14 @@ use plain_libs::utils::dbtime::iso_from_unix_millis;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-fn read_file_metadata(path: &Path, data_type: DataType) -> anyhow::Result<MediaFileMetadata> {
+fn read_file_metadata(path: &Path, data_type: DataType) -> plain_libs::anyhow::Result<MediaFileMetadata> {
     Ok(read_file_metadata_with_availability(path, data_type)?.metadata)
 }
 
 fn read_file_metadata_with_availability(
     path: &Path,
     data_type: DataType,
-) -> anyhow::Result<crate::infrastructure::db::MediaFileMetadataRead> {
+) -> plain_libs::anyhow::Result<crate::infrastructure::db::MediaFileMetadataRead> {
     super::read(path, data_type, |_| None)
 }
 

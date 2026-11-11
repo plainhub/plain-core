@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 async fn run(
     ctx: &Context<'_>,
-    work: impl FnOnce(Arc<Queue>) -> anyhow::Result<bool> + Send + 'static,
+    work: impl FnOnce(Arc<Queue>) -> plain_libs::anyhow::Result<bool> + Send + 'static,
 ) -> plain_graphql::Result<bool> {
     let queue = ctx.data::<ServerState>()?.downloads.clone();
     tokio::task::spawn_blocking(move || work(queue))

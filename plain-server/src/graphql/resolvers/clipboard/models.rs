@@ -23,7 +23,7 @@ impl TryFrom<ClipboardRow> for ClipboardItem {
             label: row.label,
             sensitive: row.sensitive,
             created_at: Instant(
-                chrono::DateTime::parse_from_rfc3339(&row.created_at)?.with_timezone(&chrono::Utc),
+                plain_libs::chrono::DateTime::parse_from_rfc3339(&row.created_at)?.with_timezone(&plain_libs::chrono::Utc),
             ),
         })
     }

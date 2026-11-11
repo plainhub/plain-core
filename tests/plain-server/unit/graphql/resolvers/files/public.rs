@@ -618,7 +618,7 @@ async fn native_main_image_info_reads_directly_without_media_host_dispatch() {
     let core = crate::server::ContentServer::open(&directory.path().join("core")).unwrap();
     let (_generation, mut requests) = core.runtime_state().host.connect();
     let path = directory.path().join("photo.png");
-    image::RgbImage::new(3, 2).save(&path).unwrap();
+    plain_libs::image::RgbImage::new(3, 2).save(&path).unwrap();
     let response = core.native_graphql().unwrap().execute(plain_graphql::Request::new("query($path:String!){fileInfo(path:$path){data{... on ImageFileInfo{width height}}}}")
         .variables(plain_graphql::Variables::from_json(json!({"path":path})))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

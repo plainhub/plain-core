@@ -89,7 +89,7 @@ impl NativeGraphqlExecutor {
                 let route = self.state.managed_proxy.peers.route(&self.state, peer_id).await?;
                 let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
                 let response = route.exchange(&self.state, &request, Some(remaining)).await?;
-                serde_json::from_slice(&response).map_err(anyhow::Error::from)
+                serde_json::from_slice(&response).map_err(plain_libs::anyhow::Error::from)
             } => result.map_err(peer_error),
         }
     }

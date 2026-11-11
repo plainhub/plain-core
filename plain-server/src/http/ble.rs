@@ -1,6 +1,6 @@
 use plain_libs::protocols::http_client;
 use crate::server::ServerState;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use axum::body::Body;
 use plain_rs::infrastructure::protocols::ble;
 use plain_rs::infrastructure::protocols::ble::Request;

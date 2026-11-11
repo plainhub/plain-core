@@ -1,4 +1,4 @@
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use plain_libs::protocols::http_client;
 use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::services::notifications::types::Notification;
@@ -83,7 +83,7 @@ async fn refresh(
     id: &str,
     identity: &plain_rs::features::services::peers::management::Identity,
     cancelled: &tokio::sync::watch::Receiver<bool>,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     plain_rs::features::services::peers::management::refresh_data(
         state, id, identity, cancelled, None,
     )
@@ -97,7 +97,7 @@ fn notification(id: &str) -> Notification {
         is_clearable: true,
         app_id: "fixture.app".into(),
         app_name: "Fixture".into(),
-        posted_at: Instant(chrono::DateTime::from_timestamp(0, 0).unwrap()),
+        posted_at: Instant(plain_libs::chrono::DateTime::from_timestamp(0, 0).unwrap()),
         silent: false,
         title: id.into(),
         body: "Body".into(),

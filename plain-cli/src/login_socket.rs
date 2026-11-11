@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, ensure};
+use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_server::native::management::NativeWebLoginRequests;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{path::Path, time::Duration};
@@ -147,7 +147,7 @@ async fn command(
         Command::Requests { after } => Ok(ReplyResult::Requests {
             page: management
                 .web_login_requests(after.map(id).transpose()?)
-                .map_err(anyhow::Error::msg)?,
+                .map_err(plain_libs::anyhow::Error::msg)?,
         }),
         Command::Decide {
             request_id,
@@ -156,7 +156,7 @@ async fn command(
             management
                 .confirm_web_login(id(request_id)?, allowed)
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             Ok(ReplyResult::Decided)
         }
     }
@@ -186,7 +186,7 @@ impl Service {
             }
             let listener = tokio::net::UnixListener::bind(&path)?;
             let socket = directory.protect_socket()?;
-            let management = core.native_management().map_err(anyhow::Error::msg)?;
+            let management = core.native_management().map_err(plain_libs::anyhow::Error::msg)?;
             let mut stop = state.stop.clone();
             let task = tokio::spawn(async move {
                 let mut workers = tokio::task::JoinSet::new();
@@ -218,7 +218,7 @@ impl Service {
                                             ensure!(request.version == VERSION, "Unsupported local approval request version");
                                             command(&management, request.command).await
                                         }.await;
-                                        let result = result.unwrap_or_else(|error: anyhow::Error| ReplyResult::Error {
+                                        let result = result.unwrap_or_else(|error: plain_libs::anyhow::Error| ReplyResult::Error {
                                             message: error.to_string().chars().take(512).collect(),
                                         });
                                         write_frame(&mut stream, &Reply { version: VERSION, result }, REPLY_LIMIT).await

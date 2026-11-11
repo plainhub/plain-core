@@ -1,4 +1,4 @@
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use plain_libs::protocols::http_client;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -23,7 +23,7 @@ impl Link {
         };
         let mut url = link.url("/")?;
         url.path_segments_mut()
-            .map_err(|_| anyhow::anyhow!("Invalid share URL"))?
+            .map_err(|_| plain_libs::anyhow::anyhow!("Invalid share URL"))?
             .clear()
             .push("s")
             .push(id);
@@ -75,7 +75,7 @@ impl Link {
             "/guest_graphql",
             envelope.as_bytes(),
         )
-        .ok_or_else(|| anyhow::anyhow!("Cannot encrypt shared request"))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Cannot encrypt shared request"))
     }
     pub fn response(&self, request: &[u8], bytes: &[u8]) -> Result<Info> {
         let plain = crate::infrastructure::transport::http_response::Context::new(
@@ -83,14 +83,14 @@ impl Link {
             request,
         )
         .decrypt(&self.key()?, bytes)
-        .ok_or_else(|| anyhow::anyhow!("Invalid shared response authentication"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid shared response authentication"))?;
         let response: Value = serde_json::from_slice(&plain)?;
         if let Some(error) = response
             .get("errors")
             .and_then(Value::as_array)
             .and_then(|errors| errors.first())
         {
-            anyhow::bail!(
+            plain_libs::anyhow::bail!(
                 "{}",
                 error["message"].as_str().unwrap_or("Share request failed")
             );

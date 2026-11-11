@@ -3,13 +3,13 @@ use crate::infrastructure::db::browse;
 use crate::infrastructure::db::browse::TableColumnMeta;
 use crate::infrastructure::db::browse::rusqlite::Connection;
 use crate::infrastructure::db::browse::rusqlite::OpenFlags;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-fn browse_err(e: browse::SqliteBrowseError) -> anyhow::Error {
-    anyhow::anyhow!("{e}")
+fn browse_err(e: browse::SqliteBrowseError) -> plain_libs::anyhow::Error {
+    plain_libs::anyhow::anyhow!("{e}")
 }
 
 fn checked(db: &Db, table: &str) -> Result<()> {

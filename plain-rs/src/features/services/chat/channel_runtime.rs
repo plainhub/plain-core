@@ -7,7 +7,7 @@ use crate::infrastructure::db::DChannel;
 use crate::infrastructure::db::chat_store::channels;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde::Deserialize;
 use serde_json::{Value, json};
 #[derive(Deserialize)]
@@ -61,7 +61,7 @@ fn with_channels(state: &CoreRuntime, mut result: Value) -> Result<Value> {
         &state
             .prefs
             .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
-            .ok_or_else(|| anyhow::anyhow!("Missing client identity"))?,
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing client identity"))?,
     )?;
     Ok(result)
 }
@@ -97,7 +97,7 @@ pub async fn receive(
         .prefs
         .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
         .filter(|id| !id.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("Missing client identity"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing client identity"))?;
     let received =
         crate::features::chat::channels::incoming::receive(&state.db, &actor, from, kind, payload)?;
     let result = serde_json::to_value(&received)?;
@@ -125,7 +125,7 @@ pub async fn receive(
     Ok(result)
 }
 pub fn get(state: &CoreRuntime, id: &str) -> Result<DChannel> {
-    channels::get(&state.db, id)?.ok_or_else(|| anyhow::anyhow!("Channel not found"))
+    channels::get(&state.db, id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Channel not found"))
 }
 async fn send(
     state: &CoreRuntime,
@@ -146,7 +146,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
         .prefs
         .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("Missing client identity"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing client identity"))?;
     if let Request::Invitation { id, owner } = &request {
         return Ok(
             json!({"channel":state::pending_invitation(&state.db, &actor, id, owner.as_deref())?}),
@@ -160,7 +160,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
         }
         Request::Delete { id } => {
             let channel = chat_deletion::remove_channel(&state.db, &state.directory, &id)?
-                .ok_or_else(|| anyhow::anyhow!("Channel not found"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel not found"))?;
             notify_changed(state)?;
             if channel.owner_id.as_deref() == Some(actor.as_str()) {
                 send(state, &channel, ChannelSystemMessageType::Kick, "", true).await;
@@ -175,7 +175,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
                     channel
                         .owner_id
                         .as_deref()
-                        .ok_or_else(|| anyhow::anyhow!("Channel owner missing"))?
+                        .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel owner missing"))?
                 )?
                 .is_some(),
                 "Owner peer not found"
@@ -187,7 +187,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
                 channel
                     .owner_id
                     .as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("Channel owner missing"))?,
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel owner missing"))?,
                 false,
             )
             .await;
@@ -259,7 +259,7 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
                 channel
                     .owner_id
                     .clone()
-                    .ok_or_else(|| anyhow::anyhow!("Channel owner missing"))?
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel owner missing"))?
             } else {
                 target
             };

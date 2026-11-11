@@ -4,7 +4,7 @@ use crate::infrastructure::db::repositories::channel::CHANNEL_COLS;
 use crate::infrastructure::db::repositories::channel::row_to_channel;
 use crate::infrastructure::db::repositories::chat_store::SaveMode;
 use crate::infrastructure::db::repositories::chat_store::validate;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 pub fn get(db: &Db, id: &str) -> Result<Option<DChannel>> {
     Ok(db.with_conn(|c| {

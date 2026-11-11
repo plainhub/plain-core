@@ -1,11 +1,11 @@
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use std::path::Path;
 
 pub const SERVICE_PATH: &str = "/etc/systemd/system/plainapp.service";
 pub const BINARY_PATH: &str = "/usr/local/bin/plainapp";
 
 pub fn require_root() -> Result<()> {
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         plain_libs::platform::unix::is_root(),
         "This command requires root privileges. Please run with sudo."
     );
@@ -20,7 +20,7 @@ pub fn install() -> Result<()> {
         let status = std::process::Command::new("systemctl")
             .arg("daemon-reload")
             .status()?;
-        anyhow::ensure!(status.success(), "systemd unit reload failed");
+        plain_libs::anyhow::ensure!(status.success(), "systemd unit reload failed");
     }
     Ok(())
 }
@@ -91,7 +91,7 @@ fn restart_service(command: &mut std::process::Command) -> Result<()> {
             "plainapp.service",
         ])
         .status()?;
-    anyhow::ensure!(status.success(), "service restart failed");
+    plain_libs::anyhow::ensure!(status.success(), "service restart failed");
     Ok(())
 }
 

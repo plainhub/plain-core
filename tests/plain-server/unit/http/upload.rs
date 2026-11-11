@@ -27,7 +27,7 @@ async fn multipart_upload(
     let boundary = "plain-upload-regression-boundary";
     let metadata = format!(
         "{}|{}|{}",
-        chrono::Utc::now().timestamp_millis(),
+        plain_libs::chrono::Utc::now().timestamp_millis(),
         plain_libs::utils::uuid::Uuid::new_v4(),
         info
     );

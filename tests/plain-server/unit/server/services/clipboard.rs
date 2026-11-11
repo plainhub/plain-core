@@ -146,7 +146,7 @@ async fn native_report_http_search_delete_and_restart_share_one_clipboard() {
     assert_eq!(item["source"], "");
     assert_eq!(item["label"], "");
     assert_eq!(item["sensitive"], true);
-    assert!(chrono::DateTime::parse_from_rfc3339(item["createdAt"].as_str().unwrap()).is_ok());
+    assert!(plain_libs::chrono::DateTime::parse_from_rfc3339(item["createdAt"].as_str().unwrap()).is_ok());
     bridge
         .publish_text("CLIPBOARD_REPORTED", payload)
         .await

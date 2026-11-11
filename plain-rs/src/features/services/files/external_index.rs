@@ -1,6 +1,6 @@
 use crate::features::services::files::file_task_media::Identity;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use plain_libs::filesystem::watch_backend::Kind;
 use plain_libs::filesystem::watch_backend::Watcher;
 use serde::{Deserialize, Serialize};
@@ -100,7 +100,7 @@ async fn roots(state: &CoreRuntime) -> Result<Vec<PathBuf>> {
     let facts = state.file_platform.mounts(state.prefs.clone()).await?;
     let rows = facts
         .as_array()
-        .ok_or_else(|| anyhow::anyhow!("invalid storage volume facts"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid storage volume facts"))?;
     let mut roots = Vec::new();
     for row in rows {
         if !matches!(

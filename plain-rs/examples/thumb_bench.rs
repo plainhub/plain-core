@@ -1,6 +1,6 @@
 //! Compare the production thumbnail pipeline stages on one local image.
 
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use plain_libs::media::thumbnails::compute_target_size;
 use plain_libs::media::thumbnails::decode;
 use plain_libs::media::thumbnails::encode;
@@ -29,7 +29,7 @@ fn main() -> Result<()> {
     let mut arguments = std::env::args().skip(1);
     let path = arguments
         .next()
-        .ok_or_else(|| anyhow::anyhow!("Usage: thumb_bench IMAGE [TARGET=512] [ITERS=5]"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Usage: thumb_bench IMAGE [TARGET=512] [ITERS=5]"))?;
     let target = arguments
         .next()
         .map(|value| value.parse::<u32>())
@@ -40,7 +40,7 @@ fn main() -> Result<()> {
         .map(|value| value.parse::<usize>())
         .transpose()?
         .unwrap_or(5);
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         target > 0 && iterations > 0,
         "Target and iterations must be positive"
     );

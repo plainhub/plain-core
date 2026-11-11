@@ -4,7 +4,7 @@ use crate::infrastructure::db::notes_feeds::FeedRow;
 use crate::infrastructure::platform::network::host as network;
 use crate::infrastructure::platform::network::lan::NetworkType;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use std::time::Duration;
 
 const RETRY_SECONDS: i64 = 60;
@@ -24,7 +24,7 @@ fn next_at(last: Option<&str>, interval: i32, now_ms: i64) -> Result<i64> {
     let Some(last) = last else {
         return Ok(now_ms);
     };
-    let last = chrono::DateTime::parse_from_rfc3339(last)?.timestamp_millis();
+    let last = plain_libs::chrono::DateTime::parse_from_rfc3339(last)?.timestamp_millis();
     if last > now_ms {
         return Ok(now_ms);
     }
@@ -118,13 +118,13 @@ async fn tick(state: &CoreRuntime) -> Result<Duration> {
         state.feeds.cancel_automatic();
         return Ok(Duration::from_secs(RETRY_SECONDS as u64));
     }
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = plain_libs::chrono::Utc::now().timestamp_millis();
     let (feeds, earliest) = scheduled_feeds(state.db.clone(), &settings, now).await?;
     let permitted = allowed(
         settings.feed_auto_refresh_only_wifi,
         network::network_type(&state.host)
             .await
-            .map_err(anyhow::Error::msg)?,
+            .map_err(plain_libs::anyhow::Error::msg)?,
     );
     if permitted {
         if !feeds.is_empty() {

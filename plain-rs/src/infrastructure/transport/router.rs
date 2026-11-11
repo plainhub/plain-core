@@ -1,5 +1,5 @@
 use crate::infrastructure::db::DPeer;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashMap},
@@ -130,7 +130,7 @@ impl Router {
         let mut route = state
             .routes
             .remove(&ticket.id)
-            .ok_or_else(|| anyhow::anyhow!("Transport attempt unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Transport attempt unavailable"))?;
         if route.active.as_ref() != Some(ticket) {
             state.routes.insert(ticket.id.clone(), route);
             bail!("Stale transport receipt");
@@ -236,7 +236,7 @@ fn next(state: &mut State, route: &mut Route, id: &str, now: Instant) -> Result<
         state.next = state
             .next
             .checked_add(1)
-            .ok_or_else(|| anyhow::anyhow!("Transport generation overflow"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Transport generation overflow"))?;
         let ticket = Ticket {
             id: id.into(),
             generation: state.next,

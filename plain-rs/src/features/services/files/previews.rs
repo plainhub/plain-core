@@ -20,7 +20,7 @@ pub async fn convert(
     state: &CoreRuntime,
     conversion: Conversion,
     path: &str,
-) -> anyhow::Result<Option<Temporary>> {
+) -> plain_libs::anyhow::Result<Option<Temporary>> {
     let output = Temporary(
         state
             .directory
@@ -40,7 +40,7 @@ pub async fn convert(
                 json!({"output":output.0}),
             )
             .await
-            .map_err(anyhow::Error::msg)?
+            .map_err(plain_libs::anyhow::Error::msg)?
             .as_bool()
                 == Some(true)
         }
@@ -52,7 +52,7 @@ async fn convert_3gp(
     state: &CoreRuntime,
     path: &str,
     output: &std::path::Path,
-) -> anyhow::Result<bool> {
+) -> plain_libs::anyhow::Result<bool> {
     #[cfg(target_os = "android")]
     let available = crate::infrastructure::platform::android::media::supports_3gp_conversion();
     #[cfg(target_os = "ios")]
@@ -65,7 +65,7 @@ async fn convert_3gp(
     let mime =
         crate::features::services::files::resources::read(&state.host, "mime", path, json!({}))
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
     if !matches!(mime.as_str(), Some("video/3gpp" | "video/3gp")) {
         return Ok(false);
     }
@@ -75,7 +75,7 @@ async fn convert_3gp(
             .resources
             .read_file(path, state.stop.clone())
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            .map_err(|error| plain_libs::anyhow::anyhow!(error.to_string()))?;
         crate::features::services::files::browser::encode_android_file(
             input,
             output.to_owned(),
@@ -83,7 +83,7 @@ async fn convert_3gp(
             state.stop.clone(),
         )
         .await
-        .map_err(anyhow::Error::msg)
+        .map_err(plain_libs::anyhow::Error::msg)
     }
     #[cfg(not(target_os = "android"))]
     {
@@ -97,10 +97,10 @@ async fn convert_3gp(
             .resources
             .read_native(path, state.stop.clone())
             .await
-            .map_err(|status| anyhow::anyhow!("Video source returned {status}"))?;
+            .map_err(|status| plain_libs::anyhow::anyhow!("Video source returned {status}"))?;
         use tokio::io::AsyncWriteExt;
         let mut file = tokio::fs::File::create(&input.0).await?;
-        while let Some(chunk) = reader.read().await.map_err(anyhow::Error::msg)? {
+        while let Some(chunk) = reader.read().await.map_err(plain_libs::anyhow::Error::msg)? {
             file.write_all(&chunk).await?;
         }
         file.flush().await?;

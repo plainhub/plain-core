@@ -29,7 +29,7 @@ impl From<&CoreRuntime> for Context {
     }
 }
 impl Context {
-    pub fn seen(&self, device: Device, visible: bool, resident: bool) -> anyhow::Result<bool> {
+    pub fn seen(&self, device: Device, visible: bool, resident: bool) -> plain_libs::anyhow::Result<bool> {
         if device.id
             == self
                 .prefs
@@ -92,7 +92,7 @@ impl Context {
 pub fn snapshot(
     db: &crate::infrastructure::db::Db,
     devices: &crate::features::discovery::nearby_devices::Devices,
-) -> anyhow::Result<serde_json::Value> {
+) -> plain_libs::anyhow::Result<serde_json::Value> {
     let paired: std::collections::HashSet<_> = chat_store::peers::all(db)?
         .into_iter()
         .filter(|p| p.is_paired())
@@ -114,7 +114,7 @@ pub fn snapshot(
     }
     Ok(snapshot)
 }
-pub async fn sweep(state: &CoreRuntime) -> anyhow::Result<()> {
+pub async fn sweep(state: &CoreRuntime) -> plain_libs::anyhow::Result<()> {
     let mut stale = state.nearby_devices.stale(&state.db)?;
     if stale.is_empty() {
         return Ok(());
@@ -123,7 +123,7 @@ pub async fn sweep(state: &CoreRuntime) -> anyhow::Result<()> {
         .host
         .call("nearbyScanFacts", json!({}))
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
     if facts.get("paused").and_then(serde_json::Value::as_bool) != Some(false) {
         stale.retain(|probe| {
             probe

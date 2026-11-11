@@ -32,7 +32,7 @@ fn visited(root: &Path) -> Vec<String> {
     names
 }
 
-fn is_cancelled_error(error: &anyhow::Error) -> bool {
+fn is_cancelled_error(error: &crate::anyhow::Error) -> bool {
     error
         .downcast_ref::<std::io::Error>()
         .is_some_and(|io_error| io_error.kind() == std::io::ErrorKind::Interrupted)
@@ -134,7 +134,7 @@ fn a_visit_error_stops_the_walk_and_surfaces() {
         |path| {
             seen.push(path.to_path_buf());
             if path.ends_with("boom.txt") {
-                return Err(anyhow::anyhow!("visit refused"));
+                return Err(crate::anyhow::anyhow!("visit refused"));
             }
             Ok(())
         },

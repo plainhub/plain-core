@@ -1,5 +1,5 @@
 use crate::server::ServerState;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use plain_rs::features::discovery::nearby_wire::Message;
 use plain_rs::features::services::discovery::discovery_advertisement;
 use plain_rs::features::services::discovery::pairing_runtime;
@@ -17,7 +17,7 @@ pub(super) async fn dispatch(
         Err(error) if !metadata.is_empty() => return Err(error),
         Err(_) => return ble::message(&[], &[]),
     };
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         metadata.is_empty() || matches!(&message, Message::PairRequest(_)),
         "Invalid Nearby metadata"
     );

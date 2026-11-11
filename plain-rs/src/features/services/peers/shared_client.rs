@@ -3,7 +3,7 @@ use crate::features::chat::messages::share_card::Card;
 use crate::features::files::shares::client::Info;
 use crate::features::files::shares::client::Link;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde_json::{Value, json};
 use std::{collections::HashSet, time::Duration};
 fn add(
@@ -199,9 +199,9 @@ async fn request<T>(
     let mut stop = state.stop.clone();
     ensure!(!*stop.borrow(), "Core stopped");
     tokio::select! {
-        _ = stop.changed() => Err(anyhow::anyhow!("Core stopped")),
+        _ = stop.changed() => Err(plain_libs::anyhow::anyhow!("Core stopped")),
         result = tokio::time::timeout(Duration::from_secs(120), work) =>
-            result.unwrap_or_else(|_| Err(anyhow::anyhow!("Share request timed out"))),
+            result.unwrap_or_else(|_| Err(plain_libs::anyhow::anyhow!("Share request timed out"))),
     }
 }
 
@@ -232,7 +232,7 @@ pub async fn initial_link(state: &CoreRuntime, message_id: &str, expected: &Card
         candidates(state, expected, false)?
             .into_iter()
             .next()
-            .ok_or_else(|| anyhow::anyhow!("Share address unavailable"))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Share address unavailable"))
     })
     .await
 }
@@ -276,7 +276,7 @@ pub async fn cache_file(
             Some(&state.lan.client),
         )
         .await
-        .map_err(anyhow::Error::msg)
+        .map_err(plain_libs::anyhow::Error::msg)
 }
 
 #[cfg(test)]

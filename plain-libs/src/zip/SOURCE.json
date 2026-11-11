@@ -1,0 +1,11 @@
+{
+  "package": "zip",
+  "version": "9.1.3",
+  "repository": "https://github.com/zip-rs/zip2",
+  "revision": "af2ed2a3e12af1fdd733b1886b3e9067bf510be5",
+  "archive_sha256": "1156b39d142a34b999c2310a50455e0cb3760bf7efad0122f796d813bee26ccb",
+  "retained_features": [
+    "_deflate-any",
+    "deflate-flate2"
+  ]
+}

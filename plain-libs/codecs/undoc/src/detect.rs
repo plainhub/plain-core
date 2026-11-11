@@ -279,7 +279,7 @@ pub fn detect_format_from_reader<R: Read + Seek>(reader: R) -> Result<FormatType
         return Ok(format);
     }
 
-    let mut archive = zip::ZipArchive::new(reader)?;
+    let mut archive = plain_libs::zip::ZipArchive::new(reader)?;
 
     // Try to read [Content_Types].xml
     let content_types = match archive.by_name("[Content_Types].xml") {
@@ -291,7 +291,7 @@ pub fn detect_format_from_reader<R: Read + Seek>(reader: R) -> Result<FormatType
         // Only an absent part is a missing component. A container that is damaged or
         // needs a password must say so — reporting either as "the part isn't there"
         // points the caller at the wrong problem.
-        Err(zip::result::ZipError::FileNotFound) => {
+        Err(plain_libs::zip::result::ZipError::FileNotFound) => {
             return Err(Error::MissingComponent("[Content_Types].xml".to_string()));
         }
         Err(e) => return Err(Error::from(e)),
@@ -312,12 +312,12 @@ pub fn detect_format_from_reader<R: Read + Seek>(reader: R) -> Result<FormatType
 
 /// Fallback detection by checking folder structure.
 fn detect_by_folder_structure<R: Read + Seek>(
-    archive: &mut zip::ZipArchive<R>,
+    archive: &mut plain_libs::zip::ZipArchive<R>,
 ) -> Result<FormatType> {
     let names = archive
         .file_names()
         .map(|name| name.map(String::from))
-        .collect::<zip::result::ZipResult<Vec<String>>>()?;
+        .collect::<plain_libs::zip::result::ZipResult<Vec<String>>>()?;
 
     // Check for format-specific paths
     let has_word = names.iter().any(|n| n.starts_with("word/"));

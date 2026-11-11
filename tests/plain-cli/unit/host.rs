@@ -280,7 +280,7 @@ async fn device_and_log_queries_use_the_headless_server_provider_without_a_legac
 async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
     let directory = Directory::new();
     let image_path = directory.0.join("photo.png");
-    image::RgbImage::new(8, 4).save(&image_path).unwrap();
+    plain_libs::image::RgbImage::new(8, 4).save(&image_path).unwrap();
     let core = Arc::new(ContentServer::open(&directory.0).unwrap());
     core.native_media_catalog()
         .unwrap()
@@ -306,7 +306,7 @@ async fn thumbnails_and_regular_file_probes_use_the_shared_media_engine() {
         .await
         .unwrap()
         .unwrap();
-    let image = image::load_from_memory(&bytes).unwrap();
+    let image = plain_libs::image::load_from_memory(&bytes).unwrap();
     assert_eq!((image.width(), image.height()), (8, 4));
     assert_eq!(bytes.as_ref(), std::fs::read(&image_path).unwrap());
     assert!(!plain_libs::filesystem::image_format::is_animated_image_or_svg(&image_path));

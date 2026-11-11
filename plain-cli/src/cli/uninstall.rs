@@ -1,4 +1,4 @@
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use plain_rs::infrastructure::platform::system::consts::AppPaths;
 
 #[cfg(target_os = "linux")]
@@ -16,5 +16,5 @@ pub fn run(paths: &AppPaths, keep_config: bool, keep_data: bool) -> Result<()> {
 
 #[cfg(not(target_os = "linux"))]
 pub fn run(_paths: &AppPaths, _keep_config: bool, _keep_data: bool) -> Result<()> {
-    anyhow::bail!("System service uninstallation is available on Linux")
+    plain_libs::anyhow::bail!("System service uninstallation is available on Linux")
 }

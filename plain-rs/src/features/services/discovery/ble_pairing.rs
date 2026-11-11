@@ -27,7 +27,7 @@ pub fn start(
     device: Device,
     generation: Option<String>,
 
-) -> anyhow::Result<Value> {
+) -> plain_libs::anyhow::Result<Value> {
     let mut jobs = state.ble_pairing.0.lock().unwrap();
     if let Some(ticket) = jobs.get(&target.device_id) {
         if state

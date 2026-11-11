@@ -8,7 +8,7 @@ use crate::infrastructure::db::PEER_COLS;
 use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::row_to_channel;
 use crate::infrastructure::db::row_to_peer;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use rusqlite::{Connection, OptionalExtension, params};
 
 pub(crate) fn channel(c: &Connection, id: &str) -> Result<Option<DChannel>> {

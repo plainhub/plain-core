@@ -78,7 +78,7 @@ fn test_xml_parse_variants_share_one_kind() {
 /// produce.
 #[test]
 fn test_zip_error_reasons_are_not_collapsed() {
-    use zip::result::ZipError;
+    use plain_libs::zip::result::ZipError;
 
     assert_eq!(
         Error::from(ZipError::InvalidArchive("no central directory".into())).kind(),
@@ -116,7 +116,7 @@ fn test_zip_error_reasons_are_not_collapsed() {
 /// XML that fails to arrive, to decode, and to parse are three different problems.
 #[test]
 fn test_xml_error_reasons_are_not_collapsed() {
-    let io_backed: Error = quick_xml::Error::Io(std::sync::Arc::new(io::Error::new(
+    let io_backed: Error = plain_libs::xml::Error::Io(std::sync::Arc::new(io::Error::new(
         io::ErrorKind::UnexpectedEof,
         "eof mid-element",
     )))
@@ -124,7 +124,7 @@ fn test_xml_error_reasons_are_not_collapsed() {
     assert_eq!(io_backed.kind(), ErrorKind::Io);
 
     let malformed: Error =
-        quick_xml::Error::Syntax(quick_xml::errors::SyntaxError::UnclosedTag).into();
+        plain_libs::xml::Error::Syntax(plain_libs::xml::errors::SyntaxError::UnclosedTag).into();
     assert_eq!(malformed.kind(), ErrorKind::XmlParse);
 }
 

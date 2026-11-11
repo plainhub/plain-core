@@ -50,8 +50,8 @@ fn png_animation_detection_preserves_both_extensions_and_skips_metadata() {
             std::fs::write(&path, &animated[..length]).unwrap();
             assert!(!is_animated_image_or_svg(&path), "{name}: {length}");
         }
-        image::RgbaImage::new(1, 1)
-            .save_with_format(&path, image::ImageFormat::Png)
+        crate::image::RgbaImage::new(1, 1)
+            .save_with_format(&path, crate::image::ImageFormat::Png)
             .unwrap();
         assert!(!is_animated_image_or_svg(&path), "static {name}");
     }

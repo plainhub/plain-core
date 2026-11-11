@@ -7,7 +7,7 @@ use crate::features::services::discovery::{
     pairing, pairing_attempts::PairingPhase, pairing_runtime,
 };
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use hmac::{Hmac, KeyInit, Mac};
 use plain_libs::utils::base64::{base64_decode, base64_encode};
 use sha2::{Digest, Sha256};
@@ -185,14 +185,14 @@ impl Confirmations {
         self.with(|entries| {
             let e = entries
                 .get_mut(&request.payload.request_id())
-                .ok_or_else(|| anyhow::anyhow!("Pairing expired"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Pairing expired"))?;
             ensure!(e.started.elapsed() < RESPONSE_TIMEOUT, "Pairing expired");
             ensure!(
                 e.request.signature_data() == request.signature_data(),
                 "Pairing request changed"
             );
             let Phase::Server { response } = &mut e.phase else {
-                anyhow::bail!("Unexpected pairing role")
+                plain_libs::anyhow::bail!("Unexpected pairing role")
             };
             if let Some(reply) = response {
                 return Ok((reply.clone(), Target::from(&e.request)));
@@ -200,14 +200,14 @@ impl Confirmations {
             let target = state
                 .pairing
                 .incoming_target(&request.from_id, &request.payload.signature)
-                .ok_or_else(|| anyhow::anyhow!("Pairing request expired or no longer available"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Pairing request expired or no longer available"))?;
             let (reply, ecdh) =
                 pairing::response(&state.prefs, e.request.clone(), accepted, device)?
-                    .ok_or_else(|| anyhow::anyhow!("Invalid pairing request"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing request"))?;
             if let Some(ecdh) = ecdh {
                 let shared = ecdh
                     .compute_shared_key(&base64_decode(&request.payload.ecdh_public_key))
-                    .ok_or_else(|| anyhow::anyhow!("Invalid pairing key"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing key"))?;
                 let mut ips = vec![target.device_ip.clone()];
                 ips.extend(request.payload.ips.clone());
                 save_peer(
@@ -244,14 +244,14 @@ impl Confirmations {
         self.with(|entries| {
             let e = entries
                 .get_mut(&response.request_id)
-                .ok_or_else(|| anyhow::anyhow!("Unknown pairing response"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown pairing response"))?;
             let Phase::Client {
                 ticket,
                 pending,
                 completed,
             } = &mut e.phase
             else {
-                anyhow::bail!("Unexpected pairing role")
+                plain_libs::anyhow::bail!("Unexpected pairing role")
             };
             ensure!(
                 response.signature_public_key.is_none() && response.from_name.is_none(),
@@ -297,7 +297,7 @@ impl Confirmations {
                         &ticket.request_signature,
                         &base64_decode(&response.ecdh_public_key),
                     )
-                    .ok_or_else(|| anyhow::anyhow!("Invalid pairing key"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing key"))?;
                 let mut ips = vec![sender_ip.to_owned()];
                 ips.extend(response.ips.clone());
                 *pending = Some((
@@ -324,7 +324,7 @@ impl Confirmations {
             completed,
         } = &mut e.phase
         else {
-            anyhow::bail!("Unexpected pairing role")
+            plain_libs::anyhow::bail!("Unexpected pairing role")
         };
         if *completed {
             return Ok(());
@@ -339,7 +339,7 @@ impl Confirmations {
         );
         let (_, facts) = pending
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Pairing response required"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Pairing response required"))?;
         save_peer(
             state,
             facts.clone(),

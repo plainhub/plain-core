@@ -7,32 +7,33 @@ description = "Reusable cryptography, media, file, format and native components"
 
 [features]
 "auth" = ["dep:opaque-ke", "dep:rand_core", "dep:hkdf", "dep:zeroize", "dep:wasm-bindgen", "dep:getrandom_auth"]
-"kv" = ["sqlite", "dep:serde_json", "dep:anyhow"]
-"volumes" = ["dep:anyhow"]
-"file-walk" = ["dep:anyhow"]
+"kv" = ["sqlite", "dep:serde_json"]
+"volumes" = []
+"file-walk" = []
 "default" = ["crypto"]
 "crypto" = ["dep:chacha20poly1305", "dep:p256", "dep:ed25519-dalek", "dep:pbkdf2"]
 "tls" = ["dep:ring", "dep:x509-cert", "dep:der", "dep:pkcs12", "dep:pkcs5", "dep:pkcs8", "dep:cbc", "dep:des", "dep:rc2", "dep:sha1", "dep:hmac", "dep:sha2_mac"]
-"time" = ["dep:chrono", "dep:core-foundation-sys"]
+"time" = ["dep:num-traits", "dep:js-sys", "dep:wasm-bindgen"]
 "sqlite" = ["time", "dep:rusqlite"]
 "html" = []
-"regex" = ["dep:regex-automata", "dep:regex-syntax"]
+"xml" = ["dep:memchr"]
+"regex" = ["dep:memchr"]
 "phone" = ["regex", "dep:flate2", "dep:serde_json"]
 "phone-batch" = ["phone", "tokio/rt"]
-"media" = ["time", "dep:anyhow", "dep:encoding_rs", "dep:flate2"]
-"thumbnails" = ["dep:tiff", "dep:heic-rs", "dep:rav1d", "media", "crypto", "dep:image", "dep:jpeg-decoder", "dep:rusty_h264-decoder", "dep:rusty_h264-common", "tokio/rt", "tokio/process", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util", "dep:thiserror"]
+"media" = ["time", "dep:encoding_rs", "dep:flate2"]
+"thumbnails" = ["dep:heic-rs", "dep:rav1d", "media", "crypto", "image", "tokio/rt", "tokio/process", "tokio/time", "tokio/fs", "tokio/macros", "tokio/io-util", "dep:thiserror"]
 "filesystem" = ["time", "tokio/fs", "tokio/rt", "tokio/time"]
 "watch" = ["filesystem", "tokio/net"]
-"apk" = ["dep:anyhow", "dep:zip"]
+"apk" = ["zip"]
 "https" = ["dep:axum", "axum/tokio", "dep:hyper-util", "hyper-util/server-auto", "hyper-util/service", "dep:tokio-rustls", "tokio/net", "tokio/rt", "tokio/sync", "tokio/macros", "tokio/time"]
 "multipart" = ["dep:axum", "dep:http", "dep:httparse", "dep:memchr", "dep:mime"]
 "websocket" = ["dep:axum", "dep:hyper", "dep:hyper-util", "dep:tokio-tungstenite", "tokio/rt"]
 "dlna" = ["http-client"]
 "http-client" = ["dep:http", "dep:http-body", "dep:http-body-util", "dep:hyper", "hyper/http1", "dep:hyper-rustls", "dep:hyper-util", "hyper-util/client-legacy", "hyper-util/client-proxy", "hyper-util/http1", "dep:rustls", "dep:tokio-rustls", "tokio-rustls/tls12", "tokio/net", "tokio/rt", "tokio/time", "dep:tower", "dep:url", "dep:percent-encoding", "dep:serde_urlencoded", "dep:webpki-roots"]
-"unix-platform" = ["dep:anyhow"]
+"unix-platform" = []
 "storage-platform" = ["volumes"]
 "linux-platform" = ["storage-platform", "dep:serde_json"]
-"ai-image-search" = ["dep:image", "dep:serde_json", "dep:cc", "dep:aho-corasick", "regex", "regex-automata/dfa", "regex-automata/nfa", "regex-automata/perf", "dep:thiserror", "dep:smallvec"]
+"ai-image-search" = ["image", "dep:serde_json", "dep:cc", "regex", "dep:thiserror", "dep:smallvec"]
 "test-seams" = []
 "document-nfc" = ["dep:smallvec"]
 "compound-file" = ["dep:fnv"]
@@ -41,12 +42,23 @@ description = "Reusable cryptography, media, file, format and native components"
 
 "native-watch" = ["dep:bitflags", "dep:mio", "dep:windows-sys"]
 
-"disk-metrics" = ["dep:core-foundation-sys"]
+"disk-metrics" = []
 
 "system-metrics" = []
 "windows-video" = ["media"]
 
+"image" = ["dep:bytemuck", "dep:num-traits", "dep:bitflags", "dep:crc32fast", "dep:miniz_oxide", "dep:simd-adler32", "dep:flate2"]
+"zip" = ["dep:crc32fast", "dep:indexmap", "dep:memchr", "dep:flate2"]
+
 [dependencies]
+bytemuck = { version = "=1.25.2", default-features = false, features = ["extern_crate_alloc"], optional = true }
+num-traits = { version = "=0.2.19", optional = true }
+bitflags = { version = "=2.13.2", optional = true }
+crc32fast = { version = "=1.5.2", optional = true }
+indexmap = { version = "=2.14.2", optional = true }
+miniz_oxide = { version = "=0.8.9", optional = true }
+simd-adler32 = { version = "=0.3.10", optional = true }
+
 opaque-ke = { version = "=4.1.0-pre.2", default-features = false, features = ["ristretto255", "argon2"], optional = true }
 rand_core = { version = "=0.6.4", features = ["getrandom"], optional = true }
 hkdf = { version = "=0.12.4", optional = true }
@@ -68,16 +80,10 @@ zeroize = { version = "1.9", optional = true }
 "sha2" = "0.10"
 "pbkdf2" = { version = "=0.13.0", default-features = false, features = ["sha2"], optional = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util", "sync"] }
-"anyhow" = { "version" = "1", "optional" = true }
-"chrono" = { "version" = "0.4", "default-features" = false, "features" = ["serde", "now", "oldtime", "wasmbind"], "optional" = true }
 "rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "backup", "cache"], "optional" = true }
 "flate2" = { version = "1", optional = true }
 "serde_json" = { "version" = "1", "optional" = true }
 "encoding_rs" = { "version" = "=0.8.42", "optional" = true }
-"image" = { "version" = "0.25", "default-features" = false, "features" = ["jpeg", "png", "webp", "gif"], "optional" = true }
-"jpeg-decoder" = { version = "0.3", default-features = false, optional = true }
-"rusty_h264-decoder" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
-"rusty_h264-common" = { version = "=0.16.0", default-features = false, features = ["std"], optional = true }
 "chacha20poly1305" = { "version" = "0.10", "optional" = true }
 "p256" = { "version" = "0.14", "default-features" = false, "features" = ["ecdh", "pkcs8", "std"], "optional" = true }
 "ed25519-dalek" = { "version" = "2", "optional" = true }
@@ -93,7 +99,6 @@ zeroize = { version = "1.9", optional = true }
 "sha1" = { version = "0.11", optional = true }
 "hmac" = { "version" = "0.13", "optional" = true }
 "sha2_mac" = { "package" = "sha2", "version" = "0.11", "optional" = true }
-"zip" = { "version" = "9", "default-features" = false, "features" = ["deflate-flate2"], "optional" = true }
 "rustls" = { version = "0.23", default-features = false, features = ["ring", "std"], optional = true }
 "http-body" = { version = "=1.1.0", optional = true }
 "http-body-util" = { version = "=0.1.5", optional = true }
@@ -104,13 +109,9 @@ zeroize = { version = "1.9", optional = true }
 "serde_urlencoded" = { version = "=0.7.1", optional = true }
 "webpki-roots" = { version = "=1.0.10", optional = true }
 
-"tiff" = { path = "codecs/tiff", optional = true }
 "heic-rs" = { path = "codecs/heic-rs", optional = true }
 "rav1d" = { path = "codecs/rav1d", optional = true }
 
-"aho-corasick" = { "version" = "=1.1.5", "optional" = true }
-"regex-automata" = { version = "0.4", default-features = false, features = ["std", "syntax", "meta", "hybrid", "dfa-onepass", "nfa-backtrack", "perf-inline", "perf-literal", "unicode"], optional = true }
-"regex-syntax" = { version = "0.8", default-features = false, features = ["std", "unicode"], optional = true }
 "memchr" = { "version" = "=2.8.3", "optional" = true }
 "thiserror" = { "version" = "=2.0.21", "optional" = true, "features" = [] }
 "smallvec" = { "version" = "=1.16.2", "optional" = true }
@@ -120,10 +121,8 @@ zeroize = { version = "1.9", optional = true }
 
 [dev-dependencies]
 "flate2" = "=1.1.10"
-"weezl" = "=0.1.12"
 "serde_json" = "1"
 "tokio" = { version = "1", features = ["full", "test-util"] }
-"jpeg-decoder" = { version = "0.3", default-features = false, features = ["platform_independent"] }
 
 [target."cfg(any(target_os=\"freebsd\", target_os=\"openbsd\", target_os = \"netbsd\", target_os = \"dragonfly\", target_os = \"ios\"))".dependencies]
 "mio" = { "version" = "=1.2.4", "features" = ["os-ext"], "optional" = true }
@@ -131,20 +130,17 @@ zeroize = { version = "1.9", optional = true }
 [target."cfg(any(target_os=\"linux\", target_os=\"android\"))".dependencies]
 "mio" = { "version" = "=1.2.4", "features" = ["os-ext"], "optional" = true }
 
-[target."cfg(target_os=\"macos\")".dependencies]
-"bitflags" = { "version" = "=2.13.2", "optional" = true }
 
 [target."cfg(windows)".dependencies]
 "windows-sys" = { "version" = "=0.52.0", "features" = ["Win32_System_Threading", "Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_WindowsProgramming", "Win32_System_IO"], "optional" = true }
 
-[target."cfg(any(target_os = \"macos\", target_os = \"ios\"))".dependencies]
-"core-foundation-sys" = { "version" = "=0.8.7", "optional" = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "=0.10.3"
 getrandom = "=0.4.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = { version = "=0.3.106", optional = true }
 wasm-bindgen = { version = "=0.2.129", optional = true }
 getrandom_auth = { package = "getrandom", version = "=0.2.17", features = ["js"], optional = true }
 

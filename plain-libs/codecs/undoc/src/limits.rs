@@ -26,12 +26,12 @@ pub(crate) fn check_input(size: usize) -> Result<()> {
 }
 
 pub(crate) fn check_xml(xml: &str) -> Result<()> {
-    let mut reader = quick_xml::Reader::from_str(xml);
+    let mut reader = plain_libs::xml::Reader::from_str(xml);
     let mut depth = 0;
     while reader.buffer_position() < xml.len() as u64 {
         let event = reader.read_event()?;
         match event {
-            quick_xml::events::Event::Start(_) => {
+            plain_libs::xml::events::Event::Start(_) => {
                 depth += 1;
                 if depth > MAX_XML_DEPTH {
                     return Err(Error::InvalidData(
@@ -39,17 +39,17 @@ pub(crate) fn check_xml(xml: &str) -> Result<()> {
                     ));
                 }
             }
-            quick_xml::events::Event::End(_) => {
+            plain_libs::xml::events::Event::End(_) => {
                 depth = depth
                     .checked_sub(1)
                     .ok_or_else(|| Error::InvalidData("Unexpected XML closing tag".into()))?;
             }
-            quick_xml::events::Event::DocType(_) => {
+            plain_libs::xml::events::Event::DocType(_) => {
                 return Err(Error::InvalidData(
                     "Document XML DTD is not supported".into(),
                 ));
             }
-            quick_xml::events::Event::Eof => break,
+            plain_libs::xml::events::Event::Eof => break,
             _ => {}
         }
     }

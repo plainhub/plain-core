@@ -107,7 +107,7 @@ fn rgb(x: u32, y: u32) -> [u8; 3] {
 fn compressed(data: &[u8], kind: u16) -> Vec<u8> {
     match kind {
         1 => data.to_vec(),
-        5 => weezl::encode::Encoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8)
+        5 => crate::image_codecs::lzw::encode::Encoder::with_tiff_size_switch(crate::image_codecs::lzw::BitOrder::Msb, 8)
             .encode(data)
             .unwrap(),
         8 => {
@@ -333,14 +333,14 @@ fn malformed_headers_truncated_chunks_and_dimension_bombs_are_refused() {
 
 #[test]
 fn jpeg_compressed_ycbcr_tiff_matches_jpeg_colors() {
-    let source = image::RgbImage::from_fn(64, 48, |x, y| image::Rgb(rgb(x, y)));
+    let source = crate::image::RgbImage::from_fn(64, 48, |x, y| crate::image::Rgb(rgb(x, y)));
     let mut jpeg = Vec::new();
-    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90)
+    crate::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90)
         .encode_image(&source)
         .unwrap();
     let f = fixture(64, 48, 8, 3, 6, 7, None, 48, vec![], vec![jpeg.clone()]);
     let actual = decode(Cursor::new(f.bytes)).unwrap();
-    let expected = image::load_from_memory(&jpeg).unwrap().into_rgb8();
+    let expected = crate::image::load_from_memory(&jpeg).unwrap().into_rgb8();
     assert_eq!((actual.width(), actual.height()), expected.dimensions());
     for (a, b) in actual.raw().0.iter().zip(expected.as_raw()) {
         assert!(a.abs_diff(*b) <= 2, "{a} {b}");

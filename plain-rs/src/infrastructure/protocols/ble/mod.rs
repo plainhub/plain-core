@@ -1,5 +1,5 @@
 pub mod print;
-use anyhow::{Result, bail, ensure};
+use plain_libs::anyhow::{Result, bail, ensure};
 use std::time::{Duration, Instant};
 
 /// Characteristic carrying Nearby discovery/pairing messages.
@@ -175,7 +175,7 @@ pub fn frame(
     let size = limit - HEADER;
     let start = (sequence as usize)
         .checked_mul(size)
-        .ok_or_else(|| anyhow::anyhow!("BLE sequence overflow"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE sequence overflow"))?;
     if start >= data.len() {
         return Ok(None);
     }
@@ -262,7 +262,7 @@ impl Assembler {
         }
         self.next = sequence
             .checked_add(1)
-            .ok_or_else(|| anyhow::anyhow!("BLE sequence overflow"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE sequence overflow"))?;
         self.last = Some(Instant::now());
         if frame[1] & 2 == 0 {
             return Ok(None);

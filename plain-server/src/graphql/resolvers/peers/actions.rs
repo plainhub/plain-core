@@ -10,7 +10,7 @@ fn changed(state: &ServerState, id: &str) {
     plain_rs::features::services::peers::status_runtime::emit(state, id, false);
 }
 
-pub(crate) async fn remove(state: &ServerState, id: &str) -> anyhow::Result<bool> {
+pub(crate) async fn remove(state: &ServerState, id: &str) -> plain_libs::anyhow::Result<bool> {
     let state = state.clone();
     let id = id.to_owned();
     let worker = state.clone();
@@ -18,7 +18,7 @@ pub(crate) async fn remove(state: &ServerState, id: &str) -> anyhow::Result<bool
     state.aware.refresh(&state).await?;
     Ok(changed)
 }
-fn remove_record(state: &ServerState, id: &str) -> anyhow::Result<bool> {
+fn remove_record(state: &ServerState, id: &str) -> plain_libs::anyhow::Result<bool> {
     let _commit = state.pairing_runtime.commit.lock().unwrap();
     state.pairing_runtime.attempts.cancel_peer(state, id);
     let removed = plain_rs::features::chat::attachments::app_file_store::chat_deletion::delete(
@@ -39,7 +39,7 @@ fn remove_record(state: &ServerState, id: &str) -> anyhow::Result<bool> {
     Ok(removed)
 }
 
-pub(crate) async fn unpair(state: &ServerState, id: &str) -> anyhow::Result<bool> {
+pub(crate) async fn unpair(state: &ServerState, id: &str) -> plain_libs::anyhow::Result<bool> {
     let state = state.clone();
     let id = id.to_owned();
     let worker = state.clone();
@@ -47,7 +47,7 @@ pub(crate) async fn unpair(state: &ServerState, id: &str) -> anyhow::Result<bool
     state.aware.refresh(&state).await?;
     Ok(changed)
 }
-fn unpair_record(state: &ServerState, id: &str) -> anyhow::Result<bool> {
+fn unpair_record(state: &ServerState, id: &str) -> plain_libs::anyhow::Result<bool> {
     let _commit = state.pairing_runtime.commit.lock().unwrap();
     state.pairing_runtime.attempts.cancel_peer(state, id);
     let changed_peer = plain_rs::infrastructure::db::chat_store::peers::unpair(&state.db, id)?;

@@ -1,7 +1,7 @@
 use crate::features::enums::DataType;
 use crate::infrastructure::db::MediaFileMetadata;
 use crate::infrastructure::db::MediaFileMetadataRead;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use std::{fs::File, io::BufReader, path::Path};
 
 pub fn read_file_metadata(path: &Path, data_type: DataType) -> Result<MediaFileMetadata> {
@@ -13,7 +13,7 @@ pub fn read_file_metadata_with_availability(
     data_type: DataType,
 ) -> Result<MediaFileMetadataRead> {
     crate::features::media::file_metadata::read(path, data_type, |reader: File| {
-        image::ImageReader::new(BufReader::new(reader))
+        plain_libs::image::ImageReader::new(BufReader::new(reader))
             .with_guessed_format()
             .ok()?
             .into_dimensions()

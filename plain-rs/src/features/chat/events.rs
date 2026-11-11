@@ -80,7 +80,7 @@ pub fn channel_to_json(ch: &crate::infrastructure::db::DChannel, actor: &str) ->
         "version":ch.version,"status":ch.status.to_string(),"createdAt":ch.created_at,"updatedAt":ch.updated_at})
 }
 
-pub fn public_channels(db: &Db, actor: &str) -> anyhow::Result<serde_json::Value> {
+pub fn public_channels(db: &Db, actor: &str) -> plain_libs::anyhow::Result<serde_json::Value> {
     let mut channels = crate::infrastructure::db::chat_store::channels::all(db)?;
     channels.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(serde_json::Value::Array(

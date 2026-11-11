@@ -217,9 +217,9 @@ pub mod test_fixture {
             || false,
         )
         .unwrap();
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        let mut zip = plain_libs::zip::ZipWriter::new(Cursor::new(Vec::new()));
         for (path, name) in files {
-            zip.start_file(name, zip::write::SimpleFileOptions::default())
+            zip.start_file(name, plain_libs::zip::write::SimpleFileOptions::default())
                 .unwrap();
             zip.write_all(&std::fs::read(path).unwrap()).unwrap();
         }

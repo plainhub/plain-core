@@ -1,5 +1,5 @@
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 
 pub struct Progress {
     pub indexed: i32,
@@ -34,7 +34,7 @@ pub async fn progress(state: &CoreRuntime) -> Result<Progress> {
     #[cfg(feature = "runtime-media")]
     {
         use crate::features::services::files::media_scans::Status;
-        let Some(snapshot) = state.media_scans.snapshot().map_err(anyhow::Error::msg)? else {
+        let Some(snapshot) = state.media_scans.snapshot().map_err(plain_libs::anyhow::Error::msg)? else {
             return Ok(Progress {
                 indexed: 0,
                 total: Some(0),
@@ -56,7 +56,7 @@ pub async fn progress(state: &CoreRuntime) -> Result<Progress> {
         })
     }
     #[cfg(not(feature = "runtime-media"))]
-    anyhow::bail!("MEDIA_SCAN advertised without a scanner implementation")
+    plain_libs::anyhow::bail!("MEDIA_SCAN advertised without a scanner implementation")
 }
 pub async fn execute(state: &CoreRuntime, command: Command) -> Result<()> {
     available(state).await?;
@@ -67,38 +67,38 @@ pub async fn execute(state: &CoreRuntime, command: Command) -> Result<()> {
         if matches!(&command, Command::Rebuild(_) | Command::RebuildVolume(_)) {
             crate::features::services::files::indexing::discover(state)
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             catalog
                 .configure_policy(
-                    (*state.media_scans.policy().map_err(anyhow::Error::msg)?).clone(),
+                    (*state.media_scans.policy().map_err(plain_libs::anyhow::Error::msg)?).clone(),
                 )
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             catalog
                 .watch_source_directories()
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
         }
         match command {
             Command::Rebuild(root) => {
                 catalog
                     .start_source_scan(&root)
-                    .map_err(anyhow::Error::msg)?;
+                    .map_err(plain_libs::anyhow::Error::msg)?;
             }
             Command::RebuildVolume(id) => {
                 catalog
                     .start_volume_scan(&id)
-                    .map_err(anyhow::Error::msg)?
+                    .map_err(plain_libs::anyhow::Error::msg)?
                     .ok_or_else(|| {
-                        anyhow::anyhow!("Volume is offline or has no configured index directories")
+                        plain_libs::anyhow::anyhow!("Volume is offline or has no configured index directories")
                     })?;
             }
             Command::Pause => {
-                catalog.pause_file_scan().map_err(anyhow::Error::msg)?;
+                catalog.pause_file_scan().map_err(plain_libs::anyhow::Error::msg)?;
             }
             Command::Resume => {
-                catalog.resume_file_scan().map_err(anyhow::Error::msg)?;
+                catalog.resume_file_scan().map_err(plain_libs::anyhow::Error::msg)?;
             }
             Command::Stop => {
-                catalog.cancel_file_scan().map_err(anyhow::Error::msg)?;
+                catalog.cancel_file_scan().map_err(plain_libs::anyhow::Error::msg)?;
             }
         }
         Ok(())
@@ -106,6 +106,6 @@ pub async fn execute(state: &CoreRuntime, command: Command) -> Result<()> {
     #[cfg(not(feature = "runtime-media"))]
     {
         let _ = command;
-        anyhow::bail!("MEDIA_SCAN advertised without a scanner implementation")
+        plain_libs::anyhow::bail!("MEDIA_SCAN advertised without a scanner implementation")
     }
 }

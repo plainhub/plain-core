@@ -1,6 +1,6 @@
 use plain_libs::protocols::http_client;
 use crate::infrastructure::db::{Db, bookmark};
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use std::collections::{HashMap, HashSet};
 
 pub fn parse_bookmark_url(url: &str) -> Result<http_client::Url> {

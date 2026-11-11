@@ -1,4 +1,4 @@
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use std::path::PathBuf;
 
 pub(super) fn configure_index(
@@ -10,7 +10,7 @@ pub(super) fn configure_index(
         .map(|path| path.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     plain_rs::features::services::files::indexing::set_directories(db, &directories)
-        .map_err(anyhow::Error::msg)
+        .map_err(plain_libs::anyhow::Error::msg)
 }
 
 #[cfg(target_os = "linux")]

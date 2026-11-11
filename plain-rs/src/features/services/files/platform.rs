@@ -5,7 +5,7 @@ pub(super) mod paths;
 use crate::features::files::tasks::{FileTaskOp, FileTaskType};
 use crate::infrastructure::db::Db;
 use crate::infrastructure::host::bridge::Host;
-use anyhow::{Result, anyhow, bail};
+use plain_libs::anyhow::{Result, anyhow, bail};
 use serde_json::json;
 use std::{
     path::{Path, PathBuf},
@@ -75,7 +75,7 @@ impl FilePlatform {
                     json!({"plan":plan,"offset":0,"limit":1,"sortBy":"NAME_ASC"}),
                 )
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             return rows
                 .as_array()
                 .and_then(|rows| rows.first())
@@ -111,13 +111,13 @@ impl FilePlatform {
                     json!({}),
                 )
                 .await
-                .map_err(anyhow::Error::msg);
+                .map_err(plain_libs::anyhow::Error::msg);
         }
         tokio::task::spawn_blocking(move || {
             crate::features::services::files::mounts::native_facts(&prefs)
         })
         .await?
-        .map_err(anyhow::Error::msg)
+        .map_err(plain_libs::anyhow::Error::msg)
     }
 
     pub fn watchable(&self, path: &Path) -> bool {
@@ -192,7 +192,7 @@ impl FilePlatform {
                             }),
                         )
                         .await
-                        .map_err(anyhow::Error::msg)?,
+                        .map_err(plain_libs::anyhow::Error::msg)?,
                 )
                 .map_err(Into::into);
             }
@@ -203,7 +203,7 @@ impl FilePlatform {
                     json!({}),
                 )
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             let root = volumes
                 .as_array()
                 .ok_or_else(|| anyhow!("Invalid storage volumes"))?
@@ -266,7 +266,7 @@ impl FilePlatform {
             .host
             .call(method, params)
             .await
-            .map_err(anyhow::Error::msg)?
+            .map_err(plain_libs::anyhow::Error::msg)?
             .as_bool()
             != Some(true)
         {
@@ -361,7 +361,7 @@ impl FilePlatform {
                 self.host
                     .call("fileTaskMediaSnapshot", json!({"paths": paths}))
                     .await
-                    .map_err(anyhow::Error::msg)?,
+                    .map_err(plain_libs::anyhow::Error::msg)?,
             )?;
             crate::features::services::files::file_task_media::validate(&rows, &paths)?;
             return Ok(rows);
@@ -404,7 +404,7 @@ impl FilePlatform {
                 Ok::<_, String>(existing)
             })
             .await?
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
             crate::features::services::files::native_scan::completed(
                 &self.db,
                 &self.scans,
@@ -412,7 +412,7 @@ impl FilePlatform {
                 existing,
             )
             .await
-            .map_err(anyhow::Error::msg)
+            .map_err(plain_libs::anyhow::Error::msg)
         }
         #[cfg(not(feature = "runtime-media"))]
         {
@@ -449,7 +449,7 @@ impl FilePlatform {
                 Ok::<_, String>((rows, generic_types))
             })
             .await?
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
             crate::features::services::files::catalog_events::publish(
                 &self.events,
                 rows.iter().map(|row| row.data_type).chain(generic_types),
@@ -468,7 +468,7 @@ impl FilePlatform {
                     db.forget_media_file(&path)?;
                 }
             }
-            anyhow::Ok(())
+            Ok::<(), plain_libs::anyhow::Error>(())
         })
         .await?
     }

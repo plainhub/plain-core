@@ -6,7 +6,7 @@ use crate::features::services::peers::management::current_peer;
 use crate::features::services::peers::metadata::AppSnapshot;
 use crate::infrastructure::db::DPeer;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde::Serialize;
 use serde_json::json;
 use std::{
@@ -344,7 +344,7 @@ pub async fn refresh_from_app(
         return Ok(());
     }
     let base = identity.http_url()?;
-    let client_id = state.native_client_id().map_err(anyhow::Error::msg)?;
+    let client_id = state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
     let key = plain_libs::utils::base64::base64_decode(&identity.token);
     let result = async {
         let app = app?;

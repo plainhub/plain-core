@@ -81,7 +81,7 @@ impl NumberingMap {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(e)) => match e.name().as_ref() {
+                Ok(plain_libs::xml::events::Event::Start(e)) => match e.name().as_ref() {
                     "w:abstractNum" => {
                         let mut abstract_num = AbstractNum {
                             id: String::new(),
@@ -113,7 +113,7 @@ impl NumberingMap {
                     }
                     _ => {}
                 },
-                Ok(quick_xml::events::Event::Empty(e)) => {
+                Ok(plain_libs::xml::events::Event::Empty(e)) => {
                     match e.name().as_ref() {
                         "w:start" if in_lvl => {
                             if let Some(ref mut level) = current_level {
@@ -149,7 +149,7 @@ impl NumberingMap {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::End(e)) => match e.name().as_ref() {
+                Ok(plain_libs::xml::events::Event::End(e)) => match e.name().as_ref() {
                     "w:abstractNum" => {
                         if let Some(abstract_num) = current_abstract.take() {
                             map.abstract_nums
@@ -167,7 +167,7 @@ impl NumberingMap {
                     }
                     _ => {}
                 },
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }
@@ -190,14 +190,14 @@ impl NumberingMap {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(e)) if e.name().as_ref() == "w:num" => {
+                Ok(plain_libs::xml::events::Event::Start(e)) if e.name().as_ref() == "w:num" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.as_ref() == "w:numId" {
                             current_num_id = Some(attr.value.to_string());
                         }
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(e))
+                Ok(plain_libs::xml::events::Event::Empty(e))
                     if e.name().as_ref() == "w:abstractNumId" =>
                 {
                     if let Some(ref num_id) = current_num_id {
@@ -214,10 +214,10 @@ impl NumberingMap {
                         }
                     }
                 }
-                Ok(quick_xml::events::Event::End(e)) if e.name().as_ref() == "w:num" => {
+                Ok(plain_libs::xml::events::Event::End(e)) if e.name().as_ref() == "w:num" => {
                     current_num_id = None;
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(_) => break,
                 _ => {}
             }

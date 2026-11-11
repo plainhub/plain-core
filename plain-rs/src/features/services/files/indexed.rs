@@ -3,7 +3,7 @@ use crate::features::services::files::provider_query as query;
 use crate::features::services::files::provider_query::Provider;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::host::bridge::Host;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use rusqlite::{params_from_iter, types::Value as SqlValue};
 use serde_json::{Value, json};
 
@@ -25,11 +25,11 @@ pub async fn platform(
         let fact = host
             .call("systemFileIndexId", json!({"path":path}))
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         Some(match fact {
             Value::Null => "-1".to_owned(),
             Value::String(id) => id,
-            _ => anyhow::bail!("invalid file index identity"),
+            _ => plain_libs::anyhow::bail!("invalid file index identity"),
         })
     } else {
         None
@@ -51,7 +51,7 @@ pub async fn platform(
         json!({"plan":plan,"offset":offset.max(0),"limit":limit.max(0),"sortBy":sort.as_str()}),
     )
     .await
-    .map_err(anyhow::Error::msg)
+    .map_err(plain_libs::anyhow::Error::msg)
 }
 
 pub fn native(
@@ -106,7 +106,7 @@ pub fn native(
                 let root = crate::features::files::index_scope::normalized(std::path::Path::new(
                     &field.value,
                 ));
-                anyhow::ensure!(
+                plain_libs::anyhow::ensure!(
                     std::path::Path::new(&root).is_absolute(),
                     "Absolute search directory required"
                 );
@@ -116,7 +116,7 @@ pub fn native(
             }
             "kind" => {
                 let kind = field.value.to_ascii_uppercase();
-                anyhow::ensure!(
+                plain_libs::anyhow::ensure!(
                     ["FILE", "DIRECTORY", "IMAGE", "VIDEO", "AUDIO", "DOC"]
                         .contains(&kind.as_str()),
                     "Unknown file kind"
@@ -126,13 +126,13 @@ pub fn native(
             }
             "updated_at" => {
                 let (op, value) = query::comparison(field);
-                anyhow::ensure!(
+                plain_libs::anyhow::ensure!(
                     ["=", "!=", ">", ">=", "<", "<="].contains(&op),
                     "Invalid modification time comparison"
                 );
-                let value = chrono::DateTime::parse_from_rfc3339(value)?
-                    .with_timezone(&chrono::Utc)
-                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+                let value = plain_libs::chrono::DateTime::parse_from_rfc3339(value)?
+                    .with_timezone(&plain_libs::chrono::Utc)
+                    .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true);
                 clauses.push(format!("updated_at {op} ?"));
                 args.push(SqlValue::Text(value));
             }
@@ -173,7 +173,7 @@ pub fn native(
 }
 
 fn millis(value: &str, column: usize) -> rusqlite::Result<i64> {
-    chrono::DateTime::parse_from_rfc3339(value)
+    plain_libs::chrono::DateTime::parse_from_rfc3339(value)
         .map(|date| date.timestamp_millis())
         .map_err(|error| {
             rusqlite::Error::FromSqlConversionFailure(

@@ -1,5 +1,5 @@
 use plain_libs::protocols::http_client;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 pub fn download_url(raw: &str) -> Result<http_client::Url> {
     let url = http_client::Url::parse(raw)?;
     ensure!(
@@ -22,7 +22,7 @@ pub fn download_url(raw: &str) -> Result<http_client::Url> {
     }
     let id = query
         .get("id")
-        .ok_or_else(|| anyhow::anyhow!("Missing shared file ID"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing shared file ID"))?;
     let (scope, _) = crate::features::files::resource_link::parse(id)?;
     ensure!(
         matches!(

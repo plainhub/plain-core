@@ -10,10 +10,10 @@ use std::io::{self, BufRead, Seek, SeekFrom};
 use std::iter::{Rev, repeat};
 use std::slice::ChunksExactMut;
 
-use image::ColorType;
-use image::error::{ImageError, ImageResult, UnsupportedError, UnsupportedErrorKind};
+use crate::image::ColorType;
+use crate::image::error::{ImageError, ImageResult, UnsupportedError, UnsupportedErrorKind};
 
-use image::{ImageDecoder, ImageFormat};
+use crate::image::{ImageDecoder, ImageFormat};
 
 const BITMAPCOREHEADER_SIZE: u32 = 12;
 const BITMAPINFOHEADER_SIZE: u32 = 40;

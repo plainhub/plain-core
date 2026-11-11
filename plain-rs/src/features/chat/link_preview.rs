@@ -66,7 +66,7 @@ use crate::infrastructure::db::DChat;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::row_to_chat;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 use serde::Serialize;
 use serde_json::Value;
@@ -88,7 +88,7 @@ pub fn edit(db: &Db, directory: &Path, id: &str, text: &str) -> Result<Edit> {
                 row_to_chat,
             )
             .optional()?
-            .ok_or_else(|| anyhow::anyhow!("Message unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Message unavailable"))?;
         let old: Value = serde_json::from_str(&row.content)?;
         if old["type"] != "TEXT" {
             bail!("Message is not text");

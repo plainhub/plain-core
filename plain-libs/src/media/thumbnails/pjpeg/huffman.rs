@@ -1,5 +1,5 @@
 use super::Bits;
-use anyhow::{Result, bail};
+use crate::anyhow::{Result, bail};
 
 pub(super) struct Codebook {
     pub(super) counts: [u8; 16],
@@ -58,7 +58,7 @@ impl Codebook {
             code = (code << 1)
                 | bits
                     .bit()
-                    .ok_or_else(|| anyhow::anyhow!("truncated Huffman symbol"))?
+                    .ok_or_else(|| crate::anyhow::anyhow!("truncated Huffman symbol"))?
                     as i32;
             if code >= self.minimum[length] as i32 && code <= self.maximum[length] {
                 return Ok(self.values

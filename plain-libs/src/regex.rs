@@ -1,8 +1,8 @@
-use regex_automata::{MatchKind, util::syntax};
-pub use regex_automata::{meta::Regex, util::captures::Captures};
-pub use regex_syntax::escape;
+use crate::regex_engine::automata::{MatchKind, util::syntax};
+pub use crate::regex_engine::automata::{meta::Regex, util::captures::Captures};
+pub use crate::regex_engine::syntax::escape;
 
-pub fn compile(pattern: &str) -> Result<Regex, regex_automata::meta::BuildError> {
+pub fn compile(pattern: &str) -> Result<Regex, crate::regex_engine::automata::meta::BuildError> {
     // Preserve the regex 1.13 string API's UTF-8 rules and compilation limits.
     Regex::builder()
         .configure(
@@ -21,3 +21,7 @@ pub fn captures(regex: &Regex, text: &str) -> Option<Captures> {
     regex.captures(text, &mut captures);
     captures.is_match().then_some(captures)
 }
+
+#[cfg(test)]
+#[path = "../../tests/plain-libs/unit/regex.rs"]
+mod tests;

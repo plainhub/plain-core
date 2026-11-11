@@ -98,14 +98,14 @@ async fn fs_icons_return_original_bytes_for_all_preview_sizes() {
 
 #[tokio::test]
 async fn fs_animated_png_preserves_frames_for_both_extensions_and_preview_sizes() {
-    use image::AnimationDecoder;
+    use plain_libs::image::AnimationDecoder;
     let (_root, _core, state, key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../plain-rs/testdata/two-frame.apng"
     ));
-    let frames = image::codecs::png::PngDecoder::new(std::io::Cursor::new(original))
+    let frames = plain_libs::image::codecs::png::PngDecoder::new(std::io::Cursor::new(original))
         .unwrap()
         .apng()
         .unwrap()
@@ -155,7 +155,7 @@ async fn fs_bmp_previews_decode_and_downloads_keep_original_bytes() {
         let response = call_fs(&state, &format!("id={id}&action=preview{options}"), &[]).await;
         assert_eq!(response.status(), StatusCode::OK);
         let bytes = body_bytes(response).await;
-        let decoded = image::load_from_memory(&bytes).unwrap();
+        let decoded = plain_libs::image::load_from_memory(&bytes).unwrap();
         assert_eq!((decoded.width(), decoded.height()), (3, 2));
         assert_eq!(
             call_fs(&state, &format!("id={id}&action=preview{options}"), &[])
@@ -197,7 +197,7 @@ async fn fs_bmp_alpha_survives_uncropped_previews_and_cached_requests() {
             .unwrap()
             .to_owned();
         let bytes = body_bytes(response).await;
-        let decoded = image::load_from_memory(&bytes).unwrap().into_rgba8();
+        let decoded = plain_libs::image::load_from_memory(&bytes).unwrap().into_rgba8();
         assert_eq!(decoded.dimensions(), (3, 1));
         assert_eq!(
             decoded.into_raw(),
@@ -432,7 +432,7 @@ async fn fs_typed_image_reference_returns_decodable_thumbnail() {
     let response = call_fs(&state, &format!("id={id}&action=preview&size=sm"), &[]).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_bytes(response).await;
-    let thumbnail = image::load_from_memory(&body).unwrap();
+    let thumbnail = plain_libs::image::load_from_memory(&body).unwrap();
     assert!(thumbnail.width() > 0 && thumbnail.width() <= 256);
     assert!(thumbnail.height() > 0 && thumbnail.height() <= 256);
     let full_size = call_fs(&state, &format!("id={id}&action=preview&size=sm"), &[]).await;
@@ -484,7 +484,7 @@ async fn fs_foreground_thumbnail_is_local_and_does_not_enable_passive_reads() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()[header::CONTENT_TYPE], "image/jpeg");
-    assert!(image::load_from_memory(&body_bytes(response).await).is_ok());
+    assert!(plain_libs::image::load_from_memory(&body_bytes(response).await).is_ok());
     for query in [
         format!("id={passive}&action=preview&size=sm"),
         format!("id={explicit}&action=preview"),
@@ -630,7 +630,7 @@ async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
     let (_root, _core, state, key) = test_state();
     let images = plain_libs::temporary::tempdir().unwrap();
     let path = images.path().join("preview.png");
-    image::RgbImage::new(64, 32).save(&path).unwrap();
+    plain_libs::image::RgbImage::new(64, 32).save(&path).unwrap();
     let original = std::fs::read(&path).unwrap();
     let id = file_id(&key, path.to_str().unwrap());
     let query = format!("id={id}&action=preview&size=sm");
@@ -844,8 +844,8 @@ async fn fs_thumbnail_latency_benchmark() {
         ("PNG 1600x1200", 1600, 1200, "png"),
     ] {
         let original = source.path().join(format!("original.{extension}"));
-        image::RgbImage::from_fn(width, height, |x, y| {
-            image::Rgb([(x % 200) as u8, (y % 200) as u8, 90])
+        plain_libs::image::RgbImage::from_fn(width, height, |x, y| {
+            plain_libs::image::Rgb([(x % 200) as u8, (y % 200) as u8, 90])
         })
         .save(&original)
         .unwrap();
@@ -866,7 +866,7 @@ async fn fs_thumbnail_latency_benchmark() {
             assert_eq!(response.status(), StatusCode::OK);
             let bytes = response.bytes().await.unwrap();
             cold.push(started.elapsed().as_secs_f64() * 1000.0);
-            let image = image::load_from_memory(&bytes).unwrap();
+            let image = plain_libs::image::load_from_memory(&bytes).unwrap();
             assert_eq!((image.width(), image.height()), (256, 192));
             let started = std::time::Instant::now();
             let response = http
@@ -1027,8 +1027,8 @@ async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_inval
     let (_root, core, state, key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("sizes.jpg");
-    image::RgbImage::from_fn(1600, 1200, |x, y| {
-        image::Rgb([(x % 251) as u8, (y % 239) as u8, 90])
+    plain_libs::image::RgbImage::from_fn(1600, 1200, |x, y| {
+        plain_libs::image::Rgb([(x % 251) as u8, (y % 239) as u8, 90])
     })
     .save(&path)
     .unwrap();
@@ -1037,7 +1037,7 @@ async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_inval
         let response = call_fs(&state, &format!("id={id}&action=preview&size={size}"), &[]).await;
         assert_eq!(response.status(), StatusCode::OK);
         let bytes = body_bytes(response).await;
-        let decoded = image::load_from_memory(&bytes).unwrap();
+        let decoded = plain_libs::image::load_from_memory(&bytes).unwrap();
         assert_eq!((decoded.width(), decoded.height()), dimensions);
     }
     let original = call_fs(&state, &format!("id={id}&action=preview"), &[]).await;
@@ -1055,7 +1055,7 @@ async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
     let (_root, core, state, key) = test_state();
     let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("transparent.png");
-    image::RgbaImage::from_pixel(1200, 900, image::Rgba([40, 90, 150, 128]))
+    plain_libs::image::RgbaImage::from_pixel(1200, 900, plain_libs::image::Rgba([40, 90, 150, 128]))
         .save(&path)
         .unwrap();
     let id = file_id(&key, path.to_str().unwrap());
@@ -1066,7 +1066,7 @@ async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
         assert_eq!(first.headers()[header::CONTENT_TYPE], "image/png");
         let etag = first.headers()[header::ETAG].to_str().unwrap().to_owned();
         let bytes = body_bytes(first).await;
-        let decoded = image::load_from_memory(&bytes).unwrap().into_rgba8();
+        let decoded = plain_libs::image::load_from_memory(&bytes).unwrap().into_rgba8();
         assert_eq!(decoded.dimensions(), dimensions);
         let pixel = decoded.get_pixel(dimensions.0 / 2, dimensions.1 / 2);
         assert_eq!(pixel[3], 128);
@@ -1110,7 +1110,7 @@ async fn fs_tiff_avif_heic_and_heif_share_thumbnails_preserve_alpha_and_download
                 .unwrap()
                 .to_owned();
             let bytes = body_bytes(response).await;
-            let pixels = image::load_from_memory(&bytes).unwrap().into_rgba8();
+            let pixels = plain_libs::image::load_from_memory(&bytes).unwrap().into_rgba8();
             assert_eq!(pixels.dimensions(), (64, 48), "{extension} {size}");
             assert!(pixels.pixels().any(|p| p[3] < 255), "{extension}");
             assert_eq!(body_bytes(call_fs(&state, &query, &[]).await).await, bytes);
@@ -1127,7 +1127,7 @@ async fn fs_tiff_avif_heic_and_heif_share_thumbnails_preserve_alpha_and_download
             assert_eq!(body_bytes(full).await, original);
         } else {
             assert_eq!(full.headers()[header::CONTENT_TYPE], "image/png");
-            let pixels = image::load_from_memory(&body_bytes(full).await)
+            let pixels = plain_libs::image::load_from_memory(&body_bytes(full).await)
                 .unwrap()
                 .into_rgba8();
             assert_eq!(pixels.dimensions(), (64, 48));
@@ -1163,8 +1163,8 @@ async fn fs_small_browser_images_keep_dimensions_and_original_bytes_for_both_siz
         ("webp", "image/webp"),
     ] {
         let path = directory.path().join(format!("small.{extension}"));
-        image::RgbImage::from_fn(64, 48, |x, y| {
-            image::Rgb([(x * 3) as u8, (y * 4) as u8, 90])
+        plain_libs::image::RgbImage::from_fn(64, 48, |x, y| {
+            plain_libs::image::Rgb([(x * 3) as u8, (y * 4) as u8, 90])
         })
         .save(&path)
         .unwrap();
@@ -1177,7 +1177,7 @@ async fn fs_small_browser_images_keep_dimensions_and_original_bytes_for_both_siz
             assert_eq!(response.headers()[header::CONTENT_TYPE], mime);
             let bytes = body_bytes(response).await;
             assert_eq!(bytes, original, "{extension} {size}");
-            let pixels = image::load_from_memory(&bytes).unwrap();
+            let pixels = plain_libs::image::load_from_memory(&bytes).unwrap();
             assert_eq!(
                 (pixels.width(), pixels.height()),
                 (64, 48),
@@ -1211,7 +1211,7 @@ async fn fs_large_still_formats_preserve_aspect_ratio_for_both_preview_sizes() {
             let response =
                 call_fs(&state, &format!("id={id}&action=preview&size={size}"), &[]).await;
             assert_eq!(response.status(), StatusCode::OK, "{extension} {size}");
-            let pixels = image::load_from_memory(&body_bytes(response).await).unwrap();
+            let pixels = plain_libs::image::load_from_memory(&body_bytes(response).await).unwrap();
             assert_eq!(
                 (pixels.width(), pixels.height()),
                 expected,

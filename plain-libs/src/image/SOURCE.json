@@ -1,0 +1,13 @@
+{
+  "package": "image",
+  "version": "0.25.10",
+  "repository": "https://github.com/image-rs/image",
+  "revision": "76e57184f22772dad1138e96954e57945406b15e",
+  "archive_sha256": "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104",
+  "retained_features": [
+    "gif",
+    "jpeg",
+    "png",
+    "webp"
+  ]
+}

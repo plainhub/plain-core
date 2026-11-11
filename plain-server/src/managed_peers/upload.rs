@@ -1,6 +1,6 @@
 use super::{GRAPHQL_LIMIT, PeerRoute};
 use crate::server::ServerState;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use axum::{
     body::Bytes,
     http::{StatusCode, header},
@@ -50,7 +50,7 @@ pub(crate) fn request(
     let filename = filename.replace('"', "\\\"");
     let boundary = plain_libs::utils::uuid::Uuid::new_v4().to_string();
     let encrypted = http_request::encrypt(&route.key, &format!("/{path}"), metadata)
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
     let mut prefix =
         format!("--{boundary}\r\nContent-Disposition: form-data; name=\"info\"\r\n\r\n")
             .into_bytes();
@@ -84,8 +84,8 @@ pub(crate) fn request(
         let mut stop = state.stop.clone();
         tokio::select! {
             biased;
-            _ = stop.wait_for(|value| *value) => anyhow::bail!("Server stopped"),
-            _ = wait_for_stall(updates) => anyhow::bail!("connection_timeout"),
+            _ = stop.wait_for(|value| *value) => plain_libs::anyhow::bail!("Server stopped"),
+            _ = wait_for_stall(updates) => plain_libs::anyhow::bail!("connection_timeout"),
             response = async {
                 route.check_current(&state)?;
                 let response = outgoing.send().await?;

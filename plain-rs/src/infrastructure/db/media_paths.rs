@@ -133,19 +133,19 @@ impl MediaPaths {
         }
     }
 
-    fn resolve(&self, id: &str) -> anyhow::Result<String> {
+    fn resolve(&self, id: &str) -> plain_libs::anyhow::Result<String> {
         let view = self.snapshot.read().unwrap();
         if let Some(error) = &view.error {
-            anyhow::bail!("{error}");
+            plain_libs::anyhow::bail!("{error}");
         }
         let (volume, path) = view
             .files
             .get(id)
-            .ok_or_else(|| anyhow::anyhow!("Media unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Media unavailable"))?;
         let root = view
             .volumes
             .get(volume)
-            .ok_or_else(|| anyhow::anyhow!("Media unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Media unavailable"))?;
         Ok(if root.ends_with('/') {
             format!("{root}{path}")
         } else {
@@ -155,7 +155,7 @@ impl MediaPaths {
 }
 
 impl super::Db {
-    pub(crate) fn media_resource_path(&self, id: &str) -> anyhow::Result<String> {
+    pub(crate) fn media_resource_path(&self, id: &str) -> plain_libs::anyhow::Result<String> {
         self.1.media_paths.resolve(id)
     }
 }

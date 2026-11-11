@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 
-use quick_xml::events::{BytesStart, Event};
+use plain_libs::xml::events::{BytesStart, Event};
 
 use crate::model::ResourceRole;
 

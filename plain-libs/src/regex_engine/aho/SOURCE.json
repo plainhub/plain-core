@@ -1,0 +1,12 @@
+{
+  "package": "aho-corasick",
+  "version": "1.1.5",
+  "repository": "https://github.com/BurntSushi/aho-corasick",
+  "revision": "5178060ce73d91938f8582d0360e3be031380440",
+  "archive_sha256": "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba",
+  "retained_features": [
+    "default",
+    "perf-literal",
+    "std"
+  ]
+}

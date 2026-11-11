@@ -164,14 +164,14 @@ fn deck_parts(shapes: &str, deck: DeckParts) -> Vec<u8> {
     } else {
         vec![("ppt/tableStyles.xml", table_styles_part.as_bytes())]
     };
-    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let mut zip = plain_libs::zip::ZipWriter::new(Cursor::new(Vec::new()));
     for (name, body) in parts {
-        zip.start_file(name, zip::write::SimpleFileOptions::default())
+        zip.start_file(name, plain_libs::zip::write::SimpleFileOptions::default())
             .unwrap();
         zip.write_all(body.as_bytes()).unwrap();
     }
     for (name, body) in extra.iter().chain(&table_styles_parts) {
-        zip.start_file(*name, zip::write::SimpleFileOptions::default())
+        zip.start_file(*name, plain_libs::zip::write::SimpleFileOptions::default())
             .unwrap();
         zip.write_all(body).unwrap();
     }

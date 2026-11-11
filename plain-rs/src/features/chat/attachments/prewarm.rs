@@ -1,7 +1,7 @@
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::chat_store::peers;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -141,7 +141,7 @@ pub async fn run<D: Driver>(
     }
     let scan = tokio::time::timeout(Duration::from_secs(120), driver.discover(id)).await;
     let Some(mut value) =
-        scan.map_err(|_| anyhow::anyhow!("Peer prewarm discovery timed out"))??
+        scan.map_err(|_| plain_libs::anyhow::anyhow!("Peer prewarm discovery timed out"))??
     else {
         return Ok(None);
     };
@@ -157,7 +157,7 @@ pub async fn run<D: Driver>(
         }
         let started = tokio::time::timeout(Duration::from_secs(20), driver.start_aware(id))
             .await
-            .map_err(|_| anyhow::anyhow!("Peer prewarm start timed out"))??;
+            .map_err(|_| plain_libs::anyhow::anyhow!("Peer prewarm start timed out"))??;
         if !unchanged(db, &claim, &peer)? {
             return Ok(None);
         }

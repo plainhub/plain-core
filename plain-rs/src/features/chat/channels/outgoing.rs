@@ -5,7 +5,7 @@ use crate::features::chat::enums::ChannelSystemMessageType as Type;
 use crate::features::chat::enums::DeviceType;
 use crate::infrastructure::db::DChannel;
 use crate::infrastructure::db::Db;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use plain_libs::crypto::ed25519_sign;
 use plain_libs::utils::base64::base64_encode;
 
@@ -41,7 +41,7 @@ pub fn build(
             }
             let members: Vec<ChannelMember> = serde_json::from_str(&channel.members)?;
             let member_peers = db
-                .ok_or_else(|| anyhow::anyhow!("Missing channel database"))?
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing channel database"))?
                 .with_conn(|c| -> Result<Vec<MemberPeerInfo>> {
                     let mut peers = vec![MemberPeerInfo {
                         id: actor.into(),

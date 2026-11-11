@@ -1,6 +1,6 @@
 use super::{caller, current, decode_key};
 use crate::server::ServerState;
-use anyhow::{Result, anyhow, ensure};
+use plain_libs::anyhow::{Result, anyhow, ensure};
 use axum::{
     body::Body,
     extract::{FromRequestParts, Query, Request},
@@ -47,7 +47,7 @@ fn pairing_target(state: &ServerState, target: &str) -> Result<PairingTarget, St
     }
     let peer = peers::get(&state.db, target).map_err(|_| StatusCode::BAD_GATEWAY)?;
     let base = if let Some(peer) = &peer {
-        http_client::Url::parse(&peer_address::address(peer).base_url).map_err(anyhow::Error::from)
+        http_client::Url::parse(&peer_address::address(peer).base_url).map_err(plain_libs::anyhow::Error::from)
     } else {
         plain_rs::features::services::discovery::pairing_attempts::nearby_management_address(
             state, target,
@@ -96,7 +96,7 @@ pub(super) async fn auth(state: ServerState, target: String, request: Request) -
                     &binding,
                 )
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
                 current(&state, &session)?;
                 let target = pairing_target(&state, &target)
                     .map_err(|_| anyhow!("Pairing device unavailable"))?;
@@ -149,7 +149,7 @@ pub(super) async fn auth(state: ServerState, target: String, request: Request) -
                         None => break,
                     }
                 }
-                Ok::<_, anyhow::Error>(())
+                Ok::<_, plain_libs::anyhow::Error>(())
             }
             .await;
             if result.is_err() {

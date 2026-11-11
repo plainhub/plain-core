@@ -85,7 +85,7 @@ fn every_quality_preserves_sampling_and_odd_image_edges() {
         )
         .unwrap();
         assert_eq!(sampling(&bytes), if quality < 90 { 0x22 } else { 0x11 });
-        let mut decoder = jpeg_decoder::Decoder::new(bytes.as_slice());
+        let mut decoder = crate::jpeg::Decoder::new(bytes.as_slice());
         let decoded = decoder.decode().unwrap();
         let info = decoder.info().unwrap();
         assert_eq!((info.width, info.height), (width as u16, height as u16));
@@ -108,7 +108,7 @@ fn single_pixels_and_constant_colors_have_no_edge_contamination() {
             let rgb = color.repeat(w * h);
             for quality in [75, 89] {
                 let bytes = encode(&rgb, w as u16, h as u16, quality).unwrap();
-                let decoded = image::load_from_memory(&bytes).unwrap().to_rgb8();
+                let decoded = crate::image::load_from_memory(&bytes).unwrap().to_rgb8();
                 let error = rgb
                     .iter()
                     .zip(decoded.as_raw())
@@ -128,16 +128,16 @@ fn full_resolution_output_agrees_with_existing_encoder() {
         .collect::<Vec<_>>();
     for quality in [90, 95, 100] {
         let mut reference = Vec::new();
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut reference, quality)
-            .encode(&rgb, 32, 24, image::ExtendedColorType::Rgb8)
+        crate::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut reference, quality)
+            .encode(&rgb, 32, 24, crate::image::ExtendedColorType::Rgb8)
             .unwrap();
         let output = super::super::encode_jpeg(
             crate::media::thumbnails::scale::Bitmap::new_rgb(rgb.clone(), 32, 24),
             quality,
         )
         .unwrap();
-        let expected = image::load_from_memory(&reference).unwrap().to_rgb8();
-        let actual = image::load_from_memory(&output).unwrap().to_rgb8();
+        let expected = crate::image::load_from_memory(&reference).unwrap().to_rgb8();
+        let actual = crate::image::load_from_memory(&output).unwrap().to_rgb8();
         let max = expected
             .as_raw()
             .iter()

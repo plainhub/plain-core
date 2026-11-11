@@ -1,0 +1,8 @@
+{
+  "package": "quick-xml-0.42.0",
+  "repository": "https://github.com/tafia/quick-xml",
+  "revision": "36a2c52a4f6c90878c3f60c3c3b5c62efaef28a9",
+  "scope": "Synchronous document XML pull reading, namespaces, events and entity/attribute processing; no writer, serde or async APIs",
+  "security_updates": "Review upstream advisories and changes to retained parser/decoder paths when updating dependencies.",
+  "archive_sha256": "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
+}

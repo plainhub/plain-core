@@ -1,5 +1,5 @@
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use plain_libs::protocols::http_client;
 use serde_json::Value;
 use std::time::Duration;
@@ -65,7 +65,7 @@ pub async fn exchange(
 ) -> Result<Vec<u8>> {
     let encrypted =
         crate::infrastructure::transport::http_request::encrypt(key, "/graphql", request)
-            .map_err(|_| anyhow::anyhow!("invalid_session"))?;
+            .map_err(|_| plain_libs::anyhow::anyhow!("invalid_session"))?;
     let context =
         crate::infrastructure::transport::http_response::Context::new("/graphql", &encrypted);
     let response = outgoing
@@ -82,5 +82,5 @@ pub async fn exchange(
     let bytes = crate::features::services::peers::peer_lan::limited(response, limit).await?;
     context
         .decrypt(key, &bytes)
-        .ok_or_else(|| anyhow::anyhow!("invalid_session"))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_session"))
 }

@@ -1,0 +1,18 @@
+{
+  "package": "regex-syntax",
+  "version": "0.8.11",
+  "repository": "https://github.com/rust-lang/regex",
+  "revision": "140167995737fa11dfe11b8af8b9aa143b790b4e",
+  "archive_sha256": "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4",
+  "retained_features": [
+    "std",
+    "unicode",
+    "unicode-age",
+    "unicode-bool",
+    "unicode-case",
+    "unicode-gencat",
+    "unicode-perl",
+    "unicode-script",
+    "unicode-segment"
+  ]
+}

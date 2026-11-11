@@ -37,7 +37,7 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
     )
     .await
     .unwrap();
-    let mut zip = zip::ZipArchive::new(std::fs::File::open(&archive).unwrap()).unwrap();
+    let mut zip = plain_libs::zip::ZipArchive::new(std::fs::File::open(&archive).unwrap()).unwrap();
     let names: Vec<_> = zip
         .file_names()
         .map(|name| name.unwrap().into_owned())
@@ -48,8 +48,13 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
         && !name.ends_with("-wal")
         && !name.ends_with("-shm")));
     let restored = plain_libs::temporary::tempdir().unwrap();
-    zip.extract(restored.path()).unwrap();
-    let snapshot = rusqlite::Connection::open(restored.path().join("files/plain.db")).unwrap();
+    let snapshot_path = restored.path().join("snapshot.db");
+    std::io::copy(
+        &mut zip.by_name("files/plain.db").unwrap(),
+        &mut std::fs::File::create(&snapshot_path).unwrap(),
+    )
+    .unwrap();
+    let snapshot = rusqlite::Connection::open(&snapshot_path).unwrap();
     assert_eq!(
         snapshot
             .query_row("SELECT value FROM backup_values", [], |row| row
@@ -57,7 +62,7 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
             .unwrap(),
         "committed"
     );
-    let kv = plain_libs::kv::Db::open(&restored.path().join("files/plain.db")).unwrap();
+    let kv = plain_libs::kv::Db::open(&snapshot_path).unwrap();
     assert_eq!(
         kv.get("state").unwrap().as_deref(),
         Some("中文 backup state")
@@ -73,10 +78,12 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
             expected
         );
     }
-    assert_eq!(
-        std::fs::read(restored.path().join("files/files/aa/bb/blob.bin")).unwrap(),
-        [1u8, 2, 255]
-    );
+    let mut attachment = Vec::new();
+    zip.by_name("files/files/aa/bb/blob.bin")
+        .unwrap()
+        .read_to_end(&mut attachment)
+        .unwrap();
+    assert_eq!(attachment, [1u8, 2, 255]);
 }
 #[test]
 fn cancellation_removes_staging_and_keeps_source_data() {

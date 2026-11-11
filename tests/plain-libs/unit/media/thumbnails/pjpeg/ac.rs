@@ -75,7 +75,7 @@ fn serial_skip(table: &AcTable, bits: &mut Bits) -> Result<()> {
         }
         let magnitude = symbol & 15;
         bits.receive(u32::from(magnitude))
-            .ok_or_else(|| anyhow::anyhow!("truncated AC"))?;
+            .ok_or_else(|| crate::anyhow::anyhow!("truncated AC"))?;
         coefficient += if symbol == 0xf0 {
             16
         } else {

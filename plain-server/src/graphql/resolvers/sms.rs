@@ -219,7 +219,7 @@ impl SmsMutation {
         date: Option<plain_rs::infrastructure::types::Instant>,
     ) -> plain_graphql::Result<bool> {
         let date = if let Some(date) = date {
-            date.0.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+            date.0.to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
         } else {
             let receipt = sms_query::execute(
                 ctx.data_unchecked::<Arc<Db>>(),
@@ -232,7 +232,7 @@ impl SmsMutation {
                 .as_str()
                 .map(str::to_owned)
                 .unwrap_or_else(|| {
-                    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+                    plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
                 })
         };
         sms_state::archive(ctx.data_unchecked::<Arc<Db>>(), id.as_str(), &date)

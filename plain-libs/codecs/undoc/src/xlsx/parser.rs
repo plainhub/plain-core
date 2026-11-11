@@ -102,7 +102,7 @@ impl XlsxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Empty(e)) | Ok(quick_xml::events::Event::Start(e))
+                Ok(plain_libs::xml::events::Event::Empty(e)) | Ok(plain_libs::xml::events::Event::Start(e))
                     if e.name().local_name().as_ref() == "sheet" =>
                 {
                     let mut name = String::new();
@@ -126,7 +126,7 @@ impl XlsxParser {
                         sheets.push(SheetInfo { name, rel_id });
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }
@@ -306,8 +306,8 @@ impl XlsxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Empty(ref e))
-                | Ok(quick_xml::events::Event::Start(ref e))
+                Ok(plain_libs::xml::events::Event::Empty(ref e))
+                | Ok(plain_libs::xml::events::Event::Start(ref e))
                     if e.name().local_name().as_ref() == "mergeCell" =>
                 {
                     for attr in e.attributes().flatten() {
@@ -329,7 +329,7 @@ impl XlsxParser {
                         }
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(_) => break,
                 _ => {}
             }
@@ -406,7 +406,7 @@ impl XlsxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     match e.name().local_name().as_ref() {
                         "row" => {
                             in_row = true;
@@ -442,7 +442,7 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) => {
                     match e.name().local_name().as_ref() {
                         "c" if in_row => {
                             current_cell_type = None;
@@ -486,17 +486,17 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Text(ref e)) if in_value => {
+                Ok(plain_libs::xml::events::Event::Text(ref e)) if in_value => {
                     let text = crate::decode::decode_text_lossy(e);
                     current_cell_value.push_str(&text);
                 }
                 // quick-xml 0.40+ splits entity refs out of Text; without this
                 // arm a cell value like "A &amp; B" or an in-cell "&#10;" break
                 // would silently lose the entity.
-                Ok(quick_xml::events::Event::GeneralRef(ref e)) if in_value => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if in_value => {
                     current_cell_value.push_str(&resolve_general_ref(e));
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => match e.name().local_name().as_ref() {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => match e.name().local_name().as_ref() {
                     "row" => {
                         sheet.end_row();
                         in_row = false;
@@ -539,7 +539,7 @@ impl XlsxParser {
                     }
                     _ => {}
                 },
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }
@@ -550,7 +550,7 @@ impl XlsxParser {
     }
 
     fn parse_cell_attributes(
-        e: &quick_xml::events::BytesStart<'_>,
+        e: &plain_libs::xml::events::BytesStart<'_>,
         current_cell_type: &mut Option<String>,
         current_cell_ref: &mut Option<String>,
         current_cell_style: &mut Option<usize>,
@@ -690,7 +690,7 @@ impl XlsxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     match e.name().local_name().as_ref() {
                         "hyperlinks" => {
                             in_hyperlinks = true;
@@ -701,17 +701,17 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e))
+                Ok(plain_libs::xml::events::Event::Empty(ref e))
                     if in_hyperlinks && e.name().local_name().as_ref() == "hyperlink" =>
                 {
                     Self::collect_hyperlink_attrs(e, sheet_rels, &mut hyperlinks);
                 }
-                Ok(quick_xml::events::Event::End(ref e))
+                Ok(plain_libs::xml::events::Event::End(ref e))
                     if e.name().local_name().as_ref() == "hyperlinks" =>
                 {
                     break; // Done with hyperlinks section
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(_) => break,
                 _ => {}
             }
@@ -723,7 +723,7 @@ impl XlsxParser {
 
     /// Extract cell ref and r:id from a `<hyperlink>` element and insert into map.
     fn collect_hyperlink_attrs(
-        e: &quick_xml::events::BytesStart<'_>,
+        e: &plain_libs::xml::events::BytesStart<'_>,
         sheet_rels: &HashMap<String, (String, String)>,
         hyperlinks: &mut HashMap<String, String>,
     ) {
@@ -781,7 +781,7 @@ impl XlsxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     let local = e.name().local_name();
                     match local.as_ref() {
                         "comment" => {
@@ -811,13 +811,13 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Text(ref e)) if in_t => {
+                Ok(plain_libs::xml::events::Event::Text(ref e)) if in_t => {
                     current_text.push_str(&crate::decode::decode_text_lossy(e));
                 }
-                Ok(quick_xml::events::Event::GeneralRef(ref e)) if in_t => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if in_t => {
                     current_text.push_str(&resolve_general_ref(e));
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => {
                     let local = e.name().local_name();
                     match local.as_ref() {
                         "comment" => {
@@ -839,7 +839,7 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(_) => break,
                 _ => {}
             }
@@ -1030,8 +1030,8 @@ impl XlsxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e))
-                | Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e))
+                | Ok(plain_libs::xml::events::Event::Empty(ref e)) => {
                     match e.name().local_name().as_ref() {
                         "metadataType" => {
                             for attr in e.attributes().flatten() {
@@ -1073,12 +1073,12 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => match e.name().local_name().as_ref() {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => match e.name().local_name().as_ref() {
                     "futureMetadata" => in_future_xlrichvalue = false,
                     "valueMetadata" => in_value_metadata = false,
                     _ => {}
                 },
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(Error::xml_parse_with_context(e.to_string(), "metadata")),
                 _ => {}
             }
@@ -1117,8 +1117,8 @@ impl XlsxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e))
-                | Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e))
+                | Ok(plain_libs::xml::events::Event::Empty(ref e)) => {
                     match e.name().local_name().as_ref() {
                         "s" => {
                             structures.push(None);
@@ -1139,7 +1139,7 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => {
                     return Err(Error::xml_parse_with_context(
                         e.to_string(),
@@ -1168,7 +1168,7 @@ impl XlsxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     match e.name().local_name().as_ref() {
                         "rv" => {
                             let mut s = 0usize;
@@ -1188,22 +1188,22 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Text(ref e)) if in_v => {
+                Ok(plain_libs::xml::events::Event::Text(ref e)) if in_v => {
                     if let Some(slot) = values.last_mut().and_then(|(_, s)| s.last_mut()) {
                         slot.push_str(&crate::decode::decode_text_lossy(e));
                     }
                 }
-                Ok(quick_xml::events::Event::GeneralRef(ref e)) if in_v => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(ref e)) if in_v => {
                     if let Some(slot) = values.last_mut().and_then(|(_, s)| s.last_mut()) {
                         slot.push_str(&resolve_general_ref(e));
                     }
                 }
-                Ok(quick_xml::events::Event::End(ref e))
+                Ok(plain_libs::xml::events::Event::End(ref e))
                     if e.name().local_name().as_ref() == "v" =>
                 {
                     in_v = false;
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(Error::xml_parse_with_context(e.to_string(), "rdrichvalue")),
                 _ => {}
             }
@@ -1222,8 +1222,8 @@ impl XlsxParser {
         let mut ids = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e))
-                | Ok(quick_xml::events::Event::Empty(ref e))
+                Ok(plain_libs::xml::events::Event::Start(ref e))
+                | Ok(plain_libs::xml::events::Event::Empty(ref e))
                     if e.name().local_name().as_ref() == "rel" =>
                 {
                     for attr in e.attributes().flatten() {
@@ -1232,7 +1232,7 @@ impl XlsxParser {
                         }
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(Error::xml_parse_with_context(e.to_string(), "richValueRel")),
                 _ => {}
             }
@@ -1337,7 +1337,7 @@ impl XlsxParser {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Start(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         "pic" | "sp" if !in_pic => {
@@ -1393,7 +1393,7 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Empty(ref e)) => {
+                Ok(plain_libs::xml::events::Event::Empty(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         "cNvPr" if in_nvpicpr => {
@@ -1430,7 +1430,7 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::End(ref e)) => {
+                Ok(plain_libs::xml::events::Event::End(ref e)) => {
                     let local_name = e.name().local_name();
                     match local_name.as_ref() {
                         "pic" | "sp" if in_pic && (local_name.as_ref() == "sp") == is_shape => {
@@ -1458,7 +1458,7 @@ impl XlsxParser {
                         _ => {}
                     }
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }
@@ -1561,7 +1561,7 @@ fn sheet_picture_rel(xml: &str) -> Option<String> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Empty(e)) | Ok(quick_xml::events::Event::Start(e))
+            Ok(plain_libs::xml::events::Event::Empty(e)) | Ok(plain_libs::xml::events::Event::Start(e))
                 if e.name().local_name().as_ref() == "picture" =>
             {
                 return e
@@ -1570,7 +1570,7 @@ fn sheet_picture_rel(xml: &str) -> Option<String> {
                     .find(|a| a.key.local_name().as_ref() == "id")
                     .map(|a| crate::decode::attr_value(&a));
             }
-            Ok(quick_xml::events::Event::Eof) | Err(_) => return None,
+            Ok(plain_libs::xml::events::Event::Eof) | Err(_) => return None,
             _ => {}
         }
         buf.clear();

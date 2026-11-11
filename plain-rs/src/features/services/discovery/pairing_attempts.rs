@@ -2,7 +2,7 @@ use crate::features::discovery::nearby_devices::DiscoveryMethod;
 use crate::features::services::discovery::pairing_runtime;
 use crate::features::services::discovery::pairing_runtime::event;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use plain_libs::protocols::http_client;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -162,7 +162,7 @@ impl Attempts {
             .filter(|a| {
                 a.state.mode == Mode::Manage && a.state.phase == PairingPhase::TrustRequired
             })
-            .ok_or_else(|| anyhow::anyhow!("No pending identity confirmation"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("No pending identity confirmation"))?;
         attempt.trusted.send_replace(true);
         Ok(())
     }
@@ -172,7 +172,7 @@ impl Attempts {
             .unwrap()
             .get(generation)
             .map(|a| a.trusted.subscribe())
-            .ok_or_else(|| anyhow::anyhow!("Pairing expired"))
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Pairing expired"))
     }
     pub fn set_identity_changed(&self, state: &CoreRuntime, generation: &str, changed: bool) {
         let mut attempts = self.0.lock().unwrap();
@@ -234,7 +234,7 @@ impl Attempts {
         let started = attempts
             .get(generation)
             .filter(|a| !a.state.terminal())
-            .ok_or_else(|| anyhow::anyhow!("cancelled"))?
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("cancelled"))?
             .started;
         ensure!(
             !attempts
@@ -285,7 +285,7 @@ impl Attempts {
         let mut attempts = self.0.lock().unwrap();
         let a = attempts
             .get_mut(generation)
-            .ok_or_else(|| anyhow::anyhow!("Unknown pairing generation"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown pairing generation"))?;
         ensure!(
             a.state.mode == Mode::Manage && a.state.phase == PairingPhase::PasswordRequired,
             "Pairing is not waiting for a password"
@@ -298,7 +298,7 @@ impl Attempts {
         );
         a.password
             .try_send(password)
-            .map_err(|_| anyhow::anyhow!("Password already submitted"))?;
+            .map_err(|_| plain_libs::anyhow::anyhow!("Password already submitted"))?;
         a.state.phase = PairingPhase::Authenticating;
         a.updated = Instant::now();
         if let Some(state) = context {
@@ -369,7 +369,7 @@ pub async fn start(
             id.as_deref(),
             host.as_deref(),
             mode,
-            password.ok_or_else(|| anyhow::anyhow!("Password required"))?,
+            password.ok_or_else(|| plain_libs::anyhow::anyhow!("Password required"))?,
         );
     }
     ensure!(
@@ -466,8 +466,8 @@ pub async fn start(
         let result = tokio::select! { biased;
             _ = scope_closed => { let _ = cancel(&state, &generation).await; return; },
             _ = cancelled.changed() => return,
-            _ = stop.changed() => Err(anyhow::anyhow!("Core stopped")),
-            result = tokio::time::timeout(deadline, work) => result.unwrap_or_else(|_| Err(anyhow::anyhow!("Pairing timed out"))),
+            _ = stop.changed() => Err(plain_libs::anyhow::anyhow!("Core stopped")),
+            result = tokio::time::timeout(deadline, work) => result.unwrap_or_else(|_| Err(plain_libs::anyhow::anyhow!("Pairing timed out"))),
         };
         if let Err(error) = result {
             let _commit = state.pairing_runtime.commit.lock().unwrap();
@@ -505,7 +505,7 @@ pub fn nearby_management_address(state: &CoreRuntime, id: &str) -> Result<http_c
     );
     resolve(state, Some(id), None, Mode::Manage)?
         .url
-        .ok_or_else(|| anyhow::anyhow!("No management address available"))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("No management address available"))
 }
 
 fn resolve(
@@ -603,7 +603,7 @@ fn resolve(
             .as_ref()
             .map(|peer| peer.public_key.clone())
             .filter(|key| !key.is_empty())
-            .ok_or_else(|| anyhow::anyhow!("A trusted pairing QR is required"))?
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("A trusted pairing QR is required"))?
     } else {
         nearby
             .as_ref()

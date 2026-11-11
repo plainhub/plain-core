@@ -108,7 +108,7 @@ impl ChatHostMutation {
             targets,
             path,
             name,
-            expires_at.map(|time| time.0.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
+            expires_at.map(|time| time.0.to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)),
         )
         .await?
         .iter()

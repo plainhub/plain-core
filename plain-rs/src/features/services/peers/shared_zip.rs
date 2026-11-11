@@ -1,4 +1,4 @@
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde::Deserialize;
 use std::{
     collections::HashSet,
@@ -58,9 +58,9 @@ pub fn pack(
         .create_new(true)
         .open(&path)?;
     let temporary = Temporary(path);
-    let mut writer = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let mut writer = plain_libs::zip::ZipWriter::new(file);
+    let options = plain_libs::zip::write::SimpleFileOptions::default()
+        .compression_method(plain_libs::zip::CompressionMethod::Deflated);
     let mut buffer = vec![0; 64 * 1024];
     for item in items {
         let mut source = std::fs::File::open(item.source_path)?;

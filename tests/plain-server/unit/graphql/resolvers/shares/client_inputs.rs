@@ -15,9 +15,9 @@ fn shared_card_input_preserves_large_sizes_expiry_and_peer_identity() {
         item_count: Long(2),
         total_size: Long(9_000_000_000),
         expires_at: Some(Instant(
-            chrono::DateTime::parse_from_rfc3339("2030-01-01T00:00:00.123Z")
+            plain_libs::chrono::DateTime::parse_from_rfc3339("2030-01-01T00:00:00.123Z")
                 .unwrap()
-                .with_timezone(&chrono::Utc),
+                .with_timezone(&plain_libs::chrono::Utc),
         )),
     };
     let card: share_card::Card = input.try_into().unwrap();
@@ -127,9 +127,9 @@ fn typed_cards_match_the_previous_scalar_encoding_at_precision_and_integer_bound
         for size in [i64::MIN, -1, 0, 9_000_000_001, i64::MAX] {
             let expires = expiry.map(|value| {
                 Instant(
-                    chrono::DateTime::parse_from_rfc3339(value)
+                    plain_libs::chrono::DateTime::parse_from_rfc3339(value)
                         .unwrap()
-                        .with_timezone(&chrono::Utc),
+                        .with_timezone(&plain_libs::chrono::Utc),
                 )
             });
             let mut input = card(65535, expires);

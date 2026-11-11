@@ -1,10 +1,10 @@
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use plain_rs::infrastructure::platform::system::consts::AppPaths;
 
 #[cfg(target_os = "linux")]
 pub fn run(paths: &AppPaths) -> Result<()> {
     plain_rs::infrastructure::platform::linux::install::service::require_root()?;
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         std::env::var_os("PLAINAPP_DATA_DIR").is_none()
             && std::env::var_os("PLAINAPP_CACHE_DIR").is_none(),
         "System service installation requires default directories; unset PLAINAPP_DATA_DIR and PLAINAPP_CACHE_DIR before installing"
@@ -17,7 +17,7 @@ pub fn run(paths: &AppPaths) -> Result<()> {
 
 #[cfg(not(target_os = "linux"))]
 pub fn run(_paths: &AppPaths) -> Result<()> {
-    anyhow::bail!(
+    plain_libs::anyhow::bail!(
         "System service installation is available on Linux; use plainapp passwd and plainapp run on this platform"
     )
 }
@@ -34,7 +34,7 @@ fn prepare_password(paths: &AppPaths, prompt: impl FnOnce() -> Result<String>) -
         &paths.data_dir,
         &paths.cache_dir,
     )
-    .map_err(anyhow::Error::msg)?;
+    .map_err(plain_libs::anyhow::Error::msg)?;
     let prefs = Prefs::load(&prefs_path)?;
     security::bootstrap(&prefs)?;
     if security::password_credential(&prefs)?.is_none() {

@@ -1,4 +1,4 @@
-use anyhow::{Result, ensure};
+use crate::anyhow::{Result, ensure};
 use std::sync::{LazyLock, OnceLock};
 
 #[derive(Clone, Copy, Default)]
@@ -113,11 +113,11 @@ fn profile(quality: u8) -> Result<&'static Profile> {
         return Ok(profile);
     }
     let mut template = Vec::new();
-    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut template, quality).encode(
+    crate::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut template, quality).encode(
         &[0, 0, 0],
         1,
         1,
-        image::ExtendedColorType::Rgb8,
+        crate::image::ExtendedColorType::Rgb8,
     )?;
     let value = Profile::from_template(&template)?;
     let _ = slot.set(value);

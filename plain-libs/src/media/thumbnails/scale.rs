@@ -55,8 +55,8 @@ impl Bitmap {
 
     /// Convert a decoded `image`-crate image into a Bitmap without extra
     /// copies for the common RGB/RGBA layouts.
-    pub fn from_dynamic(img: image::DynamicImage) -> Self {
-        use image::DynamicImage;
+    pub fn from_dynamic(img: crate::image::DynamicImage) -> Self {
+        use crate::image::DynamicImage;
         match img {
             DynamicImage::ImageRgb8(b) => {
                 let (w, h) = (b.width(), b.height());

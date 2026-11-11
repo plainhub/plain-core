@@ -1,0 +1,10 @@
+{
+  "package": "rusty_h264-decoder",
+  "version": "0.16.0",
+  "repository": "https://github.com/remade-with-rust/rusty_h264",
+  "revision": "63b527c4019a6584eb30d8b181b62ba085c04fef",
+  "archive_sha256": "e0f4deb1a3a5e928cbaa1dff7db6bc46262c850aedeb75cb5aeab890494c18a5",
+  "retained_features": [
+    "std"
+  ]
+}

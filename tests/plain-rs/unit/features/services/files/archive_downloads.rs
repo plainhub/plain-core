@@ -50,9 +50,9 @@ fn zip_files_requests_default_every_field() {
 }
 
 fn write_archive(path: &Path, files: &[(&str, &[u8])]) {
-    let mut writer = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let mut writer = plain_libs::zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+    let options = plain_libs::zip::write::SimpleFileOptions::default()
+        .compression_method(plain_libs::zip::CompressionMethod::Deflated);
     for (name, body) in files {
         writer.start_file(*name, options).unwrap();
         writer.write_all(body).unwrap();

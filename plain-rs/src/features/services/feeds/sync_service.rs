@@ -161,12 +161,12 @@ impl SyncService {
             });
         }
     }
-    pub fn queue(self: &Arc<Self>, id: Option<String>) -> anyhow::Result<()> {
+    pub fn queue(self: &Arc<Self>, id: Option<String>) -> plain_libs::anyhow::Result<()> {
         let feeds = if let Some(id) = id.as_ref() {
             vec![
                 self.db
                     .feed_get(id)?
-                    .ok_or_else(|| anyhow::anyhow!("feed_not_found"))?,
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("feed_not_found"))?,
             ]
         } else {
             self.db.feeds_list()?
@@ -179,11 +179,11 @@ impl SyncService {
         feeds: Vec<crate::infrastructure::db::notes_feeds::FeedRow>,
         manual: bool,
         aggregate: bool,
-    ) -> anyhow::Result<()> {
+    ) -> plain_libs::anyhow::Result<()> {
         let mut starts = Vec::new();
         let mut subscriptions = Vec::new();
         let mut state = self.state.lock().unwrap();
-        anyhow::ensure!(!state.stopped, "Feed sync stopped");
+        plain_libs::anyhow::ensure!(!state.stopped, "Feed sync stopped");
         let feeds = feeds
             .into_iter()
             .filter(|feed| !state.deleting.contains(&feed.id))
@@ -192,7 +192,7 @@ impl SyncService {
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             !feeds
                 .iter()
                 .any(|feed| state.tasks.get(&feed.id).is_some_and(|task| task
@@ -364,11 +364,11 @@ impl SyncService {
         task.state.send_replace(state);
         self.notify(&[feed.id.clone()], &[]);
     }
-    pub async fn delete(self: &Arc<Self>, id: &str) -> anyhow::Result<bool> {
+    pub async fn delete(self: &Arc<Self>, id: &str) -> plain_libs::anyhow::Result<bool> {
         {
             let mut state = self.state.lock().unwrap();
-            anyhow::ensure!(!state.stopped, "Feed sync stopped");
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(!state.stopped, "Feed sync stopped");
+            plain_libs::anyhow::ensure!(
                 state.deleting.insert(id.to_owned()),
                 "Feed deletion is in progress"
             );

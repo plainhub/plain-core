@@ -67,7 +67,7 @@ async fn unsupported_video_returns_null_and_local_images_use_rust_without_host_m
             .is_null()
     );
     let image = directory.path().join("image.png");
-    image::RgbImage::new(3, 2).save(&image).unwrap();
+    plain_libs::image::RgbImage::new(3, 2).save(&image).unwrap();
     let facts = info
         .read(image.to_str().unwrap(), DataType::Image)
         .await
@@ -90,7 +90,7 @@ async fn sdk_images_with_supported_headers_skip_host_metadata_calls() {
     let (_generation, mut requests) = host.connect();
     let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("sample.png");
-    image::RgbImage::new(3, 2).save(&path).unwrap();
+    plain_libs::image::RgbImage::new(3, 2).save(&path).unwrap();
     let facts = Info::sdk(host)
         .read(path.to_str().unwrap(), DataType::Image)
         .await
@@ -206,7 +206,7 @@ async fn nonseekable_opaque_image_streams_are_prepared_in_rust_and_cleaned_after
     };
     let directory = plain_libs::temporary::tempdir().unwrap();
     let source = directory.path().join("image.png");
-    image::RgbImage::new(3, 2).save(&source).unwrap();
+    plain_libs::image::RgbImage::new(3, 2).save(&source).unwrap();
     let bytes = std::fs::read(source).unwrap();
     let length = bytes.len();
     let (read, mut write) = UnixStream::pair().unwrap();

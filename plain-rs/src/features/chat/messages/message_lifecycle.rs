@@ -15,7 +15,7 @@ use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::row_to_channel;
 use crate::infrastructure::db::row_to_chat;
 use crate::infrastructure::db::row_to_peer;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 use sha2::{Digest, Sha256};
 #[derive(serde::Serialize)]
@@ -48,7 +48,7 @@ pub fn forward_many(db: &Db, id: &str, targets: &[(String, String)]) -> Result<V
                 row.get(0)
             })
             .optional()?
-            .ok_or_else(|| anyhow::anyhow!("Message unavailable"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Message unavailable"))?;
         let rows = create_in_transaction(&tx, targets, &content)?;
         tx.commit()?;
         Ok(rows)
@@ -106,9 +106,9 @@ pub fn receive(
     db.with_conn(|c|->Result<Option<Received>>{
         let tx = c.unchecked_transaction()?;
 
-        let peer=tx.query_row(&format!("SELECT {PEER_COLS} FROM peers WHERE id=?1"),[from_id],row_to_peer).optional()?.ok_or_else(||anyhow::anyhow!("invalid peer"))?;
+        let peer=tx.query_row(&format!("SELECT {PEER_COLS} FROM peers WHERE id=?1"),[from_id],row_to_peer).optional()?.ok_or_else(||plain_libs::anyhow::anyhow!("invalid peer"))?;
         let channel=if channel_id.is_empty() {None}else {
-            let channel=tx.query_row(&format!("SELECT {CHANNEL_COLS} FROM chat_channels WHERE id=?1"),[channel_id],row_to_channel).optional()?.ok_or_else(||anyhow::anyhow!("Unknown channel"))?;
+            let channel=tx.query_row(&format!("SELECT {CHANNEL_COLS} FROM chat_channels WHERE id=?1"),[channel_id],row_to_channel).optional()?.ok_or_else(||plain_libs::anyhow::anyhow!("Unknown channel"))?;
             if channel.status!=ChannelStatus::Joined {bail!("Channel not joined");}
             if !channel.joined_member_ids().iter().any(|member| member == from_id) {
                 bail!("Sender is not a joined channel member");

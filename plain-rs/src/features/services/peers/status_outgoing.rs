@@ -4,7 +4,7 @@ use crate::features::services::peers::status_runtime::emit;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use std::{
@@ -189,14 +189,14 @@ impl Outgoing {
         let port = peer
             .port
             .filter(|port| *port > 0)
-            .ok_or_else(|| anyhow::anyhow!("No peer address"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("No peer address"))?;
         let permit = self.setup.clone().acquire_owned().await?;
         ensure!(self.current(epoch), "Status runtime stopped");
         let actor = state
             .prefs
             .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
             .filter(|id| !id.is_empty())
-            .ok_or_else(|| anyhow::anyhow!("Missing identity"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing identity"))?;
         let selected_ip = peer.best_ip();
         let url = plain_libs::utils::build_url::build_url(
             "wss",
@@ -210,7 +210,7 @@ impl Outgoing {
         )
         .await??;
         let current =
-            peers::get(&state.db, &peer.id)?.ok_or_else(|| anyhow::anyhow!("Peer removed"))?;
+            peers::get(&state.db, &peer.id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Peer removed"))?;
         ensure!(
             current.is_paired()
                 && fingerprint(&current) == fingerprint(peer)
@@ -235,10 +235,10 @@ impl Outgoing {
                     let challenge = value
                         .get("challenge")
                         .and_then(|value| value.as_str())
-                        .ok_or_else(|| anyhow::anyhow!("Status challenge missing"))?;
-                    Ok::<_, anyhow::Error>(challenge.to_owned())
+                        .ok_or_else(|| plain_libs::anyhow::anyhow!("Status challenge missing"))?;
+                    Ok::<_, plain_libs::anyhow::Error>(challenge.to_owned())
                 }
-                _ => Err(anyhow::anyhow!("Status challenge missing")),
+                _ => Err(plain_libs::anyhow::anyhow!("Status challenge missing")),
             }
         })
         .await??;
@@ -270,7 +270,7 @@ impl Outgoing {
                         tokio_tungstenite::tungstenite::Message::Ping(_)
                         | tokio_tungstenite::tungstenite::Message::Pong(_),
                     )) => {}
-                    _ => return Err(anyhow::anyhow!("Status acknowledgement missing")),
+                    _ => return Err(plain_libs::anyhow::anyhow!("Status acknowledgement missing")),
                 }
             }
         })
@@ -298,7 +298,7 @@ impl Outgoing {
         loop {
             tokio::select! {
                 _=tick.tick()=>ensure!(state.peer_status.connections.valid(&state.db,&lease) && peer.best_ip()==selected_ip && state.prefs.get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?.as_deref()==Some(&actor),"Peer changed"),
-                frame=socket.next()=>match frame { Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))|None|Some(Err(_))=>return Err(anyhow::anyhow!("Status connection closed")),_=>{} }
+                frame=socket.next()=>match frame { Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))|None|Some(Err(_))=>return Err(plain_libs::anyhow::anyhow!("Status connection closed")),_=>{} }
             }
         }
     }

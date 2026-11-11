@@ -30,10 +30,10 @@ pub async fn sample(host: &Host, features: &[AccessFeature]) -> Result<Vec<Acces
     Ok(granted)
 }
 
-pub async fn granted(host: &Host, features: &[AccessFeature]) -> anyhow::Result<bool> {
+pub async fn granted(host: &Host, features: &[AccessFeature]) -> plain_libs::anyhow::Result<bool> {
     Ok(sample(host, features)
         .await
-        .map_err(anyhow::Error::msg)?
+        .map_err(plain_libs::anyhow::Error::msg)?
         .len()
         == features.len())
 }

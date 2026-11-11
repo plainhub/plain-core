@@ -1,0 +1,11 @@
+{
+  "package": "byteorder-lite",
+  "version": "0.1.0",
+  "repository": "https://github.com/image-rs/byteorder-lite",
+  "revision": "7d44da06a48fe10d7e23efd9a932d18a7a2def63",
+  "archive_sha256": "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495",
+  "retained_features": [
+    "default",
+    "std"
+  ]
+}

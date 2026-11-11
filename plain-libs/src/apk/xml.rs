@@ -1,7 +1,7 @@
 use crate::apk::manifest::Pool;
 use crate::apk::manifest::u16_at;
 use crate::apk::manifest::u32_at;
-use anyhow::{Result, anyhow, ensure};
+use crate::anyhow::{Result, anyhow, ensure};
 use std::collections::HashSet;
 
 const OUTPUT_LIMIT: usize = 32 * 1024 * 1024;

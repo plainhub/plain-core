@@ -4,8 +4,8 @@ use std::io::Cursor;
 pub(super) mod fixtures;
 use fixtures::{Counted, fixture};
 
-fn decode(bytes: Vec<u8>) -> ImageResult<image::DynamicImage> {
-    image::DynamicImage::from_decoder(BmpDecoder::new(Cursor::new(bytes))?)
+fn decode(bytes: Vec<u8>) -> ImageResult<crate::image::DynamicImage> {
+    crate::image::DynamicImage::from_decoder(BmpDecoder::new(Cursor::new(bytes))?)
 }
 
 #[test]
@@ -232,7 +232,7 @@ async fn bmp_preview_cache_preserves_formats_alpha_and_real_file_extensions() {
                 .await
                 .unwrap()
                 .unwrap();
-        let preview = image::load_from_memory(&first).unwrap();
+        let preview = crate::image::load_from_memory(&first).unwrap();
         assert_eq!(
             (preview.width(), preview.height()),
             (original.width(), original.height()),
@@ -288,7 +288,7 @@ fn byte_rgb_decoding_reads_rows_instead_of_individual_pixels() {
         let decoder = BmpDecoder::new(&mut input).unwrap();
         let height = decoder.dimensions().1;
         let before = decoder.reader.reads;
-        image::DynamicImage::from_decoder(decoder).unwrap();
+        crate::image::DynamicImage::from_decoder(decoder).unwrap();
         assert_eq!(input.reads - before, height as usize, "{name}");
     }
 }

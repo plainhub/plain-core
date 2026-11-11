@@ -665,12 +665,12 @@ impl Db {
                     file_kind
                 };
                 let created = metadata.created().ok().map(|time| {
-                    chrono::DateTime::<chrono::Utc>::from(time)
-                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+                    plain_libs::chrono::DateTime::<plain_libs::chrono::Utc>::from(time)
+                        .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
                 });
                 let updated =
-                    chrono::DateTime::<chrono::Utc>::from(metadata.modified().map_err(sql_error)?)
-                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+                    plain_libs::chrono::DateTime::<plain_libs::chrono::Utc>::from(metadata.modified().map_err(sql_error)?)
+                        .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true);
                 let size = i64::try_from(metadata.len()).map_err(sql_error)?;
                 Ok((location, kind, identity, size, created, updated))
             })

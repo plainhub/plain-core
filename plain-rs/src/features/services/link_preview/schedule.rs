@@ -8,7 +8,7 @@ use std::{
 };
 use tokio::sync::{Notify, mpsc, watch};
 type Fetch = Arc<
-    dyn Fn(Db, PathBuf, String) -> BoxFuture<'static, anyhow::Result<Option<DChat>>> + Send + Sync,
+    dyn Fn(Db, PathBuf, String) -> BoxFuture<'static, plain_libs::anyhow::Result<Option<DChat>>> + Send + Sync,
 >;
 struct Pending {
     dirty: bool,

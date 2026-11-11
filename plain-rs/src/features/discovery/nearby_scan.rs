@@ -1,6 +1,6 @@
 use crate::features::discovery::nearby_wire::DiscoverReply;
 use crate::features::discovery::nearby_wire::discover_reply;
-use anyhow::{Result, bail, ensure};
+use plain_libs::anyhow::{Result, bail, ensure};
 use serde::Serialize;
 use std::{
     collections::HashMap,
@@ -77,7 +77,7 @@ impl Scans {
         let entries = state
             .scans
             .get_mut(id)
-            .ok_or_else(|| anyhow::anyhow!("Unknown BLE scan"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown BLE scan"))?;
         if let Some(entry) = entries.get_mut(client_id) {
             if let Some(reply) = &entry.reply {
                 if entry.last_emit.is_some_and(|last| {

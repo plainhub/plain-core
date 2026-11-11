@@ -3,7 +3,7 @@ use crate::features::services::peers::peer_transport::Pending;
 use crate::infrastructure::transport::router::Outcome;
 use crate::infrastructure::transport::router::TransportType;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use futures_util::StreamExt;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
@@ -22,12 +22,12 @@ pub async fn run(
     let file_id = task.file["uri"]
         .as_str()
         .and_then(|s| s.strip_prefix("fsid:"))
-        .ok_or_else(|| anyhow::anyhow!("Invalid remote attachment"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid remote attachment"))?;
     let mut available = vec![TransportType::Lan];
     available.extend(
         crate::features::services::peers::peer_transport::capabilities(&state.host)
             .await
-            .map_err(anyhow::Error::msg)?
+            .map_err(plain_libs::anyhow::Error::msg)?
             .into_iter()
             .filter(|kind| *kind != TransportType::Lan),
     );
@@ -39,7 +39,7 @@ pub async fn run(
         .begin_with_attempt(&current_peer, &available, attempt)?;
     let ticket = step
         .ticket
-        .ok_or_else(|| anyhow::anyhow!(step.error.unwrap_or_else(|| "No peer transport".into())))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!(step.error.unwrap_or_else(|| "No peer transport".into())))?;
     let mut pending = Pending {
         state,
         router: &state.transport,
@@ -50,7 +50,7 @@ pub async fn run(
         .prefs
         .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
         .filter(|v| !v.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("Missing peer actor"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing peer actor"))?;
     let mut file = open_ticket(path).await?;
     let mut bytes = 0;
     loop {
@@ -124,7 +124,7 @@ pub async fn run(
                         error,
                     ))) => Some(error),
                     Ok(Err(crate::features::services::peers::peer_lan::Failure::Fatal(error))) => {
-                        return Err(anyhow::anyhow!(error));
+                        return Err(plain_libs::anyhow::anyhow!(error));
                     }
                     Err(error) => Some(error.to_string()),
                 }
@@ -140,14 +140,14 @@ pub async fn run(
                         &peer,
                         crate::infrastructure::protocols::ble::Request::FileChunk {
                             client_id: crate::features::services::peers::peer_sdk::ble_actor(state)
-                                .map_err(|e| anyhow::anyhow!("{e:?}"))?,
+                                .map_err(|e| plain_libs::anyhow::anyhow!("{e:?}"))?,
                             file_id: file_id.into(),
                             offset,
                             length: 8192,
                         },
                     )
                     .await
-                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+                    .map_err(|e| plain_libs::anyhow::anyhow!("{e:?}"))?;
                     let (status, chunk) =
                         crate::infrastructure::protocols::ble::decode_response(&response)?;
                     if status == 416 {
@@ -177,7 +177,7 @@ pub async fn run(
                     .transport
                     .finish(&pending.ticket, Outcome::Unavailable { error })?;
                 pending.ticket = step.ticket.ok_or_else(|| {
-                    anyhow::anyhow!(step.error.unwrap_or_else(|| "Peer unavailable".into()))
+                    plain_libs::anyhow::anyhow!(step.error.unwrap_or_else(|| "Peer unavailable".into()))
                 })?;
             }
         }
@@ -199,7 +199,7 @@ async fn write(
 ) -> Result<()> {
     *bytes = bytes
         .checked_add(chunk.len() as u64)
-        .ok_or_else(|| anyhow::anyhow!("Attachment size overflow"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Attachment size overflow"))?;
     ensure!(*bytes <= task.total, "Attachment exceeds declared size");
     file.write_all(chunk).await?;
     ensure!(

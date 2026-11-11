@@ -10,7 +10,7 @@ impl Db {
         client_id: Option<&str>,
     ) -> rusqlite::Result<String> {
         let id = crate::features::record_id::generate();
-        let at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let at = plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true);
         self.with_conn(|conn| {
             conn.execute(
             "INSERT INTO audit_events(id,type,message,client_id,created_at) VALUES(?1,?2,?3,?4,?5)",

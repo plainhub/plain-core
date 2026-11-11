@@ -39,10 +39,10 @@ fn claim(
     key: &str,
     payload_hash: &str,
     now_ms: u64,
-) -> anyhow::Result<bool> {
+) -> plain_libs::anyhow::Result<bool> {
     receipts.retain(|receipt| now_ms.saturating_sub(receipt.created_at_ms) < RECEIPT_TTL_MS);
     if let Some(existing) = receipts.iter().find(|receipt| receipt.key == key) {
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             existing.payload_hash == payload_hash,
             "requestId was already used for a different SMS"
         );
@@ -70,13 +70,13 @@ pub async fn execute(
     host: &Host,
     sends: &crate::features::services::sms::send_runtime::Runtime,
     request: Request,
-) -> anyhow::Result<Value> {
-    anyhow::ensure!(!request.number.trim().is_empty(), "phone number is empty");
+) -> plain_libs::anyhow::Result<Value> {
+    plain_libs::anyhow::ensure!(!request.number.trim().is_empty(), "phone number is empty");
     let configured: Vec<String> = prefs.get_or(
         crate::features::prefs::pref_keys::API_PERMISSIONS,
         Vec::new(),
     );
-    anyhow::ensure!(permission_allowed(&configured), "no_permission");
+    plain_libs::anyhow::ensure!(permission_allowed(&configured), "no_permission");
     crate::features::services::capabilities::require(host, "TELEPHONY").await?;
     let request_id = request
         .client_request_id
@@ -119,9 +119,9 @@ pub async fn execute(
             json!({"body":request.body,"subscriptionId":request.subscription_id}),
         )
         .await
-        .map_err(anyhow::Error::msg)?,
+        .map_err(plain_libs::anyhow::Error::msg)?,
     )?;
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         !parts.is_empty() && parts.len() <= 1024,
         "Invalid SMS part count"
     );
@@ -132,11 +132,11 @@ pub async fn execute(
         Ok(Value::Bool(true)) => {}
         Ok(_) => {
             sends.cancel(&request_id)?;
-            anyhow::bail!("SMS dispatch was rejected");
+            plain_libs::anyhow::bail!("SMS dispatch was rejected");
         }
         Err(error) => {
             sends.cancel(&request_id)?;
-            anyhow::bail!(error);
+            plain_libs::anyhow::bail!(error);
         }
     }
     Ok(json!({"sent":true}))

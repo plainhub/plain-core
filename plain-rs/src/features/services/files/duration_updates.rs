@@ -40,8 +40,8 @@ impl Physical {
     }
     fn matches(&self, item: &Identity) -> bool {
         i64::try_from(self.size).ok() == Some(item.size_bytes)
-            && chrono::DateTime::<chrono::Utc>::from(self.modified).timestamp()
-                == chrono::DateTime::parse_from_rfc3339(&item.modified_at)
+            && plain_libs::chrono::DateTime::<plain_libs::chrono::Utc>::from(self.modified).timestamp()
+                == plain_libs::chrono::DateTime::parse_from_rfc3339(&item.modified_at)
                     .map(|time| time.timestamp())
                     .unwrap_or(i64::MIN)
     }
@@ -52,10 +52,10 @@ fn identity(kind: DataType, row: &Value) -> Option<Identity> {
         DataType::Video => "video",
         _ => return None,
     };
-    let modified_at = chrono::DateTime::parse_from_rfc3339(row["updatedAt"].as_str()?)
+    let modified_at = plain_libs::chrono::DateTime::parse_from_rfc3339(row["updatedAt"].as_str()?)
         .ok()?
-        .with_timezone(&chrono::Utc)
-        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        .with_timezone(&plain_libs::chrono::Utc)
+        .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Secs, true);
     let item = Identity {
         media_type: kind.into(),
         file_id: row["id"].as_str()?.into(),

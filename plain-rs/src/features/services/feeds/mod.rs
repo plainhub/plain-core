@@ -9,7 +9,7 @@ use crate::infrastructure::db::notes_feeds::FeedRow;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 use crate::infrastructure::events::WsEvent;
-use chrono::Utc;
+use plain_libs::chrono::Utc;
 use futures_util::StreamExt;
 use futures_util::stream;
 use plain_libs::utils::html_to_markdown::dom::Dom;
@@ -180,7 +180,7 @@ fn parse_date(text: &str, fallback: &str) -> String {
         .filter(|date| date.with_timezone(&Utc) < Utc::now())
         .map(|date| {
             date.with_timezone(&Utc)
-                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+                .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
         })
         .unwrap_or_else(|| fallback.to_string())
 }

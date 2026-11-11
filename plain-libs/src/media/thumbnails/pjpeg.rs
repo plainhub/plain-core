@@ -6,8 +6,9 @@ mod huffman;
 use ac::AcTable;
 use huffman::Codebook;
 
+use crate::jpeg::ycbcr_to_rgb;
 use crate::media::thumbnails::scale::Bitmap;
-use anyhow::{Result, bail};
+use crate::anyhow::{Result, bail};
 
 /// Matches the engine-wide decompression-bomb guard.
 const MAX_SOURCE_PIXELS: u64 = 300_000_000;
@@ -223,7 +224,7 @@ impl<'a> Decoder<'a> {
         let frame = self
             .frame
             .clone()
-            .ok_or_else(|| anyhow::anyhow!("no JPEG frame found"))?;
+            .ok_or_else(|| crate::anyhow::anyhow!("no JPEG frame found"))?;
         if !saw_dc_scan {
             bail!("no DC scan decoded");
         }
@@ -241,7 +242,7 @@ impl<'a> Decoder<'a> {
     fn seg(&self, start: usize, len: usize) -> Result<&'a [u8]> {
         self.data
             .get(start..start + len)
-            .ok_or_else(|| anyhow::anyhow!("segment exceeds buffer"))
+            .ok_or_else(|| crate::anyhow::anyhow!("segment exceeds buffer"))
     }
 
     /// Advance to the next marker. Returns `(marker, seg_start, seg_len)`
@@ -354,7 +355,7 @@ impl<'a> Decoder<'a> {
             *self
                 .quant
                 .get_mut(usize::from(tq))
-                .ok_or_else(|| anyhow::anyhow!("invalid quantization table id"))? =
+                .ok_or_else(|| crate::anyhow::anyhow!("invalid quantization table id"))? =
                 t.iter().map(|&v| u16::from(v)).collect();
             i += 65;
         }
@@ -381,14 +382,14 @@ impl<'a> Decoder<'a> {
                 *self
                     .dc_tables
                     .get_mut(usize::from(id))
-                    .ok_or_else(|| anyhow::anyhow!("invalid DC table id"))? = Some(table);
+                    .ok_or_else(|| crate::anyhow::anyhow!("invalid DC table id"))? = Some(table);
             }
             if class == 1 && self.sequential {
                 let table = AcTable::shared(&counts, &s[i + 17..i + 17 + total])?;
                 *self
                     .ac_tables
                     .get_mut(usize::from(id))
-                    .ok_or_else(|| anyhow::anyhow!("invalid AC table id"))? = Some(table);
+                    .ok_or_else(|| crate::anyhow::anyhow!("invalid AC table id"))? = Some(table);
             }
             i += 17 + total;
         }
@@ -419,7 +420,7 @@ impl<'a> Decoder<'a> {
                 .comps
                 .iter()
                 .position(|fc| fc.id == cid)
-                .ok_or_else(|| anyhow::anyhow!("SOS references unknown component {cid}"))?;
+                .ok_or_else(|| crate::anyhow::anyhow!("SOS references unknown component {cid}"))?;
             if comps.contains(&idx) {
                 bail!("duplicate component in scan");
             }
@@ -493,7 +494,7 @@ impl<'a> Decoder<'a> {
         let frame = self
             .frame
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("no frame"))?;
+            .ok_or_else(|| crate::anyhow::anyhow!("no frame"))?;
         let mut reader = Bits::new(self.data, self.pos);
         let dims: Vec<_> = (0..frame.comps.len())
             .map(|c| frame.block_dims(c))
@@ -515,7 +516,7 @@ impl<'a> Decoder<'a> {
             let table = |i: usize| {
                 tables[ctx.tables[i]]
                     .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("missing DC huffman table"))
+                    .ok_or_else(|| crate::anyhow::anyhow!("missing DC huffman table"))
             };
 
             decode_420_initial(
@@ -767,7 +768,7 @@ fn read_dc_block(
     if ctx.ah == 0 {
         let table = table
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("missing DC huffman table"))?;
+            .ok_or_else(|| crate::anyhow::anyhow!("missing DC huffman table"))?;
         let diff = table.difference(reader)?;
         *pred += diff;
         let v = *pred << ctx.al;
@@ -776,7 +777,7 @@ fn read_dc_block(
         // DC refinement: one raw correction bit per block.
         let bit = reader
             .receive(1)
-            .ok_or_else(|| anyhow::anyhow!("truncated DC refinement scan"))?
+            .ok_or_else(|| crate::anyhow::anyhow!("truncated DC refinement scan"))?
             as i16;
         Ok(bit << ctx.al)
     }
@@ -976,7 +977,7 @@ impl HuffTable {
         if prefix.bits != Prefix::LONG.bits {
             while bits.cnt < i32::from(prefix.bits) {
                 bits.refill()
-                    .ok_or_else(|| anyhow::anyhow!("truncated DC difference"))?;
+                    .ok_or_else(|| crate::anyhow::anyhow!("truncated DC difference"))?;
             }
             let value = prefix.difference(bits.cur.rotate_left(u32::from(prefix.bits)));
             bits.consume(u32::from(prefix.bits));
@@ -988,7 +989,7 @@ impl HuffTable {
         }
         let magnitude = bits
             .receive(u32::from(category))
-            .ok_or_else(|| anyhow::anyhow!("truncated DC diff"))?;
+            .ok_or_else(|| crate::anyhow::anyhow!("truncated DC diff"))?;
         Ok(extend(magnitude as i32, u32::from(category)))
     }
 }
@@ -1176,21 +1177,6 @@ fn extend(v: i32, n: u32) -> i32 {
     } else {
         v
     }
-}
-
-/// jpeg-decoder's scalar fixed-point YCbCr→RGB (offset 2^20, truncating shift).
-fn ycbcr_to_rgb(y: u8, cb: u8, cr: u8) -> (u8, u8, u8) {
-    const FP: i32 = 20;
-    const HALF: i32 = 1 << 19;
-    let f2f = |x: f32| -> i32 { (x * (1u32 << FP) as f32 + 0.5) as i32 };
-    let clamp = |v: i32| -> u8 { (v >> FP).clamp(0, 255) as u8 };
-    let (cb, cr) = (i32::from(cb) - 128, i32::from(cr) - 128);
-    let yf = i32::from(y) * (1 << FP) + HALF;
-    (
-        clamp(yf + f2f(1.40200) * cr),
-        clamp(yf - f2f(0.34414) * cb - f2f(0.71414) * cr),
-        clamp(yf + f2f(1.77200) * cb),
-    )
 }
 
 #[cfg(test)]

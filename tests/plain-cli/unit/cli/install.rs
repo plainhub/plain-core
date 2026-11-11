@@ -45,7 +45,7 @@ fn cancelled_or_invalid_installation_never_creates_a_password() {
         assert!(
             prepare_password(&paths, || match value {
                 Some(value) => Ok(value.into()),
-                None => anyhow::bail!("No interactive terminal"),
+                None => plain_libs::anyhow::bail!("No interactive terminal"),
             })
             .is_err()
         );

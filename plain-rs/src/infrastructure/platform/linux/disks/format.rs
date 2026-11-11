@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use plain_libs::anyhow::{Result, anyhow};
 use plain_libs::platform::linux::disks::blockdev::LsblkDevice;
 use plain_libs::platform::linux::disks::blockdev::run_lsblk;
 use std::io::Write;

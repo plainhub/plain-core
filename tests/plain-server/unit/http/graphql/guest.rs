@@ -40,7 +40,7 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
             &key,
             "POST",
             "/guest_graphql",
-            format!("{}|{nonce}|{query}", chrono::Utc::now().timestamp_millis()).as_bytes(),
+            format!("{}|{nonce}|{query}", plain_libs::chrono::Utc::now().timestamp_millis()).as_bytes(),
         )
         .unwrap()
     };

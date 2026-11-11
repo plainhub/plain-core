@@ -9,7 +9,7 @@ fn streaming_box_decode_matches_full_crop_and_box_pixels_in_both_row_orders() {
             for crop in [None, Some((11, 7)), Some((7, 11))] {
                 let bytes = expanded(name, 129, 67, top_down);
                 let full = Bitmap::from_dynamic(
-                    image::DynamicImage::from_decoder(
+                    crate::image::DynamicImage::from_decoder(
                         BmpDecoder::new(Cursor::new(bytes.clone())).unwrap(),
                     )
                     .unwrap(),
@@ -74,7 +74,7 @@ fn batch_thumbnail_benchmark() {
         } else {
             let input = std::io::BufReader::new(std::fs::File::open(&path).unwrap());
             let bitmap = Bitmap::from_dynamic(
-                image::DynamicImage::from_decoder(BmpDecoder::new(input).unwrap()).unwrap(),
+                crate::image::DynamicImage::from_decoder(BmpDecoder::new(input).unwrap()).unwrap(),
             );
             scale::resize_to(scale::crop_for_fill(bitmap, Some((256, 256))), 256, 256)
         };

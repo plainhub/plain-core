@@ -87,7 +87,7 @@ pub async fn read(
     state: &CoreRuntime,
     file: links::File,
     options: Options,
-) -> anyhow::Result<Content> {
+) -> plain_libs::anyhow::Result<Content> {
     let download = options.action == Action::Download;
     let preview = options.action == Action::Preview;
     let links::File {
@@ -105,7 +105,7 @@ pub async fn read(
             .archives
             .preview(&state.file_platform, path.clone())
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         let filename = if name.is_empty() {
             path.trim_end_matches('/')
                 .rsplit('/')
@@ -143,7 +143,7 @@ pub async fn read(
             } else if path.starts_with("content://") {
                 let mime = super::resources::read(&state.host, "mime", &path, json!({}))
                     .await
-                    .map_err(anyhow::Error::msg)?;
+                    .map_err(plain_libs::anyhow::Error::msg)?;
                 mime.as_str()
                     .is_some_and(super::docs_preview::supports_mime)
             } else {
@@ -222,7 +222,7 @@ pub async fn read(
                 json!({"fileName":plain_libs::utils::query::url_encode(filename)}),
             )
             .await
-            .map_err(anyhow::Error::msg)?
+            .map_err(plain_libs::anyhow::Error::msg)?
             .as_bool()
                 == Some(true)
         } else {
@@ -270,7 +270,7 @@ pub async fn read(
                         json!({}),
                     )
                     .await
-                    .map_err(anyhow::Error::msg)?;
+                    .map_err(plain_libs::anyhow::Error::msg)?;
                     if matches!(codec.as_str(), Some("hvc1" | "hev1")) {
                         return Ok(
                             match state
@@ -299,7 +299,7 @@ pub async fn read(
                         crate::features::services::files::browser::Operation::Remux,
                     )
                     .await
-                    .map_err(anyhow::Error::msg)?
+                    .map_err(plain_libs::anyhow::Error::msg)?
                 {
                     return Ok(Content::File {
                         path,
@@ -319,11 +319,11 @@ pub async fn read(
     })
 }
 
-async fn read_codec(state: &CoreRuntime, path: &str) -> anyhow::Result<Content> {
+async fn read_codec(state: &CoreRuntime, path: &str) -> plain_libs::anyhow::Result<Content> {
     let codec =
         crate::features::services::files::resources::read(&state.host, "probe", path, json!({}))
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
     Ok(Content::Codec(
         codec
             .as_str()

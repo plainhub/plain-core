@@ -207,7 +207,7 @@ async fn serve(
             )
                 .into_response(),
         };
-        Ok::<_, anyhow::Error>(response)
+        Ok::<_, plain_libs::anyhow::Error>(response)
     }
     .await;
     result.unwrap_or_else(|error| {

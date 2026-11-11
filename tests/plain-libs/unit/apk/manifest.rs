@@ -88,11 +88,11 @@ fn full_manifest_without_resource_references_skips_unrelated_resource_payload() 
             self.input.seek(offset)
         }
     }
-    let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let mut writer = crate::zip::ZipWriter::new(Cursor::new(Vec::new()));
     writer
         .start_file(
             "AndroidManifest.xml",
-            zip::write::SimpleFileOptions::default(),
+            crate::zip::write::SimpleFileOptions::default(),
         )
         .unwrap();
     writer
@@ -101,8 +101,8 @@ fn full_manifest_without_resource_references_skips_unrelated_resource_payload() 
     writer
         .start_file(
             "resources.arsc",
-            zip::write::SimpleFileOptions::default()
-                .compression_method(zip::CompressionMethod::Stored),
+            crate::zip::write::SimpleFileOptions::default()
+                .compression_method(crate::zip::CompressionMethod::Stored),
         )
         .unwrap();
     writer.write_all(&vec![0u8; 1024 * 1024]).unwrap();

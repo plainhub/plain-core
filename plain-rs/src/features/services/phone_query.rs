@@ -4,7 +4,7 @@ use crate::features::services::files::provider_query::comparison;
 use crate::features::services::files::provider_query::intentionally_ignored;
 use plain_libs::utils::search_dsl::FilterField;
 use serde_json::Value;
-pub fn plan(provider: Provider, fields: &[FilterField], dates: &Value) -> anyhow::Result<Plan> {
+pub fn plan(provider: Provider, fields: &[FilterField], dates: &Value) -> plain_libs::anyhow::Result<Plan> {
     let mut plan = Plan::default();
     if matches!(provider, Provider::Contact) {
         plan.equal("mimetype", "vnd.android.cursor.item/name");
@@ -38,7 +38,7 @@ pub fn plan(provider: Provider, fields: &[FilterField], dates: &Value) -> anyhow
             }
             _ => {
                 if !intentionally_ignored(provider, field.name.as_str()) {
-                    anyhow::bail!("unsupported {provider:?} filter: {}", field.name);
+                    plain_libs::anyhow::bail!("unsupported {provider:?} filter: {}", field.name);
                 }
             }
         }
@@ -50,7 +50,7 @@ pub fn require_narrowing(
     db: &crate::infrastructure::db::Db,
     provider: Provider,
     query: &str,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     crate::features::services::files::provider_query::require_narrowing_with(
         |provider, fields, dates, _, _| plan(provider, fields, dates),
         db,

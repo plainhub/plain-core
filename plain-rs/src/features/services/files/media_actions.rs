@@ -9,7 +9,7 @@ use crate::features::services::audio::host::Audio;
 use crate::features::services::images::index::ImageIndex;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::host::bridge::Host;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use std::sync::Arc;
 pub struct MediaActions {
     #[cfg(feature = "runtime-media")]
@@ -64,12 +64,12 @@ impl MediaActions {
         let capabilities =
             crate::features::services::files::media_action_io::capability_list(&self.host)
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
         crate::features::services::capabilities::require_list(
             &capabilities,
             crate::features::services::files::media_action_io::action_capability(action),
         )
-        .map_err(|error| anyhow::Error::msg(error.to_string()))?;
+        .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
         let from_trash = action == Action::Restore
             || (action == Action::Delete
                 && capabilities.iter().any(|value| value == "MEDIA_TRASH"));
@@ -77,7 +77,7 @@ impl MediaActions {
             kind,
             DataType::Audio | DataType::Video | DataType::Image | DataType::Doc
         ) {
-            anyhow::bail!("unsupported media kind");
+            plain_libs::anyhow::bail!("unsupported media kind");
         }
         let ids = crate::features::services::files::catalog::MediaCatalog::new(
             self.db.clone(),
@@ -85,14 +85,14 @@ impl MediaActions {
         )
         .ids(kind, query, from_trash)
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
         let result = self
             .run_batches(kind, action, ids, from_trash, dest_dir.to_owned())
             .await?;
         let affected = result.affected_count;
         let failed = result.failed_ids.len();
         if failed != 0 {
-            return Err(anyhow::anyhow!(
+            return Err(plain_libs::anyhow::anyhow!(
                 "{}: {failed} media actions failed ({affected} completed)",
                 format!("{action:?}").to_uppercase()
             ));
@@ -111,10 +111,10 @@ impl MediaActions {
             kind,
             DataType::Audio | DataType::Video | DataType::Image | DataType::Doc
         ) {
-            anyhow::bail!("unsupported media kind");
+            plain_libs::anyhow::bail!("unsupported media kind");
         }
         if requested.iter().any(String::is_empty) {
-            anyhow::bail!("invalid media selection");
+            plain_libs::anyhow::bail!("invalid media selection");
         }
         let mut seen = std::collections::HashSet::new();
         let ids = requested
@@ -132,7 +132,7 @@ impl MediaActions {
             completed.affected_count = completed
                 .affected_count
                 .checked_add(result.affected_count)
-                .ok_or_else(|| anyhow::Error::msg("Media action count overflow"))?;
+                .ok_or_else(|| plain_libs::anyhow::Error::msg("Media action count overflow"))?;
             completed.failed_ids.extend(result.failed_ids);
         }
         Ok(completed)
@@ -158,7 +158,7 @@ impl MediaActions {
             });
         }
         if action == Action::Move && dest_dir.is_empty() {
-            anyhow::bail!("media destination required");
+            plain_libs::anyhow::bail!("media destination required");
         }
         let operation = crate::features::services::files::media_action_io::Operation::prepare(
             &self.host,
@@ -172,7 +172,7 @@ impl MediaActions {
             self.scans.clone(),
         )
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
         let result = if r#type == DataType::Audio {
             let prefs = self.prefs.clone();
             self.audio

@@ -1,5 +1,5 @@
 use core::fmt;
-use regex_automata::meta::BuildError as RaBuildError;
+use crate::regex_engine::automata::meta::BuildError as RaBuildError;
 
 pub type Result<T> = ::core::result::Result<T, Error>;
 

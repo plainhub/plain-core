@@ -184,7 +184,7 @@ pub fn set_file(path: &Path) -> std::io::Result<()> {
 fn append_to_file(level: Level, body: &str) {
     let mut guard = SINK.lock().unwrap_or_else(|error| error.into_inner());
     let Some(sink) = guard.as_mut() else { return };
-    let ts = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f");
+    let ts = plain_libs::chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f");
     let line = format!("{ts} {lvl} {body}\n", lvl = level.as_str());
     if let Err(error) = sink.append(&line, MAX_LOG_BYTES) {
         sink.file = None;

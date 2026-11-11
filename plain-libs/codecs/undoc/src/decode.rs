@@ -43,14 +43,14 @@
 //! regression. Add a `CData` arm alongside the `GeneralRef` arms if that ever
 //! changes.
 //!
-//! [`Event::Text`]: quick_xml::events::Event::Text
-//! [`Event::GeneralRef`]: quick_xml::events::Event::GeneralRef
+//! [`Event::Text`]: plain_libs::xml::events::Event::Text
+//! [`Event::GeneralRef`]: plain_libs::xml::events::Event::GeneralRef
 
 use std::borrow::Cow;
 
-use quick_xml::escape::resolve_predefined_entity;
-use quick_xml::events::{BytesRef, BytesText};
-use quick_xml::Reader;
+use plain_libs::xml::escape::resolve_predefined_entity;
+use plain_libs::xml::events::{BytesRef, BytesText};
+use plain_libs::xml::Reader;
 
 use crate::error::Result;
 
@@ -66,7 +66,7 @@ use crate::error::Result;
 /// must preserve `xml:space="preserve"` whitespace; attribute-only loops may
 /// trim).
 ///
-/// [`Event::Text`]: quick_xml::events::Event::Text
+/// [`Event::Text`]: plain_libs::xml::events::Event::Text
 pub(crate) fn reader_for(xml: &str) -> Reader<&[u8]> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().allow_dangling_amp = true;
@@ -77,8 +77,8 @@ pub(crate) fn reader_for(xml: &str) -> Reader<&[u8]> {
 /// sees (`A &amp; B` reads as `A & B`). A value whose references cannot be resolved comes
 /// back as written rather than being dropped.
 #[cfg(any(feature = "docx", feature = "xlsx", feature = "pptx"))]
-pub(crate) fn attr_value(attr: &quick_xml::events::attributes::Attribute<'_>) -> String {
-    attr.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+pub(crate) fn attr_value(attr: &plain_libs::xml::events::attributes::Attribute<'_>) -> String {
+    attr.normalized_value(plain_libs::xml::XmlVersion::Implicit1_0)
         .map(|v| v.into_owned())
         .unwrap_or_else(|_| attr.value.to_string())
 }
@@ -103,7 +103,7 @@ pub(crate) fn attr_value(attr: &quick_xml::events::attributes::Attribute<'_>) ->
 /// arrives as two separate references (see module docs and
 /// [`normalize_line_endings`]).
 ///
-/// [`Event::GeneralRef`]: quick_xml::events::Event::GeneralRef
+/// [`Event::GeneralRef`]: plain_libs::xml::events::Event::GeneralRef
 pub(crate) fn resolve_general_ref(r: &BytesRef<'_>) -> String {
     let name = r.as_ref();
 
@@ -165,8 +165,8 @@ pub(crate) fn normalize_line_endings(input: Cow<'_, str>) -> Cow<'_, str> {
 /// UTF-8 is replaced with U+FFFD rather than surfacing as an error, matching the
 /// graceful-degradation goal for content text (paragraphs, cells, runs, labels).
 ///
-/// [`Event::Text`]: quick_xml::events::Event::Text
-/// [`Event::GeneralRef`]: quick_xml::events::Event::GeneralRef
+/// [`Event::Text`]: plain_libs::xml::events::Event::Text
+/// [`Event::GeneralRef`]: plain_libs::xml::events::Event::GeneralRef
 pub(crate) fn decode_text_lossy(text: &BytesText<'_>) -> String {
     let raw = text.as_ref();
     normalize_line_endings(Cow::Borrowed(raw)).into_owned()
@@ -181,7 +181,7 @@ pub(crate) fn decode_text_lossy(text: &BytesText<'_>) -> String {
 /// kept for the moment so the metadata call sites keep their shape; collapsing
 /// the pair is a separate change.
 ///
-/// [`Event::Text`]: quick_xml::events::Event::Text
+/// [`Event::Text`]: plain_libs::xml::events::Event::Text
 pub(crate) fn decode_text_strict(text: &BytesText<'_>, _location: &str) -> Result<String> {
     Ok(decode_text_lossy(text))
 }

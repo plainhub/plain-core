@@ -1,6 +1,6 @@
 use crate::features::services::packages::splits;
 use crate::infrastructure::host::bridge::Host;
-use anyhow::{Result, anyhow, ensure};
+use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_libs::apk::manifest;
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -61,7 +61,7 @@ fn prepare(
         "Unsupported package archive format"
     );
     let profile = profile.ok_or_else(|| anyhow!("Package installation profile required"))?;
-    let mut archive = zip::ZipArchive::new(reader)?;
+    let mut archive = plain_libs::zip::ZipArchive::new(reader)?;
     let staging = temporary(cache)?;
     let mut entries = Vec::new();
     let mut names = std::collections::HashSet::new();
@@ -190,7 +190,7 @@ pub async fn execute(
         let facts = host
             .call("systemPackageInstallProfile", json!({}))
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         let mut profile: splits::Profile = serde_json::from_value(facts)?;
         profile.abi_order = host.startup().supported_abis.clone();
         ensure!(
@@ -201,7 +201,7 @@ pub async fn execute(
     } else {
         None
     };
-    let source = plain_libs::utils::file_uri::local_path(&path).map_err(anyhow::Error::msg)?;
+    let source = plain_libs::utils::file_uri::local_path(&path).map_err(plain_libs::anyhow::Error::msg)?;
     let local = Path::new(&source)
         .is_absolute()
         .then(|| PathBuf::from(source));
@@ -215,7 +215,7 @@ pub async fn execute(
         },
     )
     .await
-    .map_err(anyhow::Error::msg)?;
+    .map_err(plain_libs::anyhow::Error::msg)?;
     let operation = tokio::spawn(async move {
         let result = host.call_wait("systemInstallPackage", json!({
             "paths": &prepared.files, "packageName": &prepared.package_name, "session": prepared.session,
@@ -223,7 +223,7 @@ pub async fn execute(
         drop(prepared);
         result
     });
-    operation.await?.map_err(anyhow::Error::msg)
+    operation.await?.map_err(plain_libs::anyhow::Error::msg)
 }
 
 #[cfg(test)]

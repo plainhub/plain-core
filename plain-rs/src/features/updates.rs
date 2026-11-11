@@ -86,8 +86,8 @@ pub fn normalized_version(text: &str) -> String {
 pub fn release_info(
     release: &Release,
     source: &Source,
-) -> anyhow::Result<crate::features::prefs::security::ReleaseInfo> {
-    anyhow::ensure!(
+) -> plain_libs::anyhow::Result<crate::features::prefs::security::ReleaseInfo> {
+    plain_libs::anyhow::ensure!(
         numeric_version(&release.tag_name).is_some(),
         "Invalid release version"
     );

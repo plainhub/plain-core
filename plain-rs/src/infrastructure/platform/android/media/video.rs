@@ -134,7 +134,7 @@ pub(super) fn transcode_with_audio(
                     });
                 }
             } else {
-                anyhow::bail!("Unexpected selected media track")
+                plain_libs::anyhow::bail!("Unexpected selected media track")
             }
             extractor.advance();
             progress = true;

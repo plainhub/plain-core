@@ -144,18 +144,18 @@ fn webp_chunk(kind: &[u8; 4], payload: &[u8]) -> Vec<u8> {
 #[test]
 fn real_webp_encoder_outputs_keep_dimensions_and_transparency_flags() {
     for alpha in [false, true] {
-        let source = image::RgbaImage::from_fn(37, 19, |x, _| {
-            image::Rgba([40, 90, 150, if alpha && x < 20 { 128 } else { 255 }])
+        let source = crate::image::RgbaImage::from_fn(37, 19, |x, _| {
+            crate::image::Rgba([40, 90, 150, if alpha && x < 20 { 128 } else { 255 }])
         });
         let mut bytes = Vec::new();
         if alpha {
-            image::codecs::webp::WebPEncoder::new_lossless(&mut bytes)
-                .encode(source.as_raw(), 37, 19, image::ExtendedColorType::Rgba8)
+            crate::image::codecs::webp::WebPEncoder::new_lossless(&mut bytes)
+                .encode(source.as_raw(), 37, 19, crate::image::ExtendedColorType::Rgba8)
                 .unwrap();
         } else {
-            let rgb = image::DynamicImage::ImageRgba8(source.clone()).into_rgb8();
-            image::codecs::webp::WebPEncoder::new_lossless(&mut bytes)
-                .encode(rgb.as_raw(), 37, 19, image::ExtendedColorType::Rgb8)
+            let rgb = crate::image::DynamicImage::ImageRgba8(source.clone()).into_rgb8();
+            crate::image::codecs::webp::WebPEncoder::new_lossless(&mut bytes)
+                .encode(rgb.as_raw(), 37, 19, crate::image::ExtendedColorType::Rgb8)
                 .unwrap();
         }
         let actual = sniff_header(&bytes).unwrap();
@@ -164,7 +164,7 @@ fn real_webp_encoder_outputs_keep_dimensions_and_transparency_flags() {
             (37, 19, alpha)
         );
         assert_eq!(
-            image::load_from_memory(&bytes).unwrap().into_rgba8(),
+            crate::image::load_from_memory(&bytes).unwrap().into_rgba8(),
             source
         );
         assert_eq!(bytes.get(12..16), Some(b"VP8L".as_slice()));
@@ -181,7 +181,7 @@ fn real_webp_encoder_outputs_keep_dimensions_and_transparency_flags() {
             (37, 19, alpha)
         );
         assert_eq!(
-            image::load_from_memory(&extended).unwrap().into_rgba8(),
+            crate::image::load_from_memory(&extended).unwrap().into_rgba8(),
             source
         );
         for input in [&bytes, &extended] {

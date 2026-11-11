@@ -1,7 +1,7 @@
 use crate::features::services::peers::peer_lan::Failure;
 use crate::infrastructure::host::bridge::Host;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
@@ -48,7 +48,7 @@ async fn socket(
             json!({"token":token,"peerId":peer.id}),
         )
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
     ensure!(value == json!(true), "Aware socket unavailable");
     let (io, pump) = tokio::io::duplex(64 * 1024);
     let (mut reader, mut writer) = tokio::io::split(pump);
@@ -186,7 +186,7 @@ pub async fn aware_send(
         decode_response(status, key, &context, &bytes)
     }
     .await
-    .map_err(|e: anyhow::Error| Failure::Fatal(e.to_string()))
+    .map_err(|e: plain_libs::anyhow::Error| Failure::Fatal(e.to_string()))
 }
 fn decode_response(
     status: u16,
@@ -196,7 +196,7 @@ fn decode_response(
 ) -> Result<Value> {
     let plain = context
         .decrypt(key, bytes)
-        .ok_or_else(|| anyhow::anyhow!("Failed to authenticate peer response"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Failed to authenticate peer response"))?;
     if status != 200 {
         return Ok(json!({"data":null,"errors":[{"message":format!("Peer HTTP {status}")}]}));
     }

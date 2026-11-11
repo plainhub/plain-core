@@ -52,14 +52,14 @@ pub fn attributes(xml: &str) -> std::collections::HashMap<String, String> {
 pub async fn apply(
     state: &CoreRuntime,
     fields: &std::collections::HashMap<String, String>,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     observe(state, fields, false).await
 }
 
 pub async fn apply_poll(
     state: &CoreRuntime,
     fields: &std::collections::HashMap<String, String>,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     observe(state, fields, true).await
 }
 
@@ -67,7 +67,7 @@ async fn observe(
     state: &CoreRuntime,
     fields: &std::collections::HashMap<String, String>,
     polled: bool,
-) -> anyhow::Result<()> {
+) -> plain_libs::anyhow::Result<()> {
     let runtime = &state.cast;
     let status = fields.get("TransportState").map(String::as_str);
     let ended = {
@@ -136,7 +136,7 @@ async fn observe(
                     crate::features::media::audio::queue::select_next(db, true, shuffle)
                 })
                 .await
-                .map_err(|e| anyhow::anyhow!(e.to_string()))?
+                .map_err(|e| plain_libs::anyhow::anyhow!(e.to_string()))?
                 .map(
                     |track| crate::features::services::casting::dlna_sender_runtime::Item {
                         path: track.path,
@@ -153,7 +153,7 @@ async fn observe(
         {
             crate::features::services::casting::dlna_sender_playback::cast(state, next, true)
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
         } else {
             super::dlna_sender_playback::end(state, false).await;
             runtime.snapshot.lock().unwrap().active = false;

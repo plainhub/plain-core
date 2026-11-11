@@ -157,8 +157,8 @@ fn query_filter(
                         .and_local_timezone(plain_libs::local_time::Local)
                         .earliest()
                         .unwrap()
-                        .with_timezone(&chrono::Utc)
-                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                        .with_timezone(&plain_libs::chrono::Utc)
+                        .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true),
                 ));
             }
             "created_at"

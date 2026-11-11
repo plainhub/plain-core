@@ -9,7 +9,7 @@ fn real_runtime_executes_paired_encoders_and_reloads_released_sessions() {
     let directory = crate::temporary::tempdir().unwrap();
     let engine = Engine::open(directory.path().into(), fixture(directory.path())).unwrap();
     let path = directory.path().join("photo.png");
-    image::RgbImage::from_pixel(64, 64, image::Rgb([128, 64, 32]))
+    crate::image::RgbImage::from_pixel(64, 64, crate::image::Rgb([128, 64, 32]))
         .save(&path)
         .unwrap();
     assert_eq!(engine.text("cat").unwrap(), vec![1.0, 0.0, 0.0, 0.0]);
@@ -100,7 +100,7 @@ fn preprocessing_uses_manifest_normalization_and_skips_tiny_images() {
     let directory = crate::temporary::tempdir().unwrap();
     let config = test_fixture::preprocess();
     let path = directory.path().join("photo.png");
-    image::RgbImage::from_pixel(64, 64, image::Rgb([255, 0, 128]))
+    crate::image::RgbImage::from_pixel(64, 64, crate::image::Rgb([255, 0, 128]))
         .save(&path)
         .unwrap();
     let values = preprocess::tensor(&path, &config).unwrap().unwrap();
@@ -108,7 +108,7 @@ fn preprocessing_uses_manifest_normalization_and_skips_tiny_images() {
     assert_eq!(values[0], 1.0);
     assert_eq!(values[plane], -1.0);
     assert!((values[2 * plane] - 1.0 / 255.0).abs() < 1e-6);
-    image::RgbImage::new(32, 32).save(&path).unwrap();
+    crate::image::RgbImage::new(32, 32).save(&path).unwrap();
     assert!(preprocess::tensor(&path, &config).unwrap().is_none());
 }
 

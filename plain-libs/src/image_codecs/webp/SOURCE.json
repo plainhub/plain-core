@@ -1,0 +1,8 @@
+{
+  "package": "image-webp",
+  "version": "0.2.4",
+  "repository": "https://github.com/image-rs/image-webp",
+  "revision": "08b57d473c90148dd4b37a075df365afc3dfcc2b",
+  "archive_sha256": "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3",
+  "retained_features": []
+}

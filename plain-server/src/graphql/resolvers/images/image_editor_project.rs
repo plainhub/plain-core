@@ -39,8 +39,8 @@ pub struct ImageEditorProjectInput {
 }
 
 fn instant(value: &str) -> plain_graphql::Result<Instant> {
-    chrono::DateTime::parse_from_rfc3339(value)
-        .map(|value| Instant(value.with_timezone(&chrono::Utc)))
+    plain_libs::chrono::DateTime::parse_from_rfc3339(value)
+        .map(|value| Instant(value.with_timezone(&plain_libs::chrono::Utc)))
         .map_err(|error| plain_graphql::Error::new(format!("invalid stored timestamp: {error}")))
 }
 

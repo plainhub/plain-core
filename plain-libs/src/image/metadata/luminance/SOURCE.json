@@ -1,0 +1,8 @@
+{
+  "package": "moxcms",
+  "version": "0.8.1",
+  "repository": "https://github.com/awxkee/moxcms.git",
+  "revision": "c4affa196727d17f21a7f6f148a558867decb470",
+  "archive_sha256": "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b",
+  "retained": "Chromaticity constants and scalar RGB luminance matrix arithmetic only; no profile parser or transforms"
+}

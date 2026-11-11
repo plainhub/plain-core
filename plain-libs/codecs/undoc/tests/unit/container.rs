@@ -117,9 +117,9 @@ fn test_package_listing_and_relationships() {
 #[test]
 fn a_part_that_expands_past_a_hundredfold_is_a_damaged_archive() {
     use std::io::{Cursor, Write};
-    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-    let deflated = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let mut zip = plain_libs::zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let deflated = plain_libs::zip::write::SimpleFileOptions::default()
+        .compression_method(plain_libs::zip::CompressionMethod::Deflated);
     zip.start_file("word/document.xml", deflated).unwrap();
     zip.write_all(&vec![b' '; 1 << 20]).unwrap();
     zip.start_file("word/styles.xml", deflated).unwrap();
@@ -146,9 +146,9 @@ fn create_container_with_files(files: &[(&str, &str)]) -> OoxmlContainer {
     use std::io::{Cursor, Write};
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     for (path, contents) in files {
         zip.start_file(*path, options).unwrap();
@@ -162,9 +162,9 @@ fn create_container_with_binary_files(files: &[(&str, &[u8])]) -> OoxmlContainer
     use std::io::{Cursor, Write};
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
 
     for (path, contents) in files {
         zip.start_file(*path, options).unwrap();
@@ -184,9 +184,9 @@ fn create_password_protected_zip_bytes(path: &str) -> Vec<u8> {
     use std::io::{Cursor, Write};
 
     let buf = Cursor::new(Vec::new());
-    let mut zip = zip::ZipWriter::new(buf);
+    let mut zip = plain_libs::zip::ZipWriter::new(buf);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
     zip.start_file(path, options).unwrap();
     zip.write_all(b"<Types/>").unwrap();
     let mut bytes = zip.finish().unwrap().into_inner();
@@ -457,9 +457,9 @@ fn create_test_zip(entries: &[(&str, &str)]) -> Vec<u8> {
     use std::io::Write;
     let buf = Vec::new();
     let cursor = Cursor::new(buf);
-    let mut zip = zip::ZipWriter::new(cursor);
+    let mut zip = plain_libs::zip::ZipWriter::new(cursor);
     let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored);
     for (name, content) in entries {
         zip.start_file(*name, options).unwrap();
         zip.write_all(content.as_bytes()).unwrap();

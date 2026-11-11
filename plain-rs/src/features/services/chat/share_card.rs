@@ -1,14 +1,14 @@
 use crate::features::chat::messages::share_card::{Card, Peer};
 use crate::features::files::shares::{Service, summary};
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use std::sync::Arc;
 
 pub async fn content(state: &CoreRuntime, service: Arc<Service>, id: String) -> Result<String> {
     let row = state
         .db
         .share_get(&id)?
-        .ok_or_else(|| anyhow::anyhow!("Share not found"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Share not found"))?;
     let roots = Service::roots(&row)?;
     let paths = roots
         .iter()
@@ -23,10 +23,10 @@ pub async fn content(state: &CoreRuntime, service: Arc<Service>, id: String) -> 
         share_id: row.id,
         url_token: token,
         peer_info: Peer {
-            id: state.native_client_id().map_err(anyhow::Error::msg)?,
+            id: state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?,
             ip: crate::infrastructure::platform::network::host::lan_ipv4(&state.host)
                 .await
-                .map_err(anyhow::Error::msg)?,
+                .map_err(plain_libs::anyhow::Error::msg)?,
             port: state.public_ports().await.map(|ports| ports.1).unwrap_or(0),
         },
         name: row.name,

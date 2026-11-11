@@ -553,7 +553,7 @@ async fn filesystem_watch_events_from_an_os_thread_update_the_shared_catalog() {
     catalog.configure_scan_directories(None).unwrap();
     catalog.watch_source_directories().unwrap();
     let path = source.path().join("photo.png");
-    image::RgbImage::new(1, 1).save(&path).unwrap();
+    plain_libs::image::RgbImage::new(1, 1).save(&path).unwrap();
     let path = path.to_string_lossy().into_owned();
     let observed = tokio::time::timeout(std::time::Duration::from_secs(10), async {
         loop {

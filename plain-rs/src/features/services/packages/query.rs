@@ -5,17 +5,17 @@ use serde_json::Value;
 fn text(value: &Value, key: &str) -> String {
     value[key].as_str().unwrap_or_default().to_lowercase()
 }
-fn instant(value: &Value, key: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+fn instant(value: &Value, key: &str) -> Option<plain_libs::chrono::DateTime<plain_libs::chrono::FixedOffset>> {
     value[key]
         .as_str()
-        .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
+        .and_then(|v| plain_libs::chrono::DateTime::parse_from_rfc3339(v).ok())
 }
 pub fn packages(
     db: &Db,
     mut facts: Vec<Value>,
     query: &str,
     sort_by: &str,
-) -> anyhow::Result<Vec<Value>> {
+) -> plain_libs::anyhow::Result<Vec<Value>> {
     let groups = search_dsl::parse(query);
     let first = |key| {
         groups

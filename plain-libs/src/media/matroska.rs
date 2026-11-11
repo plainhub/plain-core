@@ -97,7 +97,7 @@ fn info<R: Read + Seek>(
                     i64::from_be_bytes(bytes.try_into().ok()?)
                 };
                 let seconds = 978_307_200i64.checked_add(nanos.div_euclid(1_000_000_000))?;
-                result.date = chrono::DateTime::from_timestamp(
+                result.date = crate::chrono::DateTime::from_timestamp(
                     seconds,
                     nanos.rem_euclid(1_000_000_000) as u32,
                 )

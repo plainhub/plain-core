@@ -64,8 +64,8 @@ pub(crate) fn instant(value: &Value, key: &str) -> Instant {
 pub(crate) fn optional_instant(value: &Value, key: &str) -> Option<Instant> {
     value[key]
         .as_str()
-        .and_then(|raw| chrono::DateTime::parse_from_rfc3339(raw).ok())
-        .map(|parsed| Instant(parsed.with_timezone(&chrono::Utc)))
+        .and_then(|raw| plain_libs::chrono::DateTime::parse_from_rfc3339(raw).ok())
+        .map(|parsed| Instant(parsed.with_timezone(&plain_libs::chrono::Utc)))
 }
 
 /// A timestamp read straight out of one of this crate's own tables, where
@@ -73,13 +73,13 @@ pub(crate) fn optional_instant(value: &Value, key: &str) -> Option<Instant> {
 /// Rust writes, so it degrades to the epoch the same way an unreadable
 /// platform fact does instead of failing the whole page.
 pub(crate) fn stored_instant(value: &str) -> Instant {
-    chrono::DateTime::parse_from_rfc3339(value)
-        .map(|parsed| Instant(parsed.with_timezone(&chrono::Utc)))
+    plain_libs::chrono::DateTime::parse_from_rfc3339(value)
+        .map(|parsed| Instant(parsed.with_timezone(&plain_libs::chrono::Utc)))
         .unwrap_or_else(|_| epoch())
 }
 
 fn epoch() -> Instant {
-    Instant(chrono::DateTime::from_timestamp(0, 0).unwrap_or_default())
+    Instant(plain_libs::chrono::DateTime::from_timestamp(0, 0).unwrap_or_default())
 }
 
 pub(crate) fn strings(value: &Value, key: &str) -> Vec<String> {

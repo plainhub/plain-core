@@ -4,7 +4,7 @@ mod audio;
 mod ffi;
 #[path = "media/video.rs"]
 mod video;
-use anyhow::{Result, anyhow, ensure};
+use plain_libs::anyhow::{Result, anyhow, ensure};
 use std::{
     ffi::{CStr, CString},
     fs::{File, OpenOptions},

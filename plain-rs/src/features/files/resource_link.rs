@@ -1,4 +1,4 @@
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -90,13 +90,13 @@ pub fn parse(envelope: &str) -> Result<(Scope, &str)> {
     ensure!(envelope.len() <= 32768, "Resource URL too long");
     let (mode, rest) = envelope
         .split_once('.')
-        .ok_or_else(|| anyhow::anyhow!("Invalid resource envelope"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid resource envelope"))?;
     let (scope, payload) = match mode {
         "g" => (Scope::Global, rest),
         "c" | "s" => {
             let (owner, payload) = rest
                 .rsplit_once('.')
-                .ok_or_else(|| anyhow::anyhow!("Invalid resource owner"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid resource owner"))?;
             ensure!(
                 !owner.is_empty() && owner.len() <= 4096,
                 "Invalid resource owner"
@@ -110,7 +110,7 @@ pub fn parse(envelope: &str) -> Result<(Scope, &str)> {
                 payload,
             )
         }
-        _ => anyhow::bail!("Unknown resource mode"),
+        _ => plain_libs::anyhow::bail!("Unknown resource mode"),
     };
     ensure!(
         !payload.is_empty()
@@ -124,7 +124,7 @@ pub fn parse(envelope: &str) -> Result<(Scope, &str)> {
 
 pub fn encrypt(scope: &Scope, purpose: &str, key: &[u8], plain: &[u8]) -> Result<String> {
     let bytes = plain_libs::crypto::xchacha_encrypt_raw_with_aad(key, plain, &scope.aad(purpose))
-        .ok_or_else(|| anyhow::anyhow!("Invalid resource key"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid resource key"))?;
     let payload = plain_libs::utils::base64::base64_encode_url_safe(&bytes);
     let payload = payload.trim_end_matches('=');
     let (mode, owner) = scope.parts();
@@ -140,7 +140,7 @@ pub fn encrypt(scope: &Scope, purpose: &str, key: &[u8], plain: &[u8]) -> Result
 pub fn decrypt(scope: &Scope, purpose: &str, key: &[u8], payload: &str) -> Result<Vec<u8>> {
     let bytes = plain_libs::utils::base64::base64_decode_checked(payload)?;
     plain_libs::crypto::xchacha_decrypt_raw_with_aad(key, &bytes, &scope.aad(purpose))
-        .ok_or_else(|| anyhow::anyhow!("Invalid resource authentication"))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid resource authentication"))
 }
 
 pub fn seal(scope: &Scope, key: &[u8], resource: &Resource) -> Result<String> {

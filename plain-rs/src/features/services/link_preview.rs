@@ -297,11 +297,11 @@ struct Image {
     bytes: Vec<u8>,
     mime: String,
 }
-async fn read_bounded(mut response: http_client::Response, limit: usize) -> anyhow::Result<Vec<u8>> {
+async fn read_bounded(mut response: http_client::Response, limit: usize) -> plain_libs::anyhow::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await? {
         if chunk.len() > limit.saturating_sub(bytes.len()) {
-            anyhow::bail!("Preview response too large");
+            plain_libs::anyhow::bail!("Preview response too large");
         }
         bytes.extend_from_slice(&chunk);
     }
@@ -311,7 +311,7 @@ pub async fn refresh(
     db: &Db,
     directory: &Path,
     id: &str,
-) -> anyhow::Result<Option<crate::infrastructure::db::DChat>> {
+) -> plain_libs::anyhow::Result<Option<crate::infrastructure::db::DChat>> {
     let Some(client) = http_client() else {
         return Ok(None);
     };
@@ -322,7 +322,7 @@ async fn refresh_with(
     directory: &Path,
     id: &str,
     client: &http_client::Client,
-) -> anyhow::Result<Option<crate::infrastructure::db::DChat>> {
+) -> plain_libs::anyhow::Result<Option<crate::infrastructure::db::DChat>> {
     let Some(row) = crate::infrastructure::db::chat_store::messages::get(db, id)? else {
         return Ok(None);
     };
@@ -332,7 +332,7 @@ async fn refresh_with(
     };
     let text = content["value"]["text"]
         .as_str()
-        .ok_or_else(|| anyhow::anyhow!("Invalid text message"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid text message"))?;
     let existing = content["value"]["linkPreviews"]
         .as_array()
         .into_iter()

@@ -3,7 +3,7 @@ use crate::features::peers::pairing::{
     protocol::{PairingRequest, PairingRequestPayload},
     timestamp_ok,
 };
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use plain_libs::utils::query::{percent_decode, url_encode};
 use serde::{Deserialize, Serialize};
 
@@ -44,7 +44,7 @@ pub fn parse(code: &str) -> Result<Payload> {
     ensure!(code.len() <= MAX_QR_LEN, "Pairing QR exceeds limit");
     let encoded = code
         .strip_prefix(PREFIX)
-        .ok_or_else(|| anyhow::anyhow!("Invalid pairing QR"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing QR"))?;
     let payload: Payload = serde_json::from_str(&percent_decode(encoded))?;
     let request = payload.into_request();
     let body = &request.payload;

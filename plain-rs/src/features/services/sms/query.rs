@@ -75,7 +75,7 @@ fn plans(
     fields: &[FilterField],
     include_trashed: bool,
     text_ids: Option<Vec<String>>,
-) -> anyhow::Result<Plans> {
+) -> plain_libs::anyhow::Result<Plans> {
     let mut sms = Plan::default();
     let mut mms = Some(Plan::default());
     for f in fields {
@@ -171,7 +171,7 @@ fn plans(
         .into_iter()
         .find(|a| a.conversation_id == thread)
     {
-        let millis = chrono::DateTime::parse_from_rfc3339(&archive.archived_at)?.timestamp_millis();
+        let millis = plain_libs::chrono::DateTime::parse_from_rfc3339(&archive.archived_at)?.timestamp_millis();
         let op = if fields
             .iter()
             .any(|f| f.name == "archived" && f.value == "1")
@@ -212,8 +212,8 @@ struct ConversationFacts {
     snippet_candidates:
         std::collections::HashMap<String, Vec<crate::features::services::sms::parts::Snippet>>,
 }
-fn instant(value: &str) -> anyhow::Result<chrono::DateTime<chrono::FixedOffset>> {
-    Ok(chrono::DateTime::parse_from_rfc3339(value)?)
+fn instant(value: &str) -> plain_libs::anyhow::Result<plain_libs::chrono::DateTime<plain_libs::chrono::FixedOffset>> {
+    Ok(plain_libs::chrono::DateTime::parse_from_rfc3339(value)?)
 }
 fn archived_matches(addresses: &[String], snippet: &str, query: &str) -> bool {
     let query = query.trim().to_lowercase();
@@ -230,7 +230,7 @@ fn conversation_models(
     query: &str,
     offset: i32,
     limit: i32,
-) -> anyhow::Result<Vec<Value>> {
+) -> plain_libs::anyhow::Result<Vec<Value>> {
     let active = db
         .archived_conversation_list()?
         .into_iter()
@@ -266,7 +266,7 @@ fn conversation_models(
         json!({"id":row.id,"address":selected.first().cloned().unwrap_or_default(),"addresses":selected,"snippet":row.snippet,"date":row.date,"messageCount":row.message_count,"read":row.read})
     }).collect())
 }
-fn text_ids(facts: Value, filters: &[String]) -> anyhow::Result<Vec<String>> {
+fn text_ids(facts: Value, filters: &[String]) -> plain_libs::anyhow::Result<Vec<String>> {
     let parts: std::collections::BTreeMap<String, Vec<String>> = serde_json::from_value(facts)?;
     Ok(parts
         .into_iter()
@@ -300,7 +300,7 @@ async fn prepare(
     query: &str,
     include_trashed: bool,
     destructive: bool,
-) -> anyhow::Result<Plans> {
+) -> plain_libs::anyhow::Result<Plans> {
     let fields = provider_plan::fields(&db, query)?;
     let filters = fields
         .iter()
@@ -313,13 +313,13 @@ async fn prepare(
         Some(text_ids(
             host.call("systemMmsTextFacts", json!({}))
                 .await
-                .map_err(anyhow::Error::msg)?,
+                .map_err(plain_libs::anyhow::Error::msg)?,
             &filters,
         )?)
     };
     let plans = plans(&db, &fields, include_trashed, ids)?;
     if destructive && narrows_nothing(query, &fields, &plans.sms) {
-        return Err(anyhow::anyhow!(
+        return Err(plain_libs::anyhow::anyhow!(
             "query {query:?} selects no sms message — nothing in it narrows the selection, so \
              the operation would cover the whole table; pass 'all:true' to target every \
              message on purpose"
@@ -332,35 +332,35 @@ async fn count(
     host: &crate::infrastructure::host::bridge::Host,
     query: &str,
     include_trashed: bool,
-) -> anyhow::Result<i64> {
+) -> plain_libs::anyhow::Result<i64> {
     let plans = prepare(db, host, query, include_trashed, false).await?;
     let receipt = host
         .call("systemSmsCountFacts", serde_json::to_value(plans)?)
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
     let sms = receipt["sms"]
         .as_i64()
         .filter(|v| *v >= 0)
-        .ok_or_else(|| anyhow::anyhow!("invalid SMS count"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid SMS count"))?;
     let mms = receipt["mms"]
         .as_i64()
         .filter(|v| *v >= 0)
-        .ok_or_else(|| anyhow::anyhow!("invalid MMS count"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid MMS count"))?;
     sms.checked_add(mms)
-        .ok_or_else(|| anyhow::anyhow!("SMS count overflow"))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("SMS count overflow"))
 }
 fn page(
     mut items: Vec<Value>,
     offset: i32,
     limit: i32,
     canonical: &str,
-) -> anyhow::Result<Vec<Value>> {
+) -> plain_libs::anyhow::Result<Vec<Value>> {
     for item in &mut items {
         if item["isMms"].as_bool() == Some(true) {
             let raw_parts = item
                 .as_object_mut()
                 .and_then(|item| item.remove("parts"))
-                .ok_or_else(|| anyhow::anyhow!("missing MMS parts"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("missing MMS parts"))?;
             let parts = serde_json::from_value::<Vec<crate::features::services::sms::parts::Part>>(
                 raw_parts,
             )?;
@@ -371,10 +371,10 @@ fn page(
                 serde_json::from_value(item["addressCandidates"].clone())?;
             item["address"] = json!(crate::features::services::sms::addresses::mms(&candidates));
         }
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             item["date"]
                 .as_str()
-                .is_some_and(|t| chrono::DateTime::parse_from_rfc3339(t).is_ok()),
+                .is_some_and(|t| plain_libs::chrono::DateTime::parse_from_rfc3339(t).is_ok()),
             "invalid SMS date"
         );
         if item["address"].as_str() == Some("") && !canonical.is_empty() {
@@ -383,7 +383,7 @@ fn page(
     }
     items.sort_by(|a, b| {
         let date =
-            |v: &Value| chrono::DateTime::parse_from_rfc3339(v["date"].as_str().unwrap()).unwrap();
+            |v: &Value| plain_libs::chrono::DateTime::parse_from_rfc3339(v["date"].as_str().unwrap()).unwrap();
         date(b).cmp(&date(a))
     });
     Ok(items
@@ -404,7 +404,7 @@ async fn matched_conversation_facts(
     db: &crate::infrastructure::db::Db,
     host: &crate::infrastructure::host::bridge::Host,
     query: &str,
-) -> anyhow::Result<ConversationFacts> {
+) -> plain_libs::anyhow::Result<ConversationFacts> {
     let mut plans = prepare(db, host, query, true, false).await?;
     plans.sms.clauses.retain(|c| !c.starts_with("date "));
     plans
@@ -415,7 +415,7 @@ async fn matched_conversation_facts(
     let hits: Vec<ThreadMatch> = serde_json::from_value(
         host.call("systemSmsThreadFacts", json!({"plans":plans}))
             .await
-            .map_err(anyhow::Error::msg)?,
+            .map_err(plain_libs::anyhow::Error::msg)?,
     )?;
     let mut latest = std::collections::HashMap::<String, String>::new();
     for ThreadMatch {
@@ -442,21 +442,21 @@ async fn conversation_facts(
     host: &crate::infrastructure::host::bridge::Host,
     ids: Option<Vec<String>>,
     limit: Option<i64>,
-) -> anyhow::Result<ConversationFacts> {
+) -> plain_libs::anyhow::Result<ConversationFacts> {
     let facts = host
         .call(
             "systemSmsConversationFacts",
             json!({"ids":ids,"limit":limit}),
         )
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
     Ok(serde_json::from_value(facts)?)
 }
 pub async fn execute(
     db: &crate::infrastructure::db::Db,
     host: &crate::infrastructure::host::bridge::Host,
     request: Request,
-) -> anyhow::Result<Value> {
+) -> plain_libs::anyhow::Result<Value> {
     crate::features::services::capabilities::require(host, "TELEPHONY").await?;
     Ok(match request {
         Request::Search {
@@ -475,7 +475,7 @@ pub async fn execute(
                     json!({"plans":plans,"limit":i64::from(offset.max(0))+i64::from(limit)}),
                 )
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             let candidates = serde_json::from_value(receipt["canonicalAddresses"].clone())?;
             let own = serde_json::from_value::<Vec<String>>(receipt["ownNumbers"].clone())?;
             let canonical = addresses(candidates, &own)
@@ -493,7 +493,7 @@ pub async fn execute(
             let ids: Vec<String> = serde_json::from_value(
                 host.call("systemSmsIdsFacts", serde_json::to_value(plans)?)
                     .await
-                    .map_err(anyhow::Error::msg)?,
+                    .map_err(plain_libs::anyhow::Error::msg)?,
             )?;
             json!({"ids":ids.into_iter().collect::<std::collections::BTreeSet<_>>()})
         }
@@ -547,14 +547,14 @@ pub async fn execute(
                         instant(&r.archived_at)?.timestamp_millis(),
                     ))
                 })
-                .collect::<anyhow::Result<std::collections::HashMap<_, _>>>()?;
+                .collect::<plain_libs::anyhow::Result<std::collections::HashMap<_, _>>>()?;
             let facts = host
                 .call(
                     "systemSmsConversationFacts",
                     json!({"ids":ids,"beforeDates":before}),
                 )
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             let rows: ConversationFacts = serde_json::from_value(facts)?;
             let own = rows.own_numbers;
             let snippets = rows.snippet_candidates;
@@ -570,7 +570,7 @@ pub async fn execute(
                 if !archived_matches(&addresses, &snippet, &query) {
                     return None;
                 }
-                Some(json!({"id":row.id,"address":addresses.first().cloned().unwrap_or_default(),"addresses":addresses,"snippet":snippet,"date":date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),"messageCount":row.message_count,"read":row.read}))
+                Some(json!({"id":row.id,"address":addresses.first().cloned().unwrap_or_default(),"addresses":addresses,"snippet":snippet,"date":date.to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true),"messageCount":row.message_count,"read":row.read}))
             }).flatten()).collect::<Vec<_>>();
             json!({"items":items.into_iter().skip(offset.max(0) as usize).take(limit.max(0) as usize).collect::<Vec<_>>()})
         }

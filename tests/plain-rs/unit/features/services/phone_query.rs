@@ -7,7 +7,7 @@ use crate::features::services::files::provider_query::fields;
 use crate::infrastructure::db::Db;
 use serde_json::Value;
 
-fn plan_ok(provider: Provider, fields: &[FilterField], dates: &Value) -> anyhow::Result<Plan> {
+fn plan_ok(provider: Provider, fields: &[FilterField], dates: &Value) -> plain_libs::anyhow::Result<Plan> {
     plan(provider, fields, dates)
 }
 

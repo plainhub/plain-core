@@ -5,8 +5,8 @@ use std::io::Write;
 fn archive_entry_bytes_are_exact_and_repeated_reads_do_not_replace_the_cache() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let archive = directory.path().join("files.zip");
-    let mut zip = zip::ZipWriter::new(File::create(&archive).unwrap());
-    zip.start_file("nested/note.txt", zip::write::SimpleFileOptions::default())
+    let mut zip = plain_libs::zip::ZipWriter::new(File::create(&archive).unwrap());
+    zip.start_file("nested/note.txt", plain_libs::zip::write::SimpleFileOptions::default())
         .unwrap();
     zip.write_all(b"actual entry bytes").unwrap();
     zip.finish().unwrap();
@@ -31,10 +31,10 @@ fn archive_entry_bytes_are_exact_and_repeated_reads_do_not_replace_the_cache() {
 }
 
 fn write_entry(archive: &Path, name: &str, bytes: &[u8]) {
-    let mut zip = zip::ZipWriter::new(File::create(archive).unwrap());
+    let mut zip = plain_libs::zip::ZipWriter::new(File::create(archive).unwrap());
     zip.start_file(
         name,
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
+        plain_libs::zip::write::SimpleFileOptions::default().compression_method(plain_libs::zip::CompressionMethod::Stored),
     )
     .unwrap();
     zip.write_all(bytes).unwrap();

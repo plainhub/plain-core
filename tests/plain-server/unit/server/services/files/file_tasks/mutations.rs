@@ -172,7 +172,7 @@ async fn native_rename_and_delete_follow_actual_catalog_identities() {
     let state = core.runtime_state().core;
     let source = directory_path.join("source.png");
     let destination = directory_path.join("renamed.png");
-    image::RgbImage::from_pixel(8, 8, image::Rgb([20, 40, 60]))
+    plain_libs::image::RgbImage::from_pixel(8, 8, plain_libs::image::Rgb([20, 40, 60]))
         .save(&source)
         .unwrap();
     let read = plain_rs::features::media::file_facts::read_file_metadata_with_availability(

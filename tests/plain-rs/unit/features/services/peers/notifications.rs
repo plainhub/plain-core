@@ -3,7 +3,7 @@ use crate::features::chat::enums::DeviceType;
 use crate::features::services::notifications::types::Notification;
 use crate::features::services::peers::management::Identity;
 use crate::infrastructure::db::DPeer;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -100,7 +100,7 @@ fn notification(id: &str) -> Notification {
         is_clearable: true,
         app_id: "fixture.app".into(),
         app_name: "Fixture".into(),
-        posted_at: Instant(chrono::DateTime::from_timestamp(0, 0).unwrap()),
+        posted_at: Instant(plain_libs::chrono::DateTime::from_timestamp(0, 0).unwrap()),
         silent: false,
         title: id.into(),
         body: "Body".into(),
@@ -201,7 +201,7 @@ async fn silent_items_and_active_updates_do_not_alert_but_a_dismissed_id_can_not
             "local",
             &peer.id,
             &identity,
-            Err(anyhow::anyhow!("offline")),
+            Err(plain_libs::anyhow::anyhow!("offline")),
             &events,
         )
         .unwrap();

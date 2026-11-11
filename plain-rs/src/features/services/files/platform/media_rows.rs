@@ -11,7 +11,7 @@ struct Row {
     mime_type: Option<String>,
 }
 
-pub(super) fn identities(facts: serde_json::Value) -> anyhow::Result<Vec<Identity>> {
+pub(super) fn identities(facts: serde_json::Value) -> plain_libs::anyhow::Result<Vec<Identity>> {
     let rows: Vec<Row> = serde_json::from_value(facts)?;
     Ok(rows
         .into_iter()

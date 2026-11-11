@@ -126,7 +126,7 @@ impl Runtime {
         state: &ServerState,
         request_id: &str,
         result: &Value,
-    ) -> anyhow::Result<()> {
+    ) -> plain_libs::anyhow::Result<()> {
         let outgoing = self
             .connections
             .lock()
@@ -304,19 +304,19 @@ async fn run(
                             let _ = socket.send(close(1008, "invalid_login_request")).await;
                             break;
                         }
-                        let accepted = (|| -> anyhow::Result<_> {
+                        let accepted = (|| -> plain_libs::anyhow::Result<_> {
                             match std::mem::replace(&mut handshake, LoginHandshake::Submitted) {
                                 LoginHandshake::AwaitingCommitment => {
                                     let password_type = plain_rs::features::prefs::security::password_type(&state.prefs)?;
-                                    anyhow::ensure!(password_type == PasswordType::None, "invalid_login_request");
-                                    anyhow::ensure!(enabled(&state), "remote_access_disabled");
+                                    plain_libs::anyhow::ensure!(password_type == PasswordType::None, "invalid_login_request");
+                                    plain_libs::anyhow::ensure!(enabled(&state), "remote_access_disabled");
                                     let request = serde_json::from_str::<confirmation_channel::ClientHello>(&text)?;
                                     let device_id = state.prefs.get_or(
                                         plain_rs::features::prefs::pref_keys::CLIENT_ID,
                                         String::new(),
                                     );
                                     let signing = plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
-                                    let now = chrono::Utc::now().timestamp_millis() as u64;
+                                    let now = plain_libs::chrono::Utc::now().timestamp_millis() as u64;
                                     let (pending, response) = confirmation_channel::ServerHandshake::start(
                                         &params.cid,
                                         &device_id,
@@ -327,7 +327,7 @@ async fn run(
                                     handshake = LoginHandshake::Ready(pending);
                                     Ok(Some(response))
                                 }
-                                _ => anyhow::bail!("invalid_login_request"),
+                                _ => plain_libs::anyhow::bail!("invalid_login_request"),
                             }
                         })();
                         match accepted {
@@ -348,32 +348,32 @@ async fn run(
                 if channel == Channel::Auth {
                     if let Some(request_id) = pending.take() { let _ = crate::http::auth::ws_login::execute(&state, crate::http::auth::ws_login::Request::Cancel { request_id }).await; }
                     let previous = std::mem::replace(&mut handshake, LoginHandshake::Submitted);
-                    let resolved = (|| -> anyhow::Result<_> {
+                    let resolved = (|| -> plain_libs::anyhow::Result<_> {
                         use crate::http::auth::ws_login::{LoginChannel, OpaqueChannel};
                         use plain_rs::features::prefs::security;
                         match previous {
                             LoginHandshake::AwaitingCommitment => {
-                                anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed, "invalid_login_request");
-                                let credential = security::password_credential(&state.prefs)?.ok_or_else(|| anyhow::anyhow!("password_setup_required"))?;
+                                plain_libs::anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed, "invalid_login_request");
+                                let credential = security::password_credential(&state.prefs)?.ok_or_else(|| plain_libs::anyhow::anyhow!("password_setup_required"))?;
                                 let signing = security::signing_keypair(&state.prefs)?;
-                                let identity = plain_libs::crypto::ed25519_public_from_keypair(&signing).ok_or_else(|| anyhow::anyhow!("invalid_identity"))?;
+                                let identity = plain_libs::crypto::ed25519_public_from_keypair(&signing).ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_identity"))?;
                                 let context = plain_libs::auth::context(&params.cid, &identity);
                                 let setup = plain_libs::utils::base64::base64_decode_checked(&credential.setup)?;
                                 let record = plain_libs::utils::base64::base64_decode_checked(&credential.record)?;
-                                let (login, response) = plain_libs::auth::server::start(&setup, &record, &frame, &context, &identity).map_err(|_| anyhow::anyhow!("invalid_password"))?;
+                                let (login, response) = plain_libs::auth::server::start(&setup, &record, &frame, &context, &identity).map_err(|_| plain_libs::anyhow::anyhow!("invalid_password"))?;
                                 handshake = LoginHandshake::Opaque { login, context, credential, created: std::time::Instant::now() };
                                 Ok(Err(response))
                             }
                             LoginHandshake::Opaque { login, context, credential, created } => {
-                                anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed && security::password_credential(&state.prefs)?.as_ref() == Some(&credential), "invalid_password");
+                                plain_libs::anyhow::ensure!(security::password_type(&state.prefs)? == PasswordType::Fixed && security::password_credential(&state.prefs)?.as_ref() == Some(&credential), "invalid_password");
                                 let length = plain_libs::auth::server::finalization_len();
-                                anyhow::ensure!(frame.len() > length, "invalid_password");
-                                let session = login.finish(&frame[..length]).map_err(|_| anyhow::anyhow!("invalid_password"))?;
+                                plain_libs::anyhow::ensure!(frame.len() > length, "invalid_password");
+                                let session = login.finish(&frame[..length]).map_err(|_| plain_libs::anyhow::anyhow!("invalid_password"))?;
                                 let key = plain_libs::auth::api_key(&session, &context);
                                 Ok(Ok((LoginChannel::Opaque(OpaqueChannel { key, context, credential, created }), frame[length..].to_vec(), true)))
                             }
                             LoginHandshake::Ready(channel) => Ok(Ok((LoginChannel::Confirmation(channel), frame.to_vec(), false))),
-                            _ => anyhow::bail!("invalid_login_request"),
+                            _ => plain_libs::anyhow::bail!("invalid_login_request"),
                         }
                     })();
                     let (channel, frame, password_login) = match resolved {
@@ -419,7 +419,7 @@ async fn run(
                 let aad = plain_rs::infrastructure::protocols::websocket::request_aad(path, &params.cid, registration_cipher.as_deref());
                 let plain = plain_libs::crypto::xchacha_decrypt_raw_with_aad(&key,&frame,&aad);
                 let Some(plain) = plain else { let _ = socket.send(close(1013,"invalid_request")).await; break; };
-                let plain = match super::frames::admit(&state.main_ws.replay, &state.db, &params.cid, &frame, &plain, registered, chrono::Utc::now().timestamp_millis()) {
+                let plain = match super::frames::admit(&state.main_ws.replay, &state.db, &params.cid, &frame, &plain, registered, plain_libs::chrono::Utc::now().timestamp_millis()) {
                     Ok(payload) => payload,
                     Err(()) => { let _ = socket.send(close(1013,"invalid_request")).await; break; }
                 };

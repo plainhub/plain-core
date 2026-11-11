@@ -7,13 +7,13 @@
 //!   the `image` crate (zune-jpeg / image-webp / png backends).
 
 use crate::media::thumbnails::scale::Bitmap;
-use anyhow::{Result, bail};
+use crate::anyhow::{Result, bail};
 use std::io::{self, BufRead, BufReader, Read};
 
 /// Largest JPEG dimension accepted by `Decoder::scale` (u16 API).
 const SCALE_DIM_MAX: u32 = 65_535;
 
-/// Predict the output dimensions `jpeg_decoder::Decoder::scale` will pick
+/// Predict the output dimensions `crate::jpeg::Decoder::scale` will pick
 /// for a source of (w, h) with target box (tw, th).
 ///
 /// Mirrors the crate's rule: the smallest supported scale factor (most
@@ -66,30 +66,30 @@ pub fn jpeg_scaled_bytes(data: &[u8], tw: u32, th: u32) -> Result<Bitmap> {
 }
 
 fn jpeg_scaled_reader<R: std::io::Read>(reader: R, tw: u32, th: u32) -> Result<Bitmap> {
-    let mut dec = jpeg_decoder::Decoder::new(reader);
+    let mut dec = crate::jpeg::Decoder::new(reader);
     dec.read_info()?;
     let info = dec
         .info()
-        .ok_or_else(|| anyhow::anyhow!("jpeg-decoder gave no info after read_info"))?;
+        .ok_or_else(|| crate::anyhow::anyhow!("jpeg-decoder gave no info after read_info"))?;
     let (sw, sh) = (u32::from(info.width), u32::from(info.height));
     let (rw, rh) = clamp_request(sw, sh, tw, th);
     dec.scale(rw as u16, rh as u16)?;
     let pixels = dec.decode()?;
     let info = dec
         .info()
-        .ok_or_else(|| anyhow::anyhow!("jpeg-decoder gave no info after decode"))?;
+        .ok_or_else(|| crate::anyhow::anyhow!("jpeg-decoder gave no info after decode"))?;
     let (w, h) = (u32::from(info.width), u32::from(info.height));
 
     let bitmap = match info.pixel_format {
-        jpeg_decoder::PixelFormat::RGB24 => Bitmap::new_rgb(pixels, w, h),
-        jpeg_decoder::PixelFormat::L8 => {
+        crate::jpeg::PixelFormat::RGB24 => Bitmap::new_rgb(pixels, w, h),
+        crate::jpeg::PixelFormat::L8 => {
             let mut rgb = Vec::with_capacity(pixels.len() * 3);
             for v in &pixels {
                 rgb.extend_from_slice(&[*v, *v, *v]);
             }
             Bitmap::new_rgb(rgb, w, h)
         }
-        jpeg_decoder::PixelFormat::L16 => {
+        crate::jpeg::PixelFormat::L16 => {
             let mut rgb = Vec::with_capacity(pixels.len() / 2 * 3);
             for p in pixels.chunks_exact(2) {
                 let v = (u16::from_le_bytes([p[0], p[1]]) >> 8) as u8;
@@ -97,7 +97,7 @@ fn jpeg_scaled_reader<R: std::io::Read>(reader: R, tw: u32, th: u32) -> Result<B
             }
             Bitmap::new_rgb(rgb, w, h)
         }
-        jpeg_decoder::PixelFormat::CMYK32 => {
+        crate::jpeg::PixelFormat::CMYK32 => {
             // Adobe JPEGs store inverted CMYK: 0 = full ink, 255 = paper.
             // Standard conversion: R = C·K/255 (per channel).
             let mut rgb = Vec::with_capacity(pixels.len() / 4 * 3);
@@ -141,13 +141,13 @@ pub fn image_full(path: &std::path::Path) -> Result<Bitmap> {
     if let Some(kind) = super::still::kind(&header[..n]) {
         return super::still::decode_file(path, kind);
     }
-    let mut reader = image::ImageReader::open(path)?;
+    let mut reader = crate::image::ImageReader::open(path)?;
     reader = reader.with_guessed_format()?;
-    if reader.format() == Some(image::ImageFormat::Bmp) {
+    if reader.format() == Some(crate::image::ImageFormat::Bmp) {
         return super::bmp::decode_reader(reader.into_inner());
     }
     reader.no_limits();
-    let img = reader.decode().map_err(anyhow::Error::from)?;
+    let img = reader.decode().map_err(crate::anyhow::Error::from)?;
     Ok(Bitmap::from_dynamic(img))
 }
 
@@ -159,13 +159,13 @@ pub fn image_from_bytes(data: &[u8]) -> Result<Bitmap> {
     if let Some(kind) = super::still::kind(data) {
         return super::still::decode_bytes(data, kind);
     }
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(data));
+    let mut reader = crate::image::ImageReader::new(std::io::Cursor::new(data));
     reader = reader.with_guessed_format()?;
-    if reader.format() == Some(image::ImageFormat::Bmp) {
+    if reader.format() == Some(crate::image::ImageFormat::Bmp) {
         return super::bmp::decode_reader(reader.into_inner());
     }
     reader.no_limits();
-    let img = reader.decode().map_err(anyhow::Error::from)?;
+    let img = reader.decode().map_err(crate::anyhow::Error::from)?;
     Ok(Bitmap::from_dynamic(img))
 }
 

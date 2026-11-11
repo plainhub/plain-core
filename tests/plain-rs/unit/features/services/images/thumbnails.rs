@@ -175,7 +175,7 @@ async fn cancelling_a_started_generation_keeps_its_slot_and_single_flight_until_
     let state = core.runtime_state();
     let source = plain_libs::temporary::tempdir().unwrap();
     let path = source.path().join("image.jpg");
-    image::RgbImage::from_pixel(800, 400, image::Rgb([200, 10, 20]))
+    plain_libs::image::RgbImage::from_pixel(800, 400, plain_libs::image::Rgb([200, 10, 20]))
         .save(&path)
         .unwrap();
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
@@ -231,7 +231,7 @@ async fn disconnected_queued_requests_are_removed_without_starting_a_decode() {
     let queued = 300;
     let source = plain_libs::temporary::tempdir().unwrap();
     let path = source.path().join("image.jpg");
-    image::RgbImage::from_pixel(800, 400, image::Rgb([10, 200, 20]))
+    plain_libs::image::RgbImage::from_pixel(800, 400, plain_libs::image::Rgb([10, 200, 20]))
         .save(&path)
         .unwrap();
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
@@ -295,7 +295,7 @@ async fn changed_source_during_generation_cannot_publish_an_old_version() {
     let state = core.runtime_state();
     let source = plain_libs::temporary::tempdir().unwrap();
     let path = source.path().join("image.jpg");
-    image::RgbImage::from_pixel(800, 400, image::Rgb([240, 10, 10]))
+    plain_libs::image::RgbImage::from_pixel(800, 400, plain_libs::image::Rgb([240, 10, 10]))
         .save(&path)
         .unwrap();
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
@@ -317,7 +317,7 @@ async fn changed_source_during_generation_cannot_publish_an_old_version() {
     })
     .await
     .unwrap();
-    image::RgbImage::from_pixel(800, 400, image::Rgb([10, 240, 10]))
+    plain_libs::image::RgbImage::from_pixel(800, 400, plain_libs::image::Rgb([10, 240, 10]))
         .save(&path)
         .unwrap();
     gate.add_permits(1);
@@ -329,7 +329,7 @@ async fn changed_source_during_generation_cannot_publish_an_old_version() {
         .await
         .unwrap()
         .unwrap();
-    let pixel = image::load_from_memory(&bytes)
+    let pixel = plain_libs::image::load_from_memory(&bytes)
         .unwrap()
         .to_rgb8()
         .get_pixel(30, 30)
@@ -345,7 +345,7 @@ async fn hot_cache_serves_300_requests_without_disk_reads_and_rechecks_source() 
     let (directory, core, _cache) = server_with_cache();
     let state = core.runtime_state();
     let path = directory.path().join("hot.jpg");
-    image::RgbImage::from_pixel(800, 400, image::Rgb([240, 10, 10]))
+    plain_libs::image::RgbImage::from_pixel(800, 400, plain_libs::image::Rgb([240, 10, 10]))
         .save(&path)
         .unwrap();
     let first = state
@@ -392,7 +392,7 @@ async fn hot_cache_serves_300_requests_without_disk_reads_and_rechecks_source() 
         reads + 1
     );
     assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 1);
-    image::RgbImage::from_pixel(900, 450, image::Rgb([10, 240, 10]))
+    plain_libs::image::RgbImage::from_pixel(900, 450, plain_libs::image::Rgb([10, 240, 10]))
         .save(&path)
         .unwrap();
     let updated = state
@@ -425,7 +425,7 @@ async fn sufficient_originals_skip_generation_and_thumbnail_cache_files() {
             let path = directory
                 .path()
                 .join(format!("original-{width}-{height}.{extension}"));
-            image::RgbImage::from_pixel(width, height, image::Rgb([200, 40, 50]))
+            plain_libs::image::RgbImage::from_pixel(width, height, plain_libs::image::Rgb([200, 40, 50]))
                 .save(&path)
                 .unwrap();
             for center_crop in [true, false] {
@@ -440,7 +440,7 @@ async fn sufficient_originals_skip_generation_and_thumbnail_cache_files() {
                     .unwrap()
                     .unwrap();
                 assert_eq!(bytes, std::fs::read(&path).unwrap());
-                let image = image::load_from_memory(&bytes).unwrap();
+                let image = plain_libs::image::load_from_memory(&bytes).unwrap();
                 assert_eq!((image.width(), image.height()), (width, height));
             }
         }
@@ -503,7 +503,7 @@ async fn concurrent_generation_delivers_one_shared_allocation_to_300_readers() {
     let (directory, core, _) = server_with_cache();
     let state = core.runtime_state();
     let path = directory.path().join("shared.jpg");
-    image::RgbImage::from_pixel(800, 400, image::Rgb([200, 40, 50]))
+    plain_libs::image::RgbImage::from_pixel(800, 400, plain_libs::image::Rgb([200, 40, 50]))
         .save(&path)
         .unwrap();
     let gate = Arc::new(tokio::sync::Semaphore::new(0));
@@ -552,8 +552,8 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
     let (directory, core, cache) = server_with_cache();
     let state = core.runtime_state();
     let path = directory.path().join("sizes.jpg");
-    image::RgbImage::from_fn(1600, 1200, |x, y| {
-        image::Rgb([(x % 251) as u8, (y % 239) as u8, 90])
+    plain_libs::image::RgbImage::from_fn(1600, 1200, |x, y| {
+        plain_libs::image::Rgb([(x % 251) as u8, (y % 239) as u8, 90])
     })
     .save(&path)
     .unwrap();
@@ -620,7 +620,7 @@ async fn thumbnail_sizes_share_256_bytes_and_preserve_large_previews() {
             .await
             .unwrap()
             .unwrap();
-        let image = image::load_from_memory(&bytes).unwrap();
+        let image = plain_libs::image::load_from_memory(&bytes).unwrap();
         assert_eq!((image.width(), image.height()), dimensions);
     }
     let invalid = Request {
@@ -637,7 +637,7 @@ async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cach
     let (directory, core, _) = server_with_cache();
     let state = core.runtime_state();
     let source = directory.path().join("alpha.PNG");
-    image::RgbaImage::from_pixel(512, 512, image::Rgba([40, 90, 150, 0]))
+    plain_libs::image::RgbaImage::from_pixel(512, 512, plain_libs::image::Rgba([40, 90, 150, 0]))
         .save(&source)
         .unwrap();
     let source = source.canonicalize().unwrap();
@@ -695,14 +695,14 @@ async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cach
     assert_eq!(std::fs::read(&generated).unwrap(), bytes);
     assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
     assert_eq!(
-        image::load_from_memory(&bytes)
+        plain_libs::image::load_from_memory(&bytes)
             .unwrap()
             .into_rgba8()
             .get_pixel(128, 128)[3],
         0
     );
     let jpeg = directory.path().join("photo.jpg");
-    image::RgbImage::from_pixel(512, 512, image::Rgb([40, 90, 150]))
+    plain_libs::image::RgbImage::from_pixel(512, 512, plain_libs::image::Rgb([40, 90, 150]))
         .save(&jpeg)
         .unwrap();
     let request = Request {
@@ -747,7 +747,7 @@ async fn waiting_for_generation_does_not_hold_file_lookup_capacity() {
     let (directory, core, _) = server_with_cache();
     let state = core.runtime_state();
     let path = directory.path().join("lookup-capacity.jpg");
-    image::RgbImage::from_pixel(640, 480, image::Rgb([40, 90, 150]))
+    plain_libs::image::RgbImage::from_pixel(640, 480, plain_libs::image::Rgb([40, 90, 150]))
         .save(&path)
         .unwrap();
     let gate = Arc::new(tokio::sync::Semaphore::new(0));

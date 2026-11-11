@@ -28,7 +28,7 @@ impl SharedStrings {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(e)) => match e.name().local_name().as_ref() {
+                Ok(plain_libs::xml::events::Event::Start(e)) => match e.name().local_name().as_ref() {
                     "si" => {
                         in_si = true;
                         current_text.clear();
@@ -38,16 +38,16 @@ impl SharedStrings {
                     }
                     _ => {}
                 },
-                Ok(quick_xml::events::Event::Text(e)) if in_t => {
+                Ok(plain_libs::xml::events::Event::Text(e)) if in_t => {
                     let text = decode_text_lossy(&e);
                     current_text.push_str(&text);
                 }
                 // quick-xml 0.40+ emits entity refs (&amp;, &#13;, …) as separate
                 // events; without this arm every entity in a shared string vanishes.
-                Ok(quick_xml::events::Event::GeneralRef(e)) if in_t => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(e)) if in_t => {
                     current_text.push_str(&resolve_general_ref(&e));
                 }
-                Ok(quick_xml::events::Event::End(e)) => match e.name().local_name().as_ref() {
+                Ok(plain_libs::xml::events::Event::End(e)) => match e.name().local_name().as_ref() {
                     "si" => {
                         // Collapse CR that re-entered via &#13;/&#xD; refs (Excel
                         // in-cell breaks); a CRLF pair arrives as two refs, so the
@@ -62,7 +62,7 @@ impl SharedStrings {
                     }
                     _ => {}
                 },
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => return Err(e.into()),
                 _ => {}
             }

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, ensure};
+use crate::anyhow::{Context, Result, ensure};
 use std::path::{Path, PathBuf};
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -75,7 +75,7 @@ pub fn locate(path: &Path) -> Result<Location> {
         target_os = "android",
         target_os = "windows"
     )))]
-    return Err(anyhow::anyhow!(
+    return Err(crate::anyhow::anyhow!(
         "Native filesystem volume identity is unavailable"
     ));
     #[cfg(any(

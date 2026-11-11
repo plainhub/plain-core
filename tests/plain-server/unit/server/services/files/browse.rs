@@ -63,14 +63,14 @@ async fn existing_file_queries_authorize_effective_parent_and_own_pages_counts_a
     assert!(response.errors[0].message.contains("denied"));
     revoked.store(false, std::sync::atomic::Ordering::SeqCst);
     let archive = temp.path().join("archive.zip");
-    let mut writer = zip::ZipWriter::new(std::fs::File::create(&archive).unwrap());
+    let mut writer = plain_libs::zip::ZipWriter::new(std::fs::File::create(&archive).unwrap());
     use std::io::Write;
     for (name, content) in [
         ("small", b"12".as_slice()),
         ("large", b"12345678".as_slice()),
     ] {
         writer
-            .start_file(name, zip::write::SimpleFileOptions::default())
+            .start_file(name, plain_libs::zip::write::SimpleFileOptions::default())
             .unwrap();
         writer.write_all(content).unwrap();
     }

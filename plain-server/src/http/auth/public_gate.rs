@@ -39,7 +39,7 @@ pub(crate) fn require(
 pub(crate) async fn require_granted(
     ctx: &Context<'_>,
     features: &[AccessFeature],
-) -> anyhow::Result<bool> {
+) -> plain_libs::anyhow::Result<bool> {
     if !is_local(ctx)
         && !plain_rs::features::services::device::access::is_enabled(
             ctx.data_unchecked::<Arc<Prefs>>(),

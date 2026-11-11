@@ -1,0 +1,7 @@
+#[macro_export]
+macro_rules ! plain_error_bail { ($ msg : literal $ (,) ?) => { return $ crate::anyhow:: __private :: Err ($ crate::anyhow:: __anyhow ! ($ msg)) } ; ($ err : expr $ (,) ?) => { return $ crate::anyhow:: __private :: Err ($ crate::anyhow:: __anyhow ! ($ err)) } ; ($ fmt : expr , $ ($ arg : tt) *) => { return $ crate::anyhow:: __private :: Err ($ crate::anyhow:: __anyhow ! ($ fmt , $ ($ arg) *)) } ; }
+
+#[macro_export]
+macro_rules ! plain_error_anyhow { ($ msg : literal $ (,) ?) => { $ crate::anyhow:: __private :: must_use ({ let error = $ crate::anyhow:: __private :: format_err ($ crate::anyhow:: __private :: format_args ! ($ msg)) ; error }) } ; ($ err : expr $ (,) ?) => { $ crate::anyhow:: __private :: must_use ({ use $ crate::anyhow:: __private :: kind ::*; let error = match $ err { error => (& error) . anyhow_kind () . new (error) , } ; error }) } ; ($ fmt : expr , $ ($ arg : tt) *) => { $ crate::anyhow:: Error :: msg ($ crate::anyhow:: __private :: format ! ($ fmt , $ ($ arg) *)) } ; }
+#[macro_export]
+macro_rules ! plain_error___anyhow { ($ msg : literal $ (,) ?) => ({ let error = $ crate::anyhow:: __private :: format_err ($ crate::anyhow:: __private :: format_args ! ($ msg)) ; error }) ; ($ err : expr $ (,) ?) => ({ use $ crate::anyhow:: __private :: kind ::*; let error = match $ err { error => (& error) . anyhow_kind () . new (error) , } ; error }) ; ($ fmt : expr , $ ($ arg : tt) *) => { $ crate::anyhow:: Error :: msg ($ crate::anyhow:: __private :: format ! ($ fmt , $ ($ arg) *)) } ; }

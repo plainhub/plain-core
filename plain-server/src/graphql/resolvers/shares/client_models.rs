@@ -120,7 +120,7 @@ impl TryFrom<client::Info> for SharedLinkInfo {
             expires_at: row
                 .expires_at
                 .map(|value| {
-                    chrono::DateTime::from_timestamp_millis(value)
+                    plain_libs::chrono::DateTime::from_timestamp_millis(value)
                         .map(Instant)
                         .ok_or_else(|| plain_graphql::Error::new("Invalid share expiry"))
                 })

@@ -1,6 +1,6 @@
 use crate::features::chat::attachments::app_file_store;
 use crate::infrastructure::db::Db;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use serde_json::{Value, json};
 use std::path::Path;
 pub fn text(db: &Db, directory: &Path, text: &str) -> Result<Value> {
@@ -16,6 +16,6 @@ pub fn text(db: &Db, directory: &Path, text: &str) -> Result<Value> {
         })
         .collect();
     Ok(
-        json!({"type":"FILES","value":{"items":[{"id":crate::features::record_id::generate(),"uri":format!("fid:{}",imported.fid_suffix),"fileName":format!("message-{}.txt",chrono::Utc::now().timestamp_millis()),"size":text.len(),"summary":summary,"width":0,"height":0,"durationMs":0}]}}),
+        json!({"type":"FILES","value":{"items":[{"id":crate::features::record_id::generate(),"uri":format!("fid:{}",imported.fid_suffix),"fileName":format!("message-{}.txt",plain_libs::chrono::Utc::now().timestamp_millis()),"size":text.len(),"summary":summary,"width":0,"height":0,"durationMs":0}]}}),
     )
 }

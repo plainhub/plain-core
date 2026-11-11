@@ -1,0 +1,11 @@
+{
+  "package": "anyhow",
+  "version": "1.0.104",
+  "repository": "https://github.com/dtolnay/anyhow",
+  "revision": "1dbe1862aae650423e3361fbd20b7d17c5109cc3",
+  "archive_sha256": "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470",
+  "retained_features": [
+    "default",
+    "std"
+  ]
+}

@@ -9,7 +9,7 @@ use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::chat_store::peers;
 use crate::infrastructure::transport::contract::channel_system_request;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -47,7 +47,7 @@ pub fn prepare(
     let actor = prefs
         .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
         .filter(|id| !id.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("Missing client identity"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing client identity"))?;
     let keypair = signing_keypair(prefs)?;
     let payload = outgoing::build(
         Some(db),
@@ -100,7 +100,7 @@ pub fn wire(
     channel_id: &str,
 ) -> Result<String> {
     channel_system_request(&signing_keypair(prefs)?, kind.as_str(), payload, channel_id)
-        .map_err(anyhow::Error::msg)
+        .map_err(plain_libs::anyhow::Error::msg)
 }
 
 #[cfg(test)]

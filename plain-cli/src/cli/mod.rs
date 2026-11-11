@@ -36,13 +36,13 @@ impl Cli {
 
     pub(crate) fn paths(
         &self,
-    ) -> anyhow::Result<plain_rs::infrastructure::platform::system::consts::AppPaths> {
+    ) -> plain_libs::anyhow::Result<plain_rs::infrastructure::platform::system::consts::AppPaths> {
         let mut paths =
             plain_rs::infrastructure::platform::system::consts::AppPaths::detect_with_directories(
                 self.data_dir.clone(),
                 self.cache_dir.clone(),
             )
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         paths.data_dir = std::path::absolute(paths.data_dir)?;
         paths.cache_dir = std::path::absolute(paths.cache_dir)?;
         paths.tls_cert = std::path::absolute(paths.tls_cert)?;

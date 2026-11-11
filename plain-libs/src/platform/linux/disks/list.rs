@@ -22,7 +22,7 @@ pub fn read_disks() -> Result<Vec<Disk>, String> {
 }
 
 fn read_with(
-    read: impl FnOnce(&[&str]) -> anyhow::Result<Vec<LsblkDevice>>,
+    read: impl FnOnce(&[&str]) -> crate::anyhow::Result<Vec<LsblkDevice>>,
 ) -> Result<Vec<Disk>, String> {
     let devs = read(&["NAME", "PATH", "TYPE", "MODEL", "SIZE", "RM"])
         .map_err(|error| error.to_string())?;

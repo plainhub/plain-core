@@ -1,0 +1,221 @@
+#![cfg(all(all(), target_arch = "aarch64"))]
+use core::arch::aarch64::*;
+use core::ops::{Add, AddAssign, BitOr, BitOrAssign, Mul, MulAssign, Sub};
+pub type VecType = int32x4x2_t;
+pub unsafe fn loadu(src: *const i32) -> VecType {
+    unsafe { vld1q_s32_x2(src as *const _) }
+}
+#[derive(Clone, Copy)]
+pub struct YmmRegister {
+    pub(crate) mm256: VecType,
+}
+impl YmmRegister {
+    #[inline]
+    pub unsafe fn load(src: *const i32) -> Self {
+        unsafe { loadu(src).into() }
+    }
+    #[inline]
+    pub fn map2(self, other: Self, f: impl Fn(int32x4_t, int32x4_t) -> int32x4_t) -> Self {
+        let m0 = f(self.mm256.0, other.mm256.0);
+        let m1 = f(self.mm256.1, other.mm256.1);
+        YmmRegister {
+            mm256: int32x4x2_t(m0, m1),
+        }
+    }
+    #[inline]
+    pub fn all_zero(self) -> bool {
+        unsafe {
+            let both = vorrq_s32(self.mm256.0, self.mm256.1);
+            let both_unsigned = vreinterpretq_u32_s32(both);
+            0 == vmaxvq_u32(both_unsigned)
+        }
+    }
+    #[inline]
+    pub fn const_shl<const N: i32>(self) -> Self {
+        unsafe {
+            let m0 = vreinterpretq_s32_u32(vshlq_n_u32::<N>(vreinterpretq_u32_s32(self.mm256.0)));
+            let m1 = vreinterpretq_s32_u32(vshlq_n_u32::<N>(vreinterpretq_u32_s32(self.mm256.1)));
+            YmmRegister {
+                mm256: int32x4x2_t(m0, m1),
+            }
+        }
+    }
+    #[inline]
+    pub fn const_shra<const N: i32>(self) -> Self {
+        unsafe {
+            let i0 = vshrq_n_s32::<N>(self.mm256.0);
+            let i1 = vshrq_n_s32::<N>(self.mm256.1);
+            YmmRegister {
+                mm256: int32x4x2_t(i0, i1),
+            }
+        }
+    }
+}
+impl<T> Add<T> for YmmRegister
+where
+    T: Into<Self>,
+{
+    type Output = YmmRegister;
+    #[inline]
+    fn add(self, rhs: T) -> Self::Output {
+        let rhs = rhs.into();
+        unsafe { self.map2(rhs, |a, b| vaddq_s32(a, b)) }
+    }
+}
+impl<T> Sub<T> for YmmRegister
+where
+    T: Into<Self>,
+{
+    type Output = YmmRegister;
+    #[inline]
+    fn sub(self, rhs: T) -> Self::Output {
+        let rhs = rhs.into();
+        unsafe { self.map2(rhs, |a, b| vsubq_s32(a, b)) }
+    }
+}
+impl<T> AddAssign<T> for YmmRegister
+where
+    T: Into<Self>,
+{
+    #[inline]
+    fn add_assign(&mut self, rhs: T) {
+        let rhs: Self = rhs.into();
+        *self = *self + rhs;
+    }
+}
+impl<T> Mul<T> for YmmRegister
+where
+    T: Into<Self>,
+{
+    type Output = YmmRegister;
+    #[inline]
+    fn mul(self, rhs: T) -> Self::Output {
+        let rhs = rhs.into();
+        unsafe { self.map2(rhs, |a, b| vmulq_s32(a, b)) }
+    }
+}
+impl<T> MulAssign<T> for YmmRegister
+where
+    T: Into<Self>,
+{
+    #[inline]
+    fn mul_assign(&mut self, rhs: T) {
+        let rhs: Self = rhs.into();
+        *self = *self * rhs;
+    }
+}
+impl<T> BitOr<T> for YmmRegister
+where
+    T: Into<Self>,
+{
+    type Output = YmmRegister;
+    #[inline]
+    fn bitor(self, rhs: T) -> Self::Output {
+        let rhs = rhs.into();
+        unsafe { self.map2(rhs, |a, b| vorrq_s32(a, b)) }
+    }
+}
+impl<T> BitOrAssign<T> for YmmRegister
+where
+    T: Into<Self>,
+{
+    #[inline]
+    fn bitor_assign(&mut self, rhs: T) {
+        let rhs: Self = rhs.into();
+        *self = *self | rhs;
+    }
+}
+impl From<i32> for YmmRegister {
+    #[inline]
+    fn from(val: i32) -> Self {
+        unsafe {
+            let dup = vdupq_n_s32(val);
+            YmmRegister {
+                mm256: int32x4x2_t(dup, dup),
+            }
+        }
+    }
+}
+impl From<VecType> for YmmRegister {
+    #[inline]
+    fn from(mm256: VecType) -> Self {
+        YmmRegister { mm256 }
+    }
+}
+#[inline]
+unsafe fn transpose4(
+    v0: &mut int32x4_t,
+    v1: &mut int32x4_t,
+    v2: &mut int32x4_t,
+    v3: &mut int32x4_t,
+) {
+    unsafe {
+        unsafe {
+            let w0 = vtrnq_s32(
+                vreinterpretq_s32_s64(vtrn1q_s64(
+                    vreinterpretq_s64_s32(*v0),
+                    vreinterpretq_s64_s32(*v2),
+                )),
+                vreinterpretq_s32_s64(vtrn1q_s64(
+                    vreinterpretq_s64_s32(*v1),
+                    vreinterpretq_s64_s32(*v3),
+                )),
+            );
+            let w1 = vtrnq_s32(
+                vreinterpretq_s32_s64(vtrn2q_s64(
+                    vreinterpretq_s64_s32(*v0),
+                    vreinterpretq_s64_s32(*v2),
+                )),
+                vreinterpretq_s32_s64(vtrn2q_s64(
+                    vreinterpretq_s64_s32(*v1),
+                    vreinterpretq_s64_s32(*v3),
+                )),
+            );
+            *v0 = w0.0;
+            *v1 = w0.1;
+            *v2 = w1.0;
+            *v3 = w1.1;
+        }
+    }
+}
+#[inline]
+pub unsafe fn transpose(
+    v0: &mut YmmRegister,
+    v1: &mut YmmRegister,
+    v2: &mut YmmRegister,
+    v3: &mut YmmRegister,
+    v4: &mut YmmRegister,
+    v5: &mut YmmRegister,
+    v6: &mut YmmRegister,
+    v7: &mut YmmRegister,
+) {
+    unsafe {
+        unsafe {
+            use core::mem::swap;
+            let ul0 = &mut v0.mm256.0;
+            let ul1 = &mut v1.mm256.0;
+            let ul2 = &mut v2.mm256.0;
+            let ul3 = &mut v3.mm256.0;
+            let ur0 = &mut v0.mm256.1;
+            let ur1 = &mut v1.mm256.1;
+            let ur2 = &mut v2.mm256.1;
+            let ur3 = &mut v3.mm256.1;
+            let ll0 = &mut v4.mm256.0;
+            let ll1 = &mut v5.mm256.0;
+            let ll2 = &mut v6.mm256.0;
+            let ll3 = &mut v7.mm256.0;
+            let lr0 = &mut v4.mm256.1;
+            let lr1 = &mut v5.mm256.1;
+            let lr2 = &mut v6.mm256.1;
+            let lr3 = &mut v7.mm256.1;
+            swap(ur0, ll0);
+            swap(ur1, ll1);
+            swap(ur2, ll2);
+            swap(ur3, ll3);
+            transpose4(ul0, ul1, ul2, ul3);
+            transpose4(ur0, ur1, ur2, ur3);
+            transpose4(ll0, ll1, ll2, ll3);
+            transpose4(lr0, lr1, lr2, lr3);
+        }
+    }
+}

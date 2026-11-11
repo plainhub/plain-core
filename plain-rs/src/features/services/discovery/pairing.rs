@@ -4,7 +4,7 @@ use crate::features::peers::pairing::protocol::{PairingRequest, PairingRequestPa
 use crate::features::peers::pairing::security;
 use crate::features::prefs::Prefs;
 use crate::features::services::peers::peer_wire::signing_keypair;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use plain_libs::crypto::EcdhSession;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -20,7 +20,7 @@ fn actor(prefs: &Prefs) -> Result<String> {
     prefs
         .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("Missing pairing identity"))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing pairing identity"))
 }
 fn request(
     prefs: &Prefs,
@@ -64,7 +64,7 @@ pub(super) fn response(
     }
     let kp = signing_keypair(prefs)?;
     let local_key = plain_libs::utils::base64::base64_encode(&kp[32..]);
-    anyhow::ensure!(
+    plain_libs::anyhow::ensure!(
         request.to_id == actor(prefs)?
             && request.target_public_key == local_key,
         "Pairing target identity mismatch"
@@ -117,7 +117,7 @@ pub fn start_generation(
             &ticket.generation,
             &request.payload.signature,
         )
-        .ok_or_else(|| anyhow::anyhow!("Pairing replaced"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Pairing replaced"))?;
     Ok(json!({"request":request,"ticket":ticket}))
 }
 pub fn cancel(

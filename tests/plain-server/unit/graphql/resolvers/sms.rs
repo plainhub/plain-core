@@ -210,9 +210,9 @@ async fn archiving_a_conversation_stores_the_last_message_date() {
     let records = db.archived_conversation_list().unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].conversation_id, "t1");
-    let stored = chrono::DateTime::parse_from_rfc3339(&records[0].archived_at).unwrap();
+    let stored = plain_libs::chrono::DateTime::parse_from_rfc3339(&records[0].archived_at).unwrap();
     assert!(
-        chrono::Utc::now()
+        plain_libs::chrono::Utc::now()
             .signed_duration_since(stored)
             .num_seconds()
             .abs()

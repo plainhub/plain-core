@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use plain_libs::kv::Db;
 use plain_libs::kv::LazyDb;
 use plain_libs::utils::write_batch::WriteBatch;
@@ -142,9 +142,9 @@ impl DurationCache {
                         }
                     };
                     let modified =
-                        chrono::DateTime::parse_from_rfc3339(&identity.modified_at)?.timestamp();
+                        plain_libs::chrono::DateTime::parse_from_rfc3339(&identity.modified_at)?.timestamp();
                     let stored =
-                        chrono::DateTime::parse_from_rfc3339(&value.modified_at)?.timestamp();
+                        plain_libs::chrono::DateTime::parse_from_rfc3339(&value.modified_at)?.timestamp();
                     Ok((value.path == identity.path
                         && value.size_bytes == identity.size_bytes
                         && stored == modified)
@@ -174,9 +174,9 @@ impl DurationCache {
         if value.path.is_empty() || value.size_bytes < 0 || value.duration_ms <= 0 {
             bail!("Invalid media duration cache entry");
         }
-        value.modified_at = chrono::DateTime::parse_from_rfc3339(&value.modified_at)?
-            .with_timezone(&chrono::Utc)
-            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        value.modified_at = plain_libs::chrono::DateTime::parse_from_rfc3339(&value.modified_at)?
+            .with_timezone(&plain_libs::chrono::Utc)
+            .to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Secs, true);
         value.updated_at = plain_libs::utils::dbtime::now_iso_millis();
         let now = Instant::now();
         pending.push(value, now);

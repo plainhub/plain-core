@@ -31,13 +31,13 @@ pub enum Command {
 }
 
 impl Command {
-    pub fn apply(mut self, prefs: &Prefs) -> anyhow::Result<bool> {
+    pub fn apply(mut self, prefs: &Prefs) -> plain_libs::anyhow::Result<bool> {
         if let Self::SetMdnsHostname { hostname } = &mut self {
             *hostname = hostname.trim().to_owned();
         }
         match self {
             Self::SetPassword { ref password } => {
-                anyhow::ensure!(
+                plain_libs::anyhow::ensure!(
                     !password.trim().is_empty() && password.len() <= 1024,
                     "Invalid password"
                 );
@@ -93,11 +93,11 @@ impl Command {
     }
 }
 
-fn validate_hostname(hostname: &str) -> anyhow::Result<()> {
+fn validate_hostname(hostname: &str) -> plain_libs::anyhow::Result<()> {
     let label = hostname
         .strip_suffix(".local")
-        .ok_or_else(|| anyhow::anyhow!("Hostname must end in .local"))?;
-    anyhow::ensure!(
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Hostname must end in .local"))?;
+    plain_libs::anyhow::ensure!(
         !label.is_empty()
             && label.len() <= 63
             && !label.starts_with('-')

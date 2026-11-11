@@ -3,7 +3,7 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::events::WS_POMODORO_ACTION;
 use crate::infrastructure::events::WsEvent;
 use crate::infrastructure::types::Instant;
-use chrono::{DateTime, Utc};
+use plain_libs::chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use plain_graphql::{Enum, SimpleObject};
 
@@ -89,11 +89,11 @@ impl Service {
             changed: watch::channel(0).0,
         })
     }
-    pub fn settings(&self) -> anyhow::Result<PomodoroSettings> {
+    pub fn settings(&self) -> plain_libs::anyhow::Result<PomodoroSettings> {
         let settings: PomodoroSettings = serde_json::from_value(
             crate::features::prefs::settings::snapshot(&self.prefs)?.pomodoro_settings,
         )?;
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             (1..=1440).contains(&settings.work_duration_min)
                 && (1..=1440).contains(&settings.short_break_duration_min)
                 && (1..=1440).contains(&settings.long_break_duration_min)
@@ -109,14 +109,14 @@ impl Service {
             PomodoroState::LongBreak => settings.long_break_duration_min,
         }) * 60
     }
-    fn initial_runtime(settings: &PomodoroSettings, now: DateTime<Utc>) -> anyhow::Result<Runtime> {
+    fn initial_runtime(settings: &PomodoroSettings, now: DateTime<Utc>) -> plain_libs::anyhow::Result<Runtime> {
         let today = now.with_timezone(&plain_libs::local_time::Local).date_naive();
         let day_start = today
             .and_hms_opt(0, 0, 0)
             .unwrap()
             .and_local_timezone(plain_libs::local_time::Local)
             .earliest()
-            .ok_or_else(|| anyhow::anyhow!("invalid local day"))?
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid local day"))?
             .with_timezone(&Utc);
         Ok(Runtime {
             calendar_date: today.to_string(),
@@ -134,7 +134,7 @@ impl Service {
         &self,
         settings: &PomodoroSettings,
         now: DateTime<Utc>,
-    ) -> anyhow::Result<parking_lot::MutexGuard<'_, Option<Runtime>>> {
+    ) -> plain_libs::anyhow::Result<parking_lot::MutexGuard<'_, Option<Runtime>>> {
         let mut runtime = self.runtime.lock();
         let local = Self::initial_runtime(settings, now)?;
         if let Some(r) = runtime.as_mut() {
@@ -158,7 +158,7 @@ impl Service {
         conn: &rusqlite::Connection,
         runtime: &Runtime,
         now: DateTime<Utc>,
-    ) -> anyhow::Result<PomodoroToday> {
+    ) -> plain_libs::anyhow::Result<PomodoroToday> {
         let count: Option<i32> = conn
             .query_row(
                 "SELECT completed_count FROM pomodoro_items WHERE date=?1",
@@ -177,10 +177,10 @@ impl Service {
             state: runtime.state,
         })
     }
-    pub fn today(&self) -> anyhow::Result<PomodoroToday> {
+    pub fn today(&self) -> plain_libs::anyhow::Result<PomodoroToday> {
         self.tick_at(Utc::now())
     }
-    pub fn command(&self, action: &str, duration: Option<i32>) -> anyhow::Result<PomodoroToday> {
+    pub fn command(&self, action: &str, duration: Option<i32>) -> plain_libs::anyhow::Result<PomodoroToday> {
         let now = Utc::now();
         self.tick_at(now)?;
         self.command_at(action, duration, now)
@@ -190,7 +190,7 @@ impl Service {
         action: &str,
         duration: Option<i32>,
         now: DateTime<Utc>,
-    ) -> anyhow::Result<PomodoroToday> {
+    ) -> plain_libs::anyhow::Result<PomodoroToday> {
         let settings = self.settings()?;
         let mut runtime = self.runtime(&settings, now)?;
         let mut r = runtime.as_ref().unwrap().clone();
@@ -198,9 +198,9 @@ impl Service {
             match action {
                 "start" => {
                     let seconds = duration.unwrap_or(r.remaining(now));
-                    anyhow::ensure!((1..=86400).contains(&seconds), "invalid duration");
+                    plain_libs::anyhow::ensure!((1..=86400).contains(&seconds), "invalid duration");
                     r.remaining = seconds;
-                    r.deadline = Some(now + chrono::Duration::seconds(seconds as i64));
+                    r.deadline = Some(now + plain_libs::chrono::Duration::seconds(seconds as i64));
                     r.paused = false;
                 }
                 "pause" => {
@@ -216,14 +216,14 @@ impl Service {
                     r.paused = false;
                 }
                 "adjust" => {
-                    let seconds = duration.ok_or_else(|| anyhow::anyhow!("duration required"))?;
-                    anyhow::ensure!((0..=r.total).contains(&seconds), "invalid duration");
+                    let seconds = duration.ok_or_else(|| plain_libs::anyhow::anyhow!("duration required"))?;
+                    plain_libs::anyhow::ensure!((0..=r.total).contains(&seconds), "invalid duration");
                     r.remaining = seconds;
                     if r.deadline.is_some() {
-                        r.deadline = Some(now + chrono::Duration::seconds(seconds as i64));
+                        r.deadline = Some(now + plain_libs::chrono::Duration::seconds(seconds as i64));
                     }
                 }
-                _ => anyhow::bail!("unknown pomodoro action"),
+                _ => plain_libs::anyhow::bail!("unknown pomodoro action"),
             }
             Self::snapshot(c, &r, now)
         })?;
@@ -233,10 +233,10 @@ impl Service {
             .send_modify(|revision| *revision = revision.wrapping_add(1));
         Ok(today)
     }
-    fn tick_at(&self, now: DateTime<Utc>) -> anyhow::Result<PomodoroToday> {
+    fn tick_at(&self, now: DateTime<Utc>) -> plain_libs::anyhow::Result<PomodoroToday> {
         self.advance_at(now, false)
     }
-    fn advance_at(&self, now: DateTime<Utc>, progress: bool) -> anyhow::Result<PomodoroToday> {
+    fn advance_at(&self, now: DateTime<Utc>, progress: bool) -> plain_libs::anyhow::Result<PomodoroToday> {
         let settings = self.settings()?;
         let mut runtime = self.runtime(&settings, now)?;
         let mut r = runtime.as_ref().unwrap().clone();
@@ -263,7 +263,7 @@ impl Service {
                 "SELECT id FROM pomodoro_items WHERE date=?1",
                 [&r.calendar_date], |row| row.get(0),
             ).optional()?;
-            let timestamp = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+            let timestamp = now.to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true);
             if let Some(id) = existing {
                 tx.execute(
                     "UPDATE pomodoro_items SET completed_count=completed_count+?1,total_work_secs=total_work_secs+?2,total_break_secs=total_break_secs+?3,updated_at=?4 WHERE id=?5",
@@ -291,7 +291,7 @@ impl Service {
             r.settings_duration = r.total;
             let today = Self::snapshot(&tx, &r, now)?;
             tx.commit()?;
-            Ok::<_, anyhow::Error>((today, completed))
+            Ok::<_, plain_libs::anyhow::Error>((today, completed))
         })?;
         *runtime = Some(r);
         let (today, completed) = result;

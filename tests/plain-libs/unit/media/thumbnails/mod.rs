@@ -54,10 +54,10 @@ fn image_cache_path(
 }
 
 fn write_jpeg(path: &std::path::Path, w: u32, h: u32) {
-    let img = image::RgbImage::from_fn(w, h, |x, y| {
-        image::Rgb([(x % 200) as u8, (y % 200) as u8, 90])
+    let img = crate::image::RgbImage::from_fn(w, h, |x, y| {
+        crate::image::Rgb([(x % 200) as u8, (y % 200) as u8, 90])
     });
-    img.save_with_format(path, image::ImageFormat::Jpeg)
+    img.save_with_format(path, crate::image::ImageFormat::Jpeg)
         .unwrap();
 }
 
@@ -296,8 +296,8 @@ async fn passthrough_small_images() {
 
     // Small PNG with alpha also passes through (alpha preserved).
     let png = dir.path().join("small.png");
-    image::RgbaImage::from_fn(32, 32, |_, _| image::Rgba([1, 2, 3, 0]))
-        .save_with_format(&png, image::ImageFormat::Png)
+    crate::image::RgbaImage::from_fn(32, 32, |_, _| crate::image::Rgba([1, 2, 3, 0]))
+        .save_with_format(&png, crate::image::ImageFormat::Png)
         .unwrap();
     match thumbnail(spec_for(&png, 64, 64)).await.unwrap() {
         ThumbOutcome::Original { data, mime } => {
@@ -334,7 +334,7 @@ async fn exif_oriented_thumbnail_dimensions() {
     let ThumbOutcome::Generated(d) = out else {
         panic!("must generate");
     };
-    let decoded = image::load_from_memory(&d).unwrap();
+    let decoded = crate::image::load_from_memory(&d).unwrap();
     assert_eq!(
         (decoded.width(), decoded.height()),
         (75, 100),
@@ -437,7 +437,7 @@ async fn corrupt_and_foreign_files_error() {
     let bytes = std::fs::read(&trunc).unwrap();
     std::fs::write(&trunc, &bytes[..bytes.len() / 3]).unwrap();
     if let ThumbOutcome::Generated(d) = thumbnail(spec_for(&trunc, 64, 64)).await.unwrap() {
-        assert!(image::load_from_memory(&d).is_ok(), "output must decode");
+        assert!(crate::image::load_from_memory(&d).is_ok(), "output must decode");
     }
 }
 
@@ -478,7 +478,7 @@ async fn progressive_jpeg_dc_fast_path_end_to_end() {
     let ThumbOutcome::Generated(d) = out else {
         panic!("progressive JPEG must generate");
     };
-    let decoded = image::load_from_memory(&d).unwrap();
+    let decoded = crate::image::load_from_memory(&d).unwrap();
     assert_eq!((decoded.width(), decoded.height()), (128, 85));
     // Cleanup.
     let cp = image_cache_path(
@@ -504,7 +504,7 @@ async fn video_thumbnail_end_to_end_and_cache_hit() {
         panic!("cover-less mp4 must generate a frame thumbnail");
     };
     assert!(d1.starts_with(&[0xFF, 0xD8]));
-    assert!(image::load_from_memory(&d1).is_ok());
+    assert!(crate::image::load_from_memory(&d1).is_ok());
 
     let cp = thumb_cache_path(
         &cache_dir(),
@@ -555,7 +555,7 @@ async fn real_photos_end_to_end() {
             let ThumbOutcome::Generated(d) = out else {
                 panic!("{name}@{target} must generate");
             };
-            let decoded = image::load_from_memory(&d).unwrap();
+            let decoded = crate::image::load_from_memory(&d).unwrap();
             // Aspect-preserving box fit with ±1 rounding slack.
             let expect_w = target.min(w);
             let expect_h = target.min(h);
@@ -669,7 +669,7 @@ async fn render_fit_cache_changes_when_source_changes_within_the_same_second() {
     let path = directory.path().join("source.jpg");
     let base = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
     for (nanos, color) in [(100, [240, 10, 10]), (200, [10, 240, 10])] {
-        image::RgbImage::from_pixel(800, 400, image::Rgb(color))
+        crate::image::RgbImage::from_pixel(800, 400, crate::image::Rgb(color))
             .save(&path)
             .unwrap();
         std::fs::File::options()
@@ -685,7 +685,7 @@ async fn render_fit_cache_changes_when_source_changes_within_the_same_second() {
             .await
             .unwrap()
             .unwrap();
-        let decoded = image::load_from_memory(&bytes).unwrap().to_rgb8();
+        let decoded = crate::image::load_from_memory(&bytes).unwrap().to_rgb8();
         assert_eq!(decoded.dimensions(), (128, 64));
         let pixel = decoded.get_pixel(64, 32);
         if nanos == 100 {
@@ -712,7 +712,7 @@ async fn thumbnail_latency_benchmark() {
             .unwrap()
             .unwrap();
         cold.push(start.elapsed().as_secs_f64() * 1000.0);
-        assert_eq!(image::load_from_memory(&bytes).unwrap().width(), 512);
+        assert_eq!(crate::image::load_from_memory(&bytes).unwrap().width(), 512);
         let start = std::time::Instant::now();
         let cached = render(path.to_str().unwrap(), 512, 512, true, &cache)
             .await
@@ -731,11 +731,11 @@ async fn thumbnail_latency_benchmark() {
 
 fn jpeg_with_preview(path: &std::path::Path, preview_color: [u8; 3]) {
     let mut preview = Vec::new();
-    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut preview, 85)
-        .encode_image(&image::RgbImage::from_pixel(
+    crate::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut preview, 85)
+        .encode_image(&crate::image::RgbImage::from_pixel(
             640,
             480,
-            image::Rgb(preview_color),
+            crate::image::Rgb(preview_color),
         ))
         .unwrap();
     let mut tiff = b"II".to_vec();
@@ -765,7 +765,7 @@ fn jpeg_with_preview(path: &std::path::Path, preview_color: [u8; 3]) {
 async fn sufficiently_large_embedded_preview_is_used_without_decoding_the_original() {
     let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("image.jpg");
-    image::RgbImage::from_pixel(1280, 960, image::Rgb([240, 10, 10]))
+    crate::image::RgbImage::from_pixel(1280, 960, crate::image::Rgb([240, 10, 10]))
         .save(&path)
         .unwrap();
     jpeg_with_preview(&path, [10, 240, 10]);
@@ -773,7 +773,7 @@ async fn sufficiently_large_embedded_preview_is_used_without_decoding_the_origin
         .await
         .unwrap()
         .unwrap();
-    let image = image::load_from_memory(&bytes).unwrap().to_rgb8();
+    let image = crate::image::load_from_memory(&bytes).unwrap().to_rgb8();
     let pixel = image.get_pixel(64, 64);
     assert!(
         pixel[1] > pixel[0] + 100,
@@ -822,7 +822,7 @@ async fn fit_disk_cache_contains_the_final_output_without_a_second_encode() {
         spec.file_size,
     );
     std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
-    image::RgbImage::from_pixel(128, 128, image::Rgb([255, 255, 255]))
+    crate::image::RgbImage::from_pixel(128, 128, crate::image::Rgb([255, 255, 255]))
         .save(&legacy)
         .unwrap();
     let legacy_bytes = std::fs::read(&legacy).unwrap();
@@ -831,7 +831,7 @@ async fn fit_disk_cache_contains_the_final_output_without_a_second_encode() {
         .unwrap()
         .unwrap();
     assert_eq!(std::fs::read(&cached).unwrap(), bytes);
-    let image = image::open(cached).unwrap();
+    let image = crate::image::open(cached).unwrap();
     assert_eq!((image.width(), image.height()), (128, 64));
     assert_eq!(std::fs::read(legacy).unwrap(), legacy_bytes);
 }
@@ -902,8 +902,8 @@ fn dc_input_memory_is_charged_only_for_the_full_jpeg_read_path() {
 async fn png_thumbnails_keep_transparency_and_share_fit_cache_for_both_crop_flags() {
     let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("alpha.png");
-    image::RgbaImage::from_fn(768, 768, |x, _| {
-        image::Rgba([
+    crate::image::RgbaImage::from_fn(768, 768, |x, _| {
+        crate::image::Rgba([
             40,
             90,
             150,
@@ -929,7 +929,7 @@ async fn png_thumbnails_keep_transparency_and_share_fit_cache_for_both_crop_flag
         panic!("expected resized PNG")
     };
     assert!(first.starts_with(b"\x89PNG\r\n\x1a\n"));
-    let decoded = image::load_from_memory(&first).unwrap().into_rgba8();
+    let decoded = crate::image::load_from_memory(&first).unwrap().into_rgba8();
     assert_eq!(decoded.dimensions(), (256, 256));
     for (x, alpha) in [(32, 0), (128, 128), (224, 255)] {
         assert_eq!(decoded.get_pixel(x, 128)[3], alpha);
@@ -986,7 +986,7 @@ async fn check_still_format_thumbnail(name: &str, fixture: &[u8]) {
         let ThumbOutcome::Generated(bytes) = outcome else {
             panic!("{name}: browser thumbnail required")
         };
-        let decoded = image::load_from_memory(&bytes).unwrap();
+        let decoded = crate::image::load_from_memory(&bytes).unwrap();
         assert_eq!((decoded.width(), decoded.height()), (24, 16), "{name}");
         outputs.push(bytes);
     }
@@ -1089,10 +1089,10 @@ async fn concurrent_disk_cache_hits_share_the_encoded_storage_without_decoding()
 async fn transparent_webp_uses_the_shared_aspect_fit_and_alpha_output() {
     let directory = crate::temporary::tempdir().unwrap();
     let path = directory.path().join("transparent.webp");
-    let image = image::RgbaImage::from_pixel(1024, 768, image::Rgba([40, 90, 150, 128]));
+    let image = crate::image::RgbaImage::from_pixel(1024, 768, crate::image::Rgba([40, 90, 150, 128]));
     let mut input = std::io::Cursor::new(Vec::new());
-    image::DynamicImage::ImageRgba8(image)
-        .write_to(&mut input, image::ImageFormat::WebP)
+    crate::image::DynamicImage::ImageRgba8(image)
+        .write_to(&mut input, crate::image::ImageFormat::WebP)
         .unwrap();
     std::fs::write(&path, input.into_inner()).unwrap();
     let bytes = render(path.to_str().unwrap(), 256, 256, true, directory.path())
@@ -1100,7 +1100,7 @@ async fn transparent_webp_uses_the_shared_aspect_fit_and_alpha_output() {
         .unwrap()
         .unwrap();
     assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
-    let pixels = image::load_from_memory(&bytes).unwrap().into_rgba8();
+    let pixels = crate::image::load_from_memory(&bytes).unwrap().into_rgba8();
     assert_eq!(pixels.dimensions(), (256, 192));
     assert!(pixels.pixels().all(|p| p[3] == 128));
 }

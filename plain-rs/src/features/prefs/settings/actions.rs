@@ -9,10 +9,10 @@ pub enum Action {
     ClearNotificationApps,
 }
 impl Action {
-    pub fn apply(self, prefs: &Prefs) -> anyhow::Result<bool> {
+    pub fn apply(self, prefs: &Prefs) -> plain_libs::anyhow::Result<bool> {
         let toggle = matches!(&self, Self::ToggleNotificationApp(_));
         if let Self::SetNotificationMode(ref mode) = self {
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 ["allowlist", "blacklist"].contains(&mode.as_str()),
                 "Invalid notification mode"
             );

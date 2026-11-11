@@ -1,5 +1,5 @@
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde::Deserialize;
 use serde_json::json;
 use std::sync::Mutex;
@@ -112,7 +112,7 @@ impl Runtime {
                 .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
                 .unwrap_or_default();
             let uuid = crate::features::client_identity::parse(&id)
-                .ok_or_else(|| anyhow::anyhow!("Invalid BLE client identity"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid BLE client identity"))?;
             Some(uuid.to_string())
         } else {
             None
@@ -140,7 +140,7 @@ impl Runtime {
                 .revision
                 .checked_add(1)
                 .filter(|revision| *revision <= i64::MAX as u64)
-                .ok_or_else(|| anyhow::anyhow!("BLE advertising revision exhausted"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE advertising revision exhausted"))?;
             runtime.revision
         };
         let accepted = state
@@ -150,7 +150,7 @@ impl Runtime {
                 json!({"serviceUuid":advertisement.service_uuid,"revision":revision,"lease":advertisement.lease}),
             )
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         self.current(state, generation)?;
         ensure!(accepted == json!(true), "BLE advertising command rejected");
         let mut runtime = self.state.lock().unwrap();

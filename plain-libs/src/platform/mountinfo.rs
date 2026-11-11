@@ -6,9 +6,9 @@ pub struct MountInfoEntry {
 }
 
 #[cfg(target_os = "linux")]
-pub fn read_mountinfo() -> anyhow::Result<Vec<MountInfoEntry>> {
+pub fn read_mountinfo() -> crate::anyhow::Result<Vec<MountInfoEntry>> {
     let mounts = super::volumes::linux::mounts()?;
-    anyhow::ensure!(!mounts.is_empty(), "No mount information entries");
+    crate::anyhow::ensure!(!mounts.is_empty(), "No mount information entries");
     Ok(mounts
         .into_iter()
         .map(|mount| MountInfoEntry {
@@ -37,14 +37,14 @@ fn find_best_mount_point(entries: &[MountInfoEntry], abs_path: &str) -> Option<S
     best
 }
 
-pub fn resolve_mount_point<P: AsRef<Path>>(abs_path: P) -> anyhow::Result<String> {
+pub fn resolve_mount_point<P: AsRef<Path>>(abs_path: P) -> crate::anyhow::Result<String> {
     let abs = abs_path.as_ref().clean_path();
     if abs.as_os_str().is_empty() || abs == PathBuf::from(".") {
-        anyhow::bail!("invalid path");
+        crate::anyhow::bail!("invalid path");
     }
     let abs_str = match abs.to_str() {
         Some(s) => s,
-        None => anyhow::bail!("invalid utf-8 path"),
+        None => crate::anyhow::bail!("invalid utf-8 path"),
     };
 
     #[cfg(not(target_os = "linux"))]
@@ -69,7 +69,7 @@ pub fn resolve_mount_point<P: AsRef<Path>>(abs_path: P) -> anyhow::Result<String
                 }
             }
         }
-        anyhow::bail!("unable to resolve mountpoint")
+        crate::anyhow::bail!("unable to resolve mountpoint")
     }
 }
 

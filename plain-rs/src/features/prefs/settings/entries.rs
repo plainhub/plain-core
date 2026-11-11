@@ -20,7 +20,7 @@ macro_rules! settings_keys {
             }
         }
 
-        pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> anyhow::Result<Option<bool>> {
+        pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> plain_libs::anyhow::Result<Option<bool>> {
             let patch = match key {
                 $(keys::$key => SettingsPatch {
                     $field: serde_json::from_value(value)?,

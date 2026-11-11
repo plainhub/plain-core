@@ -8,7 +8,7 @@ use crate::infrastructure::db::chat_store::messages;
 use crate::infrastructure::db::chat_store::peers;
 use crate::infrastructure::transport::contract::PeerTransport;
 use crate::infrastructure::transport::contract::chat_item_request;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex, Weak},
@@ -171,7 +171,7 @@ impl Delivery {
                             &self.db,
                             chat.channel_id.as_deref().unwrap_or_default(),
                         )?
-                        .ok_or_else(|| anyhow::anyhow!("Channel unavailable during delivery"))?;
+                        .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel unavailable during delivery"))?;
                         let members: Vec<ChannelMember> = serde_json::from_str(&channel.members)?;
                         if channel.status != ChannelStatus::Joined
                             || !members
@@ -192,7 +192,7 @@ impl Delivery {
                             &content,
                             chat.channel_id.as_deref().unwrap_or_default(),
                         )
-                        .map_err(anyhow::Error::msg)?;
+                        .map_err(plain_libs::anyhow::Error::msg)?;
                         match tokio::time::timeout(
                             Duration::from_secs(20),
                             transport.message(

@@ -41,8 +41,8 @@ fn header<'a>(headers: &'a axum::http::HeaderMap, name: &str) -> String {
 }
 
 fn write_image(path: &std::path::Path, width: u32, height: u32) {
-    image::RgbImage::from_fn(width, height, |x, y| {
-        image::Rgb([(x % 256) as u8, (y % 256) as u8, ((x + y) % 256) as u8])
+    plain_libs::image::RgbImage::from_fn(width, height, |x, y| {
+        plain_libs::image::Rgb([(x % 256) as u8, (y % 256) as u8, ((x + y) % 256) as u8])
     })
     .save(path)
     .unwrap();
@@ -96,7 +96,7 @@ async fn concurrent_requests_for_one_key_decode_once() {
     assert_eq!(first.0, 200);
     assert_eq!(header(&first.1, "content-type"), "image/png");
     assert!(host_requests.try_recv().is_err());
-    let image = image::load_from_memory(&first.2).unwrap();
+    let image = plain_libs::image::load_from_memory(&first.2).unwrap();
     assert_eq!((image.width(), image.height()), (256, 128));
     assert_eq!(header(&first.1, "cache-control"), "private, no-cache");
 
@@ -139,7 +139,7 @@ async fn a_changed_source_and_a_different_size_both_invalidate() {
         enlarged.2, changed.2,
         "output bounds are part of the cache key"
     );
-    let pixels = image::load_from_memory(&enlarged.2).unwrap();
+    let pixels = plain_libs::image::load_from_memory(&enlarged.2).unwrap();
     assert_eq!((pixels.width(), pixels.height()), (1024, 426));
     assert_eq!(state.thumbnails.native_decodes.load(Ordering::SeqCst), 3);
     assert_eq!(render(&state, large).await, enlarged);
@@ -180,7 +180,7 @@ async fn a_matching_conditional_request_answers_not_modified() {
     other.height = 1024;
     let other_image = render(&state, other.clone()).await;
     let other_etag = header(&other_image.1, "etag");
-    let pixels = image::load_from_memory(&other_image.2).unwrap();
+    let pixels = plain_libs::image::load_from_memory(&other_image.2).unwrap();
     assert_eq!((pixels.width(), pixels.height()), (1024, 512));
     assert_eq!(
         render_conditional(&state, other.clone(), Some(&etag))

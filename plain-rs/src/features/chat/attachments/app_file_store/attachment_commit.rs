@@ -4,7 +4,7 @@ use crate::infrastructure::db::DChat;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::row_to_chat;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 use serde_json::Value;
 pub(crate) enum Selection<'a> {
@@ -30,12 +30,12 @@ pub(crate) fn commit(
         let tx=c.unchecked_transaction()?;
         let mut chat=None;let mut references=1i64;
         if let Some(selection)=attachment {
-            let mut row=tx.query_row(&format!("SELECT {CHAT_COLS} FROM chats WHERE id=?1"),[match &selection {Selection::Attachment{message_id,..}|Selection::LinkPreview{message_id,..}=>*message_id}],row_to_chat).optional()?.ok_or_else(||anyhow::anyhow!("Message unavailable"))?;
+            let mut row=tx.query_row(&format!("SELECT {CHAT_COLS} FROM chats WHERE id=?1"),[match &selection {Selection::Attachment{message_id,..}|Selection::LinkPreview{message_id,..}=>*message_id}],row_to_chat).optional()?.ok_or_else(||plain_libs::anyhow::anyhow!("Message unavailable"))?;
             let mut content:Value=serde_json::from_str(&row.content)?;
             match selection {
                 Selection::Attachment{id,original_uri,..}=>{
                     if !matches!(content["type"].as_str(),Some("IMAGES"|"FILES")) {bail!("Message has no attachments");}
-                    let items=content["value"]["items"].as_array_mut().ok_or_else(||anyhow::anyhow!("Invalid attachment items"))?;
+                    let items=content["value"]["items"].as_array_mut().ok_or_else(||plain_libs::anyhow::anyhow!("Invalid attachment items"))?;
                     references=0;
                     for item in items.iter_mut().filter(|item|item["id"].as_str()==Some(id) && item["uri"].as_str()==Some(original_uri)) {
                         if item["size"].as_i64()!=Some(file.size_bytes) {bail!("Incomplete attachment download");}
@@ -46,7 +46,7 @@ pub(crate) fn commit(
                 Selection::LinkPreview{text,preview,..}=>{
                     if content["type"]!="TEXT" || content["value"]["text"].as_str()!=Some(text) {bail!("Preview message changed");}
                     let mut preview=preview.clone();
-                    let url=preview["url"].as_str().ok_or_else(||anyhow::anyhow!("Preview URL unavailable"))?;
+                    let url=preview["url"].as_str().ok_or_else(||plain_libs::anyhow::anyhow!("Preview URL unavailable"))?;
                     let mut previews=content["value"]["linkPreviews"].as_array().cloned().unwrap_or_default();
                     if previews.iter().any(|value|value["url"].as_str()==Some(url)){bail!("Preview already committed");}
                     preview["imageLocalPath"]=Value::String(format!("fid:{suffix}"));

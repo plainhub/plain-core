@@ -232,9 +232,9 @@ fn hotplug_trigger_rules() {
 fn inhibition_is_released_after_error_and_nested_guards() {
     let before = AUTO_MOUNT_INHIBIT_COUNT.load(Ordering::SeqCst);
     let guard = inhibit();
-    let fail = || -> anyhow::Result<()> {
+    let fail = || -> plain_libs::anyhow::Result<()> {
         let _nested = inhibit();
-        anyhow::bail!("operation failed")
+        plain_libs::anyhow::bail!("operation failed")
     };
     assert!(fail().is_err());
     assert_eq!(AUTO_MOUNT_INHIBIT_COUNT.load(Ordering::SeqCst), before + 1);

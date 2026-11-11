@@ -113,7 +113,7 @@ struct TestChannel {
     verification_code: String,
 }
 impl TestChannel {
-    fn encrypt_request(&self, bytes: &[u8], now: u64) -> anyhow::Result<Vec<u8>> {
+    fn encrypt_request(&self, bytes: &[u8], now: u64) -> plain_libs::anyhow::Result<Vec<u8>> {
         match &self.inner {
             LoginChannel::Confirmation(c) => c.encrypt_request(bytes, now),
             LoginChannel::Opaque(c) => Ok(plain_libs::crypto::xchacha_encrypt_raw_with_aad(
@@ -124,7 +124,7 @@ impl TestChannel {
             .unwrap()),
         }
     }
-    fn decrypt_response(&self, bytes: &[u8], now: u64) -> anyhow::Result<Vec<u8>> {
+    fn decrypt_response(&self, bytes: &[u8], now: u64) -> plain_libs::anyhow::Result<Vec<u8>> {
         match &self.inner {
             LoginChannel::Confirmation(c) => c.decrypt_response(bytes, now),
             LoginChannel::Opaque(c) => plain_libs::crypto::xchacha_decrypt_raw_with_aad(
@@ -132,7 +132,7 @@ impl TestChannel {
                 bytes,
                 &plain_libs::auth::auth_aad(&c.context, true),
             )
-            .ok_or_else(|| anyhow::anyhow!("invalid response")),
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid response")),
         }
     }
 }

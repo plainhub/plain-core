@@ -14,7 +14,7 @@ fn wide(value: &[u16]) -> Result<String> {
         .context("Unterminated native volume path")?;
     let value = std::ffi::OsString::from_wide(&value[..end])
         .into_string()
-        .map_err(|_| anyhow::anyhow!("Volume path is not Unicode"))?;
+        .map_err(|_| crate::anyhow::anyhow!("Volume path is not Unicode"))?;
     Ok(windows_path(&value))
 }
 

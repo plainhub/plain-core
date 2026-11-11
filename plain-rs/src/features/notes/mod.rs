@@ -6,7 +6,7 @@ use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 
 fn now() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+    plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true)
 }
 
 pub fn create(db: &Db, title: &str, content: &str) -> DomainResult<NoteRow> {

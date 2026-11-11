@@ -36,7 +36,7 @@ async fn main_writes_preserve_utf8_metadata_and_refuse_overwrite_or_invalid_path
     assert_eq!(data["writeTextFile"]["size"], content.len());
     assert_eq!(data["writeTextFile"]["name"], "unicode.txt");
     assert!(
-        chrono::DateTime::parse_from_rfc3339(data["writeTextFile"]["updatedAt"].as_str().unwrap())
+        plain_libs::chrono::DateTime::parse_from_rfc3339(data["writeTextFile"]["updatedAt"].as_str().unwrap())
             .is_ok()
     );
     let response = graphql(&core, query, json!({"path":path,"content":"replacement"})).await;

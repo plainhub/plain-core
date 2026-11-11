@@ -1,7 +1,7 @@
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
 
-use chrono::SubsecRound;
+use plain_libs::chrono::SubsecRound;
 use plain_graphql::{ID, InputObject};
 use plain_rs::features::{chat::messages::share_card, files::shares::client};
 

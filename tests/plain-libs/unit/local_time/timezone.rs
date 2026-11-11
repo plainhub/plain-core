@@ -1,5 +1,5 @@
 use super::*;
-use chrono::{DateTime, MappedLocalTime};
+use crate::chrono::{DateTime, MappedLocalTime};
 
 #[test]
 fn transition_search_skips_only_transitions_strictly_before_wall_time() {

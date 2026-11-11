@@ -53,7 +53,7 @@ pub fn sources(rows: Vec<Value>) -> Vec<Value> {
         .collect()
 }
 
-pub fn contacts(value: Value) -> anyhow::Result<Vec<Value>> {
+pub fn contacts(value: Value) -> plain_libs::anyhow::Result<Vec<Value>> {
     let page: Page = serde_json::from_value(value)?;
     let groups: HashMap<String, Value> = groups(page.groups)
         .into_iter()
@@ -64,7 +64,7 @@ pub fn contacts(value: Value) -> anyhow::Result<Vec<Value>> {
         details.entry(data.raw_id.clone()).or_default().push(data);
     }
     page.rows.into_iter().map(|mut row| {
-        anyhow::ensure!(row.is_object(), "invalid contact row");
+        plain_libs::anyhow::ensure!(row.is_object(), "invalid contact row");
         for key in ["phoneNumbers", "emails", "addresses", "events", "websites", "ims", "groups"] {
             row[key] = json!([]);
         }

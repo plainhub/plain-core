@@ -20,7 +20,7 @@
 
 //! A regex parser yielding an AST.
 
-use regex_syntax::escape_into;
+use crate::regex_engine::syntax::escape_into;
 
 use super::{Assertion, LookAround::*};
 use super::{CompileError, Error, Expr, MAX_RECURSION, ParseError, Result, codepoint_len};

@@ -177,7 +177,7 @@ pub fn snapshot(prefs: &Prefs) -> Result<Settings> {
     Ok(settings)
 }
 
-pub fn patch(prefs: &Prefs, patch: SettingsPatch) -> anyhow::Result<bool> {
+pub fn patch(prefs: &Prefs, patch: SettingsPatch) -> plain_libs::anyhow::Result<bool> {
     validate(&patch)?;
     let mut changed = false;
     prefs.update(|entries| {

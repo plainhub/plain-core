@@ -1,5 +1,5 @@
 use crate::features::files::shares::client::File;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -148,7 +148,7 @@ impl Walker {
                 .plan
                 .total_size
                 .checked_add(item.entry.size)
-                .ok_or_else(|| anyhow::anyhow!("Shared batch size overflow"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Shared batch size overflow"))?;
             self.plan.targets.push(Target {
                 write_dir: if self.kind == Kind::Zip {
                     String::new()
@@ -167,7 +167,7 @@ impl Walker {
         let item = self
             .active
             .take()
-            .ok_or_else(|| anyhow::anyhow!("No shared directory requested"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("No shared directory requested"))?;
         ensure!(
             self.nodes + self.pending.len() + children.len() <= 100_000,
             "Shared batch capacity exceeded"

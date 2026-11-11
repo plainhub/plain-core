@@ -74,7 +74,7 @@ pub fn read_files(
             continue;
         };
         let read = crate::features::media::file_metadata::read(&path, data_type, |reader: File| {
-            image::ImageReader::new(BufReader::new(reader))
+            plain_libs::image::ImageReader::new(BufReader::new(reader))
                 .with_guessed_format()
                 .ok()?
                 .into_dimensions()

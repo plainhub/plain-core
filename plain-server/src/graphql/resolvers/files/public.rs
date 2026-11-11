@@ -13,7 +13,7 @@ use crate::graphql::types::facts::list;
 use crate::graphql::types::facts::rows;
 use crate::graphql::types::facts::text;
 use crate::http::auth::public_gate;
-use chrono::{DateTime, Utc};
+use plain_libs::chrono::{DateTime, Utc};
 use plain_graphql::{Context, Enum, Object};
 use plain_rs::features::access::AccessFeature;
 
@@ -285,9 +285,9 @@ async fn media_info(
             iso_speed: integer(&facts, "isoSpeed") as i32,
             taken_at: facts["takenAt"]
                 .as_str()
-                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .and_then(|value| plain_libs::chrono::DateTime::parse_from_rfc3339(value).ok())
                 .map(|value| {
-                    plain_rs::infrastructure::types::Instant(value.with_timezone(&chrono::Utc))
+                    plain_rs::infrastructure::types::Instant(value.with_timezone(&plain_libs::chrono::Utc))
                 }),
             flash: integer(&facts, "flash") as i32,
             f_number: facts["fNumber"].as_f64().unwrap_or(0.0),
@@ -320,9 +320,9 @@ async fn media_info(
             composer: text(&facts, "composer"),
             taken_at: facts["takenAt"]
                 .as_str()
-                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .and_then(|value| plain_libs::chrono::DateTime::parse_from_rfc3339(value).ok())
                 .map(|value| {
-                    plain_rs::infrastructure::types::Instant(value.with_timezone(&chrono::Utc))
+                    plain_rs::infrastructure::types::Instant(value.with_timezone(&plain_libs::chrono::Utc))
                 }),
             location: location(&facts),
         }),

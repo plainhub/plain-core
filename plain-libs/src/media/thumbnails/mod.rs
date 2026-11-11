@@ -30,7 +30,7 @@ mod still;
 pub mod video;
 mod workers;
 
-use anyhow::{Result, bail};
+use crate::anyhow::{Result, bail};
 use bytes::Bytes;
 use std::sync::LazyLock;
 
@@ -699,7 +699,7 @@ pub async fn png_preview(path: &str) -> Result<Vec<u8>> {
         let mut head = [0; 64];
         let length = std::io::Read::read(&mut file, &mut head)?;
         let kind = still::kind(&head[..length])
-            .ok_or_else(|| anyhow::anyhow!("Unsupported preview image"))?;
+            .ok_or_else(|| crate::anyhow::anyhow!("Unsupported preview image"))?;
         Ok((still::probe(std::path::Path::new(&owned), kind)?, size))
     })
     .await??;

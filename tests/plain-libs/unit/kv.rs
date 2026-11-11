@@ -144,7 +144,7 @@ fn failed_json_callbacks_and_invalid_prefix_writes_preserve_original_values() {
     database.set_json("state:one", 1).unwrap();
     let result: Result<()> = database.update_json("state:one", |value: &mut u64| {
         *value = 2;
-        anyhow::bail!("rejected operation")
+        crate::anyhow::bail!("rejected operation")
     });
     assert!(result.is_err());
     assert!(

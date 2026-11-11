@@ -10,10 +10,10 @@ fn profile() -> splits::Profile {
     }
 }
 fn bundle(entries: &[(&str, Vec<u8>)]) -> Cursor<Vec<u8>> {
-    let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let mut writer = plain_libs::zip::ZipWriter::new(Cursor::new(Vec::new()));
     for (name, bytes) in entries {
         writer
-            .start_file(*name, zip::write::SimpleFileOptions::default())
+            .start_file(*name, plain_libs::zip::write::SimpleFileOptions::default())
             .unwrap();
         writer.write_all(bytes).unwrap();
     }

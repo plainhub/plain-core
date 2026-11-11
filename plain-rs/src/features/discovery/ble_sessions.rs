@@ -14,7 +14,7 @@
 #[cfg(test)]
 use crate::infrastructure::protocols::ble;
 use crate::infrastructure::protocols::ble::Assembler;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use std::{
     collections::HashMap,
     sync::Mutex,

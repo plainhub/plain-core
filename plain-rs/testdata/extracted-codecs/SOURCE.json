@@ -1,0 +1,26 @@
+{
+  "input": {
+    "width": 2,
+    "height": 2,
+    "rgb": [
+      255,
+      0,
+      0,
+      0,
+      255,
+      0,
+      0,
+      0,
+      255,
+      255,
+      255,
+      255
+    ]
+  },
+  "generators": {
+    "png": "Python standard-library zlib with explicit PNG chunk layout and CRC32",
+    "webp": "Preinstalled cwebp -lossless from the independent libwebp implementation",
+    "gif": "Explicit GIF89a four-color palette and independently packed literal LZW codes with clear codes before each pixel"
+  },
+  "privacy": "Synthetic colors only"
+}

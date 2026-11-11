@@ -89,7 +89,7 @@ async fn main_log_export_and_clear_cover_app_and_rust_log_families() {
     assert_ne!(exported, existing);
     assert_eq!(exported.file_name().unwrap(), "logs (1).zip");
     assert_eq!(std::fs::read(existing).unwrap(), b"preserved archive");
-    let mut zip = zip::ZipArchive::new(std::fs::File::open(exported).unwrap()).unwrap();
+    let mut zip = plain_libs::zip::ZipArchive::new(std::fs::File::open(exported).unwrap()).unwrap();
     let mut names = zip
         .file_names()
         .map(|name| name.unwrap().into_owned())

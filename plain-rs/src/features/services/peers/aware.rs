@@ -3,7 +3,7 @@ use crate::features::services::peers::peer_transport::AwareConnectionConfig;
 use crate::features::services::peers::peer_transport::aware_config_for_peer;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
@@ -45,7 +45,7 @@ impl Runtime {
     pub async fn subscribe(&self, state: &CoreRuntime, id: &str) -> Result<bool> {
         crate::features::services::capabilities::require(&state.host, "WIFI_AWARE").await?;
         let mut work = self.work.lock().await;
-        let peer = peers::get(&state.db, id)?.ok_or_else(|| anyhow::anyhow!("Unknown peer"))?;
+        let peer = peers::get(&state.db, id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown peer"))?;
         work.requested.insert(id.to_owned(), peer.status);
         work.rejected.remove(id);
         self.reconcile(state, &mut work).await?;
@@ -139,7 +139,7 @@ impl Runtime {
                 .host
                 .call("peerStartAware", serde_json::to_value(&subscription)?)
                 .await
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
             ensure!(state.host.is_current(generation), "Aware host replaced");
             if started == json!(true) {
                 work.rejected.remove(&id);
@@ -162,7 +162,7 @@ async fn stop_peer(state: &CoreRuntime, id: &str) -> Result<()> {
         .host
         .call("peerStopAware", json!({"id":id}))
         .await
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
     ensure!(stopped == json!(true), "Invalid Aware stop response");
     Ok(())
 }

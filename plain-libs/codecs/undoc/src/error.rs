@@ -136,15 +136,15 @@ pub enum Error {
     },
 }
 
-impl From<zip::result::ZipError> for Error {
+impl From<plain_libs::zip::result::ZipError> for Error {
     /// Preserve the reason the container could not be read.
     ///
     /// The ZIP layer already distinguishes a damaged archive from an unsupported one,
     /// from a missing entry, from one that needs a password. Collapsing all of them
     /// into a single variant would throw that away here, at the one place it is still
     /// known — and no amount of work further up could recover it.
-    fn from(err: zip::result::ZipError) -> Self {
-        use zip::result::ZipError;
+    fn from(err: plain_libs::zip::result::ZipError) -> Self {
+        use plain_libs::zip::result::ZipError;
 
         match err {
             ZipError::Io(e) => Error::Io(e),
@@ -165,15 +165,15 @@ impl From<zip::result::ZipError> for Error {
     }
 }
 
-impl From<quick_xml::Error> for Error {
+impl From<plain_libs::xml::Error> for Error {
     /// Preserve whether the XML failed to *arrive*, to *decode*, or to *parse*.
     ///
     /// These are three different problems for whoever has to act on the failure, and
     /// only this conversion still knows which one happened.
-    fn from(err: quick_xml::Error) -> Self {
+    fn from(err: plain_libs::xml::Error) -> Self {
         match err {
-            quick_xml::Error::Io(e) => Error::Io(io::Error::new(e.kind(), e.to_string())),
-            quick_xml::Error::Encoding(e) => Error::Encoding(e.to_string()),
+            plain_libs::xml::Error::Io(e) => Error::Io(io::Error::new(e.kind(), e.to_string())),
+            plain_libs::xml::Error::Encoding(e) => Error::Encoding(e.to_string()),
             other => Error::XmlParse(other.to_string()),
         }
     }

@@ -1,11 +1,11 @@
 use crate::infrastructure::host::bridge::Host;
-use anyhow::{Result, anyhow, bail};
+use plain_libs::anyhow::{Result, anyhow, bail};
 
 pub async fn snapshot(host: &Host) -> Result<Vec<String>> {
     serde_json::from_value(
         host.call("systemCapabilities", serde_json::json!({}))
             .await
-            .map_err(anyhow::Error::msg)?,
+            .map_err(plain_libs::anyhow::Error::msg)?,
     )
     .map_err(|error| anyhow!("invalid platform capabilities: {error}"))
 }

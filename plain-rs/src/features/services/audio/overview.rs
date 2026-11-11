@@ -68,7 +68,7 @@ async fn platform_read(
             let artist = row["artist"].as_str().unwrap_or_default().to_owned();
             let created = row["createdAt"]
                 .as_str()
-                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .and_then(|value| plain_libs::chrono::DateTime::parse_from_rfc3339(value).ok())
                 .map(|value| value.timestamp_millis())
                 .unwrap_or_default();
             summary

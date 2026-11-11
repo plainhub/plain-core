@@ -40,7 +40,7 @@ fn filesystem_uuid(mount: &Mount, directory: &Path) -> Result<Option<String>> {
                 entry
                     .file_name()
                     .into_string()
-                    .map_err(|_| anyhow::anyhow!("Volume UUID is not UTF-8"))?,
+                    .map_err(|_| crate::anyhow::anyhow!("Volume UUID is not UTF-8"))?,
             ));
         }
     }

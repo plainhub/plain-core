@@ -11,13 +11,13 @@
 //! pure-Rust decoder and fails cleanly — the engine still tries cover art
 //! first, and a cover-less video then answers `204 No Content`.
 
-use anyhow::{Result, bail};
+use crate::anyhow::{Result, bail};
 
 use crate::media::thumbnails::encode;
 use crate::media::thumbnails::scale;
 use crate::media::thumbnails::scale::Bitmap;
-use rusty_h264_common::YuvFrame;
-use rusty_h264_decoder::Decoder;
+use crate::h264::common::YuvFrame;
+use crate::h264::decoder::Decoder;
 
 /// How many samples past the located keyframe we feed the decoder at most
 /// (covers multi-sample pictures and streams whose "sync" sample is not a
@@ -126,7 +126,7 @@ pub fn plan_keyframe(path: &str) -> Result<FramePlan> {
 pub fn decode_plan(plan: FramePlan) -> Result<Bitmap> {
     let mut dec = Decoder::new();
     let mut frame: Option<YuvFrame> = None;
-    let mut last_err: Option<rusty_h264_decoder::DecodeError> = None;
+    let mut last_err: Option<crate::h264::decoder::DecodeError> = None;
     for au in &plan.access_units {
         match dec.decode(au) {
             Ok(Some(f)) => {
@@ -142,8 +142,8 @@ pub fn decode_plan(plan: FramePlan) -> Result<Bitmap> {
         }
     }
     let frame = frame.ok_or_else(|| match last_err {
-        Some(e) => anyhow::anyhow!("H.264 decode failed: {e}"),
-        None => anyhow::anyhow!("H.264 stream yielded no frame"),
+        Some(e) => crate::anyhow::anyhow!("H.264 decode failed: {e}"),
+        None => crate::anyhow::anyhow!("H.264 stream yielded no frame"),
     })?;
     Ok(yuv420_to_rgb(&frame))
 }

@@ -6,7 +6,7 @@ use super::{
     scale::Bitmap,
     sniff::{ImageKind, Sniffed},
 };
-use anyhow::Result;
+use crate::anyhow::Result;
 use std::path::Path;
 
 pub(super) fn kind(bytes: &[u8]) -> Option<ImageKind> {

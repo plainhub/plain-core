@@ -49,7 +49,7 @@ pub(super) fn entries(
             },
             |path| {
                 send.blocking_send(path.to_owned())
-                    .map_err(|_| anyhow::anyhow!("File scan receiver closed"))
+                    .map_err(|_| plain_libs::anyhow::anyhow!("File scan receiver closed"))
             },
             |path| skipped_roots.push(path.to_owned()),
         )

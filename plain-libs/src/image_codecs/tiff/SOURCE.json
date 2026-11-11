@@ -1,0 +1,8 @@
+{
+  "package": "tiff",
+  "version": "0.11.3",
+  "repository": "https://github.com/image-rs/image-tiff",
+  "revision": "e41159ce058bf193718b017599e2d7d53e9ccc92",
+  "archive_sha256": "b63feaf3343d35b6ca4d50483f94843803b0f51634937cc2ec519fc32232bc52",
+  "retained": "Existing project decoder including fax migrated from local crate to ordinary module; no registry removal counted"
+}

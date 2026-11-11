@@ -21,9 +21,9 @@ use std::path::Path;
 /// damaged container, one that needs a password) has to keep its own classification,
 /// or the optional-part path silently degrades a broken file into a valid-empty
 /// result — exactly what that method promises not to do.
-fn entry_error(path: &str, err: zip::result::ZipError) -> Error {
+fn entry_error(path: &str, err: plain_libs::zip::result::ZipError) -> Error {
     match err {
-        zip::result::ZipError::FileNotFound => Error::MissingComponent(path.to_string()),
+        plain_libs::zip::result::ZipError::FileNotFound => Error::MissingComponent(path.to_string()),
         other => Error::from(other),
     }
 }
@@ -155,7 +155,7 @@ fn fix_xml_encoding_declaration(content: &str) -> String {
 /// Provides methods to read XML files, binary data, and relationships
 /// from an Office Open XML document.
 pub struct OoxmlContainer {
-    archive: RefCell<zip::ZipArchive<Cursor<Vec<u8>>>>,
+    archive: RefCell<plain_libs::zip::ZipArchive<Cursor<Vec<u8>>>>,
     /// Cached package-level relationships (used in Phase 2+)
     inflated_bytes: Cell<u64>,
 }
@@ -249,7 +249,7 @@ fn decode_utf16_be(bytes: &[u8]) -> Result<String> {
 /// CP437. CP437 maps every byte, so decoding cannot fail — a name it could not decode would
 /// not be one a part could be read by either.
 fn entry_names<R: Read + Seek>(
-    archive: &zip::ZipArchive<R>,
+    archive: &plain_libs::zip::ZipArchive<R>,
 ) -> impl Iterator<Item = std::borrow::Cow<'_, str>> {
     archive.file_names().filter_map(|name| name.ok())
 }
@@ -289,7 +289,7 @@ impl OoxmlContainer {
     pub fn from_bytes(data: Vec<u8>) -> Result<Self> {
         crate::limits::check_input(data.len())?;
         let cursor = Cursor::new(data);
-        let mut archive = zip::ZipArchive::new(cursor)?;
+        let mut archive = plain_libs::zip::ZipArchive::new(cursor)?;
         if archive.len() > crate::limits::MAX_PARTS {
             return Err(Error::InvalidData(
                 "Document archive entry limit exceeded".into(),
@@ -465,20 +465,20 @@ impl OoxmlContainer {
 
                 loop {
                     match reader.read_event_into(&mut buf) {
-                        Ok(quick_xml::events::Event::Start(e)) => {
+                        Ok(plain_libs::xml::events::Event::Start(e)) => {
                             let name = e.name();
                             current_element = Some(name.local_name().as_ref().to_string());
                             current_text.clear();
                         }
-                        Ok(quick_xml::events::Event::Text(e)) if current_element.is_some() => {
+                        Ok(plain_libs::xml::events::Event::Text(e)) if current_element.is_some() => {
                             current_text.push_str(&metadata_text_or_raw(&e, "docProps/core.xml")?);
                         }
-                        Ok(quick_xml::events::Event::GeneralRef(e))
+                        Ok(plain_libs::xml::events::Event::GeneralRef(e))
                             if current_element.is_some() =>
                         {
                             current_text.push_str(&resolve_general_ref(&e));
                         }
-                        Ok(quick_xml::events::Event::End(_)) => {
+                        Ok(plain_libs::xml::events::Event::End(_)) => {
                             if let Some(ref elem) = current_element {
                                 let text = normalize_line_endings(Cow::Borrowed(&current_text))
                                     .into_owned();
@@ -503,7 +503,7 @@ impl OoxmlContainer {
                             current_element = None;
                             current_text.clear();
                         }
-                        Ok(quick_xml::events::Event::Eof) => break,
+                        Ok(plain_libs::xml::events::Event::Eof) => break,
                         Err(e) => {
                             return Err(Error::xml_parse_with_context(
                                 e.to_string(),
@@ -547,18 +547,18 @@ impl OoxmlContainer {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(quick_xml::events::Event::Start(e)) => {
+                Ok(plain_libs::xml::events::Event::Start(e)) => {
                     let name = e.name();
                     current_element = Some(name.local_name().as_ref().to_string());
                     current_text.clear();
                 }
-                Ok(quick_xml::events::Event::Text(e)) if current_element.is_some() => {
+                Ok(plain_libs::xml::events::Event::Text(e)) if current_element.is_some() => {
                     current_text.push_str(&metadata_text_or_raw(&e, "docProps/app.xml")?);
                 }
-                Ok(quick_xml::events::Event::GeneralRef(e)) if current_element.is_some() => {
+                Ok(plain_libs::xml::events::Event::GeneralRef(e)) if current_element.is_some() => {
                     current_text.push_str(&resolve_general_ref(&e));
                 }
-                Ok(quick_xml::events::Event::End(_)) => {
+                Ok(plain_libs::xml::events::Event::End(_)) => {
                     if let Some(ref elem) = current_element {
                         let text =
                             normalize_line_endings(Cow::Borrowed(&current_text)).into_owned();
@@ -579,7 +579,7 @@ impl OoxmlContainer {
                     current_element = None;
                     current_text.clear();
                 }
-                Ok(quick_xml::events::Event::Eof) => break,
+                Ok(plain_libs::xml::events::Event::Eof) => break,
                 Err(e) => {
                     return Err(Error::xml_parse_with_context(
                         e.to_string(),
@@ -620,12 +620,12 @@ impl OoxmlContainer {
     }
 }
 
-fn metadata_text_or_raw(text: &quick_xml::events::BytesText<'_>, location: &str) -> Result<String> {
+fn metadata_text_or_raw(text: &plain_libs::xml::events::BytesText<'_>, location: &str) -> Result<String> {
     crate::decode::decode_text_strict(text, location)
 }
 
 fn parse_relationship_element(
-    e: &quick_xml::events::BytesStart<'_>,
+    e: &plain_libs::xml::events::BytesStart<'_>,
     location: &str,
 ) -> Result<Relationship> {
     let mut id = String::new();
@@ -687,12 +687,12 @@ pub(crate) fn parse_relationships_xml(content: &str, location: &str) -> Result<R
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Empty(e)) | Ok(quick_xml::events::Event::Start(e))
+            Ok(plain_libs::xml::events::Event::Empty(e)) | Ok(plain_libs::xml::events::Event::Start(e))
                 if e.name().local_name().as_ref() == "Relationship" =>
             {
                 rels.add(parse_relationship_element(&e, location)?);
             }
-            Ok(quick_xml::events::Event::Eof) => break,
+            Ok(plain_libs::xml::events::Event::Eof) => break,
             Err(e) => return Err(Error::xml_parse_with_context(e.to_string(), location)),
             _ => {}
         }

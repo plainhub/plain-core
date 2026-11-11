@@ -40,7 +40,7 @@ pub async fn deliver(
     state: &CoreRuntime,
     id: &str,
     recipients: Option<Vec<String>>,
-) -> anyhow::Result<crate::features::chat::delivery::Receipt> {
+) -> plain_libs::anyhow::Result<crate::features::chat::delivery::Receipt> {
     deliver_observed(
         state,
         id,
@@ -56,13 +56,13 @@ pub async fn deliver_observed(
     recipients: Option<Vec<String>>,
     attempt: crate::infrastructure::transport::router::Attempt,
     pending: impl Fn(&crate::infrastructure::db::DChat) + Send + Sync,
-) -> anyhow::Result<crate::features::chat::delivery::Receipt> {
+) -> plain_libs::anyhow::Result<crate::features::chat::delivery::Receipt> {
     let result = async {
         let client_id = state
             .prefs
             .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
             .filter(|v| !v.is_empty())
-            .ok_or_else(|| anyhow::anyhow!("Missing chat identity"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing chat identity"))?;
         let key = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
         let token = plain_libs::utils::base64::base64_encode(&state.url_key);
         state

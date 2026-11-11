@@ -192,7 +192,7 @@ async fn a_created_directory_reads_back_as_a_file_row() {
     assert_eq!(row["isDir"], true);
     assert_eq!(row["childCount"], 0);
     assert!(row["mediaId"].is_null());
-    assert!(chrono::DateTime::parse_from_rfc3339(row["updatedAt"].as_str().unwrap()).is_ok());
+    assert!(plain_libs::chrono::DateTime::parse_from_rfc3339(row["updatedAt"].as_str().unwrap()).is_ok());
     assert!(path.is_dir());
 }
 

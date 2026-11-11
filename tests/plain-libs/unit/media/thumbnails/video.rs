@@ -113,7 +113,7 @@ fn end_to_end_h264_mp4_frame() {
         let path = testdata(name);
         let jpg = generate_video_thumbnail(&path, 256, 256, 75).unwrap();
         assert!(jpg.starts_with(&[0xFF, 0xD8]), "{name}: JPEG magic");
-        let decoded = image::load_from_memory(&jpg).unwrap();
+        let decoded = crate::image::load_from_memory(&jpg).unwrap();
         assert_eq!(
             (decoded.width(), decoded.height()),
             (256, 192),
@@ -149,7 +149,7 @@ fn long_video_targets_ten_percent_timepoint() {
     assert!(plan.first_sample_id > 1, "expected a mid-stream keyframe");
     assert!(plan.estimated_bytes() > 0);
     let jpg = decode_plan_to_jpeg(plan, 256, 256, 75).unwrap();
-    assert!(image::load_from_memory(&jpg).is_ok());
+    assert!(crate::image::load_from_memory(&jpg).is_ok());
 }
 
 #[test]

@@ -22,19 +22,19 @@ impl<'a> Preferences<'a> {
     pub async fn patch(
         &self,
         patch: crate::features::prefs::settings::SettingsPatch,
-    ) -> anyhow::Result<bool> {
+    ) -> plain_libs::anyhow::Result<bool> {
         self.update(move |prefs| crate::features::prefs::settings::patch(prefs, patch))
             .await
     }
 
-    pub async fn set(&self, key: &str, value: Value) -> anyhow::Result<bool> {
-        anyhow::ensure!(
+    pub async fn set(&self, key: &str, value: Value) -> plain_libs::anyhow::Result<bool> {
+        plain_libs::anyhow::ensure!(
             crate::features::prefs::pref_keys::writable(key, true),
             "Preference is not accessible"
         );
-        anyhow::ensure!(value.to_string().len() <= 65536, "invalid_pref_value");
+        plain_libs::anyhow::ensure!(value.to_string().len() <= 65536, "invalid_pref_value");
         if key == AI_IMAGE_SEARCH_MODEL {
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 matches!(value.as_str(), Some("default" | "imported")),
                 "Unknown image search model"
             );
@@ -57,21 +57,21 @@ impl<'a> Preferences<'a> {
         .await
     }
 
-    pub async fn remove(&self, key: &str) -> anyhow::Result<bool> {
+    pub async fn remove(&self, key: &str) -> plain_libs::anyhow::Result<bool> {
         self.update(move |prefs| Ok(prefs.remove(key)?)).await
     }
 
     pub async fn action(
         &self,
         action: crate::features::prefs::settings::Action,
-    ) -> anyhow::Result<bool> {
+    ) -> plain_libs::anyhow::Result<bool> {
         self.update(move |prefs| action.apply(prefs)).await
     }
 
     async fn update(
         &self,
-        write: impl FnOnce(&Prefs) -> anyhow::Result<bool>,
-    ) -> anyhow::Result<bool> {
+        write: impl FnOnce(&Prefs) -> plain_libs::anyhow::Result<bool>,
+    ) -> plain_libs::anyhow::Result<bool> {
         let before = crate::features::prefs::settings::snapshot(self.prefs)?;
         let before_model = self
             .prefs
@@ -95,7 +95,7 @@ impl<'a> Preferences<'a> {
                     .image_models
                     .enable(false)
                     .await
-                    .map_err(anyhow::Error::msg)?;
+                    .map_err(plain_libs::anyhow::Error::msg)?;
             }
             if before.remote_access && !after.remote_access {
                 state.clients.close(None);
@@ -103,7 +103,7 @@ impl<'a> Preferences<'a> {
             if before.dlna != after.dlna {
                 crate::features::services::casting::receiver::lifecycle::reconcile(state)
                     .await
-                    .map_err(anyhow::Error::msg)?;
+                    .map_err(plain_libs::anyhow::Error::msg)?;
             }
             if before.device_name != after.device_name
                 || before.remote_access != after.remote_access

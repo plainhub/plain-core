@@ -4,7 +4,7 @@ use crate::features::services::sms::query::Request;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::TrashedMessageRow;
 use crate::infrastructure::host::bridge::Host;
-use anyhow::{Result, anyhow, bail};
+use plain_libs::anyhow::{Result, anyhow, bail};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{collections::HashSet, sync::Arc};
@@ -144,7 +144,7 @@ impl Mutations {
             crate::features::services::sms::archives::write(
                 &directory,
                 &messages,
-                chrono::Utc::now().timestamp_millis(),
+                plain_libs::chrono::Utc::now().timestamp_millis(),
             )
         })
         .await??;
@@ -166,7 +166,7 @@ impl Mutations {
             .host
             .call("systemDeleteSmsRows", json!({"ids":ids}))
             .await
-            .map_err(anyhow::Error::msg)
+            .map_err(plain_libs::anyhow::Error::msg)
             .and_then(|facts| serde_json::from_value::<Receipt>(facts).map_err(Into::into));
         let receipt = match result {
             Ok(receipt) => receipt,

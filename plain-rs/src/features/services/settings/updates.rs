@@ -4,7 +4,7 @@ use crate::features::prefs::security::UpdateInfo;
 use crate::features::updates::Release;
 use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, anyhow, ensure};
+use plain_libs::anyhow::{Result, anyhow, ensure};
 use std::{sync::OnceLock, time::Duration};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -69,7 +69,7 @@ pub async fn check(state: &CoreRuntime, automatic: bool) -> Result<AppUpdateStat
     ensure!(!*state.stop.borrow(), "Rust core stopped");
     crate::features::services::capabilities::require(&state.host, "APP_UPDATES").await?;
     let mut cache = state.update_checks.cache.lock().await;
-    let now_ms = u64::try_from(chrono::Utc::now().timestamp_millis())?;
+    let now_ms = u64::try_from(plain_libs::chrono::Utc::now().timestamp_millis())?;
     let info = info(state)?;
     if automatic
         && !crate::features::updates::due(
@@ -97,7 +97,7 @@ pub async fn snapshot(
             .outcome
             .clone()
             .ok_or_else(|| anyhow!("Update check unavailable"))?
-            .map_err(anyhow::Error::msg)?
+            .map_err(plain_libs::anyhow::Error::msg)?
     } else {
         attempt(state, &mut cache).await?
     };
@@ -129,8 +129,8 @@ fn project(state: &CoreRuntime) -> Result<crate::features::services::settings::t
             .map(|release| release.name.clone())
             .unwrap_or_default(),
         published_at: latest
-            .and_then(|release| chrono::DateTime::parse_from_rfc3339(&release.published_at).ok())
-            .map(|time| crate::infrastructure::types::Instant(time.with_timezone(&chrono::Utc))),
+            .and_then(|release| plain_libs::chrono::DateTime::parse_from_rfc3339(&release.published_at).ok())
+            .map(|time| crate::infrastructure::types::Instant(time.with_timezone(&plain_libs::chrono::Utc))),
     })
 }
 
@@ -148,7 +148,7 @@ async fn attempt(state: &CoreRuntime, cache: &mut Cache) -> Result<AppUpdateStat
 }
 
 async fn fetch(state: &CoreRuntime) -> Result<AppUpdateStatus> {
-    let now_ms = u64::try_from(chrono::Utc::now().timestamp_millis())?;
+    let now_ms = u64::try_from(plain_libs::chrono::Utc::now().timestamp_millis())?;
     let startup = state.host.startup();
     let source = startup
         .update_source

@@ -211,7 +211,7 @@ fn has_path(file: &SqliteFile) -> bool {
 
 async fn spawn<T, F>(work: F) -> plain_graphql::Result<T>
 where
-    F: FnOnce() -> anyhow::Result<T> + Send + 'static,
+    F: FnOnce() -> plain_libs::anyhow::Result<T> + Send + 'static,
     T: Send + 'static,
 {
     tokio::task::spawn_blocking(work)

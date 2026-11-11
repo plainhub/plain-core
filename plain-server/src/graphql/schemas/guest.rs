@@ -91,7 +91,7 @@ impl Query {
             expires_at: share
                 .expires_at
                 .as_deref()
-                .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+                .and_then(|t| plain_libs::chrono::DateTime::parse_from_rfc3339(t).ok())
                 .map(|t| Long(t.timestamp_millis())),
             url_token: share.url_token,
             entries,

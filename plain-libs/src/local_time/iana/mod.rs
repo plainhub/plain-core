@@ -62,10 +62,9 @@ pub(super) fn name() -> Option<String> {
 
 #[cfg(target_vendor = "apple")]
 pub(super) fn name() -> Option<String> {
-    use core_foundation_sys::{
-        base::CFRelease,
-        string::{CFStringGetCString, kCFStringEncodingUTF8},
-        timezone::{CFTimeZoneCopySystem, CFTimeZoneGetName, CFTimeZoneResetSystem},
+    use crate::platform::apple_device::{
+        CF_STRING_ENCODING_UTF8, CFRelease, CFStringGetCString, CFTimeZoneCopySystem,
+        CFTimeZoneGetName, CFTimeZoneResetSystem,
     };
     let mut name = [0; 256];
     // SAFETY: the copied timezone owns its borrowed name until it is released below.
@@ -81,7 +80,7 @@ pub(super) fn name() -> Option<String> {
                 string,
                 name.as_mut_ptr(),
                 name.len() as _,
-                kCFStringEncodingUTF8,
+                CF_STRING_ENCODING_UTF8,
             ) != 0;
         CFRelease(zone.cast());
         if !ok {

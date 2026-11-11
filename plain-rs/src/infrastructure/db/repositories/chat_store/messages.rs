@@ -4,7 +4,7 @@ use crate::infrastructure::db::repositories::chat::CHAT_COLS;
 use crate::infrastructure::db::repositories::chat::row_to_chat;
 use crate::infrastructure::db::repositories::chat_store::SaveMode;
 use crate::infrastructure::db::repositories::chat_store::validate;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, params};
 pub fn get(db: &Db, id: &str) -> Result<Option<DChat>> {
     Ok(db.with_conn(|c| {
@@ -60,7 +60,7 @@ pub(crate) fn validate_content(content: &str) -> Result<()> {
     if matches!(value["type"].as_str(), Some("FILES" | "IMAGES")) {
         let items = value["value"]["items"]
             .as_array()
-            .ok_or_else(|| anyhow::anyhow!("invalid attachment items"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid attachment items"))?;
         for item in items {
             validate_attachment(item)?;
         }

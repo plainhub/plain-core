@@ -15,7 +15,7 @@ use std::ptr;
 use super::win_bindings::{GetTimeZoneInformationForYear, SystemTime, TimeZoneInformation};
 
 use super::{Transition, lookup_with_dst_transitions, shift_seconds};
-use chrono::{
+use crate::chrono::{
     Datelike, FixedOffset, MappedLocalTime, NaiveDate, NaiveDateTime, NaiveTime, Weekday,
 };
 

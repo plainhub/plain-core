@@ -1,5 +1,5 @@
 use crate::platform::rename::wide_path;
-use anyhow::{Context, Result, ensure};
+use crate::anyhow::{Context, Result, ensure};
 use std::{
     path::Path,
     sync::atomic::{AtomicBool, Ordering},

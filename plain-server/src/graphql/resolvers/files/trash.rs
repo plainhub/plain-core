@@ -59,7 +59,7 @@ impl TryFrom<TrashItem> for TrashedFile {
             disk: row.disk,
             trash_rel_path: row.trash_rel_path,
             deleted_at: Instant(
-                chrono::DateTime::from_timestamp(row.deleted_at, 0)
+                plain_libs::chrono::DateTime::from_timestamp(row.deleted_at, 0)
                     .ok_or("invalid trash timestamp")?,
             ),
             uid: row.uid.try_into()?,

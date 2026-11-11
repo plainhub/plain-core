@@ -8,10 +8,10 @@ fn fixture(name: &str) -> Vec<u8> {
     std::fs::read(&p).unwrap_or_else(|_| panic!("missing fixture {}", p.display()))
 }
 
-/// Reference: jpeg-decoder's platform-independent scalar decode at 1/8 scale.
+/// Reference: full JPEG decoding at one-eighth scale. scale.
 /// The dev-only feature avoids CPU-specific SIMD rounding without weakening parity.
 fn reference_1_8(data: &[u8]) -> Bitmap {
-    let mut dec = jpeg_decoder::Decoder::new(std::io::Cursor::new(data));
+    let mut dec = crate::jpeg::Decoder::new(std::io::Cursor::new(data));
     dec.read_info().unwrap();
     let info = dec.info().unwrap();
     let w = u32::from(info.width);
@@ -20,7 +20,7 @@ fn reference_1_8(data: &[u8]) -> Bitmap {
         .unwrap();
     let pixels = dec.decode().expect("reference decode");
     let info = dec.info().unwrap();
-    if info.pixel_format == jpeg_decoder::PixelFormat::L8 {
+    if info.pixel_format == crate::jpeg::PixelFormat::L8 {
         let mut rgb = Vec::with_capacity(pixels.len() * 3);
         for v in &pixels {
             rgb.extend_from_slice(&[*v, *v, *v]);
@@ -98,16 +98,16 @@ fn dc_refinement_scan_is_decoded() {
 #[test]
 fn sequential_dc_matches_scalar_decoder_with_nonzero_ac_coefficients() {
     for (w, h) in [(64, 48), (127, 93), (319, 257)] {
-        let image = image::RgbImage::from_fn(w, h, |x, y| {
-            image::Rgb([
+        let image = crate::image::RgbImage::from_fn(w, h, |x, y| {
+            crate::image::Rgb([
                 (x * 13 + y * 7) as u8,
                 (x * 3 + y * 19) as u8,
                 (x * 23 + y * 11) as u8,
             ])
         });
         let mut bytes = Vec::new();
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85)
-            .encode(image.as_raw(), w, h, image::ExtendedColorType::Rgb8)
+        crate::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85)
+            .encode(image.as_raw(), w, h, crate::image::ExtendedColorType::Rgb8)
             .unwrap();
         let mut decoder = Decoder::new(&bytes).unwrap();
         decoder.six_bit_color = false;

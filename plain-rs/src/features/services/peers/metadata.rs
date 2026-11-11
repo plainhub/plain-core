@@ -3,7 +3,7 @@ use crate::features::services::peers::management::current;
 use crate::features::services::peers::management::current_peer;
 use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::watch;
@@ -54,7 +54,7 @@ pub async fn refresh(
     let data = crate::features::services::peers::management_http::query(
         state,
         &identity.http_url()?,
-        &state.native_client_id().map_err(anyhow::Error::msg)?,
+        &state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?,
         &plain_libs::utils::base64::base64_decode(&identity.token),
         json!({"query":"{ app { deviceName capabilities access urlToken } }"}),
         256 * 1024,

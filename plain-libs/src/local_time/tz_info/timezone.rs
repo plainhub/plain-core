@@ -7,7 +7,7 @@ use std::{cmp::Ordering, fmt, str};
 
 use super::rule::{AlternateTime, TransitionRule};
 use super::{DAYS_PER_WEEK, Error, SECONDS_PER_DAY, parser};
-use chrono::NaiveDateTime;
+use crate::chrono::NaiveDateTime;
 
 /// Time zone
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -132,7 +132,7 @@ impl TimeZone {
     pub(crate) fn find_local_time_type_from_local(
         &self,
         local_time: NaiveDateTime,
-    ) -> Result<chrono::MappedLocalTime<LocalTimeType>, Error> {
+    ) -> Result<crate::chrono::MappedLocalTime<LocalTimeType>, Error> {
         self.as_ref()
             .find_local_time_type_from_local(local_time, self.max_offset)
     }
@@ -222,7 +222,7 @@ impl<'a> TimeZoneRef<'a> {
         &self,
         local_time: NaiveDateTime,
         max_offset: i32,
-    ) -> Result<chrono::MappedLocalTime<LocalTimeType>, Error> {
+    ) -> Result<crate::chrono::MappedLocalTime<LocalTimeType>, Error> {
         let local_leap_time = local_time.and_utc().timestamp();
         let offset_after_last = if !self.transitions.is_empty() {
             let first = self.first_candidate(local_leap_time, max_offset);
@@ -249,26 +249,26 @@ impl<'a> TimeZoneRef<'a> {
                         // backwards transition, eg from DST to regular
                         // this means a given local time could have one of two possible offsets
                         if local_leap_time < transition_end {
-                            return Ok(chrono::MappedLocalTime::Single(prev));
+                            return Ok(crate::chrono::MappedLocalTime::Single(prev));
                         } else if local_leap_time >= transition_end
                             && local_leap_time <= transition_start
                         {
                             if prev.ut_offset < after_ltt.ut_offset {
-                                return Ok(chrono::MappedLocalTime::Ambiguous(prev, after_ltt));
+                                return Ok(crate::chrono::MappedLocalTime::Ambiguous(prev, after_ltt));
                             } else {
-                                return Ok(chrono::MappedLocalTime::Ambiguous(after_ltt, prev));
+                                return Ok(crate::chrono::MappedLocalTime::Ambiguous(after_ltt, prev));
                             }
                         }
                     }
                     Ordering::Equal => {
                         // should this ever happen? presumably we have to handle it anyway.
                         if local_leap_time < transition_start {
-                            return Ok(chrono::MappedLocalTime::Single(prev));
+                            return Ok(crate::chrono::MappedLocalTime::Single(prev));
                         } else if local_leap_time == transition_end {
                             if prev.ut_offset < after_ltt.ut_offset {
-                                return Ok(chrono::MappedLocalTime::Ambiguous(prev, after_ltt));
+                                return Ok(crate::chrono::MappedLocalTime::Ambiguous(prev, after_ltt));
                             } else {
-                                return Ok(chrono::MappedLocalTime::Ambiguous(after_ltt, prev));
+                                return Ok(crate::chrono::MappedLocalTime::Ambiguous(after_ltt, prev));
                             }
                         }
                     }
@@ -276,11 +276,11 @@ impl<'a> TimeZoneRef<'a> {
                         // forwards transition, eg from regular to DST
                         // this means that times that are skipped are invalid local times
                         if local_leap_time <= transition_start {
-                            return Ok(chrono::MappedLocalTime::Single(prev));
+                            return Ok(crate::chrono::MappedLocalTime::Single(prev));
                         } else if local_leap_time < transition_end {
-                            return Ok(chrono::MappedLocalTime::None);
+                            return Ok(crate::chrono::MappedLocalTime::None);
                         } else if local_leap_time == transition_end {
-                            return Ok(chrono::MappedLocalTime::Single(after_ltt));
+                            return Ok(crate::chrono::MappedLocalTime::Single(after_ltt));
                         }
                     }
                 }
@@ -301,7 +301,7 @@ impl<'a> TimeZoneRef<'a> {
                 err => err,
             }
         } else {
-            Ok(chrono::MappedLocalTime::Single(offset_after_last))
+            Ok(crate::chrono::MappedLocalTime::Single(offset_after_last))
         }
     }
 

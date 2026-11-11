@@ -20,7 +20,7 @@
 
 //! Compilation of regexes to VM.
 
-use regex_automata::meta::Regex as RaRegex;
+use crate::regex_engine::automata::meta::Regex as RaRegex;
 
 use super::LookAround::*;
 use super::analyze::Info;

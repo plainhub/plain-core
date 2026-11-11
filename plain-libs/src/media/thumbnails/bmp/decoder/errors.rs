@@ -1,6 +1,6 @@
 // Adapted from image 0.25.10 BMP decoder; see ../LICENSE-MIT and ../decoder.rs for provenance.
 use super::{ImageError, ImageFormat, MAX_WIDTH_HEIGHT};
-use image::error::DecodingError;
+use crate::image::error::DecodingError;
 use std::{error, fmt};
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum DecoderError {

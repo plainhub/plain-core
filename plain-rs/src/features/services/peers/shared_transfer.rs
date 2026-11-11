@@ -3,7 +3,7 @@ use crate::features::files::shares::{
     client::File,
 };
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use futures_util::StreamExt;
 use serde::Deserialize;
 use std::{
@@ -20,7 +20,7 @@ pub(super) struct BlockingWork {
 impl BlockingWork {
     async fn join(active: &mut Option<tokio::task::JoinHandle<()>>) -> Result<()> {
         let result = match active.as_mut() {
-            Some(job) => job.await.map_err(anyhow::Error::from),
+            Some(job) => job.await.map_err(plain_libs::anyhow::Error::from),
             None => Ok(()),
         };
         *active = None;
@@ -128,13 +128,13 @@ async fn destination(
         .file_platform
         .authorize(
             path.to_str()
-                .ok_or_else(|| anyhow::anyhow!("Invalid shared path"))?,
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid shared path"))?,
             true,
         )
         .await?;
     let parent = path
         .parent()
-        .ok_or_else(|| anyhow::anyhow!("Missing shared destination parent"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing shared destination parent"))?;
     let parent_directory = parent.to_path_buf();
     work.run(move || Ok(std::fs::create_dir_all(parent_directory)?))
         .await?;
@@ -144,7 +144,7 @@ async fn destination(
     let stem = path
         .file_stem()
         .and_then(|value| value.to_str())
-        .ok_or_else(|| anyhow::anyhow!("Invalid shared file name"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid shared file name"))?;
     let extension = path
         .extension()
         .and_then(|value| value.to_str())
@@ -168,7 +168,7 @@ async fn destination(
             Err(error) => return Err(error),
         }
     }
-    anyhow::bail!("Shared destination name capacity exceeded")
+    plain_libs::anyhow::bail!("Shared destination name capacity exceeded")
 }
 #[derive(Default)]
 struct Progress {
@@ -217,7 +217,7 @@ async fn download(
         }
         downloaded = downloaded
             .checked_add(i64::try_from(chunk.len())?)
-            .ok_or_else(|| anyhow::anyhow!("Shared download size overflow"))?;
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("Shared download size overflow"))?;
         ensure!(
             downloaded <= expected,
             "Shared download exceeds declared size"
@@ -270,7 +270,7 @@ async fn perform(
             };
             let parent = target_path
                 .parent()
-                .ok_or_else(|| anyhow::anyhow!("Missing shared destination parent"))?;
+                .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing shared destination parent"))?;
             let parent_directory = parent.to_path_buf();
             work.run(move || Ok(std::fs::create_dir_all(parent_directory)?))
                 .await?;
@@ -368,7 +368,7 @@ pub(super) async fn operation(
     }
     let receipt = receiver.await?;
     if let Some(error) = &receipt.error {
-        anyhow::bail!("{error}");
+        plain_libs::anyhow::bail!("{error}");
     }
     Ok(receipt)
 }

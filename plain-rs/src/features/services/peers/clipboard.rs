@@ -2,7 +2,7 @@ use crate::features::access::AccessFeature;
 use crate::features::services::peers::management::Identity;
 use crate::features::services::peers::management::current_peer;
 use crate::runtime::Runtime as CoreRuntime;
-use anyhow::{Result, ensure};
+use plain_libs::anyhow::{Result, ensure};
 use serde_json::json;
 use std::time::Duration;
 use tokio::sync::watch;
@@ -32,7 +32,7 @@ pub async fn receive(
     let data = crate::features::services::peers::management_http::query(
         state,
         &base,
-        &state.native_client_id().map_err(anyhow::Error::msg)?,
+        &state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?,
         &plain_libs::utils::base64::base64_decode(&identity.token),
         json!({"query":r#"{ clipboardItems(query:"",offset:0,limit:1) { id text sensitive } }"#}),
         4 * 1024 * 1024,
@@ -60,7 +60,7 @@ pub async fn receive(
             peer_id,
             false,
         )
-        .map_err(anyhow::Error::msg)?;
+        .map_err(plain_libs::anyhow::Error::msg)?;
         state.clipboard_changes.received(&item.text);
         let result = state
             .host
@@ -70,7 +70,7 @@ pub async fn receive(
                 json!({"text":item.text}),
             )
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         ensure!(result.as_bool() == Some(true), "Clipboard write failed");
         crate::features::clipboard::sync::applied(state.store.get()?.as_ref(), peer_id, item)?;
     }
@@ -85,7 +85,7 @@ pub async fn send(
     text: &str,
     access: &watch::Receiver<Option<bool>>,
 ) -> Result<bool> {
-    crate::features::clipboard::validate_text(text).map_err(anyhow::Error::msg)?;
+    crate::features::clipboard::validate_text(text).map_err(plain_libs::anyhow::Error::msg)?;
     if !current_peer(state, peer_id, identity, cancelled).await?
         || *access.borrow() != Some(true)
         || !crate::features::clipboard::sync::sends(&state.prefs, peer_id)?
@@ -97,7 +97,7 @@ pub async fn send(
     let data = crate::features::services::peers::management_http::query(
         state,
         &identity.http_url()?,
-        &state.native_client_id().map_err(anyhow::Error::msg)?,
+        &state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?,
         &plain_libs::utils::base64::base64_decode(&identity.token),
         json!({"query":"mutation($text:String!){setClipboard(text:$text)}","variables":{"text":text}}),
         65536,

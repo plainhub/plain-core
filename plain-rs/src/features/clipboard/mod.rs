@@ -19,7 +19,7 @@ pub fn record(
         source: source.into(),
         label: label.into(),
         sensitive,
-        created_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        created_at: plain_libs::chrono::Utc::now().to_rfc3339_opts(plain_libs::chrono::SecondsFormat::Millis, true),
     };
     db.clipboard_record(&row).map_err(|error| error.to_string())
 }

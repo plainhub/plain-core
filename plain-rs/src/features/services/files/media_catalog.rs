@@ -3,7 +3,7 @@ use crate::features::prefs::settings::FileSortBy;
 use crate::features::services::files::provider_query::{self as query, Provider};
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::MediaFileRow;
-use anyhow::Result;
+use plain_libs::anyhow::Result;
 use rusqlite::{params_from_iter, types::Value};
 
 fn selection(db: &Db, data_type: DataType, text: &str) -> Result<(String, Vec<Value>)> {
@@ -21,7 +21,7 @@ fn selection_with_trash(
         DataType::Video => Provider::Video,
         DataType::Image => Provider::Image,
         DataType::Doc => Provider::Doc,
-        _ => anyhow::bail!("Unsupported media catalog type"),
+        _ => plain_libs::anyhow::bail!("Unsupported media catalog type"),
     };
     let fields = query::fields(db, text)?;
     let filters = fields

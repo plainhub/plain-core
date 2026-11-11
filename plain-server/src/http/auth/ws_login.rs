@@ -16,18 +16,18 @@ pub(crate) fn admit_attempt(
     state: &ServerState,
     client_id: &str,
     client_ip: &str,
-) -> anyhow::Result<()> {
-    anyhow::ensure!(!client_id.is_empty(), "Client id is required");
+) -> plain_libs::anyhow::Result<()> {
+    plain_libs::anyhow::ensure!(!client_id.is_empty(), "Client id is required");
     let allowed = state
         .login_attempts
         .lock()
-        .map_err(|_| anyhow::anyhow!("Login state unavailable"))?
+        .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?
         .acquire(&if client_ip.is_empty() {
             format!("cid:{client_id}")
         } else {
             client_ip.into()
         });
-    anyhow::ensure!(allowed, "too_many_login_attempts");
+    plain_libs::anyhow::ensure!(allowed, "too_many_login_attempts");
     Ok(())
 }
 
@@ -147,10 +147,10 @@ impl LoginChannel {
             Self::Confirmation(c) => c.context.clone(),
         }
     }
-    fn fresh(&self, now: u64) -> anyhow::Result<()> {
+    fn fresh(&self, now: u64) -> plain_libs::anyhow::Result<()> {
         match self {
             Self::Opaque(c) => {
-                anyhow::ensure!(
+                plain_libs::anyhow::ensure!(
                     c.created.elapsed() < Duration::from_secs(300),
                     "login_expired"
                 );
@@ -159,7 +159,7 @@ impl LoginChannel {
             Self::Confirmation(c) => c.fresh(now),
         }
     }
-    fn decrypt_request(&self, bytes: &[u8], now: u64) -> anyhow::Result<Vec<u8>> {
+    fn decrypt_request(&self, bytes: &[u8], now: u64) -> plain_libs::anyhow::Result<Vec<u8>> {
         self.fresh(now)?;
         match self {
             Self::Opaque(c) => plain_libs::crypto::xchacha_decrypt_raw_with_aad(
@@ -167,11 +167,11 @@ impl LoginChannel {
                 bytes,
                 &plain_libs::auth::auth_aad(&c.context, false),
             )
-            .ok_or_else(|| anyhow::anyhow!("invalid_password")),
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_password")),
             Self::Confirmation(c) => c.decrypt_request(bytes, now),
         }
     }
-    fn encrypt_response(&self, bytes: &[u8], now: u64) -> anyhow::Result<Vec<u8>> {
+    fn encrypt_response(&self, bytes: &[u8], now: u64) -> plain_libs::anyhow::Result<Vec<u8>> {
         self.fresh(now)?;
         match self {
             Self::Opaque(c) => plain_libs::crypto::xchacha_encrypt_raw_with_aad(
@@ -179,7 +179,7 @@ impl LoginChannel {
                 bytes,
                 &plain_libs::auth::auth_aad(&c.context, true),
             )
-            .ok_or_else(|| anyhow::anyhow!("invalid_auth_response")),
+            .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid_auth_response")),
             Self::Confirmation(c) => c.encrypt_response(bytes, now),
         }
     }
@@ -200,8 +200,8 @@ impl LoginProtection {
         }
     }
 
-    fn validate(&self, state: &ServerState, request: &Value) -> anyhow::Result<()> {
-        anyhow::ensure!(
+    fn validate(&self, state: &ServerState, request: &Value) -> plain_libs::anyhow::Result<()> {
+        plain_libs::anyhow::ensure!(
             !plain_rs::features::prefs::security::password_setup_required(&state.prefs)?,
             "password_setup_required"
         );
@@ -210,14 +210,14 @@ impl LoginProtection {
 
         let password_type = plain_rs::features::prefs::security::password_type(&state.prefs)?;
         match self {
-            Self::Password { credential, .. } => anyhow::ensure!(
+            Self::Password { credential, .. } => plain_libs::anyhow::ensure!(
                 password_type == PasswordType::Fixed
                     && Some(credential)
                         == plain_rs::features::prefs::security::password_credential(&state.prefs)?
                             .as_ref(),
                 "invalid_password"
             ),
-            Self::DeviceConfirmation(_) => anyhow::ensure!(
+            Self::DeviceConfirmation(_) => plain_libs::anyhow::ensure!(
                 password_type == PasswordType::None && request.get("password").is_none(),
                 "invalid_login_request"
             ),
@@ -225,7 +225,7 @@ impl LoginProtection {
         Ok(())
     }
 
-    fn encrypt_response(&self, bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
+    fn encrypt_response(&self, bytes: &[u8]) -> plain_libs::anyhow::Result<Vec<u8>> {
         self.channel().encrypt_response(bytes, now_ms())
     }
 }
@@ -380,11 +380,11 @@ fn peer_chat_paired(request: &Value) -> bool {
     port >= 1 && port <= 65535 && plain_libs::utils::base64::base64_decode(&key).len() == 32
 }
 
-async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> {
+async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Result<Value> {
     let device_client_id = state
         .prefs
         .get::<String>(plain_rs::features::prefs::pref_keys::CLIENT_ID)?
-        .ok_or_else(|| anyhow::anyhow!("device client id is missing"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("device client id is missing"))?;
     request.protection.validate(state, &request.request)?;
     let chat_paired = peer_chat_paired(&request.request);
     let shared = match request.protection.channel() {
@@ -398,7 +398,7 @@ async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> 
         let id = &request.client_id;
         let offered_key = text(&request.request["peer"], "signaturePublicKey");
         if let Some(saved) = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, id)? {
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 saved.public_key.is_empty() || saved.public_key == offered_key,
                 "Peer identity changed"
             );
@@ -434,11 +434,11 @@ async fn issue(state: &ServerState, request: &Pending) -> anyhow::Result<Value> 
     )
 }
 
-fn persist(state: &ServerState, request: &Pending, token: &str) -> anyhow::Result<()> {
+fn persist(state: &ServerState, request: &Pending, token: &str) -> plain_libs::anyhow::Result<()> {
     let existing = state
         .db
         .session_get(&request.client_id)
-        .map_err(|error| anyhow::Error::msg(error.to_string()))?;
+        .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
     let now = plain_libs::utils::dbtime::now_iso();
     let row = SessionRow {
         url_token: plain_libs::crypto::gen_token(),
@@ -470,13 +470,13 @@ fn persist(state: &ServerState, request: &Pending, token: &str) -> anyhow::Resul
     state
         .db
         .session_save(&row)
-        .map_err(|error| anyhow::Error::msg(error.to_string()))?;
+        .map_err(|error| plain_libs::anyhow::Error::msg(error.to_string()))?;
     Ok(())
 }
 
-pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Result<Value> {
+pub(crate) async fn execute(state: &ServerState, request: Request) -> plain_libs::anyhow::Result<Value> {
     if matches!(&request, Request::Issue { .. } | Request::Complete { .. }) {
-        anyhow::ensure!(
+        plain_libs::anyhow::ensure!(
             state.prefs.get_or("remote_access", true),
             "remote_access_disabled"
         );
@@ -486,7 +486,7 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             let mut attempts = state
                 .login_attempts
                 .lock()
-                .map_err(|_| anyhow::anyhow!("Login state unavailable"))?;
+                .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?;
             if attempts.pending.remove(&request_id).is_some() {
                 notify_closed(state, &mut attempts, &request_id);
             }
@@ -497,15 +497,15 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                 let mut attempts = state
                     .login_attempts
                     .lock()
-                    .map_err(|_| anyhow::anyhow!("Login state unavailable"))?;
+                    .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?;
                 let pending = attempts
                     .pending
                     .remove(&request_id)
-                    .ok_or_else(|| anyhow::anyhow!("Login confirmation is no longer pending"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Login confirmation is no longer pending"))?;
                 notify_closed(state, &mut attempts, &request_id);
                 pending
             };
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 pending.at.elapsed() < Duration::from_secs(300),
                 "Login confirmation expired"
             );
@@ -522,7 +522,7 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
             let mut request: Value = serde_json::from_slice(&bytes)?;
             let protection = match &channel {
                 LoginChannel::Opaque(c) => {
-                    anyhow::ensure!(request.get("password").is_none(), "invalid_login_request");
+                    plain_libs::anyhow::ensure!(request.get("password").is_none(), "invalid_login_request");
                     LoginProtection::Password {
                         credential: c.credential.clone(),
                         channel,
@@ -531,7 +531,7 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                 LoginChannel::Confirmation(_) => LoginProtection::DeviceConfirmation(channel),
             };
             for field in ["appName", "appVersion", "osName", "osVersion"] {
-                anyhow::ensure!(
+                plain_libs::anyhow::ensure!(
                     request[field].is_string(),
                     "Invalid login metadata: {field}"
                 );
@@ -547,12 +547,12 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                 _ => os_name.as_str(),
             };
             request["osName"] = json!(canonical_os_name);
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 request["isMobile"].is_boolean(),
                 "Invalid login metadata: isMobile"
             );
             if let Some(peer) = request.get("peer").filter(|peer| !peer.is_null()) {
-                anyhow::ensure!(
+                plain_libs::anyhow::ensure!(
                     peer["deviceName"].is_string()
                         && peer["signaturePublicKey"].is_string()
                         && peer["port"]
@@ -603,7 +603,7 @@ pub(crate) async fn execute(state: &ServerState, request: Request) -> anyhow::Re
                     let mut attempts = state
                         .login_attempts
                         .lock()
-                        .map_err(|_| anyhow::anyhow!("Login state unavailable"))?;
+                        .map_err(|_| plain_libs::anyhow::anyhow!("Login state unavailable"))?;
                     attempts
                         .pending
                         .retain(|_, item| item.at.elapsed() < Duration::from_secs(300));

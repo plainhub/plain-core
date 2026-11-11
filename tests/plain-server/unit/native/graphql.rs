@@ -310,7 +310,7 @@ fn remote_transport_errors_preserve_session_and_permission_status() {
         "remote_access_disabled"
     );
     assert_eq!(
-        peer_error(anyhow::anyhow!("fixture failure")),
+        peer_error(plain_libs::anyhow::anyhow!("fixture failure")),
         "fixture failure"
     );
 }

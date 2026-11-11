@@ -1,7 +1,7 @@
 use crate::host::Host;
 use crate::login_socket as login;
 use crate::storage;
-use anyhow::{Result, anyhow};
+use plain_libs::anyhow::{Result, anyhow};
 use plain_rs::features::access::AccessFeature;
 use plain_rs::features::prefs::pref_keys::API_PERMISSIONS;
 use plain_rs::infrastructure::platform::system::consts::AppPaths;
@@ -33,17 +33,17 @@ impl Service {
                 &paths.cache_dir,
                 PairingApproval::FollowPasswordLogin,
             )
-            .map_err(anyhow::Error::msg)?,
+            .map_err(plain_libs::anyhow::Error::msg)?,
         );
         #[cfg(test)]
         if let Some(defaults) = options.file_index_defaults.clone() {
             core.runtime()
                 .media_scans
                 .set_defaults(defaults)
-                .map_err(anyhow::Error::msg)?;
+                .map_err(plain_libs::anyhow::Error::msg)?;
         }
-        let prefs = core.shared_preferences().map_err(anyhow::Error::msg)?;
-        anyhow::ensure!(
+        let prefs = core.shared_preferences().map_err(plain_libs::anyhow::Error::msg)?;
+        plain_libs::anyhow::ensure!(
             plain_rs::features::prefs::security::password_credential(&prefs)?.is_some(),
             "Admin password is not configured. Run plainapp passwd before starting the service."
         );
@@ -61,7 +61,7 @@ impl Service {
         let log_file =
             plain_rs::infrastructure::platform::system::log::default_log_file(&paths.data_dir);
         plain_rs::infrastructure::platform::system::log::set_file(&log_file)?;
-        core.set_log_file(&log_file).map_err(anyhow::Error::msg)?;
+        core.set_log_file(&log_file).map_err(plain_libs::anyhow::Error::msg)?;
         let runtime = Arc::new(Host::new(core.clone(), capabilities()));
         let host = tokio::spawn(runtime.run());
         let mut service = Self {
@@ -88,7 +88,7 @@ impl Service {
         #[cfg(target_os = "linux")]
         if plain_libs::platform::unix::is_root() {
             let store = self.core.runtime().store.get()?;
-            let events = storage::event_sink(&self.core).map_err(anyhow::Error::msg)?;
+            let events = storage::event_sink(&self.core).map_err(plain_libs::anyhow::Error::msg)?;
             let mount_store = store.clone();
             let mount_events = events.clone();
             tokio::task::spawn_blocking(move || {
@@ -115,7 +115,7 @@ impl Service {
                 key: paths.tls_key.clone(),
             };
         if let Some(root) = options.web_root {
-            anyhow::ensure!(
+            plain_libs::anyhow::ensure!(
                 root.is_dir(),
                 "Web directory does not exist: {}",
                 root.display()
@@ -126,7 +126,7 @@ impl Service {
             .core
             .start_configured_public()
             .await
-            .map_err(anyhow::Error::msg)?;
+            .map_err(plain_libs::anyhow::Error::msg)?;
         log::info!("HTTP server listening on :{}", ports.0);
         log::info!("HTTPS server listening on :{}", ports.1);
         Ok(())
@@ -138,7 +138,7 @@ impl Service {
             return tokio::select! {
                 result = login::wait(&mut self.login) => result,
                 result = &mut self.host => {
-                    result.map_err(anyhow::Error::from)?.map_err(anyhow::Error::msg)?;
+                    result.map_err(plain_libs::anyhow::Error::from)?.map_err(plain_libs::anyhow::Error::msg)?;
                     Err(anyhow!("Headless host session stopped"))
                 }
                 result = watcher.wait() => {
@@ -150,7 +150,7 @@ impl Service {
         tokio::select! {
             result = login::wait(&mut self.login) => result,
             result = &mut self.host => {
-                result?.map_err(anyhow::Error::msg)?;
+                result?.map_err(plain_libs::anyhow::Error::msg)?;
                 Err(anyhow!("Headless host session stopped"))
             }
         }

@@ -7,7 +7,7 @@ use crate::features::chat::enums::MemberStatus;
 use crate::infrastructure::db::DChannel;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::now_iso;
-use anyhow::{Result, bail};
+use plain_libs::anyhow::{Result, bail};
 
 #[derive(Default, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,7 +72,7 @@ fn advance(channel: &mut DChannel) -> Result<()> {
     channel.version = channel
         .version
         .checked_add(1)
-        .ok_or_else(|| anyhow::anyhow!("Channel version overflow"))?;
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel version overflow"))?;
     channel.updated_at = now_iso();
     Ok(())
 }
@@ -85,7 +85,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
     let id = value["channelId"]
         .as_str()
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| anyhow::anyhow!("Missing channel id"))?
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing channel id"))?
         .to_owned();
     let id = id.as_str();
     db.with_conn(|c| -> Result<Received> {
@@ -102,12 +102,12 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                     bail!("Invite sender is not owner");
                 }
                 let owner = store::peer(&tx, from)?
-                    .ok_or_else(|| anyhow::anyhow!("Unknown invite owner"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown invite owner"))?;
                 let info = msg
                     .member_peers
                     .iter()
                     .find(|p| p.id == from)
-                    .ok_or_else(|| anyhow::anyhow!("Missing invite owner information"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing invite owner information"))?;
                 if plain_libs::utils::base64::base64_decode(&info.public_key)
                     != plain_libs::utils::base64::base64_decode(&owner.public_key)
                 {
@@ -178,12 +178,12 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
             }
             Type::Update => {
                 let msg: ChannelUpdate = serde_json::from_value(value)?;
-                let mut channel = current.ok_or_else(|| anyhow::anyhow!("Unknown channel"))?;
+                let mut channel = current.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel"))?;
                 if channel.owner_id.as_deref() != Some(from) {
                     bail!("Update sender is not owner");
                 }
                 let owner = store::peer(&tx, from)?
-                    .ok_or_else(|| anyhow::anyhow!("Unknown channel owner"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel owner"))?;
                 signature(
                     &owner.public_key,
                     id,
@@ -207,7 +207,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
             Type::Kick => {
                 let msg: ChannelKick = serde_json::from_value(value)?;
                 let owner = store::peer(&tx, from)?
-                    .ok_or_else(|| anyhow::anyhow!("Unknown channel owner"))?;
+                    .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel owner"))?;
                 if signature(
                     &owner.public_key,
                     id,
@@ -262,7 +262,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                 }
             }
             Type::InviteAccept | Type::InviteDecline | Type::Leave => {
-                let mut channel = current.ok_or_else(|| anyhow::anyhow!("Unknown channel"))?;
+                let mut channel = current.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel"))?;
                 if channel.owner_id.as_deref() != Some(actor) || from == actor {
                     bail!("Invalid member message ownership");
                 }
