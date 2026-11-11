@@ -28,7 +28,7 @@ fn prepare_password(paths: &AppPaths, prompt: impl FnOnce() -> Result<String>) -
     let prefs_path = default_path(&paths.data_dir);
     let prefs = Prefs::load(&prefs_path)?;
     if matches!(security::password_credential(&prefs), Ok(Some(_))) {
-        return Ok(());
+        return security::configure_password_login(&prefs).map_err(Into::into);
     }
     let _directory = plain_rs::infrastructure::data_paths::directory::DataDirectory::open(
         &paths.data_dir,
@@ -41,7 +41,7 @@ fn prepare_password(paths: &AppPaths, prompt: impl FnOnce() -> Result<String>) -
         security::set_password_login(&prefs, &prompt()?)?;
         println!("Admin password configured.");
     }
-    Ok(())
+    security::configure_password_login(&prefs).map_err(Into::into)
 }
 
 #[cfg(test)]

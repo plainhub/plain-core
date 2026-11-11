@@ -55,6 +55,31 @@ fn cancelled_or_invalid_installation_never_creates_a_password() {
 }
 
 #[test]
+fn reinstallation_enforces_password_login_without_approval_and_preserves_credentials() {
+    let root = plain_libs::temporary::tempdir().unwrap();
+    let paths = paths(root.path());
+    prepare_password(&paths, || Ok("installed password".into())).unwrap();
+    let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
+    let credential = security::password_credential(&prefs).unwrap();
+    prefs
+        .set("password_type", security::PasswordType::None)
+        .unwrap();
+    prefs.set("login_require_approval", true).unwrap();
+    let mut expected = prefs.entries();
+    for (key, value) in &mut expected {
+        match key.as_str() {
+            "password_type" => *value = serde_json::json!("FIXED"),
+            "login_require_approval" => *value = serde_json::json!(false),
+            _ => {}
+        }
+    }
+    prepare_password(&paths, || panic!("Existing password must be preserved")).unwrap();
+    let prefs = Prefs::load(&default_path(&paths.data_dir)).unwrap();
+    assert_eq!(security::password_credential(&prefs).unwrap(), credential);
+    assert_eq!(prefs.entries(), expected);
+}
+
+#[test]
 fn invalid_stored_credentials_fail_without_prompting_or_overwriting_them() {
     let root = plain_libs::temporary::tempdir().unwrap();
     let paths = paths(root.path());
