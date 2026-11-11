@@ -41,29 +41,27 @@ fn get_chats_page_resolves_peer_and_channel_targets() {
     seed_chat_at(&db, "c", "me", "peer2", "", "2026-01-01T00:00:03.000Z");
     seed_chat_at(&db, "d", "me", "", "ch1", "2026-01-01T00:00:04.000Z");
 
-    // Bare peer id, `peer:`-prefixed id, and `channel:`-prefixed id;
-    // pages come back oldest-first.
-    let ids: Vec<String> = db
-        .get_chats_page("peer1", "", 0, 50)
-        .into_iter()
-        .map(|c| c.id)
-        .collect();
-    assert_eq!(ids, vec!["a".to_string(), "b".to_string()]);
+    for target in ["peer1", "local", "unknown:id", "peer:", "channel:"] {
+        assert!(db.get_chats_page(target, "", 0, 50).is_err());
+    }
     let ids: Vec<String> = db
         .get_chats_page("peer:peer1", "", 0, 50)
+        .unwrap()
         .into_iter()
         .map(|c| c.id)
         .collect();
     assert_eq!(ids, vec!["a".to_string(), "b".to_string()]);
     let ids: Vec<String> = db
         .get_chats_page("channel:ch1", "", 0, 50)
+        .unwrap()
         .into_iter()
         .map(|c| c.id)
         .collect();
     assert_eq!(ids, vec!["d".to_string()]);
     // Offset pages within one conversation.
     let ids: Vec<String> = db
-        .get_chats_page("peer1", "", 1, 1)
+        .get_chats_page("peer:peer1", "", 1, 1)
+        .unwrap()
         .into_iter()
         .map(|c| c.id)
         .collect();
@@ -79,13 +77,15 @@ fn get_chats_page_resolves_peer_and_channel_targets() {
     chat.id = "x".to_string();
     db2.insert_chat(&chat);
     let ids: Vec<String> = db2
-        .get_chats_page("peer1", "hello", 0, 50)
+        .get_chats_page("peer:peer1", "hello", 0, 50)
+        .unwrap()
         .into_iter()
         .map(|c| c.id)
         .collect();
     assert_eq!(ids, vec!["x".to_string()]);
     let ids: Vec<String> = db2
-        .get_chats_page("peer1", "nope", 0, 50)
+        .get_chats_page("peer:peer1", "nope", 0, 50)
+        .unwrap()
         .into_iter()
         .map(|c| c.id)
         .collect();

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use rusqlite::params;
 
 use crate::features::chat::enums::ChatStatus;
@@ -23,17 +24,21 @@ pub(crate) fn row_to_chat(row: &rusqlite::Row<'_>) -> rusqlite::Result<DChat> {
 }
 
 impl Db {
-    /// Target-scoped chat page (plain-app `chatItems` contract): `target`
-    /// is `channel:<id>` or a bare/`peer:`-prefixed peer id, `text` is a
-    /// substring filter on `content`, results oldest-first.
-    pub fn get_chats_page(&self, id: &str, text: &str, offset: i32, limit: i32) -> Vec<DChat> {
+    /// Read a `peer:<id>` or `channel:<id>` page, oldest first.
+    pub fn get_chats_page(
+        &self,
+        target: &str,
+        text: &str,
+        offset: i32,
+        limit: i32,
+    ) -> Result<Vec<DChat>> {
+        let (peer, channel) = crate::features::chat::messages::target::parse(target)?;
         let conn = self.0.lock().unwrap();
         let text = text.trim();
-        let (base_sql, p1): (&str, &str) = if let Some(cid) = id.strip_prefix("channel:") {
-            ("WHERE channel_id=?1", cid)
+        let (base_sql, p1): (&str, &str) = if channel.is_empty() {
+            ("WHERE channel_id IS NULL AND (to_id=?1 OR from_id=?1)", &peer)
         } else {
-            let pid = id.strip_prefix("peer:").unwrap_or(id);
-            ("WHERE channel_id IS NULL AND (to_id=?1 OR from_id=?1)", pid)
+            ("WHERE channel_id=?1", &channel)
         };
         let text_clause = if text.is_empty() {
             String::new()
@@ -44,18 +49,12 @@ impl Db {
             "SELECT {CHAT_COLS} FROM chats {base_sql}{text_clause} ORDER BY created_at DESC LIMIT ?2 OFFSET ?3"
         );
 
-        let mut stmt = match conn.prepare(&sql) {
-            Ok(s) => s,
-            Err(_) => return vec![],
-        };
-
-        let rows = stmt.query_map(params![p1, limit, offset], row_to_chat);
-        let mut chats: Vec<DChat> = rows
-            .ok()
-            .map(|iter| iter.filter_map(|r| r.ok()).collect())
-            .unwrap_or_default();
+        let mut stmt = conn.prepare(&sql)?;
+        let mut chats = stmt
+            .query_map(params![p1, limit, offset], row_to_chat)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
         chats.reverse();
-        chats
+        Ok(chats)
     }
 
     pub fn insert_chat(&self, chat: &DChat) -> rusqlite::Result<()> {

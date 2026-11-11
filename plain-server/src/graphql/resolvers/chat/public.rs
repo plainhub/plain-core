@@ -122,7 +122,7 @@ impl ChatQuery {
         limit: i32,
     ) -> plain_graphql::Result<Vec<ChatItem>> {
         let text = text_of(&query);
-        let rows = db(ctx)?.get_chats_page(&target, &text, offset, limit);
+        let rows = db(ctx)?.get_chats_page(&target, &text, offset, limit)?;
         if let Some(state) = ctx.data_opt::<crate::server::ServerState>() {
             plain_rs::features::services::chat::prewarm::prepare_page(
                 state, &target, &text, offset, limit,

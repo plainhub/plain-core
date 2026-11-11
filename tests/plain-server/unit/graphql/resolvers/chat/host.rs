@@ -112,7 +112,7 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
     let first = execute(
         &server,
         format!(
-            r#"mutation {{ sendChatItem(target:"local", content:{}) {{id content status}} }}"#,
+            r#"mutation {{ sendChatItem(target:"peer:local", content:{}) {{id content status}} }}"#,
             json!(content)
         ),
     )
@@ -121,14 +121,14 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
     execute(
         &server,
         format!(
-            r#"mutation {{ forwardChatItems(id:{}, targets:["local"]) {{id}} }}"#,
+            r#"mutation {{ forwardChatItems(id:{}, targets:["peer:local"]) {{id}} }}"#,
             json!(id)
         ),
     )
     .await;
     let forwarded = execute(
         &server,
-        format!(r#"mutation {{ forwardChatItems(id:{}, targets:["local","peer:local"]) {{id content}} }}"#, json!(id)),
+        format!(r#"mutation {{ forwardChatItems(id:{}, targets:["peer:local","peer:local"]) {{id content}} }}"#, json!(id)),
     ).await;
     for row in forwarded["forwardChatItems"].as_array().unwrap() {
         assert_eq!(row["content"], first["sendChatItem"][0]["content"]);
@@ -158,7 +158,7 @@ async fn long_text_files_and_invalid_targets_use_the_same_message_lifecycle() {
     let result = execute(
         &server,
         format!(
-            r#"mutation {{sendChatItem(target:"local", content:{}) {{content}}}}"#,
+            r#"mutation {{sendChatItem(target:"peer:local", content:{}) {{content}}}}"#,
             json!(json!({"type":"TEXT","value":{"text":text}}).to_string())
         ),
     )
@@ -267,7 +267,7 @@ async fn batch_forward_uses_current_content_and_owns_each_creation_event() {
     let state = server.runtime_state();
     let source = execute(
         &server,
-        r#"mutation { sendChatItem(target:"local", content:"{\"type\":\"TEXT\",\"value\":{\"text\":\"old\"}}") {id} }"#.into(),
+        r#"mutation { sendChatItem(target:"peer:local", content:"{\"type\":\"TEXT\",\"value\":{\"text\":\"old\"}}") {id} }"#.into(),
     )
     .await;
     let id = source["sendChatItem"][0]["id"].as_str().unwrap();
@@ -281,7 +281,7 @@ async fn batch_forward_uses_current_content_and_owns_each_creation_event() {
     .await;
     let mut events = state.events.subscribe();
     let (_generation, mut host_requests) = crate::test_support::HostRequests::connect(&state.host);
-    let result = execute(&server, format!(r#"mutation {{ forwardChatItems(id:{}, targets:["local","peer:local"]) {{id content status}} }}"#, json!(id))).await;
+    let result = execute(&server, format!(r#"mutation {{ forwardChatItems(id:{}, targets:["peer:local","peer:local"]) {{id content status}} }}"#, json!(id))).await;
     let rows = result["forwardChatItems"].as_array().unwrap();
     assert_eq!(rows.len(), 2);
     assert_ne!(rows[0]["id"], rows[1]["id"]);
@@ -325,3 +325,6 @@ async fn batch_forward_uses_current_content_and_owns_each_creation_event() {
     assert!(events.try_recv().is_err());
     server.shutdown().await;
 }
+
+#[path = "host/targets.rs"]
+mod target_tests;

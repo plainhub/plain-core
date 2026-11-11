@@ -39,7 +39,7 @@ fn seed(db: &Db, id: &str, from_id: &str, to_id: &str, channel_id: &str) {
 }
 
 #[tokio::test]
-async fn send_chat_item_accepts_bare_peer_id_and_local_target() {
+async fn send_chat_item_requires_prefixed_peer_and_local_targets() {
     let dir = unique_tmp_dir("send-target");
     let db = Db::open(&dir.join("plain.db")).expect("open db");
     let service = ChatService::new(
@@ -53,14 +53,20 @@ async fn send_chat_item_accepts_bare_peer_id_and_local_target() {
         no_link_previews(),
     );
 
-    let bare = service
+    for target in ["peer-id", "local", "unknown:id", "peer:", "channel:"] {
+        assert!(service
+            .send_chat_item(target.into(), r#"{"type":"TEXT","value":{"text":"fixture"}}"#.into())
+            .is_err());
+        assert!(service.db.get_all_chats().is_empty());
+    }
+    let peer = service
         .send_chat_item(
-            "peer-id".to_string(),
+            "peer:peer-id".to_string(),
             r#"{"type":"TEXT","value":{"text":"fixture"}}"#.to_string(),
         )
         .unwrap();
-    assert_eq!(bare[0].to_id, "peer-id");
-    assert_eq!(bare[0].status, ChatStatus::Pending);
+    assert_eq!(peer[0].to_id, "peer-id");
+    assert_eq!(peer[0].status, ChatStatus::Pending);
 
     let local = service
         .send_chat_item(

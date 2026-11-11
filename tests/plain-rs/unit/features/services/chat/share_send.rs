@@ -26,7 +26,7 @@ async fn folder_share_is_created_once_and_same_card_is_sent_to_every_target() {
     let messages = folder(
         &state,
         service,
-        vec!["local".into(), "peer:local".into()],
+        vec!["peer:local".into(), "peer:local".into()],
         shared.to_string_lossy().into_owned(),
         "Files".into(),
         None,
@@ -68,7 +68,7 @@ async fn invalid_targets_and_nonfolders_cannot_leave_an_orphan_share() {
     let server = server(directory.path());
     let state = server.runtime_state();
     let service = Service::new(state.db.clone(), state.prefs.clone());
-    for targets in [vec!["channel:".into()], vec!["local".into(); 129]] {
+    for targets in [vec!["channel:".into()], vec!["peer:local".into(); 129]] {
         assert!(
             folder(
                 &state,
@@ -88,7 +88,7 @@ async fn invalid_targets_and_nonfolders_cannot_leave_an_orphan_share() {
         folder(
             &state,
             service.clone(),
-            vec!["local".into()],
+            vec!["peer:local".into()],
             file.to_string_lossy().into_owned(),
             "File".into(),
             None
@@ -100,7 +100,7 @@ async fn invalid_targets_and_nonfolders_cannot_leave_an_orphan_share() {
         folder(
             &state,
             service.clone(),
-            vec!["local".into()],
+            vec!["peer:local".into()],
             directory.path().to_string_lossy().into_owned(),
             "Expired".into(),
             Some("2000-01-01T00:00:00Z".into())
@@ -147,7 +147,7 @@ async fn failed_remote_delivery_retains_share_and_successful_local_message() {
     let _ = folder(
         &state,
         service,
-        vec!["local".into(), "peer:missing".into()],
+        vec!["peer:local".into(), "peer:missing".into()],
         shared.to_string_lossy().into_owned(),
         "Files".into(),
         None,
@@ -201,7 +201,7 @@ async fn folder_share_and_all_messages_roll_back_when_a_later_message_insert_fai
     let result = folder(
         &state,
         service,
-        vec!["local".into(), "peer:local".into()],
+        vec!["peer:local".into(), "peer:local".into()],
         folder_path.to_string_lossy().into_owned(),
         "Owned folder".into(),
         None,

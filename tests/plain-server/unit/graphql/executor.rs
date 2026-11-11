@@ -222,10 +222,10 @@ fn playback_fact_reports_do_not_trigger_generic_content_refresh() {
 #[test]
 fn shared_batch_chat_and_share_flows_own_their_events() {
     for query in [
-        r#"mutation { sendChatItems(targets:["local"],content:"{}") { id } }"#,
-        r#"mutation { forwardChatItems(id:"source",targets:["local"]) { id } }"#,
-        r#"mutation { sendShare(targets:["local"],shareId:"share") { id } }"#,
-        r#"mutation { sendFolderShare(targets:["local"],path:"/folder",name:"Folder") { id } }"#,
+        r#"mutation { sendChatItems(targets:["peer:local"],content:"{}") { id } }"#,
+        r#"mutation { forwardChatItems(id:"source",targets:["peer:local"]) { id } }"#,
+        r#"mutation { sendShare(targets:["peer:local"],shareId:"share") { id } }"#,
+        r#"mutation { sendFolderShare(targets:["peer:local"],path:"/folder",name:"Folder") { id } }"#,
     ] {
         assert!(!content_changes(&Request::new(query)));
     }

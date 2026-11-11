@@ -10,33 +10,11 @@ use crate::infrastructure::transport::contract::PeerTransport;
 use serde_json::{Value, json};
 
 impl<T: PeerTransport + 'static> ChatService<T> {
-    /// Send a chat item. Mirrors `ChatSender.send`:
-    ///   * bare id / `peer:<id>` — peer-to-peer (encrypts with the peer shared key)
-    ///   * `channel:<id>` — channel (star topology, leader election)
-    ///   * `local` / `peer:local` — local note
-    ///
-    /// Delivery is spawned fire-and-forget; the final status is published
-    /// via `WS_MESSAGE_UPDATED`. Returns the initially-inserted row (status
-    /// `PENDING` for remote targets) so the caller can render immediately.
+    /// Send to `peer:<id>` or `channel:<id>`; `peer:local` stores a local note.
     pub fn send_chat_item(&self, to_id: String, content: String) -> Result<Vec<DChat>, String> {
-        let is_channel = to_id.starts_with("channel:");
-        let peer_id = if is_channel {
-            String::new()
-        } else {
-            to_id.strip_prefix("peer:").unwrap_or(&to_id).to_string()
-        };
-        let channel_id = if is_channel {
-            to_id.strip_prefix("channel:").unwrap_or("").to_string()
-        } else {
-            String::new()
-        };
-        let to = if !is_channel {
-            peer_id.clone()
-        } else {
-            String::new()
-        };
-
-        let is_remote = (!peer_id.is_empty() && peer_id != "local") || is_channel;
+        let (to, channel_id) = crate::features::chat::messages::target::parse(&to_id)
+            .map_err(|error| error.to_string())?;
+        let is_remote = (to != "local" && !to.is_empty()) || !channel_id.is_empty();
         let chat = crate::features::chat::messages::message_lifecycle::create(
             &self.db,
             &to,

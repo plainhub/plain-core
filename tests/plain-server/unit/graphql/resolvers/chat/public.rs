@@ -82,7 +82,7 @@ async fn a_direct_message_has_no_channel_id() {
 
     let items = query(
         &schema,
-        r#"query { chatItems(target: "peer-1", offset: 0, limit: 10, query: "") {
+        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "") {
             id fromId toId channelId content status statusData createdAt updatedAt
         } }"#,
     )
@@ -136,7 +136,7 @@ async fn a_channel_message_carries_its_channel_and_stays_out_of_the_peer_list() 
 
     let peer = query(
         &schema,
-        r#"query { chatItems(target: "peer-1", offset: 0, limit: 10, query: "") { id } }"#,
+        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "") { id } }"#,
     )
     .await;
     assert_eq!(
@@ -157,7 +157,7 @@ async fn a_page_comes_back_oldest_first() {
 
     let items = query(
         &schema,
-        r#"query { chatItems(target: "peer-1", offset: 0, limit: 10, query: "") { id content } }"#,
+        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "") { id content } }"#,
     )
     .await;
     let rows = items["data"]["chatItems"].as_array().unwrap();
@@ -175,7 +175,7 @@ async fn the_text_field_filters_before_the_page_is_cut() {
 
     let items = query(
         &schema,
-        r#"query { chatItems(target: "peer-1", offset: 0, limit: 10, query: "text:buy") { content } }"#,
+        r#"query { chatItems(target: "peer:peer-1", offset: 0, limit: 10, query: "text:buy") { content } }"#,
     )
     .await;
     let rows = items["data"]["chatItems"].as_array().unwrap();
