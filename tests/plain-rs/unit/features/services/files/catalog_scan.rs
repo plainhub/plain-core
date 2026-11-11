@@ -130,7 +130,7 @@ async fn native_directory_arrival_preserves_foreground_scan_progress() {
     let before = state.media_scans.snapshot().unwrap().unwrap();
     let mut progress = state.events.subscribe();
     let (send, mut receive) = tokio::sync::mpsc::unbounded_channel();
-    let watcher = crate::features::services::files::media_watch::start(
+    let mut watcher = crate::features::services::files::media_watch::start(
         &[source.clone()],
         None,
         move |event| {
@@ -146,6 +146,7 @@ async fn native_directory_arrival_preserves_foreground_scan_progress() {
         },
     )
     .unwrap();
+    watcher.ready.wait_for(|ready| *ready).await.unwrap();
     for (incoming, destination) in [
         (incoming, source.join("arrived")),
         (incoming_again, source.join("arrived-again")),

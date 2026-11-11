@@ -86,7 +86,8 @@ fn an_inaccessible_watch_descendant_is_skipped_before_descending() {
         ..Default::default()
     };
     let mut watched = std::collections::BTreeSet::new();
-    watch_tree(&mut watcher, &mut watched, directory.path(), None).unwrap();
+    let (_, stopped) = tokio::sync::watch::channel(false);
+    watch_tree(&mut watcher, &mut watched, directory.path(), None, &stopped).unwrap();
     assert!(watched.contains(directory.path()));
     assert!(watched.contains(&readable));
     assert!(!watched.contains(&denied));
@@ -311,7 +312,8 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
     };
     let mut watcher = RecordingWatcher::default();
     let mut watched = std::collections::BTreeSet::new();
-    watch_tree(&mut watcher, &mut watched, root, Some(&scope)).unwrap();
+    let (_, stopped) = tokio::sync::watch::channel(false);
+    watch_tree(&mut watcher, &mut watched, root, Some(&scope), &stopped).unwrap();
     if cfg!(any(target_os = "macos", target_os = "windows")) {
         assert_eq!(watcher.0, vec![(root.to_owned(), RecursiveMode::Recursive)]);
         watch_tree(
@@ -319,6 +321,7 @@ fn watch_registration_uses_native_recursion_or_only_allowed_directory_watches() 
             &mut watched,
             &root.join("project"),
             Some(&scope),
+            &stopped,
         )
         .unwrap();
         assert_eq!(watcher.0.len(), 1);
@@ -388,7 +391,8 @@ fn an_inaccessible_watch_root_is_skipped_without_marking_it_watched() {
         ..Default::default()
     };
     let mut watched = std::collections::BTreeSet::new();
-    watch_tree(&mut watcher, &mut watched, directory.path(), None).unwrap();
+    let (_, stopped) = tokio::sync::watch::channel(false);
+    watch_tree(&mut watcher, &mut watched, directory.path(), None, &stopped).unwrap();
     assert!(watched.is_empty());
     assert_eq!(watcher.calls, vec![directory.path().to_owned()]);
 }
@@ -416,4 +420,248 @@ fn git_project_events_are_skipped_without_disabling_other_file_events() {
     .add_path(directory.path().join("report.txt"));
     enqueue_event(&send, None, included.clone()).unwrap();
     assert_eq!(receive.try_recv().unwrap().paths, included.paths);
+}
+
+struct GatedWatcher {
+    entered: Option<tokio::sync::oneshot::Sender<()>>,
+    release: std::sync::mpsc::Receiver<()>,
+    dropped: Option<tokio::sync::oneshot::Sender<()>>,
+    calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    callback: Box<dyn FnMut(plain_libs::file_events::Result<Event>) + Send>,
+}
+
+impl Watcher for GatedWatcher {
+    fn new<F: plain_libs::file_events::EventHandler>(
+        _: F,
+    ) -> plain_libs::file_events::Result<Self> {
+        unreachable!()
+    }
+
+    fn watch(&mut self, path: &Path, _: RecursiveMode) -> plain_libs::file_events::Result<()> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if let Some(entered) = self.entered.take() {
+            entered.send(()).unwrap();
+            self.release
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .map_err(|_| {
+                    plain_libs::file_events::Error::io(std::io::ErrorKind::TimedOut.into())
+                })?;
+            (self.callback)(Ok(
+                Event::new(EventKind::Modify(ModifyKind::Any)).add_path(path.join("changed.txt"))
+            ));
+        }
+        Ok(())
+    }
+
+    fn unwatch(&mut self, _: &Path) -> plain_libs::file_events::Result<()> {
+        Ok(())
+    }
+}
+
+impl Drop for GatedWatcher {
+    fn drop(&mut self) {
+        if let Some(dropped) = self.dropped.take() {
+            let _ = dropped.send(());
+        }
+    }
+}
+
+#[tokio::test]
+async fn starting_a_watcher_returns_before_registration_and_signals_readiness() {
+    let directory = watch_directory_fixture();
+    std::fs::write(directory.path().join("changed.txt"), b"fixture").unwrap();
+    let (entered, ready) = tokio::sync::oneshot::channel();
+    let (release, gate) = std::sync::mpsc::channel();
+    let (dropped, gone) = tokio::sync::oneshot::channel();
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let (send, mut events) = tokio::sync::mpsc::unbounded_channel();
+    let mut handle = start_with_watcher(
+        &[directory.path().to_owned()],
+        None,
+        |callback| {
+            Ok(GatedWatcher {
+                entered: Some(entered),
+                release: gate,
+                dropped: Some(dropped),
+                calls,
+                callback,
+            })
+        },
+        move |event| {
+            send.send(event).unwrap();
+            async { Ok(()) }
+        },
+    )
+    .unwrap();
+    ready.await.unwrap();
+    assert!(!*handle.ready.borrow());
+    assert!(
+        events.try_recv().is_err(),
+        "registration must still be gated after start returns"
+    );
+    release.send(()).unwrap();
+    handle.ready.wait_for(|ready| *ready).await.unwrap();
+    let change = tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(change.kind, EventKind::Modify(ModifyKind::Any));
+    assert_eq!(change.paths, vec![directory.path().join("changed.txt")]);
+    drop(handle);
+    tokio::time::timeout(std::time::Duration::from_secs(5), gone)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test]
+async fn replacing_a_watcher_cancels_registration_before_the_next_root() {
+    let directory = watch_directory_fixture();
+    let roots: Vec<_> = ["first", "second"]
+        .map(|name| directory.path().join(name))
+        .into();
+    for root in &roots {
+        std::fs::create_dir(root).unwrap();
+    }
+    let (entered, ready) = tokio::sync::oneshot::channel();
+    let (release, gate) = std::sync::mpsc::channel();
+    let (dropped, gone) = tokio::sync::oneshot::channel();
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = calls.clone();
+    let handled = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed_handlers = handled.clone();
+    let handle = start_with_watcher(
+        &roots,
+        None,
+        |callback| {
+            Ok(GatedWatcher {
+                entered: Some(entered),
+                release: gate,
+                dropped: Some(dropped),
+                calls,
+                callback,
+            })
+        },
+        move |_| {
+            handled.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            async { Ok(()) }
+        },
+    )
+    .unwrap();
+    ready.await.unwrap();
+    drop(handle);
+    release.send(()).unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), gone)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(observed.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert_eq!(
+        observed_handlers.load(std::sync::atomic::Ordering::SeqCst),
+        0
+    );
+}
+
+#[tokio::test]
+async fn dropping_a_watcher_cancels_a_pending_catalog_handler() {
+    let directory = watch_directory_fixture();
+    let (entered, ready) = tokio::sync::oneshot::channel();
+    let (release, gate) = std::sync::mpsc::channel();
+    let (dropped, gone) = tokio::sync::oneshot::channel();
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let (send, mut processing) = tokio::sync::mpsc::unbounded_channel();
+    let handle = start_with_watcher(
+        &[directory.path().to_owned()],
+        None,
+        |callback| {
+            Ok(GatedWatcher {
+                entered: Some(entered),
+                release: gate,
+                dropped: Some(dropped),
+                calls,
+                callback,
+            })
+        },
+        move |_| {
+            send.send(()).unwrap();
+            std::future::pending()
+        },
+    )
+    .unwrap();
+    ready.await.unwrap();
+    release.send(()).unwrap();
+    processing.recv().await.unwrap();
+    drop(handle);
+    tokio::time::timeout(std::time::Duration::from_secs(5), gone)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test]
+async fn directory_scanning_waits_for_watch_registration_and_remains_cancellable() {
+    use crate::features::services::files::{catalog_scan::NativeMediaCatalog, media_scans::Status};
+    use std::future::Future;
+    for cancel in [false, true] {
+        let directory = watch_directory_fixture();
+        let source = directory.path().join("source");
+        std::fs::create_dir(&source).unwrap();
+        let document = source.join("document.txt");
+        std::fs::write(&document, b"fixture").unwrap();
+        let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
+        let state = core.runtime_state();
+        let catalog = NativeMediaCatalog::new(state.clone());
+        let (started, ready) = tokio::sync::watch::channel(false);
+        let (stop, _stopped) = tokio::sync::watch::channel(false);
+        *state.media_watch.lock().unwrap() = Some(WatcherHandle {
+            task: tokio::spawn(std::future::pending()),
+            stop,
+            ready,
+        });
+        let mut scan = Box::pin(catalog.scan_directory(source.to_str().unwrap()));
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(scan.as_mut().poll(&mut context).is_pending());
+        assert_eq!(
+            started.receiver_count(),
+            2,
+            "the scan must wait on watcher readiness"
+        );
+        assert!(
+            catalog
+                .by_path(
+                    crate::features::enums::DataType::Doc,
+                    document.to_str().unwrap()
+                )
+                .unwrap()
+                .is_none()
+        );
+        if cancel {
+            state.media_scans.cancel().unwrap();
+        } else {
+            started.send_replace(true);
+        }
+        let result = tokio::time::timeout(std::time::Duration::from_secs(5), scan)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            result.status,
+            if cancel {
+                Status::Cancelled
+            } else {
+                Status::Completed
+            }
+        );
+        assert_eq!(
+            catalog
+                .by_path(
+                    crate::features::enums::DataType::Doc,
+                    document.to_str().unwrap()
+                )
+                .unwrap()
+                .is_some(),
+            !cancel
+        );
+        core.stop_core().await;
+    }
 }

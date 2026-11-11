@@ -588,6 +588,14 @@ impl NativeMediaCatalog {
         };
         session.sources(&references)?;
         let result = async {
+            let ready = self.state.media_watch.lock()
+                .map_err(|_| "Media watcher unavailable")?
+                .as_ref()
+                .map(|watcher| watcher.ready.clone());
+            if let Some(mut ready) = ready {
+                ready.wait_for(|ready| *ready).await
+                    .map_err(|_| "Media watcher stopped")?;
+            }
             self.state
                 .db
                 .refresh_volume_availability()

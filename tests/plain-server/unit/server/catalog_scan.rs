@@ -552,6 +552,7 @@ async fn filesystem_watch_events_from_an_os_thread_update_the_shared_catalog() {
     .unwrap();
     catalog.configure_scan_directories(None).unwrap();
     catalog.watch_source_directories().unwrap();
+    catalog.scan_directory(source.path().to_str().unwrap()).await.unwrap();
     let path = source.path().join("photo.png");
     plain_libs::image::RgbImage::new(1, 1).save(&path).unwrap();
     let path = path.to_string_lossy().into_owned();
