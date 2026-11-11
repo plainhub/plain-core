@@ -80,7 +80,7 @@ impl Runtime {
     fn publish(&self, outcome: sms_sends::Outcome) -> plain_libs::anyhow::Result<()> {
         let _ = self.events.send(WsEvent::broadcast(
             "SMS_SEND_RESULT",
-            serde_json::to_string(&outcome)?,
+            plain_libs::serde_json::to_string(&outcome)?,
         ));
         Ok(())
     }

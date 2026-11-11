@@ -35,7 +35,7 @@ pub fn format(request: &PairingRequest) -> Result<String> {
         from_id: request.from_id.clone(),
         request: request.payload.clone(),
     };
-    let code = format!("{PREFIX}{}", url_encode(&serde_json::to_string(&payload)?));
+    let code = format!("{PREFIX}{}", url_encode(&plain_libs::serde_json::to_string(&payload)?));
     ensure!(code.len() <= MAX_QR_LEN, "Pairing QR exceeds limit");
     Ok(code)
 }
@@ -45,7 +45,7 @@ pub fn parse(code: &str) -> Result<Payload> {
     let encoded = code
         .strip_prefix(PREFIX)
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid pairing QR"))?;
-    let payload: Payload = serde_json::from_str(&percent_decode(encoded))?;
+    let payload: Payload = plain_libs::serde_json::from_str(&percent_decode(encoded))?;
     let request = payload.into_request();
     let body = &request.payload;
     ensure!(

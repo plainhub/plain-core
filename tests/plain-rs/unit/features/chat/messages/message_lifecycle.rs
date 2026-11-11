@@ -2,7 +2,7 @@ use super::*;
 use crate::features::chat::attachments::app_file_store;
 use crate::features::chat::attachments::app_file_store::chat_deletion;
 use crate::features::chat::attachments::app_file_store::chat_deletion::Selection;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 const TEXT: &str = r#"{"type":"TEXT","value":{"text":"fixture ' 中文"}}"#;
 fn db() -> Db {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
@@ -106,7 +106,7 @@ fn retry_merges_current_recipient_results_and_protects_content_and_creation() {
     assert_eq!(retried.status, ChatStatus::Sent);
     assert_eq!(retried.content, chat.content);
     assert_eq!(retried.created_at, chat.created_at);
-    let data: StatusData = serde_json::from_str(retried.status_data.as_deref().unwrap()).unwrap();
+    let data: StatusData = plain_libs::serde_json::from_str(retried.status_data.as_deref().unwrap()).unwrap();
     assert_eq!(data.results.unwrap().len(), 2);
     assert!(
         delivery(
@@ -163,15 +163,15 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
     let signature = plain_libs::utils::base64::base64_encode(&[19; 64]);
     let timestamp = crate::features::peers::pairing::now_ms();
     for members in [
-        serde_json::to_string(&[ChannelMember::new("owner")]).unwrap(),
-        serde_json::to_string(&[ChannelMember::new("owner"), ChannelMember::pending("peer")])
+        plain_libs::serde_json::to_string(&[ChannelMember::new("owner")]).unwrap(),
+        plain_libs::serde_json::to_string(&[ChannelMember::new("owner"), ChannelMember::pending("peer")])
             .unwrap(),
         "invalid roster".to_owned(),
     ] {
         db.with_conn(|connection| {
             connection.execute(
                 "UPDATE chat_channels SET members=?1 WHERE id=?2",
-                rusqlite::params![members, channel.id],
+                plain_libs::rusqlite::params![members, channel.id],
             )
         })
         .unwrap();
@@ -192,7 +192,7 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
         .unwrap();
     }
     channel.members =
-        serde_json::to_string(&[ChannelMember::new("owner"), ChannelMember::new("peer")]).unwrap();
+        plain_libs::serde_json::to_string(&[ChannelMember::new("owner"), ChannelMember::new("peer")]).unwrap();
     channels::save(&db, std::slice::from_ref(&channel), SaveMode::Update).unwrap();
     let received = receive(&db, "peer", &channel.id, TEXT, &signature, timestamp)
         .unwrap()
@@ -206,7 +206,7 @@ fn channel_reception_requires_current_joined_membership_before_consuming_receipt
             .unwrap()
             .is_none()
     );
-    channel.members = serde_json::to_string(&[ChannelMember::new("owner")]).unwrap();
+    channel.members = plain_libs::serde_json::to_string(&[ChannelMember::new("owner")]).unwrap();
     channels::save(&db, std::slice::from_ref(&channel), SaveMode::Update).unwrap();
     assert!(
         receive(

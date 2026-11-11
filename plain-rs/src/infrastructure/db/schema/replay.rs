@@ -1,5 +1,5 @@
-use rusqlite::Connection;
-pub(crate) fn init(conn: &Connection) -> rusqlite::Result<()> {
+use plain_libs::rusqlite::Connection;
+pub(crate) fn init(conn: &Connection) -> plain_libs::rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS replay_receipts (
         receipt BLOB PRIMARY KEY NOT NULL,

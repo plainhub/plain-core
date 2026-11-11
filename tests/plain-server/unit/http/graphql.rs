@@ -41,24 +41,24 @@ fn contract_schema() -> (
 #[tokio::test]
 async fn a_public_request_is_executed_by_rust() {
     let (_dir, schema) = contract_schema();
-    let document = serde_json::json!({
+    let document = plain_libs::serde_json::json!({
         "query": "mutation { createNote(input: {title: \"From the LAN\", content: \"\"}) { title } }",
     })
     .to_string();
 
     let body = run(&schema, &document, None).await.unwrap();
-    let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let result: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&body).unwrap();
     assert_eq!(
         result["data"]["createNote"]["title"], "From the LAN",
         "{result}"
     );
 
-    let read = serde_json::json!({
+    let read = plain_libs::serde_json::json!({
         "query": "query { notes(query: \"\", offset: 0, limit: 10) { title } }",
     })
     .to_string();
     let body = run(&schema, &read, None).await.unwrap();
-    let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let result: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&body).unwrap();
     assert_eq!(
         result["data"]["notes"].as_array().map(Vec::len),
         Some(1),
@@ -69,7 +69,7 @@ async fn a_public_request_is_executed_by_rust() {
 #[tokio::test]
 async fn variables_and_operation_names_reach_the_resolver() {
     let (_dir, schema) = contract_schema();
-    let document = serde_json::json!({
+    let document = plain_libs::serde_json::json!({
         "query": "query Note($title: String!) { noteCount(query: $title) }",
         "operationName": "Note",
         "variables": { "title": "anything" },
@@ -77,7 +77,7 @@ async fn variables_and_operation_names_reach_the_resolver() {
     .to_string();
 
     let body = run(&schema, &document, None).await.unwrap();
-    let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let result: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&body).unwrap();
     assert_eq!(result["data"]["noteCount"], 0, "{result}");
     assert!(result.get("errors").is_none(), "{result}");
 }
@@ -94,7 +94,7 @@ async fn a_body_that_is_not_a_graphql_request_is_refused() {
     );
 
     let body = run(&schema, "{}", None).await.unwrap();
-    let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let result: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&body).unwrap();
     assert!(
         !result["errors"].as_array().is_none_or(Vec::is_empty),
         "{result}"
@@ -106,9 +106,9 @@ async fn a_body_that_is_not_a_graphql_request_is_refused() {
 #[tokio::test]
 async fn an_unknown_field_is_reported_as_a_graphql_error() {
     let (_dir, schema) = contract_schema();
-    let document = serde_json::json!({ "query": "query { noSuchRoot }" }).to_string();
+    let document = plain_libs::serde_json::json!({ "query": "query { noSuchRoot }" }).to_string();
     let body = run(&schema, &document, None).await.unwrap();
-    let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let result: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&body).unwrap();
     assert!(
         !result["errors"].as_array().is_none_or(Vec::is_empty),
         "{result}"

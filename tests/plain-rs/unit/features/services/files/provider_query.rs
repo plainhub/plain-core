@@ -94,7 +94,7 @@ fn plain_file_plans_keep_parent_facts_host_owned_and_hide_dotfiles_by_default() 
     assert!(result.args.contains(&"42".to_owned()));
     assert!(result.args.contains(&1_572_864u64.to_string()));
     assert!(result.args.contains(&"report\\%\\_".to_owned()));
-    let wire = serde_json::to_value(&result).unwrap();
+    let wire = plain_libs::serde_json::to_value(&result).unwrap();
     assert_eq!(wire["idsColumn"], "_id");
     assert!(wire.get("ids_column").is_none());
 
@@ -449,23 +449,23 @@ fn call_date_filters_are_resolved_by_rust_without_a_host() {
         &db,
         Provider::Call,
         "start_time:>=1700000000 start_time:<1700000000001",
-        serde_json::json!({"limit":20}),
+        plain_libs::serde_json::json!({"limit":20}),
     )
     .unwrap();
     assert_eq!(input["limit"], 20);
     assert_eq!(
         input["plan"]["clauses"],
-        serde_json::json!(["date >= ?", "date < ?"])
+        plain_libs::serde_json::json!(["date >= ?", "date < ?"])
     );
     assert_eq!(
         input["plan"]["args"],
-        serde_json::json!(["1700000000000", "1700000000001"])
+        plain_libs::serde_json::json!(["1700000000000", "1700000000001"])
     );
     let invalid = params(
         &db,
         Provider::Call,
         "start_time:not-a-date",
-        serde_json::json!({}),
+        plain_libs::serde_json::json!({}),
     )
     .unwrap();
     assert!(invalid["plan"]["clauses"].as_array().unwrap().is_empty());
@@ -503,11 +503,11 @@ fn persisted_exclusions_use_literal_subtree_boundaries_for_provider_rows() {
     let db = Db::open(&directory.path().join("index.db")).unwrap();
     db.with_conn(|conn| conn.execute(
         "INSERT INTO volumes(id,identity,path,is_available,index_mode,excluded_dirs) VALUES('test','test','/storage/user',1,'BLOCKLIST',?1)",
-        [serde_json::json!(["private_%"]).to_string()],
+        [plain_libs::serde_json::json!(["private_%"]).to_string()],
     )).unwrap();
     let mut plan = Plan::default();
     index_scope(&mut plan, &db).unwrap();
-    let connection = rusqlite::Connection::open_in_memory().unwrap();
+    let connection = plain_libs::rusqlite::Connection::open_in_memory().unwrap();
     connection
         .execute("CREATE TABLE entries(_data TEXT)", [])
         .unwrap();
@@ -527,11 +527,11 @@ fn persisted_exclusions_use_literal_subtree_boundaries_for_provider_rows() {
             plan.clauses.join(" AND ")
         ))
         .unwrap()
-        .query_map(rusqlite::params_from_iter(&plan.args), |row| {
+        .query_map(plain_libs::rusqlite::params_from_iter(&plan.args), |row| {
             row.get::<_, String>(0)
         })
         .unwrap()
-        .collect::<rusqlite::Result<Vec<_>>>()
+        .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
         .unwrap();
     assert_eq!(
         paths,

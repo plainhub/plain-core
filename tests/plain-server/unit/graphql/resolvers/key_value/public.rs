@@ -1,4 +1,4 @@
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 #[cfg(feature = "core")]
 #[tokio::test]

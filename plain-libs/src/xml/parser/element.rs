@@ -9,7 +9,7 @@ pub enum ElementParser {
 impl Parser for ElementParser {
     #[inline]
     fn feed(&mut self, bytes: &[u8]) -> Option<usize> {
-        for i in memchr::memchr3_iter(b'>', b'\'', b'"', bytes) {
+        for i in crate::memchr::memchr3_iter(b'>', b'\'', b'"', bytes) {
             *self = match (*self, bytes[i]) {
                 (Self::Outside, b'>') => return Some(i),
                 (Self::Outside, b'\'') => Self::SingleQ,

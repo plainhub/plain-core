@@ -56,9 +56,9 @@ fn removed_gateway_and_nearby_actions_cannot_be_called_through_native_codecs() {
 #[test]
 fn discovery_codec_filters_service_uuids_without_service_data() {
     let id = "706c6169-2d74-8e53-9a16-f08b62c591d3";
-    let input = serde_json::to_vec(&vec!["180D".to_string(), id.to_uppercase()]).unwrap();
+    let input = plain_libs::serde_json::to_vec(&vec!["180D".to_string(), id.to_uppercase()]).unwrap();
     let decoded = call(9, 0, 0, 0, 0, false, &input).unwrap().unwrap();
-    assert_eq!(serde_json::from_slice::<String>(&decoded).unwrap(), id);
+    assert_eq!(plain_libs::serde_json::from_slice::<String>(&decoded).unwrap(), id);
     assert_eq!(
         call(9, 0, 0, 0, 0, false, br#"["180D"]"#).unwrap().unwrap(),
         b"null"

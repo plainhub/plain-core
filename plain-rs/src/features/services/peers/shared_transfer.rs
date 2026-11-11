@@ -327,9 +327,9 @@ pub(super) async fn operation(
     run: &Run,
     name: &str,
     size: Option<i64>,
-    params: serde_json::Value,
+    params: plain_libs::serde_json::Value,
 ) -> Result<Receipt> {
-    let operation = serde_json::from_value(params)?;
+    let operation = plain_libs::serde_json::from_value(params)?;
     let (ticket, receiver) =
         state
             .shared_batches

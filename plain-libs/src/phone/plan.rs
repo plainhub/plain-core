@@ -154,7 +154,7 @@ pub(super) static PLANS: LazyLock<Plans> = LazyLock::new(|| {
     GzDecoder::new(include_bytes!("data/numbering.json.gz").as_slice())
         .read_to_end(&mut bytes)
         .expect("Invalid bundled numbering compression");
-    let data: Data = serde_json::from_slice(&bytes).expect("Invalid bundled numbering data");
+    let data: Data = crate::serde_json::from_slice(&bytes).expect("Invalid bundled numbering data");
     let mut country_codes: BTreeMap<u16, Vec<usize>> = BTreeMap::new();
     let mut regions = BTreeMap::new();
     for (index, plan) in data.plans.iter().enumerate() {

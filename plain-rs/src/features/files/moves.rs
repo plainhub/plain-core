@@ -4,7 +4,7 @@ use crate::features::media::audio::queue as audio_queue;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -64,7 +64,7 @@ pub fn rebind_with_aliases(
         for binding in bindings {
             let media_type = kind(binding.media_type)?;
             let mut statement = tx.prepare("SELECT tag_id,created_at FROM tag_relations WHERE type=?1 AND target_key=?2")?;
-            let tags = statement.query_map(params![binding.media_type,binding.source_id],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+            let tags = statement.query_map(params![binding.media_type,binding.source_id],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?)))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
             let progress = if matches!(media_type,DataType::Audio|DataType::Video) {
                 tx.query_row("SELECT position_ms,played_at,play_count FROM media_play_history WHERE file_id=?1 AND media_type=?2",params![binding.source_id,binding.media_type],|row|Ok((row.get::<_,i64>(0)?,row.get::<_,String>(1)?,row.get::<_,i64>(2)?))).optional()?
             } else { None };
@@ -107,7 +107,7 @@ pub fn rebind_with_aliases(
 
         let source_prefix = format!("{}/",source_root.trim_end_matches('/'));
         let mut statement = tx.prepare("SELECT tag_id,target_key,created_at FROM tag_relations WHERE type=?1 AND (target_key=?2 OR substr(target_key,1,length(?3))=?3)")?;
-        let relations = statement.query_map(params![DataType::File.kind(),source_root,source_prefix],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        let relations = statement.query_map(params![DataType::File.kind(),source_root,source_prefix],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?)))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
         drop(statement);
         for (tag,key,created) in relations {
             let relative = if key==source_root { "" } else { &key[source_prefix.len()..] };

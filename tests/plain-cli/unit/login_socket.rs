@@ -15,7 +15,7 @@ async fn malformed_and_oversized_frames_do_not_echo_or_allocate_unbounded_payloa
         assert!(!error.to_string().contains("oops"));
     }
     let bytes = br#"{"version":1,"command":{"type":"requests","after":null,"token":"secret"}}"#;
-    assert!(serde_json::from_slice::<Request>(bytes).is_err());
+    assert!(plain_libs::serde_json::from_slice::<Request>(bytes).is_err());
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

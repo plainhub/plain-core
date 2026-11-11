@@ -129,7 +129,7 @@ fn noble_event_vectors_match_rust_authentication_and_exact_cipher_bytes() {
         XChaCha20Poly1305, XNonce,
         aead::{Aead, KeyInit, Payload},
     };
-    let vectors: serde_json::Value = serde_json::from_str(include_str!(
+    let vectors: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(include_str!(
         "../../../../../plain-rs/testdata/crypto/websocket-event-vectors.json"
     ))
     .unwrap();

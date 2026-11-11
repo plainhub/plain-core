@@ -164,10 +164,10 @@ impl DbMutation {
             return Ok(false);
         }
         Ok(spawn(move || {
-            let mut row: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&row)?;
+            let mut row: plain_libs::serde_json::Map<String, plain_libs::serde_json::Value> = plain_libs::serde_json::from_str(&row)?;
             for value in row.values_mut() {
                 if value.is_null() {
-                    *value = serde_json::Value::String("null".into());
+                    *value = plain_libs::serde_json::Value::String("null".into());
                 }
             }
             file.insert_table_row(&table, &row).map(|_| true)

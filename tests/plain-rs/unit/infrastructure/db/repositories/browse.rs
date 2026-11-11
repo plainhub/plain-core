@@ -35,7 +35,7 @@ fn insert_items(conn: &Connection, rows: &[ItemRow]) {
     for (id, n, f, t, b) in rows {
         conn.execute(
             "INSERT INTO items(id, n, f, t, b) VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![id, n, f, t, b],
+            plain_libs::rusqlite::params![id, n, f, t, b],
         )
         .unwrap();
     }
@@ -99,18 +99,18 @@ fn rows_page_maps_sqlite_values_onto_json() {
     insert_items(&conn, &[("a", 7, Some(1.5), "hi", Some(&[0xCA, 0xFE][..]))]);
     let rows = rows_page(&conn, "items", 0, 10).unwrap();
     assert_eq!(rows.len(), 1);
-    let v: serde_json::Value = serde_json::from_str(&rows[0]).unwrap();
-    assert_eq!(v["id"], serde_json::json!("a"));
-    assert_eq!(v["n"], serde_json::json!(7));
-    assert_eq!(v["f"], serde_json::json!(1.5));
-    assert_eq!(v["t"], serde_json::json!("hi"));
-    assert_eq!(v["b"], serde_json::json!("cafe"));
+    let v: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&rows[0]).unwrap();
+    assert_eq!(v["id"], plain_libs::serde_json::json!("a"));
+    assert_eq!(v["n"], plain_libs::serde_json::json!(7));
+    assert_eq!(v["f"], plain_libs::serde_json::json!(1.5));
+    assert_eq!(v["t"], plain_libs::serde_json::json!("hi"));
+    assert_eq!(v["b"], plain_libs::serde_json::json!("cafe"));
 
     // NULL columns map to JSON null (f and b of another row).
     insert_items(&conn, &[("b", 0, None, "", None)]);
     let rows = rows_page(&conn, "items", 1, 1).unwrap();
-    let v: serde_json::Value = serde_json::from_str(&rows[0]).unwrap();
-    assert_eq!(v["id"], serde_json::json!("b"));
+    let v: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&rows[0]).unwrap();
+    assert_eq!(v["id"], plain_libs::serde_json::json!("b"));
     assert!(v["f"].is_null());
     assert!(v["b"].is_null());
 }
@@ -230,29 +230,29 @@ fn delete_rows_removes_matching_ids_and_validates() {
 #[test]
 fn insert_row_binds_json_object_as_text_with_null() {
     let conn = conn();
-    let mut row = serde_json::Map::new();
-    row.insert("id".into(), serde_json::json!("a"));
-    row.insert("n".into(), serde_json::json!(7));
-    row.insert("f".into(), serde_json::Value::Null);
+    let mut row = plain_libs::serde_json::Map::new();
+    row.insert("id".into(), plain_libs::serde_json::json!("a"));
+    row.insert("n".into(), plain_libs::serde_json::json!(7));
+    row.insert("f".into(), plain_libs::serde_json::Value::Null);
     assert_eq!(insert_row(&conn, "items", &row).unwrap(), 1);
 
-    let v: serde_json::Value =
-        serde_json::from_str(&rows_page(&conn, "items", 0, 1).unwrap()[0]).unwrap();
-    assert_eq!(v["id"], serde_json::json!("a"));
-    assert_eq!(v["n"], serde_json::json!(7)); // INTEGER affinity coerced the text bind
+    let v: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(&rows_page(&conn, "items", 0, 1).unwrap()[0]).unwrap();
+    assert_eq!(v["id"], plain_libs::serde_json::json!("a"));
+    assert_eq!(v["n"], plain_libs::serde_json::json!(7)); // INTEGER affinity coerced the text bind
     assert!(v["f"].is_null());
 
     // Empty row / unsafe table / unsafe column key are rejected.
     assert!(matches!(
-        insert_row(&conn, "items", &serde_json::Map::new()).unwrap_err(),
+        insert_row(&conn, "items", &plain_libs::serde_json::Map::new()).unwrap_err(),
         SqliteBrowseError::Invalid(_)
     ));
     assert!(matches!(
         insert_row(&conn, "items; DROP TABLE items", &row).unwrap_err(),
         SqliteBrowseError::Invalid(_)
     ));
-    let mut bad = serde_json::Map::new();
-    bad.insert("id; DROP TABLE items".into(), serde_json::json!("a"));
+    let mut bad = plain_libs::serde_json::Map::new();
+    bad.insert("id; DROP TABLE items".into(), plain_libs::serde_json::json!("a"));
     assert!(matches!(
         insert_row(&conn, "items", &bad).unwrap_err(),
         SqliteBrowseError::Invalid(_)

@@ -1,0 +1,8 @@
+{
+  "name": "serde_urlencoded",
+  "version": "0.7.1",
+  "archive_sha256": "d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd",
+  "repository": "https://github.com/nox/serde_urlencoded",
+  "revision": "d8bc15d16adf6b3ba6ae46d199d7109cf5079efa",
+  "retained_features": []
+}

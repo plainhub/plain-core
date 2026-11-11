@@ -5,7 +5,7 @@ use crate::features::files::shares::client::File;
 use crate::features::files::shares::client::Link;
 use plain_libs::anyhow::{Result, bail, ensure};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, HashSet, VecDeque},
     sync::Mutex,

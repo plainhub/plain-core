@@ -14,11 +14,11 @@
 //! [`is_safe_identifier`] validation (values always go through bound
 //! parameters).
 
-use rusqlite::Connection;
+use plain_libs::rusqlite::Connection;
 
 // Re-exported so consumers with a `with_conn` seam can name the
 // connection type without depending on rusqlite themselves.
-pub use rusqlite;
+pub use plain_libs::rusqlite;
 
 /// Hard cap for one rows page — the UIs ask for 50; the cap only stops a
 /// runaway client from materialising an unbounded page.
@@ -122,22 +122,22 @@ fn rows_page_values(
     check_table(table)?;
     let mut stmt = conn.prepare(&format!("SELECT * FROM `{table}` LIMIT ?1 OFFSET ?2"))?;
     let col_names: Vec<String> = stmt.column_names().map(|s| s.to_string()).collect();
-    let mut rows = stmt.query_map(rusqlite::params![limit, offset], |row| {
-        let mut obj = serde_json::Map::new();
+    let mut rows = stmt.query_map(plain_libs::rusqlite::params![limit, offset], |row| {
+        let mut obj = plain_libs::serde_json::Map::new();
         for (i, col) in col_names.iter().enumerate() {
-            let val: rusqlite::types::Value = row.get(i)?;
+            let val: plain_libs::rusqlite::types::Value = row.get(i)?;
             let value = if text {
                 match val {
-                    rusqlite::types::Value::Null => serde_json::Value::Null,
-                    rusqlite::types::Value::Text(value) => serde_json::Value::String(value),
-                    rusqlite::types::Value::Integer(value) => {
-                        serde_json::Value::String(value.to_string())
+                    plain_libs::rusqlite::types::Value::Null => plain_libs::serde_json::Value::Null,
+                    plain_libs::rusqlite::types::Value::Text(value) => plain_libs::serde_json::Value::String(value),
+                    plain_libs::rusqlite::types::Value::Integer(value) => {
+                        plain_libs::serde_json::Value::String(value.to_string())
                     }
-                    rusqlite::types::Value::Real(value) => {
-                        serde_json::Value::String(value.to_string())
+                    plain_libs::rusqlite::types::Value::Real(value) => {
+                        plain_libs::serde_json::Value::String(value.to_string())
                     }
-                    rusqlite::types::Value::Blob(value) => {
-                        serde_json::Value::String(String::from_utf8_lossy(&value).into_owned())
+                    plain_libs::rusqlite::types::Value::Blob(value) => {
+                        plain_libs::serde_json::Value::String(String::from_utf8_lossy(&value).into_owned())
                     }
                 }
             } else {
@@ -145,7 +145,7 @@ fn rows_page_values(
             };
             obj.insert(col.clone(), value);
         }
-        Ok(serde_json::Value::Object(obj).to_string())
+        Ok(plain_libs::serde_json::Value::Object(obj).to_string())
     })?;
     let mut out = Vec::new();
     for row in &mut rows {
@@ -185,7 +185,7 @@ pub fn table_columns(conn: &Connection, table: &str) -> Vec<TableColumnMeta> {
         return vec![];
     };
     let Ok(rows) = stmt.query_map([], |row| {
-        let default_value: Option<rusqlite::types::Value> = row.get(4)?;
+        let default_value: Option<plain_libs::rusqlite::types::Value> = row.get(4)?;
         Ok(TableColumnMeta {
             name: row.get(1)?,
             data_type: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
@@ -220,7 +220,7 @@ pub fn delete_rows(conn: &Connection, table: &str, id_key: &str, ids: &[String])
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!("DELETE FROM `{table}` WHERE `{id_key}` IN ({placeholders})");
-    conn.execute(&sql, rusqlite::params_from_iter(ids.iter()))
+    conn.execute(&sql, plain_libs::rusqlite::params_from_iter(ids.iter()))
         .map_err(SqliteBrowseError::Sqlite)
 }
 
@@ -230,7 +230,7 @@ pub fn delete_rows(conn: &Connection, table: &str, id_key: &str, ids: &[String])
 pub fn insert_row(
     conn: &Connection,
     table: &str,
-    row: &serde_json::Map<String, serde_json::Value>,
+    row: &plain_libs::serde_json::Map<String, plain_libs::serde_json::Value>,
 ) -> Result<usize> {
     check_table(table)?;
     if row.is_empty() {
@@ -257,36 +257,36 @@ pub fn insert_row(
     let args: Vec<Option<String>> = keys
         .iter()
         .map(|k| match &row[*k] {
-            serde_json::Value::Null => None,
-            serde_json::Value::String(s) => Some(s.clone()),
+            plain_libs::serde_json::Value::Null => None,
+            plain_libs::serde_json::Value::String(s) => Some(s.clone()),
             other => Some(other.to_string()),
         })
         .collect();
-    conn.execute(&sql, rusqlite::params_from_iter(args.iter()))
+    conn.execute(&sql, plain_libs::rusqlite::params_from_iter(args.iter()))
         .map_err(SqliteBrowseError::Sqlite)
 }
 
-fn value_to_json(val: rusqlite::types::Value) -> serde_json::Value {
+fn value_to_json(val: plain_libs::rusqlite::types::Value) -> plain_libs::serde_json::Value {
     match val {
-        rusqlite::types::Value::Null => serde_json::Value::Null,
-        rusqlite::types::Value::Integer(n) => serde_json::Value::Number(n.into()),
-        rusqlite::types::Value::Real(f) => serde_json::Number::from_f64(f)
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
-        rusqlite::types::Value::Text(s) => serde_json::Value::String(s),
-        rusqlite::types::Value::Blob(b) => {
-            serde_json::Value::String(plain_libs::utils::hex::bytes_to_hex(&b))
+        plain_libs::rusqlite::types::Value::Null => plain_libs::serde_json::Value::Null,
+        plain_libs::rusqlite::types::Value::Integer(n) => plain_libs::serde_json::Value::Number(n.into()),
+        plain_libs::rusqlite::types::Value::Real(f) => plain_libs::serde_json::Number::from_f64(f)
+            .map(plain_libs::serde_json::Value::Number)
+            .unwrap_or(plain_libs::serde_json::Value::Null),
+        plain_libs::rusqlite::types::Value::Text(s) => plain_libs::serde_json::Value::String(s),
+        plain_libs::rusqlite::types::Value::Blob(b) => {
+            plain_libs::serde_json::Value::String(plain_libs::utils::hex::bytes_to_hex(&b))
         }
     }
 }
 
-fn value_to_string(value: rusqlite::types::Value) -> String {
+fn value_to_string(value: plain_libs::rusqlite::types::Value) -> String {
     match value {
-        rusqlite::types::Value::Integer(n) => n.to_string(),
-        rusqlite::types::Value::Real(f) => f.to_string(),
-        rusqlite::types::Value::Text(s) => s,
-        rusqlite::types::Value::Blob(b) => plain_libs::utils::hex::bytes_to_hex(&b),
-        rusqlite::types::Value::Null => String::new(),
+        plain_libs::rusqlite::types::Value::Integer(n) => n.to_string(),
+        plain_libs::rusqlite::types::Value::Real(f) => f.to_string(),
+        plain_libs::rusqlite::types::Value::Text(s) => s,
+        plain_libs::rusqlite::types::Value::Blob(b) => plain_libs::utils::hex::bytes_to_hex(&b),
+        plain_libs::rusqlite::types::Value::Null => String::new(),
     }
 }
 

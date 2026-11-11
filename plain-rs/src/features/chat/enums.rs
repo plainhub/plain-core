@@ -7,7 +7,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Value, ValueRef};
+use plain_libs::rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Value, ValueRef};
 
 // ── PeerStatus ────────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ impl FromStr for PeerStatus {
 }
 
 impl ToSql for PeerStatus {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Owned(Value::Text(self.to_string())))
     }
 }
@@ -92,7 +92,7 @@ impl FromStr for ChatStatus {
 }
 
 impl ToSql for ChatStatus {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Owned(Value::Text(self.to_string())))
     }
 }
@@ -138,7 +138,7 @@ impl FromStr for ChannelStatus {
 }
 
 impl ToSql for ChannelStatus {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Owned(Value::Text(self.to_string())))
     }
 }
@@ -181,7 +181,7 @@ impl FromStr for MemberStatus {
 }
 
 impl ToSql for MemberStatus {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Owned(Value::Text(self.to_string())))
     }
 }
@@ -245,7 +245,7 @@ impl FromStr for DeviceType {
 }
 
 impl ToSql for DeviceType {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Owned(Value::Text(self.to_string())))
     }
 }
@@ -306,7 +306,7 @@ impl FromStr for ChannelSystemMessageType {
 }
 
 impl ToSql for ChannelSystemMessageType {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Owned(Value::Text(self.to_string())))
     }
 }

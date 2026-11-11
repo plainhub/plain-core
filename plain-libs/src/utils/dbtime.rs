@@ -68,12 +68,12 @@ fn split_unix_secs(secs: u64) -> (String, u64, u64, u64) {
 }
 
 #[cfg(feature = "sqlite")]
-pub fn normalize(value: &str) -> rusqlite::Result<String> {
+pub fn normalize(value: &str) -> crate::rusqlite::Result<String> {
     crate::chrono::DateTime::parse_from_rfc3339(value)
         .map(|instant| {
             instant
                 .with_timezone(&crate::chrono::Utc)
                 .to_rfc3339_opts(crate::chrono::SecondsFormat::Millis, true)
         })
-        .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
+        .map_err(|error| crate::rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
 }

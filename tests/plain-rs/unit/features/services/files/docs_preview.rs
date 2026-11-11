@@ -22,7 +22,7 @@ fn rejects_corrupt_and_missing_input() {
 
 #[tokio::test]
 async fn resource_uris_use_the_native_stream_and_propagate_failures() {
-    use serde_json::json;
+    use plain_libs::serde_json::json;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -46,8 +46,8 @@ async fn resource_uris_use_the_native_stream_and_propagate_failures() {
             .host
             .reply(generation, json!({"id":request["id"],"result":null}))
             .unwrap();
-        let metadata: serde_json::Value =
-            serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+        let metadata: plain_libs::serde_json::Value =
+            plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
         assert_eq!(metadata["path"], path);
         if fail {
             stream.fail().await.unwrap();

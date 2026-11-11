@@ -12,11 +12,11 @@ fn all_previously_accepted_forms_produce_the_same_value_and_json() {
         let parsed = Uuid::parse_str(input).unwrap();
         assert_eq!(parsed.to_string(), canonical);
         assert_eq!(
-            serde_json::to_string(&parsed).unwrap(),
+            crate::serde_json::to_string(&parsed).unwrap(),
             format!("\"{canonical}\"")
         );
         assert_eq!(
-            serde_json::from_str::<Uuid>(&format!("\"{input}\"")).unwrap(),
+            crate::serde_json::from_str::<Uuid>(&format!("\"{input}\"")).unwrap(),
             parsed
         );
     }

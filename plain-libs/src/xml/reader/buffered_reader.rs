@@ -41,7 +41,7 @@ macro_rules! impl_buffered_source {
                         return ReadTextResult::Err(e.into());
                     }
                 };
-                match memchr::memchr2(b'<', b'&', available) {
+                match crate::memchr::memchr2(b'<', b'&', available) {
                     Some(0) if read == 0 && available[0] == b'<' => {
                         return ReadTextResult::Markup(buf);
                     }
@@ -105,7 +105,7 @@ macro_rules! impl_buffered_source {
                     read += 1;
                     continue;
                 }
-                match memchr::memchr3(b';', b'&', b'<', available) {
+                match crate::memchr::memchr3(b';', b'&', b'<', available) {
                     Some(i) if available[i] == b';' => {
                         let used = i + 1;
                         buf.extend_from_slice(&available[..used]);

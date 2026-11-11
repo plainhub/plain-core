@@ -89,3 +89,50 @@ fn complete_blocks_and_tail_use_the_requested_alphabet() {
     assert_eq!(base64_encode(&bytes), "+/+/".repeat(64) + "+/8=");
     assert_eq!(base64_encode_url_safe(&bytes), "-_-_".repeat(64) + "-_8=");
 }
+
+#[test]
+fn segmented_encoding_matches_contiguous_bytes_for_all_boundaries() {
+    for length in 0..130 {
+        let bytes: Vec<_> = (0..length).map(|n| (n * 97) as u8).collect();
+        let expected = base64_encode(&bytes);
+        for split in 0..=length {
+            let mut output = Vec::with_capacity(7 + expected.len());
+            output.extend_from_slice(b"prefix:");
+            let pointer = output.as_ptr();
+            base64_encode_append_segments(&mut output, &[&bytes[..split], b"", &bytes[split..]]);
+            assert_eq!(&output[7..], expected.as_bytes());
+            assert_eq!(output.as_ptr(), pointer);
+        }
+    }
+}
+
+#[test]
+fn strict_alphabet_tail_bits_and_error_offsets_survive_block_boundaries() {
+    for blocks in 0..64 {
+        let prefix = "AAAA".repeat(blocks);
+        let valid = prefix.clone() + "AA==";
+        assert_eq!(
+            base64_decode_standard(valid.as_bytes()).unwrap(),
+            vec![0; blocks * 3 + 1]
+        );
+        for (tail, offset, found) in [
+            ("AA+_", 3, '_'),
+            ("AA_+", 3, '+'),
+            ("AAA+AAA_", 7, '_'),
+            ("AAA_AAA+", 7, '+'),
+            ("AA🧪", 2, '🧪'),
+        ] {
+            let input = prefix.clone() + tail;
+            let error = base64_decode_checked(&input).unwrap_err();
+            assert_eq!((error.offset, error.found), (blocks * 4 + offset, found));
+        }
+        for tail in ["AAB=", "AB=="] {
+            let input = prefix.clone() + tail;
+            assert!(base64_decode_standard(input.as_bytes()).is_err());
+        }
+        for tail in ["AA-_", "AAA_"] {
+            let input = prefix.clone() + tail;
+            assert!(base64_decode_standard(input.as_bytes()).is_err());
+        }
+    }
+}

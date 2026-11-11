@@ -64,7 +64,7 @@ async fn get_from(
 }
 
 async fn text(response: Response) -> String {
-    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+    let bytes = plain_libs::axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .expect("a complete body");
     String::from_utf8_lossy(&bytes).into_owned()
@@ -131,7 +131,7 @@ async fn developer_logging_is_injected_from_current_preferences() {
         plain_rs::features::prefs::Prefs::load(&disk.dir.path().join("prefs.json")).unwrap();
     for enabled in [false, true, false] {
         prefs
-            .set("developer_mode", serde_json::json!(enabled))
+            .set("developer_mode", plain_libs::serde_json::json!(enabled))
             .unwrap();
         for root in [Some(disk.root.as_path()), None] {
             for path in ["/", "/index.html", "/settings/device-info"] {
@@ -212,7 +212,7 @@ async fn the_access_switch_and_the_method_gate_every_asset() {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap();
     prefs
-        .set("remote_access", serde_json::json!(false))
+        .set("remote_access", plain_libs::serde_json::json!(false))
         .unwrap();
     assert!(
         serve(

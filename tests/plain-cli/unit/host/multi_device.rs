@@ -2,7 +2,7 @@ use crate::host::Host;
 use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 use plain_server::native::graphql::NativeGraphqlExecutor;
 use plain_server::server::ContentServer;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -48,7 +48,7 @@ impl Node {
         let subscription_id = native.open_subscriptions(scope.clone()).unwrap();
         let pairing_changes = native.subscription_session(subscription_id).unwrap();
         pairing_changes.send(r#"{"type":"subscribe","id":"pairing","payload":{"query":"subscription { pairingChanged }"}}"#).unwrap();
-        let ready: Value = serde_json::from_str(&pairing_changes.read().await.unwrap()).unwrap();
+        let ready: Value = plain_libs::serde_json::from_str(&pairing_changes.read().await.unwrap()).unwrap();
         assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
         Self {
             core,
@@ -207,7 +207,7 @@ async fn native_password_and_approval_pairing_enables_actual_chat_and_preserves_
     ) -> Value {
         tokio::time::timeout(Duration::from_secs(10), async {
             loop {
-                let value: Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
+                let value: Value = plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
                 assert_eq!(value["type"], "next", "{value}");
                 if value["payload"]["extensions"]["subscriptionReady"] == true {
                     continue;

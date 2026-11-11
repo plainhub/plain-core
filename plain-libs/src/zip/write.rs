@@ -21,7 +21,7 @@ use core::fmt::{Debug, Formatter};
 use core::mem::{self, offset_of, size_of};
 use core::str::{Utf8Error, from_utf8};
 use crate::checksum::crc32::Hasher;
-use indexmap::IndexMap;
+use crate::indexmap::IndexMap;
 use std::io::Cursor;
 use std::io::ErrorKind;
 use std::io::SeekFrom;
@@ -108,7 +108,7 @@ pub(crate) mod zip_writer {
         write::{GenericZipWriter, ZipWriterStats},
     };
     use core::fmt::{Debug, Formatter};
-    use indexmap::IndexMap;
+    use crate::indexmap::IndexMap;
     use std::io::{Seek, Write};
     pub struct ZipWriter<W: Write + Seek> {
         pub(super) inner: GenericZipWriter<W>,

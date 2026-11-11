@@ -69,8 +69,8 @@ fn rows_count_and_id_key_use_shared_database() {
     assert_eq!(table_row_count(&db, "chats").unwrap(), 1);
     assert_eq!(table_id_key(&db, "chats").unwrap(), "id".to_string());
     let rows = table_rows(&db, "chats", 0, 10).unwrap();
-    let v: serde_json::Value = serde_json::from_str(&rows[0]).unwrap();
-    assert_eq!(v["id"], serde_json::json!("c1"));
+    let v: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&rows[0]).unwrap();
+    assert_eq!(v["id"], plain_libs::serde_json::json!("c1"));
 
     assert_eq!(table_row_count(&db, "tags").unwrap(), 2);
     assert_eq!(table_id_key(&db, "tags").unwrap(), "id".to_string());

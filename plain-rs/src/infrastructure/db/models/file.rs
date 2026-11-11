@@ -1,4 +1,4 @@
-use rusqlite::types::{FromSql, FromSqlResult, ToSqlOutput, ValueRef};
+use plain_libs::rusqlite::types::{FromSql, FromSqlResult, ToSqlOutput, ValueRef};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -52,8 +52,8 @@ impl TryFrom<crate::features::enums::DataType> for FileKind {
     }
 }
 
-impl rusqlite::ToSql for FileKind {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+impl plain_libs::rusqlite::ToSql for FileKind {
+    fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Borrowed(ValueRef::Text(
             self.as_str().as_bytes(),
         )))
@@ -68,7 +68,7 @@ impl FromSql for FileKind {
             "VIDEO" => Ok(Self::Video),
             "AUDIO" => Ok(Self::Audio),
             "DOC" => Ok(Self::Doc),
-            _ => Err(rusqlite::types::FromSqlError::Other(
+            _ => Err(plain_libs::rusqlite::types::FromSqlError::Other(
                 "Invalid file kind".into(),
             )),
         }
@@ -96,8 +96,8 @@ impl IndexMode {
         }
     }
 }
-impl rusqlite::ToSql for IndexMode {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+impl plain_libs::rusqlite::ToSql for IndexMode {
+    fn to_sql(&self) -> plain_libs::rusqlite::Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Borrowed(ValueRef::Text(
             self.as_str().as_bytes(),
         )))
@@ -110,7 +110,7 @@ impl FromSql for IndexMode {
             "DISABLED" => Ok(Self::Disabled),
             "ALLOWLIST" => Ok(Self::Allowlist),
             "BLOCKLIST" => Ok(Self::Blocklist),
-            _ => Err(rusqlite::types::FromSqlError::Other(
+            _ => Err(plain_libs::rusqlite::types::FromSqlError::Other(
                 "Invalid index mode".into(),
             )),
         }

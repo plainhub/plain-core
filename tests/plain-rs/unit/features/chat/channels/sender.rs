@@ -34,7 +34,7 @@ fn build(
         "guest",
     )
     .unwrap();
-    serde_json::from_str::<ChannelInvite>(&payload)
+    plain_libs::serde_json::from_str::<ChannelInvite>(&payload)
         .unwrap()
         .member_peers
 }
@@ -51,7 +51,7 @@ fn build_member_peers_includes_owner_when_owner_is_member() {
     let device_name = "NAS";
 
     let mut channel = DChannel::new("Channel", client_id);
-    channel.members = serde_json::json!([
+    channel.members = plain_libs::serde_json::json!([
         { "id": client_id, "status": MemberStatus::Joined.to_string() }
     ])
     .to_string();
@@ -84,7 +84,7 @@ fn build_member_peers_includes_owner_alongside_members() {
     ));
 
     let mut channel = DChannel::new("Channel", client_id);
-    channel.members = serde_json::json!([
+    channel.members = plain_libs::serde_json::json!([
         { "id": client_id, "status": MemberStatus::Joined.to_string() },
         { "id": member_id, "status": MemberStatus::Pending.to_string() }
     ])
@@ -117,7 +117,7 @@ fn build_member_peers_includes_owner_even_when_not_in_members() {
 
     // Owner is deliberately NOT in members — only the invitee is.
     let mut channel = DChannel::new("Channel", client_id);
-    channel.members = serde_json::json!([
+    channel.members = plain_libs::serde_json::json!([
         { "id": member_id, "status": MemberStatus::Pending.to_string() }
     ])
     .to_string();

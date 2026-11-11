@@ -118,7 +118,7 @@ fn browse_owns_recursive_filters_hidden_counts_order_and_pages() {
     assert_eq!(page.items[0].child_count, 2);
     let query = format!(
         "parent:{} text:中文 file_size:>=4 file_size:<=4",
-        serde_json::json!(root.join("NeedleDir").to_str().unwrap())
+        crate::serde_json::json!(root.join("NeedleDir").to_str().unwrap())
     );
     let page = request(&root.join("missing"), &query)
         .plan()
@@ -379,13 +379,13 @@ fn large_directory_search_measurements() {
             .walk(
                 |page| {
                     snapshots += 1;
-                    bytes += serde_json::to_vec(&page).unwrap().len();
+                    bytes += crate::serde_json::to_vec(&page).unwrap().len();
                     true
                 },
                 || false,
             )
             .unwrap();
-        bytes += serde_json::to_vec(&page).unwrap().len();
+        bytes += crate::serde_json::to_vec(&page).unwrap().len();
         eprintln!(
             "query={query} count={} snapshots={snapshots} bytes={bytes} elapsed_ms={}",
             page.count,

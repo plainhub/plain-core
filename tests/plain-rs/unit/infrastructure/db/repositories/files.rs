@@ -66,7 +66,7 @@ fn literal_name_search_handles_short_chinese_symbols_and_fts_syntax() {
         for (text,total) in [("你好",1),("好世界",1),("AND",1),("%_",1),("%_literal",1),("a\"b",1),("Interior",1),("does-not-exist",0)] {
             let (filter,args)=name_filter(text);
             assert_eq!(filter.contains("MATCH"),text.chars().count()>=3);
-            let count=conn.query_row(&format!("SELECT count(*) FROM file_catalog WHERE {filter}"),rusqlite::params_from_iter(args),|row|row.get::<_,i64>(0)).unwrap();
+            let count=conn.query_row(&format!("SELECT count(*) FROM file_catalog WHERE {filter}"),plain_libs::rusqlite::params_from_iter(args),|row|row.get::<_,i64>(0)).unwrap();
             assert_eq!(count,total,"{text}");
         }
     });
@@ -215,7 +215,7 @@ fn interrupted_rename_does_not_attach_user_state_to_a_replacement_at_the_destina
         row.id
     };
     assert!(Db::open(&db_path).is_err());
-    let connection = rusqlite::Connection::open(&db_path).unwrap();
+    let connection = plain_libs::rusqlite::Connection::open(&db_path).unwrap();
     let path: String = connection
         .query_row("SELECT path FROM files WHERE id=?1", [&id], |row| {
             row.get(0)
@@ -320,7 +320,7 @@ fn visibility_subtrees_preserve_missing_trash_boundaries_and_nested_volumes() {
         .with_conn(|c| {
             c.prepare("SELECT id FROM files WHERE indexed=0 ORDER BY id")?
                 .query_map([], |r| r.get::<_, String>(0))?
-                .collect::<rusqlite::Result<Vec<_>>>()
+                .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
         })
         .unwrap();
     assert_eq!(hidden, ["a", "child", "missing", "nested"]);
@@ -365,7 +365,7 @@ fn scan_paths_commit_one_transaction_and_roll_back_a_failed_batch() {
             commits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             false
         }))?;
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
     db.record_scan_paths(&paths, "first").unwrap();
@@ -386,7 +386,7 @@ fn scan_paths_commit_one_transaction_and_roll_back_a_failed_batch() {
             )?,
             0
         );
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
 }

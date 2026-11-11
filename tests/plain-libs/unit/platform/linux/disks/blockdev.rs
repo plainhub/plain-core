@@ -36,7 +36,7 @@ fn user_visible_disk_names() {
 
 #[test]
 fn parse_boolish_variants() {
-    use serde_json::json;
+    use crate::serde_json::json;
     assert_eq!(parse_boolish(&Some(json!(true))), Some(true));
     assert_eq!(parse_boolish(&Some(json!(false))), Some(false));
     assert_eq!(parse_boolish(&Some(json!(1))), Some(true));
@@ -97,7 +97,7 @@ fn flatten_devices_walks_children_depth_first() {
 
 #[test]
 fn lsblk_accepts_null_optional_text_without_losing_disk_identity() {
-    let output: LsblkOutput = serde_json::from_value(serde_json::json!({
+    let output: LsblkOutput = crate::serde_json::from_value(crate::serde_json::json!({
         "blockdevices": [{
             "name": "vda", "path": "/dev/vda", "type": "disk",
             "fstype": null, "uuid": null, "label": null, "pkname": null,
@@ -121,12 +121,12 @@ fn lsblk_accepts_null_optional_text_without_losing_disk_identity() {
 #[test]
 fn lsblk_rejects_invalid_metadata_and_null_identity() {
     for value in [
-        serde_json::json!({"name":null}),
-        serde_json::json!({"path":null}),
-        serde_json::json!({"type":null}),
-        serde_json::json!({"fstype":123}),
-        serde_json::json!({"label":false}),
+        crate::serde_json::json!({"name":null}),
+        crate::serde_json::json!({"path":null}),
+        crate::serde_json::json!({"type":null}),
+        crate::serde_json::json!({"fstype":123}),
+        crate::serde_json::json!({"label":false}),
     ] {
-        assert!(serde_json::from_value::<LsblkDevice>(value).is_err());
+        assert!(crate::serde_json::from_value::<LsblkDevice>(value).is_err());
     }
 }

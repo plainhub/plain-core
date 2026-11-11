@@ -2,7 +2,7 @@ use crate::infrastructure::db::Db;
 use plain_libs::utils::search_dsl;
 use plain_libs::utils::search_dsl::FilterField;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 #[derive(Deserialize, Serialize, Clone, Copy, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Provider {
@@ -311,7 +311,7 @@ pub fn params(
     query: &str,
     mut params: Value,
 ) -> plain_libs::anyhow::Result<Value> {
-    params["plan"] = serde_json::to_value(prepare(db, provider, query, None)?)?;
+    params["plan"] = plain_libs::serde_json::to_value(prepare(db, provider, query, None)?)?;
     Ok(params)
 }
 
@@ -329,7 +329,7 @@ pub fn media_provider(kind: crate::features::enums::DataType) -> plain_libs::any
 }
 
 pub fn dates(fields: &[FilterField]) -> Value {
-    let values: serde_json::Map<String, Value> = fields
+    let values: plain_libs::serde_json::Map<String, Value> = fields
         .iter()
         .filter(|field| field.name == "start_time")
         .map(|field| {

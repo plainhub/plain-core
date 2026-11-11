@@ -8,7 +8,7 @@ use crate::{
     },
     schema::{IntrospectionMode, SchemaEnv},
 };
-use indexmap::IndexMap;
+use plain_libs::indexmap::IndexMap;
 use serde::{
     Serialize,
     ser::{SerializeSeq, Serializer},

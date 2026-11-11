@@ -1,7 +1,7 @@
 use crate::features::chat::attachments::app_file_store;
 use crate::infrastructure::db::Db;
 use plain_libs::anyhow::Result;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::path::Path;
 pub fn text(db: &Db, directory: &Path, text: &str) -> Result<Value> {
     if text.encode_utf16().count() <= 2048 {

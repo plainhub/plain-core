@@ -7,7 +7,7 @@ use plain_rs::features::chat::enums::ChatStatus;
 use plain_rs::infrastructure::db::DChat;
 use plain_rs::infrastructure::transport::auth::AuthenticatedPeer;
 use plain_rs::infrastructure::types::Instant;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 #[derive(SimpleObject)]
 struct ChatItem {
@@ -73,7 +73,7 @@ impl Mutation {
                 )])
                 .to_string(),
             ));
-        if let Ok(content) = serde_json::from_str::<Value>(&received.chat.content) {
+        if let Ok(content) = plain_libs::serde_json::from_str::<Value>(&received.chat.content) {
             if matches!(content["type"].as_str(), Some("FILES" | "IMAGES")) {
                 if let Some(files) = content["value"]["items"].as_array() {
                     for file in files {
@@ -144,7 +144,7 @@ pub(crate) async fn execute(
         Ok(authenticated) => authenticated,
         Err(error) => return (error.http_status(), vec![]),
     };
-    let request = match serde_json::from_str::<plain_graphql::Request>(&authenticated.graphql_json)
+    let request = match plain_libs::serde_json::from_str::<plain_graphql::Request>(&authenticated.graphql_json)
     {
         Ok(request) => request,
         Err(_) => return (400, vec![]),
@@ -159,7 +159,7 @@ pub(crate) async fn execute(
         }))
         .await;
     let context = plain_rs::infrastructure::transport::http_response::Context::new(body);
-    match serde_json::to_vec(&response) {
+    match plain_libs::serde_json::to_vec(&response) {
         Ok(body) => context
             .encrypt(&key, &body)
             .map(|body| (200, body))

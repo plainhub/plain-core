@@ -1,6 +1,6 @@
 use super::*;
 use plain_libs::protocols::http_client;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 #[cfg(feature = "http_transport")]
 const TOKEN: &str = "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=";
 
@@ -232,7 +232,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
         let controller = &controller;
         async move {
             let value: Value =
-                serde_json::from_str(&controller.execute_json(&body.to_string()).await.unwrap())
+                plain_libs::serde_json::from_str(&controller.execute_json(&body.to_string()).await.unwrap())
                     .unwrap();
             (200, json!({"result": value}).to_string())
         }
@@ -252,7 +252,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     );
     let (status, body) = post(json!({"action": "setEnabled", "enabled": true})).await;
     assert_eq!(status, 200);
-    let row: Value = serde_json::from_str(&body).unwrap();
+    let row: Value = plain_libs::serde_json::from_str(&body).unwrap();
     assert_eq!(row["result"]["isRunning"], json!(true), "{row}");
     assert_eq!(row["result"]["port"], json!(port));
 
@@ -272,7 +272,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
 
     let (status, body) = post(json!({"action": "accept", "remember": true})).await;
     assert_eq!(status, 200);
-    let row: Value = serde_json::from_str(&body).unwrap();
+    let row: Value = plain_libs::serde_json::from_str(&body).unwrap();
     assert_eq!(row["result"]["pendingCastRequest"], Value::Null);
     assert_eq!(row["result"]["mediaUri"], json!("http://example/a.mp4"));
     assert!(plain_rs::features::prefs::dlna::senders_contain_ip(
@@ -294,7 +294,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     );
     let (status, body) = post(json!({"action": "reject", "remember": true})).await;
     assert_eq!(status, 200);
-    let row: Value = serde_json::from_str(&body).unwrap();
+    let row: Value = plain_libs::serde_json::from_str(&body).unwrap();
     assert_eq!(row["result"]["pendingCastRequest"], Value::Null);
     assert_ne!(row["result"]["mediaUri"], json!("http://example/b.mp4"));
     assert!(plain_rs::features::prefs::dlna::senders_contain_ip(
@@ -305,11 +305,11 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     let (status, body) =
         post(json!({"action": "position", "positionMs": 4200, "durationMs": 9000})).await;
     assert_eq!(status, 200, "position failed: {body}");
-    let row: Value = serde_json::from_str(&body).unwrap_or_else(|e| panic!("{e}: {body}"));
+    let row: Value = plain_libs::serde_json::from_str(&body).unwrap_or_else(|e| panic!("{e}: {body}"));
     assert_eq!(row["result"]["currentPositionMs"], json!(4200));
     assert_eq!(row["result"]["durationMs"], json!(9000));
 
-    let rules: Value = serde_json::from_str(
+    let rules: Value = plain_libs::serde_json::from_str(
         &controller
             .execute_json(r#"{"action":"rules"}"#)
             .await
@@ -317,7 +317,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     )
     .unwrap();
     assert_eq!(rules["allowed"][0]["ip"], "10.0.0.9");
-    let rules: Value = serde_json::from_str(
+    let rules: Value = plain_libs::serde_json::from_str(
         &controller
             .execute_json(r#"{"action":"removeRule","ip":"10.0.0.9","allowed":true}"#)
             .await
@@ -328,7 +328,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     post(json!({"action":"playback","state":"PausedPlayback"})).await;
     state.dlna.state.write().await.seek_target_ms = Some(3000);
     post(json!({"action":"seekConsumed"})).await;
-    let snapshot: Value = serde_json::from_str(
+    let snapshot: Value = plain_libs::serde_json::from_str(
         &controller
             .execute_json(r#"{"action":"snapshot"}"#)
             .await
@@ -338,7 +338,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     assert_eq!(snapshot["playbackState"], "PausedPlayback");
     assert_eq!(snapshot["seekTargetMs"], Value::Null);
     post(json!({"action":"stopped"})).await;
-    let snapshot: Value = serde_json::from_str(
+    let snapshot: Value = plain_libs::serde_json::from_str(
         &controller
             .execute_json(r#"{"action":"snapshot"}"#)
             .await
@@ -348,7 +348,7 @@ async fn native_control_uses_shared_http_lifecycle_and_cast_prompt() {
     assert_eq!(snapshot["mediaUri"], "");
     post(json!({"action":"retry"})).await;
     let (_, body) = post(json!({"action": "setEnabled", "enabled": false})).await;
-    let row: Value = serde_json::from_str(&body).unwrap();
+    let row: Value = plain_libs::serde_json::from_str(&body).unwrap();
     assert_eq!(row["result"]["isRunning"], json!(false));
     server.shutdown().await;
     drop(dir);
@@ -395,13 +395,13 @@ async fn public_dlna_reads_the_native_players_reported_position() {
 #[tokio::test]
 async fn a_body_at_the_cap_is_read_and_one_byte_over_is_not() {
     let at_cap =
-        axum::body::Body::from_stream(futures_util::stream::iter(vec![Ok::<_, std::io::Error>(
+        plain_libs::axum::body::Body::from_stream(futures_util::stream::iter(vec![Ok::<_, std::io::Error>(
             vec![0u8; MAX_BODY],
         )]));
     assert_eq!(read_body(at_cap, MAX_BODY).await.unwrap().len(), MAX_BODY);
 
     let over =
-        axum::body::Body::from_stream(futures_util::stream::iter(vec![Ok::<_, std::io::Error>(
+        plain_libs::axum::body::Body::from_stream(futures_util::stream::iter(vec![Ok::<_, std::io::Error>(
             vec![0u8; MAX_BODY + 1],
         )]));
     assert_eq!(read_body(over, MAX_BODY).await, Err(BodyFailure::TooLarge));
@@ -414,7 +414,7 @@ async fn a_body_that_fails_mid_read_is_reported_as_unreadable() {
         Err(std::io::Error::other("peer reset")),
     ]);
     assert_eq!(
-        read_body(axum::body::Body::from_stream(stream), MAX_BODY).await,
+        read_body(plain_libs::axum::body::Body::from_stream(stream), MAX_BODY).await,
         Err(BodyFailure::Unreadable)
     );
 }
@@ -496,7 +496,7 @@ struct MainDlnaClient(
 );
 impl MainDlnaClient {
     async fn execute_json(&self, command: &str) -> Result<String, String> {
-        let mut input: Value = serde_json::from_str(command).map_err(|error| error.to_string())?;
+        let mut input: Value = plain_libs::serde_json::from_str(command).map_err(|error| error.to_string())?;
         let action = input["action"].as_str().ok_or("Missing action")?.to_owned();
         if action == "setEnabled" {
             let enabled = input["enabled"].as_bool().ok_or("Missing enabled")?;
@@ -518,7 +518,7 @@ impl MainDlnaClient {
                 &self.1.dlna.snapshot().await,
             );
             value["enabled"] = json!(plain_rs::features::prefs::dlna::enabled(&self.1.prefs));
-            return serde_json::to_string(&value).map_err(|error| error.to_string());
+            return plain_libs::serde_json::to_string(&value).map_err(|error| error.to_string());
         }
         let report_kind = match action.as_str() {
             "position" => Some("DLNA_POSITION_REPORTED"),
@@ -542,7 +542,7 @@ impl MainDlnaClient {
                 &input.to_string(),
             )
             .await?;
-            return serde_json::to_string(
+            return plain_libs::serde_json::to_string(
                 &plain_rs::features::services::casting::receiver::control::snapshot(
                     &self.1.dlna.snapshot().await,
                 ),
@@ -550,7 +550,7 @@ impl MainDlnaClient {
             .map_err(|error| error.to_string());
         }
         use plain_rs::features::services::casting::receiver::control::Request;
-        let request: Request = serde_json::from_value(input).map_err(|error| error.to_string())?;
+        let request: Request = plain_libs::serde_json::from_value(input).map_err(|error| error.to_string())?;
         let management = crate::native::management::NativeManagement::new(self.1.clone());
         let result = match request {
             Request::Snapshot {} => management.dlna_receiver().await?,
@@ -560,7 +560,7 @@ impl MainDlnaClient {
             Request::Accept { remember } => management.accept_dlna_cast(remember).await?,
             Request::Reject { remember } => management.reject_dlna_cast(remember).await?,
         };
-        serde_json::to_string(&result).map_err(|error| error.to_string())
+        plain_libs::serde_json::to_string(&result).map_err(|error| error.to_string())
     }
 }
 
@@ -646,7 +646,7 @@ async fn media_revocation_cancels_an_open_file_body_and_denies_another_peer() {
     state.cast.media.replace(session);
     let request = || {
         HttpRequest::builder()
-            .body(axum::body::Body::empty())
+            .body(plain_libs::axum::body::Body::empty())
             .unwrap()
     };
     let response = media(
@@ -725,7 +725,7 @@ async fn callback_requires_current_device_sid_and_sequence() {
         let response = callback(
             State(state.clone()),
             ConnectInfo(peer.parse().unwrap()),
-            request.body(axum::body::Body::from(body)).unwrap(),
+            request.body(plain_libs::axum::body::Body::from(body)).unwrap(),
         )
         .await;
         assert_eq!(response.status(), expected);
@@ -735,7 +735,7 @@ async fn callback_requires_current_device_sid_and_sequence() {
         .method("NOTIFY")
         .header("SID", "uuid:fixture")
         .header("SEQ", "1")
-        .body(axum::body::Body::from(body))
+        .body(plain_libs::axum::body::Body::from(body))
         .unwrap();
     assert_eq!(
         callback(
@@ -779,7 +779,7 @@ async fn native_media_head_range_and_cancel_preserve_the_descriptor_extent() {
             host.reply(generation, json!({"id":request["id"],"result":null}))
                 .unwrap();
             let metadata: Value =
-                serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+                plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
             assert_eq!(metadata["file"], true);
             stream
                 .file(NativeResourceFile {
@@ -799,7 +799,7 @@ async fn native_media_head_range_and_cancel_preserve_the_descriptor_extent() {
     for head in [true, false] {
         let request = HttpRequest::builder()
             .method(if head { "HEAD" } else { "GET" })
-            .body(axum::body::Body::empty())
+            .body(plain_libs::axum::body::Body::empty())
             .unwrap();
         let response = media(
             State(state.clone()),
@@ -832,7 +832,7 @@ async fn native_media_head_range_and_cancel_preserve_the_descriptor_extent() {
 
 #[tokio::test]
 async fn remote_proxy_pins_dns_preserves_head_range_and_does_not_forward_credentials() {
-    use axum::{Router, routing::any};
+    use plain_libs::axum::{Router, routing::any};
     let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let captured = requests.clone();
     let router = Router::new().fallback(any(move |request: HttpRequest| {
@@ -866,7 +866,7 @@ async fn remote_proxy_pins_dns_preserves_head_range_and_does_not_forward_credent
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let task = tokio::spawn(async move {
-        axum::serve(listener, router).await.unwrap();
+        plain_libs::axum::serve(listener, router).await.unwrap();
     });
     let url = http_client::Url::parse(&format!(
         "http://media.example.invalid:{}/movie",
@@ -885,7 +885,7 @@ async fn remote_proxy_pins_dns_preserves_head_range_and_does_not_forward_credent
         assert_eq!(response.status(), 206);
         assert_eq!(response.headers()["content-length"], "3");
         assert!(!response.headers().contains_key("set-cookie"));
-        let bytes = axum::body::to_bytes(response.into_body(), 1024)
+        let bytes = plain_libs::axum::body::to_bytes(response.into_body(), 1024)
             .await
             .unwrap();
         assert_eq!(

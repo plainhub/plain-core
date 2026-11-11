@@ -148,7 +148,7 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
             let mut connection = tokio::net::TcpStream::connect(("127.0.0.1", port))
                 .await
                 .unwrap();
-            let body = serde_json::json!({
+            let body = plain_libs::serde_json::json!({
                 "query": "{ app { capabilities access } fileIndexVolumes { id } fileIndexDefaults { excludedDirs } scanProgress { state } audios(query:\"\",offset:0,limit:1,sortBy:NAME_ASC) { id } }"
             })
             .to_string();
@@ -169,15 +169,15 @@ async fn service_grants_remote_file_features_and_preserves_other_settings_across
             .unwrap();
             assert!(response.starts_with("HTTP/1.1 200"));
             let (_, body) = response.split_once("\r\n\r\n").unwrap();
-            let result: serde_json::Value = serde_json::from_str(body).unwrap();
+            let result: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(body).unwrap();
             assert!(result["errors"].is_null(), "{result}");
             let data = &result["data"];
-            assert_eq!(data["app"]["access"], serde_json::json!(defaults));
+            assert_eq!(data["app"]["access"], plain_libs::serde_json::json!(defaults));
             assert!(
                 data["app"]["capabilities"]
                     .as_array()
                     .unwrap()
-                    .contains(&serde_json::json!("MEDIA_SCAN"))
+                    .contains(&plain_libs::serde_json::json!("MEDIA_SCAN"))
             );
             assert!(data["fileIndexVolumes"].is_array());
             assert!(data["fileIndexDefaults"]["excludedDirs"].is_array());
@@ -254,7 +254,7 @@ async fn service_starts_real_listeners_and_releases_them_and_the_data_lock_on_sh
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["app"]["access"],
-        serde_json::json!(["IMAGES", "VIDEOS", "AUDIO", "DOCS", "FILES"])
+        plain_libs::serde_json::json!(["IMAGES", "VIDEOS", "AUDIO", "DOCS", "FILES"])
     );
     let catalog = service.core.native_media_catalog().unwrap();
     assert_eq!(

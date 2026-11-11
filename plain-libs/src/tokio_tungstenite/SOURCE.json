@@ -1,0 +1,17 @@
+{
+  "name": "tokio-tungstenite",
+  "version": "0.30.0",
+  "archive_sha256": "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71",
+  "repository": "https://github.com/snapview/tokio-tungstenite",
+  "revision": "4994a078037a18a9347b8cf49291a5031d63d9e0",
+  "retained_features": [
+    "__rustls-tls",
+    "connect",
+    "default",
+    "handshake",
+    "rustls",
+    "rustls-pki-types",
+    "stream",
+    "tokio-rustls"
+  ]
+}

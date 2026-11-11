@@ -8,12 +8,12 @@ async fn thumbnail_body_shares_storage_and_releases_it_on_consumption_or_drop() 
         let storage: Arc<[u8]> = vec![0xff, 0xd8, 1, 2, 3].into();
         let pointer = storage.as_ptr();
         let owner = Arc::downgrade(&storage);
-        let cached = axum::body::Bytes::from_owner(storage);
+        let cached = plain_libs::axum::body::Bytes::from_owner(storage);
         let response = thumbnail(Ok(Some(cached.clone())), None);
         drop(cached);
         assert_eq!(owner.strong_count(), 1);
         if consume {
-            let body = axum::body::to_bytes(response.into_body(), 1024)
+            let body = plain_libs::axum::body::to_bytes(response.into_body(), 1024)
                 .await
                 .unwrap();
             assert_eq!(body.as_ptr(), pointer);
@@ -31,7 +31,7 @@ fn conditional_thumbnail_response_releases_its_shared_buffer() {
     use std::sync::Arc;
     let storage: Arc<[u8]> = vec![0xff, 0xd8, 1].into();
     let owner = Arc::downgrade(&storage);
-    let response = thumbnail(Ok(Some(axum::body::Bytes::from_owner(storage))), Some("*"));
+    let response = thumbnail(Ok(Some(plain_libs::axum::body::Bytes::from_owner(storage))), Some("*"));
     assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
     assert!(owner.upgrade().is_none());
 }
@@ -46,7 +46,7 @@ async fn temporary_output_survives_until_the_response_body_is_consumed_or_cancel
             stream_temporary(Temporary(path.clone()), "image/png", &HeaderMap::new()).await;
         assert!(path.exists());
         if consume {
-            let bytes = axum::body::to_bytes(response.into_body(), 1024)
+            let bytes = plain_libs::axum::body::to_bytes(response.into_body(), 1024)
                 .await
                 .unwrap();
             assert_eq!(&bytes[..], b"preview-output");
@@ -67,7 +67,7 @@ async fn temporary_range_responses_keep_range_headers_and_remove_the_output() {
     let response = stream_temporary(Temporary(path.clone()), "image/png", &headers).await;
     assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
     assert_eq!(response.headers()[header::CONTENT_RANGE], "bytes 2-5/10");
-    let bytes = axum::body::to_bytes(response.into_body(), 1024)
+    let bytes = plain_libs::axum::body::to_bytes(response.into_body(), 1024)
         .await
         .unwrap();
     assert_eq!(&bytes[..], b"2345");
@@ -82,7 +82,7 @@ async fn original_thumbnail_bytes_keep_their_mime_and_conditional_response() {
         (b"GIF89aoriginal".as_slice(), "image/gif"),
         (b"RIFF0000WEBPoriginal".as_slice(), "image/webp"),
     ] {
-        let response = thumbnail(Ok(Some(axum::body::Bytes::from_static(bytes))), None);
+        let response = thumbnail(Ok(Some(plain_libs::axum::body::Bytes::from_static(bytes))), None);
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()[header::CONTENT_TYPE], mime);
         let etag = response.headers()[header::ETAG]
@@ -90,12 +90,12 @@ async fn original_thumbnail_bytes_keep_their_mime_and_conditional_response() {
             .unwrap()
             .to_owned();
         assert_eq!(
-            &axum::body::to_bytes(response.into_body(), 1024)
+            &plain_libs::axum::body::to_bytes(response.into_body(), 1024)
                 .await
                 .unwrap()[..],
             bytes
         );
-        let response = thumbnail(Ok(Some(axum::body::Bytes::from_static(bytes))), Some(&etag));
+        let response = thumbnail(Ok(Some(plain_libs::axum::body::Bytes::from_static(bytes))), Some(&etag));
         assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
     }
 }
@@ -114,7 +114,7 @@ async fn mutable_file_responses_require_revalidation_and_preserve_full_and_range
             let response = stream_file(&path, "audio/wav", &headers).await;
             assert_eq!(response.status(), if partial { StatusCode::PARTIAL_CONTENT } else { StatusCode::OK });
             assert_eq!(response.headers()[header::CACHE_CONTROL], "private, no-cache");
-            let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
+            let body = plain_libs::axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
             assert_eq!(body.as_ref(), if partial { &bytes[2..6] } else { bytes });
         }
     }

@@ -118,8 +118,8 @@ impl Status {
         let battery = async {
             #[cfg(any(target_os = "android", target_os = "ios"))]
             if selection.battery || (selection.temperatures && cfg!(target_os = "android")) {
-                return serde_json::from_value::<BatterySample>(
-                    host.call("systemBatterySample", serde_json::json!({}))
+                return plain_libs::serde_json::from_value::<BatterySample>(
+                    host.call("systemBatterySample", plain_libs::serde_json::json!({}))
                         .await?,
                 )
                 .map(Some)

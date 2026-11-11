@@ -1,0 +1,11 @@
+{
+  "name": "ipnet",
+  "version": "2.12.2",
+  "archive_sha256": "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0",
+  "repository": "https://github.com/krisprice/ipnet",
+  "revision": "13c5c5873c02127679b1e8e64b538e4e36942640",
+  "retained_features": [
+    "default",
+    "std"
+  ]
+}

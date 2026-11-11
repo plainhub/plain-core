@@ -372,7 +372,7 @@ fn publish_status(
 ) {
     let _ = events.send(crate::infrastructure::events::WsEvent::broadcast(
         "IMAGE_INDEX_UPDATED",
-        serde_json::to_string(&status).unwrap(),
+        plain_libs::serde_json::to_string(&status).unwrap(),
     ));
 }
 

@@ -1,11 +1,11 @@
 use super::*;
 use futures_util::{SinkExt, StreamExt};
 use plain_server::server::ContentServer;
-use serde_json::{Value, json};
-use tokio_tungstenite::tungstenite::Message;
+use plain_libs::serde_json::{Value, json};
+use plain_libs::tokio_tungstenite::tungstenite::Message;
 
 type Socket =
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+    plain_libs::tokio_tungstenite::WebSocketStream<plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
@@ -31,14 +31,14 @@ async fn browser_login(
     plain_rs::features::services::confirmation_channel::Channel,
 ) {
     use plain_rs::features::services::confirmation_channel::Client;
-    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+    let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(format!(
         "ws://127.0.0.1:{port}/auth?cid={client_id}"
     ))
     .await
     .unwrap();
     let (client, hello) = Client::start(client_id).unwrap();
     socket
-        .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
+        .send(Message::Text(plain_libs::serde_json::to_string(&hello).unwrap().into()))
         .await
         .unwrap();
     let Message::Text(hello) = frame(&mut socket).await else {
@@ -49,7 +49,7 @@ async fn browser_login(
         plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
     let channel = client
         .accept(
-            &serde_json::from_str(&hello).unwrap(),
+            &plain_libs::serde_json::from_str(&hello).unwrap(),
             &plain_libs::utils::base64::base64_encode(&public[32..]),
             &state.native_client_id().unwrap(),
             now_ms(),
@@ -57,7 +57,7 @@ async fn browser_login(
         .unwrap();
     let request = json!({"appName":"Fixture","appVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false});
     let encrypted = channel
-        .encrypt_request(&serde_json::to_vec(&request).unwrap(), now_ms())
+        .encrypt_request(&plain_libs::serde_json::to_vec(&request).unwrap(), now_ms())
         .unwrap();
     socket
         .send(Message::Binary(encrypted.into()))
@@ -67,7 +67,7 @@ async fn browser_login(
         panic!("encrypted login response required")
     };
     let pending: Value =
-        serde_json::from_slice(&channel.decrypt_response(&pending, now_ms()).unwrap()).unwrap();
+        plain_libs::serde_json::from_slice(&channel.decrypt_response(&pending, now_ms()).unwrap()).unwrap();
     assert_eq!(pending["status"], "PENDING");
     (socket, channel)
 }
@@ -116,7 +116,7 @@ async fn local_approval_socket_controls_real_passwordless_browser_sessions() {
                 panic!("encrypted completion required")
             };
             let completed: Value =
-                serde_json::from_slice(&channel.decrypt_response(&bytes, now_ms()).unwrap())
+                plain_libs::serde_json::from_slice(&channel.decrypt_response(&bytes, now_ms()).unwrap())
                     .unwrap();
             assert_eq!(completed["status"], "COMPLETED");
             assert!(completed.get("ecdhPublicKey").is_none());

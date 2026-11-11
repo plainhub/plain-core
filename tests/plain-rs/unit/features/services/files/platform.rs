@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn native_read_access_rechecks_real_targets_and_rejects_missing_or_relative_paths() {
@@ -72,9 +72,9 @@ async fn sdk_file_access_without_a_system_media_catalog_records_portable_file_me
 
 async fn sdk_recents(
     config: crate::infrastructure::host::startup::StartupConfig,
-    volumes: serde_json::Value,
-    provider_rows: serde_json::Value,
-) -> (Result<Vec<serde_json::Value>>, Vec<String>) {
+    volumes: plain_libs::serde_json::Value,
+    provider_rows: plain_libs::serde_json::Value,
+) -> (Result<Vec<plain_libs::serde_json::Value>>, Vec<String>) {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::test_runtime::Core::open(directory.path()).unwrap();
     let state = core.runtime_state();

@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use futures_core::future::BoxFuture;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use tokio::sync::broadcast;
 
 use crate::features::chat::cacher::ChatCacher;

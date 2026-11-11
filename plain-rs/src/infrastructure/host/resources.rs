@@ -2,7 +2,7 @@ use crate::infrastructure::host::bridge::Host;
 use crate::infrastructure::host::resource_stream::NativeResourceFile;
 use crate::infrastructure::host::resource_stream::NativeResourceStream;
 use crate::infrastructure::host::resource_stream::ResourceFrame;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},

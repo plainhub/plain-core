@@ -1,8 +1,8 @@
 use crate::server::ContentServer;
-use axum::{Router, body::Bytes, http::HeaderMap, routing::post};
+use plain_libs::axum::{Router, body::Bytes, http::HeaderMap, routing::post};
 use plain_libs::protocols::http_client;
 use plain_rs::features::services::peers::management_http::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::{Arc, Mutex};
 
 #[tokio::test]

@@ -64,7 +64,7 @@ fn native_unindexed_files_are_probed_for_tags_without_creating_persistent_media_
 
 #[tokio::test]
 async fn uri_audio_tags_use_one_bounded_descriptor_without_sdk_metadata_or_staging() {
-    use serde_json::json;
+    use plain_libs::serde_json::json;
     use std::sync::Arc;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let bytes = std::fs::read(concat!(
@@ -95,8 +95,8 @@ async fn uri_audio_tags_use_one_bounded_descriptor_without_sdk_metadata_or_stagi
         .unwrap();
     host.reply(generation, json!({"id":request["id"],"result":null}))
         .unwrap();
-    let packet: serde_json::Value =
-        serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+    let packet: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
     assert_eq!(
         packet,
         json!({"path":"content://fixture/audio","file":true})

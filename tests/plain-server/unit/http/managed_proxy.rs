@@ -1,6 +1,6 @@
 use super::*;
 use crate::server::ContentServer;
-use axum::body::Bytes;
+use plain_libs::axum::body::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use plain_rs::infrastructure::db::{DPeer, chat_store::peers};
 use plain_rs::{
@@ -11,9 +11,9 @@ use plain_rs::{
     },
     infrastructure::{db::chat_store::SaveMode, protocols::graphql, transport::http_request},
 };
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::time::Duration;
-use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
+use plain_libs::tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 
 fn start(path: &std::path::Path, id: &str) -> ContentServer {
     std::fs::create_dir_all(path).unwrap();
@@ -81,7 +81,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         )
         .await
         .unwrap();
-    let data = serde_json::to_value(response).unwrap();
+    let data = plain_libs::serde_json::to_value(response).unwrap();
     assert_eq!(data["data"]["app"]["clientId"], b_id);
     assert_eq!(data["data"]["app"]["urlToken"], management.url_token);
     for caller in ["", browser.client_id.as_str(), a_id.as_str()] {
@@ -112,7 +112,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
             &Scope::Session(browser.client_id.clone()),
             &format!("relay:{b_id}:{method}:{path}"),
             &decode_key(&browser.url_token).unwrap(),
-            &serde_json::to_vec(&plain_libs::chrono::Utc::now().timestamp_millis()).unwrap(),
+            &plain_libs::serde_json::to_vec(&plain_libs::chrono::Utc::now().timestamp_millis()).unwrap(),
         )
         .unwrap();
         let (path, query) = path.split_once('?').unwrap_or((path, ""));
@@ -146,7 +146,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let response =
         http_request::decrypt_response(&key, &body, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&response).unwrap()["data"]["app"]["clientId"],
+        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&response).unwrap()["data"]["app"]["clientId"],
         b_id
     );
     let first = a_state.managed_proxy.route(&a_state, &b_id).await.unwrap();
@@ -163,7 +163,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     );
 
     for path in ["auth", "unavailable-socket"] {
-        let (mut socket, response) = tokio_tungstenite::connect_async(format!(
+        let (mut socket, response) = plain_libs::tokio_tungstenite::connect_async(format!(
             "ws://127.0.0.1:{a_http}/proxy/{b_id}/{path}?cid={a_id}"
         ))
         .await
@@ -203,7 +203,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         &Scope::Session(browser.client_id.clone()),
         &format!("managed:{b_id}:fs:preview"),
         &decode_key(&browser.url_token).unwrap(),
-        &serde_json::to_vec(&Resource::reference(file.to_str().unwrap())).unwrap(),
+        &plain_libs::serde_json::to_vec(&Resource::reference(file.to_str().unwrap())).unwrap(),
     )
     .unwrap();
     let get = |action| {
@@ -239,7 +239,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         &Scope::Session(browser.client_id.clone()),
         &format!("managed:{b_id}:zip/dir:download"),
         &decode_key(&browser.url_token).unwrap(),
-        &serde_json::to_vec(&Resource::reference(archive_dir.to_str().unwrap())).unwrap(),
+        &plain_libs::serde_json::to_vec(&Resource::reference(archive_dir.to_str().unwrap())).unwrap(),
     )
     .unwrap();
     let response = http
@@ -304,7 +304,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let plaintext =
         http_request::decrypt_response(&key, &chunks, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&plaintext).unwrap()["data"]["uploadedChunks"],
+        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["data"]["uploadedChunks"],
         json!([format!("0:{}", data.len())])
     );
     let clean = http_request::encrypt(
@@ -317,7 +317,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let plaintext =
         http_request::decrypt_response(&key, &clean, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&plaintext).unwrap()["data"]["deleteChunks"],
+        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["data"]["deleteChunks"],
         true
     );
 
@@ -352,7 +352,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         .await
         .unwrap()
         .unwrap();
-    let ready: serde_json::Value = serde_json::from_str(&ready).unwrap();
+    let ready: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&ready).unwrap();
     assert_eq!(ready["payload"]["extensions"]["subscriptionReady"], true);
     scope.close();
     assert!(
@@ -371,7 +371,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
         ),
         format!("ws://127.0.0.1:{a_http}/proxy/unknown/graphql?cid={a_id}"),
     ] {
-        assert!(tokio_tungstenite::connect_async(url).await.is_err());
+        assert!(plain_libs::tokio_tungstenite::connect_async(url).await.is_err());
     }
     b_state
         .prefs
@@ -391,7 +391,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     let plaintext =
         http_request::decrypt_response(&key, &chunks, &response.bytes().await.unwrap()).unwrap();
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&plaintext).unwrap()["errors"][0]["message"],
+        plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&plaintext).unwrap()["errors"][0]["message"],
         "no_permission"
     );
     a.stop_core().await;
@@ -447,11 +447,11 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     .unwrap();
     let tls = http_client::pinned_tls_config(pin).unwrap();
     let connect = || {
-        tokio_tungstenite::connect_async_tls_with_config(
+        plain_libs::tokio_tungstenite::connect_async_tls_with_config(
             format!("wss://localhost:{a_port}{socket_path}"),
             None,
             false,
-            Some(tokio_tungstenite::Connector::Rustls(Arc::new(tls.clone()))),
+            Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(tls.clone()))),
         )
     };
     let session_key = decode_key(&browser.token).unwrap();
@@ -460,7 +460,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             &session_key,
             &browser.client_id,
             path,
-            &serde_json::to_vec(&graphql::Init {
+            &plain_libs::serde_json::to_vec(&graphql::Init {
                 timestamp_millis: plain_libs::chrono::Utc::now().timestamp_millis(),
                 client_nonce: plain_libs::utils::hex::bytes_to_hex(
                     &plain_libs::crypto::random_bytes(32),
@@ -565,7 +565,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let request = json!({"appName":"Fixture", "appVersion":"1", "osName":"Fixture", "osVersion":"1", "isMobile":false});
     let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &login_key,
-        &serde_json::to_vec(&request).unwrap(),
+        &plain_libs::serde_json::to_vec(&request).unwrap(),
         &plain_libs::auth::auth_aad(&context, false),
     )
     .unwrap();
@@ -586,7 +586,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         &plain_libs::auth::auth_aad(&context, true),
     )
     .unwrap();
-    let response: serde_json::Value = serde_json::from_slice(&plaintext).unwrap();
+    let response: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&plaintext).unwrap();
     assert_eq!(response["status"], "COMPLETED", "{response}");
     assert!(
         b_state
@@ -660,7 +660,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         &native_scope,
         "native-proxy",
         &plain_rs::features::sessions::token_key(&a_state.native_url_token().unwrap()).unwrap(),
-        &serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}")})).unwrap(),
+        &plain_libs::serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}")})).unwrap(),
     )
     .unwrap();
     let native_base = format!("http://127.0.0.1:{a_http}/proxy/{ticket}");
@@ -758,8 +758,8 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
     let upstream = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = upstream.local_addr().unwrap();
     let serve = tokio::spawn(async move {
-        let router = axum::Router::new().fallback(
-            |uri: axum::http::Uri, headers: HeaderMap, body: Bytes| async move {
+        let router = plain_libs::axum::Router::new().fallback(
+            |uri: plain_libs::axum::http::Uri, headers: HeaderMap, body: Bytes| async move {
                 if uri.path() == "/auth" {
                     return StatusCode::BAD_REQUEST.into_response();
                 }
@@ -781,14 +781,14 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
                     .into_response()
             },
         );
-        axum::serve(upstream, router).await.unwrap();
+        plain_libs::axum::serve(upstream, router).await.unwrap();
     });
     let scope = Scope::Session(state.native_client_id().unwrap());
     let ticket = resource_link::encrypt(
         &scope,
         "native-proxy",
         &plain_rs::features::sessions::token_key(&state.native_url_token().unwrap()).unwrap(),
-        &serde_json::to_vec(&json!({"base":format!("http://{address}")})).unwrap(),
+        &plain_libs::serde_json::to_vec(&json!({"base":format!("http://{address}")})).unwrap(),
     )
     .unwrap();
     let http = http_client::builder().no_proxy().build().unwrap();
@@ -832,7 +832,7 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
     request
         .headers_mut()
         .insert(header::ORIGIN, "tauri://localhost".parse().unwrap());
-    assert!(tokio_tungstenite::connect_async(request).await.is_err());
+    assert!(plain_libs::tokio_tungstenite::connect_async(request).await.is_err());
     serve.abort();
     a.stop_core().await;
 }
@@ -856,18 +856,18 @@ fn upload_body(metadata: &[u8], data: &[u8]) -> http_client::Body {
 async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
     let request = url.into_client_request().unwrap();
     let tls = http_client::pinned_tls_config(pin).unwrap();
-    let (mut socket, _) = tokio_tungstenite::connect_async_tls_with_config(
+    let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async_tls_with_config(
         request,
         None,
         false,
-        Some(tokio_tungstenite::Connector::Rustls(Arc::new(tls))),
+        Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(tls))),
     )
     .await
     .unwrap();
     let init = graphql::seal_init(
         key,
         client,
-        &serde_json::to_vec(&graphql::Init {
+        &plain_libs::serde_json::to_vec(&graphql::Init {
             timestamp_millis: plain_libs::chrono::Utc::now().timestamp_millis(),
             client_nonce: "ab".repeat(32),
         })
@@ -896,7 +896,7 @@ async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
             panic!("Missing subscription frame")
         };
         let received = cipher.decode(&frame, key).unwrap();
-        let message: serde_json::Value = serde_json::from_slice(&received).unwrap();
+        let message: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&received).unwrap();
         assert_eq!(message["type"], expected, "{message}");
         if expected == "next" {
             assert_eq!(message["payload"]["extensions"]["subscriptionReady"], true);

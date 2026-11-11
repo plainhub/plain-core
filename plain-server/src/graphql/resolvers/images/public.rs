@@ -8,7 +8,7 @@ use plain_graphql::{Context, Object, SimpleObject};
 
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Images;

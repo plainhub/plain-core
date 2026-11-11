@@ -16,7 +16,7 @@ fn mount_facts_preserve_existing_wire_fields() {
         drive_type: "USB_STORAGE".into(),
         disk_id: "/volume".into(),
     };
-    let value = serde_json::to_value(facts).unwrap();
+    let value = plain_libs::serde_json::to_value(facts).unwrap();
     assert_eq!(value["mountPoint"], "/volume");
     assert_eq!(value["totalBytes"], 100);
     assert_eq!(value["usedBytes"], 40);

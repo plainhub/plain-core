@@ -32,8 +32,8 @@ async fn reconciliation_preserves_rebuild_progress_and_reserves_the_execution_sl
         reconciliation.finish(Ok(())).unwrap();
         assert!(idle.await.unwrap());
         assert_eq!(
-            serde_json::to_value(scans.snapshot().unwrap()).unwrap(),
-            serde_json::to_value(Some(&completed)).unwrap()
+            plain_libs::serde_json::to_value(scans.snapshot().unwrap()).unwrap(),
+            plain_libs::serde_json::to_value(Some(&completed)).unwrap()
         );
         assert!(received.try_recv().is_err());
     }
@@ -85,8 +85,8 @@ fn background_failure_cancellation_drop_and_close_preserve_the_rebuild_result() 
             _ => unreachable!(),
         }
         assert_eq!(
-            serde_json::to_value(scans.snapshot().unwrap()).unwrap(),
-            serde_json::to_value(Some(failed)).unwrap()
+            plain_libs::serde_json::to_value(scans.snapshot().unwrap()).unwrap(),
+            plain_libs::serde_json::to_value(Some(failed)).unwrap()
         );
         assert!(received.try_recv().is_err());
     }
@@ -310,25 +310,25 @@ fn core_scan_events_report_real_lifecycle_and_unknown_totals() {
         event.event_type,
         crate::infrastructure::events::MEDIA_SCAN_PROGRESS
     );
-    let first: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+    let first: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
     assert_eq!(first["state"], "RUNNING");
-    assert_eq!(first["total"], serde_json::Value::Null);
-    assert_eq!(first["pending"], serde_json::Value::Null);
+    assert_eq!(first["total"], plain_libs::serde_json::Value::Null);
+    assert_eq!(first["pending"], plain_libs::serde_json::Value::Null);
     scans.pause().unwrap();
-    let paused: serde_json::Value =
-        serde_json::from_str(&received.try_recv().unwrap().payload).unwrap();
+    let paused: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(&received.try_recv().unwrap().payload).unwrap();
     assert_eq!(paused["state"], "PAUSED");
     assert_eq!(paused["id"], first["id"]);
     scans.resume().unwrap();
     assert!(received.try_recv().is_ok());
     session.record(|| Ok(())).unwrap();
-    let progress: serde_json::Value =
-        serde_json::from_str(&received.try_recv().unwrap().payload).unwrap();
+    let progress: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(&received.try_recv().unwrap().payload).unwrap();
     assert_eq!(progress["indexed"], 1);
     session.finish(Err("probe failed".into())).unwrap();
-    let failed: serde_json::Value =
-        serde_json::from_str(&received.try_recv().unwrap().payload).unwrap();
+    let failed: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(&received.try_recv().unwrap().payload).unwrap();
     assert_eq!(failed["state"], "FAILED");
     assert_eq!(failed["error"], "probe failed");
-    assert_eq!(failed["total"], serde_json::Value::Null);
+    assert_eq!(failed["total"], plain_libs::serde_json::Value::Null);
 }

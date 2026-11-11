@@ -1,7 +1,7 @@
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use serde::Deserialize;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Mutex;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

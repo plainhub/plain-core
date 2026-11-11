@@ -1,0 +1,12 @@
+{
+  "name": "memchr",
+  "version": "2.8.3",
+  "archive_sha256": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98",
+  "repository": "https://github.com/BurntSushi/memchr",
+  "revision": "5fdb40c054e1fff359a2f7bdf7f87a13b34b465d",
+  "retained_features": [
+    "alloc",
+    "default",
+    "std"
+  ]
+}

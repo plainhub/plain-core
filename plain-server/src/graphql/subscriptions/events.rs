@@ -48,7 +48,7 @@ pub(super) async fn authorize(
 async fn mirror_snapshot(state: &ServerState, name: &str) -> Result<String> {
     let snapshot = state
         .host
-        .call("systemScreenMirrorState", serde_json::json!({}))
+        .call("systemScreenMirrorState", plain_libs::serde_json::json!({}))
         .await
         .map_err(plain_graphql::Error::new)?;
     if name == "SCREEN_MIRRORING" {
@@ -56,18 +56,18 @@ async fn mirror_snapshot(state: &ServerState, name: &str) -> Result<String> {
         struct Running {
             running: bool,
         }
-        let running: Running = serde_json::from_value(snapshot)
+        let running: Running = plain_libs::serde_json::from_value(snapshot)
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-        serde_json::to_string(&running)
+        plain_libs::serde_json::to_string(&running)
             .map_err(|error| plain_graphql::Error::new(error.to_string()))
     } else {
         #[derive(serde::Deserialize)]
         struct Codec {
             codec: Option<super::models::MirrorCodecConfiguration>,
         }
-        let codec: Codec = serde_json::from_value(snapshot)
+        let codec: Codec = plain_libs::serde_json::from_value(snapshot)
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-        serde_json::to_string(&codec.codec)
+        plain_libs::serde_json::to_string(&codec.codec)
             .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
 }
@@ -132,7 +132,7 @@ pub(super) async fn stream<T: DeserializeOwned + Send + 'static>(
             let authorized = authorize(&state, origin, spec).await;
             let result = authorized.and_then(|_| {
                 let payload = if spec.invalidation { "true" } else { &payload };
-                serde_json::from_str(payload).map_err(|e| plain_graphql::Error::new(format!("Invalid {name} event: {e}")))
+                plain_libs::serde_json::from_str(payload).map_err(|e| plain_graphql::Error::new(format!("Invalid {name} event: {e}")))
             });
             let terminal = result.is_err();
             return Some((result, (receiver, state, client, stop, None, terminal)));
@@ -145,7 +145,7 @@ async fn snapshot(state: &ServerState, name: &str) -> Result<Option<String>> {
         "SCREEN_MIRRORING" | "SCREEN_MIRROR_VIDEO_CODEC" => {
             return mirror_snapshot(state, name).await.map(Some);
         }
-        "DLNA_SENDER_CHANGED" => serde_json::to_string(&state.cast.snapshot())
+        "DLNA_SENDER_CHANGED" => plain_libs::serde_json::to_string(&state.cast.snapshot())
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?,
         "IMAGE_MODELS_UPDATED" => state.image_models.snapshot().event().payload,
         _ => return Ok(None),

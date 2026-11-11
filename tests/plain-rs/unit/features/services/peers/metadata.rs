@@ -6,7 +6,7 @@ use crate::infrastructure::db::chat_store::SaveMode;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use crate::test_runtime::Core as ContentServer;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use tokio::sync::watch;
 
 async fn fixture() -> (
@@ -102,7 +102,7 @@ async fn observed_names_update_only_the_current_peer_and_identical_or_empty_name
         crate::features::chat::events::WS_PEER_UPDATED
     );
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&event.payload).unwrap(),
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&event.payload).unwrap(),
         json!({"id":"peer"})
     );
     assert!(events.try_recv().is_err());

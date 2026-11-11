@@ -58,7 +58,7 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
         assert_eq!(request["method"], "systemCapabilities");
         host.reply(
             generation,
-            serde_json::json!({"id":request["id"],"result":["DISK_MANAGER"]}),
+            plain_libs::serde_json::json!({"id":request["id"],"result":["DISK_MANAGER"]}),
         )
         .unwrap();
         let request = requests.recv().await.unwrap();
@@ -69,7 +69,7 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
         assert_eq!(request["params"]["path"], "/dev/example");
         host.reply(
             generation,
-            serde_json::json!({"id":request["id"],"error":"format refused"}),
+            plain_libs::serde_json::json!({"id":request["id"],"error":"format refused"}),
         )
         .unwrap();
         let request = requests.recv().await.unwrap();
@@ -80,7 +80,7 @@ async fn public_disk_and_hostname_commands_reach_the_registered_provider() {
         assert_eq!(request["params"]["name"], "my-server");
         host.reply(
             generation,
-            serde_json::json!({"id":request["id"],"result":true}),
+            plain_libs::serde_json::json!({"id":request["id"],"result":true}),
         )
         .unwrap();
     });
@@ -141,7 +141,7 @@ async fn unsupported_platform_operations_only_read_capabilities_and_leave_state_
             assert_eq!(request["method"], "systemCapabilities");
             host.reply(
                 generation,
-                serde_json::json!({"id":request["id"],"result":[]}),
+                plain_libs::serde_json::json!({"id":request["id"],"result":[]}),
             )
             .unwrap();
             requests
@@ -183,13 +183,13 @@ async fn disk_queries_read_native_rust_after_one_capability_check() {
             let method = request["method"].as_str().unwrap().to_owned();
             observed.lock().unwrap().push(method.clone());
             let result = if method == "systemCapabilities" {
-                serde_json::json!(["DISK_MANAGER"])
+                plain_libs::serde_json::json!(["DISK_MANAGER"])
             } else {
-                serde_json::json!({"disks":[]})
+                plain_libs::serde_json::json!({"disks":[]})
             };
             host.reply(
                 generation,
-                serde_json::json!({"id":request["id"],"result":result}),
+                plain_libs::serde_json::json!({"id":request["id"],"result":result}),
             )
             .unwrap();
         }

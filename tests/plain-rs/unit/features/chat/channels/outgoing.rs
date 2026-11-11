@@ -17,7 +17,7 @@ fn shared_invite_roundtrips_into_receiver_with_owner_key_and_preserves_real_peer
     peers::save(&sender, &[guest], SaveMode::Insert).unwrap();
     let mut channel = DChannel::new("group", "owner");
     channel.key = base64_encode(&[7; 32]);
-    channel.members = serde_json::to_string(&vec![
+    channel.members = plain_libs::serde_json::to_string(&vec![
         ChannelMember::new("owner"),
         ChannelMember::pending("guest"),
     ])
@@ -33,7 +33,7 @@ fn shared_invite_roundtrips_into_receiver_with_owner_key_and_preserves_real_peer
         "guest",
     )
     .unwrap();
-    let msg: ChannelInvite = serde_json::from_str(&payload).unwrap();
+    let msg: ChannelInvite = plain_libs::serde_json::from_str(&payload).unwrap();
     assert_eq!(msg.member_peers.len(), 2);
     assert_eq!(msg.member_peers[0].public_key, base64_encode(&public));
     assert_eq!(msg.member_peers[1].name, "中文 %_");
@@ -87,7 +87,7 @@ fn member_actions_and_directed_or_broadcast_kicks_use_canonical_wire_payloads() 
             target,
         )
         .unwrap();
-        let kick: ChannelKick = serde_json::from_str(&payload).unwrap();
+        let kick: ChannelKick = plain_libs::serde_json::from_str(&payload).unwrap();
         assert!(plain_libs::crypto::ed25519_verify(
             &base64_encode(&public),
             channel_message_payload(&channel.id, channel.version, Action::Kick, target).as_bytes(),
@@ -95,7 +95,7 @@ fn member_actions_and_directed_or_broadcast_kicks_use_canonical_wire_payloads() 
         ));
     }
     for kind in [Type::InviteAccept, Type::InviteDecline, Type::Leave] {
-        let value: serde_json::Value = serde_json::from_str(
+        let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
             &build(
                 None,
                 &channel,

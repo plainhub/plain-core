@@ -5,7 +5,7 @@ use plain_libs::dlna::soap as protocol;
 use plain_libs::dlna::types::DiscoveredDevice;
 use plain_libs::dlna::types::MediaType;
 use plain_libs::dlna::util::xml_escape;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::time::Duration;
 
 pub async fn soap(

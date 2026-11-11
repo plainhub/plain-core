@@ -29,7 +29,7 @@ async fn open() -> (
         .unwrap();
     let reader = opening.await.unwrap().unwrap();
     let metadata: Value =
-        serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
     assert_eq!(metadata, json!({"path":"content://fixture/document"}));
     (resources, reader, stream, stop, generation)
 }
@@ -130,7 +130,7 @@ async fn file_descriptor_delivery_preserves_extent_and_owns_the_source() {
     host.reply(generation, json!({"id":request["id"],"result":null}))
         .unwrap();
     let metadata: Value =
-        serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
     assert_eq!(
         metadata,
         json!({"path":"content://fixture/asset","file":true})

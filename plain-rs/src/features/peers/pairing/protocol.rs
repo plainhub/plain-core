@@ -44,7 +44,7 @@ pub fn request_id(signature: &str) -> String {
 
 impl PairingRequest {
     pub fn signature_data(&self) -> String {
-        serde_json::json!([
+        plain_libs::serde_json::json!([
             "chat-pair-request",
             self.from_id,
             self.payload.signature_public_key,
@@ -84,7 +84,7 @@ pub struct PairingResponse {
 
 impl PairingResponse {
     pub fn signature_data(&self) -> String {
-        serde_json::json!([
+        plain_libs::serde_json::json!([
             "chat-pair-response",
             self.request_id,
             self.signature_public_key,
@@ -112,7 +112,7 @@ pub struct PairingCancel {
 }
 impl PairingCancel {
     pub fn signature_data(&self) -> String {
-        serde_json::json!([
+        plain_libs::serde_json::json!([
             "pair-cancel",
             self.from_id,
             self.to_id,

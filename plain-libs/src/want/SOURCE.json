@@ -1,0 +1,8 @@
+{
+  "name": "want",
+  "version": "0.3.1",
+  "archive_sha256": "bfa7760aed19e106de2c7c0b581b509f2f25d3dacaf737cb82ac61bc6d760b0e",
+  "repository": "https://github.com/seanmonstar/want",
+  "revision": "6e65401c71fa55c75b6fb52f595a692ef3643939",
+  "retained_features": []
+}

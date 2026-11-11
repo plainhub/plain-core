@@ -673,7 +673,7 @@ fn test_picture_bullet_is_referenced_by_the_list_items() {
         "markdown: {md}"
     );
     assert!(!md.contains("bullet.png"), "markdown: {md}");
-    let json = serde_json::to_string(&doc).unwrap();
+    let json = plain_libs::serde_json::to_string(&doc).unwrap();
     assert!(json.contains("\"marker_image\":\"bullet.png\""), "{json}");
     assert_eq!(doc.resources["bullet.png"].role, ResourceRole::Primary);
     assert_eq!(doc.resources["bullet.png"].alt_text, None);
@@ -805,7 +805,7 @@ fn test_slide_background_picture_is_referenced_by_the_section() {
     );
     assert!(doc.resources.contains_key("bg.png"));
     assert!(!doc.resources.contains_key("layoutbg.png"));
-    let json = serde_json::to_string(&doc.sections[0]).unwrap();
+    let json = plain_libs::serde_json::to_string(&doc.sections[0]).unwrap();
     assert!(json.contains("\"background_image\":\"bg.png\""), "{json}");
     let md = crate::render::to_markdown(&doc, &crate::render::RenderOptions::default()).unwrap();
     assert!(!md.contains("bg.png"), "markdown: {md}");

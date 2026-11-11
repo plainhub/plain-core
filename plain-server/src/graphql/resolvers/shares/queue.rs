@@ -92,7 +92,7 @@ impl SharedDownloadQuery {
         ctx: &Context<'_>,
     ) -> plain_graphql::Result<SharedDownloadQueue> {
         let runtime = ctx.data::<ServerState>()?.shared_batches.clone();
-        Ok(serde_json::from_value(
+        Ok(plain_libs::serde_json::from_value(
             tokio::task::spawn_blocking(move || runtime.queue.snapshot()).await?,
         )?)
     }

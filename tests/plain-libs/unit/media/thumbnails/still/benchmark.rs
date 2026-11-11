@@ -119,7 +119,7 @@ fn still_image_batch_benchmark() {
         optimized.sort_by(f64::total_cmp);
         println!(
             "{}",
-            serde_json::json!({
+            crate::serde_json::json!({
                 "input": name,
                 "bounds": [bounds.0, bounds.1],
                 "target": [target.0, target.1],

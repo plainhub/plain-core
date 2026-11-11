@@ -82,7 +82,7 @@ impl MdnsQuery {
         if *state.stop.borrow() {
             return Err("Server stopped".into());
         }
-        Ok(serde_json::from_value(state.mdns.snapshot_fields(
+        Ok(plain_libs::serde_json::from_value(state.mdns.snapshot_fields(
             ctx.look_ahead().field("services").exists(),
             ctx.look_ahead().field("packetsIn").exists()
                 || ctx.look_ahead().field("packetsOut").exists(),

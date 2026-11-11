@@ -75,7 +75,7 @@ impl NativeGraphqlExecutor {
         let deadline = tokio::time::Instant::now() + timeout;
         request.extensions.remove("nativeScope");
         request.extensions.remove("nativeDeadlineMs");
-        let request = serde_json::to_string(&request).map_err(|error| error.to_string())?;
+        let request = plain_libs::serde_json::to_string(&request).map_err(|error| error.to_string())?;
         if request.len() > crate::managed_peers::GRAPHQL_LIMIT {
             return Err("GraphQL request too large".into());
         }
@@ -89,7 +89,7 @@ impl NativeGraphqlExecutor {
                 let route = self.state.managed_proxy.peers.route(&self.state, peer_id).await?;
                 let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
                 let response = route.exchange(&self.state, &request, Some(remaining)).await?;
-                serde_json::from_slice(&response).map_err(plain_libs::anyhow::Error::from)
+                plain_libs::serde_json::from_slice(&response).map_err(plain_libs::anyhow::Error::from)
             } => result.map_err(peer_error),
         }
     }

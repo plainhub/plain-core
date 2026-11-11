@@ -31,7 +31,7 @@ async fn timeout_worker_emits_committed_expiry_and_stops_with_server() {
         .unwrap()
         .unwrap();
     assert_eq!(event.event_type, WS_PAIRING_FAILED);
-    let payload: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+    let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
     assert_eq!(payload["generation"], ticket.generation);
     assert_eq!(payload["deviceId"], "peer");
     assert!(sessions.tickets().is_empty());

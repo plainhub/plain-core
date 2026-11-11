@@ -1,5 +1,5 @@
-use rusqlite::types::Value;
-use rusqlite::{OptionalExtension, params, params_from_iter};
+use plain_libs::rusqlite::types::Value;
+use plain_libs::rusqlite::{OptionalExtension, params, params_from_iter};
 
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::models::simple::ArchivedConversationRow;
@@ -17,7 +17,7 @@ const POMODORO_COLUMNS: &str =
     "id, date, completed_count, total_work_secs, total_break_secs, created_at, updated_at";
 const EMBEDDING_COLUMNS: &str = "file_id, path, embedding, created_at, updated_at";
 
-fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
+fn session_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<SessionRow> {
     Ok(SessionRow {
         client_id: row.get(0)?,
         name: row.get(1)?,
@@ -35,7 +35,7 @@ fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
     })
 }
 
-fn share_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ShareRow> {
+fn share_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<ShareRow> {
     Ok(ShareRow {
         id: row.get(0)?,
         name: row.get(1)?,
@@ -49,7 +49,7 @@ fn share_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ShareRow> {
     })
 }
 
-fn pomodoro_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PomodoroItemRow> {
+fn pomodoro_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<PomodoroItemRow> {
     Ok(PomodoroItemRow {
         id: row.get(0)?,
         date: row.get(1)?,
@@ -61,7 +61,7 @@ fn pomodoro_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PomodoroItemRo
     })
 }
 
-fn embedding_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ImageEmbeddingRow> {
+fn embedding_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<ImageEmbeddingRow> {
     let blob: Vec<u8> = row.get(2)?;
     Ok(ImageEmbeddingRow {
         file_id: row.get(0)?,
@@ -85,8 +85,8 @@ fn in_clause(column: &str, values: &[String]) -> (String, Vec<Value>) {
 
 #[cfg(feature = "chat")]
 pub(crate) fn session_snapshot(
-    connection: &rusqlite::Connection,
-) -> rusqlite::Result<std::collections::HashMap<String, SessionRow>> {
+    connection: &plain_libs::rusqlite::Connection,
+) -> plain_libs::rusqlite::Result<std::collections::HashMap<String, SessionRow>> {
     let mut statement = connection.prepare(&format!("SELECT {SESSION_COLUMNS} FROM sessions"))?;
     statement
         .query_map([], session_from_row)?
@@ -95,7 +95,7 @@ pub(crate) fn session_snapshot(
 }
 
 impl Db {
-    pub fn session_list(&self) -> rusqlite::Result<Vec<SessionRow>> {
+    pub fn session_list(&self) -> plain_libs::rusqlite::Result<Vec<SessionRow>> {
         #[cfg(feature = "chat")]
         {
             if self.cached_sessions().is_none() {
@@ -126,7 +126,7 @@ impl Db {
         })
     }
 
-    pub fn session_get(&self, client_id: &str) -> rusqlite::Result<Option<SessionRow>> {
+    pub fn session_get(&self, client_id: &str) -> plain_libs::rusqlite::Result<Option<SessionRow>> {
         #[cfg(feature = "chat")]
         {
             if let Some(row) = self.cached_session(client_id) {
@@ -174,7 +174,7 @@ impl Db {
     }
 
     #[cfg(feature = "chat")]
-    fn reload_sessions(&self, connection: &rusqlite::Connection) -> rusqlite::Result<()> {
+    fn reload_sessions(&self, connection: &plain_libs::rusqlite::Connection) -> plain_libs::rusqlite::Result<()> {
         let rows = session_snapshot(connection)?;
         let mut snapshot = self.1.sessions.write().unwrap();
         let old = std::mem::replace(&mut snapshot.rows, rows);
@@ -218,7 +218,7 @@ impl Db {
         }
     }
 
-    pub fn session_save(&self, row: &SessionRow) -> rusqlite::Result<()> {
+    pub fn session_save(&self, row: &SessionRow) -> plain_libs::rusqlite::Result<()> {
         let mut row = row.clone();
         row.created_at = plain_libs::utils::dbtime::normalize(&row.created_at)?;
         row.updated_at = plain_libs::utils::dbtime::normalize(&row.updated_at)?;
@@ -237,11 +237,11 @@ impl Db {
         })
     }
 
-    pub fn session_touch(&self, items: &[(String, String)]) -> rusqlite::Result<usize> {
+    pub fn session_touch(&self, items: &[(String, String)]) -> plain_libs::rusqlite::Result<usize> {
         let items = items
             .iter()
             .map(|(id, at)| Ok((id, plain_libs::utils::dbtime::normalize(at)?)))
-            .collect::<rusqlite::Result<Vec<_>>>()?;
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
         #[cfg(feature = "chat")]
         {
             for (id, _) in &items {
@@ -279,7 +279,7 @@ impl Db {
         &self,
         now: std::time::Instant,
         force: bool,
-    ) -> rusqlite::Result<bool> {
+    ) -> plain_libs::rusqlite::Result<bool> {
         {
             let snapshot = self.1.sessions.read().unwrap();
             if snapshot.activity.pending().is_empty() || (!force && !snapshot.activity.is_due(now))
@@ -296,7 +296,7 @@ impl Db {
                 snapshot.activity_flushing = true;
                 snapshot.activity.take_pending()
             };
-            let write = |pending: &[(String, String)]| -> rusqlite::Result<()> {
+            let write = |pending: &[(String, String)]| -> plain_libs::rusqlite::Result<()> {
                 let latest = pending
                     .iter()
                     .map(|(id, at)| (id, at))
@@ -333,7 +333,7 @@ impl Db {
         client_id: &str,
         name: &str,
         updated_at: &str,
-    ) -> rusqlite::Result<usize> {
+    ) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|connection| {
             #[cfg(feature = "chat")]
             let before = self
@@ -355,7 +355,7 @@ impl Db {
         })
     }
 
-    pub fn session_delete(&self, client_id: &str) -> rusqlite::Result<usize> {
+    pub fn session_delete(&self, client_id: &str) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|connection| {
             #[cfg(feature = "chat")]
             let before = self
@@ -373,7 +373,7 @@ impl Db {
         })
     }
 
-    pub fn share_list(&self) -> rusqlite::Result<Vec<ShareRow>> {
+    pub fn share_list(&self) -> plain_libs::rusqlite::Result<Vec<ShareRow>> {
         self.with_conn(|c| {
             let mut stmt = c.prepare(&format!(
                 "SELECT {SHARE_COLUMNS} FROM shares ORDER BY created_at DESC"
@@ -382,7 +382,7 @@ impl Db {
         })
     }
 
-    pub fn share_get(&self, id: &str) -> rusqlite::Result<Option<ShareRow>> {
+    pub fn share_get(&self, id: &str) -> plain_libs::rusqlite::Result<Option<ShareRow>> {
         self.with_conn(|c| {
             c.query_row(
                 &format!("SELECT {SHARE_COLUMNS} FROM shares WHERE id=?1"),
@@ -393,7 +393,7 @@ impl Db {
         })
     }
 
-    pub fn share_insert(&self, row: &ShareRow) -> rusqlite::Result<bool> {
+    pub fn share_insert(&self, row: &ShareRow) -> plain_libs::rusqlite::Result<bool> {
         self.with_conn(|c| {
             let inserted = c.execute(
                 "INSERT INTO shares (id, name, password, url_token, expires_at,
@@ -426,15 +426,15 @@ impl Db {
         expires_at: Option<&str>,
         data: Option<&str>,
         now: &str,
-    ) -> rusqlite::Result<bool> {
+    ) -> plain_libs::rusqlite::Result<bool> {
         self.with_conn(|c| Ok(c.execute("UPDATE shares SET name=?2, expires_at=?3, data=COALESCE(?4,data), updated_at=?5 WHERE id=?1", params![id,name,expires_at,data,now])? != 0))
     }
 
-    pub fn share_delete(&self, id: &str) -> rusqlite::Result<usize> {
+    pub fn share_delete(&self, id: &str) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|c| c.execute("DELETE FROM shares WHERE id=?1", [id]))
     }
 
-    pub fn pomodoro_list(&self) -> rusqlite::Result<Vec<PomodoroItemRow>> {
+    pub fn pomodoro_list(&self) -> plain_libs::rusqlite::Result<Vec<PomodoroItemRow>> {
         self.with_conn(|c| {
             let mut stmt = c.prepare(&format!(
                 "SELECT {POMODORO_COLUMNS} FROM pomodoro_items ORDER BY date DESC"
@@ -443,7 +443,7 @@ impl Db {
         })
     }
 
-    pub fn pomodoro_get_by_date(&self, date: &str) -> rusqlite::Result<Option<PomodoroItemRow>> {
+    pub fn pomodoro_get_by_date(&self, date: &str) -> plain_libs::rusqlite::Result<Option<PomodoroItemRow>> {
         self.with_conn(|c| {
             c.query_row(
                 &format!("SELECT {POMODORO_COLUMNS} FROM pomodoro_items WHERE date=?1"),
@@ -458,7 +458,7 @@ impl Db {
         &self,
         start_date: &str,
         limit: i64,
-    ) -> rusqlite::Result<Vec<PomodoroItemRow>> {
+    ) -> plain_libs::rusqlite::Result<Vec<PomodoroItemRow>> {
         self.with_conn(|c| {
             let mut stmt = c.prepare(&format!(
                 "SELECT {POMODORO_COLUMNS} FROM pomodoro_items WHERE date >= ?1
@@ -469,7 +469,7 @@ impl Db {
         })
     }
 
-    pub fn pomodoro_total_completed(&self) -> rusqlite::Result<i64> {
+    pub fn pomodoro_total_completed(&self) -> plain_libs::rusqlite::Result<i64> {
         self.with_conn(|c| {
             c.query_row("SELECT SUM(completed_count) FROM pomodoro_items", [], |r| {
                 r.get::<_, Option<i64>>(0)
@@ -478,7 +478,7 @@ impl Db {
         })
     }
 
-    pub fn pomodoro_save(&self, row: &PomodoroItemRow) -> rusqlite::Result<()> {
+    pub fn pomodoro_save(&self, row: &PomodoroItemRow) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|c| {
             c.execute(
                 "INSERT OR REPLACE INTO pomodoro_items (id, date, completed_count,
@@ -498,11 +498,11 @@ impl Db {
         })
     }
 
-    pub fn pomodoro_delete(&self, id: &str) -> rusqlite::Result<usize> {
+    pub fn pomodoro_delete(&self, id: &str) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|c| c.execute("DELETE FROM pomodoro_items WHERE id=?1", [id]))
     }
 
-    pub fn embedding_list(&self) -> rusqlite::Result<Vec<ImageEmbeddingRow>> {
+    pub fn embedding_list(&self) -> plain_libs::rusqlite::Result<Vec<ImageEmbeddingRow>> {
         self.with_conn(|c| {
             let mut stmt =
                 c.prepare(&format!("SELECT {EMBEDDING_COLUMNS} FROM image_embeddings"))?;
@@ -510,22 +510,22 @@ impl Db {
         })
     }
 
-    pub fn embedding_ids(&self) -> rusqlite::Result<Vec<String>> {
+    pub fn embedding_ids(&self) -> plain_libs::rusqlite::Result<Vec<String>> {
         self.with_conn(|c| {
             let mut stmt = c.prepare("SELECT file_id FROM image_embeddings")?;
             stmt.query_map([], |r| r.get(0))?.collect()
         })
     }
 
-    pub fn embedding_count(&self) -> rusqlite::Result<i64> {
+    pub fn embedding_count(&self) -> plain_libs::rusqlite::Result<i64> {
         self.with_conn(|c| c.query_row("SELECT COUNT(*) FROM image_embeddings", [], |r| r.get(0)))
     }
 
-    pub fn embedding_save(&self, row: &ImageEmbeddingRow) -> rusqlite::Result<()> {
+    pub fn embedding_save(&self, row: &ImageEmbeddingRow) -> plain_libs::rusqlite::Result<()> {
         let blob = plain_libs::utils::base64::base64_decode_checked(&row.embedding_base64)
-            .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+            .map_err(|e| plain_libs::rusqlite::Error::InvalidParameterName(e.to_string()))?;
         plain_libs::utils::vector::decode_f32_be(&blob)
-            .map_err(rusqlite::Error::InvalidParameterName)?;
+            .map_err(plain_libs::rusqlite::Error::InvalidParameterName)?;
         self.with_conn(|c| {
             c.execute(
                 "INSERT OR REPLACE INTO image_embeddings (file_id, path, embedding, created_at, updated_at)
@@ -536,11 +536,11 @@ impl Db {
         })
     }
 
-    pub fn embedding_delete_all(&self) -> rusqlite::Result<usize> {
+    pub fn embedding_delete_all(&self) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|c| c.execute("DELETE FROM image_embeddings", []))
     }
 
-    pub fn embedding_delete_by_ids(&self, ids: &[String]) -> rusqlite::Result<usize> {
+    pub fn embedding_delete_by_ids(&self, ids: &[String]) -> plain_libs::rusqlite::Result<usize> {
         let (clause, values) = in_clause("file_id", ids);
         self.with_conn(|c| {
             c.execute(
@@ -550,7 +550,7 @@ impl Db {
         })
     }
 
-    pub fn archived_conversation_list(&self) -> rusqlite::Result<Vec<ArchivedConversationRow>> {
+    pub fn archived_conversation_list(&self) -> plain_libs::rusqlite::Result<Vec<ArchivedConversationRow>> {
         self.with_conn(|c| {
             let mut stmt =
                 c.prepare("SELECT conversation_id, archived_at FROM archived_sms_conversations")?;
@@ -567,7 +567,7 @@ impl Db {
     pub fn archived_conversation_save(
         &self,
         row: &ArchivedConversationRow,
-    ) -> rusqlite::Result<()> {
+    ) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|c| {
             c.execute(
                 "INSERT OR REPLACE INTO archived_sms_conversations (conversation_id, archived_at)
@@ -581,7 +581,7 @@ impl Db {
         })
     }
 
-    pub fn archived_conversation_delete(&self, conversation_id: &str) -> rusqlite::Result<usize> {
+    pub fn archived_conversation_delete(&self, conversation_id: &str) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|c| {
             c.execute(
                 "DELETE FROM archived_sms_conversations WHERE conversation_id=?1",
@@ -590,14 +590,14 @@ impl Db {
         })
     }
 
-    pub fn trashed_message_ids(&self) -> rusqlite::Result<Vec<String>> {
+    pub fn trashed_message_ids(&self) -> plain_libs::rusqlite::Result<Vec<String>> {
         self.with_conn(|c| {
             let mut stmt = c.prepare("SELECT CASE WHEN is_mms=1 THEN 'mms_' || message_id ELSE message_id END FROM trashed_sms")?;
             stmt.query_map([], |r| r.get(0))?.collect()
         })
     }
 
-    pub fn trashed_message_save_many(&self, rows: &[TrashedMessageRow]) -> rusqlite::Result<usize> {
+    pub fn trashed_message_save_many(&self, rows: &[TrashedMessageRow]) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
             let mut inserted = 0;
@@ -619,7 +619,7 @@ impl Db {
         })
     }
 
-    pub fn trashed_message_delete_by_ids(&self, ids: &[String]) -> rusqlite::Result<usize> {
+    pub fn trashed_message_delete_by_ids(&self, ids: &[String]) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
             let mut count = 0;
@@ -638,7 +638,7 @@ impl Db {
         })
     }
 
-    pub fn trashed_message_delete_older_than(&self, before: &str) -> rusqlite::Result<usize> {
+    pub fn trashed_message_delete_older_than(&self, before: &str) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|c| c.execute("DELETE FROM trashed_sms WHERE trashed_at < ?1", [before]))
     }
 }

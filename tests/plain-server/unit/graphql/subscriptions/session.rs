@@ -69,7 +69,7 @@ async fn stopping_http_preserves_native_subscriptions_and_closes_remote_subscrip
         .expect("native subscription must survive HTTP shutdown");
     native.send(r#"{"type":"ping"}"#).unwrap();
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&native.read().await.unwrap()).unwrap()["type"],
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&native.read().await.unwrap()).unwrap()["type"],
         "pong"
     );
     assert!(state.subscription_sessions.get(remote.id).is_err());
@@ -117,14 +117,14 @@ async fn scan_events_wait_for_capacity_without_closing_the_connection_or_blockin
     session
         .send(r#"{"type":"ping","payload":{"probe":1}}"#)
         .unwrap();
-    let pong: serde_json::Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
+    let pong: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
     assert_eq!(pong["type"], "pong");
     assert_eq!(pong["payload"]["probe"], 1);
     assert!(futures_util::poll!(send.as_mut()).is_pending());
     scope.close();
     assert_eq!(send.await.unwrap_err(), "Subscription operation closed");
     session.send(r#"{"type":"ping"}"#).unwrap();
-    let pong: serde_json::Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
+    let pong: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
     assert_eq!(pong["type"], "pong");
     assert!(!*session.closed.borrow());
     executor.close_subscriptions(handle);

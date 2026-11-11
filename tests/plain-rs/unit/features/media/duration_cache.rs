@@ -30,7 +30,7 @@ fn durations_survive_reopening_and_keep_exact_units_and_typed_ids() {
             .unwrap();
     let stored = db.get("media_duration:audio:same").unwrap().unwrap();
     assert_eq!(
-        serde_json::from_str::<Duration>(&stored)
+        plain_libs::serde_json::from_str::<Duration>(&stored)
             .unwrap()
             .duration_ms,
         5_000_000_001

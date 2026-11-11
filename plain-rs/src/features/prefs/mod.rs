@@ -9,7 +9,7 @@ pub mod storage;
 pub use identity::{AppIdentity, ensure_identity, ensure_mdns_hostname};
 
 use serde::{Serialize, de::DeserializeOwned};
-use serde_json::{Map, Value};
+use plain_libs::serde_json::{Map, Value};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, RwLock};
@@ -51,11 +51,11 @@ pub enum PrefsError {
     },
     Parse {
         path: PathBuf,
-        source: serde_json::Error,
+        source: plain_libs::serde_json::Error,
     },
-    Encode(serde_json::Error),
+    Encode(plain_libs::serde_json::Error),
     /// Deserialize of a stored value into the requested type failed.
-    Decode(serde_json::Error),
+    Decode(plain_libs::serde_json::Error),
     Write {
         path: PathBuf,
         source: std::io::Error,
@@ -127,7 +127,7 @@ impl Prefs {
     }
     pub fn load(path: &Path) -> Result<Self> {
         let inner = match std::fs::read_to_string(path) {
-            Ok(text) => serde_json::from_str(&text).map_err(|source| PrefsError::Parse {
+            Ok(text) => plain_libs::serde_json::from_str(&text).map_err(|source| PrefsError::Parse {
                 path: path.to_owned(),
                 source,
             })?,
@@ -153,14 +153,14 @@ impl Prefs {
             .read()
             .unwrap()
             .get(key)
-            .map(|value| serde_json::from_value(value.clone()).map_err(PrefsError::Decode))
+            .map(|value| plain_libs::serde_json::from_value(value.clone()).map_err(PrefsError::Decode))
             .transpose()
     }
     pub fn get_or<T: DeserializeOwned>(&self, key: &str, default: T) -> T {
         self.get(key).unwrap_or(None).unwrap_or(default)
     }
     pub fn set<T: Serialize>(&self, key: &str, value: T) -> Result<bool> {
-        let value = serde_json::to_value(value).map_err(PrefsError::Encode)?;
+        let value = plain_libs::serde_json::to_value(value).map_err(PrefsError::Encode)?;
         self.update(|entries| {
             if entries.get(key) == Some(&value) {
                 return Ok(false);
@@ -228,7 +228,7 @@ impl Prefs {
         let tmp = self.path.with_extension("json.tmp");
         std::fs::write(
             &tmp,
-            serde_json::to_string_pretty(inner).map_err(PrefsError::Encode)?,
+            plain_libs::serde_json::to_string_pretty(inner).map_err(PrefsError::Encode)?,
         )
         .map_err(|source| PrefsError::Write {
             path: tmp.clone(),

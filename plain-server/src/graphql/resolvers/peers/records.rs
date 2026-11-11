@@ -48,7 +48,7 @@ impl PeerRecordQuery {
         file_id: String,
     ) -> plain_graphql::Result<String> {
         let db = ctx.data::<crate::server::ServerState>()?.db.clone();
-        let expected = serde_json::from_value(serde_json::to_value(expected)?)?;
+        let expected = plain_libs::serde_json::from_value(plain_libs::serde_json::to_value(expected)?)?;
         tokio::task::spawn_blocking(move || {
             let peer =
                 plain_rs::features::services::peers::peer_address::current(&db, &id, &expected)?;

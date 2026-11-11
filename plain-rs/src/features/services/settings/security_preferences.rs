@@ -3,7 +3,7 @@ use crate::features::prefs::pref_keys::{API_PERMISSIONS, AUTO_CHECK_UPDATE, SKIP
 use crate::features::prefs::security;
 use crate::features::prefs::security::Command;
 use crate::infrastructure::events::WsEvent;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use tokio::sync::broadcast;
 
 pub struct SecurityPreferences<'a> {

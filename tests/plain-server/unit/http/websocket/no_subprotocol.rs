@@ -1,7 +1,7 @@
 use super::*;
 use futures_util::SinkExt;
-use serde_json::json;
-use tokio_tungstenite::tungstenite::Message as ClientMessage;
+use plain_libs::serde_json::json;
+use plain_libs::tokio_tungstenite::tungstenite::Message as ClientMessage;
 
 #[derive(Clone, Copy)]
 enum InvalidFrame {
@@ -23,10 +23,10 @@ async fn no_subprotocol_keeps_encrypted_handshake_and_frame_validation() {
         let key = plain_libs::utils::base64::base64_decode(&session.token);
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let app = axum::Router::new()
-            .route("/graphql", axum::routing::get(upgrade))
+        let app = plain_libs::axum::Router::new()
+            .route("/graphql", plain_libs::axum::routing::get(upgrade))
             .with_state(state);
-        let serving = tokio::spawn(async { axum::serve(listener, app).await.unwrap() });
+        let serving = tokio::spawn(async { plain_libs::axum::serve(listener, app).await.unwrap() });
         for invalid in [
             InvalidFrame::PlainInit,
             InvalidFrame::WrongKey,
@@ -34,7 +34,7 @@ async fn no_subprotocol_keeps_encrypted_handshake_and_frame_validation() {
             InvalidFrame::CorruptTag,
             InvalidFrame::Replay,
         ] {
-            let (mut socket, response) = tokio_tungstenite::connect_async(
+            let (mut socket, response) = plain_libs::tokio_tungstenite::connect_async(
                 format!("ws://{address}/graphql?cid={client}"),
             )
             .await
@@ -60,7 +60,7 @@ async fn no_subprotocol_keeps_encrypted_handshake_and_frame_validation() {
                 };
                 let ack = ack.to_vec();
                 let plain = graphql::open_ack(&key, &client, &init, &ack).unwrap();
-                let ack_json: graphql::Ack = serde_json::from_slice(&plain).unwrap();
+                let ack_json: graphql::Ack = plain_libs::serde_json::from_slice(&plain).unwrap();
                 assert_eq!(ack_json.server_nonce.len(), 64);
                 let mut stream = graphql::Stream::new(&client, &init, &ack, Role::Client).unwrap();
                 let ping = br#"{"type":"ping","payload":{"encrypted":true}}"#;
@@ -70,7 +70,7 @@ async fn no_subprotocol_keeps_encrypted_handshake_and_frame_validation() {
                     panic!("encrypted pong required")
                 };
                 let decoded = stream.decode(&pong, &key).unwrap();
-                let message: serde_json::Value = serde_json::from_slice(&decoded).unwrap();
+                let message: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&decoded).unwrap();
                 assert_eq!(message, json!({"type":"pong","payload":{"encrypted":true}}));
                 let frame = match invalid {
                     InvalidFrame::PlainMessage => ClientMessage::Text(String::from_utf8(ping.to_vec()).unwrap().into()),

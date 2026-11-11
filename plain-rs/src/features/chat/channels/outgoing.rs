@@ -39,7 +39,7 @@ pub fn build(
             if channel.owner_id.as_deref() != Some(actor) {
                 bail!("Only owner can send channel membership");
             }
-            let members: Vec<ChannelMember> = serde_json::from_str(&channel.members)?;
+            let members: Vec<ChannelMember> = plain_libs::serde_json::from_str(&channel.members)?;
             let member_peers = db
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing channel database"))?
                 .with_conn(|c| -> Result<Vec<MemberPeerInfo>> {
@@ -72,7 +72,7 @@ pub fn build(
                 if target.is_empty() {
                     bail!("Missing invitation target");
                 }
-                serde_json::to_string(&ChannelInvite {
+                plain_libs::serde_json::to_string(&ChannelInvite {
                     channel_id: channel.id.clone(),
                     channel_name: channel.name.clone(),
                     key: channel.key.clone(),
@@ -83,7 +83,7 @@ pub fn build(
                     signature: signature(Action::Invite, target)?,
                 })?
             } else {
-                serde_json::to_string(&ChannelUpdate {
+                plain_libs::serde_json::to_string(&ChannelUpdate {
                     channel_id: channel.id.clone(),
                     channel_name: channel.name.clone(),
                     members,
@@ -97,22 +97,22 @@ pub fn build(
             if channel.owner_id.as_deref() != Some(actor) {
                 bail!("Only owner can remove channel members");
             }
-            serde_json::to_string(&ChannelKick {
+            plain_libs::serde_json::to_string(&ChannelKick {
                 channel_id: channel.id.clone(),
                 version: channel.version,
                 signature: signature(Action::Kick, target)?,
             })?
         }
-        Type::InviteAccept => serde_json::to_string(&ChannelInviteAccept {
+        Type::InviteAccept => plain_libs::serde_json::to_string(&ChannelInviteAccept {
             channel_id: channel.id.clone(),
             public_key: base64_encode(&keypair[32..]),
             name: name.into(),
             device_type: device,
         })?,
-        Type::InviteDecline => serde_json::to_string(&ChannelInviteDecline {
+        Type::InviteDecline => plain_libs::serde_json::to_string(&ChannelInviteDecline {
             channel_id: channel.id.clone(),
         })?,
-        Type::Leave => serde_json::to_string(&ChannelLeave {
+        Type::Leave => plain_libs::serde_json::to_string(&ChannelLeave {
             channel_id: channel.id.clone(),
         })?,
     })

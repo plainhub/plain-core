@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 fn item(id: &str) -> Item {
     Item {

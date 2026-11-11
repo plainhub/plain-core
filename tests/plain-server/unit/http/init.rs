@@ -16,8 +16,8 @@ async fn fixed_password_without_a_secret_never_advertises_remote_setup() {
         Bytes::new(),
     )
     .await;
-    let payload: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), 2048)
+    let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(
+        &plain_libs::axum::body::to_bytes(response.into_body(), 2048)
             .await
             .unwrap(),
     )
@@ -54,8 +54,8 @@ async fn init_advertises_the_running_https_port_instead_of_the_preference() {
             .await
             .unwrap();
         assert_eq!(response.status().as_u16(), 200);
-        let payload: serde_json::Value =
-            serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
+        let payload: plain_libs::serde_json::Value =
+            plain_libs::serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
         assert_eq!(payload["httpsPort"], https);
         assert_eq!(payload["authenticated"], false);
     }
@@ -69,8 +69,8 @@ async fn init_advertises_the_running_https_port_instead_of_the_preference() {
         Bytes::new(),
     )
     .await;
-    let payload: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), 2048)
+    let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(
+        &plain_libs::axum::body::to_bytes(response.into_body(), 2048)
             .await
             .unwrap(),
     )
@@ -114,7 +114,7 @@ async fn native_init_uses_its_stored_session_without_replacing_the_password() {
     plain_rs::features::prefs::security::set_entry(
         &state.prefs,
         "password",
-        serde_json::json!("existing-password"),
+        plain_libs::serde_json::json!("existing-password"),
     )
     .unwrap();
     let key = plain_libs::utils::base64::base64_decode(&stored.token);
@@ -131,8 +131,8 @@ async fn native_init_uses_its_stored_session_without_replacing_the_password() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let payload: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), 2048)
+    let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(
+        &plain_libs::axum::body::to_bytes(response.into_body(), 2048)
             .await
             .unwrap(),
     )
@@ -163,7 +163,7 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
     plain_rs::features::prefs::security::set_entry(
         &state.prefs,
         "password",
-        serde_json::json!("preserved-password"),
+        plain_libs::serde_json::json!("preserved-password"),
     )
     .unwrap();
     plain_rs::features::services::peers::peer_wire::signing_keypair(&state.prefs).unwrap();
@@ -186,8 +186,8 @@ async fn unauthenticated_init_never_returns_or_rotates_passwords_and_reports_exp
             )
             .await;
             assert_eq!(response.status(), StatusCode::OK);
-            let payload: serde_json::Value = serde_json::from_slice(
-                &axum::body::to_bytes(response.into_body(), 2048)
+            let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(
+                &plain_libs::axum::body::to_bytes(response.into_body(), 2048)
                     .await
                     .unwrap(),
             )
@@ -247,7 +247,7 @@ async fn removed_password_setup_route_cannot_initialize_or_replace_a_password() 
         for (scheme, port) in [("http", http), ("https", https)] {
             let response = client.post(format!("{scheme}://localhost:{port}/auth/setup"))
                 .header("Content-Type", "application/json")
-                .body(serde_json::to_vec(&json!({"passwordHash": plain_libs::crypto::sha512_hex("unwanted-password")})).unwrap())
+                .body(plain_libs::serde_json::to_vec(&json!({"passwordHash": plain_libs::crypto::sha512_hex("unwanted-password")})).unwrap())
                 .send().await.unwrap();
             assert_eq!(response.status().as_u16(), 404);
             assert_eq!(state.prefs.entries(), before);

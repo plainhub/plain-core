@@ -14,7 +14,7 @@ pub fn history(db: &Db) -> DomainResult<Vec<History>> {
     db.with_conn(|conn| history_from_connection(conn))
 }
 
-fn history_from_connection(conn: &rusqlite::Connection) -> DomainResult<Vec<History>> {
+fn history_from_connection(conn: &plain_libs::rusqlite::Connection) -> DomainResult<Vec<History>> {
     Ok(conn
         .prepare(
             "SELECT file_id,play_count FROM media_play_history WHERE media_type=1 ORDER BY played_at DESC,rowid DESC",
@@ -25,7 +25,7 @@ fn history_from_connection(conn: &rusqlite::Connection) -> DomainResult<Vec<Hist
                 play_count: row.get(1)?,
             })
         })?
-        .collect::<rusqlite::Result<Vec<_>>>()?)
+        .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?)
 }
 
 pub fn native(db: &Db) -> DomainResult<Overview<crate::infrastructure::db::MediaFileRow>> {

@@ -1,0 +1,43 @@
+use crate::tungstenite::error::Error;
+use std::{
+    io::{Error as IoError, ErrorKind as IoErrorKind},
+    result::Result as StdResult,
+};
+pub trait NonBlockingError: Sized {
+    fn into_non_blocking(self) -> Option<Self>;
+}
+impl NonBlockingError for IoError {
+    fn into_non_blocking(self) -> Option<Self> {
+        match self.kind() {
+            IoErrorKind::WouldBlock => None,
+            _ => Some(self),
+        }
+    }
+}
+impl NonBlockingError for Error {
+    fn into_non_blocking(self) -> Option<Self> {
+        match self {
+            Error::Io(e) => e.into_non_blocking().map(Into::into),
+            x => Some(x),
+        }
+    }
+}
+pub trait NonBlockingResult {
+    type Result;
+    fn no_block(self) -> Self::Result;
+}
+impl<T, E> NonBlockingResult for StdResult<T, E>
+where
+    E: NonBlockingError,
+{
+    type Result = StdResult<Option<T>, E>;
+    fn no_block(self) -> Self::Result {
+        match self {
+            Ok(x) => Ok(Some(x)),
+            Err(e) => match e.into_non_blocking() {
+                Some(e) => Err(e),
+                None => Ok(None),
+            },
+        }
+    }
+}

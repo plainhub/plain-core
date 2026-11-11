@@ -1,6 +1,6 @@
 use crate::infrastructure::{db::Db, host::bridge::Host};
 use serde::Deserialize;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[derive(Default)]
 pub struct PhotoCatalog(tokio::sync::Mutex<Option<(u64, String, usize)>>);
@@ -30,14 +30,14 @@ impl PhotoCatalog {
         let mut current = self.0.lock().await;
         let generation = host.generation().ok_or("host disconnected")?;
         let snapshot: Snapshot =
-            serde_json::from_value(host.call("photoCatalogSnapshot", json!({})).await?)
+            plain_libs::serde_json::from_value(host.call("photoCatalogSnapshot", json!({})).await?)
                 .map_err(|error| error.to_string())?;
         if current.as_ref() == Some(&(generation, snapshot.revision.clone(), snapshot.total)) {
             return Ok(());
         }
         let mut assets = Vec::new();
         for offset in (0..snapshot.total).step_by(128) {
-            let page: Vec<Asset> = serde_json::from_value(
+            let page: Vec<Asset> = plain_libs::serde_json::from_value(
                 host.call(
                     "photoCatalogPage",
                     json!({
@@ -63,8 +63,8 @@ impl PhotoCatalog {
     }
 }
 
-fn replace(db: &Db, assets: &[Asset]) -> rusqlite::Result<()> {
-    use rusqlite::params;
+fn replace(db: &Db, assets: &[Asset]) -> plain_libs::rusqlite::Result<()> {
+    use plain_libs::rusqlite::params;
     for asset in assets {
         if asset.id.is_empty()
             || asset.id.contains(['\\', '\0'])
@@ -77,7 +77,7 @@ fn replace(db: &Db, assets: &[Asset]) -> rusqlite::Result<()> {
             || asset.width < 0
             || asset.height < 0
         {
-            return Err(rusqlite::Error::InvalidQuery);
+            return Err(plain_libs::rusqlite::Error::InvalidQuery);
         }
     }
     db.with_conn(|conn| {
@@ -85,8 +85,8 @@ fn replace(db: &Db, assets: &[Asset]) -> rusqlite::Result<()> {
         tx.execute("INSERT INTO volumes(id,identity,path,is_available) VALUES('photos','photos','ph://',1) ON CONFLICT(identity) DO UPDATE SET is_available=1", [])?;
         tx.execute("UPDATE files SET missing=1 WHERE volume_id='photos'", [])?;
         for asset in assets {
-            let created = plain_libs::utils::dbtime::normalize(&asset.created_at).map_err(|_| rusqlite::Error::InvalidQuery)?;
-            let updated = plain_libs::utils::dbtime::normalize(&asset.updated_at).map_err(|_| rusqlite::Error::InvalidQuery)?;
+            let created = plain_libs::utils::dbtime::normalize(&asset.created_at).map_err(|_| plain_libs::rusqlite::Error::InvalidQuery)?;
+            let updated = plain_libs::utils::dbtime::normalize(&asset.updated_at).map_err(|_| plain_libs::rusqlite::Error::InvalidQuery)?;
             let id = format!("photos:{}", asset.id);
             let kind = if asset.media_type == 1 { "IMAGE" } else { "VIDEO" };
             let mime = plain_libs::utils::mime::mime_from_ext(&asset.name);

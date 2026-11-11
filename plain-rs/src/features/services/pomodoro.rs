@@ -7,7 +7,7 @@ use plain_libs::chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use plain_graphql::{Enum, SimpleObject};
 
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{broadcast, watch};
@@ -26,7 +26,7 @@ pub struct PomodoroSettings {
 }
 impl Default for PomodoroSettings {
     fn default() -> Self {
-        serde_json::from_value(
+        plain_libs::serde_json::from_value(
             crate::features::prefs::settings::Settings::default().pomodoro_settings,
         )
         .expect("Default pomodoro settings")
@@ -90,7 +90,7 @@ impl Service {
         })
     }
     pub fn settings(&self) -> plain_libs::anyhow::Result<PomodoroSettings> {
-        let settings: PomodoroSettings = serde_json::from_value(
+        let settings: PomodoroSettings = plain_libs::serde_json::from_value(
             crate::features::prefs::settings::snapshot(&self.prefs)?.pomodoro_settings,
         )?;
         plain_libs::anyhow::ensure!(
@@ -155,7 +155,7 @@ impl Service {
         Ok(runtime)
     }
     fn snapshot(
-        conn: &rusqlite::Connection,
+        conn: &plain_libs::rusqlite::Connection,
         runtime: &Runtime,
         now: DateTime<Utc>,
     ) -> plain_libs::anyhow::Result<PomodoroToday> {
@@ -361,7 +361,7 @@ impl Service {
             .unwrap_or(std::time::Duration::from_secs(60))
     }
     fn publish(&self, action: &str, today: &PomodoroToday, completed_state: Option<PomodoroState>) {
-        let payload = serde_json::json!({"action":action,"timeLeftSec":today.time_left_sec,"totalTimeSec":today.total_time_sec,"completedCount":today.completed_count,"round":today.current_round,"state":today.state,"completedState":completed_state,"today":today});
+        let payload = plain_libs::serde_json::json!({"action":action,"timeLeftSec":today.time_left_sec,"totalTimeSec":today.total_time_sec,"completedCount":today.completed_count,"round":today.current_round,"state":today.state,"completedState":completed_state,"today":today});
         let _ = self
             .events
             .send(WsEvent::broadcast(WS_POMODORO_ACTION, payload.to_string()));

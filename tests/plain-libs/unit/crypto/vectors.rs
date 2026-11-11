@@ -1,10 +1,10 @@
 use super::*;
 use crate::utils::base64::base64_decode;
 use ed25519_dalek::SigningKey;
-use serde_json::Value;
+use crate::serde_json::Value;
 
 fn vectors() -> Value {
-    serde_json::from_str(include_str!(
+    crate::serde_json::from_str(include_str!(
         "../../../plain-rs/fixtures/crypto-vectors.json"
     ))
     .unwrap()

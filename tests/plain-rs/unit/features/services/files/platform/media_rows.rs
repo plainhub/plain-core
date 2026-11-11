@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn provider_types_are_projected_to_domain_types_without_confusing_their_numeric_codes() {

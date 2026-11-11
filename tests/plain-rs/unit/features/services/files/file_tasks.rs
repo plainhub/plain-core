@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_runtime::Core as ContentServer;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[tokio::test(start_paused = true)]
 async fn synchronous_completion_waits_for_notification_without_periodic_reads() {
@@ -147,8 +147,8 @@ async fn whole_selection_preflight_case(sdk: bool) {
             std::io::ErrorKind::NotFound
         );
         assert_eq!(
-            serde_json::to_value(state.files.list(client).await.unwrap()).unwrap(),
-            serde_json::to_value(before).unwrap()
+            plain_libs::serde_json::to_value(state.files.list(client).await.unwrap()).unwrap(),
+            plain_libs::serde_json::to_value(before).unwrap()
         );
         assert_eq!(
             std::fs::read(&source).unwrap(),

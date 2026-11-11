@@ -1,0 +1,8 @@
+{
+  "name": "itoa",
+  "version": "1.0.18",
+  "archive_sha256": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682",
+  "repository": "https://github.com/dtolnay/itoa",
+  "revision": "af77385d0daf4d0e949e81f2588be2e44f69f086",
+  "retained_features": []
+}

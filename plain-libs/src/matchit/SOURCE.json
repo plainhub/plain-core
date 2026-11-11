@@ -1,0 +1,10 @@
+{
+  "name": "matchit",
+  "version": "0.7.3",
+  "archive_sha256": "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94",
+  "repository": "https://github.com/ibraheemdev/matchit",
+  "revision": "64af4bd02757c7d12412d871c3143b18de60e9df",
+  "retained_features": [
+    "default"
+  ]
+}

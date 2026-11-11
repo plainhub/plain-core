@@ -1,4 +1,4 @@
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[tokio::test]
 async fn conversation_reads_prepare_once_in_background_and_skip_searches_and_pages() {

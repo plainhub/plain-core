@@ -89,7 +89,7 @@ impl<'a> Iterator for CDataIterator<'a> {
         if self.finished {
             return None;
         }
-        for gt in memchr::memchr_iter(b'>', self.unprocessed.as_bytes()) {
+        for gt in crate::memchr::memchr_iter(b'>', self.unprocessed.as_bytes()) {
             let (slice, rest) = self.unprocessed.split_at(gt);
             if slice.ends_with("]]") {
                 self.unprocessed = rest;

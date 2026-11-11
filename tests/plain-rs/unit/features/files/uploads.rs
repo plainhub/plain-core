@@ -132,7 +132,7 @@ async fn completion_failures_keep_the_committed_file_and_report_failure_once_wit
         .unwrap()
         .unwrap();
     assert_eq!(event.event_type, "UPLOAD_MERGE_RESULT");
-    let payload: Value = serde_json::from_str(&event.payload).unwrap();
+    let payload: Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
     assert_eq!(payload["ok"], false);
     let status = runtime.status("upload");
     assert_eq!(status["status"], "FAILED");

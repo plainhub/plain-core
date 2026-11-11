@@ -1,10 +1,10 @@
 use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
 use crate::server::ServerState;
-use axum::body::Body;
-use axum::extract::Request;
-use axum::http::{HeaderName, StatusCode, header};
-use axum::response::Response;
+use plain_libs::axum::body::Body;
+use plain_libs::axum::extract::Request;
+use plain_libs::axum::http::{HeaderName, StatusCode, header};
+use plain_libs::axum::response::Response;
 
 fn test_state() -> (plain_libs::temporary::TempDir, ContentServer, ServerState, Vec<u8>) {
     let directory = plain_libs::temporary::tempdir().unwrap();
@@ -38,11 +38,11 @@ async fn call_fs(state: &ServerState, query: &str, headers: &[(&HeaderName, &str
         builder = builder.header(*name, *value);
     }
     let req = builder.body(Body::empty()).unwrap();
-    super::get(axum::extract::State(state.clone()), req).await
+    super::get(plain_libs::axum::extract::State(state.clone()), req).await
 }
 
 async fn body_bytes(resp: Response) -> Vec<u8> {
-    axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+    plain_libs::axum::body::to_bytes(resp.into_body(), 1024 * 1024)
         .await
         .expect("body")
         .to_vec()
@@ -376,7 +376,7 @@ async fn fs_serves_fid_uris_from_app_file_store() {
     let id = file_id(&state, &uri);
 
     let resp = call_fs(&state, &format!("id={id}&action=preview"), &[]).await;
-    assert_eq!(resp.status(), axum::http::StatusCode::OK);
+    assert_eq!(resp.status(), plain_libs::axum::http::StatusCode::OK);
     assert_eq!(body_bytes(resp).await, b"fid-payload-bytes");
 }
 
@@ -506,7 +506,7 @@ async fn fs_foreground_thumbnail_is_local_and_does_not_enable_passive_reads() {
         &Scope::Session(session.client_id),
         "fs",
         &plain_libs::utils::base64::base64_decode(&session.url_token),
-        &serde_json::to_vec(&foreground).unwrap(),
+        &plain_libs::serde_json::to_vec(&foreground).unwrap(),
     )
     .unwrap();
     let response = call_fs(&state, &format!("id={remote}&action=preview&size=sm"), &[]).await;
@@ -896,11 +896,11 @@ async fn fs_thumbnail_latency_benchmark() {
         }
         cold.sort_by(f64::total_cmp);
         warm.sort_by(f64::total_cmp);
-        reports.push(serde_json::json!({"input":label,"samples":20,"target":"256x192 aspect fit","coldMedianMs":cold[10],"coldP95Ms":cold[18],"coldMaxMs":cold[19],"warmMedianMs":warm[10],"warmP95Ms":warm[18],"warmMaxMs":warm[19]}));
+        reports.push(plain_libs::serde_json::json!({"input":label,"samples":20,"target":"256x192 aspect fit","coldMedianMs":cold[10],"coldP95Ms":cold[18],"coldMaxMs":cold[19],"warmMedianMs":warm[10],"warmP95Ms":warm[18],"warmMaxMs":warm[19]}));
     }
     println!(
         "{}",
-        serde_json::json!({"transport":"trusted HTTPS HTTP/1.1 loopback, reused TLS connection","os":std::env::consts::OS,"architecture":std::env::consts::ARCH,"thumbnailCacheColdSourcePagesWarm":true,"reports":reports})
+        plain_libs::serde_json::json!({"transport":"trusted HTTPS HTTP/1.1 loopback, reused TLS connection","os":std::env::consts::OS,"architecture":std::env::consts::ARCH,"thumbnailCacheColdSourcePagesWarm":true,"reports":reports})
     );
     core.shutdown().await;
 }
@@ -1317,12 +1317,12 @@ async fn fs_native_resource_ranges_use_the_provider_file_window() {
         .host
         .reply(
             generation,
-            serde_json::json!({"id":request["id"],"result":null}),
+            plain_libs::serde_json::json!({"id":request["id"],"result":null}),
         )
         .unwrap();
-    let metadata: serde_json::Value =
-        serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
-    assert_eq!(metadata, serde_json::json!({"path":resource,"file":true}));
+    let metadata: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+    assert_eq!(metadata, plain_libs::serde_json::json!({"path":resource,"file":true}));
     let mut file = plain_libs::temporary::tempfile().unwrap();
     std::io::Write::write_all(&mut file, b"PREFIX0123456789SUFFIX").unwrap();
     stream

@@ -1,0 +1,8 @@
+{
+  "name": "axum-core",
+  "version": "0.4.5",
+  "archive_sha256": "09f2bd6146b97ae3359fa0cc6d6b376d9539582c7b4220f041a33ec24c226199",
+  "repository": "https://github.com/tokio-rs/axum",
+  "revision": "fe56a310efbb30b3b178059c48a31d1000ed5f62",
+  "retained_features": []
+}

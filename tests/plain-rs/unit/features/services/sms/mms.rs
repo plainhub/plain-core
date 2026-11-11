@@ -129,7 +129,7 @@ async fn provider_attachments_use_one_mime_primitive_and_preserve_stream_bytes()
         host.reply(generation, json!({"id":request["id"],"result":null}))
             .unwrap();
         let metadata: Value =
-            serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+            plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
         assert_eq!(metadata, json!({"path":"content://fixture/123"}));
         stream.write(vec![0, 1, 2, 255]).await.unwrap();
         stream.write(vec![3, 0, 254]).await.unwrap();

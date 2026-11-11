@@ -199,10 +199,10 @@ impl NativeMediaCatalog {
     }
 
     #[cfg(feature = "runtime-media")]
-    pub async fn scan_completed_files(&self, params: serde_json::Value) -> Result<bool, String> {
+    pub async fn scan_completed_files(&self, params: plain_libs::serde_json::Value) -> Result<bool, String> {
         self.state.native_client_id()?;
         let request: CompletedFilesRequest =
-            serde_json::from_value(params).map_err(|error| error.to_string())?;
+            plain_libs::serde_json::from_value(params).map_err(|error| error.to_string())?;
         crate::features::services::files::native_scan::completed(
             &self.state.db,
             &self.state.media_scans,
@@ -463,8 +463,8 @@ impl NativeMediaCatalog {
         let prefix = format!("{}/", root.trim_end_matches('/'));
         self.state.db.with_conn(|connection| {
             connection.prepare("SELECT data_type,id,path FROM file_catalog WHERE missing=0 AND is_available=1 AND trashed=0 AND (path=?1 OR substr(path,1,length(?2))=?2)")?
-                .query_map(rusqlite::params![root,prefix], |row| Ok(crate::features::services::files::file_task_media::Identity { media_type:row.get(0)?, file_id:row.get(1)?, path:row.get(2)? }))?
-                .collect::<rusqlite::Result<Vec<_>>>()
+                .query_map(plain_libs::rusqlite::params![root,prefix], |row| Ok(crate::features::services::files::file_task_media::Identity { media_type:row.get(0)?, file_id:row.get(1)?, path:row.get(2)? }))?
+                .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
         }).map_err(|error| error.to_string())
     }
 

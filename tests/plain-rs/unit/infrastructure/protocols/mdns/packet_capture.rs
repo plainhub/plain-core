@@ -34,11 +34,11 @@ fn packet_directions_keep_fixed_wire_values_and_reject_unknown_values() {
         (MdnsPacketDirection::In, "IN"),
         (MdnsPacketDirection::Out, "OUT"),
     ] {
-        assert_eq!(serde_json::to_value(direction).unwrap(), wire);
+        assert_eq!(plain_libs::serde_json::to_value(direction).unwrap(), wire);
         assert_eq!(
-            serde_json::from_value::<MdnsPacketDirection>(serde_json::json!(wire)).unwrap(),
+            plain_libs::serde_json::from_value::<MdnsPacketDirection>(plain_libs::serde_json::json!(wire)).unwrap(),
             direction
         );
     }
-    assert!(serde_json::from_value::<MdnsPacketDirection>(serde_json::json!("SIDEWAYS")).is_err());
+    assert!(plain_libs::serde_json::from_value::<MdnsPacketDirection>(plain_libs::serde_json::json!("SIDEWAYS")).is_err());
 }

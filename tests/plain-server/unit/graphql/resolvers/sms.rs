@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
     let (generation, mut requests) = host.connect();

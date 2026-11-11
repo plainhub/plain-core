@@ -7,7 +7,7 @@ use crate::features::services::peers::peer_wire::signing_keypair;
 use plain_libs::anyhow::{Result, bail};
 use plain_libs::crypto::EcdhSession;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 #[derive(Deserialize)]
 pub struct Device {
     pub name: String,
@@ -151,7 +151,7 @@ pub fn receive_cancel(prefs: &Prefs, sessions: &Sessions, cancel: PairingCancel)
     if !security::verify_cancel(&cancel, &actor(prefs)?) {
         return Ok(Value::Null);
     }
-    Ok(serde_json::to_value(sessions.receive_cancel(&cancel))?)
+    Ok(plain_libs::serde_json::to_value(sessions.receive_cancel(&cancel))?)
 }
 
 #[cfg(test)]

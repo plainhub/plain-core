@@ -1,14 +1,14 @@
 //! Cross-platform bookmark storage in the shared SQLite database.
 //! The tables are created when [`Db::open`] opens the database.
 
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 
 use crate::infrastructure::db::Db;
 pub use crate::infrastructure::db::models::bookmark::DBookmark;
 pub use crate::infrastructure::db::models::bookmark::DBookmarkGroup;
 use crate::infrastructure::db::now_iso;
 
-fn row_to_bookmark(row: &rusqlite::Row<'_>) -> rusqlite::Result<DBookmark> {
+fn row_to_bookmark(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<DBookmark> {
     Ok(DBookmark {
         id: row.get(0)?,
         url: row.get(1)?,
@@ -24,7 +24,7 @@ fn row_to_bookmark(row: &rusqlite::Row<'_>) -> rusqlite::Result<DBookmark> {
     })
 }
 
-fn row_to_bookmark_group(row: &rusqlite::Row<'_>) -> rusqlite::Result<DBookmarkGroup> {
+fn row_to_bookmark_group(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<DBookmarkGroup> {
     Ok(DBookmarkGroup {
         id: row.get(0)?,
         name: row.get(1)?,
@@ -52,7 +52,7 @@ pub fn get_bookmarks(db: &Db) -> Vec<DBookmark> {
     })
 }
 
-pub fn get_bookmark_by_id(db: &Db, id: &str) -> rusqlite::Result<Option<DBookmark>> {
+pub fn get_bookmark_by_id(db: &Db, id: &str) -> plain_libs::rusqlite::Result<Option<DBookmark>> {
     db.with_conn(|conn| {
         conn.query_row(
             &format!("SELECT {BOOKMARK_COLUMNS} FROM bookmarks WHERE id=?"),
@@ -78,14 +78,14 @@ pub fn get_bookmarks_by_group_id(db: &Db, group_id: &str) -> Vec<DBookmark> {
     })
 }
 
-pub fn insert_bookmark(db: &Db, bookmark: &DBookmark) -> rusqlite::Result<usize> {
+pub fn insert_bookmark(db: &Db, bookmark: &DBookmark) -> plain_libs::rusqlite::Result<usize> {
     db.with_conn(|conn| insert_bookmark_with_conn(conn, bookmark))
 }
 
 pub(crate) fn insert_bookmark_with_conn(
-    conn: &rusqlite::Connection,
+    conn: &plain_libs::rusqlite::Connection,
     bookmark: &DBookmark,
-) -> rusqlite::Result<usize> {
+) -> plain_libs::rusqlite::Result<usize> {
     conn.execute(
             "INSERT INTO bookmarks (id,url,title,favicon_path,group_id,pinned,click_count,last_clicked_at,sort_order,created_at,updated_at) \
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
@@ -105,7 +105,7 @@ pub(crate) fn insert_bookmark_with_conn(
         )
 }
 
-pub fn update_bookmark(db: &Db, bookmark: &DBookmark) -> rusqlite::Result<usize> {
+pub fn update_bookmark(db: &Db, bookmark: &DBookmark) -> plain_libs::rusqlite::Result<usize> {
     db.with_conn(|conn| {
         conn.execute(
             "UPDATE bookmarks SET url=?1,title=?2,favicon_path=?3,group_id=?4,pinned=?5,click_count=?6,last_clicked_at=?7,sort_order=?8,updated_at=?9 WHERE id=?10",
@@ -125,11 +125,11 @@ pub fn update_bookmark(db: &Db, bookmark: &DBookmark) -> rusqlite::Result<usize>
     })
 }
 
-pub fn delete_bookmarks(db: &Db, ids: &[String]) -> rusqlite::Result<i32> {
+pub fn delete_bookmarks(db: &Db, ids: &[String]) -> plain_libs::rusqlite::Result<i32> {
     delete_bookmarks_with_rows(db, ids).map(|rows| rows.len() as i32)
 }
 
-pub fn delete_bookmarks_with_rows(db: &Db, ids: &[String]) -> rusqlite::Result<Vec<DBookmark>> {
+pub fn delete_bookmarks_with_rows(db: &Db, ids: &[String]) -> plain_libs::rusqlite::Result<Vec<DBookmark>> {
     if ids.is_empty() {
         return Ok(vec![]);
     }
@@ -143,12 +143,12 @@ pub fn delete_bookmarks_with_rows(db: &Db, ids: &[String]) -> rusqlite::Result<V
             let mut stmt = tx.prepare(&format!(
                 "SELECT {BOOKMARK_COLUMNS} FROM bookmarks WHERE id IN ({placeholders})"
             ))?;
-            stmt.query_map(rusqlite::params_from_iter(ids.iter()), row_to_bookmark)?
-                .collect::<rusqlite::Result<Vec<_>>>()?
+            stmt.query_map(plain_libs::rusqlite::params_from_iter(ids.iter()), row_to_bookmark)?
+                .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?
         };
         tx.execute(
             &format!("DELETE FROM bookmarks WHERE id IN ({placeholders})"),
-            rusqlite::params_from_iter(ids.iter()),
+            plain_libs::rusqlite::params_from_iter(ids.iter()),
         )?;
         tx.commit()?;
         Ok(rows)
@@ -181,14 +181,14 @@ pub fn get_bookmark_group_by_id(db: &Db, id: &str) -> Option<DBookmarkGroup> {
     })
 }
 
-pub fn insert_bookmark_group(db: &Db, group: &DBookmarkGroup) -> rusqlite::Result<usize> {
+pub fn insert_bookmark_group(db: &Db, group: &DBookmarkGroup) -> plain_libs::rusqlite::Result<usize> {
     db.with_conn(|conn| insert_bookmark_group_with_conn(conn, group))
 }
 
 pub(crate) fn insert_bookmark_group_with_conn(
-    conn: &rusqlite::Connection,
+    conn: &plain_libs::rusqlite::Connection,
     group: &DBookmarkGroup,
-) -> rusqlite::Result<usize> {
+) -> plain_libs::rusqlite::Result<usize> {
     conn.execute(
             "INSERT INTO bookmark_groups (id,name,collapsed,sort_order,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6)",
             params![
@@ -202,7 +202,7 @@ pub(crate) fn insert_bookmark_group_with_conn(
         )
 }
 
-pub fn update_bookmark_group(db: &Db, group: &DBookmarkGroup) -> rusqlite::Result<usize> {
+pub fn update_bookmark_group(db: &Db, group: &DBookmarkGroup) -> plain_libs::rusqlite::Result<usize> {
     db.with_conn(|conn| {
         conn.execute(
             "UPDATE bookmark_groups SET name=?1,collapsed=?2,sort_order=?3,updated_at=?4 WHERE id=?5",
@@ -217,7 +217,7 @@ pub fn update_bookmark_group(db: &Db, group: &DBookmarkGroup) -> rusqlite::Resul
     })
 }
 
-pub fn delete_bookmark_group(db: &Db, id: &str) -> rusqlite::Result<Vec<DBookmark>> {
+pub fn delete_bookmark_group(db: &Db, id: &str) -> plain_libs::rusqlite::Result<Vec<DBookmark>> {
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
         tx.execute("DELETE FROM bookmark_groups WHERE id=?", params![id])?;
@@ -226,14 +226,14 @@ pub fn delete_bookmark_group(db: &Db, id: &str) -> rusqlite::Result<Vec<DBookmar
                 "UPDATE bookmarks SET group_id=NULL, updated_at=?1 WHERE group_id=?2 RETURNING {BOOKMARK_COLUMNS}"
             ))?;
             statement.query_map(params![now_iso(), id], row_to_bookmark)?
-                .collect::<rusqlite::Result<Vec<_>>>()?
+                .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?
         };
         tx.commit()?;
         Ok(updated)
     })
 }
 
-pub fn record_click(db: &Db, id: &str) -> rusqlite::Result<usize> {
+pub fn record_click(db: &Db, id: &str) -> plain_libs::rusqlite::Result<usize> {
     db.with_conn(|conn| conn.execute("UPDATE bookmarks SET click_count=click_count+1,last_clicked_at=?1,updated_at=?1 WHERE id=?2", params![now_iso(), id]))
 }
 
@@ -241,7 +241,7 @@ pub fn update_fields(
     db: &Db,
     bookmark: &DBookmark,
     favicon_path: Option<&str>,
-) -> rusqlite::Result<Option<(DBookmark, String)>> {
+) -> plain_libs::rusqlite::Result<Option<(DBookmark, String)>> {
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
         let previous_favicon = tx.query_row(

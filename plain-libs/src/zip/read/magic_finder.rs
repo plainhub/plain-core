@@ -1,5 +1,5 @@
 use crate::zip::result::ZipResult;
-use memchr::memmem::{Finder, FinderRev};
+use crate::memchr::memmem::{Finder, FinderRev};
 use std::io::{Read, Seek, SeekFrom};
 const MAGIC_LENGTH: usize = 4;
 type MagicLengthByteArray = [u8; MAGIC_LENGTH];

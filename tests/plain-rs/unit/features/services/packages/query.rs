@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 fn package(id: &str, name: &str, kind: &str, size: i64, time: &str) -> Value {
     json!({"id":id,"name":name,"type":kind,"size":size,"updatedAt":time,"certs":[{"issuer":"Certificate % issuer","subject":"subject"}]})

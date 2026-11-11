@@ -13,22 +13,22 @@ pub enum SessionType {
     ApiToken,
 }
 
-impl rusqlite::types::ToSql for SessionType {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
-        Ok(rusqlite::types::ToSqlOutput::Borrowed(
-            rusqlite::types::ValueRef::Text(match self {
+impl plain_libs::rusqlite::types::ToSql for SessionType {
+    fn to_sql(&self) -> plain_libs::rusqlite::Result<plain_libs::rusqlite::types::ToSqlOutput<'_>> {
+        Ok(plain_libs::rusqlite::types::ToSqlOutput::Borrowed(
+            plain_libs::rusqlite::types::ValueRef::Text(match self {
                 Self::Login => b"LOGIN",
                 Self::ApiToken => b"API_TOKEN",
             }),
         ))
     }
 }
-impl rusqlite::types::FromSql for SessionType {
-    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+impl plain_libs::rusqlite::types::FromSql for SessionType {
+    fn column_result(value: plain_libs::rusqlite::types::ValueRef<'_>) -> plain_libs::rusqlite::types::FromSqlResult<Self> {
         match value.as_str()? {
             "LOGIN" => Ok(Self::Login),
             "API_TOKEN" => Ok(Self::ApiToken),
-            _ => Err(rusqlite::types::FromSqlError::InvalidType),
+            _ => Err(plain_libs::rusqlite::types::FromSqlError::InvalidType),
         }
     }
 }

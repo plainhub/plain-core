@@ -1,14 +1,14 @@
 // HTTP upgrade adapted from axum 0.7.9 (websocket_axum/SOURCE.json).
-use axum::{
+use crate::axum::{
     body::Body,
     extract::FromRequestParts,
     http::{HeaderMap, HeaderValue, Method, StatusCode, header, request::Parts},
     response::Response,
 };
-use hyper::upgrade::{OnUpgrade, Upgraded};
-use hyper_util::rt::TokioIo;
+use crate::hyper::upgrade::{OnUpgrade, Upgraded};
+use crate::hyper_util::rt::TokioIo;
 use std::future::Future;
-use tokio_tungstenite::{
+use crate::tokio_tungstenite::{
     WebSocketStream,
     tungstenite::{
         handshake::derive_accept_key,
@@ -16,7 +16,7 @@ use tokio_tungstenite::{
     },
 };
 
-pub use tokio_tungstenite::tungstenite::{Message, protocol::CloseFrame};
+pub use crate::tokio_tungstenite::tungstenite::{Message, protocol::CloseFrame};
 
 pub type WebSocket = WebSocketStream<TokioIo<Upgraded>>;
 
@@ -112,7 +112,7 @@ impl WebSocketUpgrade {
     }
 }
 
-#[axum::async_trait]
+#[crate::axum::async_trait]
 impl<S: Send + Sync> FromRequestParts<S> for WebSocketUpgrade {
     type Rejection = (StatusCode, &'static str);
 

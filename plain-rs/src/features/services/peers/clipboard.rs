@@ -3,7 +3,7 @@ use crate::features::services::peers::management::Identity;
 use crate::features::services::peers::management::current_peer;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::time::Duration;
 use tokio::sync::watch;
 
@@ -39,7 +39,7 @@ pub async fn receive(
     )
     .await?;
     let items: Vec<crate::features::clipboard::sync::Item> =
-        serde_json::from_value(data["clipboardItems"].clone())?;
+        plain_libs::serde_json::from_value(data["clipboardItems"].clone())?;
     ensure!(items.len() <= 1, "Invalid clipboard snapshot");
     if let Some(item) = items.first() {
         if !state.host.is_current(host_generation)

@@ -12,7 +12,7 @@ pub use update::{ReleaseInfo, UpdateInfo, UpdatePatch};
 use super::{Prefs, PrefsError, Result};
 use keys::*;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use plain_libs::serde_json::{Map, Value, json};
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -42,13 +42,13 @@ fn read<T: serde::de::DeserializeOwned + Default>(
     key: &str,
 ) -> Result<T> {
     map.get(key)
-        .map(|v| serde_json::from_value(v.clone()).map_err(PrefsError::Decode))
+        .map(|v| plain_libs::serde_json::from_value(v.clone()).map_err(PrefsError::Decode))
         .unwrap_or_else(|| Ok(T::default()))
 }
 fn put<T: Serialize>(map: &mut Map<String, Value>, key: &str, value: T) -> Result<()> {
     map.insert(
         key.into(),
-        serde_json::to_value(value).map_err(PrefsError::Encode)?,
+        plain_libs::serde_json::to_value(value).map_err(PrefsError::Encode)?,
     );
     Ok(())
 }
@@ -139,22 +139,22 @@ pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> plain_libs::anyhow::
     }
     let command = match key {
         PASSWORD => Some(Command::SetPassword {
-            password: serde_json::from_value(value.clone())?,
+            password: plain_libs::serde_json::from_value(value.clone())?,
         }),
         PASSWORD_TYPE => Some(Command::SetPasswordType {
-            value: serde_json::from_value(value.clone())?,
+            value: plain_libs::serde_json::from_value(value.clone())?,
         }),
         LOGIN_REQUIRE_APPROVAL => Some(Command::SetLoginRequireApproval {
-            enabled: serde_json::from_value(value.clone())?,
+            enabled: plain_libs::serde_json::from_value(value.clone())?,
         }),
         MDNS_HOSTNAME => Some(Command::SetMdnsHostname {
-            hostname: serde_json::from_value(value.clone())?,
+            hostname: plain_libs::serde_json::from_value(value.clone())?,
         }),
         API_PERMISSIONS if value.is_object() => Some(Command::PatchApiPermissions {
-            permissions: serde_json::from_value(value.clone())?,
+            permissions: plain_libs::serde_json::from_value(value.clone())?,
         }),
         API_PERMISSIONS => Some(Command::SetApiPermissions {
-            permissions: serde_json::from_value(value.clone())?,
+            permissions: plain_libs::serde_json::from_value(value.clone())?,
         }),
         CLIENT_ID | SIGNATURE_KEY_PAIR | MASTER_SECRET | ADB_TOKEN => {
             plain_libs::anyhow::bail!("Rust-only preference")
@@ -249,12 +249,12 @@ pub fn snapshot(prefs: &Prefs) -> plain_libs::anyhow::Result<SecurityState> {
         password: String::new(),
         password_type: map
             .get(PASSWORD_TYPE)
-            .map(|v| serde_json::from_value(v.clone()))
+            .map(|v| plain_libs::serde_json::from_value(v.clone()))
             .transpose()?
             .unwrap_or(DEFAULT_PASSWORD_TYPE),
         login_require_approval: map
             .get(LOGIN_REQUIRE_APPROVAL)
-            .map(|v| serde_json::from_value(v.clone()))
+            .map(|v| plain_libs::serde_json::from_value(v.clone()))
             .transpose()?
             .unwrap_or(DEFAULT_LOGIN_REQUIRE_APPROVAL),
         adb_token: read(&map, ADB_TOKEN)?,

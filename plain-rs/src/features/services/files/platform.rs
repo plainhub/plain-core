@@ -6,7 +6,7 @@ use crate::features::files::tasks::{FileTaskOp, FileTaskType};
 use crate::infrastructure::db::Db;
 use crate::infrastructure::host::bridge::Host;
 use plain_libs::anyhow::{Result, anyhow, bail};
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -102,7 +102,7 @@ impl FilePlatform {
     pub async fn mounts(
         &self,
         prefs: Arc<crate::features::prefs::Prefs>,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<plain_libs::serde_json::Value> {
         if self.uses_sdk() {
             return self
                 .host
@@ -175,7 +175,7 @@ impl FilePlatform {
         Ok(self.cache.clone())
     }
 
-    pub async fn recent_files(&self) -> Result<Vec<serde_json::Value>> {
+    pub async fn recent_files(&self) -> Result<Vec<plain_libs::serde_json::Value>> {
         if self.uses_sdk() {
             if self.host.startup().recent_files_catalog {
                 let mut plan = crate::features::services::files::provider_query::Plan::default();
@@ -183,7 +183,7 @@ impl FilePlatform {
                     "mime_type != ?".into(),
                     vec!["vnd.android.document/directory".into()],
                 );
-                return serde_json::from_value(
+                return plain_libs::serde_json::from_value(
                     self.host
                         .call(
                             "systemFileIndexRows",
@@ -245,7 +245,7 @@ impl FilePlatform {
         limit: i32,
         sort: crate::features::prefs::settings::FileSortBy,
         count_only: bool,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<plain_libs::serde_json::Value> {
         let limit = limit.clamp(0, super::browse::SEARCH_RESULT_LIMIT as i32);
         if self.host.uses_system_media_catalog() {
             return crate::features::services::files::indexed::platform(
@@ -261,7 +261,7 @@ impl FilePlatform {
         })
         .await?
     }
-    async fn receipt(&self, method: &str, params: serde_json::Value) -> Result<()> {
+    async fn receipt(&self, method: &str, params: plain_libs::serde_json::Value) -> Result<()> {
         if self
             .host
             .call(method, params)
@@ -367,11 +367,11 @@ impl FilePlatform {
             return Ok(rows);
         }
         let db = self.db.clone();
-        let paths = serde_json::to_string(paths)?;
+        let paths = plain_libs::serde_json::to_string(paths)?;
         Ok(tokio::task::spawn_blocking(move || db.with_conn(|connection| {
             connection.prepare("SELECT data_type,id,path FROM file_catalog WHERE missing=0 AND is_available=1 AND data_type IN (1,2,3,22,24) AND path IN (SELECT value FROM json_each(?1))")?
                 .query_map([paths], |row| Ok(crate::features::services::files::file_task_media::Identity { media_type: row.get(0)?, file_id: row.get(1)?, path: row.get(2)? }))?
-                .collect::<rusqlite::Result<Vec<_>>>()
+                .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
         })).await??)
     }
     pub async fn scan(

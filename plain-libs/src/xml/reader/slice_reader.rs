@@ -34,7 +34,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
     #[inline]
     fn read_text(&mut self, _buf: (), position: &mut u64) -> ReadTextResult<'a, ()> {
-        match memchr::memchr2(b'<', b'&', self) {
+        match crate::memchr::memchr2(b'<', b'&', self) {
             Some(0) if self[0] == b'<' => ReadTextResult::Markup(()),
             Some(0) => ReadTextResult::Ref(()),
             Some(i) if self[i] == b'<' => {
@@ -73,7 +73,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
             "`read_ref` must be called at `&`:\n{:?}",
             crate::xml::utils::Bytes(self)
         );
-        match memchr::memchr3(b';', b'&', b'<', &self[1..]) {
+        match crate::memchr::memchr3(b';', b'&', b'<', &self[1..]) {
             Some(i) if self[i + 1] == b';' => {
                 let end = i + 2;
                 let (bytes, rest) = self.split_at(end);

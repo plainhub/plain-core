@@ -3,32 +3,32 @@ use plain_libs::protocols::http_client;
 mod filesystem;
 pub(crate) use filesystem::public_directory;
 
-pub(crate) async fn graphql_http(port: u16, token: &str, query: &str) -> serde_json::Value {
-    graphql_http_variables(port, token, query, serde_json::json!({})).await
+pub(crate) async fn graphql_http(port: u16, token: &str, query: &str) -> plain_libs::serde_json::Value {
+    graphql_http_variables(port, token, query, plain_libs::serde_json::json!({})).await
 }
 
 pub(crate) async fn graphql_http_variables(
     port: u16,
     token: &str,
     query: &str,
-    variables: serde_json::Value,
-) -> serde_json::Value {
+    variables: plain_libs::serde_json::Value,
+) -> plain_libs::serde_json::Value {
     let response = http_client::builder().build().unwrap()
         .post(format!("http://127.0.0.1:{port}/graphql"))
         .bearer_auth(token)
         .header("content-type", "application/json")
-        .body(serde_json::json!({"query":query,"variables":variables}).to_string())
+        .body(plain_libs::serde_json::json!({"query":query,"variables":variables}).to_string())
         .send()
         .await
         .unwrap();
     assert_eq!(response.status(), 200);
-    serde_json::from_slice(&response.bytes().await.unwrap()).unwrap()
+    plain_libs::serde_json::from_slice(&response.bytes().await.unwrap()).unwrap()
 }
 
 pub(crate) fn acknowledge_host_callback(
     host: &plain_rs::infrastructure::host::bridge::Host,
     generation: u64,
-    request: &serde_json::Value,
+    request: &plain_libs::serde_json::Value,
 ) -> bool {
     if !matches!(
         request["method"].as_str(),
@@ -59,7 +59,7 @@ pub(crate) fn acknowledge_host_callback(
     }
     host.reply(
         generation,
-        serde_json::json!({"id":request["id"],"result":null}),
+        plain_libs::serde_json::json!({"id":request["id"],"result":null}),
     )
     .unwrap();
     true
@@ -68,7 +68,7 @@ pub(crate) fn acknowledge_host_callback(
 pub(crate) struct HostRequests {
     host: std::sync::Arc<plain_rs::infrastructure::host::bridge::Host>,
     generation: u64,
-    incoming: tokio::sync::mpsc::Receiver<serde_json::Value>,
+    incoming: tokio::sync::mpsc::Receiver<plain_libs::serde_json::Value>,
 }
 
 impl HostRequests {
@@ -85,7 +85,7 @@ impl HostRequests {
             },
         )
     }
-    pub(crate) async fn recv(&mut self) -> Option<serde_json::Value> {
+    pub(crate) async fn recv(&mut self) -> Option<plain_libs::serde_json::Value> {
         loop {
             let request = self.incoming.recv().await?;
             if !acknowledge_host_callback(&self.host, self.generation, &request) {
@@ -95,7 +95,7 @@ impl HostRequests {
     }
     pub(crate) fn try_recv(
         &mut self,
-    ) -> Result<serde_json::Value, tokio::sync::mpsc::error::TryRecvError> {
+    ) -> Result<plain_libs::serde_json::Value, tokio::sync::mpsc::error::TryRecvError> {
         loop {
             let request = self.incoming.try_recv()?;
             if !acknowledge_host_callback(&self.host, self.generation, &request) {

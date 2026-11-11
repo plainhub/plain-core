@@ -6,7 +6,7 @@ use crate::features::chat::messages::message_lifecycle;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::SaveMode;
 use plain_libs::utils::base64::base64_encode;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::atomic::{AtomicUsize, Ordering};
 struct Transport {
     calls: AtomicUsize,
@@ -33,16 +33,16 @@ impl PeerTransport for Transport {
     ) -> std::result::Result<(), String> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         assert_eq!(key, &[7; 32]);
-        let graphql: Value = serde_json::from_str(body.splitn(4, '|').nth(3).unwrap()).unwrap();
+        let graphql: Value = plain_libs::serde_json::from_str(body.splitn(4, '|').nth(3).unwrap()).unwrap();
         let content: Value =
-            serde_json::from_str(graphql["variables"]["content"].as_str().unwrap()).unwrap();
+            plain_libs::serde_json::from_str(graphql["variables"]["content"].as_str().unwrap()).unwrap();
         assert_eq!(content["type"], "TEXT");
         if self.change_content {
             self.db
                 .with_conn(|c| {
                     c.execute(
                         "UPDATE chats SET content=?1 WHERE to_id=?2",
-                        rusqlite::params![r#"{"type":"TEXT","value":{"text":"newer"}}"#, peer.id],
+                        plain_libs::rusqlite::params![r#"{"type":"TEXT","value":{"text":"newer"}}"#, peer.id],
                     )
                 })
                 .unwrap();
@@ -166,7 +166,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
         .unwrap();
     assert_eq!(retry.status, ChatStatus::Partial);
     assert_eq!(
-        serde_json::from_str::<Value>(retry.status_data.as_deref().unwrap()).unwrap()["results"]
+        plain_libs::serde_json::from_str::<Value>(retry.status_data.as_deref().unwrap()).unwrap()["results"]
             .as_array()
             .unwrap()
             .len(),
@@ -214,7 +214,7 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
             json!({"type":"FILES","value":{"items":[{"uri":uri,"name":"x"}]}}).to_string();
         let wire = crate::features::chat::messages::content::peer_content(&content, "sender", &db)
             .unwrap();
-        let wire: Value = serde_json::from_str(&wire).unwrap();
+        let wire: Value = plain_libs::serde_json::from_str(&wire).unwrap();
         let uri_wire = wire["value"]["items"][0]["uri"].as_str().unwrap();
         let (scope, payload) =
             crate::features::files::resource_link::parse(uri_wire.strip_prefix("fsid:").unwrap())

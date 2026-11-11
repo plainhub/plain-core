@@ -1,7 +1,7 @@
 use plain_libs::protocols::http_client;
 use plain_rs::features::services::peers::peer_address::*;
 use plain_rs::infrastructure::db::DPeer;
-use serde_json::json;
+use plain_libs::serde_json::json;
 #[tokio::test]
 async fn main_peer_records_and_file_urls_use_current_addresses_and_reject_stale_identity_without_host()
  {

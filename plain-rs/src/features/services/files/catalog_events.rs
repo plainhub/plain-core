@@ -11,7 +11,7 @@ struct Change {
 }
 
 pub fn includes(payload: &str, kind: crate::features::enums::DataType) -> bool {
-    serde_json::from_str::<Change>(payload).is_ok_and(|change| change.types.contains(&kind.kind()))
+    plain_libs::serde_json::from_str::<Change>(payload).is_ok_and(|change| change.types.contains(&kind.kind()))
 }
 
 pub fn publish(events: &broadcast::Sender<WsEvent>, types: impl IntoIterator<Item = i32>) {
@@ -23,7 +23,7 @@ pub fn publish(events: &broadcast::Sender<WsEvent>, types: impl IntoIterator<Ite
     if !types.is_empty() {
         let _ = events.send(WsEvent::broadcast(
             MEDIA_LIBRARY_UPDATED,
-            serde_json::to_string(&Change { types }).unwrap(),
+            plain_libs::serde_json::to_string(&Change { types }).unwrap(),
         ));
     }
 }

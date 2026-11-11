@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use plain_libs::rusqlite::Connection;
 use std::sync::Mutex;
 
 #[cfg(all(feature = "chat", feature = "library"))]
@@ -22,21 +22,21 @@ pub(super) struct State {
 }
 
 impl State {
-    pub(super) fn new(_connection: &mut Connection) -> rusqlite::Result<Self> {
+    pub(super) fn new(_connection: &mut Connection) -> plain_libs::rusqlite::Result<Self> {
         #[cfg(all(feature = "chat", feature = "library"))]
-        _connection.authorizer(Some(|context: rusqlite::hooks::AuthContext<'_>| {
+        _connection.authorizer(Some(|context: plain_libs::rusqlite::hooks::AuthContext<'_>| {
             // Preserve DELETE row callbacks for session-cache revocation: https://sqlite.org/lang_delete.html#the_truncate_optimization
             if context.database_name == Some("main")
                 && matches!(
                     context.action,
-                    rusqlite::hooks::AuthAction::Delete {
+                    plain_libs::rusqlite::hooks::AuthAction::Delete {
                         table_name: "sessions"
                     }
                 )
             {
-                rusqlite::hooks::Authorization::Ignore
+                plain_libs::rusqlite::hooks::Authorization::Ignore
             } else {
-                rusqlite::hooks::Authorization::Allow
+                plain_libs::rusqlite::hooks::Authorization::Allow
             }
         }))?;
         #[cfg(all(feature = "chat", feature = "library"))]

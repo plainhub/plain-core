@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn closed_leases_reject_late_acquire_but_disconnect_allows_reconnection() {

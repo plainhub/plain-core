@@ -46,8 +46,8 @@ fn begin(a: &CoreRuntime, b: &CoreRuntime) -> (PairingRequest, Ticket) {
         Some(attempt.generation),
     )
     .unwrap();
-    let request: PairingRequest = serde_json::from_value(value["request"].clone()).unwrap();
-    let ticket: Ticket = serde_json::from_value(value["ticket"].clone()).unwrap();
+    let request: PairingRequest = plain_libs::serde_json::from_value(value["request"].clone()).unwrap();
+    let ticket: Ticket = plain_libs::serde_json::from_value(value["ticket"].clone()).unwrap();
     a.pairing_runtime
         .confirmations
         .begin(a, &request, &ticket)
@@ -96,8 +96,8 @@ async fn signed_reply_commits_both_peers_and_retries_keep_original_key() {
         .respond(&b, &request, false, device())
         .unwrap();
     assert_eq!(
-        serde_json::to_vec(&retried).unwrap(),
-        serde_json::to_vec(&reply).unwrap()
+        plain_libs::serde_json::to_vec(&retried).unwrap(),
+        plain_libs::serde_json::to_vec(&reply).unwrap()
     );
     assert_eq!(peer(&b, "a").unwrap().updated_at, b_peer.updated_at);
 

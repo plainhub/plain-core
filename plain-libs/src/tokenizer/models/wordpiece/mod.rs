@@ -122,7 +122,7 @@ impl WordPiece {
     }
 
     pub fn from_bytes<P: AsRef<[u8]>>(bytes: P) -> Result<Self> {
-        let tokenizer = serde_json::from_slice(bytes.as_ref())?;
+        let tokenizer = crate::serde_json::from_slice(bytes.as_ref())?;
         Ok(tokenizer)
     }
 }

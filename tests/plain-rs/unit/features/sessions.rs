@@ -82,11 +82,11 @@ fn session_types_preserve_storage_and_wire_values() {
         row.r#type = kind;
         db.session_save(&row).unwrap();
         assert_eq!(db.session_get("typed").unwrap().unwrap().r#type, kind);
-        assert_eq!(serde_json::to_value(kind).unwrap(), wire);
+        assert_eq!(plain_libs::serde_json::to_value(kind).unwrap(), wire);
         assert_eq!(
-            serde_json::from_value::<SessionType>(serde_json::json!(wire)).unwrap(),
+            plain_libs::serde_json::from_value::<SessionType>(plain_libs::serde_json::json!(wire)).unwrap(),
             kind
         );
     }
-    assert!(serde_json::from_value::<SessionType>(serde_json::json!("FUTURE_SESSION")).is_err());
+    assert!(plain_libs::serde_json::from_value::<SessionType>(plain_libs::serde_json::json!("FUTURE_SESSION")).is_err());
 }

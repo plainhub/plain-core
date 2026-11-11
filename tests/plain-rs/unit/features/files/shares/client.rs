@@ -32,7 +32,7 @@ fn guest_wire_and_file_ids_use_existing_xchacha_contract_and_exact_query_encodin
             < 1000
     );
     assert!(plain_libs::utils::uuid::Uuid::parse_str(parts[1]).is_ok());
-    let document: Value = serde_json::from_str(parts[2]).unwrap();
+    let document: Value = plain_libs::serde_json::from_str(parts[2]).unwrap();
     assert_eq!(
         document["variables"]["relativePath"],
         "folder/quoted\" 中文%"

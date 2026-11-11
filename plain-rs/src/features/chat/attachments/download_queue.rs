@@ -8,7 +8,7 @@ use crate::infrastructure::db::chat_store::peers;
 use crate::infrastructure::transport::router::Attempt;
 use plain_libs::anyhow::{Result, bail};
 use serde::Serialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, VecDeque},
     path::PathBuf,
@@ -91,7 +91,7 @@ impl Queue {
         if peer_id != row.from_id && peer_id != row.to_id {
             bail!("Attachment peer does not belong to message");
         }
-        let content: Value = serde_json::from_str(&row.content)?;
+        let content: Value = plain_libs::serde_json::from_str(&row.content)?;
         if !matches!(content["type"].as_str(), Some("FILES" | "IMAGES")) {
             bail!("Message has no attachments");
         }
@@ -164,7 +164,7 @@ impl Queue {
         if peer_id != row.from_id && peer_id != row.to_id {
             bail!("Attachment peer does not belong to message");
         }
-        let content: Value = serde_json::from_str(&row.content)?;
+        let content: Value = plain_libs::serde_json::from_str(&row.content)?;
         if !matches!(content["type"].as_str(), Some("FILES" | "IMAGES")) {
             bail!("Message has no attachments");
         }

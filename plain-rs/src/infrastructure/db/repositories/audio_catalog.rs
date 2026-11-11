@@ -1,6 +1,6 @@
 use crate::features::media::audio::queue::AudioTrack;
 use crate::infrastructure::db::Db;
-use rusqlite::{Connection, OptionalExtension, params};
+use plain_libs::rusqlite::{Connection, OptionalExtension, params};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -13,7 +13,7 @@ pub struct AudioMedia {
     pub track: AudioTrack,
 }
 
-pub(crate) fn init(conn: &Connection) -> rusqlite::Result<()> {
+pub(crate) fn init(conn: &Connection) -> plain_libs::rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE TEMP TABLE platform_audio_media (
             file_id TEXT NOT NULL PRIMARY KEY,path TEXT NOT NULL UNIQUE,
@@ -34,7 +34,7 @@ impl Db {
         self.audio().restore_needed()
     }
 
-    pub fn use_platform_audio_catalog(&self) -> rusqlite::Result<()> {
+    pub fn use_platform_audio_catalog(&self) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|conn| conn.execute("INSERT INTO platform_audio_catalog(enabled) SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM platform_audio_catalog)", []).map(|_| ()))
     }
 
@@ -42,10 +42,10 @@ impl Db {
         self.audio().read(|state| state.current_file_id.clone())
     }
 
-    pub fn audio_reference_ids(&self) -> rusqlite::Result<Vec<String>> {
+    pub fn audio_reference_ids(&self) -> plain_libs::rusqlite::Result<Vec<String>> {
         let mut ids = self.with_conn(|conn| {
             conn.prepare("SELECT file_id FROM audio_queue_items UNION SELECT file_id FROM audio_playlist_items UNION SELECT file_id FROM media_play_history WHERE media_type=1")?
-                .query_map([], |row| row.get(0))?.collect::<rusqlite::Result<Vec<String>>>()
+                .query_map([], |row| row.get(0))?.collect::<plain_libs::rusqlite::Result<Vec<String>>>()
         })?;
         if let Some(id) = self.audio_current_file_id().filter(|id| !ids.contains(id)) {
             ids.push(id);
@@ -53,9 +53,9 @@ impl Db {
         Ok(ids)
     }
 
-    pub fn forget_platform_audio_paths(&self, paths: &[String]) -> rusqlite::Result<()> {
+    pub fn forget_platform_audio_paths(&self, paths: &[String]) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|conn| {
-            let paths=serde_json::to_string(paths).map_err(|error|rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+            let paths=plain_libs::serde_json::to_string(paths).map_err(|error|plain_libs::rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
             let tx=conn.unchecked_transaction()?;
             tx.execute("DELETE FROM platform_audio_aliases WHERE path IN (SELECT value FROM json_each(?1))",[&paths])?;
             tx.execute("DELETE FROM platform_audio_media WHERE path IN (SELECT value FROM json_each(?1))",[&paths])?;
@@ -63,7 +63,7 @@ impl Db {
         })
     }
 
-    pub fn cache_platform_audio(&self, rows: &[AudioMedia], replace: bool) -> rusqlite::Result<()> {
+    pub fn cache_platform_audio(&self, rows: &[AudioMedia], replace: bool) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|conn| {
             let tx = conn.unchecked_transaction()?;
             if replace { tx.execute("DELETE FROM platform_audio_media", [])?; }
@@ -77,7 +77,7 @@ impl Db {
         })
     }
 
-    pub fn update_platform_audio_metadata(&self, track: &AudioTrack) -> rusqlite::Result<usize> {
+    pub fn update_platform_audio_metadata(&self, track: &AudioTrack) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|conn| {
             conn.execute(
             "UPDATE platform_audio_media SET title=?1,artist=?2,duration_ms=?3 WHERE file_id=?4",

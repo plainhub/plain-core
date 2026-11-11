@@ -6,7 +6,7 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 use crate::infrastructure::host::bridge::Host;
-use rusqlite::OptionalExtension;
+use plain_libs::rusqlite::OptionalExtension;
 use std::path::{Path, PathBuf};
 #[cfg(feature = "runtime-media")]
 use std::sync::Arc;
@@ -171,12 +171,12 @@ fn files(
         ids.iter()
             .map(|id| {
                 statement
-                    .query_row(rusqlite::params![id, kind.kind()], |row| {
+                    .query_row(plain_libs::rusqlite::params![id, kind.kind()], |row| {
                         Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?))
                     })
                     .optional()
             })
-            .collect::<rusqlite::Result<Vec<_>>>()
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
     })?;
     let mut outcome = Outcome {
         successful: Vec::new(),

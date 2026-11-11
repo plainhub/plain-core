@@ -79,7 +79,7 @@ pub async fn deliver_observed(
                         .events
                         .send(crate::infrastructure::events::WsEvent::broadcast(
                             crate::features::chat::events::WS_MESSAGE_UPDATED,
-                            serde_json::json!([crate::features::chat::service::chat_to_json(chat)])
+                            plain_libs::serde_json::json!([crate::features::chat::service::chat_to_json(chat)])
                                 .to_string(),
                         ));
                 },
@@ -96,7 +96,7 @@ pub async fn deliver_observed(
             .events
             .send(crate::infrastructure::events::WsEvent::broadcast(
                 crate::features::chat::events::WS_MESSAGE_UPDATED,
-                serde_json::json!([crate::features::chat::service::chat_to_json(chat)]).to_string(),
+                plain_libs::serde_json::json!([crate::features::chat::service::chat_to_json(chat)]).to_string(),
             ));
     }
     Ok(receipt)

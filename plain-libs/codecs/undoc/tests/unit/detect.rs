@@ -300,8 +300,8 @@ fn test_format_type_default_is_docx() {
 
 #[test]
 fn test_format_type_serde_roundtrip() {
-    let json = serde_json::to_string(&FormatType::Xlsx).unwrap();
+    let json = plain_libs::serde_json::to_string(&FormatType::Xlsx).unwrap();
     assert_eq!(json, "\"xlsx\"");
-    let back: FormatType = serde_json::from_str(&json).unwrap();
+    let back: FormatType = plain_libs::serde_json::from_str(&json).unwrap();
     assert_eq!(back, FormatType::Xlsx);
 }

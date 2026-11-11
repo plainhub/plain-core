@@ -5,12 +5,12 @@ use crate::infrastructure::db::repositories::chat_store::validate;
 use crate::infrastructure::db::repositories::peer::PEER_COLS;
 use crate::infrastructure::db::repositories::peer::row_to_peer;
 use plain_libs::anyhow::{Result, bail};
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 pub fn update_name(
-    connection: &rusqlite::Connection,
+    connection: &plain_libs::rusqlite::Connection,
     id: &str,
     name: &str,
-) -> rusqlite::Result<usize> {
+) -> plain_libs::rusqlite::Result<usize> {
     connection.execute(
         "UPDATE peers SET name=?1, updated_at=?2 WHERE id=?3",
         params![name, crate::infrastructure::db::now_iso(), id],
@@ -33,7 +33,7 @@ pub fn all(db: &Db) -> Result<Vec<DPeer>> {
             "SELECT {PEER_COLS} FROM peers ORDER BY created_at,id"
         ))?;
         s.query_map([], row_to_peer)?
-            .collect::<rusqlite::Result<Vec<_>>>()
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
     })?)
 }
 pub fn save(db: &Db, rows: &[DPeer], mode: SaveMode) -> Result<()> {

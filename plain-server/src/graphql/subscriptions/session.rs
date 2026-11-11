@@ -217,7 +217,7 @@ impl Sessions {
         let _delivery = self.host_delivery.lock().unwrap();
         host.notify(
             "onlineClientsChanged",
-            serde_json::json!({"clientIds":self.snapshot()}),
+            plain_libs::serde_json::json!({"clientIds":self.snapshot()}),
         )
     }
 
@@ -226,7 +226,7 @@ impl Sessions {
         let mut recovering = sessions.host_delivery.lock().unwrap();
         if let Err(error) = state.host.notify(
             "onlineClientsChanged",
-            serde_json::json!({"clientIds":sessions.snapshot()}),
+            plain_libs::serde_json::json!({"clientIds":sessions.snapshot()}),
         ) {
             log::warn!("Online clients callback: {error}");
             if *recovering || !state.host.connected() {
@@ -241,7 +241,7 @@ impl Sessions {
                 if let Ok(permit) = permit {
                     if let Err(error) = state.host.notify_reserved_callback(
                         "onlineClientsChanged",
-                        serde_json::json!({"clientIds":sessions.snapshot()}),
+                        plain_libs::serde_json::json!({"clientIds":sessions.snapshot()}),
                         permit,
                     ) {
                         log::warn!("Online clients snapshot callback: {error}");
@@ -351,14 +351,14 @@ impl Session {
             }
             ServerMessage::Pong { .. } => (None, false),
         };
-        let mut encoded = serde_json::to_string(&message).map_err(|error| error.to_string())?;
+        let mut encoded = plain_libs::serde_json::to_string(&message).map_err(|error| error.to_string())?;
         if encoded.len() > 1024 * 1024 - 49 {
             let Some(id) = &id else {
                 self.close();
                 return Err("Subscription response too large".into());
             };
             terminal = true;
-            encoded = serde_json::to_string(&ServerMessage::Error {
+            encoded = plain_libs::serde_json::to_string(&ServerMessage::Error {
                 id: id.clone(),
                 payload: vec![plain_graphql::ServerError::new(
                     "subscription_result_too_large",
@@ -410,7 +410,7 @@ impl Session {
         if encoded.len() > 1024 * 1024 - 49 {
             return Err("Subscription request too large".into());
         }
-        match serde_json::from_str::<ClientMessage>(encoded).map_err(|e| e.to_string())? {
+        match plain_libs::serde_json::from_str::<ClientMessage>(encoded).map_err(|e| e.to_string())? {
             ClientMessage::Ping { payload } => {
                 self.queue_control(ServerMessage::Pong { payload }, None, None)
             }
@@ -587,7 +587,7 @@ impl Session {
                                 task.abort();
                             }
                         }
-                        return serde_json::to_string(&ServerMessage::Error {
+                        return plain_libs::serde_json::to_string(&ServerMessage::Error {
                             id,
                             payload: vec![plain_graphql::ServerError::new(error.message, None)],
                         })

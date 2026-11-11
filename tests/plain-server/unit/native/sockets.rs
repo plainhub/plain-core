@@ -1,7 +1,7 @@
 use super::*;
 use crate::{server::ContentServer, test_support::HostRequests};
 use plain_rs::infrastructure::events::WsEvent;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -29,7 +29,7 @@ fn fake_host(
     capable: bool,
 ) -> (
     tokio::task::JoinHandle<()>,
-    mpsc::UnboundedReceiver<serde_json::Value>,
+    mpsc::UnboundedReceiver<plain_libs::serde_json::Value>,
 ) {
     let host = core.runtime_state().host.clone();
     let (generation, mut requests) = HostRequests::connect(&host);

@@ -11,9 +11,7 @@ plain-libs = { path = "../plain-libs", default-features = false, features = ["pe
 plain-graphql-macros = { path = "macros" }
 bytes = { version = "=1.12.1", features = ["serde"] }
 futures-util = { version = "=0.3.34", default-features = false, features = ["std", "async-await"] }
-indexmap = { version = "=2.14.2", features = ["serde"] }
 serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = { version = "=1.0.151" }
 
 [dev-dependencies]
 tokio = { version = "=1.53.3", features = ["full", "test-util"] }

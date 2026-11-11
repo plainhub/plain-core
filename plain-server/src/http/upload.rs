@@ -15,7 +15,7 @@
 //! shared writer cannot finish an unknown-length chunk.
 
 use crate::server::ServerState;
-use axum::{
+use plain_libs::axum::{
     extract::{Request, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
@@ -103,7 +103,7 @@ async fn read_info<T: for<'de> Deserialize<'de>>(
             plain_libs::chrono::Utc::now().timestamp_millis(),
         )
         .map_err(|_| plain_libs::anyhow::anyhow!("invalid or replayed upload metadata"))?;
-    Ok(serde_json::from_str(payload)?)
+    Ok(plain_libs::serde_json::from_str(payload)?)
 }
 
 /// Streams one multipart part into `destination`, returning the byte count.

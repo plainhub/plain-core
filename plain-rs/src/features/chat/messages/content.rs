@@ -1,9 +1,9 @@
 use crate::features::files::resource_link::{self, Resource, Scope};
 use crate::infrastructure::db::Db;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 pub fn peer_content(content: &str, client_id: &str, db: &Db) -> plain_libs::anyhow::Result<String> {
-    let mut value: Value = serde_json::from_str(content)?;
+    let mut value: Value = plain_libs::serde_json::from_str(content)?;
     if !matches!(
         value.get("type").and_then(Value::as_str),
         Some("FILES" | "IMAGES")

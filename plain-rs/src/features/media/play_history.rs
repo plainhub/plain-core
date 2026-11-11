@@ -5,7 +5,7 @@ use crate::infrastructure::db::media_play_history;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 use plain_libs::utils::search_dsl::FilterField;
-use rusqlite::{params_from_iter, types::Value};
+use plain_libs::rusqlite::{params_from_iter, types::Value};
 
 pub fn matching(db: &Db, fields: &[FilterField]) -> DomainResult<Vec<MediaPlayHistoryRow>> {
     let mut conditions = Vec::new();
@@ -30,13 +30,13 @@ pub fn matching(db: &Db, fields: &[FilterField]) -> DomainResult<Vec<MediaPlayHi
                         .collect::<DomainResult<Vec<_>>>()?;
                     (
                         "media_type",
-                        serde_json::to_string(&kinds)
+                        plain_libs::serde_json::to_string(&kinds)
                             .map_err(|error| invalid(&error.to_string()))?,
                     )
                 } else {
                     (
                         "file_id",
-                        serde_json::to_string(&entries)
+                        plain_libs::serde_json::to_string(&entries)
                             .map_err(|error| invalid(&error.to_string()))?,
                     )
                 };
@@ -84,7 +84,7 @@ pub fn matching(db: &Db, fields: &[FilterField]) -> DomainResult<Vec<MediaPlayHi
     }
     query.push_str(" ORDER BY played_at DESC,rowid DESC");
     Ok(
-        db.with_conn(|conn| -> rusqlite::Result<Vec<MediaPlayHistoryRow>> {
+        db.with_conn(|conn| -> plain_libs::rusqlite::Result<Vec<MediaPlayHistoryRow>> {
             conn.prepare(&query)?
                 .query_map(params_from_iter(values), media_play_history::from_row)?
                 .collect()

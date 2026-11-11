@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_runtime::Core as ContentServer;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]

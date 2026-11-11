@@ -81,7 +81,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
     replacement.files[0].sha256 = "0".repeat(64);
     std::fs::write(
         incoming.join("manifest.json"),
-        serde_json::to_vec(&replacement).unwrap(),
+        plain_libs::serde_json::to_vec(&replacement).unwrap(),
     )
     .unwrap();
     runtime.import().await.unwrap();
@@ -117,7 +117,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
     replacement.id = "different-space".into();
     std::fs::write(
         incoming.join("manifest.json"),
-        serde_json::to_vec(&replacement).unwrap(),
+        plain_libs::serde_json::to_vec(&replacement).unwrap(),
     )
     .unwrap();
     runtime.import().await.unwrap();
@@ -256,7 +256,7 @@ async fn core_start_restores_enabled_local_model_without_a_client_mutation_or_do
         loop {
             let event = updates.recv().await.unwrap();
             if event.event_type == "IMAGE_MODELS_UPDATED" {
-                let value: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+                let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
                 if value["status"] == "READY" {
                     break;
                 }
@@ -356,12 +356,12 @@ async fn repeated_model_projections_emit_once_per_changed_snapshot() {
     runtime.publish();
     let first = updates.try_recv().unwrap();
     assert_eq!(first.event_type, "IMAGE_MODELS_UPDATED");
-    let first: serde_json::Value = serde_json::from_str(&first.payload).unwrap();
+    let first: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&first.payload).unwrap();
     assert!(updates.try_recv().is_err());
     runtime.report_error("Index failed".into());
     runtime.report_error("Index failed".into());
     let changed = updates.try_recv().unwrap();
-    let changed: serde_json::Value = serde_json::from_str(&changed.payload).unwrap();
+    let changed: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&changed.payload).unwrap();
     assert!(changed["version"].as_u64().unwrap() > first["version"].as_u64().unwrap());
     assert_eq!(changed["errorMessage"], "Index failed");
     assert!(updates.try_recv().is_err());
@@ -391,7 +391,7 @@ async fn idle_model_runtime_does_not_poll_snapshots_and_index_events_project_wit
     loop {
         let event = updates.recv().await.unwrap();
         if event.event_type == "IMAGE_MODELS_UPDATED" {
-            let snapshot: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+            let snapshot: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
             if snapshot["isIndexing"] == true {
                 break;
             }
@@ -642,12 +642,12 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
             let params = &request["params"];
             let value = &params["plan"];
             let plan = crate::features::services::files::provider_query::Plan {
-                clauses: serde_json::from_value(value["clauses"].clone()).unwrap(),
-                args: serde_json::from_value(value["args"].clone()).unwrap(),
+                clauses: plain_libs::serde_json::from_value(value["clauses"].clone()).unwrap(),
+                args: plain_libs::serde_json::from_value(value["args"].clone()).unwrap(),
                 ids_column: value["idsColumn"].as_str().map(str::to_owned),
                 ids: value
                     .get("ids")
-                    .map(|ids| serde_json::from_value(ids.clone()).unwrap())
+                    .map(|ids| plain_libs::serde_json::from_value(ids.clone()).unwrap())
                     .unwrap_or_default(),
                 trash: value["trash"].as_bool(),
             };
@@ -659,7 +659,7 @@ async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
             let sort = if count {
                 crate::features::prefs::settings::FileSortBy::NameAsc
             } else {
-                serde_json::from_value(params["sortBy"].clone()).unwrap()
+                plain_libs::serde_json::from_value(params["sortBy"].clone()).unwrap()
             };
             let rows = crate::features::services::files::media_catalog::rows_with_plan(
                 &provider_db,

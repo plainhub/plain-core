@@ -1,7 +1,7 @@
 use crate::features::access::AccessFeature;
 use crate::features::prefs::{Prefs, pref_keys::API_PERMISSIONS};
 use crate::infrastructure::host::bridge::Host;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 pub fn is_enabled(prefs: &Prefs, features: &[AccessFeature]) -> bool {
     let configured: Vec<AccessFeature> = prefs.get_or(API_PERMISSIONS, Vec::new());
@@ -18,7 +18,7 @@ pub async fn sample(host: &Host, features: &[AccessFeature]) -> Result<Vec<Acces
     struct Facts {
         granted: std::collections::BTreeMap<AccessFeature, bool>,
     }
-    let facts: Facts = serde_json::from_value(sample).map_err(|error| error.to_string())?;
+    let facts: Facts = plain_libs::serde_json::from_value(sample).map_err(|error| error.to_string())?;
     let mut granted = Vec::new();
     for feature in features {
         match facts.granted.get(feature) {

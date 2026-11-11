@@ -1,7 +1,7 @@
 use super::*;
 use crate::features::chat::attachments::attachment_imports::Ticket;
 use crate::features::chat::attachments::download_queue::{Effect, Queue};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn fixture() -> (
@@ -106,7 +106,7 @@ async fn existing_ticket_is_truncated_and_exact_download_bytes_commit_normally()
     let chat = crate::infrastructure::db::chat_store::messages::get(&db, "message")
         .unwrap()
         .unwrap();
-    let content: Value = serde_json::from_str(&chat.content).unwrap();
+    let content: Value = plain_libs::serde_json::from_str(&chat.content).unwrap();
     let uri = content["value"]["items"][0]["uri"].as_str().unwrap();
     let hash = uri.strip_prefix("fid:").unwrap().split('.').next().unwrap();
     let stored = db.app_file_get(hash).unwrap().unwrap();
@@ -140,6 +140,6 @@ fn terminal_failure_aborts_its_ticket_but_an_active_import_legitimately_has_a_fi
     let chat = crate::infrastructure::db::chat_store::messages::get(&db, "message")
         .unwrap()
         .unwrap();
-    let content: Value = serde_json::from_str(&chat.content).unwrap();
+    let content: Value = plain_libs::serde_json::from_str(&chat.content).unwrap();
     assert_eq!(content["value"]["items"][0]["uri"], "fsid:remote-file");
 }

@@ -50,7 +50,7 @@ impl CommentParser {
 }
 #[inline]
 fn seen0(bytes: &[u8]) -> Option<usize> {
-    for i in memchr::memchr_iter(b'>', bytes) {
+    for i in crate::memchr::memchr_iter(b'>', bytes) {
         if bytes[..i].ends_with(b"--") {
             return Some(i + 1);
         }

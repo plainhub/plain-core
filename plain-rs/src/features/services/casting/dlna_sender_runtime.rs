@@ -2,7 +2,7 @@ use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::dlna::types::DiscoveredDevice;
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -83,8 +83,8 @@ impl Runtime {
     pub fn snapshot(&self) -> Snapshot {
         self.snapshot.lock().unwrap().clone()
     }
-    fn host_snapshot(&self) -> serde_json::Value {
-        let mut value = serde_json::to_value(self.snapshot()).unwrap();
+    fn host_snapshot(&self) -> plain_libs::serde_json::Value {
+        let mut value = plain_libs::serde_json::to_value(self.snapshot()).unwrap();
         let object = value.as_object_mut().unwrap();
         object.remove("sid");
         object.remove("active");

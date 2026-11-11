@@ -55,10 +55,10 @@ pub async fn accept(
     payload: &str,
 ) -> Result<bool, String> {
     let report = match kind {
-        "DLNA_POSITION_REPORTED" => serde_json::from_str(payload).map(Report::Position),
-        "DLNA_PLAYBACK_REPORTED" => serde_json::from_str(payload).map(Report::Playback),
-        "DLNA_SEEK_CONSUMED_REPORTED" => serde_json::from_str(payload).map(Report::Seek),
-        "DLNA_STOPPED_REPORTED" => serde_json::from_str(payload).map(Report::Stopped),
+        "DLNA_POSITION_REPORTED" => plain_libs::serde_json::from_str(payload).map(Report::Position),
+        "DLNA_PLAYBACK_REPORTED" => plain_libs::serde_json::from_str(payload).map(Report::Playback),
+        "DLNA_SEEK_CONSUMED_REPORTED" => plain_libs::serde_json::from_str(payload).map(Report::Seek),
+        "DLNA_STOPPED_REPORTED" => plain_libs::serde_json::from_str(payload).map(Report::Stopped),
         _ => return Ok(false),
     }
     .map_err(|error| error.to_string())?;

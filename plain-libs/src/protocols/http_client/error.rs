@@ -85,7 +85,7 @@ impl Error {
                 .downcast_ref::<Self>()
                 .is_some_and(|error| matches!(error.0.kind, Kind::Connect))
                 || error
-                    .downcast_ref::<hyper_util::client::legacy::Error>()
+                    .downcast_ref::<crate::hyper_util::client::legacy::Error>()
                     .is_some_and(|error| error.is_connect())
         })
     }

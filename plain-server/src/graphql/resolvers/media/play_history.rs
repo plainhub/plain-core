@@ -79,7 +79,7 @@ impl MediaPlayHistoryQuery {
                 if ids.is_empty() {
                     continue;
                 }
-                let query = format!("ids:{}", serde_json::to_string(&ids.join(","))?);
+                let query = format!("ids:{}", plain_libs::serde_json::to_string(&ids.join(","))?);
                 let rows = library_rows(
                     ctx,
                     kind.data_type(),

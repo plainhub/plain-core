@@ -2,7 +2,7 @@ use super::*;
 use crate::server::ContentServer;
 use plain_rs::features::files::shares::Service;
 use plain_rs::features::prefs::Prefs;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 #[tokio::test]
 async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
@@ -50,7 +50,7 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     );
     let (status, encrypted) = execute_guest(&state, &share.id, &body).await;
     assert_eq!(status, 200);
-    let result: Value = serde_json::from_slice(
+    let result: Value = plain_libs::serde_json::from_slice(
         &plain_rs::infrastructure::transport::http_response::Context::new(&body)
             .decrypt(&key, &encrypted)
             .unwrap(),
@@ -70,7 +70,7 @@ async fn guest_executes_encrypted_contract_and_rejects_replay_and_revocation() {
     let forbidden = wrap("c", r#"{"query":"{ shareRecords { id } }"}"#);
     let (status, encrypted) = execute_guest(&state, &share.id, &forbidden).await;
     assert_eq!(status, 200);
-    let result: Value = serde_json::from_slice(
+    let result: Value = plain_libs::serde_json::from_slice(
         &plain_rs::infrastructure::transport::http_response::Context::new(&forbidden)
             .decrypt(&key, &encrypted)
             .unwrap(),

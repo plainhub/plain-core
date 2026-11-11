@@ -12,8 +12,8 @@ pub struct AudioPlaybackFacts {
 
 impl Host {
     pub async fn audio_playback_facts(&self) -> Result<AudioPlaybackFacts, String> {
-        let value = self.call(PLAYBACK_STATE, serde_json::json!({})).await?;
-        serde_json::from_value(value)
+        let value = self.call(PLAYBACK_STATE, plain_libs::serde_json::json!({})).await?;
+        plain_libs::serde_json::from_value(value)
             .map_err(|error| format!("Invalid audio playback facts: {error}"))
     }
 }
@@ -42,9 +42,9 @@ pub enum AudioHostReport {
 impl AudioHostReport {
     pub fn decode(kind: &str, payload: &str) -> Result<Option<Self>, String> {
         let report = match kind {
-            "AUDIO_PROGRESS_REPORTED" => serde_json::from_str(payload).map(Self::Progress),
-            "AUDIO_STARTED_REPORTED" => serde_json::from_str(payload).map(Self::Started),
-            "AUDIO_COMPLETED_REPORTED" => serde_json::from_str(payload).map(Self::Completed),
+            "AUDIO_PROGRESS_REPORTED" => plain_libs::serde_json::from_str(payload).map(Self::Progress),
+            "AUDIO_STARTED_REPORTED" => plain_libs::serde_json::from_str(payload).map(Self::Started),
+            "AUDIO_COMPLETED_REPORTED" => plain_libs::serde_json::from_str(payload).map(Self::Completed),
             _ => return Ok(None),
         };
         report.map(Some).map_err(|error| error.to_string())

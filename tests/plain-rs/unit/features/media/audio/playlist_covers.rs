@@ -21,7 +21,7 @@ fn add(db: &Db, playlist: &str, id: &str, album: &str, order: i64) {
     .unwrap();
     db.with_conn(|conn| conn.execute(
         "INSERT INTO audio_playlist_items(id,playlist_id,file_id,sort_order,added_at) VALUES(?1,?2,?3,?4,'now')",
-        rusqlite::params![format!("{playlist}-{id}"),playlist,id,order],
+        plain_libs::rusqlite::params![format!("{playlist}-{id}"),playlist,id,order],
     )).unwrap();
 }
 

@@ -1,5 +1,5 @@
 use crate::anyhow::Result;
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use crate::rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -85,15 +85,15 @@ impl Db {
 
     pub fn get_json<T: serde::de::DeserializeOwned>(&self, key: &str) -> Result<Option<T>> {
         self.get(key)?
-            .map(|value| serde_json::from_str(&value).map_err(Into::into))
+            .map(|value| crate::serde_json::from_str(&value).map_err(Into::into))
             .transpose()
     }
 
     pub fn set_json<T: serde::Serialize>(&self, key: &str, value: T) -> Result<bool> {
-        let value = serde_json::to_string(&value)?;
+        let value = crate::serde_json::to_string(&value)?;
         let connection = self.0.connection.lock().unwrap();
         let transaction =
-            rusqlite::Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)?;
+            crate::rusqlite::Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)?;
         if get(&transaction, key)?.as_deref() == Some(&value) {
             return Ok(false);
         }
@@ -110,14 +110,14 @@ impl Db {
     ) -> Result<R> {
         let connection = self.0.connection.lock().unwrap();
         let transaction =
-            rusqlite::Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)?;
+            crate::rusqlite::Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)?;
         let mut value: T = get(&transaction, key)?
-            .map(|value| serde_json::from_str(&value))
+            .map(|value| crate::serde_json::from_str(&value))
             .transpose()?
             .unwrap_or_default();
         let result = change(&mut value)?;
         self.before_write()?;
-        set_in_connection(&transaction, key, Some(&serde_json::to_string(&value)?))?;
+        set_in_connection(&transaction, key, Some(&crate::serde_json::to_string(&value)?))?;
         transaction.commit()?;
         Ok(result)
     }
@@ -125,14 +125,14 @@ impl Db {
     pub fn update_json_prefix<R>(
         &self,
         prefix: &str,
-        change: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>) -> Result<R>,
+        change: impl FnOnce(&mut crate::serde_json::Map<String, crate::serde_json::Value>) -> Result<R>,
     ) -> Result<R> {
         let connection = self.0.connection.lock().unwrap();
         let transaction =
-            rusqlite::Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)?;
-        let mut values = serde_json::Map::new();
+            crate::rusqlite::Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)?;
+        let mut values = crate::serde_json::Map::new();
         for (key, value) in rows(&transaction, prefix)? {
-            values.insert(key, serde_json::from_str(&value)?);
+            values.insert(key, crate::serde_json::from_str(&value)?);
         }
         let previous = values.clone();
         let result = change(&mut values)?;
@@ -146,7 +146,7 @@ impl Db {
             }
             for (key, value) in &values {
                 if previous.get(key) != Some(value) {
-                    set_in_connection(&transaction, key, Some(&serde_json::to_string(value)?))?;
+                    set_in_connection(&transaction, key, Some(&crate::serde_json::to_string(value)?))?;
                 }
             }
         }
@@ -167,7 +167,7 @@ impl Db {
     pub fn apply_batch(&self, batch: Batch) -> Result<()> {
         let connection = self.0.connection.lock().unwrap();
         let transaction =
-            rusqlite::Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)?;
+            crate::rusqlite::Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)?;
         self.before_write()?;
         for (key, value) in batch.changes {
             set_in_connection(&transaction, &key, value.as_deref())?;
@@ -208,7 +208,7 @@ impl Db {
     }
 }
 
-fn get(connection: &Connection, key: &str) -> rusqlite::Result<Option<String>> {
+fn get(connection: &Connection, key: &str) -> crate::rusqlite::Result<Option<String>> {
     connection
         .query_row("SELECT value FROM key_values WHERE key=?1", [key], |row| {
             row.get(0)
@@ -220,7 +220,7 @@ pub fn set_in_connection(
     connection: &Connection,
     key: &str,
     value: Option<&str>,
-) -> rusqlite::Result<()> {
+) -> crate::rusqlite::Result<()> {
     if let Some(value) = value {
         connection.execute("INSERT INTO key_values(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value", params![key,value])?;
     } else {
@@ -229,7 +229,7 @@ pub fn set_in_connection(
     Ok(())
 }
 
-fn rows(connection: &Connection, prefix: &str) -> rusqlite::Result<Vec<(String, String)>> {
+fn rows(connection: &Connection, prefix: &str) -> crate::rusqlite::Result<Vec<(String, String)>> {
     let mut upper = prefix.to_owned();
     let end = loop {
         match upper.pop() {
@@ -254,7 +254,7 @@ fn rows(connection: &Connection, prefix: &str) -> rusqlite::Result<Vec<(String, 
         vec![prefix]
     };
     statement
-        .query_map(rusqlite::params_from_iter(params), |row| {
+        .query_map(crate::rusqlite::params_from_iter(params), |row| {
             Ok((row.get(0)?, row.get(1)?))
         })?
         .collect()

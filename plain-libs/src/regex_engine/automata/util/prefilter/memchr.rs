@@ -23,7 +23,7 @@ impl PrefilterI for Memchr {
     }
     fn find(&self, haystack: &[u8], span: Span) -> Option<Span> {
         {
-            memchr::memchr(self.0, &haystack[span]).map(|i| {
+            crate::memchr::memchr(self.0, &haystack[span]).map(|i| {
                 let start = span.start + i;
                 let end = start + 1;
                 Span { start, end }
@@ -71,7 +71,7 @@ impl PrefilterI for Memchr2 {
     }
     fn find(&self, haystack: &[u8], span: Span) -> Option<Span> {
         {
-            memchr::memchr2(self.0, self.1, &haystack[span]).map(|i| {
+            crate::memchr::memchr2(self.0, self.1, &haystack[span]).map(|i| {
                 let start = span.start + i;
                 let end = start + 1;
                 Span { start, end }
@@ -120,7 +120,7 @@ impl PrefilterI for Memchr3 {
     }
     fn find(&self, haystack: &[u8], span: Span) -> Option<Span> {
         {
-            memchr::memchr3(self.0, self.1, self.2, &haystack[span]).map(|i| {
+            crate::memchr::memchr3(self.0, self.1, self.2, &haystack[span]).map(|i| {
                 let start = span.start + i;
                 let end = start + 1;
                 Span { start, end }

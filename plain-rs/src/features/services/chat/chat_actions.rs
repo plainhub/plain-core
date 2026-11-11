@@ -5,7 +5,7 @@ use crate::infrastructure::db::DChat;
 use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
-use serde_json::json;
+use plain_libs::serde_json::json;
 pub fn committed(state: &CoreRuntime, chat: &DChat, event: &'static str) {
     state.previews.request(&chat.id);
     let _ = state.events.send(WsEvent::broadcast(
@@ -83,7 +83,7 @@ pub fn validate_targets(targets: &[String]) -> Result<Vec<(String, String)>> {
 }
 
 fn prepare_content(state: &CoreRuntime, content: &str) -> Result<(String, Option<Imported>)> {
-    let value: serde_json::Value = serde_json::from_str(content)?;
+    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(content)?;
     if value["type"] != "TEXT" {
         return Ok((content.to_owned(), None));
     }

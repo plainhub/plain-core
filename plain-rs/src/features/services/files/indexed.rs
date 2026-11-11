@@ -4,8 +4,8 @@ use crate::features::services::files::provider_query::Provider;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::host::bridge::Host;
 use plain_libs::anyhow::Result;
-use rusqlite::{params_from_iter, types::Value as SqlValue};
-use serde_json::{Value, json};
+use plain_libs::rusqlite::{params_from_iter, types::Value as SqlValue};
+use plain_libs::serde_json::{Value, json};
 
 pub async fn platform(
     db: &Db,
@@ -167,18 +167,18 @@ pub fn native(
             let created: String = row.get(4)?;
             let updated: String = row.get(5)?;
             Ok(json!({"mediaId":row.get::<_,String>(0)?,"name":row.get::<_,String>(1)?,"path":row.get::<_,String>(2)?,"size":row.get::<_,i64>(3)?,"createdAt":millis(&created,4)?,"updatedAt":millis(&updated,5)?,"isDir":row.get::<_,String>(6)?=="DIRECTORY","childCount":0,"permission":""}))
-        })?.collect::<rusqlite::Result<Vec<_>>>()?;
+        })?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
         Ok(Value::Array(rows))
     }).map_err(Into::into)
 }
 
-fn millis(value: &str, column: usize) -> rusqlite::Result<i64> {
+fn millis(value: &str, column: usize) -> plain_libs::rusqlite::Result<i64> {
     plain_libs::chrono::DateTime::parse_from_rfc3339(value)
         .map(|date| date.timestamp_millis())
         .map_err(|error| {
-            rusqlite::Error::FromSqlConversionFailure(
+            plain_libs::rusqlite::Error::FromSqlConversionFailure(
                 column,
-                rusqlite::types::Type::Text,
+                plain_libs::rusqlite::types::Type::Text,
                 Box::new(error),
             )
         })

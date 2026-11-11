@@ -67,9 +67,9 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::row_to_chat;
 use plain_libs::anyhow::{Result, bail};
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 use serde::Serialize;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::path::Path;
 #[derive(Serialize)]
 pub struct Edit {
@@ -89,7 +89,7 @@ pub fn edit(db: &Db, directory: &Path, id: &str, text: &str) -> Result<Edit> {
             )
             .optional()?
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Message unavailable"))?;
-        let old: Value = serde_json::from_str(&row.content)?;
+        let old: Value = plain_libs::serde_json::from_str(&row.content)?;
         if old["type"] != "TEXT" {
             bail!("Message is not text");
         }
@@ -155,7 +155,7 @@ pub fn append(db: &Db, id: &str, text: &str, preview: &Value) -> Result<Option<D
         else {
             return Ok(None);
         };
-        let mut content: Value = serde_json::from_str(&row.content)?;
+        let mut content: Value = plain_libs::serde_json::from_str(&row.content)?;
         if content["type"] != "TEXT" || content["value"]["text"].as_str() != Some(text) {
             return Ok(None);
         }

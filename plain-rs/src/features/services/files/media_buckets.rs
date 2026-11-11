@@ -14,7 +14,7 @@ pub fn platform_plan(
     let mut plan = crate::features::services::files::provider_query::plan(
         crate::features::services::files::provider_query::media_provider(kind)?,
         &[],
-        &serde_json::Value::Null,
+        &plain_libs::serde_json::Value::Null,
         None,
         true,
     )?;

@@ -6,7 +6,7 @@ use futures_util::{SinkExt, StreamExt};
 use plain_libs::protocols::http_client;
 use plain_libs::utils::base64::base64_decode;
 use plain_libs::utils::base64::base64_encode;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -38,7 +38,7 @@ pub(super) async fn run(
         .await
         .map_err(|_| plain_libs::anyhow::anyhow!("failed_connect"))?;
     ensure!(response.status().is_success(), "remote_access_disabled");
-    let init: Value = serde_json::from_slice(
+    let init: Value = plain_libs::serde_json::from_slice(
         &crate::features::services::peers::peer_lan::limited(response, 8192).await?,
     )?;
     let public_key = init["signaturePublicKey"]
@@ -179,7 +179,7 @@ pub(super) async fn run(
         let client = plain_libs::auth::client::OpaqueLogin::start(password.into_bytes())
             .map_err(plain_libs::anyhow::Error::msg)?;
         socket
-            .send(tokio_tungstenite::tungstenite::Message::Binary(
+            .send(plain_libs::tokio_tungstenite::tungstenite::Message::Binary(
                 client.request().into(),
             ))
             .await?;
@@ -199,14 +199,14 @@ pub(super) async fn run(
             .map_err(|_| plain_libs::anyhow::anyhow!("Invalid session key"))?;
         let encrypted = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
             &key,
-            &serde_json::to_vec(&request)?,
+            &plain_libs::serde_json::to_vec(&request)?,
             &result.request_aad,
         )
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Encryption failed"))?;
         let mut finish = result.ke3;
         finish.extend(encrypted);
         socket
-            .send(tokio_tungstenite::tungstenite::Message::Binary(
+            .send(plain_libs::tokio_tungstenite::tungstenite::Message::Binary(
                 finish.into(),
             ))
             .await?;
@@ -218,19 +218,19 @@ pub(super) async fn run(
         let (client, hello) =
             crate::features::services::confirmation_channel::Client::start(&client_id)?;
         socket
-            .send(tokio_tungstenite::tungstenite::Message::Text(
-                serde_json::to_string(&hello)?.into(),
+            .send(plain_libs::tokio_tungstenite::tungstenite::Message::Text(
+                plain_libs::serde_json::to_string(&hello)?.into(),
             ))
             .await?;
         let response = loop {
-            use tokio_tungstenite::tungstenite::Message;
+            use plain_libs::tokio_tungstenite::tungstenite::Message;
             match socket
                 .next()
                 .await
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("failed_connect_ws"))??
             {
                 Message::Text(text) => {
-                    break serde_json::from_str::<
+                    break plain_libs::serde_json::from_str::<
                         crate::features::services::confirmation_channel::ServerHello,
                     >(&text)?;
                 }
@@ -250,11 +250,11 @@ pub(super) async fn run(
             &channel.verification_code,
         );
         let encrypted = channel.encrypt_request(
-            &serde_json::to_vec(&request)?,
+            &plain_libs::serde_json::to_vec(&request)?,
             plain_libs::chrono::Utc::now().timestamp_millis() as u64,
         )?;
         socket
-            .send(tokio_tungstenite::tungstenite::Message::Binary(
+            .send(plain_libs::tokio_tungstenite::tungstenite::Message::Binary(
                 encrypted.into(),
             ))
             .await?;
@@ -266,11 +266,11 @@ pub(super) async fn run(
             .await
             .ok_or_else(|| plain_libs::anyhow::anyhow!("failed_connect_ws"))?
             .map_err(|_| plain_libs::anyhow::anyhow!("failed_connect_ws"))?;
-        use tokio_tungstenite::tungstenite::Message;
+        use plain_libs::tokio_tungstenite::tungstenite::Message;
         match frame {
             Message::Binary(data) => {
                 let plain = protection.decrypt(&data)?;
-                let response: Value = serde_json::from_slice(&plain)
+                let response: Value = plain_libs::serde_json::from_slice(&plain)
                     .map_err(|_| plain_libs::anyhow::anyhow!("invalid_auth_response"))?;
                 if response["status"] == "PENDING" {
                     state.pairing_runtime.attempts.transition(
@@ -378,7 +378,7 @@ pub(super) async fn run(
     if let Some(peer) = crate::infrastructure::db::chat_store::peers::get(&state.db, &remote_id)? {
         crate::features::services::discovery::pairing_runtime::success(
             state,
-            &serde_json::to_value(crate::features::services::peers::peer_address::view(&peer))?,
+            &plain_libs::serde_json::to_value(crate::features::services::peers::peer_address::view(&peer))?,
             &peer.ip,
             None,
         );
@@ -433,11 +433,11 @@ impl Protection {
         }
     }
 }
-async fn next_binary<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<Vec<u8>>
+async fn next_binary<S>(socket: &mut plain_libs::tokio_tungstenite::WebSocketStream<S>) -> Result<Vec<u8>>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
-    use tokio_tungstenite::tungstenite::Message;
+    use plain_libs::tokio_tungstenite::tungstenite::Message;
     loop {
         match socket
             .next()

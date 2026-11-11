@@ -24,8 +24,8 @@ pub fn require_url(url: &str) -> DomainResult<()> {
     Ok(())
 }
 
-pub fn save_error(error_value: rusqlite::Error) -> DomainError {
-    if matches!(&error_value, rusqlite::Error::SqliteFailure(code, _) if code.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE)
+pub fn save_error(error_value: plain_libs::rusqlite::Error) -> DomainError {
+    if matches!(&error_value, plain_libs::rusqlite::Error::SqliteFailure(code, _) if code.extended_code == plain_libs::rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE)
     {
         return error("feed_already_exists");
     }

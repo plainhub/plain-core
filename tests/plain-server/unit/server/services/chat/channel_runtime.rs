@@ -5,8 +5,8 @@ use plain_rs::features::services::chat::channel_runtime::*;
 use plain_rs::infrastructure::db::chat_store::channels;
 use plain_rs::infrastructure::db::chat_store::peers;
 use plain_rs::runtime::Runtime as ServerState;
-use serde_json::Value;
-use serde_json::json;
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 
 #[cfg(feature = "http_transport")]
 fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
@@ -100,9 +100,9 @@ async fn signed_invites_ack_keys_and_deleted_broadcast_use_rust_snapshot() {
                         .as_bytes(),
                         pieces[0]
                     ));
-                    let wire: Value = serde_json::from_str(pieces[3]).unwrap();
+                    let wire: Value = plain_libs::serde_json::from_str(pieces[3]).unwrap();
                     let payload: Value =
-                        serde_json::from_str(wire["variables"]["payload"].as_str().unwrap())
+                        plain_libs::serde_json::from_str(wire["variables"]["payload"].as_str().unwrap())
                             .unwrap();
                     if wire["variables"]["type"] == "INVITE" {
                         assert_eq!(payload["memberPeers"][0]["deviceType"], "COMPUTER");
@@ -184,7 +184,7 @@ async fn queued_send_and_decline_ack_cannot_act_on_replacement() {
     let state = server.runtime_state();
     add_peer(&state, "owner", true);
     let mut channel = state::create(&state.db, "owner", "invitation").unwrap();
-    channel.members = serde_json::to_string(&[
+    channel.members = plain_libs::serde_json::to_string(&[
         plain_rs::features::chat::channels::messages::ChannelMember::new("owner"),
         plain_rs::features::chat::channels::messages::ChannelMember::pending("actor"),
     ])
@@ -266,7 +266,7 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
     let state = server.runtime_state();
     add_peer(&state, "owner", true);
     let mut channel = state::create(&state.db, "owner", "fixture").unwrap();
-    channel.members = serde_json::to_string(&[
+    channel.members = plain_libs::serde_json::to_string(&[
         plain_rs::features::chat::channels::messages::ChannelMember::new("owner"),
         plain_rs::features::chat::channels::messages::ChannelMember::pending("actor"),
     ])
@@ -315,11 +315,11 @@ async fn peer_key_changes_before_physical_send_are_rejected_and_accept_leave_dec
                         &[9; 32],
                     );
                     let wire: Value =
-                        serde_json::from_str(body.splitn(4, '|').nth(3).unwrap()).unwrap();
+                        plain_libs::serde_json::from_str(body.splitn(4, '|').nth(3).unwrap()).unwrap();
                     let kind = wire["variables"]["type"].as_str().unwrap().to_string();
                     if kind == "INVITE_ACCEPT" {
                         let payload: Value =
-                            serde_json::from_str(wire["variables"]["payload"].as_str().unwrap())
+                            plain_libs::serde_json::from_str(wire["variables"]["payload"].as_str().unwrap())
                                 .unwrap();
                         assert_eq!(payload["deviceType"], "COMPUTER");
                         assert_eq!(payload["name"], "Actual tablet");

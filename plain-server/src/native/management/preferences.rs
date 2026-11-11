@@ -3,7 +3,7 @@ use plain_rs::features::services::settings::preferences::Preferences;
 use plain_rs::features::services::settings::security_preferences::SecurityPreferences;
 
 use plain_rs::features::prefs::pref_keys as keys;
-use serde_json::{Map, Value, json};
+use plain_libs::serde_json::{Map, Value, json};
 
 impl NativeManagement {
     pub fn get_prefs(&self, keys: &[String]) -> Result<Map<String, Value>, String> {
@@ -90,7 +90,7 @@ impl NativeManagement {
         Ok(values)
     }
 
-    pub async fn set_pref(&self, key: &str, value: serde_json::Value) -> Result<bool, String> {
+    pub async fn set_pref(&self, key: &str, value: plain_libs::serde_json::Value) -> Result<bool, String> {
         self.state.native_client_id()?;
         plain_rs::features::services::settings::preferences::Preferences::from_server(&self.state)
             .set(key, value)
@@ -140,7 +140,7 @@ impl NativeManagement {
         self.state.native_client_id()?;
         self.state
             .db
-            .with_conn(|conn| -> rusqlite::Result<Vec<String>> {
+            .with_conn(|conn| -> plain_libs::rusqlite::Result<Vec<String>> {
                 let mut query =
                     conn.prepare("SELECT text FROM scan_history ORDER BY rowid DESC")?;
                 query.query_map([], |row| row.get(0))?.collect()

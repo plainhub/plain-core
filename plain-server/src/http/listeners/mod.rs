@@ -7,7 +7,7 @@ pub(crate) mod lifecycle;
 mod public_server;
 
 use plain_libs::protocols::http_client;
-use axum::{Extension, Router};
+use plain_libs::axum::{Extension, Router};
 
 use crate::http::ConnectionScheme;
 use plain_libs::protocols::https::{self, ServerConfig};
@@ -60,7 +60,7 @@ impl HttpListeners {
         let http_failure = failure_sender.clone();
         let http_task = tokio::spawn(async move {
             let mut task_guard = ListenerTaskGuard::new("HTTP", http_failure.clone());
-            if let Err(error) = axum::serve(http, app)
+            if let Err(error) = plain_libs::axum::serve(http, app)
                 .with_graceful_shutdown(async move {
                     let _ = receiver.changed().await;
                 })

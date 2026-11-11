@@ -2,7 +2,7 @@ use crate::server::ContentServer;
 use plain_rs::features::services::casting::receiver::types::DlnaMediaType;
 use plain_rs::features::services::casting::receiver::types::DlnaPlaybackState;
 use plain_rs::features::services::casting::receiver::types::PendingCastRequest;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {

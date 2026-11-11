@@ -1,6 +1,6 @@
 use super::*;
 use crate::infrastructure::db::chat_store::peers;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -159,7 +159,7 @@ async fn rust_falls_back_from_unavailable_socket_and_authenticates_raw_ble_busin
                     assert!(
                         params
                             .get("peerId")
-                            .and_then(serde_json::Value::as_str)
+                            .and_then(plain_libs::serde_json::Value::as_str)
                             .is_some()
                     );
                     assert!(params.contains_key("token"));

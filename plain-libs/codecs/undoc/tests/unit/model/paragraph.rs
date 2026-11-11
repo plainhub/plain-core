@@ -73,7 +73,7 @@ fn test_paragraph_plain_text_preserves_run_breaks() {
 #[test]
 fn test_paragraph_serialization() {
     let para = Paragraph::with_text("Test");
-    let json = serde_json::to_string(&para).unwrap();
+    let json = plain_libs::serde_json::to_string(&para).unwrap();
     // Default values should not be serialized
     assert!(!json.contains("heading"));
     assert!(!json.contains("alignment"));

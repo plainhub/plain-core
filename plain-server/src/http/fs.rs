@@ -1,6 +1,6 @@
 use crate::http::file_response::{self, secure};
 use crate::server::ServerState;
-use axum::{
+use plain_libs::axum::{
     extract::{Request, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
@@ -28,7 +28,7 @@ impl Parameters {
 
 pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
     let request = request.into_parts().0;
-    let parameters = match axum::extract::Query::<Parameters>::try_from_uri(&request.uri) {
+    let parameters = match plain_libs::axum::extract::Query::<Parameters>::try_from_uri(&request.uri) {
         Ok(parameters) if parameters.is_valid() => parameters.0,
         _ => return StatusCode::BAD_REQUEST.into_response(),
     };
@@ -73,7 +73,7 @@ pub(crate) async fn native_preview(
                 preview.headers.insert(name.to_string(), value.to_owned());
             }
         }
-        let bytes = axum::body::to_bytes(body, MAX_RESOURCE_RESPONSE_BYTES as usize)
+        let bytes = plain_libs::axum::body::to_bytes(body, MAX_RESOURCE_RESPONSE_BYTES as usize)
             .await
             .map_err(|error| error.to_string())?;
         preview.content = String::from_utf8_lossy(&bytes).into_owned();
@@ -157,7 +157,7 @@ async fn serve(state: ServerState, parameters: Parameters, mut headers: HeaderMa
                 }
             }
             Content::Codec(codec) => secure(
-                axum::Json(serde_json::json!({"codec":codec})).into_response(),
+                plain_libs::axum::Json(plain_libs::serde_json::json!({"codec":codec})).into_response(),
                 None,
                 false,
             ),

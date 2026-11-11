@@ -4,7 +4,7 @@ use plain_rs::features::enums::DataType;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -50,7 +50,7 @@ fn database(schema: &PublicSchema) -> &Arc<Db> {
 }
 
 async fn query(schema: &PublicSchema, document: &str) -> Value {
-    serde_json::to_value(schema.execute(document).await).unwrap()
+    plain_libs::serde_json::to_value(schema.execute(document).await).unwrap()
 }
 
 async fn rows(schema: &PublicSchema, selection: &str) -> Vec<Value> {

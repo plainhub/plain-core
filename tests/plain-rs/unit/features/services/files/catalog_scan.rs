@@ -58,8 +58,8 @@ async fn watcher_recovery_and_paired_directory_rename_preserve_rebuild_progress(
     );
     assert!(catalog.path_identities(&old).unwrap().is_empty());
     assert_eq!(
-        serde_json::to_value(state.media_scans.snapshot().unwrap()).unwrap(),
-        serde_json::to_value(Some(before)).unwrap()
+        plain_libs::serde_json::to_value(state.media_scans.snapshot().unwrap()).unwrap(),
+        plain_libs::serde_json::to_value(Some(before)).unwrap()
     );
     while let Ok(event) = progress.try_recv() {
         assert_ne!(
@@ -98,8 +98,8 @@ async fn failed_reconciliation_returns_its_error_without_replacing_rebuild_progr
         .unwrap_err();
     assert!(!error.is_empty());
     assert_eq!(
-        serde_json::to_value(state.media_scans.snapshot().unwrap()).unwrap(),
-        serde_json::to_value(Some(before)).unwrap()
+        plain_libs::serde_json::to_value(state.media_scans.snapshot().unwrap()).unwrap(),
+        plain_libs::serde_json::to_value(Some(before)).unwrap()
     );
     assert!(events.try_recv().is_err());
     core.stop_core().await;
@@ -165,7 +165,7 @@ async fn native_directory_arrival_preserves_foreground_scan_progress() {
         let mut events = Vec::new();
         while let Ok(event) = progress.try_recv() {
             if event.event_type == crate::infrastructure::events::MEDIA_SCAN_PROGRESS {
-                events.push(serde_json::from_str::<serde_json::Value>(&event.payload).unwrap());
+                events.push(plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&event.payload).unwrap());
             }
         }
         assert!(
@@ -173,8 +173,8 @@ async fn native_directory_arrival_preserves_foreground_scan_progress() {
             "background scans must not publish rebuild progress"
         );
         assert_eq!(
-            serde_json::to_value(after).unwrap(),
-            serde_json::to_value(&before).unwrap()
+            plain_libs::serde_json::to_value(after).unwrap(),
+            plain_libs::serde_json::to_value(&before).unwrap()
         );
     }
     drop(watcher);
@@ -817,7 +817,7 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
             true
         )
         .unwrap(),
-        serde_json::json!(0)
+        plain_libs::serde_json::json!(0)
     );
     catalog
         .scan_file(
@@ -827,7 +827,7 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
         .await
         .unwrap();
     catalog
-        .scan_completed_files(serde_json::json!({"paths":[original.to_str().unwrap()]}))
+        .scan_completed_files(plain_libs::serde_json::json!({"paths":[original.to_str().unwrap()]}))
         .await
         .unwrap();
     assert_eq!(
@@ -840,7 +840,7 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
             true
         )
         .unwrap(),
-        serde_json::json!(0)
+        plain_libs::serde_json::json!(0)
     );
     assert_eq!(std::fs::read(&original).unwrap(), b"original contents");
     crate::features::services::files::indexing::set(
@@ -863,7 +863,7 @@ async fn exclusion_changes_remove_results_and_reinclude_without_touching_origina
             true
         )
         .unwrap(),
-        serde_json::json!(1)
+        plain_libs::serde_json::json!(1)
     );
     assert_eq!(
         state
@@ -893,7 +893,7 @@ async fn an_unmounted_source_is_a_coverage_gap_and_does_not_retire_catalog_rows(
     let source = source.canonicalize().unwrap();
     let core = crate::test_runtime::Core::open(&directory.path().join("core")).unwrap();
     let state = core.runtime_state();
-    let id = state.db.with_conn(|connection| -> rusqlite::Result<String> {
+    let id = state.db.with_conn(|connection| -> plain_libs::rusqlite::Result<String> {
         connection.execute("INSERT INTO volumes(id,identity,path,is_available,index_mode) VALUES('offline-fixture','offline-fixture',?1,1,'BLOCKLIST')", [source.to_str().unwrap()])?;
         let volume_id: String = connection.query_row("SELECT id FROM volumes ORDER BY rowid DESC LIMIT 1", [], |row| row.get(0)).unwrap();
         connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,updated_at,favorited) VALUES('file-'||'missing.rs',?1,'missing.rs','missing.rs','FILE','2026-01-01T00:00:00.000Z',1)", [volume_id])?;
@@ -1096,7 +1096,7 @@ async fn indexing_does_not_generate_thumbnails_or_delete_disk_cache() {
 #[cfg(feature = "runtime-media")]
 #[tokio::test]
 async fn sdk_host_restores_the_configured_index_without_scanning_on_startup() {
-    use serde_json::json;
+    use plain_libs::serde_json::json;
     let directory = directory_scan_fixture();
     let documents = directory.path().join("Documents");
     std::fs::create_dir(&documents).unwrap();
@@ -1314,7 +1314,7 @@ async fn directory_scan_counts_filtered_files_before_the_first_index_write() {
         if event.event_type != crate::infrastructure::events::MEDIA_SCAN_PROGRESS {
             continue;
         }
-        let progress: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+        let progress: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
         if progress["total"] == 4 && progress["indexed"] == 0 {
             counted = true;
         }
@@ -1387,8 +1387,8 @@ async fn watcher_reconciliation_does_not_restart_a_cancelled_scan() {
         .await
         .unwrap();
     assert_eq!(
-        serde_json::to_value(state.media_scans.snapshot().unwrap()).unwrap(),
-        serde_json::to_value(Some(stopped)).unwrap()
+        plain_libs::serde_json::to_value(state.media_scans.snapshot().unwrap()).unwrap(),
+        plain_libs::serde_json::to_value(Some(stopped)).unwrap()
     );
     assert!(state.media_scans.wait_idle().await.unwrap());
     while let Ok(event) = progress.try_recv() {
@@ -1467,7 +1467,7 @@ async fn directory_scan_batches_records_and_reconciles_unseen_rows() {
         let (records, generations): (i64, i64) = conn.query_row("SELECT COUNT(*),COUNT(DISTINCT last_seen_scan_id) FROM files WHERE last_seen_scan_id IS NOT NULL", [], |row| Ok((row.get(0)?, row.get(1)?)))?;
         assert_eq!(records, (SCAN_BATCH_SIZE * 2 + 2) as i64);
         assert_eq!(generations, 1);
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     }).unwrap();
     core.stop_core().await;
 }

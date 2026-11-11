@@ -9,7 +9,7 @@ fn fixture() -> (PathBuf, Db, Imports) {
         "me",
         "peer",
         "",
-        &serde_json::json!({"type":"FILES","extra":"preserved","value":{"items":[
+        &plain_libs::serde_json::json!({"type":"FILES","extra":"preserved","value":{"items":[
             {"id":"a","uri":"fsid:remote-a","fileName":"../../a.txt","size":3},
             {"id":"b","uri":"fsid:remote-b","fileName":"b.txt","size":3}
         ]}})
@@ -46,7 +46,7 @@ fn concurrent_attachments_preserve_current_content_and_count_references() {
     let second = imports.finish(&db, &dir, &b.token).unwrap();
     assert_eq!(first.id, second.id);
     assert_eq!(db.app_file_get(&first.id).unwrap().unwrap().ref_count, 2);
-    let current: Value = serde_json::from_str(&second.chat.unwrap().content).unwrap();
+    let current: Value = plain_libs::serde_json::from_str(&second.chat.unwrap().content).unwrap();
     assert_eq!(current["extra"], "changed");
     assert!(
         current["value"]["items"]

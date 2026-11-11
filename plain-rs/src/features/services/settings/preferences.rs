@@ -1,7 +1,7 @@
 use crate::features::prefs::Prefs;
 use crate::features::prefs::pref_keys::AI_IMAGE_SEARCH_MODEL;
 use crate::infrastructure::events::WsEvent;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use tokio::sync::broadcast;
 
 pub struct Preferences<'a> {
@@ -115,7 +115,7 @@ impl<'a> Preferences<'a> {
             if before.device_name != after.device_name {
                 let _ = events.send(WsEvent::broadcast(
                     "DEVICE_NAME_UPDATED",
-                    serde_json::to_string(&after.device_name)?,
+                    plain_libs::serde_json::to_string(&after.device_name)?,
                 ));
             }
             if before.notification_filter != after.notification_filter {

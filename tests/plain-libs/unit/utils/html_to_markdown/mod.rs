@@ -9,7 +9,7 @@ struct Case {
 
 #[test]
 fn kotlin_markdown_behavior_contract() {
-    let cases: Vec<Case> = serde_json::from_str(include_str!(
+    let cases: Vec<Case> = crate::serde_json::from_str(include_str!(
         "../../../../../plain-rs/testdata/html_to_markdown.json"
     ))
     .unwrap();

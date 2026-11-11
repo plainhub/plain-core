@@ -296,10 +296,10 @@ fn counts_and_bucket_facts_use_a_covering_index_without_sorting_all_media() {
         let details = db
             .with_conn(|c| {
                 c.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?
-                    .query_map(rusqlite::params_from_iter(args.iter()), |r| {
+                    .query_map(plain_libs::rusqlite::params_from_iter(args.iter()), |r| {
                         r.get::<_, String>(3)
                     })?
-                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
             })
             .unwrap();
         assert!(

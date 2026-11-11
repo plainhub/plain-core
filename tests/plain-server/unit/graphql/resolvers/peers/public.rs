@@ -6,7 +6,7 @@ struct PublicSchema {
     _server: crate::server::ContentServer,
 }
 use plain_rs::features::prefs::Prefs;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -77,7 +77,7 @@ async fn query(schema: &PublicSchema, document: &str) -> Value {
     )
     .await
     .unwrap();
-    serde_json::from_slice(&bytes).unwrap()
+    plain_libs::serde_json::from_slice(&bytes).unwrap()
 }
 
 fn fixture() -> (plain_libs::temporary::TempDir, PublicSchema) {
@@ -223,7 +223,7 @@ async fn unsupported_transport_does_not_call_native_pairing() {
         loop {
             let event = events.recv().await.unwrap();
             if event.event_type == "PAIRING_STATE_CHANGED" {
-                let value: Value = serde_json::from_str(&event.payload).unwrap();
+                let value: Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
                 if value["phase"] == "FAILED" {
                     break;
                 }

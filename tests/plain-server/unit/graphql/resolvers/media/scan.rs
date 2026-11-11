@@ -18,15 +18,15 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
     let provider = tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
             let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => serde_json::json!(["MEDIA_SCAN"]),
+                "systemCapabilities" => plain_libs::serde_json::json!(["MEDIA_SCAN"]),
                 "systemAccessFacts" => {
-                    serde_json::json!({"granted":{"FILES":true}})
+                    plain_libs::serde_json::json!({"granted":{"FILES":true}})
                 }
                 method => panic!("unexpected {method}"),
             };
             host.reply(
                 generation,
-                serde_json::json!({"id":request["id"],"result":result}),
+                plain_libs::serde_json::json!({"id":request["id"],"result":result}),
             )
             .unwrap();
         }
@@ -42,7 +42,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         data["fileIndexDefaults"]["excludedDirs"]
             .as_array()
             .unwrap()
-            .contains(&serde_json::json!(
+            .contains(&plain_libs::serde_json::json!(
                 plain_rs::features::files::index_scope::normalized(&state.directory)
             ))
     );
@@ -50,7 +50,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         data["fileIndexDefaults"]["excludedNames"]
             .as_array()
             .unwrap()
-            .contains(&serde_json::json!("node_modules"))
+            .contains(&plain_libs::serde_json::json!("node_modules"))
     );
     let volume = data["fileIndexVolumes"]
         .as_array()
@@ -65,7 +65,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         .unwrap();
     let set = native.execute(Request::new(
         "mutation($id:ID!,$dirs:[String!]!){setFileIndexVolume(id:$id,indexMode:DISABLED,includedDirs:$dirs,excludedDirs:[])}"
-    ).variables(plain_graphql::Variables::from_json(serde_json::json!({"id":id,"dirs":[source_path.to_str().unwrap()]})))).await;
+    ).variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"id":id,"dirs":[source_path.to_str().unwrap()]})))).await;
     assert!(set.errors.is_empty(), "{:?}", set.errors);
     state.media_scans.wait_background().await.unwrap();
     let saved = state
@@ -93,7 +93,7 @@ async fn native_media_controls_share_the_main_contract_and_remote_permissions() 
         .unwrap();
     assert_eq!(
         volume["includedDirs"],
-        serde_json::json!([plain_rs::features::files::index_scope::normalized(
+        plain_libs::serde_json::json!([plain_rs::features::files::index_scope::normalized(
             &source_path
         )])
     );
@@ -158,16 +158,16 @@ async fn public_scans_require_opt_in_and_grants_then_read_the_same_core() {
             if request["method"] == "systemCapabilities" {
                 host.reply(
                     generation,
-                    serde_json::json!({"id":request["id"],"result":["MEDIA_SCAN"]}),
+                    plain_libs::serde_json::json!({"id":request["id"],"result":["MEDIA_SCAN"]}),
                 )
                 .unwrap();
                 continue;
             }
             assert_eq!(request["method"], "systemAccessFacts");
-            assert_eq!(request["params"]["features"], serde_json::json!(["FILES"]));
+            assert_eq!(request["params"]["features"], plain_libs::serde_json::json!(["FILES"]));
             host.reply(
                 generation,
-                serde_json::json!({"id":request["id"], "result":{"granted":{"FILES":granted}}}),
+                plain_libs::serde_json::json!({"id":request["id"], "result":{"granted":{"FILES":granted}}}),
             )
             .unwrap();
         }

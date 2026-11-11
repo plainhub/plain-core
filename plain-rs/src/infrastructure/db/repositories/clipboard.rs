@@ -1,11 +1,11 @@
 use crate::infrastructure::db::ClipboardRow;
 use crate::infrastructure::db::Db;
-use rusqlite::{OptionalExtension, params, params_from_iter, types::Value};
+use plain_libs::rusqlite::{OptionalExtension, params, params_from_iter, types::Value};
 
 const CLIPBOARD_COLUMNS: &str = "id, text, hash, source, label, sensitive, created_at";
 const CLIPBOARD_ORDER: &str = "created_at DESC, rowid DESC";
 
-fn clipboard_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClipboardRow> {
+fn clipboard_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<ClipboardRow> {
     Ok(ClipboardRow {
         id: row.get(0)?,
         text: row.get(1)?,
@@ -18,7 +18,7 @@ fn clipboard_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClipboardRow>
 }
 
 impl Db {
-    pub fn clipboard_record(&self, row: &ClipboardRow) -> rusqlite::Result<(ClipboardRow, bool)> {
+    pub fn clipboard_record(&self, row: &ClipboardRow) -> plain_libs::rusqlite::Result<(ClipboardRow, bool)> {
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
             let inserted = tx.execute(
@@ -42,7 +42,7 @@ impl Db {
         query: &str,
         limit: i64,
         offset: i64,
-    ) -> rusqlite::Result<Vec<ClipboardRow>> {
+    ) -> plain_libs::rusqlite::Result<Vec<ClipboardRow>> {
         let (clause, mut values) = search_filter(query);
         values.extend([
             Value::Integer(limit.clamp(1, 200)),
@@ -54,7 +54,7 @@ impl Db {
         })
     }
 
-    pub fn clipboard_count(&self, query: &str) -> rusqlite::Result<i64> {
+    pub fn clipboard_count(&self, query: &str) -> plain_libs::rusqlite::Result<i64> {
         let (clause, values) = search_filter(query);
         self.with_conn(|c| {
             c.query_row(
@@ -75,7 +75,7 @@ impl Db {
         })
         .map_err(|error| error.to_string())
     }
-    pub fn clipboard_save(&self, row: &ClipboardRow) -> rusqlite::Result<()> {
+    pub fn clipboard_save(&self, row: &ClipboardRow) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|c| {
             c.execute(
                 "INSERT OR REPLACE INTO clipboards (id, text, hash, source, label, sensitive, created_at)
@@ -94,7 +94,7 @@ impl Db {
         })
     }
 
-    pub fn clipboard_get(&self, id: &str) -> rusqlite::Result<Option<ClipboardRow>> {
+    pub fn clipboard_get(&self, id: &str) -> plain_libs::rusqlite::Result<Option<ClipboardRow>> {
         self.with_conn(|c| {
             c.query_row(
                 &format!("SELECT {CLIPBOARD_COLUMNS} FROM clipboards WHERE id=?1"),
@@ -105,7 +105,7 @@ impl Db {
         })
     }
 
-    pub fn clipboard_latest(&self) -> rusqlite::Result<Option<ClipboardRow>> {
+    pub fn clipboard_latest(&self) -> plain_libs::rusqlite::Result<Option<ClipboardRow>> {
         self.with_conn(|c| {
             c.query_row(
                 &format!(
@@ -118,7 +118,7 @@ impl Db {
         })
     }
 
-    pub fn clipboard_latest_by_hash(&self, hash: &str) -> rusqlite::Result<Option<ClipboardRow>> {
+    pub fn clipboard_latest_by_hash(&self, hash: &str) -> plain_libs::rusqlite::Result<Option<ClipboardRow>> {
         self.with_conn(|c| {
             c.query_row(
                 &format!(
@@ -131,7 +131,7 @@ impl Db {
         })
     }
 
-    pub fn clipboard_delete_by_ids(&self, ids: &[String]) -> rusqlite::Result<usize> {
+    pub fn clipboard_delete_by_ids(&self, ids: &[String]) -> plain_libs::rusqlite::Result<usize> {
         let (clause, values) = in_clause("id", ids);
         self.with_conn(|c| {
             c.execute(
@@ -141,11 +141,11 @@ impl Db {
         })
     }
 
-    pub fn clipboard_clear(&self) -> rusqlite::Result<usize> {
+    pub fn clipboard_clear(&self) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|c| c.execute("DELETE FROM clipboards", []))
     }
 
-    pub fn clipboard_count_rows(&self) -> rusqlite::Result<i64> {
+    pub fn clipboard_count_rows(&self) -> plain_libs::rusqlite::Result<i64> {
         self.with_conn(|c| c.query_row("SELECT COUNT(*) FROM clipboards", [], |r| r.get(0)))
     }
 }

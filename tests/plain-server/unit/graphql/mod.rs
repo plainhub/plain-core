@@ -179,7 +179,7 @@ struct CachePolicyCase {
 
 #[tokio::test]
 async fn local_cache_policy_matches_frozen_reference_cases() {
-    let cases: Vec<CachePolicyCase> = serde_json::from_str(include_str!(
+    let cases: Vec<CachePolicyCase> = plain_libs::serde_json::from_str(include_str!(
         "../../../../plain-rs/testdata/graphql/cache-policy.json"
     ))
     .unwrap();

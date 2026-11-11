@@ -30,7 +30,7 @@ impl Service {
         Arc::new(Self { db, prefs })
     }
     pub fn roots(row: &ShareRow) -> plain_libs::anyhow::Result<Vec<Root>> {
-        Ok(serde_json::from_str(&row.data)?)
+        Ok(plain_libs::serde_json::from_str(&row.data)?)
     }
     fn build_roots(paths: Vec<String>) -> plain_libs::anyhow::Result<String> {
         plain_libs::anyhow::ensure!(!paths.is_empty(), "share needs at least one root");
@@ -58,7 +58,7 @@ impl Service {
                 is_dir: meta.is_dir(),
             });
         }
-        Ok(serde_json::to_string(&roots)?)
+        Ok(plain_libs::serde_json::to_string(&roots)?)
     }
     pub fn create(
         &self,

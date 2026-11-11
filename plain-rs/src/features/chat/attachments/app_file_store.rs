@@ -361,10 +361,10 @@ pub fn release(db: &Db, directory: &Path, id: &str) -> std::io::Result<bool> {
         if file.ref_count > 1 {
             tx.execute(
                 "UPDATE app_files SET ref_count=ref_count-1,updated_at=?1 WHERE id=?2",
-                rusqlite::params![crate::infrastructure::db::now_iso(), id],
+                plain_libs::rusqlite::params![crate::infrastructure::db::now_iso(), id],
             )?;
         } else {
-            tx.execute("DELETE FROM app_files WHERE id=?1", rusqlite::params![id])?;
+            tx.execute("DELETE FROM app_files WHERE id=?1", plain_libs::rusqlite::params![id])?;
         }
         tx.commit()
     });
@@ -426,7 +426,7 @@ pub fn file_name_map(chats: &[DChat]) -> HashMap<String, String> {
     let mut sorted: Vec<&DChat> = chats.iter().collect();
     sorted.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     for chat in sorted {
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&chat.content) else {
+        let Ok(v) = plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&chat.content) else {
             continue;
         };
         let Some(items) = v
@@ -520,7 +520,7 @@ pub fn import_preview_image(
     mime: &str,
     message_id: &str,
     text: &str,
-    preview: &serde_json::Value,
+    preview: &plain_libs::serde_json::Value,
 ) -> std::io::Result<ImportResult> {
     let strong = bytes_to_hex(&Sha256::digest(bytes));
     let mut weak = Sha256::new();

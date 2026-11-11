@@ -16,7 +16,7 @@ async fn generic_writes_typed_patches_and_removal_share_derived_events() {
         settings
             .set(
                 crate::features::prefs::pref_keys::DEVICE_NAME,
-                serde_json::json!("Synthetic")
+                plain_libs::serde_json::json!("Synthetic")
             )
             .await
             .unwrap()
@@ -47,7 +47,7 @@ async fn generic_writes_typed_patches_and_removal_share_derived_events() {
     assert_eq!(event.event_type, "DEVICE_NAME_UPDATED");
     assert_eq!(
         event.payload,
-        serde_json::to_string(&crate::features::prefs::settings::Settings::default().device_name)
+        plain_libs::serde_json::to_string(&crate::features::prefs::settings::Settings::default().device_name)
             .unwrap()
     );
     assert!(receiver.try_recv().is_err());
@@ -69,7 +69,7 @@ async fn invalid_generic_values_leave_state_and_events_unchanged() {
         settings
             .set(
                 crate::features::prefs::pref_keys::HTTP_PORT,
-                serde_json::json!(70000)
+                plain_libs::serde_json::json!(70000)
             )
             .await
             .is_err()
@@ -78,7 +78,7 @@ async fn invalid_generic_values_leave_state_and_events_unchanged() {
         settings
             .set(
                 crate::features::prefs::pref_keys::REMOTE_ACCESS,
-                serde_json::json!("false")
+                plain_libs::serde_json::json!("false")
             )
             .await
             .is_err()

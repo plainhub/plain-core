@@ -5,7 +5,7 @@ use bytes::Bytes;
 pub(crate) use queue::Generation;
 use queue::Queue;
 use serde::Deserialize;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,

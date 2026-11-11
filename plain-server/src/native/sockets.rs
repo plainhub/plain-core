@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{mpsc, oneshot, watch};
-use tokio_tungstenite::tungstenite::{Message, protocol::WebSocketConfig};
+use plain_libs::tokio_tungstenite::tungstenite::{Message, protocol::WebSocketConfig};
 
 pub const MAX_SOCKET_FRAME_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_SOCKET_CONTROL_BYTES: usize = 65536 - 48;
@@ -300,7 +300,7 @@ async fn peer(
             url.set_scheme("wss")
                 .map_err(|_| anyhow!("Invalid managed address"))?;
             url.query_pairs_mut().append_pair("cid", &route.client_id);
-            let (mut socket, _) = tokio_tungstenite::connect_async_tls_with_config(
+            let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async_tls_with_config(
                 url.as_str(),
                 Some(
                     WebSocketConfig::default()
@@ -308,7 +308,7 @@ async fn peer(
                         .max_frame_size(Some(MAX_SOCKET_FRAME_BYTES + 128)),
                 ),
                 false,
-                Some(tokio_tungstenite::Connector::Rustls(Arc::new(
+                Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(
                     plain_libs::protocols::http_client::pinned_tls_config(route.pin)?,
                 ))),
             )
@@ -364,8 +364,8 @@ async fn peer(
 
 async fn send_peer(
     route: &PeerRoute,
-    socket: &mut tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    socket: &mut plain_libs::tokio_tungstenite::WebSocketStream<
+        plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
     >,
     path: &str,
     registration: &[u8],

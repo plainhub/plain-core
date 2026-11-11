@@ -66,9 +66,9 @@ fn export_and_save_feed_entries() {
         get(&db, "entry").unwrap().unwrap().content,
         "# Headline\n\nSummary"
     );
-    let exported: serde_json::Value = serde_json::from_str(&export(&db, "").unwrap()).unwrap();
+    let exported: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&export(&db, "").unwrap()).unwrap();
     assert_eq!(exported[0]["id"], "entry");
-    assert_eq!(exported[0]["tags"], serde_json::json!([]));
+    assert_eq!(exported[0]["tags"], plain_libs::serde_json::json!([]));
     let note_tag = tags::create_tag(&db, DataType::Note.kind(), "note").unwrap();
     let feed_tag = tags::create_tag(&db, DataType::FeedEntry.kind(), "feed").unwrap();
     tags::add_relations(

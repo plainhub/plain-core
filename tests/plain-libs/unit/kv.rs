@@ -150,7 +150,7 @@ fn failed_json_callbacks_and_invalid_prefix_writes_preserve_original_values() {
     assert!(
         database
             .update_json_prefix("state:", |map| {
-                map.insert("outside".into(), serde_json::json!(3));
+                map.insert("outside".into(), crate::serde_json::json!(3));
                 map.remove("state:one");
                 Ok(())
             })
@@ -178,14 +178,16 @@ fn prefix_updates_commit_deletions_and_multiple_values_together() {
     database
         .update_json_prefix("state:", |map| {
             map.remove("state:one");
-            map.insert("state:two".into(), serde_json::json!({"value":3}));
+            map.insert("state:two".into(), crate::serde_json::json!({"value":3}));
             Ok(())
         })
         .unwrap();
     assert_eq!(database.get("state:one").unwrap(), None);
     assert_eq!(
-        database.get_json::<serde_json::Value>("state:two").unwrap(),
-        Some(serde_json::json!({"value":3}))
+        database
+            .get_json::<crate::serde_json::Value>("state:two")
+            .unwrap(),
+        Some(crate::serde_json::json!({"value":3}))
     );
     assert_eq!(database.get_json::<u64>("other:one").unwrap(), Some(2));
 }

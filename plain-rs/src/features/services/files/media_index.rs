@@ -93,11 +93,11 @@ pub fn record_generic(
     if paths.is_empty() {
         return Ok(Vec::new());
     }
-    let encoded = serde_json::to_string(paths).map_err(|error| error.to_string())?;
+    let encoded = plain_libs::serde_json::to_string(paths).map_err(|error| error.to_string())?;
     let mut types = db.with_conn(|conn| {
         conn.prepare("SELECT DISTINCT data_type FROM file_catalog WHERE missing=0 AND path IN (SELECT value FROM json_each(?1))")?
             .query_map([encoded], |row| row.get::<_,i32>(0))?
-            .collect::<rusqlite::Result<Vec<_>>>()
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
     }).map_err(|error| error.to_string())?;
     let rows = db
         .record_file_paths(paths, Some(crate::infrastructure::db::FileKind::File))

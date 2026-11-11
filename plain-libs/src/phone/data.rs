@@ -17,7 +17,7 @@ static INDEX: LazyLock<(Index, usize)> = LazyLock::new(|| {
     assert_eq!(&BUNDLE[..4], b"PHN1");
     let start = 8 + u32::from_be_bytes(BUNDLE[4..8].try_into().unwrap()) as usize;
     let index: Index =
-        serde_json::from_slice(&BUNDLE[8..start]).expect("invalid bundled phone index");
+        crate::serde_json::from_slice(&BUNDLE[8..start]).expect("invalid bundled phone index");
     for [offset, length] in index.entries.values() {
         assert!(*offset <= BUNDLE.len() - start && *length <= BUNDLE.len() - start - offset);
     }

@@ -60,7 +60,7 @@ fn history_records_order_equal_timestamps_by_rowid_and_update_existing_rows() {
         db.with_conn(|conn| {
             conn.execute(
                 "UPDATE media_play_history SET played_at=?1 WHERE file_id=?2",
-                rusqlite::params![played_at, format!("test:{path}")],
+                plain_libs::rusqlite::params![played_at, format!("test:{path}")],
             )
         })
         .unwrap();

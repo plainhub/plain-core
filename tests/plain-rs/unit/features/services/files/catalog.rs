@@ -126,7 +126,7 @@ async fn platform_catalog_reads_os_facts_without_a_local_catalogue() {
 
 #[test]
 fn sampled_media_revisions_are_canonical_and_reject_malformed_volumes() {
-    let page: MediaPage = serde_json::from_value(serde_json::json!({
+    let page: MediaPage = plain_libs::serde_json::from_value(plain_libs::serde_json::json!({
         "rows":[],
         "revisionBefore":[{"volume":"b","version":"v","generation":2},{"volume":"a","version":"v","generation":1}],
         "revisionAfter":[{"volume":"a","version":"v","generation":1},{"volume":"b","version":"v","generation":2}]
@@ -134,12 +134,12 @@ fn sampled_media_revisions_are_canonical_and_reject_malformed_volumes() {
     let page = page.validate().unwrap();
     assert_eq!(page.revision_before, page.revision_after);
     for revision in [
-        serde_json::json!([{"volume":"a","version":"","generation":1}]),
-        serde_json::json!([{"volume":"a","version":"v","generation":-1}]),
-        serde_json::json!([{"volume":"a","version":"v","generation":1},{"volume":"a","version":"v","generation":1}]),
+        plain_libs::serde_json::json!([{"volume":"a","version":"","generation":1}]),
+        plain_libs::serde_json::json!([{"volume":"a","version":"v","generation":-1}]),
+        plain_libs::serde_json::json!([{"volume":"a","version":"v","generation":1},{"volume":"a","version":"v","generation":1}]),
     ] {
-        let page: MediaPage = serde_json::from_value(
-            serde_json::json!({"rows":[],"revisionBefore":revision,"revisionAfter":null}),
+        let page: MediaPage = plain_libs::serde_json::from_value(
+            plain_libs::serde_json::json!({"rows":[],"revisionBefore":revision,"revisionAfter":null}),
         )
         .unwrap();
         assert!(page.validate().is_err());

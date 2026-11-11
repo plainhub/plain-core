@@ -211,7 +211,7 @@ fn dynamic_properties_cannot_be_frozen_as_startup_information() {
         let mut value = startup_json();
         value[key] = Value::Null;
         assert!(
-            serde_json::from_value::<StartupConfig>(value).is_err(),
+            plain_libs::serde_json::from_value::<StartupConfig>(value).is_err(),
             "{key}"
         );
     }
@@ -239,14 +239,14 @@ fn startup_values_are_validated_before_the_host_is_created() {
     ] {
         let mut config = startup_json();
         config[key] = value;
-        let result = serde_json::from_value::<StartupConfig>(config)
+        let result = plain_libs::serde_json::from_value::<StartupConfig>(config)
             .map_err(|error| error.to_string())
             .and_then(Host::with_startup_config);
         assert!(result.is_err(), "{key}");
     }
     let mut value = startup_json();
     value["socModel"] = Value::Null;
-    let config = serde_json::from_value::<StartupConfig>(value).unwrap();
+    let config = plain_libs::serde_json::from_value::<StartupConfig>(value).unwrap();
     assert!(Host::with_startup_config(config).is_ok());
 }
 
@@ -259,7 +259,7 @@ fn startup_accepts_sdk_abi_arrays_and_optional_update_sources() {
         let mut value = startup_json();
         value["supportedAbis"] = properties["supportedAbis"].clone();
         value["updateSource"] = properties["updateSource"].clone();
-        let config = serde_json::from_value::<StartupConfig>(value).unwrap();
+        let config = plain_libs::serde_json::from_value::<StartupConfig>(value).unwrap();
         let host = Host::with_startup_config(config).unwrap();
         assert_eq!(
             json!(host.startup().supported_abis),

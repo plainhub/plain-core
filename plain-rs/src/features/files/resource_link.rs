@@ -72,7 +72,7 @@ struct ReferenceInput {
 }
 
 pub fn seal_reference(key: &[u8], payload: &str) -> Result<String> {
-    let input: ReferenceInput = serde_json::from_str(payload)?;
+    let input: ReferenceInput = plain_libs::serde_json::from_str(payload)?;
     let scope = Scope::Session(input.client_id);
     seal(&scope, key, &Resource::reference(&input.path))
 }
@@ -131,11 +131,11 @@ pub fn decrypt(scope: &Scope, purpose: &str, key: &[u8], payload: &str) -> Resul
 
 pub fn seal(scope: &Scope, key: &[u8], resource: &Resource) -> Result<String> {
     resource.validate(scope)?;
-    encrypt(scope, "fs", key, &serde_json::to_vec(resource)?)
+    encrypt(scope, "fs", key, &plain_libs::serde_json::to_vec(resource)?)
 }
 
 pub fn open(scope: &Scope, key: &[u8], payload: &str) -> Result<Resource> {
-    let resource: Resource = serde_json::from_slice(&decrypt(scope, "fs", key, payload)?)?;
+    let resource: Resource = plain_libs::serde_json::from_slice(&decrypt(scope, "fs", key, payload)?)?;
     resource.validate(scope)?;
     Ok(resource)
 }

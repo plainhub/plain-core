@@ -1,6 +1,6 @@
-use rusqlite::Connection;
+use plain_libs::rusqlite::Connection;
 
-pub(crate) fn init(connection: &Connection) -> rusqlite::Result<()> {
+pub(crate) fn init(connection: &Connection) -> plain_libs::rusqlite::Result<()> {
     connection.execute_batch(
         "CREATE TABLE IF NOT EXISTS volumes (
     id TEXT PRIMARY KEY NOT NULL CHECK(length(id)>0),

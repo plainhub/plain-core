@@ -20,7 +20,7 @@ fn registration_binds_identity_and_keeps_timestamp() {
     let key = [7; 32];
     let init = registration(&key, "client", 1_700_000_000_123).unwrap();
     let plain = graphql::open_init(&key, "client", &init).unwrap();
-    let value: serde_json::Value = serde_json::from_slice(&plain).unwrap();
+    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&plain).unwrap();
     assert_eq!(value["timestampMillis"], 1_700_000_000_123i64);
     assert!(graphql::open_init(&key, "other", &init).is_none());
     assert!(graphql::open_init(&[8; 32], "client", &init).is_none());

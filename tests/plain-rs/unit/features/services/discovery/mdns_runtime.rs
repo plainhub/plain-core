@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[tokio::test(start_paused = true)]
 async fn network_change_burst_restarts_once_and_accepts_the_next_burst() {

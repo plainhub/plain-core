@@ -23,7 +23,7 @@ fn scopes_roundtrip_variable_identifiers_and_encode_only_binary_payload() {
         let bytes = plain_libs::utils::base64::base64_decode_checked(payload).unwrap();
         assert_eq!(
             bytes.len(),
-            24 + serde_json::to_vec(&resource).unwrap().len() + 16
+            24 + plain_libs::serde_json::to_vec(&resource).unwrap().len() + 16
         );
         assert_ne!(seal(&scope, &[7; 32], &resource).unwrap(), envelope);
     }
@@ -61,7 +61,7 @@ fn rejects_scope_substitution_wrong_key_legacy_and_unknown_resources() {
 
 #[test]
 fn noble_vector_decrypts_with_the_same_envelope_and_associated_data() {
-    let vector: serde_json::Value = serde_json::from_str(include_str!(
+    let vector: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(include_str!(
         "../../../../../plain-rs/testdata/crypto/fs-resource.json"
     ))
     .unwrap();
@@ -78,7 +78,7 @@ fn noble_vector_decrypts_with_the_same_envelope_and_associated_data() {
     .unwrap();
     assert_eq!(
         resource,
-        serde_json::from_value(vector["resource"].clone()).unwrap()
+        plain_libs::serde_json::from_value(vector["resource"].clone()).unwrap()
     );
 }
 

@@ -1,5 +1,5 @@
 use super::*;
-use axum::{Router, routing::get};
+use plain_libs::axum::{Router, routing::get};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Semaphore;
 
@@ -31,7 +31,7 @@ pub(super) async fn fixture() -> (
         }}
     }));
     let server = tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        plain_libs::axum::serve(listener, app).await.unwrap();
     });
     db.feed_save(
         "feed",
@@ -297,7 +297,7 @@ async fn feed_changes_reach_the_host_and_reconnect_recovers_a_full_snapshot() {
         .host
         .reply(
             generation,
-            serde_json::json!({"id":first["id"],"result":null}),
+            plain_libs::serde_json::json!({"id":first["id"],"result":null}),
         )
         .unwrap();
     started.acquire().await.unwrap().forget();
@@ -315,7 +315,7 @@ async fn feed_changes_reach_the_host_and_reconnect_recovers_a_full_snapshot() {
         .host
         .reply(
             replacement,
-            serde_json::json!({"id":snapshot["id"],"result":null}),
+            plain_libs::serde_json::json!({"id":snapshot["id"],"result":null}),
         )
         .unwrap();
     while let Ok(event) = events.try_recv() {
@@ -342,16 +342,16 @@ fn feed_states_keep_enum_wire_names_and_active_boundaries() {
             error: String::new(),
         };
         assert_eq!(state.active(), active);
-        let value = serde_json::to_value(&state).unwrap();
+        let value = plain_libs::serde_json::to_value(&state).unwrap();
         assert_eq!(value["status"], wire);
         assert_eq!(
-            serde_json::from_value::<FeedSyncState>(value)
+            plain_libs::serde_json::from_value::<FeedSyncState>(value)
                 .unwrap()
                 .status,
             status
         );
     }
     assert!(
-        serde_json::from_value::<FeedWorkerStatus>(serde_json::json!("FUTURE_STATUS")).is_err()
+        plain_libs::serde_json::from_value::<FeedWorkerStatus>(plain_libs::serde_json::json!("FUTURE_STATUS")).is_err()
     );
 }

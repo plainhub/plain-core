@@ -54,7 +54,7 @@ async fn read_frame<T: DeserializeOwned>(
     );
     let mut bytes = vec![0; length];
     stream.read_exact(&mut bytes).await?;
-    serde_json::from_slice(&bytes).map_err(|_| anyhow!("Invalid local approval frame"))
+    plain_libs::serde_json::from_slice(&bytes).map_err(|_| anyhow!("Invalid local approval frame"))
 }
 
 async fn write_frame<T: Serialize>(
@@ -62,7 +62,7 @@ async fn write_frame<T: Serialize>(
     value: &T,
     limit: usize,
 ) -> Result<()> {
-    let bytes = serde_json::to_vec(value)?;
+    let bytes = plain_libs::serde_json::to_vec(value)?;
     ensure!(bytes.len() <= limit, "Local approval frame is too large");
     stream.write_u32(bytes.len() as u32).await?;
     stream.write_all(&bytes).await?;

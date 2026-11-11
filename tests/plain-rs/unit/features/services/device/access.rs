@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 #[test]
 fn feature_grants_are_independent() {
     let directory = plain_libs::temporary::tempdir().unwrap();
@@ -31,7 +31,7 @@ async fn base_media_access_is_sampled_without_capabilities_and_keeps_denials() {
         assert_eq!(request["method"], "systemAccessFacts");
         let names = json!(["IMAGES", "VIDEOS", "AUDIO", "DOCS", "FILES"]);
         assert_eq!(request["params"]["features"], names);
-        let grants: serde_json::Map<String, Value> = names
+        let grants: plain_libs::serde_json::Map<String, Value> = names
             .as_array()
             .unwrap()
             .iter()

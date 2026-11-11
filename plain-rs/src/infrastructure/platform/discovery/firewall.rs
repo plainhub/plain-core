@@ -102,7 +102,7 @@ netsh advfirewall firewall add rule name={name} dir=in action=allow program="$ex
 
 #[cfg_attr(not(windows), allow(dead_code))]
 fn parse_probe(stdout: &str) -> Option<FirewallProbe> {
-    serde_json::from_str(stdout.trim()).ok()
+    plain_libs::serde_json::from_str(stdout.trim()).ok()
 }
 
 #[cfg(windows)]

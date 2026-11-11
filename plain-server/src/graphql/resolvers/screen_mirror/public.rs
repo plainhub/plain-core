@@ -5,7 +5,7 @@ use crate::graphql::types::facts::text;
 use plain_graphql::{Context, Enum, Object, SimpleObject};
 
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug, Default)]
@@ -108,13 +108,13 @@ impl ScreenMirrorMutation {
         dispatch(
             ctx,
             "systemStartScreenMirror",
-            serde_json::json!({ "audio": audio }),
+            plain_libs::serde_json::json!({ "audio": audio }),
         )
         .await
     }
 
     async fn stop_screen_mirror(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
-        dispatch(ctx, "systemStopScreenMirror", serde_json::json!({})).await
+        dispatch(ctx, "systemStopScreenMirror", plain_libs::serde_json::json!({})).await
     }
 
     /// Returns false when the device has not granted RECORD_AUDIO yet; the
@@ -128,7 +128,7 @@ impl ScreenMirrorMutation {
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let granted = ctx
             .data_unchecked::<Arc<Host>>()
-            .call("systemRequestScreenMirrorAudio", serde_json::json!({}))
+            .call("systemRequestScreenMirrorAudio", plain_libs::serde_json::json!({}))
             .await
             .map_err(|error| plain_graphql::Error::new(error))?;
         Ok(granted.as_bool().unwrap_or(false))
@@ -141,7 +141,7 @@ impl ScreenMirrorMutation {
         dispatch(
             ctx,
             "systemRequestScreenMirrorKeyFrame",
-            serde_json::json!({}),
+            plain_libs::serde_json::json!({}),
         )
         .await
     }
@@ -157,7 +157,7 @@ impl ScreenMirrorMutation {
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-        let quality = serde_json::json!({"mode":mode.name(),"resolution":if mode==ScreenMirrorMode::Smooth {720}else{1080}});
+        let quality = plain_libs::serde_json::json!({"mode":mode.name(),"resolution":if mode==ScreenMirrorMode::Smooth {720}else{1080}});
         crate::graphql::resolvers::settings::state::preferences(ctx)?
             .set(
                 plain_rs::features::prefs::pref_keys::SCREEN_MIRROR_QUALITY,
@@ -179,7 +179,7 @@ impl SettingsMutation {
         dispatch(
             ctx,
             "systemOpenAccessibilitySettings",
-            serde_json::json!({}),
+            plain_libs::serde_json::json!({}),
         )
         .await
     }
@@ -193,7 +193,7 @@ async fn state(ctx: &Context<'_>) -> plain_graphql::Result<Value> {
     .await
     .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     ctx.data_unchecked::<Arc<Host>>()
-        .call("systemScreenMirrorState", serde_json::json!({}))
+        .call("systemScreenMirrorState", plain_libs::serde_json::json!({}))
         .await
         .map_err(|error| plain_graphql::Error::new(error))
 }

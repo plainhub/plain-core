@@ -50,7 +50,7 @@ fn test_deserialization_serialization_invariant() {
 }"#;
     let tokenizer = Tokenizer::from_str(tok_json).unwrap();
 
-    let tok_str = serde_json::to_string_pretty(&tokenizer).unwrap();
+    let tok_str = crate::serde_json::to_string_pretty(&tokenizer).unwrap();
     // It should be exactly the same as above
     assert_eq!(tok_str, tok_json);
 }

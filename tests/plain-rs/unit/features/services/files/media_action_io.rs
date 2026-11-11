@@ -182,10 +182,10 @@ fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row()
     let bad = seed_kind(&db, &blocked.join("missing.wav"), DataType::Audio);
     std::fs::remove_dir(&blocked).unwrap();
     std::fs::write(&blocked, b"not a directory").unwrap();
-    db.with_conn(|connection| -> rusqlite::Result<()> {
+    db.with_conn(|connection| -> plain_libs::rusqlite::Result<()> {
         connection.execute_batch("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('audio','audio',1,'now','now'),('video','video',2,'now','now');")?;
         for (index, id) in [&good, &bad].into_iter().enumerate() {
-            connection.execute("INSERT INTO audio_queue_items(file_id,sort_order) VALUES(?1,?2)", rusqlite::params![id,index as i64])?;
+            connection.execute("INSERT INTO audio_queue_items(file_id,sort_order) VALUES(?1,?2)", plain_libs::rusqlite::params![id,index as i64])?;
             connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('audio',?1,1,'now'),('video',?1,2,'now')", [id])?;
         }
         Ok(())
@@ -215,7 +215,7 @@ fn physical_failure_preserves_queue_and_tag_references_for_only_the_failed_row()
     assert_eq!(outcome.successful.len(), 1);
     assert_eq!(outcome.failed_ids, vec![bad.clone()]);
     assert!(!good_path.exists());
-    db.with_conn(|connection| -> rusqlite::Result<()> {
+    db.with_conn(|connection| -> plain_libs::rusqlite::Result<()> {
         assert_eq!(
             connection.query_row("SELECT file_id FROM audio_queue_items", [], |row| row
                 .get::<_, String>(0))?,
@@ -260,7 +260,7 @@ fn wrong_media_type_and_corrupt_catalog_rows_never_delete_source_files() {
     .unwrap();
     assert_eq!(outcome.failed_ids, vec![id.clone()]);
     assert!(path.exists());
-    db.with_conn(|connection| -> rusqlite::Result<()> {
+    db.with_conn(|connection| -> plain_libs::rusqlite::Result<()> {
         assert!(
             connection
                 .execute("UPDATE files SET path=X'FF' WHERE id=?1", [&id])

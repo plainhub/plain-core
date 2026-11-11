@@ -325,8 +325,8 @@ fn rows_round_trip_through_serde() {
         sensitive: true,
         created_at: "2026-01-01T00:00:00.000Z".into(),
     };
-    let json = serde_json::to_string(&original).unwrap();
-    let back: ClipboardRow = serde_json::from_str(&json).unwrap();
+    let json = plain_libs::serde_json::to_string(&original).unwrap();
+    let back: ClipboardRow = plain_libs::serde_json::from_str(&json).unwrap();
     assert_eq!(back.id, original.id);
     assert_eq!(back.text, original.text);
     assert_eq!(back.hash, original.hash);
@@ -355,7 +355,7 @@ fn serialized_field_names_are_snake_case() {
         created_at: "2026-01-01T00:00:00.000Z".into(),
         updated_at: "2026-01-01T00:00:00.000Z".into(),
     };
-    let value: serde_json::Value = serde_json::to_value(&row).unwrap();
+    let value: plain_libs::serde_json::Value = plain_libs::serde_json::to_value(&row).unwrap();
     let object = value.as_object().unwrap();
     for key in [
         "client_id",
@@ -490,9 +490,9 @@ fn session_cache_tracks_mutations_clones_raw_sql_and_rollbacks() {
         clone.session_get(&row.client_id).unwrap().unwrap().token,
         row.token
     );
-    let mut invalid = serde_json::to_value(&row).unwrap();
-    invalid["type"] = serde_json::json!("invalid-session-type");
-    assert!(serde_json::from_value::<SessionRow>(invalid).is_err());
+    let mut invalid = plain_libs::serde_json::to_value(&row).unwrap();
+    invalid["type"] = plain_libs::serde_json::json!("invalid-session-type");
+    assert!(plain_libs::serde_json::from_value::<SessionRow>(invalid).is_err());
     assert!(
         db.with_conn(|connection| connection.execute(
             "UPDATE sessions SET type='invalid-session-type' WHERE client_id=?1",

@@ -5,8 +5,8 @@ use plain_libs::utils::base64::base64_encode;
 use plain_rs::features::services::discovery::pairing_attempts;
 use plain_rs::features::services::discovery::pairing_attempts::PairingPhase;
 use plain_rs::runtime::Runtime as ServerState;
-use serde_json::Value;
-use serde_json::json;
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 use sha2::Digest;
 use std::time::Duration;
 
@@ -104,7 +104,7 @@ async fn phase(
         }
     })
     .await
-    .unwrap_or_else(|_| panic!("Expected {expected:?}; current {}",serde_json::to_string(&state.pairing_runtime.attempts.get(generation)).unwrap()))
+    .unwrap_or_else(|_| panic!("Expected {expected:?}; current {}",plain_libs::serde_json::to_string(&state.pairing_runtime.attempts.get(generation)).unwrap()))
 }
 
 #[cfg(feature = "http_transport")]
@@ -334,7 +334,7 @@ async fn actual_native_management_uses_encrypted_auth_and_saves_both_grants_once
     let mut updated = false;
     while let Ok(event) = local_events.try_recv() {
         if event.event_type == plain_rs::features::chat::events::WS_PEER_UPDATED {
-            updated |= serde_json::from_str::<Value>(&event.payload).unwrap()["id"] == remote_id;
+            updated |= plain_libs::serde_json::from_str::<Value>(&event.payload).unwrap()["id"] == remote_id;
         }
     }
     assert!(updated);
@@ -689,7 +689,7 @@ async fn web_management_pairs_by_device_id_and_keeps_the_grant_on_a() {
             )
             .await
             .unwrap();
-            serde_json::from_slice::<Value>(&response).unwrap()
+            plain_libs::serde_json::from_slice::<Value>(&response).unwrap()
         }
     };
     let denied =

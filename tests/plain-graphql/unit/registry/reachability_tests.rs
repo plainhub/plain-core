@@ -91,9 +91,9 @@ async fn introspection_preserves_reachable_inputs_abstract_types_and_system_type
         backlink: __type(name: "BacklinkInterface") { name possibleTypes { name } }
     }"#).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    let expected: serde_json::Value = serde_json::from_str(include_str!(
+    let expected: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(include_str!(
         "../../../../plain-rs/testdata/graphql/introspection.json"
     ))
     .unwrap();
-    assert_eq!(serde_json::to_value(&response.data).unwrap(), expected);
+    assert_eq!(plain_libs::serde_json::to_value(&response.data).unwrap(), expected);
 }

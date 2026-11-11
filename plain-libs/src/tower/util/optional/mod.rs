@@ -1,0 +1,40 @@
+pub mod error;
+pub mod future;
+use self::future::ResponseFuture;
+use std::task::{Context, Poll};
+use tower_service::Service;
+#[derive(Debug)]
+pub struct Optional<T> {
+    inner: Option<T>,
+}
+impl<T> Optional<T> {
+    pub const fn new<Request>(inner: Option<T>) -> Optional<T>
+    where
+        T: Service<Request>,
+        T::Error: Into<crate::tower::BoxError>,
+    {
+        Optional { inner }
+    }
+}
+impl<T, Request> Service<Request> for Optional<T>
+where
+    T: Service<Request>,
+    T::Error: Into<crate::tower::BoxError>,
+{
+    type Response = T::Response;
+    type Error = crate::tower::BoxError;
+    type Future = ResponseFuture<T::Future>;
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        match self.inner {
+            Some(ref mut inner) => match inner.poll_ready(cx) {
+                Poll::Ready(r) => Poll::Ready(r.map_err(Into::into)),
+                Poll::Pending => Poll::Pending,
+            },
+            None => Poll::Ready(Ok(())),
+        }
+    }
+    fn call(&mut self, request: Request) -> Self::Future {
+        let inner = self.inner.as_mut().map(|i| i.call(request));
+        ResponseFuture::new(inner)
+    }
+}

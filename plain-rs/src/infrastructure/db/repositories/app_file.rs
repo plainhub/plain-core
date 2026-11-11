@@ -1,4 +1,4 @@
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 
 use crate::infrastructure::db::DAppFile;
 use crate::infrastructure::db::Db;
@@ -6,7 +6,7 @@ use crate::infrastructure::db::Db;
 const APP_FILE_COLS: &str =
     "id,size_bytes,mime_type,real_path,ref_count,weak_hash,created_at,updated_at";
 
-fn row_to_app_file(row: &rusqlite::Row<'_>) -> rusqlite::Result<DAppFile> {
+fn row_to_app_file(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<DAppFile> {
     Ok(DAppFile {
         id: row.get(0)?,
         size_bytes: row.get(1)?,
@@ -20,7 +20,7 @@ fn row_to_app_file(row: &rusqlite::Row<'_>) -> rusqlite::Result<DAppFile> {
 }
 
 impl Db {
-    pub fn app_file_get(&self, id: &str) -> rusqlite::Result<Option<DAppFile>> {
+    pub fn app_file_get(&self, id: &str) -> plain_libs::rusqlite::Result<Option<DAppFile>> {
         self.with_conn(|conn| {
             conn.query_row(
                 &format!("SELECT {APP_FILE_COLS} FROM app_files WHERE id=?1"),
@@ -31,20 +31,20 @@ impl Db {
         })
     }
 
-    pub fn app_file_insert(&self, file: &DAppFile) -> rusqlite::Result<()> {
+    pub fn app_file_insert(&self, file: &DAppFile) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|conn| conn.execute(
             "INSERT INTO app_files (id,size_bytes,mime_type,real_path,ref_count,weak_hash,created_at,updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
             params![file.id,file.size_bytes,file.mime_type,file.real_path,file.ref_count,file.weak_hash,plain_libs::utils::dbtime::normalize(&file.created_at)?,plain_libs::utils::dbtime::normalize(&file.updated_at)?]).map(|_| ()))
     }
 
-    pub fn app_file_retain(&self, id: &str) -> rusqlite::Result<()> {
+    pub fn app_file_retain(&self, id: &str) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|conn| {
             let affected = conn.execute(
                 "UPDATE app_files SET ref_count=ref_count+1,updated_at=?1 WHERE id=?2",
                 params![crate::infrastructure::db::now_iso(), id],
             )?;
             if affected == 0 {
-                return Err(rusqlite::Error::QueryReturnedNoRows);
+                return Err(plain_libs::rusqlite::Error::QueryReturnedNoRows);
             }
             Ok(())
         })
@@ -55,7 +55,7 @@ impl Db {
         offset: i32,
         limit: i32,
         query: &str,
-    ) -> rusqlite::Result<Vec<DAppFile>> {
+    ) -> plain_libs::rusqlite::Result<Vec<DAppFile>> {
         let text = plain_libs::utils::search_dsl::field_value(query, "text").unwrap_or_default();
         let pattern = format!(
             "%{}%",
@@ -70,7 +70,7 @@ impl Db {
         })
     }
 
-    pub fn app_file_count(&self, query: &str) -> rusqlite::Result<i32> {
+    pub fn app_file_count(&self, query: &str) -> plain_libs::rusqlite::Result<i32> {
         let text = plain_libs::utils::search_dsl::field_value(query, "text").unwrap_or_default();
         let pattern = format!(
             "%{}%",
@@ -112,7 +112,7 @@ impl Db {
             .unwrap_or_default()
     }
 
-    pub fn insert_app_file(&self, f: &DAppFile) -> rusqlite::Result<()> {
+    pub fn insert_app_file(&self, f: &DAppFile) -> plain_libs::rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(
             "INSERT OR IGNORE INTO app_files \

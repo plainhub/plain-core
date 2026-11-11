@@ -73,18 +73,18 @@ fn server_with_cache() -> (plain_libs::temporary::TempDir, ContentServer, std::p
 async fn sdk_decode_validates_receipts_and_cleans_every_output_token() {
     for (receipt, output, expected) in [
         (
-            serde_json::json!(true),
+            plain_libs::serde_json::json!(true),
             Some(vec![0, 255, 1]),
             Ok(Some(vec![0, 255, 1])),
         ),
-        (serde_json::json!(null), None, Ok(None)),
+        (plain_libs::serde_json::json!(null), None, Ok(None)),
         (
-            serde_json::json!(false),
+            plain_libs::serde_json::json!(false),
             None,
             Err("invalid thumbnail receipt"),
         ),
         (
-            serde_json::json!(true),
+            plain_libs::serde_json::json!(true),
             None,
             Err("missing thumbnail output"),
         ),
@@ -106,7 +106,7 @@ async fn sdk_decode_validates_receipts_and_cleans_every_output_token() {
                 .host
                 .reply(
                     generation,
-                    serde_json::json!({"id":request["id"],"result":receipt}),
+                    plain_libs::serde_json::json!({"id":request["id"],"result":receipt}),
                 )
                 .unwrap();
         });
@@ -648,7 +648,7 @@ async fn real_image_extensions_skip_legacy_white_thumbnails_and_use_current_cach
     };
     let source_key = |request: &Request, version: &str| {
         let metadata = std::fs::metadata(&request.path).unwrap();
-        let input = serde_json::json!([
+        let input = plain_libs::serde_json::json!([
             request.path,
             metadata.len(),
             format!("{:?}", metadata.modified().unwrap()),

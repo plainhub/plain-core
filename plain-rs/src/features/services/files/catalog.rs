@@ -4,7 +4,7 @@ use crate::features::services::files::media_catalog;
 use crate::features::services::files::media_catalog_facts;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 pub enum MediaCatalog {
@@ -74,7 +74,7 @@ impl MediaCatalog {
                     "systemMediaRows",
                     platform_params(db, kind, query, json!({"dataType":kind,"sortBy":sort.as_str(),"limit":limit,"offset":offset}))?,
                 ).await?;
-                serde_json::from_value(facts).map_err(|error| error.to_string())
+                plain_libs::serde_json::from_value(facts).map_err(|error| error.to_string())
             }
             Self::Native(db) => {
                 let db = db.clone();
@@ -106,7 +106,7 @@ impl MediaCatalog {
                     db, kind, query,
                     json!({"dataType":kind,"sortBy":sort.as_str(),"limit":limit,"offset":offset,"includeRevision":true}),
                 )?).await?;
-                serde_json::from_value::<MediaPage>(facts)
+                plain_libs::serde_json::from_value::<MediaPage>(facts)
                     .map_err(|error| error.to_string())?
                     .validate()
             }
@@ -142,7 +142,7 @@ impl MediaCatalog {
                     "systemMediaRows",
                     json!({"dataType":DataType::Image,"sortBy":"NAME_ASC","limit":limit,"offset":0,"plan":plan}),
                 ).await?;
-                serde_json::from_value(facts).map_err(|error| error.to_string())
+                plain_libs::serde_json::from_value(facts).map_err(|error| error.to_string())
             }
             Self::Native(db) => {
                 let db = db.clone();
@@ -195,7 +195,7 @@ impl MediaCatalog {
         from_trash: bool,
     ) -> Result<Vec<String>, String> {
         match self {
-            Self::Platform { db, host } => serde_json::from_value(
+            Self::Platform { db, host } => plain_libs::serde_json::from_value(
                 host.call("systemMediaIdsFacts", {
                     let mut params = platform_params(db, kind, query, json!({"dataType":kind}))?;
                     if from_trash {
@@ -239,7 +239,7 @@ impl MediaCatalog {
                     let facts = host.call("systemMediaRows", platform_params(db, DataType::Doc, query,
                         json!({"dataType":DataType::Doc,"sortBy":"NAME_ASC","pathsOnly":true,"limit":page_size,"offset":offset}))?).await?;
                     let paths: Vec<String> =
-                        serde_json::from_value(facts).map_err(|error| error.to_string())?;
+                        plain_libs::serde_json::from_value(facts).map_err(|error| error.to_string())?;
                     for path in &paths {
                         media_catalog::add_document_extension(&mut counts, path);
                     }
@@ -330,7 +330,7 @@ fn platform_params(
     )
     .map_err(|error| error.to_string())?;
     query::index_scope(&mut plan, db).map_err(|error| error.to_string())?;
-    params["plan"] = serde_json::to_value(plan).map_err(|error| error.to_string())?;
+    params["plan"] = plain_libs::serde_json::to_value(plan).map_err(|error| error.to_string())?;
     Ok(params)
 }
 

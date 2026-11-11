@@ -1,5 +1,5 @@
 use crate::features::prefs::{Prefs, pref_keys as keys, settings};
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn published_integer_preferences_decode_to_current_names_without_rewriting_storage() {
@@ -72,7 +72,7 @@ fn invalid_enum_preferences_are_rejected_and_preserved() {
             prefs.set(key, &value).unwrap();
             assert!(settings::get_entry(&prefs, key).is_err(), "{key}: {value}");
             assert!(settings::values(&prefs).is_err(), "{key}: {value}");
-            assert_eq!(prefs.get::<serde_json::Value>(key).unwrap(), Some(value));
+            assert_eq!(prefs.get::<plain_libs::serde_json::Value>(key).unwrap(), Some(value));
         }
     }
 }

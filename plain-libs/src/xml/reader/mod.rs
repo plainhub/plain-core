@@ -303,7 +303,7 @@ impl BangType {
     fn feed(&mut self, buf: &[u8], chunk: &[u8]) -> Option<usize> {
         match self {
             Self::Comment => {
-                for i in memchr::memchr_iter(b'>', chunk) {
+                for i in crate::memchr::memchr_iter(b'>', chunk) {
                     if buf.len() + i > 5 {
                         if chunk[..i].ends_with(b"--") {
                             return Some(i);
@@ -318,7 +318,7 @@ impl BangType {
                 }
             }
             Self::CData => {
-                for i in memchr::memchr_iter(b'>', chunk) {
+                for i in crate::memchr::memchr_iter(b'>', chunk) {
                     if chunk[..i].ends_with(b"]]") {
                         return Some(i);
                     }

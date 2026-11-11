@@ -6,9 +6,9 @@ fn timestamps_offsets_nanoseconds_and_serde_keep_their_meaning() {
         value.with_timezone(&Utc).to_rfc3339(),
         "2000-02-29T15:59:59.123456789+00:00"
     );
-    let json = serde_json::to_string(&value).unwrap();
+    let json = crate::serde_json::to_string(&value).unwrap();
     assert_eq!(
-        serde_json::from_str::<DateTime<FixedOffset>>(&json).unwrap(),
+        crate::serde_json::from_str::<DateTime<FixedOffset>>(&json).unwrap(),
         value
     );
     let before = DateTime::<Utc>::from_timestamp(-1, 999_999_999).unwrap();

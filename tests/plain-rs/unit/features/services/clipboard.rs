@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_runtime::Core as ContentServer;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn start(dir: &plain_libs::temporary::TempDir) -> (ContentServer, String, Arc<crate::features::prefs::Prefs>) {
@@ -37,7 +37,7 @@ async fn reports_recheck_permission_deduplicate_and_publish_only_nonsensitive_te
         .unwrap();
     let event = events.try_recv().unwrap();
     assert_eq!(event.event_type, "CLIPBOARD_CHANGED");
-    let body: Value = serde_json::from_str(&event.payload).unwrap();
+    let body: Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
     let item = state.db.clipboard_latest().unwrap().unwrap();
     assert_eq!(
         body,

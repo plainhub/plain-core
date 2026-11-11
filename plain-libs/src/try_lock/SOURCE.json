@@ -1,0 +1,8 @@
+{
+  "name": "try-lock",
+  "version": "0.2.5",
+  "archive_sha256": "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b",
+  "repository": "https://github.com/seanmonstar/try-lock",
+  "revision": "fd160ecd9105e8afcc43dbea450a0ef6e5128cce",
+  "retained_features": []
+}

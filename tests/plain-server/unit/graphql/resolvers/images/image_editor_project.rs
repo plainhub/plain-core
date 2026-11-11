@@ -50,11 +50,11 @@ async fn projects_persist_project_summaries_and_validate_state() {
     server
         .runtime_state()
         .db
-        .with_conn(|connection| -> rusqlite::Result<()> {
+        .with_conn(|connection| -> plain_libs::rusqlite::Result<()> {
             for n in 0..55 {
                 connection.execute(
                     "UPDATE image_editor_projects SET updated_at=?1 WHERE id=?2",
-                    rusqlite::params![
+                    plain_libs::rusqlite::params![
                         format!("2099-01-01T00:00:{n:02}.000Z"),
                         format!("project-{n}%_")
                     ],
@@ -106,7 +106,7 @@ async fn binary_delta_does_not_invalidate_content() {
     )
     .unwrap();
     let mut socket = server.runtime_state().events.subscribe();
-    let result = serde_json::to_value(
+    let result = plain_libs::serde_json::to_value(
         server
             .native_graphql()
             .unwrap()

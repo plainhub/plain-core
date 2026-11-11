@@ -186,12 +186,12 @@ pub struct ChannelLeave {
 /// Format a member roster back to the storage string
 /// (`[{"peerId","status"}, ...]`, status as `JOINED`/`PENDING`).
 pub fn encode_members(members: &[ChannelMember]) -> String {
-    serde_json::to_string(members).unwrap_or_else(|_| "[]".to_string())
+    plain_libs::serde_json::to_string(members).unwrap_or_else(|_| "[]".to_string())
 }
 
 /// Parse the `members` storage string into a typed roster.
 pub fn decode_members(raw: &str) -> Vec<ChannelMember> {
-    serde_json::from_str(raw).unwrap_or_default()
+    plain_libs::serde_json::from_str(raw).unwrap_or_default()
 }
 
 /// Does the members list already contain `peer_id`?

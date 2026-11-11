@@ -10,7 +10,7 @@ fn application_id_columns_are_text() {
     let tables = tables
         .query_map([], |row| row.get::<_, String>(0))
         .unwrap()
-        .collect::<rusqlite::Result<Vec<_>>>()
+        .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
         .unwrap();
     for table in tables {
         let mut columns = connection

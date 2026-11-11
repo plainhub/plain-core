@@ -1,4 +1,4 @@
-use rusqlite::params;
+use plain_libs::rusqlite::params;
 
 use crate::features::chat::channels::messages::decode_members;
 use crate::features::chat::enums::ChannelStatus;
@@ -8,7 +8,7 @@ use crate::infrastructure::db::Db;
 pub(crate) const CHANNEL_COLS: &str =
     "id,name,owner_id,members,key,version,status,created_at,updated_at";
 
-pub(crate) fn row_to_channel(row: &rusqlite::Row<'_>) -> rusqlite::Result<DChannel> {
+pub(crate) fn row_to_channel(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<DChannel> {
     Ok(DChannel {
         id: row.get(0)?,
         name: row.get(1)?,
@@ -77,7 +77,7 @@ impl Db {
         .ok()
     }
 
-    pub fn insert_channel(&self, channel: &DChannel) -> rusqlite::Result<()> {
+    pub fn insert_channel(&self, channel: &DChannel) -> plain_libs::rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(
             "INSERT INTO chat_channels (id,name,owner_id,members,key,version,status,created_at,updated_at) \
@@ -90,7 +90,7 @@ impl Db {
         ).map(|_| ())
     }
 
-    pub fn update_channel(&self, channel: &DChannel) -> rusqlite::Result<()> {
+    pub fn update_channel(&self, channel: &DChannel) -> plain_libs::rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(
             "UPDATE chat_channels SET name=?1,owner_id=?2,members=?3,key=?4,version=?5,status=?6,updated_at=?7 WHERE id=?8",
@@ -101,7 +101,7 @@ impl Db {
         ).map(|_| ())
     }
 
-    pub fn upsert_channel(&self, channel: &DChannel) -> rusqlite::Result<()> {
+    pub fn upsert_channel(&self, channel: &DChannel) -> plain_libs::rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(
             "INSERT INTO chat_channels (id,name,owner_id,members,key,version,status,created_at,updated_at) \

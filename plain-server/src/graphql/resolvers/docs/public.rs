@@ -6,7 +6,7 @@ use plain_graphql::{Context, Object, SimpleObject};
 
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::path::Path;
 
 const FEATURE: AccessFeature = AccessFeature::Docs;

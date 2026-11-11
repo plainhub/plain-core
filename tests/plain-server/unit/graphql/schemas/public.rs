@@ -583,7 +583,7 @@ async fn no_root_field_fails_for_unregistered_schema_data() {
     let responses = host.clone();
     let provider = tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
-            responses.reply(generation, serde_json::json!({"id":request["id"],"error":"platform unavailable in schema registration probe"})).unwrap();
+            responses.reply(generation, plain_libs::serde_json::json!({"id":request["id"],"error":"platform unavailable in schema registration probe"})).unwrap();
         }
     });
     let schema = build(host.clone(), events, prefs, db, dir.path().to_path_buf());
@@ -626,7 +626,7 @@ async fn no_root_field_fails_for_unregistered_schema_data() {
     let state_responses = state_host.clone();
     let state_provider = tokio::spawn(async move {
         while let Some(request) = state_requests.recv().await {
-            state_responses.reply(state_generation, serde_json::json!({"id":request["id"],"error":"platform unavailable in schema registration probe"})).unwrap();
+            state_responses.reply(state_generation, plain_libs::serde_json::json!({"id":request["id"],"error":"platform unavailable in schema registration probe"})).unwrap();
         }
     });
     for (name, ty) in &roots {

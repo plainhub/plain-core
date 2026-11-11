@@ -1,6 +1,6 @@
 use super::*;
 #[cfg(feature = "chat")]
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 #[cfg(feature = "chat")]
@@ -19,11 +19,11 @@ fn public_pairing_success_excludes_credentials_without_changing_native_payload()
     assert_eq!(public.event_type, WS_PAIRING_SUCCESS);
     assert_eq!(public.target_cid.as_deref(), Some("client"));
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&public.payload).unwrap(),
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&public.payload).unwrap(),
         json!({"deviceId":"peer","deviceName":"Device","ip":"192.0.2.1"})
     );
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&event.payload).unwrap(),
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&event.payload).unwrap(),
         payload
     );
 }

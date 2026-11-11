@@ -1,0 +1,8 @@
+{
+  "name": "zmij",
+  "version": "1.0.23",
+  "archive_sha256": "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b",
+  "repository": "https://github.com/dtolnay/zmij",
+  "revision": "7b7cc48b58028e8af7be87e94c0c1c8936f1a57c",
+  "retained_features": []
+}

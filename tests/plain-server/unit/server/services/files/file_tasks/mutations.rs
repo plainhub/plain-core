@@ -1,6 +1,6 @@
 use crate::server::ContentServer;
 use plain_graphql::Request;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 async fn rename(
     core: &ContentServer,
@@ -25,7 +25,7 @@ fn relation(core: &ContentServer, tag: &str) -> Option<String> {
         .core
         .db
         .with_conn(|connection| {
-            use rusqlite::OptionalExtension;
+            use plain_libs::rusqlite::OptionalExtension;
             connection
                 .query_row(
                     "SELECT target_key FROM tag_relations WHERE tag_id=?1",

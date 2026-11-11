@@ -51,7 +51,7 @@ impl<T: DeserializeOwned + Serialize + Send + Sync> InputType for Json<T> {
         Ok(from_value(value.unwrap_or_default())?)
     }
     fn to_value(&self) -> Value {
-        Value::String(serde_json::to_string(&self.0).unwrap_or_default())
+        Value::String(plain_libs::serde_json::to_string(&self.0).unwrap_or_default())
     }
     fn as_raw_value(&self) -> Option<&Self::RawValueType> {
         Some(&self.0)
@@ -78,13 +78,13 @@ impl<T: Serialize + Send + Sync> OutputType for Json<T> {
         Ok(to_value(&self.0).ok().unwrap_or_default())
     }
 }
-impl InputType for serde_json::Value {
-    type RawValueType = serde_json::Value;
+impl InputType for plain_libs::serde_json::Value {
+    type RawValueType = plain_libs::serde_json::Value;
     fn type_name() -> Cow<'static, str> {
         Cow::Borrowed("JSON")
     }
     fn create_type_info(registry: &mut Registry) -> String {
-        registry.create_input_type::<serde_json::Value, _>(MetaTypeId::Scalar, |_| {
+        registry.create_input_type::<plain_libs::serde_json::Value, _>(MetaTypeId::Scalar, |_| {
             MetaType::Scalar {
                 name: <Self as InputType>::type_name().to_string(),
                 description: Some("A scalar that can represent any JSON value.".to_string()),
@@ -104,12 +104,12 @@ impl InputType for serde_json::Value {
         Some(&self)
     }
 }
-impl OutputType for serde_json::Value {
+impl OutputType for plain_libs::serde_json::Value {
     fn type_name() -> Cow<'static, str> {
         Cow::Borrowed("JSON")
     }
     fn create_type_info(registry: &mut Registry) -> String {
-        registry.create_output_type::<serde_json::Value, _>(MetaTypeId::Scalar, |_| {
+        registry.create_output_type::<plain_libs::serde_json::Value, _>(MetaTypeId::Scalar, |_| {
             MetaType::Scalar {
                 name: <Self as OutputType>::type_name().to_string(),
                 description: Some("A scalar that can represent any JSON value.".to_string()),

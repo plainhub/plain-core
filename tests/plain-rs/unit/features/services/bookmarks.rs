@@ -41,7 +41,7 @@ fn import_keeps_titles_groups_and_existing_rows_and_deduplicates_repeated_files(
     existing.pinned = true;
     existing.click_count = 7;
     bookmark::insert_bookmark(&db, &existing).unwrap();
-    let before = serde_json::to_value(&existing).unwrap();
+    let before = plain_libs::serde_json::to_value(&existing).unwrap();
     let html = "<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p>
       <DT><A HREF='https://example.com/root'>Root &amp; 中文</A>
       <DT><H3>Saved &amp; 中文</H3><DL><p>
@@ -58,7 +58,7 @@ fn import_keeps_titles_groups_and_existing_rows_and_deduplicates_repeated_files(
     let rows = bookmark::get_bookmarks(&db);
     assert_eq!(rows.len(), 4);
     assert_eq!(
-        serde_json::to_value(
+        plain_libs::serde_json::to_value(
             bookmark::get_bookmark_by_id(&db, &existing.id)
                 .unwrap()
                 .unwrap()
@@ -93,10 +93,10 @@ fn import_keeps_titles_groups_and_existing_rows_and_deduplicates_repeated_files(
                 .as_str()
         )
     );
-    let once = serde_json::to_value((&rows, &groups)).unwrap();
+    let once = plain_libs::serde_json::to_value((&rows, &groups)).unwrap();
     assert_eq!(import_bookmarks(&db, html).unwrap(), 0);
     assert_eq!(
-        serde_json::to_value((
+        plain_libs::serde_json::to_value((
             bookmark::get_bookmarks(&db),
             bookmark::get_bookmark_groups(&db)
         ))

@@ -251,8 +251,8 @@ async fn directory_scan_uses_core_policy_real_walker_and_existing_catalog() {
                 request=requests.recv() => {
                     let request=request.unwrap();
                     assert_eq!(request["method"],"systemAccessFacts");
-                    assert_eq!(request["params"]["features"],serde_json::json!(["FILES"]));
-                    host.reply(generation,serde_json::json!({"id":request["id"],"result":{"granted":{"FILES":true}}})).unwrap();
+                    assert_eq!(request["params"]["features"],plain_libs::serde_json::json!(["FILES"]));
+                    host.reply(generation,plain_libs::serde_json::json!({"id":request["id"],"result":{"granted":{"FILES":true}}})).unwrap();
                 },
             }
         }
@@ -363,7 +363,7 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
     assert!(!core.runtime_state().host.connected());
     assert!(
         catalog
-            .scan_completed_files(serde_json::json!({"paths":[path]}))
+            .scan_completed_files(plain_libs::serde_json::json!({"paths":[path]}))
             .await
             .unwrap()
     );
@@ -375,19 +375,19 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
     );
     assert!(
         catalog
-            .scan_completed_files(serde_json::json!([path]))
+            .scan_completed_files(plain_libs::serde_json::json!([path]))
             .await
             .is_err()
     );
     assert!(
         catalog
-            .scan_completed_files(serde_json::json!({"paths":[path],"extra":true}))
+            .scan_completed_files(plain_libs::serde_json::json!({"paths":[path],"extra":true}))
             .await
             .is_err()
     );
     assert!(
         catalog
-            .scan_completed_files(serde_json::json!({"paths":[]}))
+            .scan_completed_files(plain_libs::serde_json::json!({"paths":[]}))
             .await
             .unwrap()
     );
@@ -395,7 +395,7 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
     std::fs::write(&opaque, b"opaque").unwrap();
     assert!(
         catalog
-            .scan_completed_files(serde_json::json!({"paths":[opaque]}))
+            .scan_completed_files(plain_libs::serde_json::json!({"paths":[opaque]}))
             .await
             .unwrap()
     );
@@ -408,7 +408,7 @@ async fn completion_scan_uses_the_object_protocol_and_os_reads_without_host_reen
     core.stop_core().await;
     assert!(
         catalog
-            .scan_completed_files(serde_json::json!({"paths":[]}))
+            .scan_completed_files(plain_libs::serde_json::json!({"paths":[]}))
             .await
             .is_err()
     );
@@ -431,7 +431,7 @@ async fn completion_scan_reports_read_failures_instead_of_partial_success() {
     let missing = directory.path().join("missing.txt");
     assert!(
         catalog
-            .scan_completed_files(serde_json::json!({"paths":[path,missing]}))
+            .scan_completed_files(plain_libs::serde_json::json!({"paths":[path,missing]}))
             .await
             .is_err()
     );
@@ -443,7 +443,7 @@ async fn completion_scan_reports_read_failures_instead_of_partial_success() {
     );
     assert!(
         catalog
-            .scan_completed_files(serde_json::json!({"paths":["relative.txt"]}))
+            .scan_completed_files(plain_libs::serde_json::json!({"paths":["relative.txt"]}))
             .await
             .is_err()
     );
@@ -525,7 +525,7 @@ async fn the_watcher_stops_with_the_core_and_rejects_after_it() {
     assert!(catalog.watch_source_directories().is_err());
     assert!(
         catalog
-            .scan_completed_files(serde_json::json!({"paths":[]}))
+            .scan_completed_files(plain_libs::serde_json::json!({"paths":[]}))
             .await
             .is_err(),
         "a stopped core must refuse catalog writes"
@@ -594,7 +594,7 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
     std::fs::write(&path, b"unrecognized audio bytes").unwrap();
     let scan = async || {
         catalog
-            .scan_completed_files(serde_json::json!({"paths":[path]}))
+            .scan_completed_files(plain_libs::serde_json::json!({"paths":[path]}))
             .await
             .unwrap()
     };
@@ -605,10 +605,10 @@ async fn nomedia_reclassification_preserves_file_identity_and_user_state() {
         .unwrap();
     let id = &original.id;
     let db = core.runtime_state().db.clone();
-    db.with_conn(|conn| -> rusqlite::Result<()> {
+    db.with_conn(|conn| -> plain_libs::rusqlite::Result<()> {
         conn.execute("UPDATE files SET favorited=1 WHERE id=?1", [id])?;
         conn.execute("INSERT INTO tags(id,name,type,created_at,updated_at) VALUES('nomedia-tag','Tag',1,'2026-01-01','2026-01-01')", [])?;
-        conn.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('nomedia-tag',?1,?2,'2026-01-01')", rusqlite::params![original.id, DataType::Audio.kind()])?;
+        conn.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('nomedia-tag',?1,?2,'2026-01-01')", plain_libs::rusqlite::params![original.id, DataType::Audio.kind()])?;
         Ok(())
     }).unwrap();
     let marker = directory.path().join(".nomedia");

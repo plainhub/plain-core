@@ -4,7 +4,7 @@ use plain_rs::features::chat::enums::DeviceType;
 use plain_rs::features::services::notifications::types::Notification;
 use plain_rs::features::services::peers::management::Identity;
 use plain_rs::infrastructure::db::DPeer;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Mutex;
 use tokio::sync::watch;
 
@@ -17,8 +17,8 @@ use tokio::sync::Notify;
 struct CallbackReceiver {
     host: Arc<plain_rs::infrastructure::host::bridge::Host>,
     generation: u64,
-    requests: tokio::sync::mpsc::Receiver<serde_json::Value>,
-    buffered: std::collections::VecDeque<serde_json::Value>,
+    requests: tokio::sync::mpsc::Receiver<plain_libs::serde_json::Value>,
+    buffered: std::collections::VecDeque<plain_libs::serde_json::Value>,
 }
 
 impl CallbackReceiver {
@@ -32,7 +32,7 @@ impl CallbackReceiver {
         }
     }
 
-    fn try_recv(&mut self) -> Result<serde_json::Value, tokio::sync::mpsc::error::TryRecvError> {
+    fn try_recv(&mut self) -> Result<plain_libs::serde_json::Value, tokio::sync::mpsc::error::TryRecvError> {
         if let Some(value) = self.buffered.pop_front() {
             return Ok(value);
         }
@@ -47,7 +47,7 @@ impl CallbackReceiver {
         }
     }
 
-    async fn recv(&mut self) -> Option<serde_json::Value> {
+    async fn recv(&mut self) -> Option<plain_libs::serde_json::Value> {
         if let Some(value) = self.buffered.pop_front() {
             return Some(value);
         }
@@ -61,7 +61,7 @@ impl CallbackReceiver {
             }
         }
     }
-    async fn recv_clipboard(&mut self) -> Option<serde_json::Value> {
+    async fn recv_clipboard(&mut self) -> Option<plain_libs::serde_json::Value> {
         loop {
             let request = self.requests.recv().await?;
             self.host
@@ -106,7 +106,7 @@ fn notification(id: &str) -> Notification {
     }
 }
 
-fn event(receiver: &mut CallbackReceiver) -> serde_json::Value {
+fn event(receiver: &mut CallbackReceiver) -> plain_libs::serde_json::Value {
     receiver.try_recv().unwrap()
 }
 
@@ -148,7 +148,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     let (_, port) = remote.start_configured_public().await.unwrap();
     let (generation, mut requests) = remote_state.host.connect();
     let facts = Arc::new(Mutex::new(vec![
-        serde_json::to_value(notification("old")).unwrap(),
+        plain_libs::serde_json::to_value(notification("old")).unwrap(),
     ]));
     let allowed = Arc::new(AtomicBool::new(true));
     let supported = Arc::new(AtomicBool::new(true));
@@ -211,7 +211,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
                         }
                     }
                     "systemAccessFacts" => {
-                        let granted: serde_json::Map<String, serde_json::Value> = request["params"]
+                        let granted: plain_libs::serde_json::Map<String, plain_libs::serde_json::Value> = request["params"]
                             ["features"]
                             .as_array()
                             .unwrap()
@@ -242,7 +242,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
                         json!(sdk_facts.lock().unwrap().clone())
                     }
                     "mdnsMulticast" => json!(false),
-                    "onlineClientsChanged" => serde_json::Value::Null,
+                    "onlineClientsChanged" => plain_libs::serde_json::Value::Null,
                     method => panic!("Unexpected notification primitive {method}"),
                 };
                 host.reply(generation, json!({"id":request["id"],"result":result}))
@@ -356,7 +356,7 @@ async fn encrypted_snapshots_keep_socket_delivery_live_and_discard_revoked_crede
     };
     let (cancel, cancelled) = watch::channel(false);
     while callbacks.try_recv().is_ok() {}
-    *facts.lock().unwrap() = vec![serde_json::to_value(notification("confirmed")).unwrap()];
+    *facts.lock().unwrap() = vec![plain_libs::serde_json::to_value(notification("confirmed")).unwrap()];
     refresh(&state, &peer.id, &identity, &cancelled)
         .await
         .unwrap();

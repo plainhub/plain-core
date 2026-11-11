@@ -154,7 +154,7 @@ async fn scanner_sends_only_the_response_and_both_tls_peers_save_the_same_key() 
     while let Ok(event) = incoming.try_recv() {
         assert_ne!(event.event_type, "PAIRING_REQUEST_RECEIVED");
         if event.event_type == "PAIRING_SUCCESS" {
-            let payload: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+            let payload: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
             assert_eq!(payload["requestId"], qr.request_id);
             assert_eq!(payload["ip"], "127.0.0.1");
             assert_eq!(payload["port"], ports[1]);

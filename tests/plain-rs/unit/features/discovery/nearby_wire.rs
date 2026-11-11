@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn canonical_messages_round_trip_and_reject_unknown_or_malformed_payloads() {
@@ -8,10 +8,10 @@ fn canonical_messages_round_trip_and_reject_unknown_or_malformed_payloads() {
         json!({"kind":"PAIR_CANCEL","payload":{"fromId":"a","toId":"b","requestSignature":"request","signaturePublicKey":"public","timestamp":1,"signature":"proof"}}),
         json!({"kind":"DISCOVER_REPLY","payload":{"id":"peer","name":"Fixture","port":1234,"deviceType":"PHONE","version":"1","signaturePublicKey":"test-public-key","platform":"test"}}),
     ] {
-        let message: Message = serde_json::from_value(value).unwrap();
-        let expected = serde_json::to_value(&message).unwrap();
+        let message: Message = plain_libs::serde_json::from_value(value).unwrap();
+        let expected = plain_libs::serde_json::to_value(&message).unwrap();
         assert_eq!(
-            serde_json::to_value(Message::parse(&message.wire().unwrap()).unwrap()).unwrap(),
+            plain_libs::serde_json::to_value(Message::parse(&message.wire().unwrap()).unwrap()).unwrap(),
             expected
         );
     }

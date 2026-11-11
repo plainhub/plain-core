@@ -3,7 +3,7 @@
 /// GraphQL error types at the consumers' boundaries.
 #[derive(Debug)]
 pub enum DomainError {
-    Sqlite(rusqlite::Error),
+    Sqlite(plain_libs::rusqlite::Error),
     Other(String),
 }
 
@@ -25,8 +25,8 @@ impl std::error::Error for DomainError {
     }
 }
 
-impl From<rusqlite::Error> for DomainError {
-    fn from(e: rusqlite::Error) -> Self {
+impl From<plain_libs::rusqlite::Error> for DomainError {
+    fn from(e: plain_libs::rusqlite::Error) -> Self {
         DomainError::Sqlite(e)
     }
 }

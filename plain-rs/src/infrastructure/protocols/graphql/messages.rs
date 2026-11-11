@@ -1,6 +1,6 @@
 use plain_graphql::{Request, Response};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClientMessage {

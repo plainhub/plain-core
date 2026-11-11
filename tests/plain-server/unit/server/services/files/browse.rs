@@ -1,5 +1,5 @@
 use crate::server::ContentServer;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 
 #[tokio::test]

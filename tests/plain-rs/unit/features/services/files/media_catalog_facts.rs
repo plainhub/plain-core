@@ -92,11 +92,11 @@ fn sixty_four_bit_values_stay_integers() {
     assert_eq!(facts["size"].as_i64(), Some(9_007_199_254_740_993));
     assert_eq!(facts["durationMs"].as_i64(), Some(i64::MAX));
     assert_eq!(
-        serde_json::to_string(&facts["size"]).unwrap(),
+        plain_libs::serde_json::to_string(&facts["size"]).unwrap(),
         "9007199254740993"
     );
     assert_eq!(
-        serde_json::to_string(&facts["durationMs"]).unwrap(),
+        plain_libs::serde_json::to_string(&facts["durationMs"]).unwrap(),
         "9223372036854775807"
     );
 }

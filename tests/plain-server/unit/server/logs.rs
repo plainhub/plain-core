@@ -21,7 +21,7 @@ async fn native_main_uses_the_shared_default_path_without_host_requests() {
         assert_eq!(data["appLogPath"], path.to_string_lossy().as_ref());
         assert_eq!(
             data["appLogs"],
-            serde_json::json!(["ERROR current", "INFO previous"])
+            plain_libs::serde_json::json!(["ERROR current", "INFO previous"])
         );
         assert_eq!(data["appLogFilesSize"], contents.len());
     }
@@ -48,7 +48,7 @@ async fn native_main_uses_the_injected_logger_path_without_host_requests() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["appLogPath"], path.to_string_lossy().as_ref());
-    assert_eq!(data["appLogs"], serde_json::json!(["ERROR current"]));
+    assert_eq!(data["appLogs"], plain_libs::serde_json::json!(["ERROR current"]));
     let response = native
         .execute(plain_graphql::Request::new("mutation { clearAppLogs }"))
         .await;

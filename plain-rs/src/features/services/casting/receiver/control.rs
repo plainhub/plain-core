@@ -2,7 +2,7 @@ use crate::features::prefs::pref_keys::{DLNA_ALLOWED_SENDERS, DLNA_DENIED_SENDER
 use crate::features::services::casting::receiver::renderer_state::DlnaRendererState;
 use crate::runtime::Runtime as CoreRuntime;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 pub fn snapshot(state: &DlnaRendererState) -> Value {
     json!({

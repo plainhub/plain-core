@@ -31,7 +31,7 @@ fn register(db: &Db) -> String {
 
 #[test]
 fn installed_schema_matches_generated_definitions() {
-    fn definitions(conn: &rusqlite::Connection) -> Vec<(String, String, String)> {
+    fn definitions(conn: &plain_libs::rusqlite::Connection) -> Vec<(String, String, String)> {
         conn.prepare(
             "SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type,name",
         )
@@ -47,10 +47,10 @@ fn installed_schema_matches_generated_definitions() {
             ))
         })
         .unwrap()
-        .collect::<rusqlite::Result<_>>()
+        .collect::<plain_libs::rusqlite::Result<_>>()
         .unwrap()
     }
-    let expected = rusqlite::Connection::open_in_memory().unwrap();
+    let expected = plain_libs::rusqlite::Connection::open_in_memory().unwrap();
     expected
         .execute_batch(include_str!("../../../../../schema/database.sql"))
         .unwrap();

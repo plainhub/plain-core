@@ -6,7 +6,7 @@ use crate::infrastructure::db::PEER_COLS;
 use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::row_to_peer;
 use plain_libs::anyhow::{Result, bail};
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 #[derive(Clone, serde::Deserialize)]
 pub struct Facts {
     pub id: String,

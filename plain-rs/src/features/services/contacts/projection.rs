@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Deserialize)]
@@ -54,7 +54,7 @@ pub fn sources(rows: Vec<Value>) -> Vec<Value> {
 }
 
 pub fn contacts(value: Value) -> plain_libs::anyhow::Result<Vec<Value>> {
-    let page: Page = serde_json::from_value(value)?;
+    let page: Page = plain_libs::serde_json::from_value(value)?;
     let groups: HashMap<String, Value> = groups(page.groups)
         .into_iter()
         .map(|group| (group["id"].as_str().unwrap_or_default().to_owned(), group))

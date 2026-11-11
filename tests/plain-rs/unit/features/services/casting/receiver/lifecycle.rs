@@ -48,13 +48,13 @@ async fn receiver_requires_multicast_permission() {
     let responder = tokio::spawn(async move {
         while let Some(request) = requests.recv().await {
             let result = match request["method"].as_str().unwrap() {
-                "systemCapabilities" => serde_json::json!([]),
-                "mdnsMulticast" => serde_json::json!(false),
+                "systemCapabilities" => plain_libs::serde_json::json!([]),
+                "mdnsMulticast" => plain_libs::serde_json::json!(false),
                 other => panic!("Unexpected platform primitive: {other}"),
             };
             host.reply(
                 generation,
-                serde_json::json!({"id": request["id"], "result": result}),
+                plain_libs::serde_json::json!({"id": request["id"], "result": result}),
             )
             .unwrap();
         }

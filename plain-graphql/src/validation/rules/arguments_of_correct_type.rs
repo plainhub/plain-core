@@ -9,7 +9,7 @@ use crate::{
         visitor::{Visitor, VisitorContext},
     },
 };
-use indexmap::map::IndexMap;
+use plain_libs::indexmap::map::IndexMap;
 #[derive(Default)]
 pub struct ArgumentsOfCorrectType<'a> {
     current_args: Option<&'a IndexMap<String, MetaInputValue>>,

@@ -1,11 +1,11 @@
 use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
 use plain_rs::features::files::tasks::FileTaskStatus;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
-use tokio_tungstenite::tungstenite::Message;
+use plain_libs::tokio_tungstenite::tungstenite::Message;
 
 async fn call(port: u16, token: &str, doc: String) -> Value {
     let text = http_client::builder().build().unwrap()
@@ -19,7 +19,7 @@ async fn call(port: u16, token: &str, doc: String) -> Value {
         .text()
         .await
         .unwrap();
-    serde_json::from_str(&text).unwrap()
+    plain_libs::serde_json::from_str(&text).unwrap()
 }
 fn find_task(response: &Value, id: &str) -> Value {
     assert!(response.get("errors").is_none(), "{response}");
@@ -54,7 +54,7 @@ async fn main_tasks_track_resolved_paths_and_gate_sdk_execution_on_platform_auth
     let records = scanned.clone();
     let worker = tokio::spawn(async move {
         while let Some(Ok(Message::Text(text))) = socket.next().await {
-            let request: Value = serde_json::from_str(&text).unwrap();
+            let request: Value = plain_libs::serde_json::from_str(&text).unwrap();
             let reply = if request["method"] == "systemCapabilities" {
                 json!({"id":request["id"],"result":[]})
             } else if request["method"] == "mdnsMulticast" {
@@ -185,9 +185,9 @@ async fn media_move_case(missing_destination: bool) {
     .unwrap();
     let db = server.runtime_state().core.db.clone();
     let audio_path = source.join("audio").to_str().unwrap().to_owned();
-    db.with_conn(|c| -> rusqlite::Result<()> {
+    db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         for (kind, id, tag) in [(1,"1","audio"),(2,"2","video"),(3,"3","image"),(24,"4","document")] {
-            c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES(?1,?2,?3,'first')",rusqlite::params![tag,id,kind])?;
+            c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES(?1,?2,?3,'first')",plain_libs::rusqlite::params![tag,id,kind])?;
         }
         c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('file',?1,22,'first')",[source.join("document").to_str().unwrap()])?;
         c.execute_batch("INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES(2,'2',4000000001,0,'first');")?;
@@ -236,7 +236,7 @@ async fn media_move_case(missing_destination: bool) {
     let missing = unavailable.clone();
     let worker = tokio::spawn(async move {
         while let Some(Ok(Message::Text(text))) = socket.next().await {
-            let request: Value = serde_json::from_str(&text).unwrap();
+            let request: Value = plain_libs::serde_json::from_str(&text).unwrap();
             let params = &request["params"];
             let result = match request["method"].as_str().unwrap() {
                 "fileTaskScan" => json!(true),
@@ -350,7 +350,7 @@ async fn media_move_case(missing_destination: bool) {
     } else {
         assert_eq!(task["status"], "DONE", "{task}");
         assert_eq!(clear_count.load(std::sync::atomic::Ordering::SeqCst), 1);
-        db.with_conn(|c| -> rusqlite::Result<()> {
+        db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
             for (tag, id) in [
                 ("audio", "11"),
                 ("video", "12"),

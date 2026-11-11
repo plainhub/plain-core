@@ -3,12 +3,12 @@ use plain_libs::protocols::http_client;
 
 #[test]
 fn upload_info_defaults_match_the_desktop_payload() {
-    let info: UploadInfo = serde_json::from_str("{}").unwrap();
+    let info: UploadInfo = plain_libs::serde_json::from_str("{}").unwrap();
     assert!(info.dir.is_empty());
     assert!(!info.replace);
     assert!(!info.is_app_file);
     assert_eq!(info.size, 0);
-    let chunk: ChunkInfo = serde_json::from_str("{}").unwrap();
+    let chunk: ChunkInfo = plain_libs::serde_json::from_str("{}").unwrap();
     assert!(chunk.file_id.is_empty());
     assert_eq!(chunk.index, 0);
 }
@@ -20,7 +20,7 @@ async fn multipart_upload(
     client_id: &str,
     token: Option<&str>,
     key: &[u8],
-    info: serde_json::Value,
+    info: plain_libs::serde_json::Value,
     bytes: &[u8],
     file_first: bool,
 ) -> http_client::Response {
@@ -57,7 +57,7 @@ async fn multipart_upload(
     body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
     let chunks = body
         .chunks(32768)
-        .map(|chunk| Ok::<_, std::io::Error>(axum::body::Bytes::copy_from_slice(chunk)))
+        .map(|chunk| Ok::<_, std::io::Error>(plain_libs::axum::body::Bytes::copy_from_slice(chunk)))
         .collect::<Vec<_>>();
     let mut request = http_client::builder()
         .build()
@@ -102,7 +102,7 @@ async fn multipart_regular_upload_streams_without_host_preserves_replacements_an
     let data = (0..(2 * 1024 * 1024 + 17))
         .map(|index| (index % 251) as u8)
         .collect::<Vec<_>>();
-    let info = serde_json::json!({"dir":destination,"replace":false,"size":data.len()});
+    let info = plain_libs::serde_json::json!({"dir":destination,"replace":false,"size":data.len()});
     let response = multipart_upload(
         &core,
         "/upload",
@@ -130,7 +130,7 @@ async fn multipart_regular_upload_streams_without_host_preserves_replacements_an
     .await;
     assert_eq!(response.status(), 201);
     assert_eq!(response.text().await.unwrap(), "part (1).bin");
-    let invalid = serde_json::json!({"dir":destination,"replace":true,"size":10});
+    let invalid = plain_libs::serde_json::json!({"dir":destination,"replace":true,"size":10});
     let response = multipart_upload(
         &core,
         "/upload",
@@ -184,7 +184,7 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
     let client_id = state.native_client_id().unwrap();
     let key = plain_libs::utils::base64::base64_decode(&core.runtime_state().token);
     let data = vec![42; MAX_UPLOAD_WRITE_BYTES * 3 + 19];
-    let info = serde_json::json!({"fileId":"fixture","index":0,"size":data.len()});
+    let info = plain_libs::serde_json::json!({"fileId":"fixture","index":0,"size":data.len()});
     let response = multipart_upload(
         &core,
         "/upload_chunk",
@@ -204,7 +204,7 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
     )
     .unwrap();
     assert_eq!(std::fs::read(path).unwrap(), data);
-    let info = serde_json::json!({"fileId":"fixture","index":0,"size":20});
+    let info = plain_libs::serde_json::json!({"fileId":"fixture","index":0,"size":20});
     let response = multipart_upload(
         &core,
         "/upload_chunk",
@@ -227,7 +227,7 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
         &client_id,
         Some(&token),
         &key,
-        serde_json::json!({"fileId":"empty","index":0,"size":0}),
+        plain_libs::serde_json::json!({"fileId":"empty","index":0,"size":0}),
         b"",
         false,
     )

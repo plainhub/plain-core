@@ -1,6 +1,6 @@
 use super::{PeerRoute, request_error};
 use crate::{native::resources::MAX_RESOURCE_RESPONSE_BYTES, server::ServerState};
-use axum::http::{Method, StatusCode, header};
+use plain_libs::axum::http::{Method, StatusCode, header};
 use plain_libs::protocols::http_client;
 use plain_rs::features::{
     files::resource_link::{self, Resource, Scope},

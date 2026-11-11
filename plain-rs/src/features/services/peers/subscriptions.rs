@@ -10,7 +10,7 @@ use futures_util::{SinkExt, StreamExt};
 use plain_libs::protocols::http_client;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::{mpsc, watch};
-use tokio_tungstenite::tungstenite::Message;
+use plain_libs::tokio_tungstenite::tungstenite::Message;
 
 pub struct PeerSubscription {
     state: CoreRuntime,
@@ -122,7 +122,7 @@ impl PeerSubscription {
         if encoded.len() > 1024 * 1024 - 49 {
             return Err("Subscription request too large".into());
         }
-        let message = serde_json::from_str(encoded).map_err(|error| error.to_string())?;
+        let message = plain_libs::serde_json::from_str(encoded).map_err(|error| error.to_string())?;
         self.commands
             .try_send(message)
             .map_err(|_| "Subscription command backpressure".into())
@@ -205,10 +205,10 @@ impl PeerSubscription {
                     match frame {
                         Message::Binary(frame) => {
                             let plain = stream.decode(&frame, &key).ok_or_else(|| anyhow!("Invalid management event authentication"))?;
-                            let message: ServerMessage = serde_json::from_slice(&plain)?;
+                            let message: ServerMessage = plain_libs::serde_json::from_slice(&plain)?;
                             self.current()?;
                             if matches!(message, ServerMessage::Pong { .. }) { pong_deadline = None; }
-                            else { outgoing.try_send(Ok(serde_json::to_string(&message)?)).map_err(|_| anyhow!("Subscription response backpressure"))?; }
+                            else { outgoing.try_send(Ok(plain_libs::serde_json::to_string(&message)?)).map_err(|_| anyhow!("Subscription response backpressure"))?; }
                         },
                         Message::Ping(payload) => socket.send(Message::Pong(payload)).await?,
                         Message::Pong(_) => {},

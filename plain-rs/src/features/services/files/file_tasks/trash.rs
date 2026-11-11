@@ -1,6 +1,6 @@
 use crate::features::files::trash::{SortOrder, Trash, TrashItem};
 use crate::features::services::files::file_tasks::*;
-use rusqlite::OptionalExtension;
+use plain_libs::rusqlite::OptionalExtension;
 
 impl FileTasks {
     fn trash_store(&self) -> Result<Trash> {

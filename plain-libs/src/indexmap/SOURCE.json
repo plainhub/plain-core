@@ -1,0 +1,12 @@
+{
+  "name": "indexmap",
+  "version": "2.14.2",
+  "archive_sha256": "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855",
+  "repository": "https://github.com/indexmap-rs/indexmap",
+  "revision": "41a870887c4c77adf665886e63df08f406bfe37a",
+  "retained_features": [
+    "default",
+    "serde",
+    "std"
+  ]
+}

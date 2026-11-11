@@ -6,8 +6,8 @@ use crate::infrastructure::db::chat_store::SaveMode;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use crate::test_runtime::Core as ContentServer;
-use serde_json::Value;
-use serde_json::json;
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 use std::sync::{Arc, Mutex};
 
 fn server() -> (plain_libs::temporary::TempDir, ContentServer, CoreRuntime) {

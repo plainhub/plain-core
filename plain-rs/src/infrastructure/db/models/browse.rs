@@ -5,7 +5,7 @@ use std::fmt;
 #[derive(Debug)]
 pub enum SqliteBrowseError {
     Invalid(String),
-    Sqlite(rusqlite::Error),
+    Sqlite(plain_libs::rusqlite::Error),
 }
 
 impl fmt::Display for SqliteBrowseError {
@@ -26,8 +26,8 @@ impl std::error::Error for SqliteBrowseError {
     }
 }
 
-impl From<rusqlite::Error> for SqliteBrowseError {
-    fn from(e: rusqlite::Error) -> Self {
+impl From<plain_libs::rusqlite::Error> for SqliteBrowseError {
+    fn from(e: plain_libs::rusqlite::Error) -> Self {
         SqliteBrowseError::Sqlite(e)
     }
 }

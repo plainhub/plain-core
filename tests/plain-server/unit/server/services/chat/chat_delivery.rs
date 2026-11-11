@@ -2,8 +2,8 @@
 
 use plain_rs::features::services::chat::chat_delivery::*;
 use plain_rs::infrastructure::db::DPeer;
-use serde_json::Value;
-use serde_json::json;
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -76,7 +76,7 @@ async fn explicit_message_retry_root_probes_open_transport_and_sends_original_ro
                         &[7; 32],
                     );
                     let document: Value =
-                        serde_json::from_str(wire.splitn(4, '|').nth(3).unwrap()).unwrap();
+                        plain_libs::serde_json::from_str(wire.splitn(4, '|').nth(3).unwrap()).unwrap();
                     assert_eq!(
                         document["query"],
                         plain_rs::infrastructure::transport::contract::CREATE_CHAT_ITEM

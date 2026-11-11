@@ -144,7 +144,7 @@ fn development_database_tools_cannot_read_or_erase_security_receipts() {
             .is_err()
     );
     assert!(
-        file.insert_table_row("replay_receipts", &serde_json::Map::new())
+        file.insert_table_row("replay_receipts", &plain_libs::serde_json::Map::new())
             .is_err()
     );
     assert!(

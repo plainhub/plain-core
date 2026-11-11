@@ -34,5 +34,5 @@ pub async fn content(state: &CoreRuntime, service: Arc<Service>, id: String) -> 
         total_size: summary.total_size,
         expires_at: row.expires_at.map(|value| value.parse()).transpose()?,
     };
-    Ok(serde_json::json!({"type":"SHARE", "value":card}).to_string())
+    Ok(plain_libs::serde_json::json!({"type":"SHARE", "value":card}).to_string())
 }

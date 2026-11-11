@@ -1,0 +1,14 @@
+{
+  "name": "hyper",
+  "version": "1.11.1",
+  "archive_sha256": "27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43",
+  "repository": "https://github.com/hyperium/hyper",
+  "revision": "6371cd425017155f7fbecef0e57b218edbe6a93a",
+  "retained_features": [
+    "client",
+    "default",
+    "http1",
+    "http2",
+    "server"
+  ]
+}

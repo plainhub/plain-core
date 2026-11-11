@@ -7,7 +7,7 @@ use plain_rs::infrastructure::db::DPeer;
 use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::channels;
 use plain_rs::infrastructure::db::chat_store::peers;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -132,7 +132,7 @@ async fn main_login_and_logout_preserve_pairing_and_live_proxy_addresses() {
     let response = executor.execute(plain_graphql::Request::new(query)).await;
     assert_eq!(
         response.data.into_json().unwrap()["peers"][0]["token"],
-        serde_json::json!("")
+        plain_libs::serde_json::json!("")
     );
     let mut row = plain_rs::infrastructure::db::chat_store::peers::get(&state.db, "peer-a")
         .unwrap()

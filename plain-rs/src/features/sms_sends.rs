@@ -1,6 +1,6 @@
 use plain_libs::kv::Db;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use plain_libs::serde_json::{Map, Value};
 use std::collections::BTreeSet;
 
 const PREFIX: &str = "sms_pending_";
@@ -44,10 +44,10 @@ fn key(id: &str) -> String {
     format!("{PREFIX}{id}")
 }
 fn decode(value: Value) -> plain_libs::anyhow::Result<Pending> {
-    Ok(serde_json::from_value(value)?)
+    Ok(plain_libs::serde_json::from_value(value)?)
 }
 fn encode(value: &Pending) -> plain_libs::anyhow::Result<Value> {
-    Ok(serde_json::to_value(value)?)
+    Ok(plain_libs::serde_json::to_value(value)?)
 }
 
 pub fn pending(store: &Db) -> plain_libs::anyhow::Result<Vec<Pending>> {
@@ -55,7 +55,7 @@ pub fn pending(store: &Db) -> plain_libs::anyhow::Result<Vec<Pending>> {
         .scan_prefix(PREFIX)
         .map(|entry| {
             let (_, value) = entry?;
-            decode(serde_json::from_str(&value)?)
+            decode(plain_libs::serde_json::from_str(&value)?)
         })
         .collect()
 }

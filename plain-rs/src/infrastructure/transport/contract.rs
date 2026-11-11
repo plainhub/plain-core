@@ -5,7 +5,7 @@
 //! actual HTTP POST is the app's job via the [`PeerTransport`] trait —
 //! Native hosts use the shared async HTTP client.
 
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 use plain_libs::crypto::ed25519_sign;
 use plain_libs::utils::http_url::build_url;
@@ -157,7 +157,7 @@ pub async fn deliver_signed<T: PeerTransport + ?Sized>(
             errors.push(format!("{peer_graphql_url}: failed decrypting response"));
             continue;
         };
-        let Ok(value) = serde_json::from_slice::<serde_json::Value>(&decrypted) else {
+        let Ok(value) = plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&decrypted) else {
             log::warn!("deliver_to_peer invalid JSON from {peer_graphql_url}");
             errors.push(format!("{peer_graphql_url}: invalid JSON response"));
             continue;
@@ -176,18 +176,18 @@ pub async fn deliver_signed<T: PeerTransport + ?Sized>(
     })
 }
 
-pub fn message_response(value: &serde_json::Value) -> Result<(), String> {
+pub fn message_response(value: &plain_libs::serde_json::Value) -> Result<(), String> {
     if let Some(errors) = value.get("errors") {
         match errors {
-            serde_json::Value::Null => {}
-            serde_json::Value::Array(errors) if errors.is_empty() => {}
+            plain_libs::serde_json::Value::Null => {}
+            plain_libs::serde_json::Value::Array(errors) if errors.is_empty() => {}
             _ => return Err(format!("GraphQL errors {errors}")),
         }
     }
     if !value
         .get("data")
         .and_then(|data| data.get("createChatItem"))
-        .is_some_and(serde_json::Value::is_array)
+        .is_some_and(plain_libs::serde_json::Value::is_array)
     {
         return Err("Missing createChatItem delivery receipt".into());
     }
@@ -200,10 +200,10 @@ pub const START_AWARE: &str = "mutation StartAware { startAware }";
 pub fn signed_request(
     kp_bytes: &[u8],
     query: &str,
-    variables: serde_json::Value,
+    variables: plain_libs::serde_json::Value,
     channel_id: &str,
 ) -> Result<String, String> {
-    let graphql_json = serde_json::to_string(&json!({"query":query,"variables":variables}))
+    let graphql_json = plain_libs::serde_json::to_string(&json!({"query":query,"variables":variables}))
         .map_err(|e| e.to_string())?;
     let ts = now_ms();
     let nonce = plain_libs::utils::uuid::Uuid::new_v4().into_string();
@@ -303,7 +303,7 @@ pub async fn deliver_channel_system_message<T: PeerTransport>(
             log::warn!("[channel] {} response decrypt failed from {url}", msg_type);
             continue;
         };
-        let Ok(value) = serde_json::from_slice::<serde_json::Value>(&decrypted) else {
+        let Ok(value) = plain_libs::serde_json::from_slice::<plain_libs::serde_json::Value>(&decrypted) else {
             continue;
         };
         if value.get("errors").is_some_and(|errors| {

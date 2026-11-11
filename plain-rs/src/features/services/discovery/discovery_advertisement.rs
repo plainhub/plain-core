@@ -2,7 +2,7 @@ use crate::features::discovery::advertisement;
 use crate::features::discovery::advertisement::Facts;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::Result;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 pub enum Request {
     Reply {},
     Mdns {},
@@ -19,8 +19,8 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> Result<Value> {
     reply.remote_access = Some(settings.remote_access);
     reply.signature_public_key = crate::features::prefs::security::snapshot(&state.prefs)?.signature_public_key;
     match request {
-        Request::Reply {} => Ok(serde_json::to_value(reply)?),
-        Request::Mdns {} => Ok(serde_json::to_value(advertisement::mdns(
+        Request::Reply {} => Ok(plain_libs::serde_json::to_value(reply)?),
+        Request::Mdns {} => Ok(plain_libs::serde_json::to_value(advertisement::mdns(
             &reply,
             &crate::features::prefs::ensure_mdns_hostname(&state.prefs),
         )?)?),

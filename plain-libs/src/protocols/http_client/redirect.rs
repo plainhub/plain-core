@@ -1,9 +1,9 @@
 // Redirect handling adapted from tower-http 0.6.11 (https://github.com/tower-rs/tower-http), see LICENSE-tower-http.
 
 use super::{Body, ClientInner, Error, Method, StatusCode, Url, allowed_scheme};
-use http::{HeaderMap, HeaderValue, Request, Response, Uri, header};
-use http_body::Body as _;
-use hyper::body::Incoming;
+use crate::http::{HeaderMap, HeaderValue, Request, Response, Uri, header};
+use crate::http_body::Body as _;
+use crate::hyper::body::Incoming;
 
 #[derive(Clone, Copy)]
 pub struct Policy(Option<usize>);
@@ -84,7 +84,7 @@ pub(super) async fn send(
             for name in [
                 header::AUTHORIZATION,
                 header::COOKIE,
-                http::HeaderName::from_static("cookie2"),
+                crate::http::HeaderName::from_static("cookie2"),
                 header::PROXY_AUTHORIZATION,
                 header::WWW_AUTHENTICATE,
             ] {

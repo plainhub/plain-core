@@ -1,8 +1,8 @@
 use super::*;
 use futures_util::SinkExt;
 use plain_libs::protocols::http_client;
-use serde_json::{Value, json};
-use tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClientRequest};
+use plain_libs::serde_json::{Value, json};
+use plain_libs::tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClientRequest};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypted_socket() {
@@ -33,11 +33,11 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         let key = plain_libs::utils::base64::base64_decode(&session.token);
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let app = axum::Router::new().route("/graphql", axum::routing::get(upgrade).post(crate::http::graphql::call)).with_state(state.clone());
-        let serving = tokio::spawn(async { axum::serve(listener, app).await.unwrap() });
+        let app = plain_libs::axum::Router::new().route("/graphql", plain_libs::axum::routing::get(upgrade).post(crate::http::graphql::call)).with_state(state.clone());
+        let serving = tokio::spawn(async { plain_libs::axum::serve(listener, app).await.unwrap() });
         let request = format!("ws://{address}/graphql?cid={client}").into_client_request().unwrap();
-        let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
-        let init = graphql::seal_init(&key, &client, &serde_json::to_vec(&Init {
+        let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(request).await.unwrap();
+        let init = graphql::seal_init(&key, &client, &plain_libs::serde_json::to_vec(&Init {
             timestamp_millis: plain_libs::chrono::Utc::now().timestamp_millis(),
             client_nonce: "ab".repeat(32),
         }).unwrap()).unwrap();
@@ -52,7 +52,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         let mut ready = 0;
         while ready < 2 {
             let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else { panic!("socket closed during subscribe") };
-            let message: Value = serde_json::from_slice(&cipher.decode(&frame, &key).unwrap()).unwrap();
+            let message: Value = plain_libs::serde_json::from_slice(&cipher.decode(&frame, &key).unwrap()).unwrap();
             assert_eq!(message["type"], "next", "{message}");
             if message["payload"]["extensions"]["subscriptionReady"] == true { ready += 1; }
         }
@@ -63,7 +63,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         let mut first_media = false;
         while !first_scan || !first_media {
             let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else { panic!("socket closed before scan results") };
-            let message: Value = serde_json::from_slice(&cipher.decode(&frame, &key).unwrap()).unwrap();
+            let message: Value = plain_libs::serde_json::from_slice(&cipher.decode(&frame, &key).unwrap()).unwrap();
             assert_eq!(message["type"], "next", "{message}");
             first_scan |= message["payload"]["data"]["mediaScanProgress"].is_object();
             first_media |= message["payload"]["data"]["mediaLibraryUpdated"].is_object();
@@ -86,7 +86,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         socket.send(ClientMessage::Binary(frame.into())).await.unwrap();
         loop {
             let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else { panic!("socket closed during scan and page changes") };
-            let message: Value = serde_json::from_slice(&cipher.decode(&frame, &key).unwrap()).unwrap();
+            let message: Value = plain_libs::serde_json::from_slice(&cipher.decode(&frame, &key).unwrap()).unwrap();
             assert!(message["type"] != "error" || message["payload"][0]["message"] == "resync_required", "{message}");
             if message["type"] == "pong" {
                 assert_eq!(message["payload"]["afterPageChange"], true);
@@ -104,7 +104,7 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
 }
 
 type TestSocket =
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+    plain_libs::tokio_tungstenite::WebSocketStream<plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn heartbeat(socket: &mut TestSocket, cipher: &mut graphql::Stream, key: &[u8]) {
     let frame = cipher
@@ -120,7 +120,7 @@ async fn heartbeat(socket: &mut TestSocket, cipher: &mut graphql::Stream, key: &
                 panic!("WebSocket closed under fs load")
             };
             let message: Value =
-                serde_json::from_slice(&cipher.decode(&frame, key).unwrap()).unwrap();
+                plain_libs::serde_json::from_slice(&cipher.decode(&frame, key).unwrap()).unwrap();
             if message["type"] == "pong" {
                 assert_eq!(message["payload"]["fsResponsive"], true);
                 break;
@@ -250,7 +250,7 @@ async fn fs_burst_and_page_cancellation(
     let context = plain_rs::infrastructure::transport::http_response::Context::new(&body);
     let bytes = response.bytes().await.unwrap();
     let decoded = context.decrypt(key, &bytes).unwrap();
-    let response: Value = serde_json::from_slice(&decoded).unwrap();
+    let response: Value = plain_libs::serde_json::from_slice(&decoded).unwrap();
     assert_eq!(response["data"]["noteCount"], 0);
     heartbeat(socket, cipher, key).await;
     assert_eq!(
@@ -325,7 +325,7 @@ async fn fs_burst_and_page_cancellation(
         })
         .collect::<Vec<_>>();
     let configuration = source.path().join("http2.json");
-    std::fs::write(&configuration,serde_json::to_vec(&json!({"origin":origin,"certificate":pem,"client":client,"requests":requests.iter().map(|body|plain_libs::utils::base64::base64_encode(body)).collect::<Vec<_>>()})).unwrap()).unwrap();
+    std::fs::write(&configuration,plain_libs::serde_json::to_vec(&json!({"origin":origin,"certificate":pem,"client":client,"requests":requests.iter().map(|body|plain_libs::utils::base64::base64_encode(body)).collect::<Vec<_>>()})).unwrap()).unwrap();
     let output = tokio::task::spawn_blocking(move || {
         std::process::Command::new("node")
             .arg(concat!(
@@ -343,7 +343,7 @@ async fn fs_burst_and_page_cancellation(
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let responses: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
+    let responses: Vec<Value> = plain_libs::serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(responses.len(), 300);
     for (response, request) in responses.iter().zip(&requests) {
         assert_eq!(response["status"], 200);
@@ -351,7 +351,7 @@ async fn fs_burst_and_page_cancellation(
         let decoded = plain_rs::infrastructure::transport::http_response::Context::new(request)
             .decrypt(key, &bytes)
             .unwrap();
-        let result: Value = serde_json::from_slice(&decoded).unwrap();
+        let result: Value = plain_libs::serde_json::from_slice(&decoded).unwrap();
         assert_eq!(result["data"]["noteCount"], 0);
         assert!(result.get("errors").is_none());
     }

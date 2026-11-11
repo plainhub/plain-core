@@ -62,7 +62,7 @@ pub fn prepare(
     let ids = if !target.is_empty() {
         vec![target.to_owned()]
     } else {
-        serde_json::from_str::<Vec<ChannelMember>>(&channel.members)?
+        plain_libs::serde_json::from_str::<Vec<ChannelMember>>(&channel.members)?
             .into_iter()
             .filter(|m| m.peer_id != actor)
             .map(|m| m.peer_id)

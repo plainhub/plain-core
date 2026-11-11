@@ -117,7 +117,7 @@ impl MediaScans {
             Status::Completed => "IDLE",
             Status::Failed => "FAILED",
         };
-        let payload = serde_json::json!({
+        let payload = plain_libs::serde_json::json!({
             "id": snapshot.id,
             "indexed": snapshot.processed_files,
             "pending": snapshot.total_files.map(|total| total.saturating_sub(snapshot.processed_files)),

@@ -2,13 +2,13 @@ use crate::server::ServerState;
 use plain_rs::infrastructure::events::HOST_BINARY_TYPES;
 use plain_rs::infrastructure::events::HOST_TEXT_TYPES;
 use plain_rs::infrastructure::events::WsEvent;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use tokio::sync::{Mutex, mpsc};
 
 pub struct HostEvents {
     state: ServerState,
     generation: u64,
-    preferences: Mutex<serde_json::Map<String, Value>>,
+    preferences: Mutex<plain_libs::serde_json::Map<String, Value>>,
     requests: Mutex<mpsc::Receiver<Value>>,
 }
 struct ServingSession<'a>(&'a HostEvents);
@@ -95,7 +95,7 @@ impl HostEvents {
         let mut previous = self.preferences.lock().await;
         let current =
             crate::native::management::NativeManagement::new(self.state.clone()).preferences()?;
-        let changes: serde_json::Map<_, _> = current
+        let changes: plain_libs::serde_json::Map<_, _> = current
             .iter()
             .filter(|(key, value)| previous.get(*key) != Some(*value))
             .map(|(key, value)| (key.clone(), value.clone()))
@@ -218,7 +218,7 @@ impl HostEvents {
         plain_rs::features::services::discovery::pairing_runtime::execute(
             &self.state,
             plain_rs::features::services::discovery::pairing_runtime::Request::Complete {
-                response: serde_json::from_str(&payload).map_err(|error| error.to_string())?,
+                response: plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?,
                 sender_ip: String::new(),
             },
         )
@@ -235,7 +235,7 @@ impl HostEvents {
         return crate::graphql::resolvers::notifications::public::publish(
             &self.state.prefs,
             &self.state.events,
-            serde_json::from_str(&payload).map_err(|error| error.to_string())?,
+            plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?,
         );
     }
 
@@ -244,7 +244,7 @@ impl HostEvents {
             return Err("host disconnected".into());
         }
 
-        serde_json::from_str::<()>(&payload).map_err(|error| error.to_string())?;
+        plain_libs::serde_json::from_str::<()>(&payload).map_err(|error| error.to_string())?;
         #[cfg(not(target_os = "ios"))]
         self.state.image_models.catalog_changed();
         #[cfg(target_os = "ios")]
@@ -257,7 +257,7 @@ impl HostEvents {
             return Err("host disconnected".into());
         }
 
-        serde_json::from_str::<()>(&payload).map_err(|error| error.to_string())?;
+        plain_libs::serde_json::from_str::<()>(&payload).map_err(|error| error.to_string())?;
         self.state.mdns.network_changed(self.state.core.clone());
         self.state
             .network_revision
@@ -278,7 +278,7 @@ impl HostEvents {
             client_id: String,
         }
         let value: Advertisement =
-            serde_json::from_str(&payload).map_err(|error| error.to_string())?;
+            plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?;
         plain_rs::features::services::discovery::ble_scan::seen(
             &self.state,
             &value.scan_id,
@@ -300,7 +300,7 @@ impl HostEvents {
             scan_id: String,
             active: bool,
         }
-        let value: ScanState = serde_json::from_str(&payload).map_err(|error| error.to_string())?;
+        let value: ScanState = plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?;
         let id = plain_libs::utils::uuid::Uuid::parse_str(&value.scan_id).map_err(|error| error.to_string())?;
         return self
             .state
@@ -314,7 +314,7 @@ impl HostEvents {
             return Err("host disconnected".into());
         }
 
-        let facts = serde_json::from_str(&payload).map_err(|error| error.to_string())?;
+        let facts = plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?;
         return self
             .state
             .ble_advertising
@@ -346,7 +346,7 @@ impl HostEvents {
 
         self.state
             .sms_sends
-            .report(serde_json::from_str(&payload).map_err(|error| error.to_string())?)
+            .report(plain_libs::serde_json::from_str(&payload).map_err(|error| error.to_string())?)
             .map_err(|error| error.to_string())?;
         return Ok(());
     }
@@ -575,7 +575,7 @@ impl TestHost {
     }
     pub(crate) async fn next(
         &mut self,
-    ) -> Option<Result<tokio_tungstenite::tungstenite::Message, String>> {
+    ) -> Option<Result<plain_libs::tokio_tungstenite::tungstenite::Message, String>> {
         loop {
             let value = self.0.next_request().await?;
             if crate::test_support::acknowledge_host_callback(
@@ -585,17 +585,17 @@ impl TestHost {
             ) {
                 continue;
             }
-            return Some(Ok(tokio_tungstenite::tungstenite::Message::Text(
+            return Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Text(
                 value.to_string().into(),
             )));
         }
     }
     pub(crate) async fn send(
         &mut self,
-        value: tokio_tungstenite::tungstenite::Message,
+        value: plain_libs::tokio_tungstenite::tungstenite::Message,
     ) -> Result<(), String> {
         self.0.reply(
-            serde_json::from_str(value.to_text().map_err(|e| e.to_string())?)
+            plain_libs::serde_json::from_str(value.to_text().map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?,
         )
     }

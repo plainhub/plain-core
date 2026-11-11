@@ -204,7 +204,7 @@ fn article_html(html: &str) -> String {
 fn item_to_row(feed: &FeedRow, item: ParsedEntry) -> FeedEntryRow {
     let at = now();
     let fallback = plain_libs::utils::hex::bytes_to_hex(&Sha256::digest(
-        serde_json::to_vec(&(
+        plain_libs::serde_json::to_vec(&(
             &item.title,
             &item.author,
             &item.content,
@@ -418,12 +418,12 @@ pub(super) async fn sync_feed(
     } else {
         "UNKNOWN"
     };
-    let stored = serde_json::json!({"code":code,"detail":detail}).to_string();
+    let stored = plain_libs::serde_json::json!({"code":code,"detail":detail}).to_string();
     let persist = db.feed_set_sync_status(&feed.id, &now(), &stored);
     let detail = persist.err().map(|e| e.to_string()).unwrap_or(detail);
     let _ = events.send(WsEvent::broadcast(
         "FEEDS_FETCHED",
-        serde_json::json!({"feedId":feed.id,"error":detail}).to_string(),
+        plain_libs::serde_json::json!({"feedId":feed.id,"error":detail}).to_string(),
     ));
     if detail.is_empty() {
         Ok(())

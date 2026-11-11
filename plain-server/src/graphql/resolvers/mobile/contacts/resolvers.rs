@@ -14,7 +14,7 @@ use plain_rs::features::services::capabilities;
 use plain_rs::features::services::contacts::write as contact_write;
 use plain_rs::features::services::contacts::write::Action;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Contacts;
@@ -45,7 +45,7 @@ impl ContactsQuery {
                 ctx,
                 plain_rs::features::services::files::provider_query::Provider::Contact,
                 &query,
-                serde_json::json!({"offset": offset, "limit": limit}),
+                plain_libs::serde_json::json!({"offset": offset, "limit": limit}),
             )
             .await?,
         )
@@ -77,7 +77,7 @@ impl ContactsQuery {
                     ctx,
                     plain_rs::features::services::files::provider_query::Provider::Contact,
                     &query,
-                    serde_json::json!({}),
+                    plain_libs::serde_json::json!({}),
                 )
                 .await?,
             )
@@ -192,7 +192,7 @@ impl ContactsMutation {
                 ctx,
                 plain_rs::features::services::files::provider_query::Provider::Contact,
                 &query,
-                serde_json::json!({}),
+                plain_libs::serde_json::json!({}),
             )
             .await?,
         )
@@ -201,7 +201,7 @@ impl ContactsMutation {
         .filter_map(Value::as_str)
         .map(Value::from)
         .collect();
-        let deleted: Vec<Value> = serde_json::from_value(
+        let deleted: Vec<Value> = plain_libs::serde_json::from_value(
             ctx.data_unchecked::<Arc<Host>>()
                 .call(
                     "systemDeleteRecords",

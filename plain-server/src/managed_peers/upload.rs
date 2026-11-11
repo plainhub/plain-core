@@ -1,7 +1,7 @@
 use super::{GRAPHQL_LIMIT, PeerRoute};
 use crate::server::ServerState;
 use plain_libs::anyhow::{Result, ensure};
-use axum::{
+use plain_libs::axum::{
     body::Bytes,
     http::{StatusCode, header},
 };

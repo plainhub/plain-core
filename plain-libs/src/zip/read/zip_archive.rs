@@ -15,7 +15,7 @@ use crate::zip::result::{ZipError, ZipResult};
 use crate::zip::types::ZipFileData;
 use crate::zip::unstable::path_to_string;
 use core::ops::Range;
-use indexmap::IndexMap;
+use crate::indexmap::IndexMap;
 use std::borrow::Cow;
 use std::io::{Read, Seek, SeekFrom};
 use std::mem;

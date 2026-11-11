@@ -166,7 +166,7 @@ fn jpeg_encode_latency_benchmark() {
     samples.sort_by(f64::total_cmp);
     println!(
         "{}",
-        serde_json::json!({"phase":"JPEG encode 512x512 q85","samples":20,"medianMs":samples[10],"p95Ms":samples[18],"digest":sha2::Sha256::digest(&encoded).to_vec()})
+        crate::serde_json::json!({"phase":"JPEG encode 512x512 q85","samples":20,"medianMs":samples[10],"p95Ms":samples[18],"digest":sha2::Sha256::digest(&encoded).to_vec()})
     );
 }
 

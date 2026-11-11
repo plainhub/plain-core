@@ -287,7 +287,7 @@ async fn monitor_exit_is_reported_as_a_failure() {
 
 #[test]
 fn discovered_filesystems_keep_whole_disk_and_partition_layouts() {
-    let devices: Vec<plain_libs::platform::linux::disks::blockdev::LsblkDevice> = serde_json::from_value(serde_json::json!([
+    let devices: Vec<plain_libs::platform::linux::disks::blockdev::LsblkDevice> = plain_libs::serde_json::from_value(plain_libs::serde_json::json!([
         {"path":"/dev/sdfixture", "type":"disk", "fstype":"exfat", "uuid":"whole-disk", "size":64000000000_i64},
         {"path":"/dev/sdexample", "type":"disk", "children":[
             {"path":"/dev/sdexample1", "type":"part", "fstype":"ext4", "uuid":"partition", "mountpoint":"/mnt/usb2"},
@@ -315,7 +315,7 @@ fn discovered_filesystems_keep_whole_disk_and_partition_layouts() {
 fn absent_incomplete_and_container_devices_are_never_mount_candidates() {
     assert!(filesystems_from_devices(&[]).is_empty());
     let devices: Vec<plain_libs::platform::linux::disks::blockdev::LsblkDevice> =
-        serde_json::from_value(serde_json::json!([
+        plain_libs::serde_json::from_value(plain_libs::serde_json::json!([
             {"path":"/dev/swap", "fstype":"swap", "uuid":"swap"},
             {"path":"/dev/encrypted", "fstype":"crypto_LUKS", "uuid":"encrypted"},
             {"path":"/dev/lvm", "fstype":"LVM2_member", "uuid":"lvm"},

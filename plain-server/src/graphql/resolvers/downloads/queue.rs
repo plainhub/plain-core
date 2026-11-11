@@ -97,11 +97,11 @@ struct ChatDownloadQueue {
     tasks: Vec<ChatDownloadTask>,
 }
 fn snapshot(
-    value: serde_json::Value,
+    value: plain_libs::serde_json::Value,
     online: &std::collections::HashSet<&str>,
 ) -> plain_graphql::Result<ChatDownloadQueue> {
     let local = plain_rs::infrastructure::transport::lan::local_interfaces();
-    let receipt: QueueReceipt = serde_json::from_value(value)?;
+    let receipt: QueueReceipt = plain_libs::serde_json::from_value(value)?;
     Ok(ChatDownloadQueue {
         runtime_id: receipt.runtime_id,
         revision: receipt.revision,
@@ -142,7 +142,7 @@ impl ChatDownloadQuery {
             .as_array()
             .into_iter()
             .flatten()
-            .filter_map(serde_json::Value::as_str)
+            .filter_map(plain_libs::serde_json::Value::as_str)
             .collect();
         snapshot(
             tokio::task::spawn_blocking(move || queue.snapshot()).await?,

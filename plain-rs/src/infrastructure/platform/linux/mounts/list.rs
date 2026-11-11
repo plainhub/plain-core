@@ -6,7 +6,7 @@ use plain_libs::platform::linux::disks::blockdev::is_user_visible_disk_name;
 use plain_libs::platform::linux::disks::blockdev::resolve_underlying_single_base_disk;
 use plain_libs::platform::linux::disks::blockdev::run_lsblk;
 use serde::Serialize;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 const VOLUME_ID_REMOTE_PREFIX: &str = "remote:";
 const VOLUME_ID_FSUUID_PREFIX: &str = "fsuuid:";

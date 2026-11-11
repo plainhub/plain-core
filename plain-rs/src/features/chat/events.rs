@@ -70,20 +70,20 @@ pub fn load_key_cache(db: &Db, peer_cache: &PeerKeyCache, channel_cache: &Channe
 }
 
 /// Public channel projection shared by GraphQL and WebSocket events.
-pub fn channel_to_json(ch: &crate::infrastructure::db::DChannel, actor: &str) -> serde_json::Value {
-    let members: Vec<serde_json::Value> = decode_members(&ch.members)
+pub fn channel_to_json(ch: &crate::infrastructure::db::DChannel, actor: &str) -> plain_libs::serde_json::Value {
+    let members: Vec<plain_libs::serde_json::Value> = decode_members(&ch.members)
         .into_iter()
-        .map(|m| serde_json::json!({"peerId":m.peer_id,"status":m.status.to_string()}))
+        .map(|m| plain_libs::serde_json::json!({"peerId":m.peer_id,"status":m.status.to_string()}))
         .collect();
-    serde_json::json!({"id":ch.id,"name":ch.name,"ownerId":ch.owner_id.as_deref().unwrap_or_default(),"members":members,
+    plain_libs::serde_json::json!({"id":ch.id,"name":ch.name,"ownerId":ch.owner_id.as_deref().unwrap_or_default(),"members":members,
         "actions":crate::features::chat::channels::policy::actions(ch.owner_id.as_deref(), ch.status, actor),
         "version":ch.version,"status":ch.status.to_string(),"createdAt":ch.created_at,"updatedAt":ch.updated_at})
 }
 
-pub fn public_channels(db: &Db, actor: &str) -> plain_libs::anyhow::Result<serde_json::Value> {
+pub fn public_channels(db: &Db, actor: &str) -> plain_libs::anyhow::Result<plain_libs::serde_json::Value> {
     let mut channels = crate::infrastructure::db::chat_store::channels::all(db)?;
     channels.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(serde_json::Value::Array(
+    Ok(plain_libs::serde_json::Value::Array(
         channels
             .iter()
             .map(|channel| channel_to_json(channel, actor))
@@ -93,7 +93,7 @@ pub fn public_channels(db: &Db, actor: &str) -> plain_libs::anyhow::Result<serde
 
 pub fn channels_updated_payload(db: &Db, actor: &str) -> String {
     let channels = db.get_channels(ChannelStatus::Joined);
-    serde_json::to_string(
+    plain_libs::serde_json::to_string(
         &channels
             .iter()
             .map(|channel| channel_to_json(channel, actor))

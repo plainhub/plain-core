@@ -81,7 +81,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
     if actor.is_empty() || from.is_empty() {
         bail!("Missing channel message identity");
     }
-    let value: serde_json::Value = serde_json::from_str(payload)?;
+    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(payload)?;
     let id = value["channelId"]
         .as_str()
         .filter(|s| !s.is_empty())
@@ -97,7 +97,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
         };
         match kind {
             Type::Invite => {
-                let msg: ChannelInvite = serde_json::from_value(value)?;
+                let msg: ChannelInvite = plain_libs::serde_json::from_value(value)?;
                 if msg.owner != from {
                     bail!("Invite sender is not owner");
                 }
@@ -159,7 +159,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                 store::ensure_peers(&tx, &msg.member_peers, actor)?;
                 channel.name = msg.channel_name;
                 channel.key = msg.key;
-                channel.members = serde_json::to_string(&msg.members)?;
+                channel.members = plain_libs::serde_json::to_string(&msg.members)?;
                 channel.version = msg.version;
                 channel.status = ChannelStatus::Joined;
                 channel.updated_at = now_iso();
@@ -177,7 +177,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                 result.channel = Some(channel);
             }
             Type::Update => {
-                let msg: ChannelUpdate = serde_json::from_value(value)?;
+                let msg: ChannelUpdate = plain_libs::serde_json::from_value(value)?;
                 let mut channel = current.ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel"))?;
                 if channel.owner_id.as_deref() != Some(from) {
                     bail!("Update sender is not owner");
@@ -198,14 +198,14 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                 validate_members(&msg.members)?;
                 store::ensure_peers(&tx, &msg.member_peers, actor)?;
                 channel.name = msg.channel_name;
-                channel.members = serde_json::to_string(&msg.members)?;
+                channel.members = plain_libs::serde_json::to_string(&msg.members)?;
                 channel.version = msg.version;
                 channel.updated_at = now_iso();
                 store::save(&tx, &channel, false)?;
                 result.channel = Some(channel);
             }
             Type::Kick => {
-                let msg: ChannelKick = serde_json::from_value(value)?;
+                let msg: ChannelKick = plain_libs::serde_json::from_value(value)?;
                 let owner = store::peer(&tx, from)?
                     .ok_or_else(|| plain_libs::anyhow::anyhow!("Unknown channel owner"))?;
                 if signature(
@@ -242,7 +242,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                         return Ok(result);
                     }
                     members.retain(|m| m.peer_id != actor);
-                    channel.members = serde_json::to_string(&members)?;
+                    channel.members = plain_libs::serde_json::to_string(&members)?;
                     channel.status = ChannelStatus::Kicked;
                     channel.version = msg.version;
                     channel.updated_at = now_iso();
@@ -272,7 +272,7 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                 };
                 match kind {
                     Type::InviteAccept => {
-                        let msg: ChannelInviteAccept = serde_json::from_value(value)?;
+                        let msg: ChannelInviteAccept = plain_libs::serde_json::from_value(value)?;
                         if !members[index].is_pending() {
                             return Ok(result);
                         }
@@ -287,20 +287,20 @@ pub fn receive(db: &Db, actor: &str, from: &str, kind: Type, payload: &str) -> R
                         result.broadcast = true;
                     }
                     Type::InviteDecline => {
-                        let _: ChannelInviteDecline = serde_json::from_value(value)?;
+                        let _: ChannelInviteDecline = plain_libs::serde_json::from_value(value)?;
                         if !members[index].is_pending() {
                             return Ok(result);
                         }
                         members.remove(index);
                     }
                     Type::Leave => {
-                        let _: ChannelLeave = serde_json::from_value(value)?;
+                        let _: ChannelLeave = plain_libs::serde_json::from_value(value)?;
                         members.remove(index);
                         result.broadcast = true;
                     }
                     _ => unreachable!(),
                 }
-                channel.members = serde_json::to_string(&members)?;
+                channel.members = plain_libs::serde_json::to_string(&members)?;
                 advance(&mut channel)?;
                 store::save(&tx, &channel, false)?;
                 result.channel = Some(channel);

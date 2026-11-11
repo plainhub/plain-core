@@ -115,8 +115,8 @@ fn call(
                 return Err("BLE payload exceeds advertising limit".into());
             }
             let service_uuids: Vec<String> =
-                serde_json::from_slice(data).map_err(|e| e.to_string())?;
-            serde_json::to_vec(&crate::features::discovery::advertisement::decode_ble(
+                plain_libs::serde_json::from_slice(data).map_err(|e| e.to_string())?;
+            plain_libs::serde_json::to_vec(&crate::features::discovery::advertisement::decode_ble(
                 &service_uuids,
             ))
             .map(Some)

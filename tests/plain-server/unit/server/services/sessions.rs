@@ -1,13 +1,13 @@
 use crate::http::{auth::ws_login, graphql};
 use crate::server::ContentServer;
 use crate::server::ServerState;
-use axum::{
+use plain_libs::axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
 };
 use plain_rs::features::services::sessions::*;
-use serde_json::Value;
-use serde_json::json;
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
@@ -17,7 +17,7 @@ fn fixture() -> (plain_libs::temporary::TempDir, ContentServer) {
     prefs.set("background_service_enabled", true).unwrap();
     prefs.set("remote_access", true).unwrap();
     prefs.set("login_require_approval", false).unwrap();
-    plain_rs::features::prefs::security::set_entry(&prefs, "password", serde_json::json!("secret"))
+    plain_rs::features::prefs::security::set_entry(&prefs, "password", plain_libs::serde_json::json!("secret"))
         .unwrap();
     prefs.set("password_type", "NONE").unwrap();
     prefs.set("client_id", "phone").unwrap();
@@ -61,7 +61,7 @@ fn offer(
         )
         .unwrap();
     let request = json!({"appName":"Test","appVersion":"1","osName":"Fixture","osVersion":"1","isMobile":false,"peer":peer});
-    let frame = serde_json::to_vec(&request).unwrap();
+    let frame = plain_libs::serde_json::to_vec(&request).unwrap();
     let frame = keys.encrypt_request(&frame, now).unwrap();
     (
         ws_login::Request::Issue {
@@ -116,7 +116,7 @@ async fn approved_web_login_encrypted_response_and_token_auth_survive_restart() 
         .unwrap();
     let decrypted = encrypted;
     assert_eq!(
-        serde_json::from_slice::<Value>(&decrypted).unwrap(),
+        plain_libs::serde_json::from_slice::<Value>(&decrypted).unwrap(),
         issued["response"]
     );
     assert!(issued["response"].get("ecdhPublicKey").is_none());
@@ -139,21 +139,21 @@ async fn approved_web_login_encrypted_response_and_token_auth_survive_restart() 
     let response = graphql::call(
         State(state.clone()),
         headers.clone(),
-        axum::body::Bytes::from(encrypted),
+        plain_libs::axum::body::Bytes::from(encrypted),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+    let body = plain_libs::axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
         .unwrap();
     let body = context.decrypt(&shared, &body).unwrap();
-    assert!(serde_json::from_slice::<Value>(&body).unwrap()["errors"].is_null());
+    assert!(plain_libs::serde_json::from_slice::<Value>(&body).unwrap()["errors"].is_null());
     headers.insert(
         "authorization",
         format!("Bearer {}", row.token).parse().unwrap(),
     );
     assert_eq!(
-        graphql::call(State(state), headers, axum::body::Bytes::from("{}"))
+        graphql::call(State(state), headers, plain_libs::axum::body::Bytes::from("{}"))
             .await
             .status(),
         StatusCode::UNAUTHORIZED
@@ -214,7 +214,7 @@ async fn confirmation_is_once_only_and_cancel_or_revoke_prevents_issuance() {
 async fn native_management_public_auth_and_revoke_share_one_database_without_host() {
     let (dir, server) = fixture();
     let state = server.runtime_state();
-    let created = serde_json::to_value(create(&state, "API".into()).unwrap()).unwrap();
+    let created = plain_libs::serde_json::to_value(create(&state, "API".into()).unwrap()).unwrap();
     let id = created["client_id"].as_str().unwrap();
     let token = created["token"].as_str().unwrap();
     assert_eq!(plain_libs::utils::base64::base64_decode(token).len(), 32);
@@ -224,7 +224,7 @@ async fn native_management_public_auth_and_revoke_share_one_database_without_hos
     let response = graphql::call(
         State(state.clone()),
         headers.clone(),
-        axum::body::Bytes::from(r#"{"query":"{noteCount(query:\"\")}"}"#),
+        plain_libs::axum::body::Bytes::from(r#"{"query":"{noteCount(query:\"\")}"}"#),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -246,7 +246,7 @@ async fn native_management_public_auth_and_revoke_share_one_database_without_hos
     let mut wrong = headers.clone();
     wrong.insert("authorization", "Bearer wrong".parse().unwrap());
     assert_eq!(
-        graphql::call(State(state.clone()), wrong, axum::body::Bytes::from("{}"))
+        graphql::call(State(state.clone()), wrong, plain_libs::axum::body::Bytes::from("{}"))
             .await
             .status(),
         StatusCode::UNAUTHORIZED
@@ -254,7 +254,7 @@ async fn native_management_public_auth_and_revoke_share_one_database_without_hos
     assert!(delete(&state, id).unwrap());
     assert!(key(&state.db, id).unwrap().is_none());
     assert_eq!(
-        graphql::call(State(state.clone()), headers, axum::body::Bytes::from("{}"))
+        graphql::call(State(state.clone()), headers, plain_libs::axum::body::Bytes::from("{}"))
             .await
             .status(),
         StatusCode::UNAUTHORIZED
@@ -317,16 +317,16 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
     headers.insert("c-id", "browser".parse().unwrap());
     let response = crate::http::init::init(
         State(state.clone()),
-        axum::extract::ConnectInfo("127.0.0.1:1".parse().unwrap()),
+        plain_libs::axum::extract::ConnectInfo("127.0.0.1:1".parse().unwrap()),
         headers.clone(),
-        axum::body::Bytes::from(
+        plain_libs::axum::body::Bytes::from(
             plain_rs::infrastructure::transport::http_request::encrypt(&token, "/init", "init")
                 .unwrap(),
         ),
     )
     .await;
-    let response: Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), 1024)
+    let response: Value = plain_libs::serde_json::from_slice(
+        &plain_libs::axum::body::to_bytes(response.into_body(), 1024)
             .await
             .unwrap(),
     )
@@ -338,13 +338,13 @@ async fn login_pairing_and_init_preserve_rust_state_without_revealing_passwords(
     state.prefs.set("password_type", "NONE").unwrap();
     let response = crate::http::init::init(
         State(state.clone()),
-        axum::extract::ConnectInfo("127.0.0.1:1".parse().unwrap()),
+        plain_libs::axum::extract::ConnectInfo("127.0.0.1:1".parse().unwrap()),
         headers,
-        axum::body::Bytes::new(),
+        plain_libs::axum::body::Bytes::new(),
     )
     .await;
-    let response: Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), 1024)
+    let response: Value = plain_libs::serde_json::from_slice(
+        &plain_libs::axum::body::to_bytes(response.into_body(), 1024)
             .await
             .unwrap(),
     )
@@ -411,12 +411,12 @@ async fn main_schema_keeps_secrets_local_and_remote_metadata_and_resource_token_
         let response = graphql::call(
             State(state.clone()),
             headers.clone(),
-            axum::body::Bytes::from(serde_json::to_vec(&json!({"query":query})).unwrap()),
+            plain_libs::axum::body::Bytes::from(plain_libs::serde_json::to_vec(&json!({"query":query})).unwrap()),
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
-        serde_json::from_slice(
-            &axum::body::to_bytes(response.into_body(), usize::MAX)
+        plain_libs::serde_json::from_slice(
+            &plain_libs::axum::body::to_bytes(response.into_body(), usize::MAX)
                 .await
                 .unwrap(),
         )

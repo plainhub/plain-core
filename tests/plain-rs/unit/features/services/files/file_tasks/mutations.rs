@@ -37,11 +37,11 @@ async fn deleting_an_indexed_image_publishes_its_library_type_and_preserves_its_
     let mut changes = Vec::new();
     while let Ok(event) = events.try_recv() {
         if event.event_type == crate::infrastructure::events::MEDIA_LIBRARY_UPDATED {
-            changes.push(serde_json::from_str::<serde_json::Value>(&event.payload).unwrap());
+            changes.push(plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&event.payload).unwrap());
         }
     }
     assert!(
-        changes.contains(&serde_json::json!({"types":[3]})),
+        changes.contains(&plain_libs::serde_json::json!({"types":[3]})),
         "{changes:?}"
     );
     assert!(!selected.exists());
@@ -134,7 +134,7 @@ fn relation(core: &ContentServer, tag: &str) -> Option<String> {
     core.runtime_state()
         .db
         .with_conn(|connection| {
-            use rusqlite::OptionalExtension;
+            use plain_libs::rusqlite::OptionalExtension;
             connection
                 .query_row(
                     "SELECT target_key FROM tag_relations WHERE tag_id=?1",

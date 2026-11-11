@@ -2,7 +2,7 @@ use plain_libs::protocols::http_client;
 use crate::server::ServerState;
 use plain_rs::infrastructure::events::WsEvent;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 pub use plain_rs::features::services::http_status::HttpServerState;
 pub use plain_rs::features::services::settings::update_download::AppUpdateDownload;
@@ -41,7 +41,7 @@ pub struct NativeManagement {
 }
 
 impl NativeManagement {
-    pub fn peer_notifications(&self) -> Result<serde_json::Value, String> {
+    pub fn peer_notifications(&self) -> Result<plain_libs::serde_json::Value, String> {
         self.state.native_client_id()?;
         Ok(self.state.management.notifications.snapshot())
     }
@@ -165,7 +165,7 @@ impl NativeManagement {
         self.certificate(json!({"action":"importPkcs12","data":plain_libs::utils::base64::base64_encode(&data),"password":password})).await
     }
 
-    async fn certificate(&self, command: serde_json::Value) -> Result<Vec<u8>, String> {
+    async fn certificate(&self, command: plain_libs::serde_json::Value) -> Result<Vec<u8>, String> {
         self.state.native_client_id()?;
         let signature =
             plain_rs::infrastructure::tls_identity::server_action(&self.state, command).await?;

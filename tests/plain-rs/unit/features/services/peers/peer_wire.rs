@@ -46,7 +46,7 @@ fn signing_current_peer_and_channel_keys_and_authenticated_crypto_roundtrip() {
         .as_bytes(),
         split[0]
     ));
-    let gql: serde_json::Value = serde_json::from_str(split[3]).unwrap();
+    let gql: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(split[3]).unwrap();
     assert_eq!(gql["variables"]["content"], content);
     assert_eq!(first.key, peer.key);
     let decoded_key = plain_libs::utils::base64::base64_decode(&first.key);

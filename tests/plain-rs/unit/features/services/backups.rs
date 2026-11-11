@@ -54,7 +54,7 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
         &mut std::fs::File::create(&snapshot_path).unwrap(),
     )
     .unwrap();
-    let snapshot = rusqlite::Connection::open(&snapshot_path).unwrap();
+    let snapshot = plain_libs::rusqlite::Connection::open(&snapshot_path).unwrap();
     assert_eq!(
         snapshot
             .query_row("SELECT value FROM backup_values", [], |row| row
@@ -74,7 +74,7 @@ async fn export_uses_owned_snapshots_and_preserves_attachment_bytes_without_host
             .read_to_string(&mut json)
             .unwrap();
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&json).unwrap()["device_name"],
+            plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&json).unwrap()["device_name"],
             expected
         );
     }

@@ -264,7 +264,7 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
     plain_rs::features::prefs::security::set_entry(
         &state.prefs,
         "password",
-        serde_json::json!("fixture-password"),
+        plain_libs::serde_json::json!("fixture-password"),
     )
     .unwrap();
     let system = management.preferences().unwrap();
@@ -295,7 +295,7 @@ async fn native_preference_reads_and_notification_changes_preserve_shared_state_
         assert!(system.get(private).is_none());
     }
     let mut events = state.events.subscribe();
-    for expected in [serde_json::json!(["fixture.app"]), serde_json::json!([])] {
+    for expected in [plain_libs::serde_json::json!(["fixture.app"]), plain_libs::serde_json::json!([])] {
         assert!(
             management
                 .toggle_notification_app("fixture.app".into())

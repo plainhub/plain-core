@@ -33,7 +33,7 @@ fn edits_use_only_typed_keys_and_preserve_existing_relation_dates() {
             .unwrap()
             .query_map([&audio.id], |row| row.get::<_, String>(0))
             .unwrap()
-            .collect::<rusqlite::Result<Vec<_>>>()
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
             .unwrap();
         assert_eq!(rows, ["2026-01-01T00:00:00Z"]);
     });

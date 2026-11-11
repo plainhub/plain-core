@@ -1,5 +1,5 @@
 use super::*;
-use axum::body::Body;
+use crate::axum::body::Body;
 use std::convert::Infallible;
 
 fn request(body: Body, content_type: &str) -> Request {

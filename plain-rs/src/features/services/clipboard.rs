@@ -88,7 +88,7 @@ pub fn record_history(
 }
 
 pub fn report(state: &CoreRuntime, payload: &str) -> Result<(), String> {
-    let value: Report = serde_json::from_str(payload).map_err(|error| error.to_string())?;
+    let value: Report = plain_libs::serde_json::from_str(payload).map_err(|error| error.to_string())?;
     if !crate::features::services::device::access::is_enabled(&state.prefs, &[AccessFeature::Clipboard]) {
         return Ok(());
     }
@@ -106,7 +106,7 @@ pub fn report(state: &CoreRuntime, payload: &str) -> Result<(), String> {
             .timestamp_millis();
         let _ = state.events.send(WsEvent::broadcast(
             "CLIPBOARD_CHANGED",
-            serde_json::json!({"text": item.text, "sensitive": false, "time": time}).to_string(),
+            plain_libs::serde_json::json!({"text": item.text, "sensitive": false, "time": time}).to_string(),
         ));
     }
     Ok(())

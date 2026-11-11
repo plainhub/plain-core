@@ -1,0 +1,8 @@
+{
+  "name": "h2",
+  "version": "0.4.19",
+  "archive_sha256": "ef8e5e5a340588f4452631496976cf8636d4a7ecf600239fdc27615d2530bc16",
+  "repository": "https://github.com/hyperium/h2",
+  "revision": "d57d1b852fec9dda6d42d3454502006d52104da8",
+  "retained_features": []
+}

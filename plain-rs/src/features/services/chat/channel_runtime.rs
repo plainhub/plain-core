@@ -9,7 +9,7 @@ use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Request {
@@ -100,7 +100,7 @@ pub async fn receive(
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing client identity"))?;
     let received =
         crate::features::chat::channels::incoming::receive(&state.db, &actor, from, kind, payload)?;
-    let result = serde_json::to_value(&received)?;
+    let result = plain_libs::serde_json::to_value(&received)?;
     if received.changed || received.invite.is_some() || received.cancel.is_some() {
         publish(state, result.clone())?;
     }

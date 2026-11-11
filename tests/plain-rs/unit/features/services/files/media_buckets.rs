@@ -96,11 +96,11 @@ fn sort_keys_are_computed_once_per_bucket_and_shared_across_provider_sources() {
     );
     assert_eq!(buckets[0].sort_name, "zhongguo");
     assert_eq!(buckets[1].sort_name, "zulu");
-    let raw = serde_json::json!([
+    let raw = plain_libs::serde_json::json!([
         {"id":"b", "name":"中国", "path":"content://image/b", "size":2},
         {"id":"a", "name":"Zulu", "path":"content://image/a", "size":2}
     ]);
-    let platform = aggregate("IMAGE", serde_json::from_value(raw).unwrap()).unwrap();
+    let platform = aggregate("IMAGE", plain_libs::serde_json::from_value(raw).unwrap()).unwrap();
     assert_eq!(
         platform
             .iter()
@@ -117,7 +117,7 @@ fn selected_ids(
     plan: crate::features::services::files::provider_query::Plan,
     fixtures: &str,
 ) -> Vec<String> {
-    let connection = rusqlite::Connection::open_in_memory().unwrap();
+    let connection = plain_libs::rusqlite::Connection::open_in_memory().unwrap();
     connection.execute_batch("CREATE TABLE source (_id TEXT, mime_type TEXT, _size INTEGER, duration INTEGER, bucket_display_name TEXT);").unwrap();
     connection.execute_batch(fixtures).unwrap();
     let mut statement = connection
@@ -127,11 +127,11 @@ fn selected_ids(
         ))
         .unwrap();
     statement
-        .query_map(rusqlite::params_from_iter(plan.args.iter()), |row| {
+        .query_map(plain_libs::rusqlite::params_from_iter(plan.args.iter()), |row| {
             row.get(0)
         })
         .unwrap()
-        .collect::<rusqlite::Result<Vec<_>>>()
+        .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
         .unwrap()
 }
 

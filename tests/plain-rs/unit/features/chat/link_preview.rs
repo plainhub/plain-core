@@ -1,7 +1,7 @@
 use super::*;
 use crate::features::chat::attachments::app_file_store::chat_deletion;
 use crate::features::chat::attachments::app_file_store::import_preview_image;
-use serde_json::json;
+use plain_libs::serde_json::json;
 fn fixture() -> (plain_libs::temporary::TempDir, Db) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&dir.path().join("plain.db")).unwrap();
@@ -41,7 +41,7 @@ fn preview_import_merges_current_content_and_edit_releases_per_occurrence() {
     assert_eq!(db.app_file_get(&first.id).unwrap().unwrap().ref_count, 2);
     let edited = edit(&db, dir.path(), "message", "https://b.example").unwrap();
     assert!(edited.changed);
-    let content: Value = serde_json::from_str(&edited.chat.content).unwrap();
+    let content: Value = plain_libs::serde_json::from_str(&edited.chat.content).unwrap();
     assert_eq!(content["metadata"], "changed");
     assert_eq!(
         content["value"]["linkPreviews"].as_array().unwrap().len(),
@@ -132,7 +132,7 @@ fn failed_edit_restores_quarantined_image_and_sql_state() {
     assert!(edit(&db, dir.path(), "message", "new text").is_err());
     assert!(first.real_path.exists());
     assert_eq!(db.app_file_get(&first.id).unwrap().unwrap().ref_count, 1);
-    let content: Value = serde_json::from_str(
+    let content: Value = plain_libs::serde_json::from_str(
         &crate::infrastructure::db::chat_store::messages::get(&db, "message")
             .unwrap()
             .unwrap()
@@ -173,7 +173,7 @@ fn failed_import_rolls_back_preview_and_physically_installed_image() {
         .unwrap()
         .unwrap();
     assert_eq!(
-        serde_json::from_str::<Value>(&row.content).unwrap()["value"]["linkPreviews"],
+        plain_libs::serde_json::from_str::<Value>(&row.content).unwrap()["value"]["linkPreviews"],
         json!([])
     );
     use sha2::{Digest, Sha256};

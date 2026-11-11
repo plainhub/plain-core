@@ -2,7 +2,7 @@ use crate::features::services::packages::splits;
 use crate::infrastructure::host::bridge::Host;
 use plain_libs::anyhow::{Result, anyhow, ensure};
 use plain_libs::apk::manifest;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 use std::{
     fs::File,
@@ -191,7 +191,7 @@ pub async fn execute(
             .call("systemPackageInstallProfile", json!({}))
             .await
             .map_err(plain_libs::anyhow::Error::msg)?;
-        let mut profile: splits::Profile = serde_json::from_value(facts)?;
+        let mut profile: splits::Profile = plain_libs::serde_json::from_value(facts)?;
         profile.abi_order = host.startup().supported_abis.clone();
         ensure!(
             profile.density_dpi > 0 && !profile.abi_order.is_empty(),

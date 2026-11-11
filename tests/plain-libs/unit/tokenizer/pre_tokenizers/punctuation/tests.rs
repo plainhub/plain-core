@@ -25,7 +25,7 @@ fn punctuation_basic() {
 
 #[test]
 fn deserialization() {
-    let punctuation: Punctuation = serde_json::from_str(r#"{"type": "Punctuation"}"#).unwrap();
+    let punctuation: Punctuation = crate::serde_json::from_str(r#"{"type": "Punctuation"}"#).unwrap();
     assert_eq!(punctuation, Punctuation::default());
     assert_eq!(
         punctuation,
@@ -36,5 +36,5 @@ fn deserialization() {
 #[test]
 #[should_panic]
 fn deserialization_erroneous() {
-    let _punctuation: Punctuation = serde_json::from_str(r#"{"type": "WhitespaceSplit"}"#).unwrap();
+    let _punctuation: Punctuation = crate::serde_json::from_str(r#"{"type": "WhitespaceSplit"}"#).unwrap();
 }

@@ -18,10 +18,10 @@ fn salted_records_verify_only_the_original_secret_and_roundtrip() {
     assert_ne!(first.hash, second.hash);
     assert!(first.verify(b"fixture-digest"));
     assert!(!first.verify(b"wrong-digest"));
-    let encoded = serde_json::to_string(&first).unwrap();
+    let encoded = crate::serde_json::to_string(&first).unwrap();
     assert!(!encoded.contains("fixture-digest"));
     assert_eq!(
-        serde_json::from_str::<PasswordHash>(&encoded).unwrap(),
+        crate::serde_json::from_str::<PasswordHash>(&encoded).unwrap(),
         first
     );
     let mut altered = first;

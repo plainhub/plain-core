@@ -3,8 +3,8 @@ use crate::server::ContentServer;
 use plain_rs::features::chat::messages::share_card::Card;
 use plain_rs::features::files::shares::client::Link;
 use plain_rs::runtime::Runtime as ServerState;
-use serde_json::Value;
-use serde_json::json;
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -42,7 +42,7 @@ async fn authenticated_main_browse_caches_and_queues_real_tls_files_without_host
     assert_eq!(result["card"]["name"], "current");
     assert!(result["card"]["expiresAt"].is_null());
     assert_eq!(result["card"]["totalSize"], 8);
-    let link: Link = serde_json::from_value(result["link"].clone()).unwrap();
+    let link: Link = plain_libs::serde_json::from_value(result["link"].clone()).unwrap();
     let cached = graphql_http_variables(server.port, &token,
         "mutation($link:SharedLinkInput!,$urlToken:String!,$entry:SharedEntryInput!){cacheSharedFile(link:$link,urlToken:$urlToken,entry:$entry,thumbnail:false)}",
         json!({"link":link,"urlToken":result["info"]["urlToken"],"entry":{"name":"preview.txt","relativePath":"folder/ +?#中文%","isDir":false,"size":8,"mimeType":"text/plain","hasThumb":false}})).await;

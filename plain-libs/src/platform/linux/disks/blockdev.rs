@@ -33,7 +33,7 @@ pub struct LsblkDevice {
     #[serde(default)]
     pub partn: Option<i64>,
     #[serde(default)]
-    pub rm: Option<serde_json::Value>,
+    pub rm: Option<crate::serde_json::Value>,
     #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]
@@ -59,7 +59,7 @@ pub fn run_lsblk(cols: &[&str]) -> Result<Vec<LsblkDevice>> {
         return Err(anyhow!("lsblk failed: {}", stderr.trim()));
     }
     let parsed: LsblkOutput =
-        serde_json::from_slice(&out.stdout).map_err(|e| anyhow!("lsblk json: {e}"))?;
+        crate::serde_json::from_slice(&out.stdout).map_err(|e| anyhow!("lsblk json: {e}"))?;
     Ok(parsed.blockdevices)
 }
 
@@ -78,11 +78,11 @@ pub fn flatten_devices(devs: &[LsblkDevice]) -> Vec<&LsblkDevice> {
     v
 }
 
-pub fn parse_boolish(v: &Option<serde_json::Value>) -> Option<bool> {
+pub fn parse_boolish(v: &Option<crate::serde_json::Value>) -> Option<bool> {
     match v.as_ref()? {
-        serde_json::Value::Bool(b) => Some(*b),
-        serde_json::Value::Number(n) => n.as_f64().map(|f| f != 0.0),
-        serde_json::Value::String(s) => {
+        crate::serde_json::Value::Bool(b) => Some(*b),
+        crate::serde_json::Value::Number(n) => n.as_f64().map(|f| f != 0.0),
+        crate::serde_json::Value::String(s) => {
             let s = s.trim().to_ascii_lowercase();
             match s.as_str() {
                 "1" | "true" | "yes" => Some(true),

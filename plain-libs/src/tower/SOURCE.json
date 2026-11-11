@@ -1,0 +1,16 @@
+{
+  "name": "tower",
+  "version": "0.5.3",
+  "archive_sha256": "ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4",
+  "repository": "https://github.com/tower-rs/tower",
+  "revision": "4b0a6b0e688bd177eb2c9c97f5268dd9703c66fc",
+  "retained_features": [
+    "futures-core",
+    "futures-util",
+    "make",
+    "pin-project-lite",
+    "sync_wrapper",
+    "tokio",
+    "util"
+  ]
+}

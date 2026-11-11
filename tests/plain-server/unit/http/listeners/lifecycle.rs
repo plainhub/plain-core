@@ -96,7 +96,7 @@ async fn listener_failure_cleans_up_and_notifies_host() {
             }
             let _ = host.reply(
                 host_generation,
-                serde_json::json!({"id":request["id"],"result":[]}),
+                plain_libs::serde_json::json!({"id":request["id"],"result":[]}),
             );
         }
     });
@@ -119,7 +119,7 @@ async fn listener_failure_cleans_up_and_notifies_host() {
         .unwrap();
     assert_eq!(
         failure,
-        serde_json::json!({"state":"error","message":"injected listener failure","httpPort":0,"httpsPort":0})
+        plain_libs::serde_json::json!({"state":"error","message":"injected listener failure","httpPort":0,"httpsPort":0})
     );
     assert!(server.http_ports().await.is_none());
     for port in [ports.0, ports.1] {

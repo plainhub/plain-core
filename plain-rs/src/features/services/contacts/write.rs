@@ -2,7 +2,7 @@ use crate::features::prefs::Prefs;
 use crate::features::services::capabilities;
 use crate::infrastructure::host::bridge::Host;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 const MAX_NAME_LEN: usize = 200;
 const MAX_NOTES_LEN: usize = 10_000;
@@ -88,7 +88,7 @@ fn text_field(input: &Value, field: &str, max: usize) -> plain_libs::anyhow::Res
 }
 
 fn bounded_field(
-    object: &serde_json::Map<String, Value>,
+    object: &plain_libs::serde_json::Map<String, Value>,
     field: &str,
     max: usize,
 ) -> plain_libs::anyhow::Result<()> {
@@ -213,7 +213,7 @@ pub async fn execute(prefs: &Prefs, host: &Host, request: Request) -> plain_libs
                     .call("systemContactSources", json!({}))
                     .await
                     .map_err(plain_libs::anyhow::Error::msg)?;
-                let sources: Vec<Value> = serde_json::from_value(sources)?;
+                let sources: Vec<Value> = plain_libs::serde_json::from_value(sources)?;
                 let sources = crate::features::services::contacts::projection::sources(sources);
                 let source = sources
                     .iter()

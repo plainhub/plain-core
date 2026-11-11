@@ -1,7 +1,7 @@
 use crate::infrastructure::db::Db;
-use rusqlite::{params, params_from_iter, types::Value};
+use plain_libs::rusqlite::{params, params_from_iter, types::Value};
 impl Db {
-    pub fn feed_entry_set_image(&self, id: &str, image: &str) -> rusqlite::Result<()> {
+    pub fn feed_entry_set_image(&self, id: &str, image: &str) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|c| {
             c.execute(
                 "UPDATE feed_entries SET image=?2 WHERE id=?1",
@@ -10,7 +10,7 @@ impl Db {
             .map(|_| ())
         })
     }
-    pub fn feed_set_sync_status(&self, id: &str, at: &str, error: &str) -> rusqlite::Result<()> {
+    pub fn feed_set_sync_status(&self, id: &str, at: &str, error: &str) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|c| {
             c.execute(
                 "UPDATE feeds SET last_sync_at=?2,last_error=?3 WHERE id=?1",
@@ -19,13 +19,13 @@ impl Db {
             .map(|_| ())
         })
     }
-    pub fn feed_set_logo(&self, id: &str, logo: &str) -> rusqlite::Result<()> {
+    pub fn feed_set_logo(&self, id: &str, logo: &str) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|c| {
             c.execute("UPDATE feeds SET logo=?2 WHERE id=?1", params![id, logo])
                 .map(|_| ())
         })
     }
-    pub fn feed_entries_mark_read(&self, ids: &[String], read: bool) -> rusqlite::Result<usize> {
+    pub fn feed_entries_mark_read(&self, ids: &[String], read: bool) -> plain_libs::rusqlite::Result<usize> {
         if ids.is_empty() {
             return Ok(0);
         }

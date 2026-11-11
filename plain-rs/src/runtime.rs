@@ -338,7 +338,7 @@ impl Runtime {
             Arc::new(move |row| {
                 let _ = preview_events.send(WsEvent::broadcast(
                     crate::features::chat::events::WS_MESSAGE_UPDATED,
-                    serde_json::json!([crate::features::chat::service::chat_to_json(&row)])
+                    plain_libs::serde_json::json!([crate::features::chat::service::chat_to_json(&row)])
                         .to_string(),
                 ));
             }),
@@ -544,7 +544,7 @@ impl Runtime {
         if self.host.connected() && self.host.needs_socket_cleanup() {
             let _ = self
                 .host
-                .call("peerTransportSocketCloseAll", serde_json::json!({}))
+                .call("peerTransportSocketCloseAll", plain_libs::serde_json::json!({}))
                 .await;
         }
         #[cfg(feature = "runtime-media")]

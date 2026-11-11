@@ -8,7 +8,7 @@ use crate::features::chat::service::ChatService;
 use crate::infrastructure::db::DChat;
 use crate::infrastructure::transport::contract::PeerTransport;
 use plain_libs::utils::base64::base64_decode;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 impl<T: PeerTransport + 'static> ChatService<T> {
     /// Persist an incoming chat item from a peer and broadcast

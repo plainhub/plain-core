@@ -6,7 +6,7 @@ use crate::features::services::peers::peer_transport;
 use crate::features::services::peers::peer_wire;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, bail};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 struct Native<'a>(&'a CoreRuntime);
 impl Driver for Native<'_> {
@@ -27,7 +27,7 @@ impl Driver for Native<'_> {
             .host
             .generation()
             .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE host unavailable"))?;
-        let found: Option<String> = serde_json::from_value(
+        let found: Option<String> = plain_libs::serde_json::from_value(
             self.0
                 .host
                 .call_current(

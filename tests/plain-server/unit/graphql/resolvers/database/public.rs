@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use serde_json::Value;
-use serde_json::json;
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 fn fixture() -> (plain_libs::temporary::TempDir, PublicSchema) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let path = plain_rs::infrastructure::data_paths::DataPaths::new(dir.path()).database();
@@ -57,7 +57,7 @@ async fn owned_database_browser_works_without_a_connected_host() {
     assert_eq!(columns[3]["dataType"], "REAL");
     assert_eq!(columns[4]["dataType"], "BLOB");
     let rows = data["dbTableRows"].as_array().unwrap();
-    let row: Value = serde_json::from_str(rows[0].as_str().unwrap()).unwrap();
+    let row: Value = plain_libs::serde_json::from_str(rows[0].as_str().unwrap()).unwrap();
     assert_eq!(row["key"], "b");
     assert_eq!(row["size"], "43");
     let response=schema.execute(r#"mutation {createDbTableRow(table:"test_rows",row:"{\"key\":\"c\",\"title\":\"Third\"}") deleteDbTableRows(table:"test_rows",ids:["a","b"])}"#).await;

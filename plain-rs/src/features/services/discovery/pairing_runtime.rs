@@ -11,7 +11,7 @@ use crate::features::services::discovery::pairing::Device;
 use crate::features::services::discovery::pairing_attempts::PairingPhase;
 use crate::runtime::Runtime as CoreRuntime;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, HashMap},
     net::IpAddr,
@@ -239,7 +239,7 @@ async fn deliver_successes(state: CoreRuntime) {
         .running = false;
 }
 pub(super) async fn local_device(state: &CoreRuntime) -> plain_libs::anyhow::Result<Device> {
-    let reply: crate::features::discovery::nearby_wire::DiscoverReply = serde_json::from_value(
+    let reply: crate::features::discovery::nearby_wire::DiscoverReply = plain_libs::serde_json::from_value(
         crate::features::services::discovery::discovery_advertisement::execute(
             state,
             crate::features::services::discovery::discovery_advertisement::Request::Reply {},
@@ -372,8 +372,8 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
                     generation,
                 )?
             };
-            let ticket: Ticket = serde_json::from_value(result["ticket"].clone())?;
-            let request: PairingRequest = serde_json::from_value(result["request"].clone())?;
+            let ticket: Ticket = plain_libs::serde_json::from_value(result["ticket"].clone())?;
+            let request: PairingRequest = plain_libs::serde_json::from_value(result["request"].clone())?;
             state
                 .pairing_runtime
                 .confirmations
@@ -458,8 +458,8 @@ pub async fn execute(state: &CoreRuntime, request: Request) -> plain_libs::anyho
             let value = pairing::cancel(&state.prefs, &state.pairing, &id, generation.as_deref())?;
             if !value.is_null() {
                 canceled(state, &value);
-                let ticket: Ticket = serde_json::from_value(value["ticket"].clone())?;
-                let cancel: PairingCancel = serde_json::from_value(value["cancel"].clone())?;
+                let ticket: Ticket = plain_libs::serde_json::from_value(value["ticket"].clone())?;
+                let cancel: PairingCancel = plain_libs::serde_json::from_value(value["cancel"].clone())?;
                 if !ticket.target.device_ip.is_empty() {
                     let _ = nearby_http::send(
                         &ticket.target.device_ip,
@@ -660,7 +660,7 @@ pub async fn accept_report(state: &CoreRuntime, kind: &str, payload: &str) -> pl
                 request: PairingRequest,
                 address: String,
             }
-            let report: Report = serde_json::from_str(payload)?;
+            let report: Report = plain_libs::serde_json::from_str(payload)?;
             Request::ReceiveRequest {
                 payload: report.request.payload,
                 client_id: report.request.from_id,
@@ -669,11 +669,11 @@ pub async fn accept_report(state: &CoreRuntime, kind: &str, payload: &str) -> pl
             }
         }
         "PAIRING_RESPONSE_REPORTED" => Request::Complete {
-            response: serde_json::from_str(payload)?,
+            response: plain_libs::serde_json::from_str(payload)?,
             sender_ip: String::new(),
         },
         "PAIRING_CANCEL_REPORTED" => Request::ReceiveCancel {
-            cancel: serde_json::from_str(payload)?,
+            cancel: plain_libs::serde_json::from_str(payload)?,
         },
         _ => return Ok(false),
     };

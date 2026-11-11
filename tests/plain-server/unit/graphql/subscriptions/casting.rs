@@ -1,11 +1,11 @@
 use crate::native::graphql::NativeGraphqlExecutor;
 use crate::server::ContentServer;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 async fn snapshot(executor: &NativeGraphqlExecutor, handle: u64) -> Value {
     tokio::time::timeout(std::time::Duration::from_secs(2), async {
         loop {
-            let message: Value = serde_json::from_str(
+            let message: Value = plain_libs::serde_json::from_str(
                 &executor
                     .subscription_session(handle)
                     .unwrap()
@@ -44,7 +44,7 @@ async fn query_and_subscription_share_sender_state_without_starting_scan_or_chan
     executor.subscription_session(handle).unwrap().send(&json!({
         "type":"subscribe", "id":"casting", "payload":{"query":format!("subscription {{ dlnaSenderChanged {{ {fields} }} }}")}
     }).to_string()).unwrap();
-    let ready: Value = serde_json::from_str(
+    let ready: Value = plain_libs::serde_json::from_str(
         &tokio::time::timeout(
             std::time::Duration::from_secs(2),
             executor.subscription_session(handle).unwrap().read(),

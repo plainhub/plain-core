@@ -1,6 +1,6 @@
 use plain_libs::dlna::types::DiscoveredDevice;
 use plain_rs::features::services::casting::dlna_sender_runtime::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -48,7 +48,7 @@ async fn queue_mutations_preserve_duplicates_and_order_through_the_main_schema()
 
 #[tokio::test]
 async fn sender_controls_use_soap_and_release_the_original_subscription() {
-    use axum::{Router, body::to_bytes, extract::Request, routing::any};
+    use plain_libs::axum::{Router, body::to_bytes, extract::Request, routing::any};
     use plain_libs::dlna::types::UpnpService;
     let calls = Arc::new(Mutex::new(Vec::<(String, String, String)>::new()));
     let captured = calls.clone();
@@ -96,7 +96,7 @@ async fn sender_controls_use_soap_and_release_the_original_subscription() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let renderer = tokio::spawn(async move {
-        axum::serve(listener, router).await.unwrap();
+        plain_libs::axum::serve(listener, router).await.unwrap();
     });
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
@@ -287,7 +287,7 @@ async fn sender_controls_use_soap_and_release_the_original_subscription() {
 
 #[tokio::test]
 async fn stop_during_pending_poll_does_not_advance_the_queue() {
-    use axum::{Router, extract::Request, routing::any};
+    use plain_libs::axum::{Router, extract::Request, routing::any};
     use plain_libs::dlna::types::UpnpService;
     use std::time::Duration;
     use tokio::sync::Notify;
@@ -328,7 +328,7 @@ async fn stop_during_pending_poll_does_not_advance_the_queue() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let renderer = tokio::spawn(async move {
-        axum::serve(listener, router).await.unwrap();
+        plain_libs::axum::serve(listener, router).await.unwrap();
     });
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =

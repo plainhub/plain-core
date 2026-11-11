@@ -1,7 +1,7 @@
 use super::{caller, current, decode_key};
 use crate::server::ServerState;
 use plain_libs::anyhow::{Result, anyhow, ensure};
-use axum::{
+use plain_libs::axum::{
     body::Body,
     extract::{FromRequestParts, Query, Request},
     http::{HeaderMap, HeaderName, StatusCode, header},
@@ -219,7 +219,7 @@ pub(super) async fn native(state: ServerState, ticket: &str, request: Request) -
     else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let Ok(target) = serde_json::from_slice::<NativeTarget>(&plain) else {
+    let Ok(target) = plain_libs::serde_json::from_slice::<NativeTarget>(&plain) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     let Ok(base) = http_client::Url::parse(&target.base) else {
@@ -276,7 +276,7 @@ impl Drop for NativeAccess {
     }
 }
 
-fn upstream_path(uri: &axum::http::Uri) -> Option<&str> {
+fn upstream_path(uri: &plain_libs::axum::http::Uri) -> Option<&str> {
     uri.path()
         .strip_prefix("/proxy/")?
         .split_once('/')
@@ -368,7 +368,7 @@ async fn relay(
         .headers()
         .get(header::CACHE_CONTROL)
         .cloned()
-        .unwrap_or_else(|| axum::http::HeaderValue::from_static("no-store"));
+        .unwrap_or_else(|| plain_libs::axum::http::HeaderValue::from_static("no-store"));
     let mut response = Response::builder()
         .status(status)
         .header(header::CACHE_CONTROL, cache)

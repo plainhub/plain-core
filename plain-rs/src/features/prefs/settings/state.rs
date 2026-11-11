@@ -1,6 +1,6 @@
 use super::{DarkTheme, FileSortBy, MediaPlayMode};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
@@ -63,7 +63,7 @@ impl Default for Settings {
             device_name: String::new(),
             https: false,
             web_address_bar_expanded: false,
-            screen_mirror_quality: serde_json::json!({"mode":"HD","resolution":1080}),
+            screen_mirror_quality: plain_libs::serde_json::json!({"mode":"HD","resolution":1080}),
             audio_play_mode: MediaPlayMode::Repeat,
             audio_playback_speed: 1.0,
             image_grid_cells_per_row: 3,
@@ -78,8 +78,8 @@ impl Default for Settings {
             editor_status_bar: true,
             nearby_discoverable: true,
             ai_image_search_enabled: false,
-            notification_filter: serde_json::json!({"mode":"blacklist","apps":[]}),
-            pomodoro_settings: serde_json::json!({"workDurationMin":25,"shortBreakDurationMin":5,"longBreakDurationMin":15,"pomodorosBeforeLongBreak":4,"showNotification":true,"playSoundOnComplete":true,"soundPath":"","originalSoundName":""}),
+            notification_filter: plain_libs::serde_json::json!({"mode":"blacklist","apps":[]}),
+            pomodoro_settings: plain_libs::serde_json::json!({"workDurationMin":25,"shortBreakDurationMin":5,"longBreakDurationMin":15,"pomodorosBeforeLongBreak":4,"showNotification":true,"playSoundOnComplete":true,"soundPath":"","originalSoundName":""}),
             app_home_features: "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS".into(),
             launcher_shortcuts: "NOTES|DOCS|FEEDS|POMODORO_TIMER".into(),
             audio_sort_by: FileSortBy::DateDesc,

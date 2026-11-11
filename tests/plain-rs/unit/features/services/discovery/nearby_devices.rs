@@ -1,6 +1,6 @@
 use super::*;
 use crate::features::discovery::nearby_devices::Device;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[tokio::test]
 async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts() {
@@ -35,7 +35,7 @@ async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts(
         .unwrap();
     let invalidation = events.recv().await.unwrap();
     assert_eq!(invalidation.event_type, EVENT_UPDATED);
-    let notice: serde_json::Value = serde_json::from_str(&invalidation.payload).unwrap();
+    let notice: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&invalidation.payload).unwrap();
     assert!(notice["revision"].is_u64());
     assert!(notice.get("id").is_none());
     let public = events.recv().await.unwrap();
@@ -43,7 +43,7 @@ async fn nearby_invalidation_and_public_device_payloads_have_distinct_contracts(
         public.event_type,
         crate::features::chat::events::WS_NEARBY_DEVICE_FOUND
     );
-    let row: serde_json::Value = serde_json::from_str(&public.payload).unwrap();
+    let row: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&public.payload).unwrap();
     assert_eq!(row["id"], device.id);
     assert_eq!(row["name"], device.name);
     assert_eq!(row["status"], "UNPAIRED");
@@ -102,7 +102,7 @@ async fn resident_peer_changes_emit_one_committed_notice_without_secrets_or_visi
     );
     assert!(!event.is_internal());
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&event.payload).unwrap(),
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&event.payload).unwrap(),
         json!({"id":"fixture-peer"})
     );
     let peer = crate::infrastructure::db::chat_store::peers::get(&state.db, "fixture-peer")

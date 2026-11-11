@@ -114,7 +114,7 @@ fn channel_invite_serializes_to_camelcase_wire() {
         signature: "SIG".to_string(),
     };
 
-    let json = serde_json::to_value(&invite).expect("serialize");
+    let json = plain_libs::serde_json::to_value(&invite).expect("serialize");
 
     // Wire uses camelCase for multi-word fields.
     assert_eq!(json["channelId"], "ch_x");
@@ -124,7 +124,7 @@ fn channel_invite_serializes_to_camelcase_wire() {
     assert_eq!(json["members"][1]["status"], "PENDING");
 
     // Round-trip back to the typed struct.
-    let back: ChannelInvite = serde_json::from_value(json).expect("deserialize");
+    let back: ChannelInvite = plain_libs::serde_json::from_value(json).expect("deserialize");
     assert_eq!(back, invite);
 }
 

@@ -25,7 +25,7 @@ pub(super) fn registration(key: &[u8], client: &str, timestamp: i64) -> Result<V
         timestamp_millis: timestamp,
         client_nonce: plain_libs::utils::hex::bytes_to_hex(&plain_libs::crypto::random_bytes(32)),
     };
-    graphql::seal_init(key, client, &serde_json::to_vec(&init)?)
+    graphql::seal_init(key, client, &plain_libs::serde_json::to_vec(&init)?)
         .ok_or_else(|| anyhow!("Invalid management session key"))
 }
 pub(super) fn acknowledge(
@@ -36,7 +36,7 @@ pub(super) fn acknowledge(
 ) -> Result<graphql::Stream> {
     let plain = graphql::open_ack(key, client, init, ack)
         .ok_or_else(|| anyhow!("Invalid management acknowledgement"))?;
-    let ack_body: crate::infrastructure::protocols::graphql::Ack = serde_json::from_slice(&plain)?;
+    let ack_body: crate::infrastructure::protocols::graphql::Ack = plain_libs::serde_json::from_slice(&plain)?;
     ensure!(
         ack_body.server_nonce.len() == 64
             && ack_body
@@ -54,7 +54,7 @@ pub(super) fn encode(
     stream: &mut graphql::Stream,
 ) -> Result<Vec<u8>> {
     stream
-        .encode(&serde_json::to_vec(message)?, key)
+        .encode(&plain_libs::serde_json::to_vec(message)?, key)
         .ok_or_else(|| anyhow!("Management sequence exhausted"))
 }
 pub(super) enum Incoming {
@@ -67,7 +67,7 @@ pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut graphql::Stream) -> R
     let plain = stream
         .decode(frame, key)
         .ok_or_else(|| anyhow!("Invalid management event authentication"))?;
-    match serde_json::from_slice::<ServerMessage>(&plain)? {
+    match plain_libs::serde_json::from_slice::<ServerMessage>(&plain)? {
         ServerMessage::Pong { .. } => Ok(Incoming::Pong),
         ServerMessage::Next { id, payload } => {
             let spec = operations()
@@ -83,7 +83,7 @@ pub(super) fn event(frame: &[u8], key: &[u8], stream: &mut graphql::Stream) -> R
             {
                 return Ok(Incoming::Ready);
             }
-            let mut data = serde_json::to_value(payload.data)?;
+            let mut data = plain_libs::serde_json::to_value(payload.data)?;
             let _value = data
                 .as_object_mut()
                 .and_then(|data| data.remove(spec.field))

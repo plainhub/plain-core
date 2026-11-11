@@ -18,7 +18,7 @@ use plain_rs::features::services::capabilities;
 use plain_rs::features::services::files::provider_query::Provider;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Calls;
@@ -130,18 +130,18 @@ impl CallsQuery {
                 ctx,
                 plain_rs::features::services::files::provider_query::Provider::Call,
                 &query,
-                serde_json::json!({"offset": offset, "limit": limit}),
+                plain_libs::serde_json::json!({"offset": offset, "limit": limit}),
             )
             .await?,
         )
         .await?;
         let host = ctx.data_unchecked::<Arc<Host>>();
         let locale = if !facts.is_empty() && ctx.look_ahead().field("geo").exists() {
-            host.call("systemPhoneLocaleFacts", serde_json::json!({}))
+            host.call("systemPhoneLocaleFacts", plain_libs::serde_json::json!({}))
                 .await
                 .ok()
                 .and_then(|facts| {
-                    serde_json::from_value::<plain_libs::phone::batch::LocaleFacts>(facts).ok()
+                    plain_libs::serde_json::from_value::<plain_libs::phone::batch::LocaleFacts>(facts).ok()
                 })
         } else {
             None
@@ -194,7 +194,7 @@ impl CallsQuery {
                     ctx,
                     plain_rs::features::services::files::provider_query::Provider::Call,
                     &query,
-                    serde_json::json!({}),
+                    plain_libs::serde_json::json!({}),
                 )
                 .await?,
             )
@@ -238,7 +238,7 @@ impl CallsMutation {
                 ctx,
                 plain_rs::features::services::files::provider_query::Provider::Call,
                 &query,
-                serde_json::json!({}),
+                plain_libs::serde_json::json!({}),
             )
             .await?,
         )
@@ -247,11 +247,11 @@ impl CallsMutation {
         .filter_map(Value::as_str)
         .map(Value::from)
         .collect();
-        let deleted: Vec<Value> = serde_json::from_value(
+        let deleted: Vec<Value> = plain_libs::serde_json::from_value(
             ctx.data_unchecked::<Arc<Host>>()
                 .call(
                     "systemDeleteRecords",
-                    serde_json::json!({"provider": "CALL", "ids": ids}),
+                    plain_libs::serde_json::json!({"provider": "CALL", "ids": ids}),
                 )
                 .await
                 .map_err(|error| plain_graphql::Error::new(error))?,
@@ -277,7 +277,7 @@ impl CallsMutation {
         ctx.data_unchecked::<Arc<Host>>()
             .call(
                 "systemMakeCall",
-                serde_json::json!({"number": number, "showDialer": show_dialer}),
+                plain_libs::serde_json::json!({"number": number, "showDialer": show_dialer}),
             )
             .await
             .map_err(|error| plain_graphql::Error::new(error))?;

@@ -1,8 +1,8 @@
 use super::*;
 use crate::infrastructure::db::DPeer;
 use crate::infrastructure::transport::contract::PeerTransport;
-use serde_json::Value;
-use serde_json::json;
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]

@@ -9,10 +9,10 @@ use bytes::Bytes;
 pub use deserializer::{DeserializerError, from_value};
 pub use extensions::Extensions;
 #[doc(hidden)]
-pub use indexmap;
-use indexmap::IndexMap;
+pub use plain_libs::indexmap;
+use plain_libs::indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-pub use serde_json::Number;
+pub use plain_libs::serde_json::Number;
 pub use serializer::{SerializerError, to_value};
 use std::{
     borrow::{Borrow, Cow},
@@ -247,10 +247,10 @@ impl ConstValue {
             ),
         }
     }
-    pub fn into_json(self) -> serde_json::Result<serde_json::Value> {
+    pub fn into_json(self) -> plain_libs::serde_json::Result<plain_libs::serde_json::Value> {
         self.try_into()
     }
-    pub fn from_json(json: serde_json::Value) -> serde_json::Result<Self> {
+    pub fn from_json(json: plain_libs::serde_json::Value) -> plain_libs::serde_json::Result<Self> {
         json.try_into()
     }
 }
@@ -269,16 +269,16 @@ impl Display for ConstValue {
         }
     }
 }
-impl TryFrom<serde_json::Value> for ConstValue {
-    type Error = serde_json::Error;
-    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+impl TryFrom<plain_libs::serde_json::Value> for ConstValue {
+    type Error = plain_libs::serde_json::Error;
+    fn try_from(value: plain_libs::serde_json::Value) -> Result<Self, Self::Error> {
         Self::deserialize(value)
     }
 }
-impl TryFrom<ConstValue> for serde_json::Value {
-    type Error = serde_json::Error;
+impl TryFrom<ConstValue> for plain_libs::serde_json::Value {
+    type Error = plain_libs::serde_json::Error;
     fn try_from(value: ConstValue) -> Result<Self, Self::Error> {
-        serde_json::to_value(value)
+        plain_libs::serde_json::to_value(value)
     }
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -330,10 +330,10 @@ impl Value {
     pub fn into_const(self) -> Option<ConstValue> {
         self.into_const_with(|_| Err(())).ok()
     }
-    pub fn into_json(self) -> serde_json::Result<serde_json::Value> {
+    pub fn into_json(self) -> plain_libs::serde_json::Result<plain_libs::serde_json::Value> {
         self.try_into()
     }
-    pub fn from_json(json: serde_json::Value) -> serde_json::Result<Self> {
+    pub fn from_json(json: plain_libs::serde_json::Value) -> plain_libs::serde_json::Result<Self> {
         json.try_into()
     }
 }
@@ -358,16 +358,16 @@ impl From<ConstValue> for Value {
         value.into_value()
     }
 }
-impl TryFrom<serde_json::Value> for Value {
-    type Error = serde_json::Error;
-    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+impl TryFrom<plain_libs::serde_json::Value> for Value {
+    type Error = plain_libs::serde_json::Error;
+    fn try_from(value: plain_libs::serde_json::Value) -> Result<Self, Self::Error> {
         Self::deserialize(value)
     }
 }
-impl TryFrom<Value> for serde_json::Value {
-    type Error = serde_json::Error;
+impl TryFrom<Value> for plain_libs::serde_json::Value {
+    type Error = plain_libs::serde_json::Error;
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        serde_json::to_value(value)
+        plain_libs::serde_json::to_value(value)
     }
 }
 fn write_quoted(s: &str, f: &mut Formatter<'_>) -> fmt::Result {

@@ -86,7 +86,7 @@ async fn resource_image(decode: bool, fail: bool, available: bool) {
     host.reply(generation, json!({"id":request["id"],"result":null}))
         .unwrap();
     let metadata: Value =
-        serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
     assert_eq!(metadata, json!({"path":"ph://photo","file":true}));
     stream
         .file(NativeResourceFile::new(std::fs::File::open(source).unwrap(), 7, 9).unwrap())

@@ -8,25 +8,25 @@ fn serialization() {
     let metaspace = Metaspace::new('_', PrependScheme::Always, true);
     let metaspace_s =
         r#"{"type":"Metaspace","replacement":"_","prepend_scheme":"always","split":true}"#;
-    assert_eq!(serde_json::to_string(&metaspace).unwrap(), metaspace_s);
+    assert_eq!(crate::serde_json::to_string(&metaspace).unwrap(), metaspace_s);
     assert_eq!(
-        serde_json::from_str::<Metaspace>(metaspace_s).unwrap(),
+        crate::serde_json::from_str::<Metaspace>(metaspace_s).unwrap(),
         metaspace
     );
 
     // Also check it can deserialize previous versions
     let metaspace_s = r#"{"type":"Metaspace","replacement":"_","add_prefix_space":false,"prepend_scheme":"always"}"#;
-    assert!(serde_json::from_str::<Metaspace>(metaspace_s).is_err(),);
+    assert!(crate::serde_json::from_str::<Metaspace>(metaspace_s).is_err(),);
 
     let metaspace = Metaspace::new('_', PrependScheme::Always, true);
     let metaspace_s = r#"{"type":"Metaspace","str_rep":"_","replacement":"_","add_prefix_space":true,"prepend_scheme":"always"}"#;
     assert_eq!(
-        serde_json::from_str::<Metaspace>(metaspace_s).unwrap(),
+        crate::serde_json::from_str::<Metaspace>(metaspace_s).unwrap(),
         metaspace
     );
 
     let metaspace_parsed: Metaspace =
-        serde_json::from_str(r#"{"type":"Metaspace","replacement":"_","add_prefix_space":true}"#)
+        crate::serde_json::from_str(r#"{"type":"Metaspace","replacement":"_","add_prefix_space":true}"#)
             .unwrap();
     assert_eq!(metaspace_parsed, metaspace);
 }

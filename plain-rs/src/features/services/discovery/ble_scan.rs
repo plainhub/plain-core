@@ -27,7 +27,7 @@ use crate::features::discovery::nearby_scan::Step;
 use crate::features::services::discovery::nearby_devices::Context;
 use crate::infrastructure::db::now_iso;
 use crate::runtime::Runtime as CoreRuntime;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Mutex;
 use tokio::sync::Notify;
 
@@ -162,7 +162,7 @@ pub async fn read_payload(
         .await?;
     Ok(reply
         .get("payload")
-        .and_then(serde_json::Value::as_str)
+        .and_then(plain_libs::serde_json::Value::as_str)
         .map(str::to_owned))
 }
 

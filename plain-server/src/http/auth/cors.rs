@@ -1,6 +1,6 @@
 use plain_libs::protocols::http_client;
 use crate::server::ServerState;
-use axum::{
+use plain_libs::axum::{
     extract::{Request, State},
     http::{Method, StatusCode, header},
     middleware::Next,
@@ -117,7 +117,7 @@ pub(crate) async fn apply(
         if native_proxy {
             headers.insert(
                 header::ACCESS_CONTROL_EXPOSE_HEADERS,
-                axum::http::HeaderValue::from_static("content-disposition, content-range, etag"),
+                plain_libs::axum::http::HeaderValue::from_static("content-disposition, content-range, etag"),
             );
         }
         if options {

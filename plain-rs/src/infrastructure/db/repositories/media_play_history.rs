@@ -2,17 +2,17 @@ use crate::features::enums::DataType;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::HISTORY_KEEP;
 use crate::infrastructure::db::MediaPlayHistoryRow;
-use rusqlite::{Connection, OptionalExtension, params};
+use plain_libs::rusqlite::{Connection, OptionalExtension, params};
 
 pub(crate) const COLUMNS: &str = "file_id,position_ms,play_count,played_at,media_type";
 
-fn type_mismatch() -> rusqlite::Error {
-    rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
+fn type_mismatch() -> plain_libs::rusqlite::Error {
+    plain_libs::rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
         "Media play history type mismatch",
     )))
 }
 
-pub(crate) fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MediaPlayHistoryRow> {
+pub(crate) fn from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<MediaPlayHistoryRow> {
     Ok(MediaPlayHistoryRow {
         file_id: row.get(0)?,
         position_ms: row.get(1)?,
@@ -27,7 +27,7 @@ pub(crate) fn record_play(
     media_type: DataType,
     file_id: &str,
     position_ms: i64,
-) -> rusqlite::Result<()> {
+) -> plain_libs::rusqlite::Result<()> {
     let current = conn
         .query_row(
             "SELECT media_type,play_count FROM media_play_history WHERE file_id=?1",
@@ -45,7 +45,7 @@ pub(crate) fn record_play(
         .transpose()?
         .unwrap_or(0);
     let count = current.checked_add(1).ok_or_else(|| {
-        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
+        plain_libs::rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(
             "play count overflow",
         )))
     })?;
@@ -74,7 +74,7 @@ pub(crate) fn update_progress(
     media_type: DataType,
     file_id: &str,
     position_ms: i64,
-) -> rusqlite::Result<()> {
+) -> plain_libs::rusqlite::Result<()> {
     let current = conn
         .query_row(
             "SELECT media_type,position_ms FROM media_play_history WHERE file_id=?1",
@@ -102,7 +102,7 @@ pub(crate) fn save_progress(
     media_type: DataType,
     file_id: &str,
     position_ms: i64,
-) -> rusqlite::Result<()> {
+) -> plain_libs::rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO media_play_history(file_id,position_ms,play_count,played_at,media_type) VALUES(?1,?2,0,?3,?4) ON CONFLICT(file_id) DO NOTHING",
         params![file_id, position_ms, plain_libs::utils::dbtime::now_iso_millis(), media_type.kind()],
@@ -116,7 +116,7 @@ impl Db {
         media_type: DataType,
         file_id: &str,
         position_ms: i64,
-    ) -> rusqlite::Result<()> {
+    ) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|conn| {
             let tx = conn.unchecked_transaction()?;
             record_play(&tx, media_type, file_id, position_ms)?;
@@ -129,7 +129,7 @@ impl Db {
         media_type: DataType,
         file_id: &str,
         position_ms: i64,
-    ) -> rusqlite::Result<()> {
+    ) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|conn| {
             let tx = conn.unchecked_transaction()?;
             save_progress(&tx, media_type, file_id, position_ms)?;

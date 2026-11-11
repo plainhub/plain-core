@@ -9,7 +9,7 @@ use crate::features::services::discovery::pairing_runtime::event;
 use crate::features::services::discovery::pairing_runtime::failed;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::utils::base64::base64_encode;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     collections::HashMap,
     sync::Mutex,
@@ -64,8 +64,8 @@ pub fn start(
             generation,
         )?
     };
-    let ticket: Ticket = serde_json::from_value(value["ticket"].clone())?;
-    let request = serde_json::from_value(value["request"].clone())?;
+    let ticket: Ticket = plain_libs::serde_json::from_value(value["ticket"].clone())?;
+    let request = plain_libs::serde_json::from_value(value["request"].clone())?;
     state
         .pairing_runtime
         .confirmations

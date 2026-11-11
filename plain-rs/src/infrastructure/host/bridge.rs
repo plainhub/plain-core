@@ -1,4 +1,4 @@
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
@@ -272,7 +272,7 @@ impl Host {
             let names = params["names"]
                 .as_array()
                 .ok_or("System property names required")?;
-            let mut values = serde_json::Map::new();
+            let mut values = plain_libs::serde_json::Map::new();
             let mut dynamic = Vec::new();
             for name in names {
                 let name = name.as_str().ok_or("Invalid system property name")?;

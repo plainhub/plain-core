@@ -2,7 +2,7 @@ use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -23,7 +23,7 @@ fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static
 }
 
 fn permission_sample(params: Value, grants: &[&str]) -> Value {
-    let values: serde_json::Map<String, Value> = params["features"]
+    let values: plain_libs::serde_json::Map<String, Value> = params["features"]
         .as_array()
         .unwrap()
         .iter()
@@ -85,7 +85,7 @@ async fn device_info_carries_the_hardware_report_without_combined_host_facts() {
     let (_dir, schema) = fixture(|method, params| match method {
         "systemProperties" => {
             let values = properties();
-            let mut selected = serde_json::Map::new();
+            let mut selected = plain_libs::serde_json::Map::new();
             for name in params["names"].as_array().unwrap() {
                 let name = name.as_str().unwrap();
                 assert!(values.get(name).is_some(), "unexpected property {name}");

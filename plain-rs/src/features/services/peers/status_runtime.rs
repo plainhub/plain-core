@@ -1,5 +1,5 @@
 use crate::runtime::Runtime as CoreRuntime;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 pub struct Runtime {
     pub connections: crate::features::peers::status::Connections,
@@ -8,7 +8,7 @@ pub struct Runtime {
     pub public_active: std::sync::atomic::AtomicBool,
 }
 impl Runtime {
-    pub fn snapshot(&self, db: &crate::infrastructure::db::Db) -> serde_json::Value {
+    pub fn snapshot(&self, db: &crate::infrastructure::db::Db) -> plain_libs::serde_json::Value {
         let mut row = self.connections.snapshot(db);
         row["outgoing"] = self.outgoing.snapshot();
         row

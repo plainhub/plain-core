@@ -1,8 +1,8 @@
 use plain_rs::features::services::discovery::mdns_runtime::*;
 use plain_rs::infrastructure::protocols::mdns::host_responder;
 use plain_rs::runtime::Runtime as ServerState;
-use serde_json::Value;
-use serde_json::json;
+use plain_libs::serde_json::Value;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 

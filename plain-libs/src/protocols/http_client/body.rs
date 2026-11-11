@@ -1,11 +1,11 @@
 use super::{Error, error::BoxError};
 use bytes::Bytes;
 use futures_core::Stream;
-use http_body::{Body as HttpBody, Frame, SizeHint};
-use http_body_util::{
+use crate::http_body::{Body as HttpBody, Frame, SizeHint};
+use crate::http_body_util::{
     BodyDataStream, BodyExt, Either, Full, StreamBody, combinators::UnsyncBoxBody,
 };
-use hyper::body::Incoming;
+use crate::hyper::body::Incoming;
 use std::{
     future::Future,
     pin::Pin,

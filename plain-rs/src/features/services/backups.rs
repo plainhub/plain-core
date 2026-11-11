@@ -140,10 +140,10 @@ fn snapshot(
             return Err("Backup cancelled".into());
         }
         let target = staging.path().join(format!("prefs-{index}.json"));
-        let values: serde_json::Map<String, serde_json::Value> = entries.into_iter().collect();
+        let values: plain_libs::serde_json::Map<String, plain_libs::serde_json::Value> = entries.into_iter().collect();
         std::fs::write(
             &target,
-            serde_json::to_vec_pretty(&values).map_err(|error| error.to_string())?,
+            plain_libs::serde_json::to_vec_pretty(&values).map_err(|error| error.to_string())?,
         )
         .map_err(|error| error.to_string())?;
         files.push((target, name(path, &roots.folders)?));

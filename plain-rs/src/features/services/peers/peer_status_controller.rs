@@ -1,5 +1,5 @@
 use crate::runtime::Runtime as CoreRuntime;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 pub struct Controller {
     state: CoreRuntime,

@@ -86,6 +86,6 @@ fn exports_browser_interop_vector() {
     assert_eq!(verified.api_key(), server.api_key());
     if let Ok(path) = std::env::var("PLAIN_WEB_APPROVAL_VECTOR") {
         let vector = json!({"clientId":"fixture-browser","clientPrivate":base64_encode(&private),"serverIdentity":base64_encode(&public),"request":request,"response":response,"fingerprint":server.context,"key":base64_encode(&server.api_key())});
-        std::fs::write(path, serde_json::to_vec_pretty(&vector).unwrap()).unwrap();
+        std::fs::write(path, plain_libs::serde_json::to_vec_pretty(&vector).unwrap()).unwrap();
     }
 }

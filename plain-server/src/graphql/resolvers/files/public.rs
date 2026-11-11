@@ -23,7 +23,7 @@ use plain_rs::features::prefs::settings::FileSortBy;
 use plain_rs::features::services::files::browse as file_reads;
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{path::Path, sync::Arc};
 
 const STORAGE: AccessFeature = AccessFeature::Files;

@@ -1,5 +1,5 @@
 use plain_libs::anyhow::{Result, anyhow};
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::{
     fs,
     path::Path,
@@ -16,7 +16,7 @@ pub fn write(directory: &Path, messages: &[Value], now_ms: i64) -> Result<()> {
     let name = format!("deleted_{now_ms}_{}", plain_libs::utils::uuid::Uuid::new_v4());
     fs::write(
         directory.join(format!("{name}.json")),
-        serde_json::to_vec_pretty(messages)?,
+        plain_libs::serde_json::to_vec_pretty(messages)?,
     )?;
     fs::write(directory.join(format!("{name}.csv")), csv(messages)?)?;
     let cutoff =

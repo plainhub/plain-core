@@ -1,6 +1,6 @@
 #[cfg(feature = "library")]
 mod audit_event;
-use rusqlite::Connection;
+use plain_libs::rusqlite::Connection;
 
 pub(crate) const VERSION: i32 = 1;
 
@@ -47,7 +47,7 @@ mod tag;
 #[cfg(feature = "library")]
 mod trashed_sms;
 
-pub(crate) fn init(conn: &Connection) -> rusqlite::Result<()> {
+pub(crate) fn init(conn: &Connection) -> plain_libs::rusqlite::Result<()> {
     plain_libs::kv::schema::init(conn)?;
     scan_history::init(conn)?;
     replay::init(conn)?;

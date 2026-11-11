@@ -1,7 +1,7 @@
 #![cfg(all(feature = "core", feature = "http_transport"))]
 use futures_util::StreamExt;
 use plain_server::server::ContentServer;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 
@@ -25,7 +25,7 @@ fn public_fixture() -> (
     (directory, core, prefs)
 }
 use futures_util::SinkExt;
-use tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClientRequest};
+use plain_libs::tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClientRequest};
 
 #[tokio::test]
 async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
@@ -33,7 +33,7 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
     let key = plain_libs::utils::base64::base64_decode(&core.runtime().token);
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
     let url = format!("ws://127.0.0.1:{}/image_editor?cid={client}", core.port);
-    let (mut denied, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+    let (mut denied, _) = plain_libs::tokio_tungstenite::connect_async(&url).await.unwrap();
     denied
         .send(ClientMessage::Binary(vec![1, 2, 3].into()))
         .await
@@ -43,7 +43,7 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
         ClientMessage::Close(_)
     ));
 
-    let (mut socket, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+    let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(&url).await.unwrap();
     let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
         plain_libs::chrono::Utc::now()
@@ -142,11 +142,11 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     let request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
         .into_client_request()
         .unwrap();
-    let (mut subscriptions, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+    let (mut subscriptions, _) = plain_libs::tokio_tungstenite::connect_async(request).await.unwrap();
     let init = plain_rs::infrastructure::protocols::graphql::seal_init(
         &key,
         &client,
-        serde_json::to_string(&json!({
+        plain_libs::serde_json::to_string(&json!({
             "timestampMillis":plain_libs::chrono::Utc::now().timestamp_millis(), "clientNonce":"01".repeat(32)
         }))
         .unwrap()
@@ -200,13 +200,13 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         else {
             panic!("Expected subscription frame")
         };
-        let value: serde_json::Value =
-            serde_json::from_slice(&subscription_stream.decode(&frame, &key).unwrap()).unwrap();
+        let value: plain_libs::serde_json::Value =
+            plain_libs::serde_json::from_slice(&subscription_stream.decode(&frame, &key).unwrap()).unwrap();
         if value["payload"]["extensions"]["subscriptionReady"] == true {
             ready += 1;
         }
     }
-    let (mut screen, _) = tokio_tungstenite::connect_async(format!(
+    let (mut screen, _) = plain_libs::tokio_tungstenite::connect_async(format!(
         "ws://127.0.0.1:{}/screen?cid={client}",
         core.port
     ))
@@ -330,8 +330,8 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
             let ClientMessage::Binary(frame) = subscriptions.next().await.unwrap().unwrap() else {
                 panic!("Expected codec subscription")
             };
-            let value: serde_json::Value =
-                serde_json::from_slice(&subscription_stream.decode(&frame, &key).unwrap()).unwrap();
+            let value: plain_libs::serde_json::Value =
+                plain_libs::serde_json::from_slice(&subscription_stream.decode(&frame, &key).unwrap()).unwrap();
             if value["payload"]["data"]["screenMirrorVideoCodec"]["annexB"] == "fixture" {
                 break;
             }
@@ -404,8 +404,8 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
             let ClientMessage::Binary(frame) = subscriptions.next().await.unwrap().unwrap() else {
                 panic!("Expected mirror state subscription")
             };
-            let value: serde_json::Value =
-                serde_json::from_slice(&subscription_stream.decode(&frame, &key).unwrap()).unwrap();
+            let value: plain_libs::serde_json::Value =
+                plain_libs::serde_json::from_slice(&subscription_stream.decode(&frame, &key).unwrap()).unwrap();
             if value["payload"]["data"]["screenMirrorState"]["running"] == true {
                 break;
             }
@@ -423,7 +423,7 @@ async fn screen_rejects_missing_clients_invalid_keys_and_disabled_access() {
     let (_directory, core, prefs) = public_fixture();
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
     for query in [String::new(), format!("cid={client}")] {
-        let (mut screen, _) = tokio_tungstenite::connect_async(format!(
+        let (mut screen, _) = plain_libs::tokio_tungstenite::connect_async(format!(
             "ws://127.0.0.1:{}/screen?{query}",
             core.port
         ))
@@ -443,7 +443,7 @@ async fn screen_rejects_missing_clients_invalid_keys_and_disabled_access() {
         assert!(matches!(message, ClientMessage::Close(_)));
     }
     prefs.set("remote_access", false).unwrap();
-    let (mut screen, _) = tokio_tungstenite::connect_async(format!(
+    let (mut screen, _) = plain_libs::tokio_tungstenite::connect_async(format!(
         "ws://127.0.0.1:{}/screen?cid={client}",
         core.port
     ))
@@ -473,7 +473,7 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
     let request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
         .into_client_request()
         .unwrap();
-    let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+    let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(request).await.unwrap();
     let init = plain_rs::infrastructure::protocols::graphql::seal_init(
         &key,
         &client,
@@ -517,8 +517,8 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
     else {
         panic!("Expected encrypted authorization response")
     };
-    let response: serde_json::Value =
-        serde_json::from_slice(&stream.decode(&frame, &key).unwrap()).unwrap();
+    let response: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_slice(&stream.decode(&frame, &key).unwrap()).unwrap();
     assert_eq!(response["id"], "private");
     assert_eq!(response["type"], "error");
     assert_eq!(
@@ -537,8 +537,8 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
             let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else {
                 panic!("Expected encrypted image model update")
             };
-            let response: serde_json::Value =
-                serde_json::from_slice(&stream.decode(&frame, &key).unwrap()).unwrap();
+            let response: plain_libs::serde_json::Value =
+                plain_libs::serde_json::from_slice(&stream.decode(&frame, &key).unwrap()).unwrap();
             if response["id"] == "models"
                 && response["payload"]["data"]["imageModelsUpdated"]["status"].is_string()
             {
@@ -570,8 +570,8 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
             let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else {
                 panic!("Expected subscription response")
             };
-            let response: serde_json::Value =
-                serde_json::from_slice(&stream.decode(&frame, &key).unwrap()).unwrap();
+            let response: plain_libs::serde_json::Value =
+                plain_libs::serde_json::from_slice(&stream.decode(&frame, &key).unwrap()).unwrap();
             assert_ne!(response["type"], "error");
             if response["payload"]["extensions"]["subscriptionReady"] == true {
                 ready.insert(response["id"].as_str().unwrap().to_owned());
@@ -602,8 +602,8 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
             let ClientMessage::Binary(frame) = socket.next().await.unwrap().unwrap() else {
                 panic!("Expected encrypted subscription update")
             };
-            let response: serde_json::Value =
-                serde_json::from_slice(&stream.decode(&frame, &key).unwrap()).unwrap();
+            let response: plain_libs::serde_json::Value =
+                plain_libs::serde_json::from_slice(&stream.decode(&frame, &key).unwrap()).unwrap();
             assert_ne!(response["type"], "error");
             if response["id"] == "settings"
                 && response["payload"]["data"]["pomodoroSettingsChanged"] == true

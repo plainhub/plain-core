@@ -157,7 +157,7 @@ async fn run(state: &CoreRuntime) -> Result<bool> {
     };
     for entry in state.store.get()?.scan_prefix(IDENTITY_PREFIX) {
         let (key, value) = entry?;
-        let row: Known = serde_json::from_str(&value)?;
+        let row: Known = plain_libs::serde_json::from_str(&value)?;
         let path = PathBuf::from(&row.identity.path);
         if key != identity_key(&path)
             || !path.is_absolute()
@@ -577,7 +577,7 @@ fn save_identities(
         batch.remove(identity_key(path));
     }
     for (path, row) in updates {
-        batch.insert(identity_key(path), serde_json::to_string(row)?);
+        batch.insert(identity_key(path), plain_libs::serde_json::to_string(row)?);
     }
     store.apply_batch(batch)
 }

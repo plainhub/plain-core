@@ -1,5 +1,5 @@
 use crate::server::ServerState;
-use axum::{
+use plain_libs::axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -9,7 +9,7 @@ use plain_rs::features::prefs::security::PasswordType;
 use plain_rs::features::services::confirmation_channel;
 use plain_rs::infrastructure::events::WsEvent;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
@@ -320,7 +320,7 @@ async fn run(
                                     let password_type = plain_rs::features::prefs::security::password_type(&state.prefs)?;
                                     plain_libs::anyhow::ensure!(password_type == PasswordType::None, "invalid_login_request");
                                     plain_libs::anyhow::ensure!(enabled(&state), "remote_access_disabled");
-                                    let request = serde_json::from_str::<confirmation_channel::ClientHello>(&text)?;
+                                    let request = plain_libs::serde_json::from_str::<confirmation_channel::ClientHello>(&text)?;
                                     let device_id = state.prefs.get_or(
                                         plain_rs::features::prefs::pref_keys::CLIENT_ID,
                                         String::new(),
@@ -341,7 +341,7 @@ async fn run(
                             }
                         })();
                         match accepted {
-                            Ok(Some(response)) => { if socket.send(Message::Text(serde_json::to_string(&response).unwrap().into())).await.is_err() { break; } }
+                            Ok(Some(response)) => { if socket.send(Message::Text(plain_libs::serde_json::to_string(&response).unwrap().into())).await.is_err() { break; } }
                             Ok(None) => {}
                             Err(error) => {
                                 let reason = if error.to_string() == "too_many_login_attempts" { "too_many_login_attempts" } else { "invalid_login_request" };
@@ -540,7 +540,7 @@ fn controls(bytes: &[u8]) -> Vec<Value> {
             "pointerId":p[1],"x":f32::from(u16::from_le_bytes([p[2],p[3]]))/65535.0,"y":f32::from(u16::from_le_bytes([p[4],p[5]]))/65535.0
         })).collect()
     } else {
-        let Ok(value) = serde_json::from_slice::<Value>(bytes) else {
+        let Ok(value) = plain_libs::serde_json::from_slice::<Value>(bytes) else {
             return vec![];
         };
         if value["type"] != "screenMirrorControl" {

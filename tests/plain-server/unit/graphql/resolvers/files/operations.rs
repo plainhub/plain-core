@@ -4,7 +4,7 @@ use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 const GRANTED: &str = r#"["IMAGES","VIDEOS","AUDIO","DOCS","FILES"]"#;
@@ -42,7 +42,7 @@ fn fixture_with(
     prefs
         .set(
             "api_permissions",
-            json!(serde_json::from_str::<Vec<String>>(permissions).unwrap()),
+            json!(plain_libs::serde_json::from_str::<Vec<String>>(permissions).unwrap()),
         )
         .unwrap();
     prefs.set("client_id", "file-test").unwrap();
@@ -598,7 +598,7 @@ async fn media_batches_commit_successes_and_notify_only_confirmed_ids() {
             connection
                 .prepare("SELECT id FROM file_catalog WHERE data_type=2")?
                 .query_map([], |row| row.get::<_, String>(0))?
-                .collect::<rusqlite::Result<Vec<_>>>()
+                .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
         })
         .unwrap();
     assert_eq!(remaining, vec![casualty]);

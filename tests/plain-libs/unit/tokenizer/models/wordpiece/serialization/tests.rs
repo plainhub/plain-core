@@ -11,8 +11,8 @@ fn serde() {
             \"vocab\":{}\
         }";
 
-    assert_eq!(serde_json::to_string(&wp).unwrap(), wp_s);
-    assert_eq!(serde_json::from_str::<WordPiece>(wp_s).unwrap(), wp);
+    assert_eq!(crate::serde_json::to_string(&wp).unwrap(), wp_s);
+    assert_eq!(crate::serde_json::from_str::<WordPiece>(wp_s).unwrap(), wp);
 }
 
 #[test]
@@ -24,7 +24,7 @@ fn deserialization_should_fail() {
             \"vocab\":{}\
         }";
     assert!(
-        serde_json::from_str::<WordPiece>(missing_unk)
+        crate::serde_json::from_str::<WordPiece>(missing_unk)
             .unwrap_err()
             .to_string()
             .starts_with("missing field `unk_token`")
@@ -36,7 +36,7 @@ fn deserialization_should_fail() {
             \"vocab\":{}\
         }";
     assert!(
-        serde_json::from_str::<WordPiece>(wrong_type)
+        crate::serde_json::from_str::<WordPiece>(wrong_type)
             .unwrap_err()
             .to_string()
             .starts_with("invalid value: string \"WordLevel\", expected WordPiece")

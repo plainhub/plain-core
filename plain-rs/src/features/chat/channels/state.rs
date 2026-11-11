@@ -8,7 +8,7 @@ use crate::infrastructure::db::chat_store::channels;
 use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::row_to_channel;
 use plain_libs::anyhow::{Result, bail};
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 
 #[derive(serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
@@ -35,7 +35,7 @@ pub fn pending_invitation(
     {
         return Ok(None);
     }
-    let members: Vec<ChannelMember> = serde_json::from_str(&channel.members)?;
+    let members: Vec<ChannelMember> = plain_libs::serde_json::from_str(&channel.members)?;
     Ok(members
         .iter()
         .any(|member| member.peer_id == actor && member.is_pending())
@@ -48,7 +48,7 @@ pub fn create(db: &Db, actor: &str, name: &str) -> Result<DChannel> {
     }
     let mut channel = DChannel::new(name.trim(), actor);
     channel.key = plain_libs::utils::base64::base64_encode(&plain_libs::crypto::random_bytes(32));
-    channel.members = serde_json::to_string(&[ChannelMember::new(actor)])?;
+    channel.members = plain_libs::serde_json::to_string(&[ChannelMember::new(actor)])?;
     channels::save(db, std::slice::from_ref(&channel), SaveMode::Insert)?;
     Ok(channel)
 }
@@ -60,7 +60,7 @@ pub fn apply(db: &Db, actor: &str, id: &str, action: Action) -> Result<DChannel>
     db.with_conn(|c| -> Result<DChannel> {
         let tx=c.unchecked_transaction()?;
         let mut channel=tx.query_row(&format!("SELECT {CHANNEL_COLS} FROM chat_channels WHERE id=?1"),[id],row_to_channel).optional()?.ok_or_else(||plain_libs::anyhow::anyhow!("Channel not found"))?;
-        let mut members: Vec<ChannelMember>=serde_json::from_str(&channel.members)?;
+        let mut members: Vec<ChannelMember>=plain_libs::serde_json::from_str(&channel.members)?;
         let mut changed=true;
         let mut versioned=false;
         match action {
@@ -100,7 +100,7 @@ pub fn apply(db: &Db, actor: &str, id: &str, action: Action) -> Result<DChannel>
         }
         if changed {
             if versioned { channel.version=channel.version.checked_add(1).ok_or_else(||plain_libs::anyhow::anyhow!("Channel version overflow"))?; }
-            channel.members=serde_json::to_string(&members)?;
+            channel.members=plain_libs::serde_json::to_string(&members)?;
             channel.updated_at=now_iso();
             if tx.execute("UPDATE chat_channels SET name=?2,members=?3,version=?4,status=?5,updated_at=?6 WHERE id=?1",params![channel.id,channel.name,channel.members,channel.version,channel.status,plain_libs::utils::dbtime::normalize(&channel.updated_at)?])? != 1 { bail!("Channel update failed"); }
         }

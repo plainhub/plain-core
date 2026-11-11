@@ -1,0 +1,16 @@
+{
+  "name": "rusqlite",
+  "version": "0.41.1",
+  "repository": "https://github.com/rusqlite/rusqlite",
+  "revision": "18ee76dbb976d5ef7e37ad5a8fffae678ca21a78",
+  "retained_features": [
+    "backup",
+    "bundled",
+    "cache",
+    "hashlink",
+    "hooks",
+    "modern_sqlite",
+    "wal"
+  ],
+  "archive_integrity": "sha256-2pu6bzUGE14SCmWG3wW+GLSNGIlmAGRqS+yPmT2RpZQ="
+}

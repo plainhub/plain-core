@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_runtime::Core as ContentServer;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[tokio::test]
 async fn interrupted_platform_read_preserves_the_previous_sound_and_removes_temporary_files() {

@@ -34,7 +34,7 @@ fn roundtrip_string_and_json_shapes() {
     prefs.set("adb_token", "abc123").unwrap();
     prefs.set("dlna_allowed_senders", vec!["/a", "/b"]).unwrap();
     prefs
-        .set("volume_alias", serde_json::json!({"enabled": true}))
+        .set("volume_alias", plain_libs::serde_json::json!({"enabled": true}))
         .unwrap();
 
     assert_eq!(
@@ -46,8 +46,8 @@ fn roundtrip_string_and_json_shapes() {
         Some(vec!["/a".into(), "/b".into()])
     );
     assert_eq!(
-        prefs.get::<serde_json::Value>("volume_alias").unwrap(),
-        Some(serde_json::json!({"enabled": true}))
+        prefs.get::<plain_libs::serde_json::Value>("volume_alias").unwrap(),
+        Some(plain_libs::serde_json::json!({"enabled": true}))
     );
 }
 
@@ -128,8 +128,8 @@ fn entries_sorted_with_json_rendered_values() {
     assert_eq!(entries[1].1, "\"v\"");
 
     let values = prefs.entries();
-    assert_eq!(values[0].1, serde_json::json!(["A", "B"]));
-    assert_eq!(values[1].1, serde_json::json!("v"));
+    assert_eq!(values[0].1, plain_libs::serde_json::json!(["A", "B"]));
+    assert_eq!(values[1].1, plain_libs::serde_json::json!("v"));
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn reload_sees_previous_writes_and_pretty_prints() {
     let (dir, prefs) = tmp_prefs("reload");
     prefs.set("device_name", "box").unwrap();
     prefs
-        .set("volume_alias", serde_json::json!({"a": 1}))
+        .set("volume_alias", plain_libs::serde_json::json!({"a": 1}))
         .unwrap();
     drop(prefs);
 
@@ -151,8 +151,8 @@ fn reload_sees_previous_writes_and_pretty_prints() {
         Some("box")
     );
     assert_eq!(
-        reloaded.get::<serde_json::Value>("volume_alias").unwrap(),
-        Some(serde_json::json!({"a": 1}))
+        reloaded.get::<plain_libs::serde_json::Value>("volume_alias").unwrap(),
+        Some(plain_libs::serde_json::json!({"a": 1}))
     );
 }
 
@@ -165,7 +165,7 @@ fn retired_preferences_do_not_block_writes_or_become_writable() {
     let prefs = Prefs::load(&file).unwrap();
     assert!(prefs.set("device_name", "box").unwrap());
     assert!(matches!(
-        prefs.set("samba_settings", serde_json::json!({"enabled": false})),
+        prefs.set("samba_settings", plain_libs::serde_json::json!({"enabled": false})),
         Err(PrefsError::UnknownKey(_))
     ));
     let reloaded = Prefs::load(&file).unwrap();
@@ -174,8 +174,8 @@ fn retired_preferences_do_not_block_writes_or_become_writable() {
         Some("box")
     );
     assert_eq!(
-        reloaded.get::<serde_json::Value>("samba_settings").unwrap(),
-        Some(serde_json::json!({"enabled": true}))
+        reloaded.get::<plain_libs::serde_json::Value>("samba_settings").unwrap(),
+        Some(plain_libs::serde_json::json!({"enabled": true}))
     );
 }
 

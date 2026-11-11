@@ -8,7 +8,7 @@ fn incomplete_ordered_vocab() {
 
     let ordered = OrderedVocabIter::new(&vocab_r);
 
-    let serialized = serde_json::to_string(&ordered).unwrap();
+    let serialized = crate::serde_json::to_string(&ordered).unwrap();
     assert_eq!(serialized, "{\"Hi\":0,\"There\":2}");
 }
 
@@ -32,25 +32,25 @@ fn serialization() {
 
     let model = ModelWrapper::BPE(bpe);
     let legacy = r#"{"type":"BPE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b":2,"ab":3},"merges":["a b"]}"#;
-    let legacy = serde_json::from_str(legacy).unwrap();
+    let legacy = crate::serde_json::from_str(legacy).unwrap();
     assert_eq!(model, legacy);
 
-    let data = serde_json::to_string(&model).unwrap();
+    let data = crate::serde_json::to_string(&model).unwrap();
     assert_eq!(
         data,
         r#"{"type":"BPE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b":2,"ab":3},"merges":[["a","b"]]}"#
     );
-    let reconstructed = serde_json::from_str(&data).unwrap();
+    let reconstructed = crate::serde_json::from_str(&data).unwrap();
     assert_eq!(model, reconstructed);
 
     // Legacy check, type is not necessary.
     let legacy = r#"{"dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b":2,"ab":3},"merges":["a b"]}"#;
-    let reconstructed = serde_json::from_str(legacy).unwrap();
+    let reconstructed = crate::serde_json::from_str(legacy).unwrap();
     assert_eq!(model, reconstructed);
 
     let invalid = r#"{"type":"BPE","dropout":null,"unk_token":"<unk>","continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":false,"byte_fallback":false,"ignore_merges":true,"vocab":{"<unk>":0,"a":1,"b":2,"ab":3},"merges":["a b c"]}"#;
-    let reconstructed: std::result::Result<ModelWrapper, serde_json::Error> =
-        serde_json::from_str(invalid);
+    let reconstructed: std::result::Result<ModelWrapper, crate::serde_json::Error> =
+        crate::serde_json::from_str(invalid);
     match reconstructed {
         Err(err) => assert_eq!(err.to_string(), "Merges text file invalid at line 1"),
         _ => panic!("Expected an error here"),

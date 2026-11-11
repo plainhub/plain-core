@@ -10,7 +10,7 @@ pub struct PiParser(
 impl Parser for PiParser {
     #[inline]
     fn feed(&mut self, bytes: &[u8]) -> Option<usize> {
-        for i in memchr::memchr_iter(b'>', bytes) {
+        for i in crate::memchr::memchr_iter(b'>', bytes) {
             match i {
                 0 if self.0 => return Some(0),
                 i if i > 0 && bytes[i - 1] == b'?' => return Some(i),

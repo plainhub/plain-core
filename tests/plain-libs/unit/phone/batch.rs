@@ -44,7 +44,7 @@ async fn batch_resolution_preserves_order_and_handles_invalid_numbers_without_a_
 
 #[tokio::test]
 async fn raw_network_region_takes_precedence_for_national_numbers() {
-    let locale = serde_json::from_value(serde_json::json!({
+    let locale = crate::serde_json::from_value(crate::serde_json::json!({
         "region":"CN", "locale":"en-US", "networkRegion":"US", "simRegion":"CN"
     }))
     .unwrap();

@@ -33,7 +33,7 @@ fn remove_record(state: &ServerState, id: &str) -> plain_libs::anyhow::Result<bo
         plain_rs::features::services::discovery::pairing_runtime::event(
             state,
             plain_rs::features::chat::events::WS_MESSAGE_DELETED,
-            serde_json::json!(format!("peer:{id}")),
+            plain_libs::serde_json::json!(format!("peer:{id}")),
         );
     }
     Ok(removed)

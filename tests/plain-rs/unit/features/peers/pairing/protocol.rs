@@ -60,7 +60,7 @@ fn response_signature_data_format_is_locked() {
 /// camelCase JSON wire names must match the Kotlin @Serializable classes.
 #[test]
 fn wire_json_is_camelcase() {
-    let json = serde_json::to_value(sample_request()).unwrap();
+    let json = plain_libs::serde_json::to_value(sample_request()).unwrap();
     assert_eq!(json["fromId"], "client-a");
     assert_eq!(json["fromName"], "Mac");
     assert_eq!(json["deviceType"], "COMPUTER");
@@ -68,17 +68,17 @@ fn wire_json_is_camelcase() {
     assert_eq!(json["signaturePublicKey"], "SIGPK");
     assert_eq!(json["awareSupported"], false);
     assert_eq!(json["fromIp"], "");
-    let back: PairingRequest = serde_json::from_value(json).unwrap();
+    let back: PairingRequest = plain_libs::serde_json::from_value(json).unwrap();
     assert_eq!(back.from_id, "client-a");
 }
 
 #[test]
 fn legacy_unsigned_cancellation_and_unbound_response_are_rejected() {
     assert!(
-        serde_json::from_value::<PairingCancel>(serde_json::json!({"fromId":"a","toId":"b"}))
+        plain_libs::serde_json::from_value::<PairingCancel>(plain_libs::serde_json::json!({"fromId":"a","toId":"b"}))
             .is_err()
     );
-    assert!(serde_json::from_value::<PairingResponse>(serde_json::json!({"fromId":"b","toId":"a","port":2443,"deviceType":"PHONE","ecdhPublicKey":"key","signaturePublicKey":"signer","accepted":true,"timestamp":1,"signature":"old"})).is_err());
+    assert!(plain_libs::serde_json::from_value::<PairingResponse>(plain_libs::serde_json::json!({"fromId":"b","toId":"a","port":2443,"deviceType":"PHONE","ecdhPublicKey":"key","signaturePublicKey":"signer","accepted":true,"timestamp":1,"signature":"old"})).is_err());
 }
 
 #[test]
@@ -95,19 +95,19 @@ fn request_device_enums_preserve_wire_and_signature_values() {
     ] {
         let mut request = sample_request();
         request.payload.device_type = kind;
-        let wire = serde_json::to_value(&request).unwrap();
+        let wire = plain_libs::serde_json::to_value(&request).unwrap();
         assert_eq!(wire["deviceType"], kind.as_str());
-        let decoded: PairingRequest = serde_json::from_value(wire).unwrap();
+        let decoded: PairingRequest = plain_libs::serde_json::from_value(wire).unwrap();
         assert_eq!(decoded.payload.device_type, kind);
         assert_eq!(decoded.signature_data(), request.signature_data());
         assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&request.signature_data()).unwrap()[7],
+            plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&request.signature_data()).unwrap()[7],
             kind.as_str()
         );
     }
-    let mut wire = serde_json::to_value(sample_request()).unwrap();
-    wire["deviceType"] = serde_json::json!("FUTURE_DEVICE");
-    assert!(serde_json::from_value::<PairingRequest>(wire).is_err());
+    let mut wire = plain_libs::serde_json::to_value(sample_request()).unwrap();
+    wire["deviceType"] = plain_libs::serde_json::json!("FUTURE_DEVICE");
+    assert!(plain_libs::serde_json::from_value::<PairingRequest>(wire).is_err());
 }
 
 #[test]

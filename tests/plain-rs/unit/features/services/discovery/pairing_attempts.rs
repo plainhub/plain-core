@@ -43,7 +43,7 @@ fn continuation_cannot_retarget_or_reuse_a_terminal_attempt() {
         attempts.get(&second.generation).unwrap().phase,
         PairingPhase::Starting
     );
-    let encoded = serde_json::to_value(attempts.states()).unwrap().to_string();
+    let encoded = plain_libs::serde_json::to_value(attempts.states()).unwrap().to_string();
     assert!(!encoded.contains("secret"));
     assert!(!encoded.contains("example.test"));
 }
@@ -125,9 +125,9 @@ fn phases_have_fixed_wire_names_and_terminal_behavior() {
             identity_changed: false,
         };
         assert_eq!(state.terminal(), terminal);
-        let value = serde_json::to_value(&state).unwrap();
+        let value = plain_libs::serde_json::to_value(&state).unwrap();
         assert_eq!(value["phase"], wire);
-        assert_eq!(serde_json::from_value::<State>(value).unwrap().phase, phase);
+        assert_eq!(plain_libs::serde_json::from_value::<State>(value).unwrap().phase, phase);
     }
-    assert!(serde_json::from_value::<PairingPhase>(serde_json::json!("FUTURE_PHASE")).is_err());
+    assert!(plain_libs::serde_json::from_value::<PairingPhase>(plain_libs::serde_json::json!("FUTURE_PHASE")).is_err());
 }

@@ -60,16 +60,16 @@ pub trait Events: Send + Sync + 'static {
     fn changed(&self, task: &FileTask);
 }
 pub type HookResult<'a> = Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
-pub type PrepareResult<'a> = Pin<Box<dyn Future<Output = Result<serde_json::Value>> + Send + 'a>>;
+pub type PrepareResult<'a> = Pin<Box<dyn Future<Output = Result<plain_libs::serde_json::Value>> + Send + 'a>>;
 pub trait Hooks: Send + Sync + 'static {
     fn prepare<'a>(&'a self, _: FileTaskType, _: &'a FileTaskOp) -> PrepareResult<'a> {
-        Box::pin(async { Ok(serde_json::Value::Null) })
+        Box::pin(async { Ok(plain_libs::serde_json::Value::Null) })
     }
     fn completed_with_snapshot<'a>(
         &'a self,
         kind: FileTaskType,
         op: &'a CompletedOp,
-        _: &'a serde_json::Value,
+        _: &'a plain_libs::serde_json::Value,
     ) -> HookResult<'a> {
         self.completed(kind, op)
     }

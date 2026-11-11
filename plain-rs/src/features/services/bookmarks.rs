@@ -66,7 +66,7 @@ pub fn import_bookmarks(db: &Db, html: &str) -> Result<i32> {
             let mut stmt = tx.prepare("SELECT url FROM bookmarks")?;
             let rows = stmt
                 .query_map([], |row| row.get::<_, String>(0))?
-                .collect::<rusqlite::Result<HashSet<_>>>()?;
+                .collect::<plain_libs::rusqlite::Result<HashSet<_>>>()?;
             rows
         };
         let mut groups = HashMap::new();
@@ -102,7 +102,7 @@ pub fn import_bookmarks(db: &Db, html: &str) -> Result<i32> {
             count += 1;
         }
         tx.commit()?;
-        Ok::<_, rusqlite::Error>(count)
+        Ok::<_, plain_libs::rusqlite::Error>(count)
     })
     .map_err(Into::into)
 }

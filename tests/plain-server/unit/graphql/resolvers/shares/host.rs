@@ -1,6 +1,6 @@
 use crate::server::ContentServer;
 use plain_graphql::Request;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 #[tokio::test]
@@ -33,7 +33,7 @@ async fn main_share_content_uses_saved_roots_identity_and_live_port() {
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
     let message: Value =
-        serde_json::from_str(data["sendShare"][0]["content"].as_str().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(data["sendShare"][0]["content"].as_str().unwrap()).unwrap();
     assert_eq!(message["type"], "SHARE");
     assert_eq!(message["value"]["shareId"], id);
     assert_eq!(

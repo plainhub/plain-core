@@ -25,7 +25,7 @@
 
 use std::collections::HashSet;
 
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 use crate::features::chat::enums::ChatStatus;
 use crate::features::chat::events::ChannelKeyCache;

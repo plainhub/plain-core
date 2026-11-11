@@ -1,13 +1,13 @@
 // Streaming parser adapted from multer 3.1.0 (https://github.com/rwf2/multer), see LICENSE.
 
-use axum::{RequestExt, body::BodyDataStream, extract::Request};
+use crate::axum::{RequestExt, body::BodyDataStream, extract::Request};
 use bytes::{Buf, Bytes, BytesMut};
 use futures_core::Stream;
-use http::{
+use crate::http::{
     HeaderMap, HeaderName, HeaderValue,
     header::{CONTENT_DISPOSITION, CONTENT_TYPE},
 };
-use memchr::{memchr_iter, memmem};
+use crate::memchr::{memchr_iter, memmem};
 use std::{
     fmt,
     future::poll_fn,
@@ -20,10 +20,10 @@ use disposition::ContentDispositionAttr;
 
 #[derive(Debug)]
 pub enum MultipartError {
-    Headers(httparse::Error),
-    HeaderName(http::header::InvalidHeaderName),
-    HeaderValue(http::header::InvalidHeaderValue),
-    Body(axum::Error),
+    Headers(crate::httparse::Error),
+    HeaderName(crate::http::header::InvalidHeaderName),
+    HeaderValue(crate::http::header::InvalidHeaderValue),
+    Body(crate::axum::Error),
     Incomplete,
 }
 
@@ -70,11 +70,11 @@ pub struct Multipart {
 impl Multipart {
     pub fn from_request(request: Request) -> Option<Self> {
         let content_type = request.headers().get(CONTENT_TYPE)?.to_str().ok()?;
-        let mime = content_type.parse::<mime::Mime>().ok()?;
-        if mime.type_() != mime::MULTIPART || mime.subtype() != mime::FORM_DATA {
+        let mime = content_type.parse::<crate::mime::Mime>().ok()?;
+        if mime.type_() != crate::mime::MULTIPART || mime.subtype() != crate::mime::FORM_DATA {
             return None;
         }
-        let boundary = mime.get_param(mime::BOUNDARY)?;
+        let boundary = mime.get_param(crate::mime::BOUNDARY)?;
         Some(Self {
             stream: request.with_limited_body().into_body().into_data_stream(),
             buffer: BytesMut::new(),
@@ -164,11 +164,11 @@ impl Multipart {
             return Poll::Ready(Err(MultipartError::Incomplete));
         }
         let bytes = self.buffer.split_to(index + 4);
-        let mut headers = [httparse::EMPTY_HEADER; 32];
+        let mut headers = [crate::httparse::EMPTY_HEADER; 32];
         let parsed =
-            match httparse::parse_headers(&bytes, &mut headers).map_err(MultipartError::Headers)? {
-                httparse::Status::Complete((_, headers)) => headers,
-                httparse::Status::Partial => return Poll::Ready(Err(MultipartError::Incomplete)),
+            match crate::httparse::parse_headers(&bytes, &mut headers).map_err(MultipartError::Headers)? {
+                crate::httparse::Status::Complete((_, headers)) => headers,
+                crate::httparse::Status::Partial => return Poll::Ready(Err(MultipartError::Incomplete)),
             };
         let mut headers = HeaderMap::with_capacity(parsed.len());
         for header in parsed {
@@ -230,7 +230,7 @@ pub struct Field<'a> {
     multipart: &'a mut Multipart,
     name: Option<String>,
     file_name: Option<String>,
-    content_type: Option<mime::Mime>,
+    content_type: Option<crate::mime::Mime>,
 }
 
 impl<'a> Field<'a> {

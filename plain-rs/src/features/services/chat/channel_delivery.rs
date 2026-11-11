@@ -6,7 +6,7 @@ use crate::infrastructure::db::chat_store::channels;
 use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 pub fn rejected(message: impl ToString) -> Value {
     json!({"errors":[{"message":message.to_string()}]})
@@ -67,7 +67,7 @@ async fn deliver(
         "Missing invite target"
     );
     let ids = if target.is_empty() {
-        serde_json::from_str::<Vec<ChannelMember>>(&channel.members)?
+        plain_libs::serde_json::from_str::<Vec<ChannelMember>>(&channel.members)?
             .into_iter()
             .filter(|m| m.peer_id != actor)
             .map(|m| m.peer_id)

@@ -2,7 +2,7 @@ use crate::features::enums::DataType;
 use crate::features::services::files::archives::ArchiveReader;
 use crate::runtime::Runtime as CoreRuntime;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -335,7 +335,7 @@ async fn package_entries(
         .call("systemPackageFacts", json!({}))
         .await
         .map_err(plain_libs::anyhow::Error::msg)?;
-    let facts: Vec<Value> = serde_json::from_value(facts)?;
+    let facts: Vec<Value> = plain_libs::serde_json::from_value(facts)?;
     let items =
         crate::features::services::packages::query::packages(&state.db, facts, query, "NAME_ASC")?;
     Ok(items
@@ -363,7 +363,7 @@ fn temp_file_entries(state: &CoreRuntime, key: &str) -> Vec<(PathBuf, String)> {
     let Some(value) = state.temp_values.take(key) else {
         return Vec::new();
     };
-    serde_json::from_str::<Vec<DownloadFileItem>>(&value)
+    plain_libs::serde_json::from_str::<Vec<DownloadFileItem>>(&value)
         .map(|items| {
             items
                 .into_iter()
@@ -377,7 +377,7 @@ async fn zip_items(
     state: &CoreRuntime,
     request: &ZipFilesRequest,
 ) -> plain_libs::anyhow::Result<Vec<(PathBuf, String)>> {
-    let data_type: DataType = serde_json::from_value(Value::String(request.r#type.clone()))?;
+    let data_type: DataType = plain_libs::serde_json::from_value(Value::String(request.r#type.clone()))?;
     match data_type {
         DataType::AppFile => app_file_entries(state, &request.query),
         DataType::Audio | DataType::Video | DataType::Image | DataType::Doc => {
@@ -403,7 +403,7 @@ pub async fn files(state: &CoreRuntime, id: &str) -> Result<Download, Error> {
     let Some(plaintext) = decrypt_url_id(state, id) else {
         return Err(Error::Invalid("File is expired or does not exist.".into()));
     };
-    let request: ZipFilesRequest = match serde_json::from_str(&plaintext) {
+    let request: ZipFilesRequest = match plain_libs::serde_json::from_str(&plaintext) {
         Ok(request) => request,
         Err(error) => return Err(Error::Invalid(error.to_string())),
     };

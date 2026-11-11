@@ -3,7 +3,7 @@ use plain_rs::features::discovery::nearby_http::Message;
 use plain_rs::features::peers::pairing::sessions::Target;
 use plain_rs::features::services::discovery::pairing::Device;
 use plain_rs::features::services::discovery::pairing_runtime::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[cfg(feature = "http_transport")]
 fn fixture(id: &str) -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
@@ -156,7 +156,7 @@ async fn public_nearby_endpoint_runs_pairing_parser_in_rust() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacement() {
-    use axum::{Router, body::Bytes, extract::State, http::HeaderMap, routing::post};
+    use plain_libs::axum::{Router, body::Bytes, extract::State, http::HeaderMap, routing::post};
     async fn receive(
         State(sender): State<tokio::sync::mpsc::Sender<Message>>,
         headers: HeaderMap,
@@ -173,7 +173,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
     let state = server.runtime_state();
     let (send, mut received) = tokio::sync::mpsc::channel(8);
     let router = Router::new()
-        .route("/health", axum::routing::get(crate::http::health::health))
+        .route("/health", plain_libs::axum::routing::get(crate::http::health::health))
         .route("/nearby", post(receive))
         .with_state(send);
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
@@ -230,7 +230,7 @@ async fn lan_runtime_sends_signed_tls_requests_and_cancel_cannot_remove_replacem
         payload,
     };
     assert!(plain_rs::features::peers::pairing::security::verify_request(&request));
-    let wire = serde_json::to_value(request.payload).unwrap();
+    let wire = plain_libs::serde_json::to_value(request.payload).unwrap();
     for removed in ["fromId", "fromIp", "toId", "targetPublicKey"] {
         assert!(
             wire.get(removed).is_none(),

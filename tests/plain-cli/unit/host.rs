@@ -26,44 +26,44 @@ async fn access_primitives_report_capabilities_and_grants_without_an_app_busines
     let runtime = Host::new(core.clone(), vec!["MEDIA_SCAN".into()]);
     assert_eq!(
         runtime
-            .dispatch("peerTransportCapabilities", serde_json::json!({}))
+            .dispatch("peerTransportCapabilities", plain_libs::serde_json::json!({}))
             .await
             .unwrap(),
-        serde_json::json!([])
+        plain_libs::serde_json::json!([])
     );
     assert_eq!(
         runtime
-            .dispatch("systemCapabilities", serde_json::json!({}))
+            .dispatch("systemCapabilities", plain_libs::serde_json::json!({}))
             .await
             .unwrap(),
-        serde_json::json!(["MEDIA_SCAN"])
+        plain_libs::serde_json::json!(["MEDIA_SCAN"])
     );
     let permissions = runtime
         .dispatch(
             "systemAccessFacts",
-            serde_json::json!({"features":["FILES","SMS"]}),
+            plain_libs::serde_json::json!({"features":["FILES","SMS"]}),
         )
         .await
         .unwrap();
     assert_eq!(
         permissions,
-        serde_json::json!({"granted":{"FILES":true,"SMS":false}})
+        plain_libs::serde_json::json!({"granted":{"FILES":true,"SMS":false}})
     );
     assert!(
         runtime
-            .dispatch("unregisteredMethod", serde_json::json!({}))
+            .dispatch("unregisteredMethod", plain_libs::serde_json::json!({}))
             .await
             .is_err()
     );
     assert!(
         runtime
-            .dispatch("systemMountFacts", serde_json::json!({}))
+            .dispatch("systemMountFacts", plain_libs::serde_json::json!({}))
             .await
             .is_err()
     );
     assert!(
         runtime
-            .dispatch("systemDisksFacts", serde_json::json!({}))
+            .dispatch("systemDisksFacts", plain_libs::serde_json::json!({}))
             .await
             .is_err()
     );
@@ -90,7 +90,7 @@ async fn native_app_query_uses_startup_data_and_live_capabilities_without_public
     assert_eq!(data["app"]["deviceType"], "COMPUTER");
     let mut capabilities = vec!["MEDIA_SCAN"];
     capabilities.extend(plain_rs::features::services::files::browser::capabilities());
-    assert_eq!(data["app"]["capabilities"], serde_json::json!(capabilities));
+    assert_eq!(data["app"]["capabilities"], plain_libs::serde_json::json!(capabilities));
     assert_eq!(data["app"]["httpPort"], 0);
     assert_eq!(data["app"]["httpsPort"], 0);
     core.stop_core().await;
@@ -106,7 +106,7 @@ async fn native_file_resolution_uses_actual_os_read_authorization() {
     let runtime = Arc::new(Host::new(core.clone(), vec![]));
     assert!(
         runtime
-            .dispatch("fileTaskAuthorize", serde_json::json!({"paths":[path]}))
+            .dispatch("fileTaskAuthorize", plain_libs::serde_json::json!({"paths":[path]}))
             .await
             .is_err()
     );
@@ -114,7 +114,7 @@ async fn native_file_resolution_uses_actual_os_read_authorization() {
         runtime
             .dispatch(
                 "fileTaskAuthorize",
-                serde_json::json!({"operation":"write","paths":[path]})
+                plain_libs::serde_json::json!({"operation":"write","paths":[path]})
             )
             .await
             .is_err()
@@ -186,7 +186,7 @@ async fn media_buckets_are_served_by_the_core_catalog() {
     assert_eq!(data["mediaBuckets"][0]["itemCount"], 1);
     assert_eq!(
         data["mediaBuckets"][0]["topItemPaths"],
-        serde_json::json!([directory
+        plain_libs::serde_json::json!([directory
             .0
             .canonicalize()
             .unwrap()
@@ -222,7 +222,7 @@ async fn completion_scan_runs_directly_without_another_host_request() {
                 .core
                 .native_media_catalog()
                 .unwrap()
-                .scan_completed_files(serde_json::json!({"paths":[path]}))
+                .scan_completed_files(plain_libs::serde_json::json!({"paths":[path]}))
                 .await
         });
     }
@@ -240,7 +240,7 @@ async fn completion_scan_runs_directly_without_another_host_request() {
     assert!(
         core.native_media_catalog()
             .unwrap()
-            .scan_completed_files(serde_json::json!({"paths":[missing]}))
+            .scan_completed_files(plain_libs::serde_json::json!({"paths":[missing]}))
             .await
             .is_err()
     );
@@ -261,7 +261,7 @@ async fn device_and_log_queries_use_the_headless_server_provider_without_a_legac
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["deviceInfo"]["cpuArch"], std::env::consts::ARCH);
-    assert_eq!(data["appLogs"], serde_json::json!(["second", "first"]));
+    assert_eq!(data["appLogs"], plain_libs::serde_json::json!(["second", "first"]));
     let response = core
         .native_graphql()
         .unwrap()
@@ -323,7 +323,7 @@ async fn headless_dispatch_rejects_the_retired_image_metadata_operation() {
         runtime
             .dispatch(
                 "systemImageFileInfo",
-                serde_json::json!({"path":"photo.png"})
+                plain_libs::serde_json::json!({"path":"photo.png"})
             )
             .await
             .is_err()
@@ -390,7 +390,7 @@ async fn audio_queue_uses_the_registered_host_and_keeps_unindexed_playback_tempo
         .execute(
             format!(
                 r#"mutation {{ audioPlayPath(path:{}) {{ path }} }}"#,
-                serde_json::to_string(&raw.to_string_lossy()).unwrap()
+                plain_libs::serde_json::to_string(&raw.to_string_lossy()).unwrap()
             )
             .into(),
         )

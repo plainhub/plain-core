@@ -1,5 +1,5 @@
 use crate::server::ContentServer;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[tokio::test]
 async fn receiver_preserves_state_rules_and_refuses_operations_after_stop() {
@@ -35,7 +35,7 @@ async fn set_enabled(core: &ContentServer, enabled: bool) -> Result<bool, String
         .await
 }
 
-async fn snapshot(core: &ContentServer) -> serde_json::Value {
+async fn snapshot(core: &ContentServer) -> plain_libs::serde_json::Value {
     core.native_management()
         .unwrap()
         .dlna_receiver()

@@ -49,7 +49,7 @@ impl<'de> Deserialize<'de> for DecoderWrapper {
             #[serde(rename = "type")]
             variant: EnumType,
             #[serde(flatten)]
-            rest: serde_json::Value,
+            rest: crate::serde_json::Value,
         }
         #[derive(Serialize, Deserialize)]
         pub enum EnumType {
@@ -69,7 +69,7 @@ impl<'de> Deserialize<'de> for DecoderWrapper {
         #[serde(untagged)]
         pub enum DecoderHelper {
             Tagged(Tagged),
-            Legacy(serde_json::Value),
+            Legacy(crate::serde_json::Value),
         }
 
         #[derive(Deserialize)]
@@ -90,48 +90,48 @@ impl<'de> Deserialize<'de> for DecoderWrapper {
         let helper = DecoderHelper::deserialize(deserializer).expect("Helper");
         Ok(match helper {
             DecoderHelper::Tagged(model) => {
-                let mut values: serde_json::Map<String, serde_json::Value> =
-                    serde_json::from_value(model.rest).map_err(serde::de::Error::custom)?;
+                let mut values: crate::serde_json::Map<String, crate::serde_json::Value> =
+                    crate::serde_json::from_value(model.rest).map_err(serde::de::Error::custom)?;
                 values.insert(
                     "type".to_string(),
-                    serde_json::to_value(&model.variant).map_err(serde::de::Error::custom)?,
+                    crate::serde_json::to_value(&model.variant).map_err(serde::de::Error::custom)?,
                 );
-                let values = serde_json::Value::Object(values);
+                let values = crate::serde_json::Value::Object(values);
                 match model.variant {
                     EnumType::BPEDecoder => DecoderWrapper::BPE(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::ByteLevel => DecoderWrapper::ByteLevel(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::WordPiece => DecoderWrapper::WordPiece(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Metaspace => DecoderWrapper::Metaspace(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::CTC => DecoderWrapper::CTC(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Sequence => DecoderWrapper::Sequence(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Replace => DecoderWrapper::Replace(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Fuse => DecoderWrapper::Fuse(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Strip => DecoderWrapper::Strip(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::ByteFallback => DecoderWrapper::ByteFallback(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                 }
             }
             DecoderHelper::Legacy(value) => {
-                let untagged = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                let untagged = crate::serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                 match untagged {
                     DecoderUntagged::BPE(dec) => DecoderWrapper::BPE(dec),
                     DecoderUntagged::ByteLevel(dec) => DecoderWrapper::ByteLevel(dec),

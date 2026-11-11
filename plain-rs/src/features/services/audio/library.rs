@@ -5,7 +5,7 @@ use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 use crate::infrastructure::host::bridge::Host;
 use serde::de::DeserializeOwned;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 pub struct HostLibrary {
@@ -104,7 +104,7 @@ impl HostLibrary {
             .runtime
             .block_on(self.host.call(method, params))
             .map_err(DomainError::Other)?;
-        serde_json::from_value(result)
+        plain_libs::serde_json::from_value(result)
             .map_err(|e| DomainError::Other(format!("invalid audio provider response: {e}")))
     }
 
@@ -154,7 +154,7 @@ impl crate::features::media::audio::commands::Engine for HostLibrary {
     ) -> DomainResult<crate::features::media::audio::commands::EngineReport> {
         self.call(
             "audioEngineCommand",
-            serde_json::to_value(command).map_err(|e| DomainError::Other(e.to_string()))?,
+            plain_libs::serde_json::to_value(command).map_err(|e| DomainError::Other(e.to_string()))?,
         )
     }
 }

@@ -63,9 +63,9 @@ pub fn config() -> plain_libs::anyhow::Result<rustls::ClientConfig> {
 pub async fn connect(
     url: &str,
 ) -> plain_libs::anyhow::Result<
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    plain_libs::tokio_tungstenite::WebSocketStream<plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
-    let ws_config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+    let ws_config = plain_libs::tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
         .max_message_size(Some(64 * 1024))
         .max_frame_size(Some(64 * 1024));
     connect_with_config(url, ws_config, None).await
@@ -74,7 +74,7 @@ pub async fn connect(
 pub async fn connect_management(
     url: &str,
 ) -> plain_libs::anyhow::Result<
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    plain_libs::tokio_tungstenite::WebSocketStream<plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
     connect_management_with_pin(url, None).await
 }
@@ -83,13 +83,13 @@ pub(super) async fn connect_management_with_pin(
     url: &str,
     pin: Option<[u8; 32]>,
 ) -> plain_libs::anyhow::Result<
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    plain_libs::tokio_tungstenite::WebSocketStream<plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
     let mut url = http_client::Url::parse(url)?;
     url.set_path("/graphql");
     connect_with_config(
         url.as_str(),
-        tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+        plain_libs::tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
             .max_message_size(Some(1024 * 1024))
             .max_frame_size(Some(1024 * 1024)),
         pin,
@@ -99,20 +99,20 @@ pub(super) async fn connect_management_with_pin(
 
 async fn connect_with_config(
     url: &str,
-    ws_config: tokio_tungstenite::tungstenite::protocol::WebSocketConfig,
+    ws_config: plain_libs::tokio_tungstenite::tungstenite::protocol::WebSocketConfig,
     pin: Option<[u8; 32]>,
 ) -> plain_libs::anyhow::Result<
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    plain_libs::tokio_tungstenite::WebSocketStream<plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
     let config = match pin {
         Some(pin) => http_client::pinned_tls_config(pin)?,
         None => config()?,
     };
-    let (socket, _) = tokio_tungstenite::connect_async_tls_with_config(
+    let (socket, _) = plain_libs::tokio_tungstenite::connect_async_tls_with_config(
         url,
         Some(ws_config),
         false,
-        Some(tokio_tungstenite::Connector::Rustls(Arc::new(config))),
+        Some(plain_libs::tokio_tungstenite::Connector::Rustls(Arc::new(config))),
     )
     .await?;
     Ok(socket)

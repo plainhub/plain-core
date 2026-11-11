@@ -13,7 +13,7 @@ fn explicit_modes_are_persisted_and_used_by_the_shared_queue() {
         crate::features::prefs::settings::set_entry(
             &prefs,
             crate::features::prefs::pref_keys::AUDIO_PLAY_MODE,
-            serde_json::json!(mode),
+            plain_libs::serde_json::json!(mode),
         )
         .unwrap();
         assert_eq!(

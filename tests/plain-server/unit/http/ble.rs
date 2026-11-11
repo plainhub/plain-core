@@ -17,7 +17,7 @@ fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer) {
 }
 #[tokio::test]
 async fn removed_ble_websocket_does_not_upgrade() {
-    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    use plain_libs::tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
     let (_dir, server) = fixture();
     let mut request = format!("ws://127.0.0.1:{}/chat/ble-incoming", server.port)
@@ -32,7 +32,7 @@ async fn removed_ble_websocket_does_not_upgrade() {
         .parse()
         .unwrap(),
     );
-    assert!(tokio_tungstenite::connect_async(request).await.is_err());
+    assert!(plain_libs::tokio_tungstenite::connect_async(request).await.is_err());
     server.shutdown().await;
 }
 
@@ -86,7 +86,7 @@ async fn outgoing_completes_in_one_host_call() {
         .host
         .reply(
             generation,
-            serde_json::json!({"id":call["id"],"result":{"response":plain_libs::utils::base64::base64_encode(&reply)}}),
+            plain_libs::serde_json::json!({"id":call["id"],"result":{"response":plain_libs::utils::base64::base64_encode(&reply)}}),
         )
         .unwrap();
     assert_eq!(task.await.unwrap(), reply);
@@ -164,7 +164,7 @@ async fn nearby_discovery_uses_the_existing_raw_channel_and_shared_identity() {
     .unwrap();
     let (metadata, body) = ble::parts(&bytes).unwrap();
     assert!(metadata.is_empty());
-    let value: serde_json::Value = serde_json::from_slice(body).unwrap();
+    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(body).unwrap();
     assert_eq!(value["id"], "actor");
     assert_eq!(value["name"], "BLE fixture");
     assert_eq!(value["deviceType"], "COMPUTER");
@@ -315,9 +315,9 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
     let event = events.try_recv().unwrap();
     assert_eq!(event.event_type, "PAIRING_REQUEST_RECEIVED");
     let delivered: plain_rs::features::peers::pairing::protocol::PairingRequest =
-        serde_json::from_str(&event.payload).unwrap();
+        plain_libs::serde_json::from_str(&event.payload).unwrap();
     assert_eq!(delivered.payload.signature, request.payload.signature);
-    let notice: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+    let notice: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
     let code = notice["verificationCode"].as_str().unwrap();
     assert_eq!(code.len(), 8);
     assert!(code.bytes().all(|byte| byte.is_ascii_digit()));
@@ -368,7 +368,7 @@ async fn nearby_pairing_preserves_signatures_and_the_actual_radio_return_address
         .host
         .reply(
             generation,
-            serde_json::json!({"id":call["id"],"result":true}),
+            plain_libs::serde_json::json!({"id":call["id"],"result":true}),
         )
         .unwrap();
     assert!(

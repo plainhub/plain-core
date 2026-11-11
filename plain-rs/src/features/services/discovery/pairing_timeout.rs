@@ -1,7 +1,7 @@
 use crate::features::chat::events::WS_PAIRING_FAILED;
 use crate::features::peers::pairing::sessions::Sessions;
 use crate::infrastructure::events::WsEvent;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{sync::Arc, time::Duration};
 use tokio::{
     sync::{broadcast, watch},

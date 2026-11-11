@@ -12,7 +12,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
 
     #[error("JsonError: {0}")]
-    JsonError(#[from] serde_json::Error),
+    JsonError(#[from] crate::serde_json::Error),
 
     #[error("Bad vocabulary json file")]
     BadVocabulary,

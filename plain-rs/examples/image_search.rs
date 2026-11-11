@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     std::fs::write(
         output,
-        serde_json::to_vec(&Report {
+        plain_libs::serde_json::to_vec(&Report {
             initialized_ms,
             rows,
         })?,

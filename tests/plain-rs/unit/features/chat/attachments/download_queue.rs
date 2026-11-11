@@ -280,7 +280,7 @@ fn committed_downloads_release_all_queue_capacity_without_client_remove_requests
         assert!(!queue.finish(&id, &task.generation, None).unwrap());
     }
     let chat = messages::get(&db, "message").unwrap().unwrap();
-    let content: Value = serde_json::from_str(&chat.content).unwrap();
+    let content: Value = plain_libs::serde_json::from_str(&chat.content).unwrap();
     let items = content["value"]["items"].as_array().unwrap();
     assert_eq!(items.len(), 129);
     for item in items {

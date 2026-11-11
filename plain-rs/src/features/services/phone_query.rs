@@ -3,7 +3,7 @@ use crate::features::services::files::provider_query::Provider;
 use crate::features::services::files::provider_query::comparison;
 use crate::features::services::files::provider_query::intentionally_ignored;
 use plain_libs::utils::search_dsl::FilterField;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 pub fn plan(provider: Provider, fields: &[FilterField], dates: &Value) -> plain_libs::anyhow::Result<Plan> {
     let mut plan = Plan::default();
     if matches!(provider, Provider::Contact) {

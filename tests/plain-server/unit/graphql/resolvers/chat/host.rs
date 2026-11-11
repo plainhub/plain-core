@@ -1,6 +1,6 @@
 use crate::server::ContentServer;
 use plain_graphql::Request;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn server(dir: &std::path::Path) -> ContentServer {
@@ -48,7 +48,7 @@ async fn local_messages_edit_forward_and_clear_through_native_executor() {
     .await;
     assert_eq!(edited["editChatText"]["changed"], true);
     assert_eq!(
-        serde_json::from_str::<Value>(edited["editChatText"]["chat"]["content"].as_str().unwrap())
+        plain_libs::serde_json::from_str::<Value>(edited["editChatText"]["chat"]["content"].as_str().unwrap())
             .unwrap()["value"]["text"],
         "edited"
     );
@@ -139,7 +139,7 @@ async fn prepared_files_retain_metadata_and_message_owners_after_import_cleanup(
         4
     );
     let saved: Value =
-        serde_json::from_str(first["sendChatItem"][0]["content"].as_str().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(first["sendChatItem"][0]["content"].as_str().unwrap()).unwrap();
     assert_eq!(saved["value"]["items"][0]["width"], 12);
     assert_eq!(saved["value"]["items"][0]["durationMs"], 56);
     execute(
@@ -164,7 +164,7 @@ async fn long_text_files_and_invalid_targets_use_the_same_message_lifecycle() {
     )
     .await;
     let content: Value =
-        serde_json::from_str(result["sendChatItem"][0]["content"].as_str().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(result["sendChatItem"][0]["content"].as_str().unwrap()).unwrap();
     assert_eq!(content["type"], "FILES");
     assert_eq!(content["value"]["items"][0]["size"], text.len());
     let rejected = server
@@ -288,7 +288,7 @@ async fn batch_forward_uses_current_content_and_owns_each_creation_event() {
     for row in rows {
         assert_eq!(row["status"], "SENT");
         assert_eq!(
-            serde_json::from_str::<Value>(row["content"].as_str().unwrap()).unwrap()["value"]["text"],
+            plain_libs::serde_json::from_str::<Value>(row["content"].as_str().unwrap()).unwrap()["value"]["text"],
             "current"
         );
     }

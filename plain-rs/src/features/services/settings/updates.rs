@@ -38,8 +38,8 @@ pub fn info(state: &CoreRuntime) -> Result<UpdateInfo> {
         .unwrap_or_default())
 }
 
-pub fn update(state: &CoreRuntime, patch: serde_json::Value) -> Result<()> {
-    let patch: crate::features::prefs::security::UpdatePatch = serde_json::from_value(patch)?;
+pub fn update(state: &CoreRuntime, patch: plain_libs::serde_json::Value) -> Result<()> {
+    let patch: crate::features::prefs::security::UpdatePatch = plain_libs::serde_json::from_value(patch)?;
     state
         .store
         .get()?
@@ -162,7 +162,7 @@ async fn fetch(state: &CoreRuntime) -> Result<AppUpdateStatus> {
         "Invalid update source"
     );
     let response = client()?.get(url).send().await?;
-    update(state, serde_json::json!({"checkUpdateTime":now_ms}))?;
+    update(state, plain_libs::serde_json::json!({"checkUpdateTime":now_ms}))?;
     if response.status() == http_client::StatusCode::FORBIDDEN
         || response.status() == http_client::StatusCode::TOO_MANY_REQUESTS
     {
@@ -184,7 +184,7 @@ async fn fetch(state: &CoreRuntime) -> Result<AppUpdateStatus> {
         );
         bytes.extend_from_slice(&chunk);
     }
-    let release: Release = serde_json::from_slice(&bytes)?;
+    let release: Release = plain_libs::serde_json::from_slice(&bytes)?;
     let latest = crate::features::updates::release_info(&release, source)?;
     let mut info: UpdateInfo = info(state)?;
     let available = crate::features::updates::apply_release(
@@ -195,9 +195,9 @@ async fn fetch(state: &CoreRuntime) -> Result<AppUpdateStatus> {
         source,
         &release,
     );
-    let mut patch = serde_json::json!({"latestRelease":latest});
+    let mut patch = plain_libs::serde_json::json!({"latestRelease":latest});
     if available {
-        patch.as_object_mut().unwrap().extend(serde_json::json!({"newVersion":info.new_version,"log":info.log,"publishDate":info.publish_date,"size":info.size,"downloadUrl":info.download_url}).as_object().unwrap().clone());
+        patch.as_object_mut().unwrap().extend(plain_libs::serde_json::json!({"newVersion":info.new_version,"log":info.log,"publishDate":info.publish_date,"size":info.size,"downloadUrl":info.download_url}).as_object().unwrap().clone());
     }
     let previous = crate::features::services::settings::updates::info(state)?;
     if previous.new_version != info.new_version
@@ -205,7 +205,7 @@ async fn fetch(state: &CoreRuntime) -> Result<AppUpdateStatus> {
         || previous.size != info.size
     {
         state.update_checks.download.invalidate();
-        patch["downloadedApkPath"] = serde_json::json!("");
+        patch["downloadedApkPath"] = plain_libs::serde_json::json!("");
     }
     update(state, patch)?;
     crate::features::services::settings::update_download::Runtime::schedule_reconcile(state);
@@ -216,12 +216,12 @@ async fn fetch(state: &CoreRuntime) -> Result<AppUpdateStatus> {
     Ok(AppUpdateStatus::Available)
 }
 
-pub async fn set_setting(state: &CoreRuntime, key: &str, value: serde_json::Value) -> Result<bool> {
+pub async fn set_setting(state: &CoreRuntime, key: &str, value: plain_libs::serde_json::Value) -> Result<bool> {
     let _cache = state.update_checks.cache.lock().await;
     let changed = crate::features::prefs::security::set_entry(&state.prefs, key, value)?;
     if changed && key == SKIP_VERSION {
         state.update_checks.download.invalidate();
-        update(state, serde_json::json!({"downloadedApkPath":""}))?;
+        update(state, plain_libs::serde_json::json!({"downloadedApkPath":""}))?;
         crate::features::services::settings::update_download::Runtime::schedule_reconcile(state);
     }
     Ok(changed)

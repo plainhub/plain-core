@@ -100,11 +100,11 @@ impl PlatformMutation {
             .host
             .call_wait(
                 plain_rs::infrastructure::host::commands::SYSTEM_DISK_FORMAT,
-                serde_json::to_value(request)?,
+                plain_libs::serde_json::to_value(request)?,
             )
             .await
             .map_err(plain_graphql::Error::new)?;
-        if value != serde_json::Value::Bool(true) {
+        if value != plain_libs::serde_json::Value::Bool(true) {
             return Err("Disk format failed".into());
         }
         Ok(true)
@@ -120,13 +120,13 @@ impl PlatformMutation {
             .host
             .call(
                 plain_rs::infrastructure::host::commands::SYSTEM_HOSTNAME_SET,
-                serde_json::to_value(plain_rs::infrastructure::host::commands::HostnameRequest {
+                plain_libs::serde_json::to_value(plain_rs::infrastructure::host::commands::HostnameRequest {
                     name: name.clone(),
                 })?,
             )
             .await
             .map_err(plain_graphql::Error::new)?;
-        if value != serde_json::Value::Bool(true) {
+        if value != plain_libs::serde_json::Value::Bool(true) {
             return Err("Hostname update failed".into());
         }
         state.db.audit_event_add(

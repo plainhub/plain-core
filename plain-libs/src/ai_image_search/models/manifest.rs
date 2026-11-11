@@ -112,7 +112,7 @@ impl Manifest {
         if bytes.len() > 64 * 1024 {
             return Err("Model manifest exceeds 64 KiB".into());
         }
-        let value: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+        let value: Self = crate::serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         value.validate()?;
         Ok(value)
     }
@@ -198,7 +198,7 @@ impl Manifest {
     }
     pub fn fingerprint(&self) -> Result<String, String> {
         use sha2::{Digest, Sha256};
-        let bytes = serde_json::to_vec(self).map_err(|e| e.to_string())?;
+        let bytes = crate::serde_json::to_vec(self).map_err(|e| e.to_string())?;
         Ok(format!("{:x}", Sha256::digest(bytes)))
     }
     pub fn size(&self) -> u64 {

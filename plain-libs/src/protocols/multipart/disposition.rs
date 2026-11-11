@@ -26,7 +26,7 @@ impl ContentDispositionAttr {
             ContentDispositionAttr::FileName => &b"filename"[..],
         };
 
-        while let Some(i) = memchr::memmem::find(header, prefix) {
+        while let Some(i) = crate::memchr::memmem::find(header, prefix) {
             // Check if we found a superstring of `prefix`; continue if so.
             let suffix = &header[(i + prefix.len())..];
             if i > 0 && !(header[i - 1].is_ascii_whitespace() || header[i - 1] == b';') {
@@ -37,16 +37,16 @@ impl ContentDispositionAttr {
             // Now find and trim the `=`. Handle quoted strings first.
             let rest = trim_ascii_ws_then(suffix, b'=')?;
             let (bytes, is_escaped) = if let Some(rest) = trim_ascii_ws_then(rest, b'"') {
-                let (mut k, mut escaped) = (memchr::memchr(b'"', rest)?, false);
+                let (mut k, mut escaped) = (crate::memchr::memchr(b'"', rest)?, false);
                 while k > 0 && rest[k - 1] == b'\\' {
                     escaped = true;
-                    k = k + 1 + memchr::memchr(b'"', &rest[(k + 1)..])?;
+                    k = k + 1 + crate::memchr::memchr(b'"', &rest[(k + 1)..])?;
                 }
 
                 (&rest[..k], escaped)
             } else {
                 let rest = trim_ascii_ws_start(rest);
-                let j = memchr::memchr2(b';', b' ', rest).unwrap_or(rest.len());
+                let j = crate::memchr::memchr2(b';', b' ', rest).unwrap_or(rest.len());
                 (&rest[..j], false)
             };
 

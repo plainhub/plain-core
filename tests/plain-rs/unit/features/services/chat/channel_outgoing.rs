@@ -27,7 +27,7 @@ fn private_prepare_uses_persisted_signing_identity_and_current_peer_keys() {
     peers::save(&db, &[paired.clone(), group], SaveMode::Insert).unwrap();
     let mut channel = DChannel::new("中文 group", "actor");
     channel.key = base64_encode(&[7; 32]);
-    channel.members = serde_json::to_string(&vec![
+    channel.members = plain_libs::serde_json::to_string(&vec![
         ChannelMember::new("actor"),
         ChannelMember::new("paired"),
         ChannelMember::pending("group"),
@@ -61,10 +61,10 @@ fn private_prepare_uses_persisted_signing_identity_and_current_peer_keys() {
         .as_bytes(),
         pieces[0]
     ));
-    let wire: serde_json::Value = serde_json::from_str(pieces[3]).unwrap();
+    let wire: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(pieces[3]).unwrap();
     assert_eq!(wire["variables"]["type"], "UPDATE");
-    let payload: serde_json::Value =
-        serde_json::from_str(wire["variables"]["payload"].as_str().unwrap()).unwrap();
+    let payload: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(wire["variables"]["payload"].as_str().unwrap()).unwrap();
     assert_eq!(payload["channelName"], channel.name);
     assert_eq!(payload["memberPeers"][0]["id"], "actor");
     assert!(

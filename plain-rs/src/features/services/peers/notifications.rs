@@ -8,7 +8,7 @@ use crate::infrastructure::db::DPeer;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use serde::Serialize;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, Mutex},
@@ -67,7 +67,7 @@ fn allowed(app: &AppSnapshot) -> bool {
 }
 
 impl State {
-    fn snapshot(&self) -> serde_json::Value {
+    fn snapshot(&self) -> plain_libs::serde_json::Value {
         let groups: Vec<_> = self.peers.values().map(|peer| &peer.group).collect();
         json!({"revision":self.revision,"groups":groups})
     }
@@ -185,7 +185,7 @@ impl Store {
         }
     }
 
-    pub fn snapshot(&self) -> serde_json::Value {
+    pub fn snapshot(&self) -> plain_libs::serde_json::Value {
         self.0.lock().unwrap().snapshot()
     }
 
@@ -351,7 +351,7 @@ pub async fn refresh_from_app(
         let items: Vec<Notification> = if allowed(&app) {
             let data = crate::features::services::peers::management_http::query(state, &base, &client_id, &key,
                 json!({"query":"{ notifications(query:\"\",offset:0,limit:200) { id onlyOnce isClearable appId appName postedAt silent title body actions replyActions } }"}), 4 * 1024 * 1024).await?;
-            serde_json::from_value(data["notifications"].clone())?
+            plain_libs::serde_json::from_value(data["notifications"].clone())?
         } else { vec![] };
         validate_snapshot(&app, &items)?;
         Ok((app, items, base))

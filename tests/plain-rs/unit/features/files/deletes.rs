@@ -36,7 +36,7 @@ fn deleted_receipts_cascade_atomically_and_preserve_failed_and_foreign_records()
                 .get::<_, i64>(0))?,
             2
         );
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
     cleanup(&db, &[], &["/root".into()], &["/root".into()]).unwrap();
@@ -59,7 +59,7 @@ fn deleted_receipts_cascade_atomically_and_preserve_failed_and_foreign_records()
                 .get::<_, i64>(0))?,
             2
         );
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
 }
@@ -106,7 +106,7 @@ fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_f
         ])
         .unwrap();
     let video = &created[0].id;
-    db.with_conn(|c| -> rusqlite::Result<()> {
+    db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media',?1,2,'first'),('foreign',?1,6,'first')",[video])?;
         c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",[video])?;
         Ok(())
@@ -127,7 +127,7 @@ fn deletion_uses_current_catalog_identities_and_preserves_partial_failures_and_f
             .unwrap()
             .is_some()
     );
-    db.with_conn(|c| -> rusqlite::Result<()> {
+    db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         assert_eq!(
             c.query_row(
                 "SELECT count(*) FROM tag_relations WHERE target_key=?1 AND type=2",
@@ -200,7 +200,7 @@ fn catalog_deletion_failure_rolls_back_all_associated_state_cleanup() {
         .record_media_files(&[catalog_file(DataType::Video, &path("root/deleted.mp4"))])
         .unwrap()
         .remove(0);
-    db.with_conn(|c| -> rusqlite::Result<()> {
+    db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         c.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media',?1,2,'first')",[&created.id])?;
         c.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,played_at,play_count) VALUES(2,?1,123,'first',0)",[&created.id])?;
         c.execute_batch("CREATE TRIGGER reject_catalog_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABORT,'catalog delete rejected'); END;")?;
@@ -208,7 +208,7 @@ fn catalog_deletion_failure_rolls_back_all_associated_state_cleanup() {
     }).unwrap();
     assert!(cleanup(&db, &[], &[created.path.clone()], &[]).is_err());
     assert_eq!(db.media_file_count(DataType::Video).unwrap(), 1);
-    db.with_conn(|c| -> rusqlite::Result<()> {
+    db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         assert_eq!(
             c.query_row("SELECT count(*) FROM tag_relations", [], |r| r
                 .get::<_, i64>(0))?,
@@ -248,7 +248,7 @@ fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
         .media_file_by_path(DataType::Video, &path("root/gone.mp4"))
         .unwrap()
         .unwrap();
-    db.with_conn(|c| -> rusqlite::Result<()> {
+    db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         c.execute(
             "INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('media',?1,2,'first')",
             [&gone.id],
@@ -277,7 +277,7 @@ fn missing_paths_keep_user_state_until_confirmed_permanent_deletion() {
             .is_some(),
         "forgetting one path must not touch a sibling"
     );
-    db.with_conn(|c| -> rusqlite::Result<()> {
+    db.with_conn(|c| -> plain_libs::rusqlite::Result<()> {
         let tags: i64 = c.query_row(
             "SELECT COUNT(*) FROM tag_relations WHERE target_key=?1",
             [&gone.id],
@@ -324,7 +324,7 @@ fn retired_identity_preserves_replacement_and_file_tags_at_the_same_path() {
     db.with_conn(|connection| {
         connection.execute("INSERT INTO tag_relations(tag_id,target_key,type,created_at) VALUES('old',?1,2,'first'),('replacement',?2,3,'first'),('file',?3,22,'first'),('neighbor',?4,22,'first')", params![old.id,new.id,path("root/replaced.mp4"),path("root/neighbor")])?;
         connection.execute("INSERT INTO media_play_history(file_id,media_type,position_ms,played_at,play_count) VALUES(?1,2,123,'first',0)", [&old.id])?;
-        Ok::<_,rusqlite::Error>(())
+        Ok::<_,plain_libs::rusqlite::Error>(())
     }).unwrap();
     retire_identity(
         &db,
@@ -358,7 +358,7 @@ fn retired_identity_preserves_replacement_and_file_tags_at_the_same_path() {
                 .get::<_, i64>(0))?,
             0
         );
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
 }
@@ -444,7 +444,7 @@ CREATE TRIGGER reject_scan_delete BEFORE DELETE ON files BEGIN SELECT RAISE(ABOR
             )?,
             1
         );
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
 }

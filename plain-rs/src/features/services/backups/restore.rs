@@ -133,9 +133,9 @@ fn validate(payload: &Path) -> Result<(), String> {
             return Err("Backup is missing a required data file".into());
         }
     }
-    let database = rusqlite::Connection::open_with_flags(
+    let database = plain_libs::rusqlite::Connection::open_with_flags(
         paths.database(),
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        plain_libs::rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     )
     .map_err(|error| error.to_string())?;
     let check: String = database
@@ -228,7 +228,7 @@ fn stage_reader(
         .prefix(".restore-marker-")
         .tempfile_in(directory)
         .map_err(|error| error.to_string())?;
-    serde_json::to_writer(marker.as_file_mut(), &pending).map_err(|error| error.to_string())?;
+    plain_libs::serde_json::to_writer(marker.as_file_mut(), &pending).map_err(|error| error.to_string())?;
     marker
         .as_file_mut()
         .flush()
@@ -257,7 +257,7 @@ pub fn apply(directory: &Path) -> Result<(), String> {
     {
         return Err("Invalid restore marker".into());
     }
-    let pending: Pending = serde_json::from_reader(
+    let pending: Pending = plain_libs::serde_json::from_reader(
         File::open(paths.pending_restore()).map_err(|error| error.to_string())?,
     )
     .map_err(|error| error.to_string())?;

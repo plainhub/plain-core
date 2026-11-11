@@ -1,6 +1,6 @@
 use super::*;
-use axum::{Router, body::Body, routing::post};
-use tower::ServiceExt;
+use plain_libs::axum::{Router, body::Body, routing::post};
+use plain_libs::tower::ServiceExt;
 
 async fn preflight(
     core: &crate::server::ContentServer,
@@ -9,11 +9,11 @@ async fn preflight(
 ) -> Response {
     let router = Router::new()
         .route("/graphql", post(|| async { StatusCode::NO_CONTENT }))
-        .layer(axum::middleware::from_fn_with_state(
+        .layer(plain_libs::axum::middleware::from_fn_with_state(
             core.runtime_state(),
             apply,
         ));
-    let mut request = axum::http::Request::builder()
+    let mut request = plain_libs::axum::http::Request::builder()
         .method("OPTIONS")
         .uri("/graphql")
         .header("host", "device.local")
@@ -111,9 +111,9 @@ async fn http2_same_origin_uses_uri_authority_without_host_header() {
     let router = Router::new()
         .route(
             "/assets/main.js",
-            axum::routing::get(|| async { StatusCode::NO_CONTENT }),
+            plain_libs::axum::routing::get(|| async { StatusCode::NO_CONTENT }),
         )
-        .layer(axum::middleware::from_fn_with_state(
+        .layer(plain_libs::axum::middleware::from_fn_with_state(
             core.runtime_state(),
             apply,
         ));
@@ -123,8 +123,8 @@ async fn http2_same_origin_uses_uri_authority_without_host_header() {
         ("http://device.local:8443", StatusCode::FORBIDDEN),
         ("https://other.example:8443", StatusCode::FORBIDDEN),
     ] {
-        let mut request = axum::http::Request::builder()
-            .version(axum::http::Version::HTTP_2)
+        let mut request = plain_libs::axum::http::Request::builder()
+            .version(plain_libs::axum::http::Version::HTTP_2)
             .uri("https://device.local:8443/assets/main.js")
             .header(header::ORIGIN, origin)
             .body(Body::empty())

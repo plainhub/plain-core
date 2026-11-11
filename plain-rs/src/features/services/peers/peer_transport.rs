@@ -5,7 +5,7 @@ use crate::infrastructure::transport::router::Router;
 use crate::infrastructure::transport::router::Ticket;
 use crate::infrastructure::transport::router::TransportType;
 use crate::runtime::Runtime as CoreRuntime;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::time::Duration;
 pub async fn capabilities(
     host: &crate::infrastructure::host::bridge::Host,
@@ -13,7 +13,7 @@ pub async fn capabilities(
     if !host.connected() {
         return Ok(Vec::new());
     }
-    serde_json::from_value(host.call("peerTransportCapabilities", json!({})).await?)
+    plain_libs::serde_json::from_value(host.call("peerTransportCapabilities", json!({})).await?)
         .map_err(|error| error.to_string())
 }
 pub fn snapshot(state: &CoreRuntime) -> Value {

@@ -1,7 +1,7 @@
 use plain_rs::features::discovery::nearby_devices::Device;
 use plain_rs::features::services::discovery::nearby_devices::*;
 use plain_rs::infrastructure::db::chat_store;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[tokio::test]
 async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
@@ -19,9 +19,9 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
     let state = server.runtime_state().core;
     let (cert_pem, cert_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let listeners = crate::http::listeners::HttpListeners::start(
-        axum::Router::new()
-            .route("/health", axum::routing::get(crate::http::health::health))
-            .route("/nearby", axum::routing::post(|| async { "1" })),
+        plain_libs::axum::Router::new()
+            .route("/health", plain_libs::axum::routing::get(crate::http::health::health))
+            .route("/nearby", plain_libs::axum::routing::post(|| async { "1" })),
         0,
         0,
         cert_pem,
@@ -109,7 +109,7 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
         plain_rs::features::chat::events::WS_PEER_UPDATED
     );
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&peer_update.payload).unwrap(),
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&peer_update.payload).unwrap(),
         json!({"id":"live"})
     );
     let invalidation = events.recv().await.unwrap();
@@ -119,7 +119,7 @@ async fn rust_sweep_keeps_lan_probes_independent_of_bluetooth_pause() {
         first.event_type,
         plain_rs::features::chat::events::WS_NEARBY_DEVICE_FOUND
     );
-    let public: serde_json::Value = serde_json::from_str(&first.payload).unwrap();
+    let public: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&first.payload).unwrap();
     assert_eq!(public["id"], "live");
     assert_eq!(public["status"], "PAIRED");
     assert!(public.get("key").is_none());

@@ -2,9 +2,9 @@ use crate::features::media::images::indexing::{Image, Page, Snapshot};
 use crate::infrastructure::db::Db;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
-use rusqlite::{Connection, params, params_from_iter};
+use plain_libs::rusqlite::{Connection, params, params_from_iter};
 
-pub(crate) fn init(connection: &Connection) -> rusqlite::Result<()> {
+pub(crate) fn init(connection: &Connection) -> plain_libs::rusqlite::Result<()> {
     connection.execute_batch(
         "CREATE TEMP TABLE image_catalog_revision (revision INTEGER NOT NULL);
         INSERT INTO image_catalog_revision VALUES(0);
@@ -92,7 +92,7 @@ pub fn page(db: &Db, expected: &str, cursor: &str, limit: usize) -> DomainResult
                     path: row.get(1)?,
                 })
             })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
         Ok(Page {
             revision: expected.to_owned(),
             next_cursor: items
@@ -124,7 +124,7 @@ pub fn resolve(db: &Db, expected: &str, ids: &[String]) -> DomainResult<Vec<Imag
                     path: row.get(1)?,
                 })
             })?
-            .collect::<rusqlite::Result<Vec<_>>>()?)
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?)
     })
 }
 

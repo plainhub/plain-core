@@ -2,7 +2,7 @@ use crate::features::prefs::Prefs;
 use crate::features::prefs::pref_keys::CLIPBOARD_DIRECTIONS;
 use plain_libs::anyhow::{Result, ensure};
 use serde::Deserialize;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 const APPLIED: &str = "clipboard_last_item";
 
@@ -29,7 +29,7 @@ pub fn sends(prefs: &Prefs, peer_id: &str) -> Result<bool> {
 
 fn direction(prefs: &Prefs, peer_id: &str) -> Result<String> {
     let directions = prefs
-        .get::<serde_json::Map<String, Value>>(CLIPBOARD_DIRECTIONS)?
+        .get::<plain_libs::serde_json::Map<String, Value>>(CLIPBOARD_DIRECTIONS)?
         .unwrap_or_default();
     match directions.get(peer_id) {
         None => Ok("pull".into()),
@@ -54,14 +54,14 @@ pub fn prepare(
     ensure!(!item.id.is_empty(), "Missing clipboard item identity");
     super::validate_text(&item.text).map_err(plain_libs::anyhow::Error::msg)?;
     Ok(
-        store.update_json(APPLIED, |map: &mut serde_json::Map<String, Value>| {
+        store.update_json(APPLIED, |map: &mut plain_libs::serde_json::Map<String, Value>| {
             let mut applied: std::collections::BTreeMap<String, String> =
-                serde_json::from_value(Value::Object(map.clone()))?;
+                plain_libs::serde_json::from_value(Value::Object(map.clone()))?;
             match applied.get(peer_id) {
                 Some(id) => Ok(id != &item.id),
                 None => {
                     applied.insert(peer_id.into(), item.id.clone());
-                    *map = serde_json::to_value(applied)?.as_object().unwrap().clone();
+                    *map = plain_libs::serde_json::to_value(applied)?.as_object().unwrap().clone();
                     Ok(false)
                 }
             }
@@ -71,11 +71,11 @@ pub fn prepare(
 
 pub fn applied(store: &plain_libs::kv::Db, peer_id: &str, item: &Item) -> Result<()> {
     Ok(
-        store.update_json(APPLIED, |map: &mut serde_json::Map<String, Value>| {
+        store.update_json(APPLIED, |map: &mut plain_libs::serde_json::Map<String, Value>| {
             let mut applied: std::collections::BTreeMap<String, String> =
-                serde_json::from_value(Value::Object(map.clone()))?;
+                plain_libs::serde_json::from_value(Value::Object(map.clone()))?;
             applied.insert(peer_id.into(), item.id.clone());
-            *map = serde_json::to_value(applied)?.as_object().unwrap().clone();
+            *map = plain_libs::serde_json::to_value(applied)?.as_object().unwrap().clone();
             Ok(())
         })?,
     )

@@ -28,8 +28,8 @@ pub async fn lan_ipv4_addresses(host: &Host) -> Result<Vec<String>, String> {
     .map_err(|error| error.to_string())??;
     #[cfg(target_os = "android")]
     let interfaces = {
-        let facts = serde_json::from_value(
-            host.call("systemNetworkInterfaceFacts", serde_json::json!({}))
+        let facts = plain_libs::serde_json::from_value(
+            host.call("systemNetworkInterfaceFacts", plain_libs::serde_json::json!({}))
                 .await?,
         )
         .map_err(|error| error.to_string())?;
@@ -51,8 +51,8 @@ pub async fn lan_ipv4(host: &Host) -> Result<String, String> {
 pub async fn network_type(host: &Host) -> Result<NetworkType, String> {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
-        serde_json::from_value(
-            host.call("systemNetworkType", serde_json::json!({}))
+        plain_libs::serde_json::from_value(
+            host.call("systemNetworkType", plain_libs::serde_json::json!({}))
                 .await?,
         )
         .map_err(|error| error.to_string())

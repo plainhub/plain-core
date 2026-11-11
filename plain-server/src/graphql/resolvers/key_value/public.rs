@@ -1,6 +1,6 @@
 use crate::server::ServerState;
 use plain_graphql::{Context, Json, Object, Result};
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 #[derive(Default)]
 pub struct KeyValueQuery;

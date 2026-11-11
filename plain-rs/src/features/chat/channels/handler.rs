@@ -11,7 +11,7 @@ use crate::features::chat::events::load_key_cache;
 use crate::features::chat::service::ChatService;
 use crate::infrastructure::transport::contract::PeerTransport;
 use plain_libs::utils::base64::base64_decode;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 pub fn handle<T: PeerTransport + 'static>(
     service: &ChatService<T>,

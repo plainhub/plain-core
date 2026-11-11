@@ -7,7 +7,7 @@ use crate::infrastructure::db::chat_store::peers;
 use plain_libs::crypto::ed25519_generate;
 use plain_libs::crypto::ed25519_sign;
 use plain_libs::utils::base64::base64_encode;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 fn setup() -> (Db, Vec<u8>, String) {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
@@ -151,7 +151,7 @@ fn accepting_only_pending_members_is_atomic_and_does_not_create_uninvited_peers(
     let (db, _, public) = setup();
     let mut ch = super::super::state::create(&db, "actor", "owned").unwrap();
     ch.id = "channel".into();
-    ch.members = serde_json::to_string(&vec![
+    ch.members = plain_libs::serde_json::to_string(&vec![
         ChannelMember::new("actor"),
         ChannelMember::pending("guest"),
     ])
@@ -211,7 +211,7 @@ fn accept_key_conflicts_and_version_overflow_preserve_peer_and_roster() {
     let ch = DChannel {
         id: "channel".into(),
         owner_id: Some("actor".into()),
-        members: serde_json::to_string(&vec![
+        members: plain_libs::serde_json::to_string(&vec![
             ChannelMember::new("actor"),
             ChannelMember::pending("owner"),
         ])
@@ -244,7 +244,7 @@ fn unknown_kick_requires_a_signature_and_pending_decline_is_idempotent() {
     assert!(!effect.changed);
     let ch = DChannel {
         id: "channel".into(),
-        members: serde_json::to_string(&vec![
+        members: plain_libs::serde_json::to_string(&vec![
             ChannelMember::new("actor"),
             ChannelMember::pending("guest"),
         ])

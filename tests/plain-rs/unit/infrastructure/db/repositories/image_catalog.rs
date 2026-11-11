@@ -107,7 +107,7 @@ fn keyset_page_uses_the_catalog_order_index_without_a_temporary_sort() {
     let db = Db::open(std::path::Path::new(":memory:")).unwrap();
     let plan = db.with_conn(|connection| {
         connection.prepare("EXPLAIN QUERY PLAN SELECT id,path FROM files WHERE kind=?1 AND missing=0 AND trashed_at IS NULL AND id>?2 ORDER BY id LIMIT ?3").unwrap()
-            .query_map(params!["IMAGE",0,128], |row| row.get::<_,String>(3)).unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap()
+            .query_map(params!["IMAGE",0,128], |row| row.get::<_,String>(3)).unwrap().collect::<plain_libs::rusqlite::Result<Vec<_>>>().unwrap()
     });
     assert!(
         plan.iter().any(|step| step.contains("idx_files_kind_id")),

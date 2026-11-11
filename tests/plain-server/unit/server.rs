@@ -50,7 +50,7 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
                 .post(format!("{url}/graphql"))
                 .bearer_auth(&token)
                 .header("content-type", "application/json")
-                .body(serde_json::json!({"query":"{ __typename }"}).to_string())
+                .body(plain_libs::serde_json::json!({"query":"{ __typename }"}).to_string())
                 .send()
                 .await
                 .unwrap()
@@ -61,7 +61,7 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
             client
                 .post(format!("{url}/graphql"))
                 .header("content-type", "application/json")
-                .body(serde_json::json!({"query":"{ __typename }"}).to_string())
+                .body(plain_libs::serde_json::json!({"query":"{ __typename }"}).to_string())
                 .send()
                 .await
                 .unwrap()
@@ -79,17 +79,17 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
         );
     }
     let router = crate::http::router::build_router(server.state.clone(), server.stop.subscribe());
-    use tower::ServiceExt;
+    use plain_libs::tower::ServiceExt;
     for peer in [None, Some("192.0.2.42:1234"), Some("127.0.0.1:1234")] {
-        let mut request = axum::http::Request::builder()
+        let mut request = plain_libs::axum::http::Request::builder()
             .method("GET")
             .uri("/health")
             .header("authorization", format!("Bearer {token}"))
             .header("x-forwarded-for", "127.0.0.1")
-            .body(axum::body::Body::empty())
+            .body(plain_libs::axum::body::Body::empty())
             .unwrap();
         if let Some(peer) = peer {
-            request.extensions_mut().insert(axum::extract::ConnectInfo(
+            request.extensions_mut().insert(plain_libs::axum::extract::ConnectInfo(
                 peer.parse::<std::net::SocketAddr>().unwrap(),
             ));
         }
@@ -108,7 +108,7 @@ async fn app_and_remote_access_share_listeners_without_background_service() {
         client
             .post(format!("http://127.0.0.1:{http}/graphql"))
             .header("content-type", "application/json")
-            .body(serde_json::json!({"query":"{ __typename }"}).to_string())
+            .body(plain_libs::serde_json::json!({"query":"{ __typename }"}).to_string())
             .send()
             .await
             .unwrap()
@@ -211,7 +211,7 @@ async fn core_startup_persists_complete_identity_and_regenerates_the_native_sess
     plain_rs::features::prefs::security::set_entry(
         &core.state.prefs,
         PASSWORD,
-        serde_json::json!("custom-password"),
+        plain_libs::serde_json::json!("custom-password"),
     )
     .unwrap();
     core.state.prefs.set(LOGIN_REQUIRE_APPROVAL, false).unwrap();
@@ -288,10 +288,10 @@ async fn every_transport_build_serves_the_main_guest_and_peer_contracts_without_
     let token = plain_libs::utils::base64::base64_encode(&[3; 32]);
     let server = ContentServer::start(directory.path(), &token, prefs).unwrap();
     let client = http_client::builder().build().unwrap();
-    let document = serde_json::json!({"query":"query Main { __typename audioQueueItems(query: \"\", offset: 0, limit: 10) { mediaId } }","operationName":"Main"});
+    let document = plain_libs::serde_json::json!({"query":"query Main { __typename audioQueueItems(query: \"\", offset: 0, limit: 10) { mediaId } }","operationName":"Main"});
     let native = server
         .graphql_executor()
-        .execute(serde_json::from_value(document.clone()).unwrap())
+        .execute(plain_libs::serde_json::from_value(document.clone()).unwrap())
         .await;
     assert!(native.errors.is_empty(), "{:?}", native.errors);
     let http = client
@@ -303,8 +303,8 @@ async fn every_transport_build_serves_the_main_guest_and_peer_contracts_without_
         .await
         .unwrap();
     assert_eq!(http.status(), 200);
-    let body: serde_json::Value = serde_json::from_slice(&http.bytes().await.unwrap()).unwrap();
-    assert_eq!(body, serde_json::to_value(native).unwrap());
+    let body: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&http.bytes().await.unwrap()).unwrap();
+    assert_eq!(body, plain_libs::serde_json::to_value(native).unwrap());
     for path in ["/guest_graphql", "/peer_graphql"] {
         let response = client
             .post(format!("http://127.0.0.1:{}{path}", server.port))
@@ -450,15 +450,15 @@ async fn embedded_web_assets_survive_cache_clear_without_extraction() {
             ("/assets/app.js", "console.log('embedded')"),
         ] {
             let response = crate::http::static_files::fallback(
-                axum::extract::State(server.runtime_state()),
-                axum::http::Request::builder()
+                plain_libs::axum::extract::State(server.runtime_state()),
+                plain_libs::axum::http::Request::builder()
                     .uri(path)
-                    .body(axum::body::Body::empty())
+                    .body(plain_libs::axum::body::Body::empty())
                     .unwrap(),
             )
             .await;
-            assert_eq!(response.status(), axum::http::StatusCode::OK);
-            let body = axum::body::to_bytes(response.into_body(), 4096)
+            assert_eq!(response.status(), plain_libs::axum::http::StatusCode::OK);
+            let body = plain_libs::axum::body::to_bytes(response.into_body(), 4096)
                 .await
                 .unwrap();
             let text = std::str::from_utf8(&body).unwrap();

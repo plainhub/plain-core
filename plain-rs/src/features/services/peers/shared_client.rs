@@ -4,7 +4,7 @@ use crate::features::files::shares::client::Info;
 use crate::features::files::shares::client::Link;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{collections::HashSet, time::Duration};
 fn add(
     links: &mut Vec<Link>,

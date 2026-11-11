@@ -2,8 +2,8 @@ use crate::infrastructure::host::bridge::Host;
 use plain_libs::anyhow::{Result, anyhow, bail};
 
 pub async fn snapshot(host: &Host) -> Result<Vec<String>> {
-    serde_json::from_value(
-        host.call("systemCapabilities", serde_json::json!({}))
+    plain_libs::serde_json::from_value(
+        host.call("systemCapabilities", plain_libs::serde_json::json!({}))
             .await
             .map_err(plain_libs::anyhow::Error::msg)?,
     )

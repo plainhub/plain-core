@@ -121,16 +121,16 @@ async fn authenticated_revocation_and_logout_remove_the_keys_used_by_http_authen
             .unwrap()
             .is_none()
     );
-    let mut headers = axum::http::HeaderMap::new();
+    let mut headers = plain_libs::axum::http::HeaderMap::new();
     headers.insert("c-id", "first".parse().unwrap());
     headers.insert("authorization", format!("Bearer {token}").parse().unwrap());
     let response = crate::http::graphql::call(
-        axum::extract::State(state.clone()),
+        plain_libs::axum::extract::State(state.clone()),
         headers,
-        axum::body::Bytes::from_static(br#"{"query":"{ sessions { clientId } }"}"#),
+        plain_libs::axum::body::Bytes::from_static(br#"{"query":"{ sessions { clientId } }"}"#),
     )
     .await;
-    assert_eq!(response.status(), axum::http::StatusCode::UNAUTHORIZED);
+    assert_eq!(response.status(), plain_libs::axum::http::StatusCode::UNAUTHORIZED);
     server.shutdown().await;
 }
 

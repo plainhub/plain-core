@@ -1,7 +1,7 @@
 #[tokio::test]
 async fn aware_requests_preserve_headers_body_bytes_and_length_hints() {
     use futures_util::StreamExt;
-    use hyper::body::Body as _;
+    use plain_libs::hyper::body::Body as _;
     for payload in [vec![], vec![0, 1, 0xff, 2]] {
         let request =
             super::aware_request("POST", "/peer_graphql", "actor", "channel", payload.clone())
@@ -20,7 +20,7 @@ async fn aware_requests_preserve_headers_body_bytes_and_length_hints() {
             Some(payload.len() as u64)
         );
         assert_eq!(request.body().is_end_stream(), payload.is_empty());
-        let mut stream = axum::body::Body::new(request.into_body()).into_data_stream();
+        let mut stream = plain_libs::axum::body::Body::new(request.into_body()).into_data_stream();
         let mut decoded = Vec::new();
         while let Some(chunk) = stream.next().await {
             decoded.extend_from_slice(&chunk.unwrap());

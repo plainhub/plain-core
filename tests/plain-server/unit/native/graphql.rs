@@ -91,7 +91,7 @@ async fn native_subscription_delivers_without_an_http_listener() {
     let id = executor.open_subscriptions(scope.clone()).unwrap();
     let session = executor.subscription_session(id).unwrap();
     session.send(r#"{"type":"subscribe","id":"content","payload":{"query":"subscription { contentChanged }"}}"#).unwrap();
-    let ready: serde_json::Value = serde_json::from_str(
+    let ready: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
         &tokio::time::timeout(std::time::Duration::from_secs(5), session.read())
             .await
             .unwrap()
@@ -107,7 +107,7 @@ async fn native_subscription_delivers_without_an_http_listener() {
             "{}".into(),
         ))
         .unwrap();
-    let next: serde_json::Value = serde_json::from_str(
+    let next: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
         &tokio::time::timeout(std::time::Duration::from_secs(5), session.read())
             .await
             .unwrap()
@@ -148,10 +148,10 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
         ("messagesCreated", "MESSAGE_CREATED"),
         ("messagesUpdated", "MESSAGE_UPDATED"),
     ] {
-        session.send(&serde_json::json!({"type": "subscribe", "id": field, "payload": {
+        session.send(&plain_libs::serde_json::json!({"type": "subscribe", "id": field, "payload": {
             "query": format!("subscription {{ {field} {{ id status statusData channelId }} }}")
         }}).to_string()).unwrap();
-        let ready: serde_json::Value = serde_json::from_str(
+        let ready: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
             &tokio::time::timeout(std::time::Duration::from_secs(5), session.read())
                 .await
                 .unwrap()
@@ -176,11 +176,11 @@ async fn chat_subscriptions_deliver_messages_without_status_details_and_remain_a
                 .events
                 .send(plain_rs::infrastructure::events::WsEvent::broadcast(
                     event,
-                    serde_json::json!([plain_rs::features::chat::service::chat_to_json(&row)])
+                    plain_libs::serde_json::json!([plain_rs::features::chat::service::chat_to_json(&row)])
                         .to_string(),
                 ))
                 .unwrap();
-            let next: serde_json::Value = serde_json::from_str(
+            let next: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
                 &tokio::time::timeout(std::time::Duration::from_secs(5), session.read())
                     .await
                     .unwrap()

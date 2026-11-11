@@ -206,7 +206,7 @@ impl<'i> Position<'i> {
                 [] => (),
                 [s1] => {
                     if let Some(from) =
-                        memchr::memmem::find(&self.input.as_bytes()[self.pos..], s1.as_bytes())
+                        crate::memchr::memmem::find(&self.input.as_bytes()[self.pos..], s1.as_bytes())
                     {
                         self.pos += from;
                         return true;
@@ -215,7 +215,7 @@ impl<'i> Position<'i> {
                 [s1, s2] if !s1.is_empty() && !s2.is_empty() => {
                     let b1 = s1.as_bytes()[0];
                     let b2 = s2.as_bytes()[0];
-                    let miter = memchr::memchr2_iter(b1, b2, &self.input.as_bytes()[self.pos..]);
+                    let miter = crate::memchr::memchr2_iter(b1, b2, &self.input.as_bytes()[self.pos..]);
                     for from in miter {
                         let start = &self.input[self.pos + from..];
                         if start.starts_with(s1) || start.starts_with(s2) {
@@ -229,7 +229,7 @@ impl<'i> Position<'i> {
                     let b2 = s2.as_bytes()[0];
                     let b3 = s2.as_bytes()[0];
                     let miter =
-                        memchr::memchr3_iter(b1, b2, b3, &self.input.as_bytes()[self.pos..]);
+                        crate::memchr::memchr3_iter(b1, b2, b3, &self.input.as_bytes()[self.pos..]);
                     for from in miter {
                         let start = &self.input[self.pos + from..];
                         if start.starts_with(s1) || start.starts_with(s2) || start.starts_with(s3) {

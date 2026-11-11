@@ -101,8 +101,8 @@ fn feed_model(_ctx: &Context<'_>, row: FeedRow) -> GqlResult<Feed> {
             .map(content_common::instant)
             .transpose()?,
         last_error: {
-            let value: serde_json::Value =
-                serde_json::from_str(&row.last_error).unwrap_or_default();
+            let value: plain_libs::serde_json::Value =
+                plain_libs::serde_json::from_str(&row.last_error).unwrap_or_default();
             FeedError {
                 code: value["code"].as_str().unwrap_or_default().into(),
                 detail: value["detail"].as_str().unwrap_or_default().into(),

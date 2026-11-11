@@ -725,7 +725,7 @@ async fn thumbnail_latency_benchmark() {
     warm.sort_by(f64::total_cmp);
     println!(
         "{}",
-        serde_json::json!({"input":"synthetic baseline JPEG 4000x3000","target":"512x384 aspect fit","samples":20,"coldMedianMs":cold[10],"coldP95Ms":cold[18],"warmMedianMs":warm[10],"warmP95Ms":warm[18]})
+        crate::serde_json::json!({"input":"synthetic baseline JPEG 4000x3000","target":"512x384 aspect fit","samples":20,"coldMedianMs":cold[10],"coldP95Ms":cold[18],"warmMedianMs":warm[10],"warmP95Ms":warm[18]})
     );
 }
 

@@ -1,6 +1,6 @@
 use crate::features::files::app_files::FileStore;
 use crate::infrastructure::events::WsEvent;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},

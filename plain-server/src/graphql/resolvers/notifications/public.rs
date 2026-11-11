@@ -11,7 +11,7 @@ use plain_graphql::{Context, Object};
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::notifications::types::Notification;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Notifications;
@@ -82,11 +82,11 @@ impl NotificationsMutation {
             .data_unchecked::<Arc<Host>>()
             .call(
                 "systemCancelNotifications",
-                serde_json::json!({ "ids": ids }),
+                plain_libs::serde_json::json!({ "ids": ids }),
             )
             .await
             .map_err(|error| plain_graphql::Error::new(error))?;
-        let cancelled: Vec<String> = serde_json::from_value(receipt)
+        let cancelled: Vec<String> = plain_libs::serde_json::from_value(receipt)
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         // The platform only confirms what it actually dismissed; a receipt
         // naming an id that was never sent is a host contract violation.
@@ -131,7 +131,7 @@ impl NotificationsMutation {
             .data_unchecked::<Arc<Host>>()
             .call(
                 "systemReplyNotification",
-                serde_json::json!({
+                plain_libs::serde_json::json!({
                     "id": id.0,
                     "actionIndex": action_index,
                     "text": text,
@@ -149,10 +149,10 @@ impl NotificationsMutation {
 async fn notification_items(ctx: &Context<'_>, query: &str) -> plain_graphql::Result<Vec<Value>> {
     let facts = ctx
         .data_unchecked::<Arc<Host>>()
-        .call("systemNotificationFacts", serde_json::json!({}))
+        .call("systemNotificationFacts", plain_libs::serde_json::json!({}))
         .await
         .map_err(|error| plain_graphql::Error::new(error))?;
-    let facts: Vec<Value> = serde_json::from_value(facts)
+    let facts: Vec<Value> = plain_libs::serde_json::from_value(facts)
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     plain_rs::features::services::notifications::query::notifications(
         ctx.data_unchecked::<Arc<Prefs>>(),
@@ -212,7 +212,7 @@ pub(crate) fn publish(
     {
         return Ok(());
     }
-    let payload = serde_json::to_string(&notification(&facts.notification))
+    let payload = plain_libs::serde_json::to_string(&notification(&facts.notification))
         .map_err(|error| error.to_string())?;
     let _ = events.send(plain_rs::infrastructure::events::WsEvent::broadcast(
         kind, payload,

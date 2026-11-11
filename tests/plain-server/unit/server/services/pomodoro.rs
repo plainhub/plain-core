@@ -3,7 +3,7 @@ use crate::server::ContentServer;
 use plain_libs::chrono::Utc;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::events::WS_POMODORO_ACTION;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 struct Fixture {
@@ -42,7 +42,7 @@ async fn call(server: &ContentServer, token: &str, query: &str) -> Value {
         .text()
         .await
         .unwrap();
-    serde_json::from_str(&text).unwrap()
+    plain_libs::serde_json::from_str(&text).unwrap()
 }
 
 #[tokio::test]
@@ -80,7 +80,7 @@ async fn server_assembly_runs_the_timer_and_main_controls_share_its_statistics()
         loop {
             let event = events.recv().await.unwrap();
             if event.event_type == WS_POMODORO_ACTION {
-                let payload: Value = serde_json::from_str(&event.payload).unwrap();
+                let payload: Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
                 if payload["action"] == "complete" {
                     break;
                 }
@@ -141,7 +141,7 @@ async fn main_schema_rejects_retired_client_scheduler_controls() {
             .unwrap()
             .text()
             .await
-            .map(|text| serde_json::from_str(&text).unwrap())
+            .map(|text| plain_libs::serde_json::from_str(&text).unwrap())
             .unwrap();
         assert!(result.get("errors").is_some(), "{result}");
     }

@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use plain_libs::rusqlite::Connection;
 #[cfg(all(feature = "chat", feature = "library"))]
 mod media_paths;
 mod state;
@@ -54,7 +54,7 @@ pub struct Db(
 );
 
 impl Db {
-    pub fn open(db_path: &Path) -> rusqlite::Result<Self> {
+    pub fn open(db_path: &Path) -> plain_libs::rusqlite::Result<Self> {
         #[cfg(feature = "library")]
         {
             Self::open_audio(db_path)
@@ -68,7 +68,7 @@ impl Db {
     }
 
     #[cfg(feature = "library")]
-    fn open_audio(db_path: &Path) -> rusqlite::Result<Self> {
+    fn open_audio(db_path: &Path) -> plain_libs::rusqlite::Result<Self> {
         let mut connection = Self::open_connection(db_path)?;
         let state = state::State::new(&mut connection)?;
         let connection = Arc::new(Mutex::new(connection));
@@ -76,8 +76,8 @@ impl Db {
         let runtime = |key| {
             let current_id = store
                 .get(key)
-                .map_err(|error| rusqlite::Error::ToSqlConversionFailure(error.into()))?;
-            Ok::<_, rusqlite::Error>(Arc::new(
+                .map_err(|error| plain_libs::rusqlite::Error::ToSqlConversionFailure(error.into()))?;
+            Ok::<_, plain_libs::rusqlite::Error>(Arc::new(
                 crate::features::media::audio::state::Runtime::new(key, current_id),
             ))
         };
@@ -120,14 +120,14 @@ impl Db {
     pub(crate) fn audio_transaction<T>(
         &self,
         operation: impl FnOnce(
-            &rusqlite::Transaction<'_>,
+            &plain_libs::rusqlite::Transaction<'_>,
             &mut crate::features::media::audio::state::State,
         ) -> crate::infrastructure::error::DomainResult<T>,
     ) -> crate::infrastructure::error::DomainResult<T> {
         self.audio().transaction(self, operation)
     }
 
-    fn open_connection(db_path: &Path) -> rusqlite::Result<Connection> {
+    fn open_connection(db_path: &Path) -> plain_libs::rusqlite::Result<Connection> {
         let conn = plain_libs::sqlite::open(db_path)?;
         #[cfg(any(feature = "chat", feature = "library"))]
         schema::init(&conn)?;
@@ -162,15 +162,15 @@ impl Db {
         let result = self.with_conn(|source| {
             let mut destination = Connection::open(path).map_err(|error| error.to_string())?;
             {
-                let backup = rusqlite::backup::Backup::new(source, &mut destination)
+                let backup = plain_libs::rusqlite::backup::Backup::new(source, &mut destination)
                     .map_err(|error| error.to_string())?;
                 loop {
                     if cancelled() {
                         return Err("Backup cancelled".into());
                     }
                     match backup.step(128).map_err(|error| error.to_string())? {
-                        rusqlite::backup::StepResult::Done => break,
-                        rusqlite::backup::StepResult::More => {}
+                        plain_libs::rusqlite::backup::StepResult::Done => break,
+                        plain_libs::rusqlite::backup::StepResult::More => {}
                         _ => return Err("Database is busy during backup".into()),
                     }
                 }
@@ -247,11 +247,11 @@ mod design_tests;
 #[path = "../../../../tests/plain-rs/unit/infrastructure/db/backup.rs"]
 mod backup_tests;
 
-pub(crate) fn read_count(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<usize> {
+pub(crate) fn read_count(row: &plain_libs::rusqlite::Row<'_>, index: usize) -> plain_libs::rusqlite::Result<usize> {
     usize::try_from(row.get::<_, i64>(index)?).map_err(|error| {
-        rusqlite::Error::FromSqlConversionFailure(
+        plain_libs::rusqlite::Error::FromSqlConversionFailure(
             index,
-            rusqlite::types::Type::Integer,
+            plain_libs::rusqlite::types::Type::Integer,
             error.into(),
         )
     })

@@ -1,10 +1,10 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn ble_associations_match_signature_and_cleanup_without_consuming_replacements() {
     let runtime = Runtime::default();
-    let mut request:PairingRequest=serde_json::from_value(json!({"toId":"local","targetPublicKey":"key","fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false})).unwrap();
+    let mut request:PairingRequest=plain_libs::serde_json::from_value(json!({"toId":"local","targetPublicKey":"key","fromId":"peer","fromName":"fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"first","awareSupported":false})).unwrap();
     runtime.remember(&request, "mac-first").unwrap();
     request.payload.signature = "second".into();
     runtime.remember(&request, "mac-second").unwrap();
@@ -70,7 +70,7 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
         None,
     )
     .unwrap();
-    let request: PairingRequest = serde_json::from_value(started["request"].clone()).unwrap();
+    let request: PairingRequest = plain_libs::serde_json::from_value(started["request"].clone()).unwrap();
     let mut pinned = crate::infrastructure::db::DPeer::new(
         &request.from_id, "Fixture", "192.0.2.1", None,
         crate::features::chat::enums::DeviceType::Phone,
@@ -81,7 +81,7 @@ async fn expired_incoming_request_rejects_both_decisions_without_pairing() {
     ).unwrap();
 
     let ticket: crate::features::peers::pairing::sessions::Ticket =
-        serde_json::from_value(started["ticket"].clone()).unwrap();
+        plain_libs::serde_json::from_value(started["ticket"].clone()).unwrap();
     remote_state
         .pairing_runtime
         .confirmations
@@ -149,7 +149,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
         None,
     )
     .unwrap();
-    let request: PairingRequest = serde_json::from_value(started["request"].clone()).unwrap();
+    let request: PairingRequest = plain_libs::serde_json::from_value(started["request"].clone()).unwrap();
     let mut pinned = crate::infrastructure::db::DPeer::new(
         &request.from_id, "Fixture", "192.0.2.1", None,
         crate::features::chat::enums::DeviceType::Phone,
@@ -160,7 +160,7 @@ async fn incoming_ble_response_uses_matching_address_and_shared_handshake_exactl
     ).unwrap();
 
     let ticket: crate::features::peers::pairing::sessions::Ticket =
-        serde_json::from_value(started["ticket"].clone()).unwrap();
+        plain_libs::serde_json::from_value(started["ticket"].clone()).unwrap();
     remote_state
         .pairing_runtime
         .confirmations
@@ -367,7 +367,7 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
             public.event_type,
             crate::features::chat::events::WS_PAIRING_SUCCESS
         );
-        let payload: Value = serde_json::from_str(&public.payload).unwrap();
+        let payload: Value = plain_libs::serde_json::from_str(&public.payload).unwrap();
         assert!(payload.get("key").is_none());
         let request = tokio::time::timeout(Duration::from_secs(3), async {
             loop {
@@ -436,7 +436,7 @@ async fn pairing_key_goes_only_to_the_host_and_is_redelivered_after_disconnect()
 async fn incoming_ble_message_succeeds_when_lan_address_is_invalid() {
     let (_directory, server) = fixture("local");
     let state = server.runtime_state();
-    let request: PairingRequest = serde_json::from_value(json!({"toId":"local","targetPublicKey":"key","fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false})).unwrap();
+    let request: PairingRequest = plain_libs::serde_json::from_value(json!({"toId":"local","targetPublicKey":"key","fromId":"peer","fromName":"Fixture","port":2443,"deviceType":"PHONE","ecdhPublicKey":"","signaturePublicKey":"","timestamp":1,"ips":[],"signature":"request","awareSupported":false})).unwrap();
     state
         .pairing_runtime
         .remember(&request, "fixture-ble")

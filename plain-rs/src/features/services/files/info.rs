@@ -1,6 +1,6 @@
 use crate::features::enums::DataType;
 use crate::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     io::{BufReader, Read, Seek, SeekFrom},
     path::PathBuf,
@@ -44,7 +44,7 @@ impl Info {
                 path,
                 |reader| {
                     plain_libs::media::video_info::read(reader)
-                        .map(serde_json::to_value)
+                        .map(plain_libs::serde_json::to_value)
                         .transpose()
                         .map_err(|error| error.to_string())
                 },
@@ -118,7 +118,7 @@ fn apply_image_bounds(facts: &mut Value, sample: Value) -> Result<(), String> {
         if !sample.is_object() {
             return Err("Invalid image decode bounds".into());
         }
-        let bounds: ImageBounds = serde_json::from_value(sample)
+        let bounds: ImageBounds = plain_libs::serde_json::from_value(sample)
             .map_err(|error| format!("Invalid image decode bounds: {error}"))?;
         if bounds.width < 0 || bounds.height < 0 {
             return Err("Invalid image decode bounds".into());
@@ -166,7 +166,7 @@ fn image_facts_with_exif(bytes: &[u8], exif: Option<&[u8]>) -> Value {
     let metadata_bytes = exif.unwrap_or(bytes);
     let metadata = plain_libs::utils::image_metadata::read(metadata_bytes);
     let date = metadata.taken_at();
-    let mut facts = serde_json::to_value(metadata).unwrap_or_else(|_| json!({}));
+    let mut facts = plain_libs::serde_json::to_value(metadata).unwrap_or_else(|_| json!({}));
     let (mut width, mut height) = plain_libs::utils::image_dimensions::dimensions(bytes)
         .or_else(|| exif.and_then(plain_libs::utils::image_dimensions::dimensions))
         .unwrap_or((0, 0));

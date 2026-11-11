@@ -1,6 +1,6 @@
 use super::{DarkTheme, FileSortBy, MediaPlayMode};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

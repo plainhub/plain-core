@@ -1,0 +1,12 @@
+{
+  "name": "serde_json",
+  "version": "1.0.151",
+  "archive_sha256": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14",
+  "repository": "https://github.com/serde-rs/json",
+  "revision": "de8500740cdcabffb9734f503e4889def823cf10",
+  "retained_features": [
+    "default",
+    "raw_value",
+    "std"
+  ]
+}

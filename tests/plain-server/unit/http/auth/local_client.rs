@@ -1,6 +1,6 @@
 use super::*;
-use axum::{Router, body::Body, routing::get};
-use tower::ServiceExt;
+use plain_libs::axum::{Router, body::Body, routing::get};
+use plain_libs::tower::ServiceExt;
 
 #[tokio::test]
 async fn native_bearer_requires_an_actual_loopback_peer_and_never_trusts_forwarded_headers() {
@@ -10,7 +10,7 @@ async fn native_bearer_requires_an_actual_loopback_peer_and_never_trusts_forward
     let token = state.token.clone();
     let router = Router::new()
         .route("/graphql", get(|| async { StatusCode::NO_CONTENT }))
-        .layer(axum::middleware::from_fn_with_state(state, authorize));
+        .layer(plain_libs::axum::middleware::from_fn_with_state(state, authorize));
     for (peer, bearer, expected) in [
         (None, true, StatusCode::FORBIDDEN),
         (Some("192.0.2.42:1234"), true, StatusCode::FORBIDDEN),
@@ -19,7 +19,7 @@ async fn native_bearer_requires_an_actual_loopback_peer_and_never_trusts_forward
         (Some("192.0.2.42:1234"), false, StatusCode::NO_CONTENT),
         (None, false, StatusCode::NO_CONTENT),
     ] {
-        let mut builder = axum::http::Request::builder()
+        let mut builder = plain_libs::axum::http::Request::builder()
             .uri("/graphql")
             .header("x-forwarded-for", "127.0.0.1")
             .header("forwarded", "for=127.0.0.1");

@@ -27,7 +27,7 @@ impl Action {
                         .cloned()
                         .unwrap_or(defaults.notification_filter);
                     if toggle {
-                        let mut apps: Vec<Value> = serde_json::from_value(filter["apps"].clone())
+                        let mut apps: Vec<Value> = plain_libs::serde_json::from_value(filter["apps"].clone())
                             .map_err(PrefsError::Decode)?;
                         let value = Value::String(app);
                         if apps.contains(&value) {
@@ -46,7 +46,7 @@ impl Action {
                         .get(keys::NOTIFICATION_FILTER)
                         .cloned()
                         .unwrap_or(defaults.notification_filter);
-                    filter["apps"] = serde_json::json!([]);
+                    filter["apps"] = plain_libs::serde_json::json!([]);
                     (keys::NOTIFICATION_FILTER, filter)
                 }
             };

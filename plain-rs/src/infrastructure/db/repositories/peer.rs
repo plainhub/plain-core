@@ -1,4 +1,4 @@
-use rusqlite::params;
+use plain_libs::rusqlite::params;
 
 use crate::features::chat::enums::DeviceType;
 use crate::features::chat::enums::PeerStatus;
@@ -9,7 +9,7 @@ use crate::infrastructure::db::now_iso;
 pub(crate) const PEER_COLS: &str =
     "id,name,ip,key,public_key,status,port,device_type,token,created_at,updated_at";
 
-pub(crate) fn row_to_peer(row: &rusqlite::Row<'_>) -> rusqlite::Result<DPeer> {
+pub(crate) fn row_to_peer(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<DPeer> {
     Ok(DPeer {
         id: row.get(0)?,
         name: row.get(1)?,
@@ -51,7 +51,7 @@ impl Db {
 
     pub fn upsert_peer(&self, peer: &DPeer) {
         let conn = self.0.lock().unwrap();
-        let result = (|| -> rusqlite::Result<usize> {
+        let result = (|| -> plain_libs::rusqlite::Result<usize> {
             conn.execute(
             "INSERT INTO peers (id,name,ip,key,public_key,status,port,device_type,token,created_at,updated_at)
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)

@@ -7,7 +7,7 @@ use crate::infrastructure::db::row_to_peer;
 use plain_libs::crypto::ed25519_verify;
 use plain_libs::crypto::xchacha_decrypt_raw;
 use plain_libs::utils::base64::base64_decode;
-use rusqlite::OptionalExtension;
+use plain_libs::rusqlite::OptionalExtension;
 use std::time::{SystemTime, UNIX_EPOCH};
 // Existing chat receipt lifetime; independent of HTTP request freshness.
 pub(crate) const TIMESTAMP_WINDOW_MS: u64 = 5 * 60 * 1000;
@@ -70,10 +70,10 @@ enum Purpose {
     Status,
 }
 pub fn signature_payload(timestamp: i64, channel_id: &str, nonce: &str, content: &str) -> String {
-    serde_json::json!(["peer", channel_id, timestamp.to_string(), nonce, content]).to_string()
+    plain_libs::serde_json::json!(["peer", channel_id, timestamp.to_string(), nonce, content]).to_string()
 }
 pub(crate) fn status_signature_payload(timestamp: i64, content: &str) -> String {
-    serde_json::json!(["status", "", timestamp.to_string(), content]).to_string()
+    plain_libs::serde_json::json!(["status", "", timestamp.to_string(), content]).to_string()
 }
 fn decrypt(
     key: &[u8],

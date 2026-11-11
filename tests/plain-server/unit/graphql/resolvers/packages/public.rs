@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 /// Answers every host call from `handler`, so a resolver test exercises the
 /// real `Host` round trip (including the permission pref it reads).
@@ -154,7 +154,7 @@ async fn install_package_parses_identity_in_rust_and_dispatches_only_sdk_executi
     let response = schema
         .execute(format!(
             "mutation {{ installPackage(path:{}) {{ id updatedAt isNew }} }}",
-            serde_json::to_string(&path.to_string_lossy()).unwrap()
+            plain_libs::serde_json::to_string(&path.to_string_lossy()).unwrap()
         ))
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

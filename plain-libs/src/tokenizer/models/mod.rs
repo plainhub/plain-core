@@ -77,7 +77,7 @@ impl<'de> Deserialize<'de> for ModelWrapper {
             #[serde(rename = "type")]
             variant: EnumType,
             #[serde(flatten)]
-            rest: serde_json::Value,
+            rest: crate::serde_json::Value,
         }
         #[derive(Deserialize)]
         pub enum EnumType {
@@ -91,7 +91,7 @@ impl<'de> Deserialize<'de> for ModelWrapper {
         #[serde(untagged)]
         pub enum ModelHelper {
             Tagged(Tagged),
-            Legacy(serde_json::Value),
+            Legacy(crate::serde_json::Value),
         }
 
         #[derive(Deserialize)]
@@ -109,20 +109,20 @@ impl<'de> Deserialize<'de> for ModelWrapper {
         Ok(match helper {
             ModelHelper::Tagged(model) => match model.variant {
                 EnumType::BPE => ModelWrapper::BPE(
-                    serde_json::from_value(model.rest).map_err(serde::de::Error::custom)?,
+                    crate::serde_json::from_value(model.rest).map_err(serde::de::Error::custom)?,
                 ),
                 EnumType::WordPiece => ModelWrapper::WordPiece(
-                    serde_json::from_value(model.rest).map_err(serde::de::Error::custom)?,
+                    crate::serde_json::from_value(model.rest).map_err(serde::de::Error::custom)?,
                 ),
                 EnumType::WordLevel => ModelWrapper::WordLevel(
-                    serde_json::from_value(model.rest).map_err(serde::de::Error::custom)?,
+                    crate::serde_json::from_value(model.rest).map_err(serde::de::Error::custom)?,
                 ),
                 EnumType::Unigram => ModelWrapper::Unigram(
-                    serde_json::from_value(model.rest).map_err(serde::de::Error::custom)?,
+                    crate::serde_json::from_value(model.rest).map_err(serde::de::Error::custom)?,
                 ),
             },
             ModelHelper::Legacy(value) => {
-                let untagged = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                let untagged = crate::serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                 match untagged {
                     ModelUntagged::BPE(bpe) => ModelWrapper::BPE(bpe),
                     ModelUntagged::WordPiece(bpe) => ModelWrapper::WordPiece(bpe),

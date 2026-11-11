@@ -34,7 +34,7 @@ fn local_event_and_query_collections_use_the_same_actor_policy() {
     for actor in ["fixture-owner", "fixture-member"] {
         let expected = crate::features::chat::events::channel_to_json(&channel, actor);
         let query = crate::features::chat::events::public_channels(&db, actor).unwrap();
-        let event: serde_json::Value = serde_json::from_str(
+        let event: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(
             &crate::features::chat::events::channels_updated_payload(&db, actor),
         )
         .unwrap();

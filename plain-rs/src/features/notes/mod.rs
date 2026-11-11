@@ -82,22 +82,22 @@ pub fn export(db: &Db, query: &str) -> DomainResult<String> {
     let notes = db.notes_list(query, i64::MAX, 0)?;
     let values: Vec<_> = notes
         .into_iter()
-        .map(|note| -> DomainResult<serde_json::Value> {
+        .map(|note| -> DomainResult<plain_libs::serde_json::Value> {
             let tag_values: Vec<_> = tags::tags_for_key_of_kind(
                 db,
                 &note.id,
                 DataType::Note.kind(),
             )?
             .into_iter()
-            .map(|tag| serde_json::json!({ "id": tag.id, "name": tag.name, "count": tag.count }))
+            .map(|tag| plain_libs::serde_json::json!({ "id": tag.id, "name": tag.name, "count": tag.count }))
             .collect();
             Ok(
-                serde_json::json!({ "id": note.id, "title": note.title, "content": note.content,
+                plain_libs::serde_json::json!({ "id": note.id, "title": note.title, "content": note.content,
             "createdAt": note.created_at, "updatedAt": note.updated_at, "tags": tag_values }),
             )
         })
         .collect::<DomainResult<Vec<_>>>()?;
-    Ok(serde_json::to_string(&values).map_err(|e| DomainError::Other(e.to_string()))?)
+    Ok(plain_libs::serde_json::to_string(&values).map_err(|e| DomainError::Other(e.to_string()))?)
 }
 
 #[cfg(test)]

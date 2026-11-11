@@ -47,7 +47,7 @@ impl<'de> Deserialize<'de> for NormalizerWrapper {
             #[serde(rename = "type")]
             variant: EnumType,
             #[serde(flatten)]
-            rest: serde_json::Value,
+            rest: crate::serde_json::Value,
         }
         #[derive(Debug, Serialize, Deserialize)]
         pub enum EnumType {
@@ -71,7 +71,7 @@ impl<'de> Deserialize<'de> for NormalizerWrapper {
         #[serde(untagged)]
         pub enum NormalizerHelper {
             Tagged(Tagged),
-            Legacy(serde_json::Value),
+            Legacy(crate::serde_json::Value),
         }
 
         #[derive(Deserialize)]
@@ -96,61 +96,61 @@ impl<'de> Deserialize<'de> for NormalizerWrapper {
         let helper = NormalizerHelper::deserialize(deserializer)?;
         Ok(match helper {
             NormalizerHelper::Tagged(model) => {
-                let mut values: serde_json::Map<String, serde_json::Value> =
-                    serde_json::from_value(model.rest).expect("Parsed values");
+                let mut values: crate::serde_json::Map<String, crate::serde_json::Value> =
+                    crate::serde_json::from_value(model.rest).expect("Parsed values");
                 values.insert(
                     "type".to_string(),
-                    serde_json::to_value(&model.variant).expect("Reinsert"),
+                    crate::serde_json::to_value(&model.variant).expect("Reinsert"),
                 );
-                let values = serde_json::Value::Object(values);
+                let values = crate::serde_json::Value::Object(values);
                 match model.variant {
                     EnumType::Bert => NormalizerWrapper::BertNormalizer(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Strip => NormalizerWrapper::StripNormalizer(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::StripAccents => NormalizerWrapper::StripAccents(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::NFC => NormalizerWrapper::NFC(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::NFD => NormalizerWrapper::NFD(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::NFKC => NormalizerWrapper::NFKC(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::NFKD => NormalizerWrapper::NFKD(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Sequence => NormalizerWrapper::Sequence(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Lowercase => NormalizerWrapper::Lowercase(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Nmt => NormalizerWrapper::Nmt(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Precompiled => NormalizerWrapper::Precompiled(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Replace => NormalizerWrapper::Replace(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Prepend => NormalizerWrapper::Prepend(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::ByteLevel => NormalizerWrapper::ByteLevel(
-                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                        crate::serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                 }
             }
 
             NormalizerHelper::Legacy(value) => {
-                let untagged = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                let untagged = crate::serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                 match untagged {
                     NormalizerUntagged::BertNormalizer(bpe) => {
                         NormalizerWrapper::BertNormalizer(bpe)

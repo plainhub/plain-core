@@ -149,11 +149,11 @@ fn streaming_does_not_retain_all_full_track_payloads() {
 }
 
 fn insert_native_audio(
-    connection: &rusqlite::Connection,
+    connection: &plain_libs::rusqlite::Connection,
     id: &str,
     artist: &str,
     created: &str,
-) -> rusqlite::Result<usize> {
+) -> plain_libs::rusqlite::Result<usize> {
     connection.execute(
         "INSERT OR IGNORE INTO volumes(id,identity,path,is_available) VALUES(1,'TEST','/',1)",
         [],
@@ -166,12 +166,12 @@ fn insert_native_audio(
         "video" => 5,
         _ => 100 + id.strip_prefix("track-").unwrap().parse::<i64>().unwrap(),
     };
-    connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,title,artist,created_at,updated_at,size_bytes,duration_ms) VALUES(?1,1,?2,?2,'AUDIO',?2,?3,?4,?4,1,1000)",rusqlite::params![number,id,artist,created])
+    connection.execute("INSERT INTO files(id,volume_id,path,file_name,kind,title,artist,created_at,updated_at,size_bytes,duration_ms) VALUES(?1,1,?2,?2,'AUDIO',?2,?3,?4,?4,1,1000)",plain_libs::rusqlite::params![number,id,artist,created])
 }
 
 fn native_database(path: &std::path::Path) -> Db {
     let db = Db::open(path).unwrap();
-    db.with_conn(|connection| -> rusqlite::Result<()> {
+    db.with_conn(|connection| -> plain_libs::rusqlite::Result<()> {
         insert_native_audio(connection, "one", "Old Artist", "2026-01-01T00:00:00Z")?;
         insert_native_audio(connection, "two", "Old Artist", "2026-01-02T00:00:00Z")?;
         connection.execute("INSERT INTO media_play_history(media_type,file_id,position_ms,play_count,played_at) VALUES(1,'1',0,5,'2026-01-02T00:00:00Z')", [])?;
@@ -185,7 +185,7 @@ fn native_history_and_catalog_share_one_snapshot_during_external_writes() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("db");
     let db = native_database(&path);
-    let writer = rusqlite::Connection::open(&path).unwrap();
+    let writer = plain_libs::rusqlite::Connection::open(&path).unwrap();
     AFTER_NATIVE_HISTORY.with(|hook| {
         *hook.borrow_mut() = Some(Box::new(move || {
             writer
@@ -217,7 +217,7 @@ fn native_history_and_catalog_share_one_snapshot_during_external_writes() {
 fn native_scan_covers_more_than_a_page_and_excludes_trash_and_other_media() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = native_database(&directory.path().join("db"));
-    db.with_conn(|connection| -> rusqlite::Result<()> {
+    db.with_conn(|connection| -> plain_libs::rusqlite::Result<()> {
         let transaction = connection.unchecked_transaction()?;
         for index in 0..1100 {
             insert_native_audio(

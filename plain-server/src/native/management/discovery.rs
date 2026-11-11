@@ -1,7 +1,7 @@
 use super::NativeManagement;
 use plain_rs::features::services::discovery::mdns_runtime;
 use plain_rs::features::services::discovery::mdns_runtime::Request;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 impl NativeManagement {
     pub async fn acquire_mdns_debug_session(&self, token: String) -> Result<Value, String> {

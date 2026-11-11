@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 fn message() -> Value {
     json!({"id":"mms_8","body":"line\n\"quoted\"","address":"a\"b","date":"1970-01-01T00:00:01Z","threadId":"9","isMms":true})
@@ -31,7 +31,7 @@ fn json_and_csv_archives_do_not_overwrite_a_batch_with_the_same_timestamp() {
         let bytes = fs::read(&entry).unwrap();
         if entry.extension().unwrap() == "json" {
             assert_eq!(
-                serde_json::from_slice::<Vec<Value>>(&bytes).unwrap(),
+                plain_libs::serde_json::from_slice::<Vec<Value>>(&bytes).unwrap(),
                 messages
             );
         } else {

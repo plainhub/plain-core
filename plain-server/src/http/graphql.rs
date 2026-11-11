@@ -1,5 +1,5 @@
 use crate::server::ServerState;
-use axum::{
+use plain_libs::axum::{
     body::Bytes,
     extract::State,
     http::{HeaderMap, StatusCode, header::CONTENT_TYPE},
@@ -207,8 +207,8 @@ async fn run_with_context(
     context: crate::graphql::executor::RequestContext,
 ) -> Result<Vec<u8>, StatusCode> {
     let parsed: plain_graphql::Request =
-        serde_json::from_str(request).map_err(|_| StatusCode::BAD_REQUEST)?;
-    serde_json::to_vec(&crate::graphql::executor::execute_graphql(schema, parsed, context).await)
+        plain_libs::serde_json::from_str(request).map_err(|_| StatusCode::BAD_REQUEST)?;
+    plain_libs::serde_json::to_vec(&crate::graphql::executor::execute_graphql(schema, parsed, context).await)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
@@ -290,13 +290,13 @@ async fn execute_guest(state: &ServerState, id: &str, body: &[u8]) -> (u16, Vec<
         Ok(p) => p,
         Err(_) => return (400, vec![]),
     };
-    let request: plain_graphql::Request = match serde_json::from_str(body) {
+    let request: plain_graphql::Request = match plain_libs::serde_json::from_str(body) {
         Ok(p) => p,
         Err(_) => return (400, vec![]),
     };
     let schema = crate::graphql::schemas::guest::schema(state.clone(), id.to_owned());
     let result = schema.execute(request).await;
-    match serde_json::to_vec(&result)
+    match plain_libs::serde_json::to_vec(&result)
         .ok()
         .and_then(|p| context.encrypt(&key, &p))
     {

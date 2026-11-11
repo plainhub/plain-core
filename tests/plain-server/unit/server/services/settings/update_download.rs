@@ -2,7 +2,7 @@ use crate::server::ContentServer;
 use crate::server::ServerState;
 use plain_rs::features::services::settings::update_download::*;
 use plain_rs::features::services::settings::updates;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,7 +21,7 @@ fn setup() -> (plain_libs::temporary::TempDir, ContentServer, ServerState) {
     (dir, core, state)
 }
 
-fn allow_updates(state: &ServerState) -> tokio::sync::mpsc::UnboundedReceiver<serde_json::Value> {
+fn allow_updates(state: &ServerState) -> tokio::sync::mpsc::UnboundedReceiver<plain_libs::serde_json::Value> {
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();
     let (sent, received) = tokio::sync::mpsc::unbounded_channel();

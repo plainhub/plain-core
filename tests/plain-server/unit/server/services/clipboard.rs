@@ -1,6 +1,6 @@
 use plain_libs::protocols::http_client;
 use crate::server::ContentServer;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 #[tokio::test]
@@ -94,7 +94,7 @@ async fn call(port: u16, token: &str, query: &str) -> Value {
         .await
         .unwrap();
     assert_eq!(response.status(), 200);
-    serde_json::from_slice(&response.bytes().await.unwrap()).unwrap()
+    plain_libs::serde_json::from_slice(&response.bytes().await.unwrap()).unwrap()
 }
 
 fn start(

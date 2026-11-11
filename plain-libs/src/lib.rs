@@ -1,7 +1,9 @@
+#[cfg(feature = "http-runtime")]
+#[macro_use]
+mod tuples;
 #[cfg(feature = "auth")]
 pub mod auth;
 
-#[cfg(feature = "peg")]
 extern crate alloc;
 
 #[cfg(feature = "ai-image-search")]
@@ -115,3 +117,104 @@ pub mod compression;
 mod cpu_features;
 #[cfg(feature = "encoding")]
 pub mod encoding;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+pub mod axum;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod axum_core;
+
+mod equivalent;
+
+#[cfg(feature = "sqlite")]
+mod fallible_iterator;
+
+#[cfg(feature = "sqlite")]
+mod fallible_streaming_iterator;
+
+mod foldhash;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod h2;
+
+mod hashbrown;
+
+#[cfg(feature = "sqlite")]
+mod hashlink;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+pub mod http;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+pub mod http_body;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+pub mod http_body_util;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod httparse;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod httpdate;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+pub mod hyper;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod hyper_rustls;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+pub mod hyper_util;
+
+pub mod indexmap;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod ipnet;
+
+mod itoa;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod matchit;
+
+pub mod memchr;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod mime;
+
+#[cfg(feature = "sqlite")]
+pub mod rusqlite;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod ryu;
+
+pub mod serde_json;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod serde_path_to_error;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod serde_urlencoded;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod sync_wrapper;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+pub mod tokio_tungstenite;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+pub mod tower;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod try_lock;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+pub mod tungstenite;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "http-runtime"))]
+mod want;
+
+mod zmij;
+
+#[cfg(all(test, unix))]
+#[path = "../../tests/plain-libs/unit/dependency_benchmark.rs"]
+mod dependency_benchmark;

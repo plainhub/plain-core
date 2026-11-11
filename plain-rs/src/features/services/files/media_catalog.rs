@@ -4,7 +4,7 @@ use crate::features::services::files::provider_query::{self as query, Provider};
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::MediaFileRow;
 use plain_libs::anyhow::Result;
-use rusqlite::{params_from_iter, types::Value};
+use plain_libs::rusqlite::{params_from_iter, types::Value};
 
 fn selection(db: &Db, data_type: DataType, text: &str) -> Result<(String, Vec<Value>)> {
     selection_with_trash(db, data_type, text, false)
@@ -32,7 +32,7 @@ fn selection_with_trash(
     let mut plan = query::plan(
         provider,
         &filters,
-        &serde_json::Value::Null,
+        &plain_libs::serde_json::Value::Null,
         None,
         text.is_empty(),
     )?;
@@ -162,7 +162,7 @@ fn selected_rows(
                 params_from_iter(args.iter()),
                 crate::infrastructure::db::media_file::from_row,
             )?
-            .collect::<rusqlite::Result<Vec<_>>>()
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
     })?)
 }
 
@@ -187,13 +187,13 @@ pub fn ids(db: &Db, data_type: DataType, query: &str, from_trash: bool) -> Resul
         let mut statement = conn.prepare(&sql)?;
         statement
             .query_map(params_from_iter(args.iter()), |row| row.get(0))?
-            .collect::<rusqlite::Result<Vec<_>>>()
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
     })?)
 }
 
 pub fn document_extensions(db: &Db, query: &str) -> Result<Vec<(String, i32)>> {
     let (sql, args) = selection(db, DataType::Doc, query)?;
-    Ok(db.with_conn(|conn| -> rusqlite::Result<_> {
+    Ok(db.with_conn(|conn| -> plain_libs::rusqlite::Result<_> {
         let mut statement = conn.prepare(&sql.replace("{columns}", "file_name"))?;
         let mut counts = std::collections::BTreeMap::new();
         let paths =
@@ -216,7 +216,7 @@ pub fn add_document_extension(counts: &mut std::collections::BTreeMap<String, i3
     }
 }
 
-pub fn bucket_item_facts(db: &Db, data_type: DataType) -> Result<Vec<serde_json::Value>> {
+pub fn bucket_item_facts(db: &Db, data_type: DataType) -> Result<Vec<plain_libs::serde_json::Value>> {
     let (sql, args) = selection(db, data_type, "")?;
     let sql = format!(
         "{} ORDER BY updated_at DESC,file_id",
@@ -232,7 +232,7 @@ pub fn bucket_item_facts(db: &Db, data_type: DataType) -> Result<Vec<serde_json:
                     row.get::<_, i64>(2)?,
                 ))
             })?
-            .collect::<rusqlite::Result<Vec<_>>>()
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
     })?;
     Ok(items
         .into_iter()
@@ -241,7 +241,7 @@ pub fn bucket_item_facts(db: &Db, data_type: DataType) -> Result<Vec<serde_json:
                 .file_name()
                 .and_then(|name| name.to_str())
                 .unwrap_or(&id);
-            serde_json::json!({"id":id,"name":name,"size":size,"path":path})
+            plain_libs::serde_json::json!({"id":id,"name":name,"size":size,"path":path})
         })
         .collect())
 }

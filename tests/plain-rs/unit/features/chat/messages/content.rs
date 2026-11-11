@@ -13,7 +13,7 @@ fn attachments_resolve_the_current_session_url_token_without_retaining_a_service
     let content = r#"{"type":"FILES","value":{"items":[{"uri":"fid:fixture.txt"}]}}"#;
     for _ in 0..2 {
         let wire: Value =
-            serde_json::from_str(&peer_content(content, "client", &db).unwrap()).unwrap();
+            plain_libs::serde_json::from_str(&peer_content(content, "client", &db).unwrap()).unwrap();
         let id = wire["value"]["items"][0]["uri"]
             .as_str()
             .unwrap()

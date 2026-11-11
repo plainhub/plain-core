@@ -1,6 +1,6 @@
 use crate::server::ContentServer;
 use plain_graphql::Request;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 async fn graphql(core: &ContentServer, query: &str, variables: Value) -> plain_graphql::Response {
     core.native_graphql()

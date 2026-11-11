@@ -162,7 +162,7 @@ fn pkcs12_import_persists_a_matching_identity_and_failed_import_preserves_it() {
             )
             .unwrap();
         assert_eq!(
-            serde_json::from_str::<Value>(&result).unwrap()["signature"],
+            plain_libs::serde_json::from_str::<Value>(&result).unwrap()["signature"],
             json!(signature(&expected.0).unwrap())
         );
         assert_eq!(source.identity().unwrap(), expected);

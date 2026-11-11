@@ -366,11 +366,11 @@ impl Tokenizer {
     }
     pub fn from_file<P: AsRef<Path>>(file: P) -> Result<Self> {
         let content = read_to_string(file)?;
-        let tokenizer = serde_json::from_str(&content)?;
+        let tokenizer = crate::serde_json::from_str(&content)?;
         Ok(tokenizer)
     }
     pub fn from_bytes<P: AsRef<[u8]>>(bytes: P) -> Result<Self> {
-        let tokenizer = serde_json::from_slice(bytes.as_ref())?;
+        let tokenizer = crate::serde_json::from_slice(bytes.as_ref())?;
         Ok(tokenizer)
     }
 }
@@ -379,7 +379,7 @@ impl std::str::FromStr for Tokenizer {
     type Err = Box<dyn std::error::Error + Send + Sync>;
 
     fn from_str(s: &str) -> Result<Self> {
-        Ok(serde_json::from_str(s)?)
+        Ok(crate::serde_json::from_str(s)?)
     }
 }
 
@@ -890,7 +890,7 @@ where
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        Ok(serde_json::from_str(s)?)
+        Ok(crate::serde_json::from_str(s)?)
     }
 }
 
@@ -913,7 +913,7 @@ where
     D: DeserializeOwned + Decoder,
 {
     pub fn from_bytes<P: AsRef<[u8]>>(bytes: P) -> Result<Self> {
-        let tokenizer = serde_json::from_slice(bytes.as_ref())?;
+        let tokenizer = crate::serde_json::from_slice(bytes.as_ref())?;
         Ok(tokenizer)
     }
 }
@@ -928,9 +928,9 @@ where
 {
     pub fn to_string(&self, pretty: bool) -> Result<String> {
         Ok(if pretty {
-            serde_json::to_string_pretty(self)?
+            crate::serde_json::to_string_pretty(self)?
         } else {
-            serde_json::to_string(self)?
+            crate::serde_json::to_string(self)?
         })
     }
 }

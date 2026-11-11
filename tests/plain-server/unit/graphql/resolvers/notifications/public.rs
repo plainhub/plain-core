@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::infrastructure::db::Db;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
     let (generation, mut requests) = host.connect();
@@ -168,7 +168,7 @@ fn reported_notifications_keep_permission_filtering_and_project_public_events() 
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     let (events, mut receiver) = tokio::sync::broadcast::channel(8);
     let facts = |kind: &str| {
-        serde_json::from_value(json!({
+        plain_libs::serde_json::from_value(json!({
         "type":kind,
         "notification":{"id":"notice", "appId":"app", "title":"hello", "postedAt":"2026-10-01T00:00:00.000Z"}
     })).unwrap()
@@ -181,7 +181,7 @@ fn reported_notifications_keep_permission_filtering_and_project_public_events() 
     publish(&prefs, &events, facts("NOTIFICATION_UPDATED")).unwrap();
     let event = receiver.try_recv().unwrap();
     assert_eq!(event.event_type, "NOTIFICATION_UPDATED");
-    let payload: Value = serde_json::from_str(&event.payload).unwrap();
+    let payload: Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
     assert_eq!(payload["id"], "notice");
     assert_eq!(payload["postedAt"], "2026-10-01T00:00:00.000Z");
     prefs.set("api_permissions", json!([])).unwrap();
@@ -200,7 +200,7 @@ fn sms_refresh_hints_follow_notification_permissions_filters_and_event_kinds() {
     let prefs = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     let (events, mut receiver) = tokio::sync::broadcast::channel(8);
     let facts = |kind: &str, app: &str| {
-        serde_json::from_value(
+        plain_libs::serde_json::from_value(
             json!({"type":kind,"notification":fact("notice",app,"2026-10-01T00:00:00.000Z")}),
         )
         .unwrap()
@@ -226,7 +226,7 @@ fn sms_refresh_hints_follow_notification_permissions_filters_and_event_kinds() {
         let hint = receiver.try_recv().unwrap();
         assert_eq!(hint.event_type, "SMS_PROVIDER_CHANGED");
         assert_eq!(
-            serde_json::from_str::<Value>(&hint.payload).unwrap(),
+            plain_libs::serde_json::from_str::<Value>(&hint.payload).unwrap(),
             json!({"uris":[]})
         );
         assert!(receiver.try_recv().is_err());

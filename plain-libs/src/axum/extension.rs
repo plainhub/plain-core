@@ -1,0 +1,82 @@
+use crate::axum::{extract::rejection::*, response::IntoResponseParts};
+use crate::axum_core::{
+    extract::FromRequestParts,
+    response::{IntoResponse, Response, ResponseParts},
+};
+use crate::http::{Request, request::Parts};
+use async_trait::async_trait;
+use std::{
+    convert::Infallible,
+    task::{Context, Poll},
+};
+use tower_service::Service;
+#[derive(Debug, Clone, Copy, Default)]
+#[must_use]
+pub struct Extension<T>(pub T);
+#[async_trait]
+impl<T, S> FromRequestParts<S> for Extension<T>
+where
+    T: Clone + Send + Sync + 'static,
+    S: Send + Sync,
+{
+    type Rejection = ExtensionRejection;
+    async fn from_request_parts(req: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let value = req . extensions . get::< T > () . ok_or_else (| | { MissingExtension::from_err (format ! ("Extension of type `{}` was not found. Perhaps you forgot to add it? See `crate::axum::Extension`." , std::any::type_name::< T > ())) }) . cloned () ? ;
+        Ok(Extension(value))
+    }
+}
+crate::axum_core::__impl_deref!(Extension);
+impl<T> IntoResponseParts for Extension<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    type Error = Infallible;
+    fn into_response_parts(self, mut res: ResponseParts) -> Result<ResponseParts, Self::Error> {
+        res.extensions_mut().insert(self.0);
+        Ok(res)
+    }
+}
+impl<T> IntoResponse for Extension<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    fn into_response(self) -> Response {
+        let mut res = ().into_response();
+        res.extensions_mut().insert(self.0);
+        res
+    }
+}
+impl<S, T> tower_layer::Layer<S> for Extension<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    type Service = AddExtension<S, T>;
+    fn layer(&self, inner: S) -> Self::Service {
+        AddExtension {
+            inner,
+            value: self.0.clone(),
+        }
+    }
+}
+#[derive(Clone, Copy, Debug)]
+pub struct AddExtension<S, T> {
+    pub(crate) inner: S,
+    pub(crate) value: T,
+}
+impl<ResBody, S, T> Service<Request<ResBody>> for AddExtension<S, T>
+where
+    S: Service<Request<ResBody>>,
+    T: Clone + Send + Sync + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+    #[inline]
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+    fn call(&mut self, mut req: Request<ResBody>) -> Self::Future {
+        req.extensions_mut().insert(self.value.clone());
+        self.inner.call(req)
+    }
+}

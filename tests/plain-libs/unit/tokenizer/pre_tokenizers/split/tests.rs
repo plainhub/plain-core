@@ -133,12 +133,12 @@ fn serialization() {
     let split = Split::new("Hello", Removed, true).unwrap();
     let split_s =
         r#"{"type":"Split","pattern":{"String":"Hello"},"behavior":"Removed","invert":true}"#;
-    assert_eq!(serde_json::to_string(&split).unwrap(), split_s);
-    assert_eq!(serde_json::from_str::<Split>(split_s).unwrap(), split);
+    assert_eq!(crate::serde_json::to_string(&split).unwrap(), split_s);
+    assert_eq!(crate::serde_json::from_str::<Split>(split_s).unwrap(), split);
 
     let split = Split::new(SplitPattern::Regex(r"\s+".into()), Isolated, false).unwrap();
     let split_s =
         r#"{"type":"Split","pattern":{"Regex":"\\s+"},"behavior":"Isolated","invert":false}"#;
-    assert_eq!(serde_json::to_string(&split).unwrap(), split_s);
-    assert_eq!(serde_json::from_str::<Split>(split_s).unwrap(), split);
+    assert_eq!(crate::serde_json::to_string(&split).unwrap(), split_s);
+    assert_eq!(crate::serde_json::from_str::<Split>(split_s).unwrap(), split);
 }

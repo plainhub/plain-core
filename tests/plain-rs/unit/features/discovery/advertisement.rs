@@ -79,7 +79,7 @@ fn remote_access_advertisement_distinguishes_enabled_disabled_and_unknown() {
                 .txt_records
                 .contains(&format!("ra={}", u8::from(enabled)))
         );
-        let wire = serde_json::to_value(&reply).unwrap();
+        let wire = plain_libs::serde_json::to_value(&reply).unwrap();
         assert_eq!(wire["remoteAccess"], enabled);
     }
 }

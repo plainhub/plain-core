@@ -1,6 +1,6 @@
 use super::*;
 use crate::infrastructure::host::startup::StartupConfig;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 fn android_startup_config() -> StartupConfig {

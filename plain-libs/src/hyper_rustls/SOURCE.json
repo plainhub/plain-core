@@ -1,0 +1,13 @@
+{
+  "name": "hyper-rustls",
+  "version": "0.27.10",
+  "archive_sha256": "dfa8e654703247911e29c23fbeaa261834bd9bb74efba2f9acddc37bfb127f53",
+  "repository": "https://github.com/rustls/hyper-rustls",
+  "revision": "ce45b6b0dfdf238f9058b89feb1e3b8eaebbc5b0",
+  "retained_features": [
+    "http1",
+    "tls12"
+  ],
+  "license": "Apache-2.0",
+  "upstream_license_choice": "Apache-2.0 OR ISC OR MIT"
+}

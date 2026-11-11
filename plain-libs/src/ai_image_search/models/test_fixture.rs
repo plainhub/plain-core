@@ -82,7 +82,7 @@ pub fn fixture(directory: &Path) -> Manifest {
         .collect();
     std::fs::write(
         directory.join("manifest.json"),
-        serde_json::to_vec(&manifest).unwrap(),
+        crate::serde_json::to_vec(&manifest).unwrap(),
     )
     .unwrap();
     manifest

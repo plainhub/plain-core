@@ -64,7 +64,7 @@ impl DurationCache {
             db.scan_prefix(PREFIX)
                 .map(|entry| {
                     let (key, value) = entry?;
-                    Ok((key, serde_json::from_str(&value)?))
+                    Ok((key, plain_libs::serde_json::from_str(&value)?))
                 })
                 .collect::<Result<BTreeMap<_, Duration>>>()
         })?;
@@ -85,7 +85,7 @@ impl DurationCache {
             for value in pending {
                 values.insert(
                     key(&value.media_type, &value.file_id)?,
-                    serde_json::to_string(value)?,
+                    plain_libs::serde_json::to_string(value)?,
                 );
             }
             let mut batch = db.batch();
@@ -138,7 +138,7 @@ impl DurationCache {
                             else {
                                 return Ok(None);
                             };
-                            serde_json::from_str(&bytes)?
+                            plain_libs::serde_json::from_str(&bytes)?
                         }
                     };
                     let modified =

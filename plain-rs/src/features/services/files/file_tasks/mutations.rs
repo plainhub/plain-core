@@ -147,7 +147,7 @@ impl FileTasks {
         &self,
         path: &str,
         root: &str,
-        snapshot: &serde_json::Value,
+        snapshot: &plain_libs::serde_json::Value,
         outcome: &Outcome,
     ) -> Result<()> {
         let root = root.to_owned();

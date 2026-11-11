@@ -63,7 +63,7 @@ fn non_owner_rename_is_rejected_without_changing_any_channel_field() {
         let mut channel = create(&db, "owner", "original").unwrap();
         let mut members = vec![ChannelMember::new("owner")];
         members.extend(membership);
-        channel.members = serde_json::to_string(&members).unwrap();
+        channel.members = plain_libs::serde_json::to_string(&members).unwrap();
         channel.status = status;
         channels::save(&db, std::slice::from_ref(&channel), SaveMode::Update).unwrap();
         let before = channels::get(&db, &channel.id).unwrap().unwrap();
@@ -92,7 +92,7 @@ fn creation_mutations_and_invite_validation_preserve_credentials_and_version_rul
         32
     );
     assert_eq!(
-        serde_json::from_str::<Vec<ChannelMember>>(&channel.members).unwrap(),
+        plain_libs::serde_json::from_str::<Vec<ChannelMember>>(&channel.members).unwrap(),
         vec![ChannelMember::new("owner")]
     );
     assert!(apply(&db, "owner", &channel.id, Action::Leave).is_err());
@@ -286,7 +286,7 @@ fn concurrent_member_actions_read_current_state_and_do_not_lose_members() {
     let result = channels::get(&db, &channel.id).unwrap().unwrap();
     assert_eq!(result.version, 13);
     assert_eq!(
-        serde_json::from_str::<Vec<ChannelMember>>(&result.members)
+        plain_libs::serde_json::from_str::<Vec<ChannelMember>>(&result.members)
             .unwrap()
             .len(),
         13

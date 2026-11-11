@@ -1,5 +1,5 @@
 use crate::runtime::Runtime as CoreRuntime;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 fn fixture() -> (plain_libs::temporary::TempDir, crate::test_runtime::Core, CoreRuntime) {

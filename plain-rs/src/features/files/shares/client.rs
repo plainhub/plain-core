@@ -1,7 +1,7 @@
 use plain_libs::anyhow::{Result, ensure};
 use plain_libs::protocols::http_client;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Link {
@@ -81,7 +81,7 @@ impl Link {
         let plain = crate::infrastructure::transport::http_response::Context::new(request)
             .decrypt(&self.key()?, bytes)
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid shared response authentication"))?;
-        let response: Value = serde_json::from_slice(&plain)?;
+        let response: Value = plain_libs::serde_json::from_slice(&plain)?;
         if let Some(error) = response
             .get("errors")
             .and_then(Value::as_array)
@@ -92,7 +92,7 @@ impl Link {
                 error["message"].as_str().unwrap_or("Share request failed")
             );
         }
-        let info: Info = serde_json::from_value(response["data"]["sharedInfo"].clone())?;
+        let info: Info = plain_libs::serde_json::from_value(response["data"]["sharedInfo"].clone())?;
         ensure!(
             plain_libs::utils::base64::base64_decode_checked(&info.url_token)?.len() == 32,
             "Invalid shared file token"

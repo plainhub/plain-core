@@ -1,7 +1,7 @@
 use crate::features::prefs::Prefs;
 use crate::infrastructure::host::bridge::Host;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 const RECEIPTS_KEY: &str = "sms_send_requests";
@@ -95,7 +95,7 @@ pub async fn execute(
     if let Some(key) = &receipt_key {
         let _guard = SEND_LOCK.lock().await;
         let payload_hash = digest(
-            serde_json::to_vec(&json!({
+            plain_libs::serde_json::to_vec(&json!({
                 "number": &request.number,
                 "body": &request.body,
                 "subscriptionId": request.subscription_id,
@@ -113,7 +113,7 @@ pub async fn execute(
         // This makes an ambiguous timeout/retry at-most-once across restarts.
         sends.store()?.set_json(RECEIPTS_KEY, &receipts)?;
     }
-    let parts: Vec<String> = serde_json::from_value(
+    let parts: Vec<String> = plain_libs::serde_json::from_value(
         host.call(
             "systemDivideSmsText",
             json!({"body":request.body,"subscriptionId":request.subscription_id}),

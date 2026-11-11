@@ -4,7 +4,7 @@ use plain_graphql::{Context, Json, Object};
 
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::prefs::pref_keys::{APP_HOME_FEATURES, AUTO_CHECK_UPDATE, SKIP_VERSION};
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -22,7 +22,7 @@ impl PrefsQuery {
             super::super::common::require_developer_mode(ctx)?;
             return Ok(Json(Value::Object(prefs.entries().into_iter().collect())));
         };
-        let mut values = serde_json::Map::new();
+        let mut values = plain_libs::serde_json::Map::new();
         for key in keys {
             if !plain_rs::features::prefs::pref_keys::readable(&key, is_local(ctx)) {
                 return Err(plain_graphql::Error::new("Preference is not accessible"));

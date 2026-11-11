@@ -7,7 +7,7 @@ use plain_rs::features::access::AccessFeature;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::features::services::device::types::DeviceType;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 pub use plain_rs::features::chat::enums::PeerStatus;
@@ -150,7 +150,7 @@ impl PeersQuery {
             plain_rs::features::services::discovery::pairing_runtime::Request::States,
         )
         .await?;
-        Ok(serde_json::from_value(value)?)
+        Ok(plain_libs::serde_json::from_value(value)?)
     }
     fn peers(&self, ctx: &Context<'_>) -> plain_graphql::Result<Vec<Peer>> {
         let state = ctx.data::<crate::server::ServerState>()?;
@@ -229,7 +229,7 @@ impl PeersMutation {
             }
             plain_rs::features::services::discovery::pairing_confirmation::confirm(core, generation).await?;
             let state = core.pairing_runtime.attempts.get(generation).ok_or_else(|| plain_graphql::Error::new("Pairing expired"))?;
-            return Ok(serde_json::from_value(serde_json::to_value(state)?)?);
+            return Ok(plain_libs::serde_json::from_value(plain_libs::serde_json::to_value(state)?)?);
         }
         let state = plain_rs::features::services::discovery::pairing_attempts::start(
             core,
@@ -242,7 +242,7 @@ impl PeersMutation {
                 .cloned(),
         )
         .await?;
-        Ok(serde_json::from_value(serde_json::to_value(state)?)?)
+        Ok(plain_libs::serde_json::from_value(plain_libs::serde_json::to_value(state)?)?)
     }
 
     async fn cancel_pairing(
@@ -276,7 +276,7 @@ impl PeersMutation {
     ) -> plain_graphql::Result<bool> {
         plain_rs::features::services::discovery::pairing_runtime::respond_device(
             ctx.data::<crate::server::ServerState>()?,
-            serde_json::from_value(request(&input))?,
+            plain_libs::serde_json::from_value(request(&input))?,
             accepted,
         )
         .await?;

@@ -40,7 +40,7 @@ pub enum Message {
 }
 impl Message {
     pub fn wire(&self) -> Result<String> {
-        let value = serde_json::to_value(self)?;
+        let value = plain_libs::serde_json::to_value(self)?;
         let kind = value["kind"]
             .as_str()
             .expect("serialized nearby message kind");
@@ -48,7 +48,7 @@ impl Message {
             "{kind}:{}",
             value
                 .get("payload")
-                .map(serde_json::Value::to_string)
+                .map(plain_libs::serde_json::Value::to_string)
                 .unwrap_or_default()
         ))
     }
@@ -56,15 +56,15 @@ impl Message {
         let (kind, payload) = body
             .split_once(':')
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing nearby message prefix"))?;
-        let mut value = serde_json::json!({"kind":kind});
+        let mut value = plain_libs::serde_json::json!({"kind":kind});
         if !payload.is_empty() {
-            value["payload"] = serde_json::from_str(payload)?;
+            value["payload"] = plain_libs::serde_json::from_str(payload)?;
         }
-        Ok(serde_json::from_value(value)?)
+        Ok(plain_libs::serde_json::from_value(value)?)
     }
 }
 pub fn discover_reply(payload: &str, advertised_id: &str) -> Result<DiscoverReply> {
-    let reply: DiscoverReply = serde_json::from_str(payload)?;
+    let reply: DiscoverReply = plain_libs::serde_json::from_str(payload)?;
     ensure!(
         crate::features::client_identity::parse(&reply.id).is_some() && reply.id == advertised_id,
         "BLE discovery identity mismatch"

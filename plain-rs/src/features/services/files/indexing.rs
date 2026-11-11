@@ -18,7 +18,7 @@ pub async fn set(
     if mode == IndexMode::Unconfigured {
         return Err("Select an index mode".into());
     }
-    if serde_json::to_vec(&(&included_dirs, &excluded_dirs))
+    if plain_libs::serde_json::to_vec(&(&included_dirs, &excluded_dirs))
         .map_err(|error| error.to_string())?
         .len()
         > 65536

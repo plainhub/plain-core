@@ -109,7 +109,7 @@ impl Runtime {
     pub fn transaction<T>(
         &self,
         db: &Db,
-        operation: impl FnOnce(&rusqlite::Transaction<'_>, &mut State) -> DomainResult<T>,
+        operation: impl FnOnce(&plain_libs::rusqlite::Transaction<'_>, &mut State) -> DomainResult<T>,
     ) -> DomainResult<T> {
         let mut state = self.state.lock().unwrap();
         let mut next = state.clone();

@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn queue_projection_preserves_large_progress_and_normalizes_attachment_defaults() {
@@ -24,7 +24,7 @@ fn queue_projection_preserves_large_progress_and_normalizes_attachment_defaults(
 }
 #[test]
 fn explicit_millisecond_duration_takes_precedence_and_legacy_overflow_is_rejected() {
-    let file: FileReceipt = serde_json::from_value(
+    let file: FileReceipt = plain_libs::serde_json::from_value(
         json!({"id":"file","uri":"fsid:fixture","size":1,"durationMs":1234,"duration":2}),
     )
     .unwrap();
@@ -32,7 +32,7 @@ fn explicit_millisecond_duration_takes_precedence_and_legacy_overflow_is_rejecte
         ChatDownloadFile::try_from(file).unwrap().duration_ms,
         Long(1234)
     );
-    let file: FileReceipt = serde_json::from_value(
+    let file: FileReceipt = plain_libs::serde_json::from_value(
         json!({"id":"file","uri":"fsid:fixture","size":1,"legacyDurationSec":i64::MAX}),
     )
     .unwrap();

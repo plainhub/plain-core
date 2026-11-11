@@ -6,24 +6,24 @@ rust-version = "1.99"
 description = "Shared Plain protocol, crypto, persistence and domain primitives"
 
 [features]
-"kv" = ["dep:rusqlite", "dep:serde_json", "plain-libs/kv"]
+"kv" = ["plain-libs/kv"]
 "default" = ["crypto"]
 "crypto" = ["plain-libs/crypto"]
 "ble" = []
-"ble-native" = ["ble", "chat", "dep:serde_json"]
+"ble-native" = ["ble", "chat"]
 "mdns" = ["dep:socket2"]
 "tls" = ["plain-libs/tls"]
-"chat" = ["rusqlite/hooks", "crypto", "mdns", "events", "plain-libs/time", "dep:serde_json", "dep:rusqlite", "sqlite_browse", "tokio/sync", "tokio/rt", "tokio/fs", "tokio/time", "plain-libs/sqlite", "plain-libs/file-walk", "plain-libs/kv"]
-"library" = ["kv", "plain-libs/regex", "dep:rusqlite", "plain-libs/time", "prefs", "events", "tokio/rt", "tokio/fs", "tokio/time", "plain-libs/media", "plain-libs/sqlite", "plain-libs/file-walk", "plain-libs/volumes"]
-"sqlite_browse" = ["dep:rusqlite", "dep:serde_json", "plain-libs/sqlite"]
-"prefs" = ["plain-libs/auth", "crypto", "dep:serde_json"]
+"chat" = ["plain-libs/sqlite", "crypto", "mdns", "events", "plain-libs/time", "sqlite_browse", "tokio/sync", "tokio/rt", "tokio/fs", "tokio/time", "plain-libs/sqlite", "plain-libs/file-walk", "plain-libs/kv"]
+"library" = ["kv", "plain-libs/regex", "plain-libs/time", "prefs", "events", "tokio/rt", "tokio/fs", "tokio/time", "plain-libs/media", "plain-libs/sqlite", "plain-libs/file-walk", "plain-libs/volumes"]
+"sqlite_browse" = ["plain-libs/sqlite"]
+"prefs" = ["plain-libs/auth", "crypto"]
 "trash" = ["filesystem", "storage-platform"]
 "filesystem" = ["library", "tokio/fs", "tokio/rt", "tokio/time", "tokio/sync", "plain-libs/filesystem", "plain-libs/file-walk"]
 "events" = ["tokio/sync"]
 "services" = ["link-preview", "http-client", "chat", "library", "events", "dep:hmac", "dep:sha2_mac"]
 "graphql" = ["dep:plain-graphql"]
 "html" = ["plain-libs/html"]
-"phone" = [ "dep:serde_json", "plain-libs/phone"]
+"phone" = [ "plain-libs/phone"]
 "link-preview" = ["chat", "plain-libs/regex"]
 "http-client" = ["plain-libs/http-client", "tokio/net", "tokio/rt", "tokio/time"]
 
@@ -39,7 +39,7 @@ description = "Shared Plain protocol, crypto, persistence and domain primitives"
 "linux-platform" = ["linux-system", "filesystem", "storage-platform", "unix-platform", "tokio/process", "tokio/macros", "tokio/io-util", "plain-libs/linux-platform"]
 
 "image-metadata" = ["library", "plain-libs/image"]
-"runtime" = ["dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "dep:tokio-tungstenite", "tokio-tungstenite/__rustls-tls", "plain-libs/zip", "dep:http", "dep:hyper", "dep:hyper-util", "dep:tokio-rustls", "plain-libs/image", "ai-image-search", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "plain-libs/windows-video"]
+"runtime" = ["plain-libs/websocket", "dep:undoc", "ble", "graphql", "services", "phone", "trash", "feeds", "tls", "linux-system", "dep:parking_lot", "dep:futures-util", "dep:rustls", "plain-libs/zip", "dep:tokio-rustls", "plain-libs/image", "ai-image-search", "plain-libs/disk-metrics", "plain-libs/system-metrics", "tokio/net", "tokio/rt-multi-thread", "tokio/fs", "tokio/sync", "tokio/time", "tokio/macros", "plain-libs/apk", "plain-libs/dlna", "plain-libs/phone-batch", "plain-libs/watch", "dep:objc2", "dep:objc2-foundation", "dep:objc2-av-foundation", "dep:objc2-core-foundation", "dep:objc2-core-media", "dep:objc2-core-video", "dep:block2", "dep:dispatch2", "plain-libs/windows-video"]
 "runtime-media" = ["runtime", "media", "plain-libs/native-watch", "tokio/process"]
 
 "ai-image-search" = ["plain-libs/ai-image-search"]
@@ -55,8 +55,6 @@ plain-libs = { path = "../plain-libs", default-features = false }
 "log" = "0.4"
 "socket2" = { "version" = "0.6", "optional" = true, "features" = ["all"] }
 "serde" = { "version" = "1", "features" = ["derive"] }
-"serde_json" = { "version" = "1", "optional" = true }
-"rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "backup", "cache"], "optional" = true }
 "libc" = "0.2"
 "bytes" = "1"
 "futures-core" = "0.3"
@@ -66,18 +64,12 @@ plain-graphql = { path = "../plain-graphql", optional = true }
 "parking_lot" = { "version" = "0.12", "optional" = true }
 "futures-util" = { "version" = "0.3", "default-features" = false, "features" = ["sink", "std"], "optional" = true }
 "rustls" = { "version" = "0.23", "default-features" = false, "features" = ["ring", "std"], "optional" = true }
-"tokio-tungstenite" = { "version" = "0.30", "default-features" = false, "features" = ["connect"], "optional" = true }
-"http" = { "version" = "1", "optional" = true }
-"hyper" = { "version" = "1", "features" = ["client", "http1"], "optional" = true }
-"hyper-util" = { "version" = "0.1", "features" = ["tokio"], "optional" = true }
 "tokio-rustls" = { "version" = "0.26", "default-features" = false, "features" = ["ring"], "optional" = true }
 
 
 [dev-dependencies]
 "chacha20poly1305" = { "version" = "0.10" }
 plain-libs = { path = "../plain-libs", default-features = false, features = ["test-seams", "https"] }
-"axum" = { "version" = "0.7", "default-features" = false, "features" = ["json", "query", "tokio", "http1"] }
-"serde_json" = "1"
 "tokio" = { "version" = "1", "features" = ["full", "test-util"] }
 
 [[example]]

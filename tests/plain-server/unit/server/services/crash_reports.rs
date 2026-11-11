@@ -1,5 +1,5 @@
 use crate::server::ContentServer;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 fn request(report: &str) -> plain_graphql::Request {
     plain_graphql::Request::new("mutation($report:String!){createCrashReport(report:$report)}")

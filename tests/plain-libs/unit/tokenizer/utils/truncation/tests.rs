@@ -154,7 +154,7 @@ fn truncate_encodings_empty() {
 fn test_deserialize_defaults() {
     let old_truncation_params = r#"{"max_length":256,"strategy":"LongestFirst","stride":0}"#;
 
-    let params: TruncationParams = serde_json::from_str(old_truncation_params).unwrap();
+    let params: TruncationParams = crate::serde_json::from_str(old_truncation_params).unwrap();
 
     assert_eq!(params.direction, TruncationDirection::Right);
 }

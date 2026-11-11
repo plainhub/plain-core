@@ -3,7 +3,7 @@ use crate::graphql::executor::RequestOrigin;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::{enums::DataType, prefs::Prefs};
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 fn fixture(permissions: &[&str]) -> (plain_libs::temporary::TempDir, Arc<Db>, PublicSchema) {
     let directory = plain_libs::temporary::tempdir().unwrap();
@@ -24,7 +24,7 @@ fn fixture(permissions: &[&str]) -> (plain_libs::temporary::TempDir, Arc<Db>, Pu
 fn audio(db: &Db, id: &str, title: &str, artist: &str) {
     db.with_conn(|conn| {
         conn.execute("INSERT OR IGNORE INTO volumes(id,identity,path,is_available) VALUES(1,'TEST','/music',1)",[])?;
-        conn.execute("INSERT INTO files(id,volume_id,path,file_name,kind,title,artist,size_bytes,duration_ms,created_at,updated_at) VALUES(?1,1,?2,?3,'AUDIO',?3,?4,1,1000,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')",rusqlite::params![id,format!("{id}.mp3"),title,artist])
+        conn.execute("INSERT INTO files(id,volume_id,path,file_name,kind,title,artist,size_bytes,duration_ms,created_at,updated_at) VALUES(?1,1,?2,?3,'AUDIO',?3,?4,1,1000,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')",plain_libs::rusqlite::params![id,format!("{id}.mp3"),title,artist])
     }).unwrap();
     play_history::record(db, DataType::Audio, id, 123).unwrap();
 }
@@ -33,7 +33,7 @@ async fn query(schema: &PublicSchema, text: &str, offset: i32, limit: i32) -> Va
     let response = schema.execute(plain_graphql::Request::new("query($query: String!, $offset: Int!, $limit: Int!) { mediaPlayHistory(query: $query, offset: $offset, limit: $limit) { mediaId positionMs playCount media { id title path } } }")
         .variables(plain_graphql::Variables::from_json(json!({"query":text,"offset":offset,"limit":limit})))
         .data(RequestOrigin::Remote)).await;
-    serde_json::to_value(response).unwrap()
+    plain_libs::serde_json::to_value(response).unwrap()
 }
 
 #[tokio::test]

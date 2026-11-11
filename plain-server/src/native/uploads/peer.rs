@@ -5,7 +5,7 @@ use crate::{
     },
     server::ServerState,
 };
-use axum::{body::Bytes, http::StatusCode};
+use plain_libs::axum::{body::Bytes, http::StatusCode};
 use plain_rs::features::services::files::upload_chunks::MAX_UPLOAD_WRITE_BYTES;
 use std::{io, sync::Arc};
 use tokio::sync::mpsc;
@@ -42,7 +42,7 @@ impl PeerUploadChunk {
         };
         let (sender, receiver) = mpsc::channel(2);
         let metadata =
-            serde_json::json!({"fileId": file_id, "index": index, "size": size}).to_string();
+            plain_libs::serde_json::json!({"fileId": file_id, "index": index, "size": size}).to_string();
         let request = crate::managed_peers::upload::request(
             state.clone(),
             route.clone(),

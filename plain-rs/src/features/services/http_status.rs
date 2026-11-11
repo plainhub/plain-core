@@ -35,7 +35,7 @@ impl CoreRuntime {
         }
         if let Err(error) = self.host.notify(
             "httpServerStatusChanged",
-            serde_json::json!(self.http_server.host_status()),
+            plain_libs::serde_json::json!(self.http_server.host_status()),
         ) {
             log::warn!("HTTP server status callback: {error}");
             if *recovering {
@@ -49,7 +49,7 @@ impl CoreRuntime {
                 if let Ok(permit) = permit {
                     if let Err(error) = state.host.notify_reserved_callback(
                         "httpServerStatusChanged",
-                        serde_json::json!(state.http_server.host_status()),
+                        plain_libs::serde_json::json!(state.http_server.host_status()),
                         permit,
                     ) {
                         log::warn!("HTTP server status recovery callback: {error}");
@@ -132,7 +132,7 @@ impl Runtime {
         let _delivery = self.host_delivery.lock().unwrap();
         host.notify(
             "httpServerStatusChanged",
-            serde_json::json!(self.host_status()),
+            plain_libs::serde_json::json!(self.host_status()),
         )
     }
 

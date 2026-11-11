@@ -1,5 +1,5 @@
 use crate::infrastructure::db::Db;
-use rusqlite::{TransactionBehavior, params};
+use plain_libs::rusqlite::{TransactionBehavior, params};
 use sha2::{Digest, Sha256};
 impl Db {
     pub fn admit_request(
@@ -10,7 +10,7 @@ impl Db {
         nonce: &str,
         now: i64,
         window_ms: i64,
-    ) -> rusqlite::Result<bool> {
+    ) -> plain_libs::rusqlite::Result<bool> {
         if client.is_empty()
             || client.len() > 256
             || nonce.is_empty()

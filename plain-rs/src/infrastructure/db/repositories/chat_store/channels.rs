@@ -5,7 +5,7 @@ use crate::infrastructure::db::repositories::channel::row_to_channel;
 use crate::infrastructure::db::repositories::chat_store::SaveMode;
 use crate::infrastructure::db::repositories::chat_store::validate;
 use plain_libs::anyhow::{Result, bail};
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 pub fn get(db: &Db, id: &str) -> Result<Option<DChannel>> {
     Ok(db.with_conn(|c| {
         c.query_row(
@@ -22,13 +22,13 @@ pub fn all(db: &Db) -> Result<Vec<DChannel>> {
             "SELECT {CHANNEL_COLS} FROM chat_channels ORDER BY created_at,id"
         ))?;
         s.query_map([], row_to_channel)?
-            .collect::<rusqlite::Result<Vec<_>>>()
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
     })?)
 }
 pub fn save(db: &Db, rows: &[DChannel], mode: SaveMode) -> Result<()> {
     for row in rows {
         validate(&row.id, &row.created_at, &row.updated_at)?;
-        serde_json::from_str::<Vec<crate::features::chat::channels::messages::ChannelMember>>(
+        plain_libs::serde_json::from_str::<Vec<crate::features::chat::channels::messages::ChannelMember>>(
             &row.members,
         )?;
         if row.version < 0 {
@@ -58,7 +58,7 @@ pub fn patch(db: &Db, before: &DChannel, after: &DChannel) -> Result<DChannel> {
         bail!("channel patch identity mismatch");
     }
     validate(&after.id, &after.created_at, &after.updated_at)?;
-    serde_json::from_str::<Vec<crate::features::chat::channels::messages::ChannelMember>>(
+    plain_libs::serde_json::from_str::<Vec<crate::features::chat::channels::messages::ChannelMember>>(
         &after.members,
     )?;
     if after.version < before.version {

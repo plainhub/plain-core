@@ -6,7 +6,7 @@ use crate::infrastructure::types::Instant;
 use crate::infrastructure::types::Long;
 
 use crate::infrastructure::host::bridge::Host;
-use serde_json::{Map, Value};
+use plain_libs::serde_json::{Map, Value};
 
 pub const FIELDS: &[&str] = &[
     "name",
@@ -173,7 +173,7 @@ async fn read_properties(host: &Host, names: Vec<String>) -> Result<Map<String, 
         return Ok(Map::new());
     }
     let values = host
-        .call("systemProperties", serde_json::json!({"names":names}))
+        .call("systemProperties", plain_libs::serde_json::json!({"names":names}))
         .await?;
     let values = values.as_object().ok_or("invalid system properties")?;
     for name in &names {

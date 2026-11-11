@@ -62,7 +62,7 @@ fn response_input(
     let mut mac =
         Hmac::<sha2_mac::Sha256>::new_from_slice(request.payload.signature.as_bytes()).unwrap();
     mac.update(
-        serde_json::json!(["qr-pair-response", sender_id, response.signature_data()])
+        plain_libs::serde_json::json!(["qr-pair-response", sender_id, response.signature_data()])
             .to_string()
             .as_bytes(),
     );

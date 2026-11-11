@@ -13,7 +13,7 @@ use plain_rs::infrastructure::host::audio::AudioPlaybackFacts;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Audio;

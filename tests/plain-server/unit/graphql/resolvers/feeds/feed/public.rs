@@ -4,7 +4,7 @@ use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::db::notes_feeds::FeedEntryRow;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -49,7 +49,7 @@ fn database(schema: &PublicSchema) -> &Arc<Db> {
 }
 
 async fn query(schema: &PublicSchema, document: &str) -> Value {
-    serde_json::to_value(schema.execute(document).await).unwrap()
+    plain_libs::serde_json::to_value(schema.execute(document).await).unwrap()
 }
 
 const NOW: &str = "2026-01-02T03:04:05+00:00";
@@ -333,7 +333,7 @@ async fn opml_round_trips_through_export_and_import() {
         &schema,
         &format!(
             "mutation {{ importFeeds(content: {}) }}",
-            serde_json::to_string(&opml).unwrap()
+            plain_libs::serde_json::to_string(&opml).unwrap()
         ),
     )
     .await;
@@ -411,7 +411,7 @@ async fn deleting_entries_in_one_main_mutation_cleans_only_the_selected_feed_rel
             )?;
             statement
                 .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-                .collect::<rusqlite::Result<_>>()
+                .collect::<plain_libs::rusqlite::Result<_>>()
         })
         .unwrap();
     assert_eq!(

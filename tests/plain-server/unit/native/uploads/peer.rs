@@ -41,7 +41,7 @@ async fn scoped_native_peer_uploads_preserve_empty_small_and_multiple_window_byt
         assert_eq!(std::fs::read(chunk).unwrap(), bytes);
         let destination = fixture.root.path().join(format!("result-{size}.bin"));
         let query = plain_graphql::Request::new("mutation Merge($id:String!,$path:String!,$size:Long!){mergeChunks(fileId:$id,totalChunks:1,path:$path,replace:true,totalSize:$size){status}}")
-            .variables(plain_graphql::Variables::from_json(serde_json::json!({"id":id,"path":destination,"size":size})));
+            .variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({"id":id,"path":destination,"size":size})));
         let response = fixture
             .local
             .native_graphql()

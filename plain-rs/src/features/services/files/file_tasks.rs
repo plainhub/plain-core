@@ -89,7 +89,7 @@ impl FileTasks {
                 Ok((item.path.clone(), path.to_string_lossy().into_owned()))
             })
             .collect::<Result<Vec<_>>>()?;
-        let snapshot = serde_json::json!({"root":source,"items":items});
+        let snapshot = plain_libs::serde_json::json!({"root":source,"items":items});
         let op = CompletedOp {
             src: source.to_owned(),
             dst: destination.to_owned(),
@@ -131,7 +131,7 @@ impl FileTasks {
             src: previous.path.clone(),
             dst: current.path.clone(),
         };
-        let snapshot = serde_json::json!({"root":previous.path,"items":[previous.clone()]});
+        let snapshot = plain_libs::serde_json::json!({"root":previous.path,"items":[previous.clone()]});
         self.hooks.prepare_move(&op, &snapshot).await?;
         if previous.media_type == current.media_type {
             self.hooks.rebind_move(&op, &snapshot).await?;
@@ -177,7 +177,7 @@ impl FileTasks {
         paths.push(root.to_owned());
         paths.sort();
         paths.dedup();
-        let snapshot = serde_json::json!({"root":root,"items":items});
+        let snapshot = plain_libs::serde_json::json!({"root":root,"items":items});
         let outcome = plain_libs::filesystem::deletion::Outcome {
             removed: true,
             paths,
@@ -367,7 +367,7 @@ impl Hooks for NativeHooks {
                 crate::features::services::files::file_task_media::prepare(&self.platform, &op.src)
                     .await
             } else {
-                Ok(serde_json::Value::Null)
+                Ok(plain_libs::serde_json::Value::Null)
             }
         })
     }
@@ -375,7 +375,7 @@ impl Hooks for NativeHooks {
         &'a self,
         kind: FileTaskType,
         op: &'a CompletedOp,
-        snapshot: &'a serde_json::Value,
+        snapshot: &'a plain_libs::serde_json::Value,
     ) -> HookResult<'a> {
         self.apply_completed(kind, op, snapshot)
     }
@@ -387,7 +387,7 @@ impl Hooks for NativeHooks {
     }
 }
 impl NativeHooks {
-    async fn prepare_move(&self, op: &CompletedOp, snapshot: &serde_json::Value) -> Result<()> {
+    async fn prepare_move(&self, op: &CompletedOp, snapshot: &plain_libs::serde_json::Value) -> Result<()> {
         let source = crate::features::services::files::file_task_media::source_root(snapshot)?;
         let destination = crate::features::services::files::file_task_media::normalized(
             std::path::Path::new(&op.dst),
@@ -404,7 +404,7 @@ impl NativeHooks {
             .invalidate_paths(&[], &[op.src.clone(), op.dst.clone(), source, destination])?;
         Ok(())
     }
-    async fn rebind_move(&self, op: &CompletedOp, snapshot: &serde_json::Value) -> Result<()> {
+    async fn rebind_move(&self, op: &CompletedOp, snapshot: &plain_libs::serde_json::Value) -> Result<()> {
         let change = crate::features::services::files::file_task_media::resolve(
             &self.platform,
             &op.dst,
@@ -458,7 +458,7 @@ impl NativeHooks {
         &'a self,
         kind: FileTaskType,
         op: &'a CompletedOp,
-        snapshot: &'a serde_json::Value,
+        snapshot: &'a plain_libs::serde_json::Value,
     ) -> HookResult<'a> {
         Box::pin(async move {
             if kind == FileTaskType::Move {

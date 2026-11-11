@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 struct Fixture {
     _directory: plain_libs::temporary::TempDir,
@@ -58,7 +58,7 @@ fn completion_is_atomic_and_shared_phase_rules_match_the_app_baseline() {
     assert_eq!(
         std::iter::from_fn(|| events.try_recv().ok())
             .filter(|event| {
-                let payload: Value = serde_json::from_str(&event.payload).unwrap();
+                let payload: Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
                 payload["action"] == "complete" && payload["completedState"] == "WORK"
             })
             .count(),
@@ -140,7 +140,7 @@ fn progress_does_not_write_statistics_and_pause_adjust_and_settings_preserve_sta
     service.command_at("stop", None, now).unwrap();
     service.command_at("adjust", Some(15), now).unwrap();
     assert_eq!(service.tick_at(now).unwrap().time_left_sec, 15);
-    let mut settings = serde_json::to_value(service.settings().unwrap()).unwrap();
+    let mut settings = plain_libs::serde_json::to_value(service.settings().unwrap()).unwrap();
     settings["workDurationMin"] = json!(3);
     service.prefs.set("pomodoro_settings", settings).unwrap();
     assert_eq!(service.tick_at(now).unwrap().time_left_sec, 180);
@@ -205,7 +205,7 @@ fn failed_completion_keeps_deadline_and_emits_no_success_until_commit() {
         .unwrap();
     let done = service.tick_at(now + plain_libs::chrono::Duration::seconds(1)).unwrap();
     assert_eq!(done.completed_count, 1);
-    let event: Value = serde_json::from_str(&events.try_recv().unwrap().payload).unwrap();
+    let event: Value = plain_libs::serde_json::from_str(&events.try_recv().unwrap().payload).unwrap();
     assert_eq!(event["action"], "complete");
     assert_eq!(event["completedState"], "WORK");
     assert_eq!(event["today"]["completedCount"], 1);
@@ -224,7 +224,7 @@ async fn lifecycle_completes_without_any_client_tick_or_query_and_stops() {
     let completed = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let event = events.recv().await.unwrap();
-            let payload: Value = serde_json::from_str(&event.payload).unwrap();
+            let payload: Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
             if payload["action"] == "complete" {
                 break payload;
             }
@@ -276,7 +276,7 @@ fn zero_remaining_without_a_running_deadline_does_not_complete_or_record_work() 
     let today = service.tick_at(now + plain_libs::chrono::Duration::seconds(1)).unwrap();
     assert_eq!(today.state, PomodoroState::ShortBreak);
     assert_eq!(today.completed_count, 1);
-    let event: Value = serde_json::from_str(&events.try_recv().unwrap().payload).unwrap();
+    let event: Value = plain_libs::serde_json::from_str(&events.try_recv().unwrap().payload).unwrap();
     assert_eq!(event["action"], "complete");
     assert_eq!(event["completedState"], "WORK");
     service.tick_at(now + plain_libs::chrono::Duration::seconds(2)).unwrap();

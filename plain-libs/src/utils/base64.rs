@@ -29,32 +29,62 @@ impl std::error::Error for Invalid {}
 const STANDARD: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const URL_SAFE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-fn encode(bytes: &[u8], alphabet: &[u8; 64]) -> String {
-    let mut out = Vec::with_capacity(bytes.len().div_ceil(3) * 4);
-    let chunks = bytes.as_chunks::<3>();
-    for &[b0, b1, b2] in chunks.0 {
+#[inline]
+fn append_triple(out: &mut Vec<u8>, bytes: [u8; 3], alphabet: &[u8; 64]) {
+    let [a, b, c] = bytes;
+    out.extend_from_slice(&[
+        alphabet[usize::from(a >> 2)],
+        alphabet[usize::from((a & 3) << 4 | b >> 4)],
+        alphabet[usize::from((b & 15) << 2 | c >> 6)],
+        alphabet[usize::from(c & 63)],
+    ]);
+}
+
+#[inline]
+fn encode_segments(out: &mut Vec<u8>, segments: &[&[u8]], alphabet: &[u8; 64]) {
+    let mut tail = [0; 3];
+    let mut count = 0;
+    for &segment in segments {
+        let mut bytes = segment;
+        while count != 0 && !bytes.is_empty() {
+            tail[count] = bytes[0];
+            count += 1;
+            bytes = &bytes[1..];
+            if count == 3 {
+                append_triple(out, tail, alphabet);
+                count = 0;
+            }
+        }
+        let (chunks, remainder) = bytes.as_chunks::<3>();
+        for &chunk in chunks {
+            append_triple(out, chunk, alphabet);
+        }
+        if !remainder.is_empty() {
+            tail[..remainder.len()].copy_from_slice(remainder);
+            count = remainder.len();
+        }
+    }
+    if count != 0 {
         out.extend_from_slice(&[
-            alphabet[usize::from(b0 >> 2)],
-            alphabet[usize::from((b0 & 3) << 4 | b1 >> 4)],
-            alphabet[usize::from((b1 & 15) << 2 | b2 >> 6)],
-            alphabet[usize::from(b2 & 63)],
+            alphabet[usize::from(tail[0] >> 2)],
+            alphabet[usize::from((tail[0] & 3) << 4 | if count == 2 { tail[1] >> 4 } else { 0 })],
+            if count == 2 {
+                alphabet[usize::from((tail[1] & 15) << 2)]
+            } else {
+                b'='
+            },
+            b'=',
         ]);
     }
-    match chunks.1 {
-        &[b0] => out.extend_from_slice(&[
-            alphabet[usize::from(b0 >> 2)],
-            alphabet[usize::from((b0 & 3) << 4)],
-            b'=',
-            b'=',
-        ]),
-        &[b0, b1] => out.extend_from_slice(&[
-            alphabet[usize::from(b0 >> 2)],
-            alphabet[usize::from((b0 & 3) << 4 | b1 >> 4)],
-            alphabet[usize::from((b1 & 15) << 2)],
-            b'=',
-        ]),
-        _ => {}
-    }
+}
+
+pub(crate) fn base64_encode_append_segments(out: &mut Vec<u8>, segments: &[&[u8]]) {
+    encode_segments(out, segments, STANDARD);
+}
+
+fn encode(bytes: &[u8], alphabet: &[u8; 64]) -> String {
+    let mut out = Vec::with_capacity(bytes.len().div_ceil(3) * 4);
+    encode_segments(&mut out, &[bytes], alphabet);
     String::from_utf8(out).expect("Base64 alphabet is ASCII")
 }
 
@@ -89,6 +119,20 @@ pub(crate) fn base64_decode_standard_optional_padding(input: &str) -> Result<Vec
     decode_checked(input, true, false)
 }
 
+const DECODE: [u8; 256] = {
+    let mut table = [255; 256];
+    let mut index = 0;
+    while index < 64 {
+        table[STANDARD[index] as usize] = index as u8;
+        index += 1;
+    }
+    table[b'+' as usize] |= 128;
+    table[b'/' as usize] |= 128;
+    table[b'-' as usize] = 62 | 64;
+    table[b'_' as usize] = 63 | 64;
+    table
+};
+
 fn decode_checked(input: &str, standard: bool, require_padding: bool) -> Result<Vec<u8>, Invalid> {
     let body = input.trim_end_matches('=');
     if standard {
@@ -107,63 +151,61 @@ fn decode_checked(input: &str, standard: bool, require_padding: bool) -> Result<
         // Padding only ever belongs at the end.
         return Err(Invalid { offset, found: '=' });
     }
-    let mut symbols: Vec<u8> = Vec::with_capacity(body.len());
-    let mut tail: Option<bool> = None;
-    for (offset, c) in body.char_indices() {
-        let value = match c {
-            'A'..='Z' => c as u8 - b'A',
-            'a'..='z' => c as u8 - b'a' + 26,
-            '0'..='9' => c as u8 - b'0' + 52,
-            '+' | '/' | '-' | '_' => {
-                let url_safe = matches!(c, '-' | '_');
-                if standard && url_safe {
-                    return Err(Invalid { offset, found: c });
+    let mut out = Vec::with_capacity(body.len() * 3 / 4);
+    let mut alphabet = 0_u8;
+    let invalid_mask = if standard { 64 } else { 192 };
+    let (chunks, remainder) = body.as_bytes().as_chunks::<4>();
+    for (block, bytes) in chunks.iter().enumerate() {
+        let values = bytes.map(|byte| DECODE[usize::from(byte)]);
+        let combined = alphabet | values[0] | values[1] | values[2] | values[3];
+        if combined & invalid_mask == invalid_mask {
+            for (index, &value) in values.iter().enumerate() {
+                alphabet |= value & 192;
+                if value == 255 || alphabet & invalid_mask == invalid_mask {
+                    let offset = block * 4 + index;
+                    return Err(Invalid {
+                        offset,
+                        found: body[offset..].chars().next().unwrap(),
+                    });
                 }
-                match tail {
-                    Some(seen) if seen != url_safe => {
-                        return Err(Invalid { offset, found: c });
-                    }
-                    Some(_) => {}
-                    None => tail = Some(url_safe),
-                }
-                if c == '+' || c == '-' { 62 } else { 63 }
             }
-            _ => return Err(Invalid { offset, found: c }),
-        };
-        symbols.push(value);
+        }
+        alphabet = combined & 192;
+        let [a, b, c, d] = values.map(|value| value & 63);
+        out.extend_from_slice(&[(a << 2) | (b >> 4), (b << 4) | (c >> 2), (c << 6) | d]);
     }
-    if symbols.len() % 4 == 1 {
+    let mut tail = [0_u8; 3];
+    for (index, &byte) in remainder.iter().enumerate() {
+        let value = DECODE[usize::from(byte)];
+        alphabet |= value & 192;
+        if value == 255 || alphabet & invalid_mask == invalid_mask {
+            let offset = chunks.len() * 4 + index;
+            return Err(Invalid {
+                offset,
+                found: body[offset..].chars().next().unwrap(),
+            });
+        }
+        tail[index] = value & 63;
+    }
+    if remainder.len() == 1 {
         return Err(Invalid {
             offset: body.len(),
             found: '\0',
         });
     }
-    if standard {
-        let remaining = symbols.len() % 4;
-        let mask = match remaining {
-            2 => 15,
-            3 => 3,
-            _ => 0,
-        };
-        if mask != 0 && symbols[symbols.len() - 1] & mask != 0 {
+    if standard && !remainder.is_empty() {
+        let mask = if remainder.len() == 2 { 15 } else { 3 };
+        if tail[remainder.len() - 1] & mask != 0 {
             return Err(Invalid {
                 offset: body.len() - 1,
-                found: input.as_bytes()[body.len() - 1] as char,
+                found: char::from(body.as_bytes()[body.len() - 1]),
             });
         }
     }
-    let mut out = Vec::with_capacity(symbols.len() * 3 / 4);
-    for chunk in symbols.chunks(4) {
-        let v0 = chunk[0] as u32;
-        let v1 = chunk[1] as u32;
-        let v2 = chunk.get(2).copied().unwrap_or(0) as u32;
-        let v3 = chunk.get(3).copied().unwrap_or(0) as u32;
-        out.push(((v0 << 2) | (v1 >> 4)) as u8);
-        if chunk.len() > 2 {
-            out.push((((v1 & 0xf) << 4) | (v2 >> 2)) as u8);
-        }
-        if chunk.len() > 3 {
-            out.push((((v2 & 0x3) << 6) | v3) as u8);
+    if remainder.len() >= 2 {
+        out.push((tail[0] << 2) | (tail[1] >> 4));
+        if remainder.len() == 3 {
+            out.push((tail[1] << 4) | (tail[2] >> 2));
         }
     }
     Ok(out)

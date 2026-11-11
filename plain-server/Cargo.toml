@@ -8,22 +8,17 @@ description = "Shared Plain GraphQL, HTTP and native transport adapters"
 [features]
 "default" = ["core", "http_transport", "media"]
 "media" = ["plain-rs/runtime-media"]
-"http_transport" = ["dep:serde_json", "plain-libs/http-client", "dep:axum", "plain-libs/https", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
-"core" = ["plain-libs/auth", "plain-libs/websocket", "plain-libs/multipart", "dep:serde_json", "plain-libs/time", "dep:rusqlite", "dep:tower", "dep:tokio-tungstenite", "dep:plain-graphql", "dep:axum", "plain-libs/http-client", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
+"http_transport" = ["plain-libs/http-client", "plain-libs/https", "tokio/net", "tokio/rt", "tokio/sync", "tokio/time", "plain-rs/tls"]
+"core" = ["plain-libs/sqlite", "plain-libs/auth", "plain-libs/websocket", "plain-libs/multipart", "plain-libs/time", "dep:plain-graphql", "plain-libs/http-client", "dep:futures-util", "tokio/net", "tokio/rt-multi-thread", "tokio/sync", "tokio/time", "tokio/fs", "tokio/macros", "dep:subtle", "plain-rs/runtime"]
 
 
 [dependencies]
 plain-libs = { path = "../plain-libs", default-features = false }
 "subtle" = { "version" = "2", "optional" = true }
 "futures-util" = { "version" = "0.3", "default-features" = false, "features" = ["sink", "std"], "optional" = true }
-"axum" = { "version" = "0.7", "default-features" = false, "features" = ["json", "query", "tokio", "http1"], "optional" = true }
-"tokio-tungstenite" = { "version" = "0.30", "default-features" = false, "features" = ["connect"], "optional" = true }
-"tower" = { "version" = "0.5", "features" = ["util"], "optional" = true }
 "serde" = { "version" = "1", "features" = ["derive"] }
-"serde_json" = { "version" = "1", "optional" = true }
 "sha2" = "0.10"
 "log" = "0.4"
-"rusqlite" = { "version" = "0.41.1", "default-features" = false, "features" = ["bundled", "cache"], "optional" = true }
 "tokio" = { "version" = "1", "default-features" = false, "features" = ["io-util"] }
 plain-graphql = { path = "../plain-graphql", optional = true }
 "plain-rs" = { "path" = "../plain-rs", "default-features" = false }
@@ -34,14 +29,10 @@ opaque-ke = { version = "=4.1.0-pre.2", default-features = false, features = ["r
 rand_core = { version = "=0.6.4", features = ["getrandom"] }
 "rustls" = { "version" = "0.23", "default-features" = false, "features" = ["ring", "std"] }
 "socket2" = { "version" = "0.6", "features" = ["all"] }
-"hyper" = { "version" = "1", "features" = ["client", "http1"] }
 # Test-only: exposes plain-rs mdns packet-capture test seams, which
 # `#[cfg(test)]` in plain-rs cannot reach from this crate's test binary.
 "plain-rs" = { "path" = "../plain-rs", "default-features" = false, "features" = ["test-seams"] }
-"serde_json" = "1"
 "tokio" = { "version" = "1", "features" = ["full", "test-util"] }
-"tower" = { "version" = "0.5", "features" = ["util"] }
-"tokio-tungstenite" = { "version" = "0.30", "features" = ["connect"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 plain-rs = { path = "../plain-rs", default-features = false, features = ["linux-platform"] }

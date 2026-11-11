@@ -247,7 +247,7 @@ async fn opaque_audio_duration_reads_only_the_descriptor_range_without_sdk_metad
         .reply(generation, json!({"id":request["id"],"result":null}))
         .unwrap();
     let metadata: Value =
-        serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
     assert_eq!(
         metadata,
         json!({"path":"content://fixture/audio","file":true})

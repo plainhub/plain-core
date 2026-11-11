@@ -32,16 +32,16 @@ fn compute_status_aggregates() {
 fn status_data_json_shape() {
     assert_eq!(build_status_data_json(&[]), "");
     let json = build_status_data_json(&[result("a", Some("boom")), result("b", None)]);
-    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let v: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&json).unwrap();
     assert_eq!(v["results"][0]["peerId"], "a");
     assert_eq!(v["results"][0]["error"], "boom");
-    assert_eq!(v["results"][1]["error"], serde_json::Value::Null);
+    assert_eq!(v["results"][1]["error"], plain_libs::serde_json::Value::Null);
 }
 
 /// NoLeader / LeaderPeerMissing serialize `results: null` — the shape the
 /// web client distinguishes from an empty result list.
 #[test]
 fn no_leader_status_data_is_null_results() {
-    let v: serde_json::Value = serde_json::from_str(&build_no_leader_status_data()).unwrap();
+    let v: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&build_no_leader_status_data()).unwrap();
     assert!(v["results"].is_null());
 }

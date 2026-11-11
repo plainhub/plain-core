@@ -46,7 +46,7 @@ fn derive(input: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
 }
 pub(super) fn chat_key(shared: &[u8; 32], request: &PairingRequest, response: &PairingResponse) -> [u8; 32] {
     let context = Sha256::digest(
-        serde_json::json!([
+        plain_libs::serde_json::json!([
             "pairing",
             request.signature_data(),
             request.payload.signature,
@@ -75,7 +75,7 @@ pub(super) fn save_peer(
     let peer = peer_store::save_confirmed(&state.db, facts, previous_identity, true)?;
     pairing_runtime::success(
         state,
-        &serde_json::to_value(crate::features::services::peers::peer_address::view(&peer))?,
+        &plain_libs::serde_json::to_value(crate::features::services::peers::peer_address::view(&peer))?,
         ip,
         request_id,
     );
@@ -372,9 +372,9 @@ pub async fn confirm(state: &CoreRuntime, generation: &str) -> Result<()> {
 pub fn publish(state: &CoreRuntime, request: PairingRequest) -> Result<()> {
     let changed = crate::infrastructure::db::chat_store::peers::get(&state.db, &request.from_id)?
         .is_some_and(|p| p.public_key != request.payload.signature_public_key);
-    let mut value = serde_json::to_value(&request)?;
-    value["identityChanged"] = serde_json::json!(changed);
-    value["verificationCode"] = serde_json::json!(verification_code(&request));
+    let mut value = plain_libs::serde_json::to_value(&request)?;
+    value["identityChanged"] = plain_libs::serde_json::json!(changed);
+    value["verificationCode"] = plain_libs::serde_json::json!(verification_code(&request));
     pairing_runtime::event(
         state,
         crate::features::chat::events::WS_PAIRING_REQUEST_RECEIVED,

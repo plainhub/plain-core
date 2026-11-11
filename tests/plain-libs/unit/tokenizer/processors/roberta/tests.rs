@@ -11,9 +11,9 @@ fn serde() {
             "add_prefix_space":true
         }"#
     .replace(char::is_whitespace, "");
-    assert_eq!(serde_json::to_string(&roberta).unwrap(), roberta_r);
+    assert_eq!(crate::serde_json::to_string(&roberta).unwrap(), roberta_r);
     assert_eq!(
-        serde_json::from_str::<RobertaProcessing>(&roberta_r).unwrap(),
+        crate::serde_json::from_str::<RobertaProcessing>(&roberta_r).unwrap(),
         roberta
     );
 }

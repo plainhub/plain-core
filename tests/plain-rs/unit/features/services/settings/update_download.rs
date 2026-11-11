@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_runtime::Core as ContentServer;
 use plain_libs::anyhow::anyhow;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[test]
@@ -35,7 +35,7 @@ fn setup() -> (plain_libs::temporary::TempDir, ContentServer, CoreRuntime, Ident
     (dir, core, state, identity)
 }
 
-fn allow_updates(state: &CoreRuntime) -> tokio::sync::mpsc::UnboundedReceiver<serde_json::Value> {
+fn allow_updates(state: &CoreRuntime) -> tokio::sync::mpsc::UnboundedReceiver<plain_libs::serde_json::Value> {
     let host = state.host.clone();
     let (generation, mut requests) = host.connect();
     let (sent, received) = tokio::sync::mpsc::unbounded_channel();

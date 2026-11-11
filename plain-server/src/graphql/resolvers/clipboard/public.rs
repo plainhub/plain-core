@@ -71,10 +71,10 @@ impl ClipboardMutation {
         }
         let result = ctx
             .data::<Arc<Host>>()?
-            .call("systemSetClipboard", serde_json::json!({ "text": text }))
+            .call("systemSetClipboard", plain_libs::serde_json::json!({ "text": text }))
             .await
             .map_err(plain_graphql::Error::new)?;
-        Ok(serde_json::from_value(result)?)
+        Ok(plain_libs::serde_json::from_value(result)?)
     }
 
     /// Delete clipboard history entries matching the query DSL (`ids:` /

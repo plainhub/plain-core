@@ -1,7 +1,7 @@
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use plain_libs::protocols::http_client;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -40,7 +40,7 @@ pub async fn query(
         .header("c-id", client_id)
         .timeout(Duration::from_secs(10));
     let response = exchange(outgoing, key, &request.to_string(), limit).await?;
-    let response: Value = serde_json::from_slice(&response)?;
+    let response: Value = plain_libs::serde_json::from_slice(&response)?;
     if let Some(errors) = response["errors"].as_array() {
         if !errors.is_empty()
             && errors

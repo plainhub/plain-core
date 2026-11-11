@@ -1,4 +1,4 @@
-use axum::{
+use plain_libs::axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -8,7 +8,7 @@ pub(crate) async fn stream_file(
     path: &Path,
     mime: &str,
     headers: &HeaderMap,
-) -> axum::response::Response {
+) -> plain_libs::axum::response::Response {
     let Ok(file) = tokio::fs::File::open(path).await else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -31,7 +31,7 @@ pub(crate) async fn stream_open_file(
     use plain_libs::utils::http::RangeParse;
     use tokio::io::{AsyncReadExt, AsyncSeekExt};
     let range = headers
-        .get(axum::http::header::RANGE)
+        .get(plain_libs::axum::http::header::RANGE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
     let (status, start, length, end) =
@@ -46,7 +46,7 @@ pub(crate) async fn stream_open_file(
             RangeParse::Unsatisfiable => {
                 return (
                     StatusCode::RANGE_NOT_SATISFIABLE,
-                    [(axum::http::header::CONTENT_RANGE, format!("bytes */{size}"))],
+                    [(plain_libs::axum::http::header::CONTENT_RANGE, format!("bytes */{size}"))],
                 )
                     .into_response();
             }
@@ -74,24 +74,24 @@ pub(crate) async fn stream_open_file(
             buffer.truncate(read);
             Ok(Some((buffer, (file, remaining - read as u64))))
         });
-    let mut response = axum::body::Body::from_stream(stream).into_response();
+    let mut response = plain_libs::axum::body::Body::from_stream(stream).into_response();
     *response.status_mut() = status;
     let output = response.headers_mut();
     output.insert(
-        axum::http::header::CONTENT_LENGTH,
+        plain_libs::axum::http::header::CONTENT_LENGTH,
         length.to_string().parse().unwrap(),
     );
-    output.insert(axum::http::header::ACCEPT_RANGES, "bytes".parse().unwrap());
+    output.insert(plain_libs::axum::http::header::ACCEPT_RANGES, "bytes".parse().unwrap());
     output.insert(
-        axum::http::header::CACHE_CONTROL,
+        plain_libs::axum::http::header::CACHE_CONTROL,
         "private, no-cache".parse().unwrap(),
     );
     if let Ok(value) = mime.parse() {
-        output.insert(axum::http::header::CONTENT_TYPE, value);
+        output.insert(plain_libs::axum::http::header::CONTENT_TYPE, value);
     }
     if let Some(end) = end {
         output.insert(
-            axum::http::header::CONTENT_RANGE,
+            plain_libs::axum::http::header::CONTENT_RANGE,
             format!("bytes {start}-{end}/{size}").parse().unwrap(),
         );
     }
@@ -160,12 +160,12 @@ pub(crate) async fn stream_temporary(
         let _ = &file;
         chunk
     });
-    Response::from_parts(parts, axum::body::Body::from_stream(stream))
+    Response::from_parts(parts, plain_libs::axum::body::Body::from_stream(stream))
 }
 
 pub(crate) fn thumbnail(
     bytes: Result<
-        Option<axum::body::Bytes>,
+        Option<plain_libs::axum::body::Bytes>,
         plain_rs::features::services::images::thumbnails::Error,
     >,
     conditional: Option<&str>,
@@ -206,7 +206,7 @@ pub(crate) fn thumbnail(
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(error) => (
             StatusCode::BAD_REQUEST,
-            axum::Json(serde_json::json!({"error":error.to_string()})),
+            plain_libs::axum::Json(plain_libs::serde_json::json!({"error":error.to_string()})),
         )
             .into_response(),
     }
@@ -256,7 +256,7 @@ pub(crate) async fn resource(
     });
     Ok((
         [(header::CONTENT_TYPE, "application/octet-stream")],
-        axum::body::Body::from_stream(stream),
+        plain_libs::axum::body::Body::from_stream(stream),
     )
         .into_response())
 }

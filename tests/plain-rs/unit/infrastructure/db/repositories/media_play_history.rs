@@ -75,7 +75,7 @@ fn normalized_audio_reads_live_catalog_metadata_and_keeps_video_history() {
                 .unwrap()
                 .query_map([], |row| row.get::<_, String>(1))
                 .unwrap()
-                .collect::<rusqlite::Result<Vec<_>>>()
+                .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
                 .unwrap()
         });
         assert!(columns.iter().all(|column| !matches!(

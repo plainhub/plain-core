@@ -4,7 +4,7 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::chat_store::messages as chats;
 use plain_libs::anyhow::{Result, bail};
 use serde::Serialize;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::{
     collections::HashMap,
     fs,
@@ -46,7 +46,7 @@ impl Imports {
         }
         let chat =
             chats::get(db, message_id)?.ok_or_else(|| plain_libs::anyhow::anyhow!("Message unavailable"))?;
-        let content: Value = serde_json::from_str(&chat.content)?;
+        let content: Value = plain_libs::serde_json::from_str(&chat.content)?;
         if !matches!(content["type"].as_str(), Some("FILES" | "IMAGES"))
             || !uri.starts_with("fsid:")
         {

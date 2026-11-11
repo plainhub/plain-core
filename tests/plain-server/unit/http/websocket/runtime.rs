@@ -2,10 +2,10 @@ use super::*;
 use plain_libs::protocols::http_client;
 #[test]
 fn websocket_query_has_no_client_selected_login_mode() {
-    let params: Params = serde_json::from_value(json!({"cid": "browser"})).unwrap();
+    let params: Params = plain_libs::serde_json::from_value(json!({"cid": "browser"})).unwrap();
     assert_eq!(params.cid, "browser");
     for auth in ["1", "2"] {
-        assert!(serde_json::from_value::<Params>(json!({"cid": "browser", "auth": auth})).is_err());
+        assert!(plain_libs::serde_json::from_value::<Params>(json!({"cid": "browser", "auth": auth})).is_err());
     }
 }
 
@@ -89,7 +89,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         .lock()
         .await;
     use futures_util::SinkExt;
-    use tokio_tungstenite::tungstenite::Message as ClientMessage;
+    use plain_libs::tokio_tungstenite::tungstenite::Message as ClientMessage;
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs = std::sync::Arc::new(
         plain_rs::features::prefs::Prefs::load(&dir.path().join("prefs.json")).unwrap(),
@@ -106,7 +106,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             plain_libs::utils::base64::base64_encode(&private),
         )
         .unwrap();
-    plain_rs::features::prefs::security::set_entry(&prefs, "password", serde_json::json!("secret"))
+    plain_rs::features::prefs::security::set_entry(&prefs, "password", plain_libs::serde_json::json!("secret"))
         .unwrap();
     let server = crate::server::ContentServer::start(
         dir.path(),
@@ -130,7 +130,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
     let (port, _) = server.start_public(0, 0, cert_pem, cert_key).await.unwrap();
     for (cid, allowed) in [("rejected-browser", false), ("accepted-browser", true)] {
         let (mut socket, _) =
-            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid={cid}"))
+            plain_libs::tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/auth?cid={cid}"))
                 .await
                 .unwrap();
         let keys = password_keys(&mut socket, &server.runtime_state(), cid).await;
@@ -140,7 +140,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
             "isMobile":false,
             "peer":null,
         });
-        let inner = serde_json::to_vec(&request).unwrap();
+        let inner = plain_libs::serde_json::to_vec(&request).unwrap();
         let frame = keys
             .encrypt_request(&inner, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
             .unwrap();
@@ -177,7 +177,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
                 .decrypt_response(&frame, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
                 .unwrap();
             let decrypted = inner;
-            let result: Value = serde_json::from_slice(&decrypted).unwrap();
+            let result: Value = plain_libs::serde_json::from_slice(&decrypted).unwrap();
             assert_eq!(result["status"], "COMPLETED");
             let state = server.runtime_state();
             for _ in 0..3 {
@@ -240,21 +240,21 @@ fn public_fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentSe
 #[tokio::test]
 async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_rotating_clients() {
     use futures_util::SinkExt;
-    use tokio_tungstenite::tungstenite::Message as ClientMessage;
+    use plain_libs::tokio_tungstenite::tungstenite::Message as ClientMessage;
 
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
     plain_rs::features::prefs::security::set_entry(
         &state.prefs,
         "password",
-        serde_json::json!("secret"),
+        plain_libs::serde_json::json!("secret"),
     )
     .unwrap();
     state.prefs.set("password_type", "FIXED").unwrap();
     state.prefs.set("login_require_approval", false).unwrap();
     for attempt in 0..7 {
         let cid = format!("login-limit-{attempt}");
-        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(format!(
             "ws://127.0.0.1:{}/auth?cid={cid}",
             core.port
         ))
@@ -274,7 +274,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                 "peer":null,
             });
             let inner = if attempt == 0 {
-                serde_json::to_vec(&request).unwrap()
+                plain_libs::serde_json::to_vec(&request).unwrap()
             } else {
                 b"invalid".to_vec()
             };
@@ -298,7 +298,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                     .decrypt_response(&frame, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
                     .unwrap();
                 let plaintext = inner;
-                let result: Value = serde_json::from_slice(&plaintext).unwrap();
+                let result: Value = plain_libs::serde_json::from_slice(&plaintext).unwrap();
                 assert_eq!(result["status"], "COMPLETED");
                 assert!(result.get("loginContext").is_none());
                 assert!(state.db.session_get(&cid).unwrap().is_some());
@@ -349,9 +349,9 @@ async fn root_serves_the_spa_and_old_ws_path_never_upgrades() {
     }
     for path in ["/?cid=browser", "/ws?cid=browser"] {
         let denied =
-            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{}{path}", core.port)).await;
+            plain_libs::tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{}{path}", core.port)).await;
         match denied {
-            Err(tokio_tungstenite::tungstenite::Error::Http(response)) => {
+            Err(plain_libs::tokio_tungstenite::tungstenite::Error::Http(response)) => {
                 assert_eq!(response.status(), 200)
             }
             _ => panic!("the retired event endpoint must never upgrade"),
@@ -375,7 +375,7 @@ async fn confirm_login(
 #[tokio::test]
 async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_refuse_replay() {
     use futures_util::SinkExt;
-    use tokio_tungstenite::tungstenite::Message as ClientMessage;
+    use plain_libs::tokio_tungstenite::tungstenite::Message as ClientMessage;
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
     let key = plain_libs::utils::base64::base64_decode(&state.token);
@@ -399,7 +399,7 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
             let _ = host.reply(generation, json!({"id":request["id"],"result":result}));
         }
     });
-    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+    let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(format!(
         "ws://127.0.0.1:{}/screen?cid={client}",
         core.port
     ))
@@ -459,7 +459,7 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     .unwrap();
     assert!(received.try_recv().is_err());
     // A fresh control encrypted for the old registration cannot move to a new connection.
-    let (mut next, _) = tokio_tungstenite::connect_async(format!(
+    let (mut next, _) = plain_libs::tokio_tungstenite::connect_async(format!(
         "ws://127.0.0.1:{}/screen?cid={client}",
         core.port
     ))
@@ -638,7 +638,7 @@ async fn online_clients_follow_authenticated_graphql_connections() {
         .lock()
         .await;
     use futures_util::SinkExt;
-    use tokio_tungstenite::tungstenite::{Message as Frame, client::IntoClientRequest};
+    use plain_libs::tokio_tungstenite::tungstenite::{Message as Frame, client::IntoClientRequest};
 
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
@@ -656,7 +656,7 @@ async fn online_clients_follow_authenticated_graphql_connections() {
     let invalid_request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
         .into_client_request()
         .unwrap();
-    let (mut invalid, _) = tokio_tungstenite::connect_async(invalid_request)
+    let (mut invalid, _) = plain_libs::tokio_tungstenite::connect_async(invalid_request)
         .await
         .unwrap();
     invalid
@@ -677,7 +677,7 @@ async fn online_clients_follow_authenticated_graphql_connections() {
             let request = format!("ws://127.0.0.1:{port}/graphql?cid={client}")
                 .into_client_request()
                 .unwrap();
-            let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+            let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(request).await.unwrap();
             let init = plain_rs::infrastructure::protocols::graphql::seal_init(&key, &client, json!({"timestampMillis": plain_libs::chrono::Utc::now().timestamp_millis(), "clientNonce": nonce.repeat(32)}).to_string().as_bytes()).unwrap();
             socket
                 .send(Frame::Binary(init.clone().into()))
@@ -764,7 +764,7 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
     session.send(r#"{"type":"subscribe","id":"public","payload":{"query":"subscription { pairingCompleted { deviceId deviceName ip } }"}}"#).unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
-            let response: Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
+            let response: Value = plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
             if response["payload"]["extensions"]["subscriptionReady"] == true {
                 break;
             }
@@ -784,7 +784,7 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
         .await
         .unwrap()
         .unwrap();
-    let response: Value = serde_json::from_str(&message).unwrap();
+    let response: Value = plain_libs::serde_json::from_str(&message).unwrap();
     assert_eq!(
         response["payload"]["data"]["pairingCompleted"],
         json!({"deviceId":"peer","deviceName":"Peer","ip":"host"})
@@ -793,7 +793,7 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
     session.send(r#"{"type":"subscribe","id":"channels","payload":{"query":"subscription { channelsChanged { changed invite { channelId channelName ownerPeerId ownerPeerName } cancel { channelId } } }"}}"#).unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
-            let response: Value = serde_json::from_str(&session.read().await.unwrap()).unwrap();
+            let response: Value = plain_libs::serde_json::from_str(&session.read().await.unwrap()).unwrap();
             if response["id"] == "channels"
                 && response["payload"]["extensions"]["subscriptionReady"] == true
             {
@@ -809,7 +809,7 @@ async fn remote_pairing_completion_omits_secret_key_and_channel_invites_keep_nam
         .await
         .unwrap()
         .unwrap();
-    let response: Value = serde_json::from_str(&message).unwrap();
+    let response: Value = plain_libs::serde_json::from_str(&message).unwrap();
     assert_eq!(
         response["payload"]["data"]["channelsChanged"]["invite"]["channelName"],
         "Channel"
@@ -849,15 +849,15 @@ impl PasswordKeys {
 }
 #[cfg(feature = "http_transport")]
 async fn password_keys(
-    socket: &mut tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    socket: &mut plain_libs::tokio_tungstenite::WebSocketStream<
+        plain_libs::tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
     >,
     state: &ServerState,
     client_id: &str,
 ) -> PasswordKeys {
     use futures_util::{SinkExt, StreamExt};
     use opaque_ke::{ClientLogin, ClientLoginFinishParameters, CredentialResponse, Identifiers};
-    use tokio_tungstenite::tungstenite::Message;
+    use plain_libs::tokio_tungstenite::tungstenite::Message;
     let signing = plain_rs::features::prefs::security::signing_keypair(&state.prefs).unwrap();
     let context = plain_libs::auth::context(client_id, &signing[32..]);
     let client = ClientLogin::<plain_libs::auth::Suite>::start(&mut rand_core::OsRng, b"secret").unwrap();
@@ -896,7 +896,7 @@ async fn password_keys(
 #[tokio::test]
 async fn socket_registration_rejects_other_route_and_client_binding() {
     use futures_util::{SinkExt, StreamExt};
-    use tokio_tungstenite::tungstenite::Message;
+    use plain_libs::tokio_tungstenite::tungstenite::Message;
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
     let client = state.native_client_id().unwrap();
@@ -905,7 +905,7 @@ async fn socket_registration_rejects_other_route_and_client_binding() {
         ("/screen", client.as_str()),
         ("/image_editor", "other-client"),
     ] {
-        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        let (mut socket, _) = plain_libs::tokio_tungstenite::connect_async(format!(
             "ws://127.0.0.1:{}/image_editor?cid={client}",
             core.port
         ))

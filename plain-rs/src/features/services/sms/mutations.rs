@@ -6,7 +6,7 @@ use crate::infrastructure::db::TrashedMessageRow;
 use crate::infrastructure::host::bridge::Host;
 use plain_libs::anyhow::{Result, anyhow, bail};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{collections::HashSet, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -90,7 +90,7 @@ impl Mutations {
             },
         )
         .await?;
-        let ids: Vec<String> = serde_json::from_value(result["ids"].clone())?;
+        let ids: Vec<String> = plain_libs::serde_json::from_value(result["ids"].clone())?;
         for id in &ids {
             let raw = id.strip_prefix("mms_").unwrap_or(id);
             if raw.is_empty() || !raw.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -120,7 +120,7 @@ impl Mutations {
             },
         )
         .await?;
-        let messages: Vec<Value> = serde_json::from_value(facts["items"].clone())?;
+        let messages: Vec<Value> = plain_libs::serde_json::from_value(facts["items"].clone())?;
         let selected = ids.iter().map(String::as_str).collect::<HashSet<_>>();
         let mut found = HashSet::new();
         for row in &messages {
@@ -167,7 +167,7 @@ impl Mutations {
             .call("systemDeleteSmsRows", json!({"ids":ids}))
             .await
             .map_err(plain_libs::anyhow::Error::msg)
-            .and_then(|facts| serde_json::from_value::<Receipt>(facts).map_err(Into::into));
+            .and_then(|facts| plain_libs::serde_json::from_value::<Receipt>(facts).map_err(Into::into));
         let receipt = match result {
             Ok(receipt) => receipt,
             Err(error) => {

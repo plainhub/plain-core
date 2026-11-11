@@ -25,8 +25,8 @@ async fn native_part_reports_publish_one_result_and_replay_the_durable_outbox() 
     let event = received.recv().await.unwrap();
     assert_eq!(event.event_type, "SMS_SEND_RESULT");
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&event.payload).unwrap(),
-        serde_json::json!({"requestId":"request","success":true,"resultCode":-1})
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&event.payload).unwrap(),
+        plain_libs::serde_json::json!({"requestId":"request","success":true,"resultCode":-1})
     );
     runtime.report(report(1)).unwrap();
     assert!(received.try_recv().is_err());

@@ -2,7 +2,7 @@ use crate::features::services::peers::peer_lan::Failure;
 use crate::infrastructure::host::bridge::Host;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 
@@ -95,8 +95,8 @@ fn aware_request(
     actor: &str,
     channel: &str,
     body: Vec<u8>,
-) -> Result<hyper::Request<RequestBody>> {
-    Ok(hyper::Request::builder()
+) -> Result<plain_libs::hyper::Request<RequestBody>> {
+    Ok(plain_libs::hyper::Request::builder()
         .method(method)
         .uri(path)
         .header("host", "plain-aware-peer")
@@ -108,7 +108,7 @@ fn aware_request(
 
 pub struct Response {
     pub status: u16,
-    pub body: hyper::body::Incoming,
+    pub body: plain_libs::hyper::body::Incoming,
     pub lease: Lease,
 }
 pub async fn aware(
@@ -134,7 +134,7 @@ pub async fn aware(
     .await
     .map_err(|e| Failure::Unavailable(e.to_string()))?;
     let (mut sender, connection) =
-        hyper::client::conn::http1::handshake(hyper_util::rt::TokioIo::new(tls))
+        plain_libs::hyper::client::conn::http1::handshake(plain_libs::hyper_util::rt::TokioIo::new(tls))
             .await
             .map_err(|e| Failure::Unavailable(e.to_string()))?;
     lease.jobs.push(tokio::spawn(async move {
@@ -199,7 +199,7 @@ fn decode_response(
     if status != 200 {
         return Ok(json!({"data":null,"errors":[{"message":format!("Peer HTTP {status}")}]}));
     }
-    let value: Value = serde_json::from_slice(&plain)?;
+    let value: Value = plain_libs::serde_json::from_slice(&plain)?;
     ensure!(value.is_object(), "Invalid peer response");
     Ok(value)
 }
@@ -259,24 +259,24 @@ pub async fn ble_send(
 }
 
 struct RequestBody(Option<bytes::Bytes>);
-impl hyper::body::Body for RequestBody {
+impl plain_libs::hyper::body::Body for RequestBody {
     type Data = bytes::Bytes;
     type Error = std::convert::Infallible;
     fn poll_frame(
         mut self: std::pin::Pin<&mut Self>,
         _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+    ) -> std::task::Poll<Option<Result<plain_libs::hyper::body::Frame<Self::Data>, Self::Error>>> {
         std::task::Poll::Ready(
             self.0
                 .take()
-                .map(|bytes| Ok(hyper::body::Frame::data(bytes))),
+                .map(|bytes| Ok(plain_libs::hyper::body::Frame::data(bytes))),
         )
     }
     fn is_end_stream(&self) -> bool {
         self.0.is_none()
     }
-    fn size_hint(&self) -> hyper::body::SizeHint {
-        hyper::body::SizeHint::with_exact(self.0.as_ref().map_or(0, |bytes| bytes.len() as u64))
+    fn size_hint(&self) -> plain_libs::hyper::body::SizeHint {
+        plain_libs::hyper::body::SizeHint::with_exact(self.0.as_ref().map_or(0, |bytes| bytes.len() as u64))
     }
 }
 

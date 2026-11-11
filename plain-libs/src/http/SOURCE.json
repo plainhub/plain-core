@@ -1,0 +1,11 @@
+{
+  "name": "http",
+  "version": "1.5.0",
+  "archive_sha256": "918d3568bebf352712bc2ef3d46a8bcf1a75b373be6539de198e9105cbbf9ce0",
+  "repository": "https://github.com/hyperium/http",
+  "revision": "e559023f67e3fad6ecc3ee91307be178e0f13626",
+  "retained_features": [
+    "default",
+    "std"
+  ]
+}

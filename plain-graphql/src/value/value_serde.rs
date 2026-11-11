@@ -1,5 +1,5 @@
 use crate::value::{ConstValue, Name, Number, Value};
-use indexmap::IndexMap;
+use plain_libs::indexmap::IndexMap;
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{Error as DeError, MapAccess, SeqAccess, Visitor},

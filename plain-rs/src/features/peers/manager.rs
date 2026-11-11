@@ -2,7 +2,7 @@ use crate::features::chat::events::WS_PEER_STATUS_UPDATED;
 use crate::features::chat::events::refresh_peer_key_cache;
 use crate::features::chat::service::ChatService;
 use crate::infrastructure::transport::contract::PeerTransport;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 impl<T: PeerTransport + 'static> ChatService<T> {
     /// Mirrors plain-app `PeerManager.deletePeer(peerId)`:

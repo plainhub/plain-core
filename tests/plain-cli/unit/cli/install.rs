@@ -68,8 +68,8 @@ fn reinstallation_enforces_password_login_without_approval_and_preserves_credent
     let mut expected = prefs.entries();
     for (key, value) in &mut expected {
         match key.as_str() {
-            "password_type" => *value = serde_json::json!("FIXED"),
-            "login_require_approval" => *value = serde_json::json!(false),
+            "password_type" => *value = plain_libs::serde_json::json!("FIXED"),
+            "login_require_approval" => *value = plain_libs::serde_json::json!(false),
             _ => {}
         }
     }

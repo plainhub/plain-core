@@ -130,7 +130,7 @@ fn mirrored_or_unknown_orientations_do_not_invent_a_rotation_only_transform() {
                 (1..=8).contains(&orientation).then_some(orientation)
             );
             assert!(
-                serde_json::to_value(metadata)
+                crate::serde_json::to_value(metadata)
                     .unwrap()
                     .get("orientation")
                     .is_none()

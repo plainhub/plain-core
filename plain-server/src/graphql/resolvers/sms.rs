@@ -16,7 +16,7 @@ use plain_rs::features::services::sms::send as sms_send;
 use plain_rs::features::services::sms::state as sms_state;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 const READ: AccessFeature = AccessFeature::Sms;

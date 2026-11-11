@@ -1,6 +1,6 @@
 use crate::{http::ConnectionScheme, server::ServerState};
 use plain_libs::anyhow::{Result, anyhow, ensure};
-use axum::{
+use plain_libs::axum::{
     body::{Body, to_bytes},
     extract::{Path, Request, State},
     http::{HeaderMap, Method, StatusCode, header},
@@ -80,7 +80,7 @@ pub(crate) async fn call(
 }
 
 pub(super) fn native_loopback(state: &ServerState, request: &Request) -> bool {
-    use axum::extract::ConnectInfo;
+    use plain_libs::axum::extract::ConnectInfo;
     use std::net::SocketAddr;
     let host = request
         .uri()
@@ -101,7 +101,7 @@ pub(super) fn native_loopback(state: &ServerState, request: &Request) -> bool {
             .get::<ConnectionScheme>()
             .is_some_and(|scheme| scheme.0 == "http")
         && host
-            .and_then(|host| host.parse::<axum::http::uri::Authority>().ok())
+            .and_then(|host| host.parse::<plain_libs::axum::http::uri::Authority>().ok())
             .is_some_and(|authority| {
                 matches!(authority.host(), "localhost" | "127.0.0.1" | "[::1]")
             })
@@ -177,7 +177,7 @@ fn caller_id(headers: &HeaderMap) -> &str {
 
 pub(super) fn forwarded_resource(
     state: &ServerState,
-    request: &axum::http::request::Parts,
+    request: &plain_libs::axum::http::request::Parts,
     id: &str,
 ) -> Result<bool, StatusCode> {
     if !request.headers.contains_key(MANAGED_RESOURCE) {
@@ -220,7 +220,7 @@ pub(super) fn mark_forwarded(mut response: Response, managed: bool) -> Response 
     if managed {
         response
             .headers_mut()
-            .insert(MANAGED_RESOURCE, axum::http::HeaderValue::from_static("1"));
+            .insert(MANAGED_RESOURCE, plain_libs::axum::http::HeaderValue::from_static("1"));
     }
     response
 }
@@ -251,7 +251,7 @@ async fn graphql(state: ServerState, target: &str, request: Request) -> Response
     ) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
-    let Ok(query) = serde_json::from_str::<plain_graphql::Request>(text) else {
+    let Ok(query) = plain_libs::serde_json::from_str::<plain_graphql::Request>(text) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     if authorize_graphql(&query, false).is_err() {
@@ -346,8 +346,8 @@ fn authorize_graphql(request: &plain_graphql::Request, subscription: bool) -> Re
 }
 
 async fn resource(state: ServerState, target: &str, path: &str, request: Request) -> Response {
-    let Ok(axum::extract::Query(parameters)) =
-        axum::extract::Query::<crate::http::fs::Parameters>::try_from_uri(request.uri())
+    let Ok(plain_libs::axum::extract::Query(parameters)) =
+        plain_libs::axum::extract::Query::<crate::http::fs::Parameters>::try_from_uri(request.uri())
     else {
         return StatusCode::BAD_REQUEST.into_response();
     };
@@ -422,7 +422,7 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
             r#type: plain_rs::features::enums::DataType,
         }
         use plain_rs::features::enums::DataType;
-        serde_json::from_slice::<Selection>(&plain)
+        plain_libs::serde_json::from_slice::<Selection>(&plain)
             .map_err(plain_libs::anyhow::Error::from)
             .and_then(|selection| {
                 ensure!(
@@ -435,7 +435,7 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
                 resource_link::encrypt(&scope, "zip-files", &route.url_key, &plain)
             })
     } else {
-        serde_json::from_slice::<Resource>(&plain)
+        plain_libs::serde_json::from_slice::<Resource>(&plain)
             .map_err(plain_libs::anyhow::Error::from)
             .and_then(|resource| {
                 use plain_rs::features::files::resource_link::ResourceType;

@@ -6,7 +6,7 @@ use plain_rs::infrastructure::db::DPeer;
 use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::peers;
 use plain_rs::runtime::Runtime as ServerState;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{
     sync::{
         Arc,
@@ -97,7 +97,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
                         sdk_requested.notify_one();
                         sdk_release.notified().await;
                     }
-                    let granted: serde_json::Map<String, serde_json::Value> =
+                    let granted: plain_libs::serde_json::Map<String, plain_libs::serde_json::Value> =
                         request["params"]["features"]
                             .as_array()
                             .unwrap()
@@ -124,7 +124,7 @@ async fn encrypted_app_observations_work_without_notification_support_and_cannot
         connection
             .execute(
                 "UPDATE peers SET token=?1,port=?2 WHERE id=?3",
-                rusqlite::params![peer.token, port, peer.id],
+                plain_libs::rusqlite::params![peer.token, port, peer.id],
             )
             .unwrap()
     });

@@ -1,6 +1,6 @@
 use plain_libs::protocols::http_client;
 use super::*;
-use axum::{
+use plain_libs::axum::{
     extract::ConnectInfo,
     routing::{get, post},
 };
@@ -50,7 +50,7 @@ async fn serves_http_and_tls_then_releases_both_ports() {
 
 #[tokio::test]
 async fn readiness_requires_ok_from_both_health_listeners_without_private_route() {
-    use axum::http::StatusCode;
+    use plain_libs::axum::http::StatusCode;
     use std::sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -146,7 +146,7 @@ async fn listener_task_abort_is_reported_and_shutdown_releases_ports() {
 /// `false`, honour its own deadline, and fail once the listener is gone.
 #[tokio::test]
 async fn nearby_client_handles_probe_accept_reject_timeout_and_offline() {
-    use axum::http::{HeaderMap, StatusCode};
+    use plain_libs::axum::http::{HeaderMap, StatusCode};
     use plain_rs::features::discovery::nearby_http::{Message, post_url, probe, send, url};
     use plain_rs::features::peers::pairing::protocol::PairingCancel;
 
@@ -162,8 +162,8 @@ async fn nearby_client_handles_probe_accept_reject_timeout_and_offline() {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 return StatusCode::OK;
             }
-            let value: serde_json::Value =
-                serde_json::from_str(body.strip_prefix("PAIR_CANCEL:").unwrap()).unwrap();
+            let value: plain_libs::serde_json::Value =
+                plain_libs::serde_json::from_str(body.strip_prefix("PAIR_CANCEL:").unwrap()).unwrap();
             if value["toId"] == "reject" {
                 StatusCode::BAD_REQUEST
             } else {

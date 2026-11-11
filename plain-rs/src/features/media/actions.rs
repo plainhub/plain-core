@@ -3,7 +3,7 @@ use crate::features::media::audio::queue as audio_queue;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
-use rusqlite::{OptionalExtension, Transaction, params};
+use plain_libs::rusqlite::{OptionalExtension, Transaction, params};
 use std::collections::HashSet;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "graphql", derive(plain_graphql::Enum))]
@@ -80,7 +80,7 @@ pub fn cleanup(
     if successful.is_empty() {
         return Ok(successful.len());
     }
-    let ids = serde_json::to_string(&successful.iter().map(|item| &item.id).collect::<Vec<_>>())
+    let ids = plain_libs::serde_json::to_string(&successful.iter().map(|item| &item.id).collect::<Vec<_>>())
         .map_err(|e| invalid(&e.to_string()))?;
     let paths = successful
         .iter()
@@ -119,7 +119,7 @@ fn update_catalog(
     kind: DataType,
     action: Action,
     item: &Item,
-) -> rusqlite::Result<()> {
+) -> plain_libs::rusqlite::Result<()> {
     let row: Option<(String,String,Option<String>,bool)> = tx.query_row(
         "SELECT file_id,path,original_path,trashed FROM file_catalog WHERE id=?1 AND data_type=?2",
         params![item.id,kind.kind()],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?)),
@@ -136,7 +136,7 @@ fn update_catalog(
         {
             return Ok(());
         }
-        return Err(rusqlite::Error::InvalidQuery);
+        return Err(plain_libs::rusqlite::Error::InvalidQuery);
     }
     if action == Action::Delete {
         tx.execute("DELETE FROM files WHERE id=?1", [&id])?;
@@ -152,7 +152,7 @@ fn update_catalog(
         }
         Action::Restore if trashed => {
             if item.destination_path.is_empty() {
-                original.ok_or(rusqlite::Error::InvalidQuery)?
+                original.ok_or(plain_libs::rusqlite::Error::InvalidQuery)?
             } else {
                 item.destination_path.clone()
             }
@@ -160,7 +160,7 @@ fn update_catalog(
         Action::Move if !trashed && !item.destination_path.is_empty() => {
             item.destination_path.clone()
         }
-        _ => return Err(rusqlite::Error::InvalidQuery),
+        _ => return Err(plain_libs::rusqlite::Error::InvalidQuery),
     };
     let location = crate::infrastructure::db::files::locate(&destination)?;
     let (volume_id, relative) = crate::infrastructure::db::files::bind_volume(tx, &location)?;
@@ -170,13 +170,13 @@ fn update_catalog(
         |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
     if action == Action::Trash && volume_id != previous.0 {
-        return Err(rusqlite::Error::InvalidQuery);
+        return Err(plain_libs::rusqlite::Error::InvalidQuery);
     }
     let name = location
         .path
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or(rusqlite::Error::InvalidQuery)?;
+        .ok_or(plain_libs::rusqlite::Error::InvalidQuery)?;
     let (time, original) = if action == Action::Trash {
         (
             Some(plain_libs::utils::dbtime::now_iso_millis()),

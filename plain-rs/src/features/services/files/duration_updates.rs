@@ -4,7 +4,7 @@ use crate::features::{
     media::duration_cache::{Duration, DurationCache, Identity},
 };
 use crate::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     collections::HashSet,
     path::Path,

@@ -30,7 +30,7 @@ impl ChatCacher {
     pub fn conversations(db: &Db) -> Result<Vec<(String, DChat)>> {
         let peer_ids: HashSet<String> = peers::all(db)?.into_iter().map(|p| p.id).collect();
         let channel_ids: HashSet<String> = channels::all(db)?.into_iter().map(|c| c.id).collect();
-        let latest_chats: Vec<DChat> = serde_json::from_value(messages::list(
+        let latest_chats: Vec<DChat> = plain_libs::serde_json::from_value(messages::list(
             db,
             &messages::Filter {
                 peer: None,

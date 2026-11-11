@@ -1,0 +1,52 @@
+{
+  "name": "ryu",
+  "version": "1.0.23",
+  "archive_sha256": "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f",
+  "repository": "https://github.com/dtolnay/ryu",
+  "revision": "f0b52bb194befe6fd242154f2182fafd43a819b8",
+  "retained_features": [],
+  "source_notices": [
+    {
+      "file": "digit_table.rs",
+      "notices": [
+        "Copyright 2018 Ulf Adams"
+      ]
+    },
+    {
+      "file": "d2s_full_table.rs",
+      "notices": [
+        "Copyright 2018 Ulf Adams"
+      ]
+    },
+    {
+      "file": "f2s.rs",
+      "notices": [
+        "Copyright 2018 Ulf Adams"
+      ]
+    },
+    {
+      "file": "f2s_intrinsics.rs",
+      "notices": [
+        "Copyright 2018 Ulf Adams"
+      ]
+    },
+    {
+      "file": "d2s.rs",
+      "notices": [
+        "Copyright 2018 Ulf Adams"
+      ]
+    },
+    {
+      "file": "d2s_intrinsics.rs",
+      "notices": [
+        "Copyright 2018 Ulf Adams"
+      ]
+    },
+    {
+      "file": "common.rs",
+      "notices": [
+        "Copyright 2018 Ulf Adams"
+      ]
+    }
+  ]
+}

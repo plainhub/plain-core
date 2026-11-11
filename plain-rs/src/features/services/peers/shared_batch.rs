@@ -7,7 +7,7 @@ use crate::features::services::peers::shared_transfer::operation;
 use crate::features::services::peers::shared_transfer::{BlockingWork, cleanup};
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{
     collections::HashMap,
     sync::{

@@ -4,7 +4,7 @@ use crate::regex_engine::automata::util::{
 };
 #[derive(Clone, Debug)]
 pub(crate) struct Memmem {
-    finder: memchr::memmem::Finder<'static>,
+    finder: crate::memchr::memmem::Finder<'static>,
 }
 impl Memmem {
     pub(crate) fn new<B: AsRef<[u8]>>(_kind: MatchKind, needles: &[B]) -> Option<Memmem> {
@@ -13,7 +13,7 @@ impl Memmem {
                 return None;
             }
             let needle = needles[0].as_ref();
-            let finder = memchr::memmem::Finder::new(needle).into_owned();
+            let finder = crate::memchr::memmem::Finder::new(needle).into_owned();
             Some(Memmem { finder })
         }
     }

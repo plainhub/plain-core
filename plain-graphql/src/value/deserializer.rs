@@ -1,5 +1,5 @@
 use crate::value::{ConstValue, Name};
-use indexmap::IndexMap;
+use plain_libs::indexmap::IndexMap;
 use serde::{
     de::{
         self, Deserialize, DeserializeOwned, DeserializeSeed, EnumAccess, Error as DeError,

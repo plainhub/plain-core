@@ -1,10 +1,10 @@
-use rusqlite::params;
+use plain_libs::rusqlite::params;
 
 use crate::infrastructure::db::DNearbyDeviceCache;
 use crate::infrastructure::db::Db;
 
 impl Db {
-    pub fn get_cached_nearby_devices(&self) -> rusqlite::Result<Vec<DNearbyDeviceCache>> {
+    pub fn get_cached_nearby_devices(&self) -> plain_libs::rusqlite::Result<Vec<DNearbyDeviceCache>> {
         let conn = self.0.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id,name,ips,port,device_type,version,platform,last_seen_at \
@@ -15,10 +15,10 @@ impl Db {
             Ok(DNearbyDeviceCache {
                 id: row.get(0)?,
                 name: row.get(1)?,
-                ips: serde_json::from_str(&ips).map_err(|error| {
-                    rusqlite::Error::FromSqlConversionFailure(
+                ips: plain_libs::serde_json::from_str(&ips).map_err(|error| {
+                    plain_libs::rusqlite::Error::FromSqlConversionFailure(
                         2,
-                        rusqlite::types::Type::Text,
+                        plain_libs::rusqlite::types::Type::Text,
                         Box::new(error),
                     )
                 })?,
@@ -32,7 +32,7 @@ impl Db {
         rows.collect()
     }
 
-    pub fn save_cached_nearby_device(&self, device: &DNearbyDeviceCache) -> rusqlite::Result<()> {
+    pub fn save_cached_nearby_device(&self, device: &DNearbyDeviceCache) -> plain_libs::rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(
             "INSERT INTO nearby_devices (id,name,ips,port,device_type,version,platform,last_seen_at)
@@ -42,7 +42,7 @@ impl Db {
                device_type=excluded.device_type, version=excluded.version,
                platform=excluded.platform,
                last_seen_at=excluded.last_seen_at",
-            params![device.id, device.name, serde_json::to_string(&device.ips.iter().collect::<std::collections::BTreeSet<_>>()).map_err(|error|rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?, device.port as i64,
+            params![device.id, device.name, plain_libs::serde_json::to_string(&device.ips.iter().collect::<std::collections::BTreeSet<_>>()).map_err(|error|plain_libs::rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?, device.port as i64,
                 device.device_type, device.version, device.platform, plain_libs::utils::dbtime::normalize(&device.last_seen_at)?],
         )?;
         Ok(())
@@ -53,7 +53,7 @@ impl Db {
         id: &str,
         last_seen_at: &str,
         now: &str,
-    ) -> rusqlite::Result<bool> {
+    ) -> plain_libs::rusqlite::Result<bool> {
         let conn = self.0.lock().unwrap();
         Ok(conn.execute(
             "UPDATE nearby_devices SET last_seen_at=?3 WHERE id=?1 AND last_seen_at=?2",
@@ -65,7 +65,7 @@ impl Db {
         &self,
         id: &str,
         last_seen_at: &str,
-    ) -> rusqlite::Result<bool> {
+    ) -> plain_libs::rusqlite::Result<bool> {
         let conn = self.0.lock().unwrap();
         Ok(conn.execute(
             "DELETE FROM nearby_devices WHERE id=?1 AND last_seen_at=?2",

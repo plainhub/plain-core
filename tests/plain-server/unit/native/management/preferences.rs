@@ -24,7 +24,7 @@ async fn startup_loads_published_integer_enums_and_returns_names_to_the_app() {
     let values = core.native_management().unwrap().preferences().unwrap();
     let stored = Prefs::load(&path).unwrap();
     for (key, name) in expected {
-        assert_eq!(values[key], serde_json::json!(name));
+        assert_eq!(values[key], plain_libs::serde_json::json!(name));
         assert_eq!(stored.get::<u64>(key).unwrap(), Some(2));
     }
     core.stop_core().await;
@@ -45,7 +45,7 @@ async fn native_resets_keep_identity_and_publish_once_per_change() {
     );
     assert!(events.try_recv().is_err());
     management
-        .set_pref("password", serde_json::json!(&generated))
+        .set_pref("password", plain_libs::serde_json::json!(&generated))
         .await
         .unwrap();
     assert_eq!(
@@ -130,7 +130,7 @@ async fn native_scan_history_preserves_order_and_scoped_deletion() {
             .unwrap()
             .query_map([], |row| row.get::<_, String>(0))
             .unwrap()
-            .collect::<rusqlite::Result<Vec<_>>>()
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
             .unwrap()
     });
     assert_eq!(ids.len(), 4);
@@ -176,7 +176,7 @@ async fn native_preference_writes_share_validation_and_commit_notifications() {
     let mut events = state.events.subscribe();
     assert!(
         management
-            .set_pref("http_port", serde_json::json!(8181))
+            .set_pref("http_port", plain_libs::serde_json::json!(8181))
             .await
             .unwrap()
     );
@@ -184,16 +184,16 @@ async fn native_preference_writes_share_validation_and_commit_notifications() {
     assert_eq!(management.preferences().unwrap()["http_port"], 8181);
     assert!(
         !management
-            .set_pref("http_port", serde_json::json!(8181))
+            .set_pref("http_port", plain_libs::serde_json::json!(8181))
             .await
             .unwrap()
     );
     assert_eq!(preference_updates(&mut events), 0);
     let before = state.prefs.entries_sorted();
     for (key, value) in [
-        ("http_port", serde_json::json!(70000)),
-        ("unknown_pref", serde_json::json!(true)),
-        ("ai_image_search_model", serde_json::json!("unknown")),
+        ("http_port", plain_libs::serde_json::json!(70000)),
+        ("unknown_pref", plain_libs::serde_json::json!(true)),
+        ("ai_image_search_model", plain_libs::serde_json::json!("unknown")),
     ] {
         assert!(management.set_pref(key, value).await.is_err());
     }
@@ -201,7 +201,7 @@ async fn native_preference_writes_share_validation_and_commit_notifications() {
     assert_eq!(preference_updates(&mut events), 0);
     assert!(
         management
-            .set_pref("login_require_approval", serde_json::json!(false))
+            .set_pref("login_require_approval", plain_libs::serde_json::json!(false))
             .await
             .unwrap()
     );
@@ -213,7 +213,7 @@ async fn native_preference_writes_share_validation_and_commit_notifications() {
     core.stop_core().await;
     assert!(
         management
-            .set_pref("http_port", serde_json::json!(8282))
+            .set_pref("http_port", plain_libs::serde_json::json!(8282))
             .await
             .is_err()
     );
@@ -226,22 +226,22 @@ async fn keyed_native_reads_observe_committed_writes_and_reject_private_or_unkno
     let management = core.native_management().unwrap();
     assert_eq!(
         management.get_pref("http_port").unwrap(),
-        serde_json::json!(8080)
+        plain_libs::serde_json::json!(8080)
     );
     assert!(
         management
-            .set_pref("http_port", serde_json::json!(8282))
+            .set_pref("http_port", plain_libs::serde_json::json!(8282))
             .await
             .unwrap()
     );
     assert_eq!(
         management.get_pref("http_port").unwrap(),
-        serde_json::json!(8282)
+        plain_libs::serde_json::json!(8282)
     );
     let keys = vec!["http_port".into(), "client_id".into()];
     let selected = management.get_prefs(&keys).unwrap();
     assert_eq!(selected.len(), 2);
-    assert_eq!(selected["http_port"], serde_json::json!(8282));
+    assert_eq!(selected["http_port"], plain_libs::serde_json::json!(8282));
     assert_eq!(
         selected["client_id"],
         management.get_pref("client_id").unwrap()
@@ -283,7 +283,7 @@ async fn derived_native_keys_are_readable_but_not_writable() {
 #[tokio::test]
 async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
     use plain_rs::features::prefs::pref_keys as keys;
-    use serde_json::json;
+    use plain_libs::serde_json::json;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -348,7 +348,7 @@ async fn keyed_identity_and_permission_reads_ignore_unrelated_invalid_data() {
 #[tokio::test]
 async fn derived_native_reads_use_only_their_current_dependencies() {
     use plain_rs::features::prefs::pref_keys as keys;
-    use serde_json::json;
+    use plain_libs::serde_json::json;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
@@ -439,7 +439,7 @@ async fn password_status_validates_private_storage_and_generation_never_saves() 
     assert_eq!(state.prefs.entries_sorted(), before);
     let approval = management.get_pref(keys::LOGIN_REQUIRE_APPROVAL).unwrap();
     management
-        .set_pref(keys::PASSWORD, serde_json::json!("fixture-password"))
+        .set_pref(keys::PASSWORD, plain_libs::serde_json::json!("fixture-password"))
         .await
         .unwrap();
     assert_eq!(
@@ -466,7 +466,7 @@ async fn password_status_validates_private_storage_and_generation_never_saves() 
     );
     assert!(
         persisted
-            .get::<serde_json::Value>(keys::PASSWORD)
+            .get::<plain_libs::serde_json::Value>(keys::PASSWORD)
             .unwrap()
             .is_none()
     );
@@ -478,7 +478,7 @@ async fn password_status_validates_private_storage_and_generation_never_saves() 
         assert!(management.get_pref(key).is_err());
         assert!(
             management
-                .set_pref(key, serde_json::json!("forbidden"))
+                .set_pref(key, plain_libs::serde_json::json!("forbidden"))
                 .await
                 .is_err()
         );
@@ -506,7 +506,7 @@ async fn password_status_validates_private_storage_and_generation_never_saves() 
     std::fs::create_dir(state.prefs.path().with_extension("json.tmp")).unwrap();
     assert!(
         management
-            .set_pref(keys::PASSWORD, serde_json::json!("replacement"))
+            .set_pref(keys::PASSWORD, plain_libs::serde_json::json!("replacement"))
             .await
             .is_err()
     );
@@ -529,7 +529,7 @@ async fn invalid_password_registration_does_not_block_startup_or_repair() {
         false
     );
     management
-        .set_pref(keys::PASSWORD, serde_json::json!("repaired-password"))
+        .set_pref(keys::PASSWORD, plain_libs::serde_json::json!("repaired-password"))
         .await
         .unwrap();
     assert_eq!(

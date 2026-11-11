@@ -4,7 +4,7 @@ use plain_libs::protocols::http_client;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -51,7 +51,7 @@ fn database(schema: &PublicSchema) -> &Arc<Db> {
 }
 
 async fn query(schema: &PublicSchema, document: &str) -> Value {
-    serde_json::to_value(schema.execute(document).await).unwrap()
+    plain_libs::serde_json::to_value(schema.execute(document).await).unwrap()
 }
 
 fn seed(db: &Arc<Db>, id: &str, from: &str, to: &str, channel: &str, content: &str, at: &str) {
@@ -282,7 +282,7 @@ async fn bulk_delete_preserves_literal_id_boundaries_instead_of_retargeting_trim
         &state,
         &format!(
             "mutation {{ deleteChatItems(query: {}) {{ affectedCount }} }}",
-            serde_json::to_string(r"ids:=\ literal-id\ ").unwrap(),
+            plain_libs::serde_json::to_string(r"ids:=\ literal-id\ ").unwrap(),
         ),
     )
     .await;
@@ -428,7 +428,7 @@ async fn channel_query(state: &crate::server::ServerState, document: &str) -> Va
     )
     .await
     .unwrap();
-    serde_json::from_slice(&bytes).unwrap()
+    plain_libs::serde_json::from_slice(&bytes).unwrap()
 }
 #[cfg(feature = "http_transport")]
 #[tokio::test]
@@ -443,7 +443,7 @@ async fn channel_roots_read_current_store_and_share_runtime_mutations_without_ho
     );
     let id = created["data"]["createChatChannel"]["id"].as_str().unwrap();
     assert_eq!(created["data"]["createChatChannel"]["ownerId"], "actor");
-    let event: Value = serde_json::from_str(&events.recv().await.unwrap().payload).unwrap();
+    let event: Value = plain_libs::serde_json::from_str(&events.recv().await.unwrap().payload).unwrap();
     assert_eq!(event["channels"][0]["id"], id);
     assert!(event["channels"][0].get("key").is_none());
     assert_eq!(event["channels"][0].as_object().unwrap().len(), 9);
@@ -521,7 +521,7 @@ async fn channel_roots_read_current_store_and_share_runtime_mutations_without_ho
     );
     let mut last = Value::Null;
     while let Ok(event) = events.try_recv() {
-        last = serde_json::from_str(&event.payload).unwrap();
+        last = plain_libs::serde_json::from_str(&event.payload).unwrap();
     }
     assert_eq!(last["channels"], json!([]));
     server.shutdown().await;
@@ -579,7 +579,7 @@ async fn channel_snapshot_recovers_current_public_list_without_emitting_another_
         .await
         .unwrap();
     assert_eq!(response.status(), 200);
-    let snapshot: Value = serde_json::from_str(&response.text().await.unwrap()).unwrap();
+    let snapshot: Value = plain_libs::serde_json::from_str(&response.text().await.unwrap()).unwrap();
     assert_eq!(snapshot["data"]["chatChannels"][0]["id"], channel.id);
     assert!(snapshot["data"]["chatChannels"][0].get("key").is_none());
     assert!(events.try_recv().is_err());

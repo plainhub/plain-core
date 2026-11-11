@@ -2,7 +2,7 @@ use crate::features::discovery::nearby_devices::Device;
 use crate::infrastructure::db::chat_store;
 use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
-use serde_json::json;
+use plain_libs::serde_json::json;
 pub const EVENT_UPDATED: &'static str = "NEARBY_DEVICES_UPDATED";
 
 fn publish(state: &CoreRuntime) {
@@ -92,16 +92,16 @@ impl Context {
 pub fn snapshot(
     db: &crate::infrastructure::db::Db,
     devices: &crate::features::discovery::nearby_devices::Devices,
-) -> plain_libs::anyhow::Result<serde_json::Value> {
+) -> plain_libs::anyhow::Result<plain_libs::serde_json::Value> {
     let paired: std::collections::HashSet<_> = chat_store::peers::all(db)?
         .into_iter()
         .filter(|p| p.is_paired())
         .map(|p| p.id)
         .collect();
-    let mut snapshot = serde_json::to_value(devices.snapshot())?;
+    let mut snapshot = plain_libs::serde_json::to_value(devices.snapshot())?;
     let interfaces = crate::infrastructure::transport::lan::local_interfaces();
     for device in snapshot["devices"].as_array_mut().unwrap() {
-        let ips: Vec<String> = serde_json::from_value(device["ips"].clone())?;
+        let ips: Vec<String> = plain_libs::serde_json::from_value(device["ips"].clone())?;
         device["bestIp"] = json!(crate::infrastructure::transport::lan::best(
             &ips,
             &interfaces
@@ -124,7 +124,7 @@ pub async fn sweep(state: &CoreRuntime) -> plain_libs::anyhow::Result<()> {
         .call("nearbyScanFacts", json!({}))
         .await
         .map_err(plain_libs::anyhow::Error::msg)?;
-    if facts.get("paused").and_then(serde_json::Value::as_bool) != Some(false) {
+    if facts.get("paused").and_then(plain_libs::serde_json::Value::as_bool) != Some(false) {
         stale.retain(|probe| {
             probe
                 .device

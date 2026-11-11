@@ -1,7 +1,7 @@
 use plain_libs::protocols::http_client;
 use crate::server::ServerState;
 use plain_libs::anyhow::{Result, ensure};
-use axum::body::Body;
+use plain_libs::axum::body::Body;
 use plain_rs::infrastructure::protocols::ble;
 use plain_rs::infrastructure::protocols::ble::Request;
 
@@ -42,7 +42,7 @@ pub(crate) async fn dispatch(state: ServerState, data: &[u8]) -> Result<Vec<u8>>
             channel_id,
             body,
         } => (
-            axum::http::Request::builder()
+            plain_libs::axum::http::Request::builder()
                 .method("POST")
                 .uri("/peer_graphql")
                 .header("c-id", client_id)
@@ -60,13 +60,13 @@ pub(crate) async fn dispatch(state: ServerState, data: &[u8]) -> Result<Vec<u8>>
                 .append_pair("id", &file_id)
                 .append_pair("action", "download");
             (
-                axum::http::Request::builder()
+                plain_libs::axum::http::Request::builder()
                     .method("GET")
                     .uri(format!("/fs?{}", url.query().unwrap()))
                     .header("c-id", client_id)
                     .header("c-cid", "")
                     .header(
-                        axum::http::header::RANGE,
+                        plain_libs::axum::http::header::RANGE,
                         format!("bytes={offset}-{}", offset + u64::from(length) - 1),
                     ),
                 Vec::new(),
@@ -76,7 +76,7 @@ pub(crate) async fn dispatch(state: ServerState, data: &[u8]) -> Result<Vec<u8>>
     builder = builder.header("content-type", "application/octet-stream");
     let mut req = builder.body(Body::from(body))?;
     req.extensions_mut()
-        .insert(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+        .insert(plain_libs::axum::extract::ConnectInfo(std::net::SocketAddr::from((
             [127, 0, 0, 1],
             0,
         ))));
@@ -85,12 +85,12 @@ pub(crate) async fn dispatch(state: ServerState, data: &[u8]) -> Result<Vec<u8>>
         req.extensions_mut()
             .insert(crate::http::ConnectionScheme("https"));
     }
-    use tower::ServiceExt;
+    use plain_libs::tower::ServiceExt;
     let response = crate::http::router::transfer_routes(state)
         .oneshot(req)
         .await?;
     let status = response.status().as_u16();
-    let body = axum::body::to_bytes(response.into_body(), ble::MAX_BODY).await?;
+    let body = plain_libs::axum::body::to_bytes(response.into_body(), ble::MAX_BODY).await?;
     ble::response(status, &body)
 }
 

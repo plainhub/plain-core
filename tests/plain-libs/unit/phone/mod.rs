@@ -9,7 +9,7 @@ pub(super) fn example(region: &str, kind: NumberType) -> String {
         .lines()
         .skip(1)
         .find_map(|line| {
-            let case: Reference = serde_json::from_str(&line.unwrap()).unwrap();
+            let case: Reference = crate::serde_json::from_str(&line.unwrap()).unwrap();
             (case.region == region
                 && case
                     .expected
@@ -42,7 +42,7 @@ fn region_selection_uses_network_then_sim_then_locale_without_platform_rules() {
 fn phone_results_match_independent_google_examples_in_every_exported_format_and_locale() {
     let bytes = include_bytes!("../../../../plain-rs/testdata/phone/reference.jsonl.gz");
     let mut lines = BufReader::new(GzDecoder::new(bytes.as_slice())).lines();
-    let header: serde_json::Value = serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
+    let header: crate::serde_json::Value = crate::serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
     assert_eq!(
         header["reference"]["source"],
         "google-libphonenumber-public-examples"
@@ -55,7 +55,7 @@ fn phone_results_match_independent_google_examples_in_every_exported_format_and_
     let mut failures = Vec::new();
     let mut failed_count = 0;
     for (index, line) in lines.enumerate() {
-        let case: Reference = serde_json::from_str(&line.unwrap()).unwrap();
+        let case: Reference = crate::serde_json::from_str(&line.unwrap()).unwrap();
         let actual = service.lookup(&case.number, &case.region, &case.locale);
         if actual != case.expected {
             failed_count += 1;

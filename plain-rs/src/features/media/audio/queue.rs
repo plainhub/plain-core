@@ -1,6 +1,6 @@
 use crate::infrastructure::db::audio_queue::io;
 use crate::infrastructure::error::DomainError;
-use rusqlite::OptionalExtension;
+use plain_libs::rusqlite::OptionalExtension;
 use std::collections::HashSet;
 
 use crate::infrastructure::db::Db;
@@ -153,7 +153,7 @@ fn enqueue_with_selection(
 }
 
 pub(crate) fn enqueue_conn(
-    c: &rusqlite::Connection,
+    c: &plain_libs::rusqlite::Connection,
     items: &[AudioTrack],
     play_next: bool,
 ) -> DomainResult<()> {
@@ -181,7 +181,7 @@ pub(crate) fn enqueue_conn(
             if let Some(id) = resolved.and_then(|track| track.file_id) {
                 if c.execute(
                     "INSERT OR IGNORE INTO audio_queue_items(file_id,sort_order) VALUES(?1,?2)",
-                    rusqlite::params![id, order],
+                    plain_libs::rusqlite::params![id, order],
                 )? > 0
                 {
                     order += 1;
@@ -237,7 +237,7 @@ pub fn reorder_queued(db: &Db, file_ids: &[String]) -> DomainResult<()> {
         let exists = c
             .prepare("SELECT file_id FROM audio_queue_items ORDER BY sort_order,file_id")?
             .query_map([], |row| row.get::<_, String>(0))?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
         if file_ids
             .iter()
             .any(|id| !seen.insert(id.clone()) || !exists.contains(id))
@@ -251,7 +251,7 @@ pub fn reorder_queued(db: &Db, file_ids: &[String]) -> DomainResult<()> {
         for (order, id) in ordered.enumerate() {
             c.execute(
                 "UPDATE audio_queue_items SET sort_order=?1 WHERE file_id=?2",
-                rusqlite::params![order as i64, id],
+                plain_libs::rusqlite::params![order as i64, id],
             )?;
         }
         Ok(())
@@ -265,7 +265,7 @@ pub fn remove_paths(db: &Db, paths: &[String]) -> DomainResult<()> {
 }
 
 pub(crate) fn remove_root_paths_conn(
-    c: &rusqlite::Connection,
+    c: &plain_libs::rusqlite::Connection,
     root: &str,
     state: &mut super::state::State,
 ) -> DomainResult<()> {
@@ -273,7 +273,7 @@ pub(crate) fn remove_root_paths_conn(
 }
 
 pub(crate) fn remove_root_paths_except_conn(
-    c: &rusqlite::Connection,
+    c: &plain_libs::rusqlite::Connection,
     root: &str,
     state: &mut super::state::State,
     retained_ids: &[String],
@@ -282,15 +282,15 @@ pub(crate) fn remove_root_paths_except_conn(
     let mut statement = c.prepare("SELECT path FROM audio_media WHERE file_id IN (SELECT file_id FROM audio_queue_items UNION SELECT file_id FROM audio_playlist_items UNION SELECT file_id FROM media_play_history WHERE media_type=1) AND file_id NOT IN (SELECT value FROM json_each(?3)) AND (path=?1 OR substr(path,1,length(?2))=?2)")?;
     let mut paths = statement
         .query_map(
-            rusqlite::params![
+            plain_libs::rusqlite::params![
                 root,
                 prefix,
-                serde_json::to_string(retained_ids)
+                plain_libs::serde_json::to_string(retained_ids)
                     .map_err(|e| DomainError::Other(e.to_string()))?
             ],
             |row| row.get::<_, String>(0),
         )?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
+        .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
     drop(statement);
     let current = io::audio_by_path(c, &state.playback.path)?
         .map(|track| track.path)
@@ -307,7 +307,7 @@ pub(crate) fn remove_root_paths_except_conn(
 }
 
 pub(crate) fn remove_paths_conn(
-    c: &rusqlite::Connection,
+    c: &plain_libs::rusqlite::Connection,
     paths: &[String],
     state: &mut super::state::State,
 ) -> DomainResult<()> {
@@ -626,14 +626,14 @@ pub fn remove_playlist_query(db: &Db, playlist_id: &str, query: &str) -> DomainR
             if matches_query(&AudioTrack::from(&row), query) {
                 count += c.execute(
                     "DELETE FROM audio_playlist_items WHERE playlist_id=?1 AND file_id=?2",
-                    rusqlite::params![playlist_id, row.file_id],
+                    plain_libs::rusqlite::params![playlist_id, row.file_id],
                 )?;
             }
         }
         if count > 0 {
             c.execute(
                 "UPDATE audio_playlists SET updated_at=?1 WHERE id=?2",
-                rusqlite::params![now_iso_millis(), playlist_id],
+                plain_libs::rusqlite::params![now_iso_millis(), playlist_id],
             )?;
         }
         Ok(count)
@@ -641,7 +641,7 @@ pub fn remove_playlist_query(db: &Db, playlist_id: &str, query: &str) -> DomainR
 }
 fn transaction<T>(
     db: &Db,
-    operation: impl FnOnce(&rusqlite::Connection, &mut super::state::State) -> DomainResult<T>,
+    operation: impl FnOnce(&plain_libs::rusqlite::Connection, &mut super::state::State) -> DomainResult<T>,
 ) -> DomainResult<T> {
     db.audio_transaction(|tx, state| operation(tx, state))
 }
@@ -651,7 +651,7 @@ fn validate_duration(value: i64) -> DomainResult<()> {
     }
     Ok(())
 }
-pub(crate) fn record_history_conn(c: &rusqlite::Connection, path: &str) -> DomainResult<()> {
+pub(crate) fn record_history_conn(c: &plain_libs::rusqlite::Connection, path: &str) -> DomainResult<()> {
     let file_id = c.query_row("SELECT file_id FROM audio_media WHERE path=?1 UNION SELECT a.file_id FROM platform_audio_aliases a JOIN audio_media m USING(file_id) WHERE a.path=?1",[path],|row|row.get::<_,String>(0)).optional()?;
     let Some(file_id) = file_id else {
         return Ok(());
@@ -717,9 +717,9 @@ pub fn move_queued(db: &Db, from: i32, to: i32) -> DomainResult<()> {
     })
 }
 pub fn track_by_path_conn(
-    conn: &rusqlite::Connection,
+    conn: &plain_libs::rusqlite::Connection,
     path: &str,
-) -> rusqlite::Result<Option<AudioTrack>> {
+) -> plain_libs::rusqlite::Result<Option<AudioTrack>> {
     io::audio_by_path(conn, path)
 }
 

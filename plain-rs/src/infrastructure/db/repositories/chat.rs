@@ -1,5 +1,5 @@
 use plain_libs::anyhow::Result;
-use rusqlite::params;
+use plain_libs::rusqlite::params;
 
 use crate::features::chat::enums::ChatStatus;
 use crate::infrastructure::db::DChat;
@@ -9,7 +9,7 @@ use crate::infrastructure::db::now_iso;
 pub(crate) const CHAT_COLS: &str =
     "id,from_id,to_id,channel_id,content,status,status_data,created_at,updated_at";
 
-pub(crate) fn row_to_chat(row: &rusqlite::Row<'_>) -> rusqlite::Result<DChat> {
+pub(crate) fn row_to_chat(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<DChat> {
     Ok(DChat {
         id: row.get(0)?,
         from_id: row.get(1)?,
@@ -52,12 +52,12 @@ impl Db {
         let mut stmt = conn.prepare(&sql)?;
         let mut chats = stmt
             .query_map(params![p1, limit, offset], row_to_chat)?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
         chats.reverse();
         Ok(chats)
     }
 
-    pub fn insert_chat(&self, chat: &DChat) -> rusqlite::Result<()> {
+    pub fn insert_chat(&self, chat: &DChat) -> plain_libs::rusqlite::Result<()> {
         let conn = self.0.lock().unwrap();
         conn.execute(
             "INSERT INTO chats (id,from_id,to_id,channel_id,content,status,status_data,created_at,updated_at) \
@@ -166,8 +166,8 @@ impl Db {
         let conn = self.0.lock().unwrap();
         let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let sql = format!("DELETE FROM chats WHERE id IN ({placeholders})");
-        let params: Vec<&dyn rusqlite::ToSql> =
-            ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn plain_libs::rusqlite::ToSql> =
+            ids.iter().map(|id| id as &dyn plain_libs::rusqlite::ToSql).collect();
         let _ = conn.execute(&sql, params.as_slice());
     }
 

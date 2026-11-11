@@ -89,7 +89,7 @@ fn notification_actions_are_atomic_and_reject_invalid_modes() {
     Action::ClearNotificationApps.apply(&prefs).unwrap();
     assert_eq!(
         snapshot(&prefs).unwrap().notification_filter,
-        serde_json::json!({"mode":"allowlist","apps":[]})
+        plain_libs::serde_json::json!({"mode":"allowlist","apps":[]})
     );
     assert!(
         Action::SetNotificationMode("other".into())
@@ -104,15 +104,15 @@ fn structured_values_reject_unusable_shapes_without_writing() {
     let before = prefs.entries();
     for input in [
         SettingsPatch {
-            notification_filter: Some(serde_json::json!({"mode":"other","apps":[]})),
+            notification_filter: Some(plain_libs::serde_json::json!({"mode":"other","apps":[]})),
             ..Default::default()
         },
         SettingsPatch {
-            screen_mirror_quality: Some(serde_json::json!({"mode":"HD","resolution":0})),
+            screen_mirror_quality: Some(plain_libs::serde_json::json!({"mode":"HD","resolution":0})),
             ..Default::default()
         },
         SettingsPatch {
-            pomodoro_settings: Some(serde_json::json!({})),
+            pomodoro_settings: Some(plain_libs::serde_json::json!({})),
             ..Default::default()
         },
     ] {
@@ -156,9 +156,9 @@ fn keyed_values_include_defaults_without_writing_and_round_trip_through_validate
         assert!(keys::access(key).is_some(), "{key}");
     }
     for (key, value) in [
-        (keys::HTTP_PORT, serde_json::json!(8181)),
-        (keys::FEED_AUTO_REFRESH_INTERVAL, serde_json::json!(900)),
-        (keys::PACKAGE_SORT_BY, serde_json::json!("NAME_DESC")),
+        (keys::HTTP_PORT, plain_libs::serde_json::json!(8181)),
+        (keys::FEED_AUTO_REFRESH_INTERVAL, plain_libs::serde_json::json!(900)),
+        (keys::PACKAGE_SORT_BY, plain_libs::serde_json::json!("NAME_DESC")),
     ] {
         assert_eq!(set_entry(&prefs, key, value.clone()).unwrap(), Some(true));
         assert_eq!(values(&prefs).unwrap()[key], value);
@@ -166,15 +166,15 @@ fn keyed_values_include_defaults_without_writing_and_round_trip_through_validate
         assert_eq!(set_entry(&prefs, key, value).unwrap(), Some(false));
     }
     let before_invalid = prefs.entries();
-    assert!(set_entry(&prefs, keys::HTTP_PORT, serde_json::json!(70000)).is_err());
-    assert!(set_entry(&prefs, keys::HTTP_PORT, serde_json::json!("invalid")).is_err());
+    assert!(set_entry(&prefs, keys::HTTP_PORT, plain_libs::serde_json::json!(70000)).is_err());
+    assert!(set_entry(&prefs, keys::HTTP_PORT, plain_libs::serde_json::json!("invalid")).is_err());
     assert_eq!(
         set_entry(&prefs, keys::HTTP_PORT, Value::Null).unwrap(),
         Some(false)
     );
     assert_eq!(prefs.entries(), before_invalid);
     assert_eq!(
-        set_entry(&prefs, "httpPort", serde_json::json!(8181)).unwrap(),
+        set_entry(&prefs, "httpPort", plain_libs::serde_json::json!(8181)).unwrap(),
         None
     );
 }
@@ -190,7 +190,7 @@ fn keyed_reads_use_core_defaults_and_do_not_decode_unrelated_preferences() {
     prefs.set(keys::SHOW_HIDDEN_FILES, "invalid").unwrap();
     assert_eq!(
         get_entry(&prefs, keys::HTTP_PORT).unwrap(),
-        Some(serde_json::json!(8080))
+        Some(plain_libs::serde_json::json!(8080))
     );
     assert!(get_entry(&prefs, keys::SHOW_HIDDEN_FILES).is_err());
     assert_eq!(get_entry(&prefs, "unknown").unwrap(), None);

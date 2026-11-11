@@ -5,7 +5,7 @@ use crate::features::media::audio::overview::Overview;
 use crate::features::prefs::settings::FileSortBy;
 use crate::features::services::files::catalog::MediaCatalog;
 use crate::infrastructure::db::Db;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 const PAGE_SIZE: u32 = 512;

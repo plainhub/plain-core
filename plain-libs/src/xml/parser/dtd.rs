@@ -44,7 +44,7 @@ impl DtdParser {
                     break;
                 }
                 Self::BeforeInternalSubset(quote) => {
-                    if let Some(i) = memchr::memchr(quote, cur) {
+                    if let Some(i) = crate::memchr::memchr(quote, cur) {
                         *self = Self::BeforeInternalSubset(0);
                         cur = &cur[i + 1..];
                         continue;
@@ -52,7 +52,7 @@ impl DtdParser {
                     break;
                 }
                 Self::InsideOfInternalSubset => {
-                    if let Some(i) = memchr::memchr2(b']', b'<', cur) {
+                    if let Some(i) = crate::memchr::memchr2(b']', b'<', cur) {
                         if cur[i] == b']' {
                             *self = Self::AfterInternalSubset;
                             cur = &cur[i + 1..];
@@ -73,7 +73,7 @@ impl DtdParser {
                     break;
                 }
                 Self::AfterInternalSubset => {
-                    if let Some(i) = memchr::memchr(b'>', cur) {
+                    if let Some(i) = crate::memchr::memchr(b'>', cur) {
                         *self = Self::Finished;
                         return Some(chunk.len() - cur.len() + i);
                     }
@@ -96,7 +96,7 @@ impl DtdParser {
                     break;
                 }
                 Self::InElementDecl => {
-                    if let Some(i) = memchr::memchr(b'>', cur) {
+                    if let Some(i) = crate::memchr::memchr(b'>', cur) {
                         *self = Self::InsideOfInternalSubset;
                         cur = &cur[i + 1..];
                         continue;
@@ -161,7 +161,7 @@ impl DtdParser {
                 Some(9)
             }
             _ => {
-                if let Some(i) = memchr::memchr(b'>', markup) {
+                if let Some(i) = crate::memchr::memchr(b'>', markup) {
                     *self = Self::InsideOfInternalSubset;
                     Some(i + 1)
                 } else {

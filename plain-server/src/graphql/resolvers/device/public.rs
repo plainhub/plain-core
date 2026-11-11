@@ -7,7 +7,7 @@ use plain_rs::features::access::AccessFeature;
 use plain_rs::features::services::device::types::*;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Long;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 #[derive(SimpleObject, Clone)]
@@ -298,13 +298,13 @@ impl DeviceMutation {
             .data_unchecked::<Arc<Host>>()
             .call(
                 "systemRequestAccess",
-                serde_json::json!({
+                plain_libs::serde_json::json!({
                     "feature": feature.as_str(),
                 }),
             )
             .await
             .map_err(plain_graphql::Error::new)?;
-        serde_json::from_value(accepted)
+        plain_libs::serde_json::from_value(accepted)
             .map_err(|error| plain_graphql::Error::new(error.to_string()))
     }
 

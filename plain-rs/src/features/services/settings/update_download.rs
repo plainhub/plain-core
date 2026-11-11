@@ -101,7 +101,7 @@ impl Runtime {
     ) -> Result<(), String> {
         let current = self.state.lock().unwrap();
         let snapshot =
-            serde_json::to_value(&current.snapshot).map_err(|error| error.to_string())?;
+            plain_libs::serde_json::to_value(&current.snapshot).map_err(|error| error.to_string())?;
         host.notify("appUpdateDownloadChanged", snapshot)
     }
     fn publish(&self, state: &CoreRuntime, mut snapshot: AppUpdateDownload) -> AppUpdateDownload {
@@ -111,7 +111,7 @@ impl Runtime {
         current.snapshot = snapshot.clone();
         if let Err(error) = state.host.notify(
             "appUpdateDownloadChanged",
-            serde_json::to_value(&snapshot).unwrap(),
+            plain_libs::serde_json::to_value(&snapshot).unwrap(),
         ) {
             log::warn!("Update download callback: {error}");
             if !current.recovery_pending && state.host.connected() {
@@ -123,7 +123,7 @@ impl Runtime {
                     if let Ok(permit) = permit {
                         if let Err(error) = state.host.notify_reserved_callback(
                             "appUpdateDownloadChanged",
-                            serde_json::to_value(&current.snapshot).unwrap(),
+                            plain_libs::serde_json::to_value(&current.snapshot).unwrap(),
                             permit,
                         ) {
                             log::warn!("Update download recovery callback: {error}");
@@ -146,7 +146,7 @@ impl Runtime {
         task
     }
     pub fn reset_after_cache_clear(&self, state: &CoreRuntime) -> Result<()> {
-        updates::update(state, serde_json::json!({"downloadedApkPath":""}))?;
+        updates::update(state, plain_libs::serde_json::json!({"downloadedApkPath":""}))?;
         self.state.lock().unwrap().cancel = None;
         self.publish(state, AppUpdateDownload::default());
         Ok(())
@@ -217,7 +217,7 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
             let identity = Identity::from(&info);
             validate_url(&identity.url)?;
             discard(&state, &info.downloaded_apk_path)?;
-            updates::update(&state, serde_json::json!({"downloadedApkPath":""}))?;
+            updates::update(&state, plain_libs::serde_json::json!({"downloadedApkPath":""}))?;
             let id = plain_libs::utils::uuid::Uuid::new_v4().into_string();
             let (cancel, receiver) = watch::channel(false);
             runtime.state.lock().unwrap().cancel = Some(cancel.clone());
@@ -236,7 +236,7 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
         }
         Command::Cancel => {
             discard(&state, &info.downloaded_apk_path)?;
-            updates::update(&state, serde_json::json!({"downloadedApkPath":""}))?;
+            updates::update(&state, plain_libs::serde_json::json!({"downloadedApkPath":""}))?;
             runtime.state.lock().unwrap().cancel = None;
             Ok(runtime.publish(&state, AppUpdateDownload::default()))
         }
@@ -278,7 +278,7 @@ async fn execute_owned(state: CoreRuntime, command: Command) -> Result<AppUpdate
                 ));
             }
             if !info.downloaded_apk_path.is_empty() {
-                updates::update(&state, serde_json::json!({"downloadedApkPath":""}))?;
+                updates::update(&state, plain_libs::serde_json::json!({"downloadedApkPath":""}))?;
             }
             if snapshot.status == AppUpdateDownloadStatus::Completed {
                 return Ok(runtime.publish(&state, AppUpdateDownload::default()));
@@ -475,12 +475,12 @@ async fn save_stream<B: AsRef<[u8]>>(
     );
     std::fs::write(
         staging.path().join("source.json"),
-        serde_json::to_vec(identity)?,
+        plain_libs::serde_json::to_vec(identity)?,
     )?;
     let target = root.join(id);
     std::fs::rename(staging.path(), &target)?;
     let path = target.join("package").to_string_lossy().into_owned();
-    if let Err(error) = updates::update(state, serde_json::json!({"downloadedApkPath":path})) {
+    if let Err(error) = updates::update(state, plain_libs::serde_json::json!({"downloadedApkPath":path})) {
         std::fs::remove_dir_all(&target)?;
         return Err(error);
     }
@@ -516,7 +516,7 @@ fn restored(state: &CoreRuntime, info: &UpdateInfo) -> Result<Option<String>> {
     {
         return Ok(None);
     }
-    let Ok(saved) = serde_json::from_slice::<Identity>(&std::fs::read(metadata)?) else {
+    let Ok(saved) = plain_libs::serde_json::from_slice::<Identity>(&std::fs::read(metadata)?) else {
         return Ok(None);
     };
     let length = std::fs::metadata(path)?.len();

@@ -6,7 +6,7 @@ use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use futures_util::{SinkExt, StreamExt};
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -126,7 +126,7 @@ impl Outgoing {
         }
         Ok(())
     }
-    pub fn snapshot(&self) -> serde_json::Value {
+    pub fn snapshot(&self) -> plain_libs::serde_json::Value {
         let work = self.state.lock().unwrap();
         json!({"started":work.started,"workers":work.peers.len(),"epoch":work.epoch})
     }
@@ -230,8 +230,8 @@ impl Outgoing {
         let keypair = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
         let challenge = tokio::time::timeout(Duration::from_secs(10), async {
             match socket.next().await {
-                Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) => {
-                    let value: serde_json::Value = serde_json::from_str(&text)?;
+                Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Text(text))) => {
+                    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&text)?;
                     let challenge = value
                         .get("challenge")
                         .and_then(|value| value.as_str())
@@ -250,25 +250,25 @@ impl Outgoing {
         )?;
         tokio::time::timeout(
             Duration::from_secs(5),
-            socket.send(tokio_tungstenite::tungstenite::Message::Binary(body.into())),
+            socket.send(plain_libs::tokio_tungstenite::tungstenite::Message::Binary(body.into())),
         )
         .await??;
         tokio::time::timeout(Duration::from_secs(10), async {
             loop {
                 match socket.next().await {
-                    Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text)))
+                    Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Text(text)))
                         if text == "ok" =>
                     {
                         return Ok(());
                     }
-                    Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(body)))
+                    Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Binary(body)))
                         if body.as_ref() == b"ok" =>
                     {
                         return Ok(());
                     }
                     Some(Ok(
-                        tokio_tungstenite::tungstenite::Message::Ping(_)
-                        | tokio_tungstenite::tungstenite::Message::Pong(_),
+                        plain_libs::tokio_tungstenite::tungstenite::Message::Ping(_)
+                        | plain_libs::tokio_tungstenite::tungstenite::Message::Pong(_),
                     )) => {}
                     _ => return Err(plain_libs::anyhow::anyhow!("Status acknowledgement missing")),
                 }
@@ -298,7 +298,7 @@ impl Outgoing {
         loop {
             tokio::select! {
                 _=tick.tick()=>ensure!(state.peer_status.connections.valid(&state.db,&lease) && peer.best_ip()==selected_ip && state.prefs.get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?.as_deref()==Some(&actor),"Peer changed"),
-                frame=socket.next()=>match frame { Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_)))|None|Some(Err(_))=>return Err(plain_libs::anyhow::anyhow!("Status connection closed")),_=>{} }
+                frame=socket.next()=>match frame { Some(Ok(plain_libs::tokio_tungstenite::tungstenite::Message::Close(_)))|None|Some(Err(_))=>return Err(plain_libs::anyhow::anyhow!("Status connection closed")),_=>{} }
             }
         }
     }

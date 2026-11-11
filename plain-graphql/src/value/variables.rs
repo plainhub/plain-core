@@ -33,7 +33,7 @@ impl Variables {
         }
     }
     #[must_use]
-    pub fn from_json(value: serde_json::Value) -> Self {
+    pub fn from_json(value: plain_libs::serde_json::Value) -> Self {
         ConstValue::from_json(value)
             .map(Self::from_value)
             .unwrap_or_default()

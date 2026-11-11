@@ -8,7 +8,7 @@ mod tls;
 
 pub use body::Body;
 pub use error::Error;
-pub use http::{Method, StatusCode, Version, header};
+pub use crate::http::{Method, StatusCode, Version, header};
 pub use tls::Certificate;
 pub use url::Url;
 
@@ -20,10 +20,10 @@ use body::{ResponseBody, timeout};
 use bytes::Bytes;
 use connector::{Connector, NativeHttp};
 use futures_core::Stream;
-use http::{HeaderMap, HeaderName, HeaderValue, Uri, header::Entry};
-use http_body::Body as HttpBody;
-use http_body_util::BodyExt;
-use hyper_util::{
+use crate::http::{HeaderMap, HeaderName, HeaderValue, Uri, header::Entry};
+use crate::http_body::Body as HttpBody;
+use crate::http_body_util::BodyExt;
+use crate::hyper_util::{
     client::{legacy::Client as HyperClient, proxy::matcher::Matcher},
     rt::{TokioExecutor, TokioIo, TokioTimer},
 };
@@ -361,7 +361,7 @@ impl RequestBuilder {
     pub fn query<T: serde::Serialize + ?Sized>(mut self, query: &T) -> Self {
         self.request = self.request.and_then(|mut request| {
             let mut pairs = request.url.query_pairs_mut();
-            let serializer = serde_urlencoded::Serializer::new(&mut pairs);
+            let serializer = crate::serde_urlencoded::Serializer::new(&mut pairs);
             query.serialize(serializer).map_err(Error::builder)?;
             drop(pairs);
             if request.url.query() == Some("") {
@@ -394,7 +394,7 @@ impl RequestBuilder {
                 entry.insert(value.clone());
             }
         }
-        let mut request = http::Request::new(body);
+        let mut request = crate::http::Request::new(body);
         *request.method_mut() = method;
         *request.uri_mut() = uri;
         *request.headers_mut() = headers;
@@ -432,7 +432,7 @@ impl RequestBuilder {
         url.set_fragment(None);
         let (parts, incoming) = response.into_parts();
         Ok(Response {
-            inner: http::Response::from_parts(
+            inner: crate::http::Response::from_parts(
                 parts,
                 ResponseBody::new(
                     incoming,
@@ -446,7 +446,7 @@ impl RequestBuilder {
 }
 
 pub struct Response {
-    inner: http::Response<ResponseBody>,
+    inner: crate::http::Response<ResponseBody>,
     url: Box<Url>,
 }
 
@@ -501,8 +501,8 @@ impl Response {
         Ok(String::from_utf8_lossy(&self.bytes().await?).into_owned())
     }
 
-    pub async fn upgrade(self) -> Result<TokioIo<hyper::upgrade::Upgraded>, Error> {
-        hyper::upgrade::on(self.inner)
+    pub async fn upgrade(self) -> Result<TokioIo<crate::hyper::upgrade::Upgraded>, Error> {
+        crate::hyper::upgrade::on(self.inner)
             .await
             .map(TokioIo::new)
             .map_err(Error::upgrade)

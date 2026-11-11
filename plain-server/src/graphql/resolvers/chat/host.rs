@@ -37,7 +37,7 @@ impl ChatHostQuery {
         let state = ctx.data::<ServerState>()?;
         let filter = filter(&query, offset, limit, false);
         let value = plain_rs::infrastructure::db::chat_store::messages::list(&state.db, &filter)?;
-        let rows: Vec<plain_rs::infrastructure::db::DChat> = serde_json::from_value(value)?;
+        let rows: Vec<plain_rs::infrastructure::db::DChat> = plain_libs::serde_json::from_value(value)?;
         plain_rs::features::services::chat::prewarm::prepare_conversation(state, &filter);
         Ok(rows.iter().map(item).collect())
     }

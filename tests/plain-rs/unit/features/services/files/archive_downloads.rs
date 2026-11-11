@@ -42,7 +42,7 @@ fn directory_walks_are_prefixed_and_recursive() {
 
 #[test]
 fn zip_files_requests_default_every_field() {
-    let request: ZipFilesRequest = serde_json::from_str("{}").unwrap();
+    let request: ZipFilesRequest = plain_libs::serde_json::from_str("{}").unwrap();
     assert!(request.r#type.is_empty());
     assert!(request.query.is_empty());
     assert!(request.id.is_empty());

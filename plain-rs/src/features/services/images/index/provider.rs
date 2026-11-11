@@ -7,7 +7,7 @@ use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
 use crate::infrastructure::host::bridge::Host;
 use serde::de::DeserializeOwned;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 pub struct ImageProvider {
     catalog: Option<Arc<crate::infrastructure::db::Db>>,
@@ -53,7 +53,7 @@ impl ImageProvider {
             .runtime
             .block_on(self.host.call(method, params))
             .map_err(DomainError::Other)?;
-        serde_json::from_value(value)
+        plain_libs::serde_json::from_value(value)
             .map_err(|e| DomainError::Other(format!("invalid image index host response: {e}")))
     }
 

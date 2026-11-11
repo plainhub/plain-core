@@ -4,10 +4,10 @@ use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, anyhow, ensure};
 use futures_util::{SinkExt, StreamExt};
-use rusqlite::OptionalExtension;
+use plain_libs::rusqlite::OptionalExtension;
 use std::{collections::HashMap, sync::Mutex, time::Duration};
 use tokio::{sync::watch, task::JoinHandle};
-use tokio_tungstenite::tungstenite::Message;
+use plain_libs::tokio_tungstenite::tungstenite::Message;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Identity {
@@ -55,7 +55,7 @@ impl Runtime {
         let _delivery = self.clipboard_delivery.lock().unwrap();
         host.notify(
             "peerClipboardChanged",
-            serde_json::json!({"peerIds":[],"refreshAll":true}),
+            plain_libs::serde_json::json!({"peerIds":[],"refreshAll":true}),
         )
     }
 
@@ -63,7 +63,7 @@ impl Runtime {
         let mut recovering = state.management.clipboard_delivery.lock().unwrap();
         if let Err(error) = state.host.notify(
             "peerClipboardChanged",
-            serde_json::json!({"peerIds":[peer_id],"refreshAll":false}),
+            plain_libs::serde_json::json!({"peerIds":[peer_id],"refreshAll":false}),
         ) {
             log::warn!("Peer clipboard callback: {error}");
             if *recovering || !state.host.connected() {
@@ -77,7 +77,7 @@ impl Runtime {
                 if let Ok(permit) = permit {
                     if let Err(error) = state.host.notify_reserved_callback(
                         "peerClipboardChanged",
-                        serde_json::json!({"peerIds":[],"refreshAll":true}),
+                        plain_libs::serde_json::json!({"peerIds":[],"refreshAll":true}),
                         permit,
                     ) {
                         log::warn!("Peer clipboard recovery callback: {error}");
@@ -276,7 +276,7 @@ async fn publish_clipboard_change(
 }
 
 pub fn current(
-    connection: &rusqlite::Connection,
+    connection: &plain_libs::rusqlite::Connection,
     state: &CoreRuntime,
     peer_id: &str,
     identity: &Identity,

@@ -2,7 +2,7 @@ use plain_libs::protocols::http_client;
 use super::*;
 use crate::features::chat::enums::DeviceType;
 use crate::infrastructure::db::chat_store::SaveMode;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn reconnect_backoff_has_the_existing_one_to_thirty_second_bounds() {

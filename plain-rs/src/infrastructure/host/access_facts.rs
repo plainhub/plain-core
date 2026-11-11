@@ -1,6 +1,6 @@
 use crate::features::access::AccessFeature;
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -10,8 +10,8 @@ struct AccessRequest {
 
 pub fn facts(granted: &[AccessFeature], params: Value) -> Result<Value, String> {
     let request: AccessRequest =
-        serde_json::from_value(params).map_err(|error| error.to_string())?;
-    let values: serde_json::Map<String, Value> = request
+        plain_libs::serde_json::from_value(params).map_err(|error| error.to_string())?;
+    let values: plain_libs::serde_json::Map<String, Value> = request
         .features
         .into_iter()
         .map(|feature| {

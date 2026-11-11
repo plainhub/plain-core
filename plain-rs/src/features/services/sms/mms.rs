@@ -2,7 +2,7 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::events::WsEvent;
 use crate::infrastructure::host::bridge::Host;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
@@ -315,7 +315,7 @@ impl Runtime {
             tokio::select! {_=tokio::time::sleep(Duration::from_secs(2))=>{},_=cancel.changed()=>{result_code=-1001;break;}}
             let facts = tokio::select! {result=self.host.call("systemMmsCandidates",json!({"minimumId":pending.minimum_id,"launchTimeSec":pending.launch_time_sec}))=>result,_=cancel.changed()=>{result_code=-1001;break;}};
             if let Ok(facts) = facts {
-                if let Ok(candidates) = serde_json::from_value::<Vec<Candidate>>(facts) {
+                if let Ok(candidates) = plain_libs::serde_json::from_value::<Vec<Candidate>>(facts) {
                     let matches = matching(&pending, candidates);
                     let mut state = self.state.lock().unwrap();
                     if let Some(id) = matches.into_iter().find(|id| !state.claimed.contains(id)) {

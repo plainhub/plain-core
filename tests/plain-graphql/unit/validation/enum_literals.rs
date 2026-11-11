@@ -42,7 +42,7 @@ impl Mutation {
         matrix: Option<Vec<Vec<Choice>>>,
         text: Option<String>,
         id: Option<ID>,
-        json: Option<Json<serde_json::Value>>,
+        json: Option<Json<plain_libs::serde_json::Value>>,
     ) -> bool {
         let _ = (choice, filter, matrix, text, id, json);
         self.0.fetch_add(1, Ordering::SeqCst);
@@ -98,7 +98,7 @@ async fn enum_variables_tokens_defaults_and_unrelated_string_scalars_remain_vali
     }
     let response = schema.execute(plain_graphql::Request::new(
         "mutation($choice: Choice, $filter: Filter, $matrix: [[Choice!]!]) { record(choice: $choice, filter: $filter, matrix: $matrix) }",
-    ).variables(plain_graphql::Variables::from_json(serde_json::json!({
+    ).variables(plain_graphql::Variables::from_json(plain_libs::serde_json::json!({
         "choice": "FIRST", "filter": {"choices": ["FIRST", "SECOND"], "nested": {"choice": "SECOND"}}, "matrix": [["FIRST"], ["SECOND"]],
     })))).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);

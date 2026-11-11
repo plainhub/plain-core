@@ -16,7 +16,7 @@ fn request_for(path: &std::path::Path) -> Request {
     }
 }
 
-async fn render(state: &ServerState, request: Request) -> (u16, axum::http::HeaderMap, Vec<u8>) {
+async fn render(state: &ServerState, request: Request) -> (u16, plain_libs::axum::http::HeaderMap, Vec<u8>) {
     render_conditional(state, request, None).await
 }
 
@@ -24,19 +24,19 @@ async fn render_conditional(
     state: &ServerState,
     request: Request,
     conditional: Option<&str>,
-) -> (u16, axum::http::HeaderMap, Vec<u8>) {
+) -> (u16, plain_libs::axum::http::HeaderMap, Vec<u8>) {
     let bytes = state.thumbnails.get(state, request).await;
     let response = crate::http::file_response::thumbnail(bytes, conditional);
     let status = response.status().as_u16();
     let headers = response.headers().clone();
-    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+    let bytes = plain_libs::axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap()
         .to_vec();
     (status, headers, bytes)
 }
 
-fn header<'a>(headers: &'a axum::http::HeaderMap, name: &str) -> String {
+fn header<'a>(headers: &'a plain_libs::axum::http::HeaderMap, name: &str) -> String {
     headers.get(name).unwrap().to_str().unwrap().to_owned()
 }
 
@@ -244,7 +244,7 @@ async fn a_corrupt_native_image_returns_bad_request_with_a_json_decoder_error() 
     let rendered = render(&state, request_for(&source)).await;
     assert_eq!(rendered.0, 400);
     assert_eq!(header(&rendered.1, "content-type"), "application/json");
-    let error: serde_json::Value = serde_json::from_slice(&rendered.2).unwrap();
+    let error: plain_libs::serde_json::Value = plain_libs::serde_json::from_slice(&rendered.2).unwrap();
     let object = error.as_object().unwrap();
     assert_eq!(object.len(), 1);
     assert!(!object["error"].as_str().unwrap().is_empty());

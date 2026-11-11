@@ -1,11 +1,11 @@
 use super::NativeManagement;
 
 impl NativeManagement {
-    pub async fn pairing_code(&self) -> Result<serde_json::Value, String> {
+    pub async fn pairing_code(&self) -> Result<plain_libs::serde_json::Value, String> {
         let code = plain_rs::features::services::discovery::pairing_qr::display(&self.state)
             .await
             .map_err(|error| error.to_string())?;
-        serde_json::to_value(code).map_err(|error| error.to_string())
+        plain_libs::serde_json::to_value(code).map_err(|error| error.to_string())
     }
 
     pub fn is_pairing_request_current(

@@ -61,7 +61,7 @@ fn directory_move_identity_batch_survives_reopen_without_stale_sources_or_neighb
     assert!(store.get(identity_key(&old)).unwrap().is_none());
     for path in [&destination, &neighbor] {
         let row: Known =
-            serde_json::from_str(&store.get(identity_key(path)).unwrap().unwrap()).unwrap();
+            plain_libs::serde_json::from_str(&store.get(identity_key(path)).unwrap().unwrap()).unwrap();
         assert_eq!(row.identity.path, path.to_str().unwrap());
     }
     assert_eq!(store.scan_prefix(IDENTITY_PREFIX).count(), 2);

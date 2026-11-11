@@ -7,7 +7,7 @@ use crate::zip::format::flags::{ZipFileFlags, ZipFlags};
 use crate::zip::format::system::System;
 use crate::zip::result::{ZipError, ZipResult, invalid};
 use crate::zip::types::ZipFileData;
-use indexmap::IndexMap;
+use crate::indexmap::IndexMap;
 use std::io::{self, Read, Seek};
 use std::sync::OnceLock;
 mod config;

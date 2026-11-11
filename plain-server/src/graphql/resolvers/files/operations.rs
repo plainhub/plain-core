@@ -13,7 +13,7 @@ use plain_rs::features::services::files::provider_query as provider_plan;
 use plain_rs::features::services::files::provider_query::Provider;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Long;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 const STORAGE: AccessFeature = AccessFeature::Files;

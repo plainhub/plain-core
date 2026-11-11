@@ -19,7 +19,7 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use plain_libs::regex;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 use plain_libs::utils::image_dimensions;
 
@@ -326,7 +326,7 @@ async fn refresh_with(
     let Some(row) = crate::infrastructure::db::chat_store::messages::get(db, id)? else {
         return Ok(None);
     };
-    let content: Value = serde_json::from_str(&row.content)?;
+    let content: Value = plain_libs::serde_json::from_str(&row.content)?;
     if content["type"] != "TEXT" {
         return Ok(None);
     };

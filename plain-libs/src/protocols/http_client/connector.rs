@@ -1,8 +1,8 @@
 use super::Error;
-use http::{HeaderMap, HeaderValue, Uri, header, uri::Scheme};
-use hyper::rt::{Read, ReadBufCursor, Write};
-use hyper_rustls::{DefaultServerNameResolver, HttpsConnector, ResolveServerName};
-use hyper_util::{
+use crate::http::{HeaderMap, HeaderValue, Uri, header, uri::Scheme};
+use crate::hyper::rt::{Read, ReadBufCursor, Write};
+use crate::hyper_rustls::{DefaultServerNameResolver, HttpsConnector, ResolveServerName};
+use crate::hyper_util::{
     client::{
         legacy::connect::{Connected, Connection, HttpConnector, proxy::Tunnel},
         proxy::matcher::Matcher,
@@ -19,7 +19,7 @@ use std::{
     time::Duration,
 };
 use tokio_rustls::TlsConnector;
-use tower::Service;
+use crate::tower::Service;
 
 pub(super) type NativeHttp = HttpConnector<Resolver>;
 
@@ -27,7 +27,7 @@ pub(super) use resolver::Resolver;
 
 mod resolver {
     use super::*;
-    use hyper_util::client::legacy::connect::dns::{GaiResolver, Name};
+    use crate::hyper_util::client::legacy::connect::dns::{GaiResolver, Name};
     use std::{collections::HashMap, net::SocketAddr};
 
     #[derive(Clone)]
@@ -184,7 +184,7 @@ impl Service<Uri> for Connector {
 
 type TunnelStream = TokioIo<
     tokio_rustls::client::TlsStream<
-        TokioIo<hyper_rustls::MaybeHttpsStream<TokioIo<tokio::net::TcpStream>>>,
+        TokioIo<crate::hyper_rustls::MaybeHttpsStream<TokioIo<tokio::net::TcpStream>>>,
     >,
 >;
 

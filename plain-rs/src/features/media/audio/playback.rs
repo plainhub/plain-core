@@ -102,7 +102,7 @@ pub fn started(
 }
 
 fn record_started(
-    tx: &rusqlite::Connection,
+    tx: &plain_libs::rusqlite::Connection,
     state: &mut crate::features::media::audio::state::State,
     track: &crate::features::media::audio::queue::AudioTrack,
     revision: i64,
@@ -114,11 +114,11 @@ fn record_started(
 }
 
 fn save_position(
-    conn: &rusqlite::Connection,
+    conn: &plain_libs::rusqlite::Connection,
     path: &str,
     position_ms: i64,
-) -> rusqlite::Result<()> {
-    use rusqlite::OptionalExtension;
+) -> plain_libs::rusqlite::Result<()> {
+    use plain_libs::rusqlite::OptionalExtension;
     let file_id = conn
         .query_row(
             "SELECT file_id FROM audio_media WHERE path=?1 UNION SELECT a.file_id FROM platform_audio_aliases a JOIN audio_media m USING(file_id) WHERE a.path=?1",

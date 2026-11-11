@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn command_rejects_missing_fields_and_unknown_actions() {
@@ -10,7 +10,7 @@ fn command_rejects_missing_fields_and_unknown_actions() {
         json!({"action":"snapshot","nativeFallback":true}),
         json!({"action":"unknown"}),
     ] {
-        assert!(serde_json::from_value::<Command>(body).is_err());
+        assert!(plain_libs::serde_json::from_value::<Command>(body).is_err());
     }
 }
 

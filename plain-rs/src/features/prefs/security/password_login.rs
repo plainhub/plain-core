@@ -44,12 +44,12 @@ pub(super) fn write_password(map: &mut Map<String, Value>, password: &str) -> Re
     let pair = plain_libs::utils::base64::base64_decode(&read::<String>(map, SIGNATURE_KEY_PAIR)?);
     if pair.len() != 64 {
         return Err(PrefsError::Decode(
-            <serde_json::Error as serde::de::Error>::custom("Invalid signing identity"),
+            <plain_libs::serde_json::Error as serde::de::Error>::custom("Invalid signing identity"),
         ));
     }
     let registration = plain_libs::auth::server::register(password.as_bytes(), &pair[32..])
         .map_err(|_| {
-            PrefsError::Encode(<serde_json::Error as serde::ser::Error>::custom(
+            PrefsError::Encode(<plain_libs::serde_json::Error as serde::ser::Error>::custom(
                 "Password registration failed",
             ))
         })?;
@@ -89,14 +89,14 @@ pub fn password_credential(prefs: &Prefs) -> Result<Option<PasswordCredential>> 
     let map: Map<String, Value> = prefs.entries().into_iter().collect();
     let setup: Option<String> = map
         .get(OPAQUE_SERVER_SETUP)
-        .map(|v| serde_json::from_value(v.clone()).map_err(PrefsError::Decode))
+        .map(|v| plain_libs::serde_json::from_value(v.clone()).map_err(PrefsError::Decode))
         .transpose()?;
     let record: Option<String> = map
         .get(OPAQUE_PASSWORD_RECORD)
-        .map(|v| serde_json::from_value(v.clone()).map_err(PrefsError::Decode))
+        .map(|v| plain_libs::serde_json::from_value(v.clone()).map_err(PrefsError::Decode))
         .transpose()?;
     let invalid = || {
-        PrefsError::Decode(<serde_json::Error as serde::de::Error>::custom(
+        PrefsError::Decode(<plain_libs::serde_json::Error as serde::de::Error>::custom(
             "Invalid password registration",
         ))
     };
@@ -123,7 +123,7 @@ pub fn opaque_public_key(prefs: &Prefs) -> Result<Option<String>> {
             ))
             .map(|key| plain_libs::utils::base64::base64_encode(&key))
             .map_err(|_| {
-                PrefsError::Decode(<serde_json::Error as serde::de::Error>::custom(
+                PrefsError::Decode(<plain_libs::serde_json::Error as serde::de::Error>::custom(
                     "Invalid password registration",
                 ))
             })

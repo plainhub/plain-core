@@ -1,6 +1,6 @@
 use super::*;
 use plain_rs::features::enums::DataType;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::io::Read;
 
 #[test]
@@ -65,7 +65,7 @@ async fn encrypted_media_download_resolves_selection_and_preserves_each_basename
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+    let bytes = plain_libs::axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
         .unwrap();
     let mut archive = plain_libs::zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
@@ -128,7 +128,7 @@ async fn shared_directory_download_preserves_empty_directories_and_excludes_outs
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
-        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+        let bytes = plain_libs::axum::body::to_bytes(response.into_body(), 1024 * 1024)
             .await
             .unwrap();
         let mut archive = plain_libs::zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();

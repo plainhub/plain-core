@@ -1,7 +1,7 @@
 use crate::infrastructure::db::Db;
 use crate::infrastructure::error::DomainError;
 use crate::infrastructure::error::DomainResult;
-use rusqlite::params;
+use plain_libs::rusqlite::params;
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmbeddingInput {

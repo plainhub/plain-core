@@ -185,7 +185,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
         .unwrap();
     assert!(response.errors.is_empty(), "{response:?}");
     assert_eq!(
-        serde_json::to_value(response).unwrap()["data"]["app"]["clientId"],
+        plain_libs::serde_json::to_value(response).unwrap()["data"]["app"]["clientId"],
         "remote"
     );
     let mut wrong_target = peer.clone();
@@ -242,7 +242,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
         .unwrap()
         .unwrap();
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&ready).unwrap()["payload"]["extensions"]["subscriptionReady"],
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&ready).unwrap()["payload"]["extensions"]["subscriptionReady"],
         true
     );
     assert!(Arc::ptr_eq(
@@ -265,7 +265,7 @@ async fn native_queries_and_subscriptions_share_a_pinned_route_without_a_local_l
         .await
         .unwrap()
         .unwrap();
-    let event: serde_json::Value = serde_json::from_str(&event).unwrap();
+    let event: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event).unwrap();
     assert_eq!(event["id"], "content");
     assert_eq!(event["payload"]["data"]["contentChanged"], true);
     let sockets = local.native_sockets().unwrap();
@@ -458,7 +458,7 @@ fn management_credentials_require_exact_key_and_certificate_lengths() {
 
 #[tokio::test]
 async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry() {
-    use axum::{body::Bytes, routing::post};
+    use plain_libs::axum::{body::Bytes, routing::post};
     use plain_rs::infrastructure::transport::http_response;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::sync::{mpsc, oneshot};
@@ -473,7 +473,7 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
     let key = decode_key(&peer.token).unwrap();
     let calls = Arc::new(AtomicUsize::new(0));
     let (arrived, mut requests) = mpsc::unbounded_channel::<oneshot::Sender<()>>();
-    let router = axum::Router::new().route(
+    let router = plain_libs::axum::Router::new().route(
         "/graphql",
         post({
             let key = key.clone();
@@ -488,8 +488,8 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
                     )
                     .unwrap();
                     let text = std::str::from_utf8(&plaintext).unwrap();
-                    let document: serde_json::Value =
-                        serde_json::from_str(text.splitn(3, '|').nth(2).unwrap()).unwrap();
+                    let document: plain_libs::serde_json::Value =
+                        plain_libs::serde_json::from_str(text.splitn(3, '|').nth(2).unwrap()).unwrap();
                     assert_eq!(
                         document["query"],
                         "mutation { deleteChunks(fileId: \"fixture\") }"
@@ -505,7 +505,7 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
             }
         }),
     );
-    let upstream = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+    let upstream = tokio::spawn(async move { plain_libs::axum::serve(listener, router).await.unwrap() });
     let route = Arc::new(PeerRoute {
         peer,
         base: http_client::Url::parse(&format!("http://{address}")).unwrap(),
@@ -553,7 +553,7 @@ async fn native_request_budgets_outlive_shared_timeouts_and_cancel_without_retry
         tokio::time::resume();
         let response = pending.await.unwrap().unwrap();
         assert_eq!(
-            serde_json::to_value(response).unwrap()["data"]["deleteChunks"],
+            plain_libs::serde_json::to_value(response).unwrap()["data"]["deleteChunks"],
             true
         );
     }
@@ -607,7 +607,7 @@ async fn request_timeout_errors_use_the_native_timeout_contract() {
 #[cfg(feature = "http_transport")]
 #[tokio::test]
 async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_session() {
-    use axum::{body::Bytes, http::StatusCode, routing::post};
+    use plain_libs::axum::{body::Bytes, http::StatusCode, routing::post};
     use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
     use tokio::sync::{mpsc, oneshot, watch};
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -619,7 +619,7 @@ async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_ses
     peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
     let key = decode_key(&peer.token).unwrap();
     let (arrived, mut requests) = mpsc::unbounded_channel::<oneshot::Sender<()>>();
-    let router = axum::Router::new().route(
+    let router = plain_libs::axum::Router::new().route(
         "/graphql",
         post(move |body: Bytes| {
             let key = key.clone();
@@ -630,8 +630,8 @@ async fn stale_bootstrap_unauthorized_cannot_revoke_a_replacement_management_ses
                 )
                 .unwrap();
                 let text = std::str::from_utf8(&plaintext).unwrap();
-                let document: serde_json::Value =
-                    serde_json::from_str(text.splitn(3, '|').nth(2).unwrap()).unwrap();
+                let document: plain_libs::serde_json::Value =
+                    plain_libs::serde_json::from_str(text.splitn(3, '|').nth(2).unwrap()).unwrap();
                 assert!(
                     document["query"]
                         .as_str()

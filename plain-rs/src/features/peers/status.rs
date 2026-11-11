@@ -2,7 +2,7 @@ use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::transport::auth as peer_auth;
 use plain_libs::anyhow::{Result, bail};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{collections::HashMap, sync::Mutex};
 
 struct State {
@@ -37,7 +37,7 @@ impl Connections {
     pub fn open(&self, db: &Db, id: &str, challenge: &str, body: &[u8]) -> Result<(String, bool)> {
         let authenticated = peer_auth::authenticate_status(db, id, body)
             .map_err(|e| plain_libs::anyhow::anyhow!(e.reason()))?;
-        let proof: Proof = serde_json::from_str(&authenticated.graphql_json)?;
+        let proof: Proof = plain_libs::serde_json::from_str(&authenticated.graphql_json)?;
         if proof.client_id != id || proof.challenge != challenge {
             bail!("Status proof does not match connection");
         }
@@ -192,7 +192,7 @@ pub fn handshake(key: &[u8], keypair: &[u8], client_id: &str, challenge: &str) -
         bail!("Missing client identity");
     }
     plain_libs::utils::uuid::Uuid::parse_str(challenge)?;
-    let content = serde_json::to_string(&Proof {
+    let content = plain_libs::serde_json::to_string(&Proof {
         client_id: client_id.to_owned(),
         challenge: challenge.to_owned(),
     })?;

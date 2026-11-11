@@ -3,9 +3,9 @@ use crate::infrastructure::db::DChat;
 use crate::infrastructure::db::Db;
 use crate::infrastructure::db::row_to_chat;
 use plain_libs::anyhow::{Result, ensure};
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Peer {
@@ -28,9 +28,9 @@ pub struct Card {
     pub expires_at: Option<plain_libs::chrono::DateTime<plain_libs::chrono::Utc>>,
 }
 fn parse(chat: &DChat) -> Result<(Value, Card)> {
-    let value: Value = serde_json::from_str(&chat.content)?;
+    let value: Value = plain_libs::serde_json::from_str(&chat.content)?;
     ensure!(value["type"] == "SHARE", "Message is not a share card");
-    let card = serde_json::from_value(value["value"].clone())?;
+    let card = plain_libs::serde_json::from_value(value["value"].clone())?;
     Ok((value, card))
 }
 pub fn current(db: &Db, id: &str, expected: &Card) -> Result<String> {
@@ -85,9 +85,9 @@ pub fn refresh(
             .as_object_mut()
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid share card"))?;
         value.insert("name".into(), Value::String(fresh.name.clone()));
-        value.insert("expiresAt".into(), serde_json::to_value(fresh.expires_at)?);
-        value.insert("peerInfo".into(), serde_json::to_value(&fresh.peer_info)?);
-        let updated = serde_json::to_string(&content)?;
+        value.insert("expiresAt".into(), plain_libs::serde_json::to_value(fresh.expires_at)?);
+        value.insert("peerInfo".into(), plain_libs::serde_json::to_value(&fresh.peer_info)?);
+        let updated = plain_libs::serde_json::to_string(&content)?;
         ensure!(
             tx.execute(
                 "UPDATE chats SET content=?2 WHERE id=?1 AND content=?3",

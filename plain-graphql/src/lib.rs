@@ -41,7 +41,7 @@ pub use error::{
 pub use futures_util;
 pub use guard::Guard;
 #[doc(hidden)]
-pub use indexmap;
+pub use plain_libs::indexmap;
 pub use look_ahead::Lookahead;
 #[doc(no_inline)]
 pub use parser::{Pos, Positioned};

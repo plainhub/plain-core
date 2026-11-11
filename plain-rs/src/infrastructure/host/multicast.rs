@@ -14,8 +14,8 @@ pub struct MulticastLeases {
 }
 
 impl MulticastLeases {
-    pub fn without_platform_lock(&mut self, params: serde_json::Value) -> Result<bool, String> {
-        let request: Request = serde_json::from_value(params).map_err(|error| error.to_string())?;
+    pub fn without_platform_lock(&mut self, params: plain_libs::serde_json::Value) -> Result<bool, String> {
+        let request: Request = plain_libs::serde_json::from_value(params).map_err(|error| error.to_string())?;
         if request.lease.is_empty() || request.lease.len() > 128 {
             return Err("Invalid multicast lease".into());
         }

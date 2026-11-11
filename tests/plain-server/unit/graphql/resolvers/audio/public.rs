@@ -4,7 +4,7 @@ use plain_rs::features::media::play_history;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, db: Arc<Db>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -19,7 +19,7 @@ fn stub(host: Arc<Host>, db: Arc<Db>, handler: impl Fn(&str, Value) -> Value + S
                 Value::Null
             } else if request["method"] == "audioLibraryResolve" {
                 let params = &request["params"];
-                let mut rows = db.with_conn(|conn|conn.prepare("SELECT id,path,title,artist,duration_ms,cover_image_id FROM file_catalog WHERE data_type=1 UNION SELECT file_id,path,title,artist,duration_ms,album_id FROM platform_audio_media UNION SELECT id,path,title,artist,duration_ms,'' FROM file_catalog WHERE data_type=1").unwrap().query_map([],|row|Ok(json!({"mediaId":row.get::<_,String>(0)?,"path":row.get::<_,String>(1)?,"title":row.get::<_,String>(2)?,"artist":row.get::<_,String>(3)?,"durationMs":row.get::<_,i64>(4)?,"albumId":row.get::<_,String>(5)?,"aliases":[]}))).unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap());
+                let mut rows = db.with_conn(|conn|conn.prepare("SELECT id,path,title,artist,duration_ms,cover_image_id FROM file_catalog WHERE data_type=1 UNION SELECT file_id,path,title,artist,duration_ms,album_id FROM platform_audio_media UNION SELECT id,path,title,artist,duration_ms,'' FROM file_catalog WHERE data_type=1").unwrap().query_map([],|row|Ok(json!({"mediaId":row.get::<_,String>(0)?,"path":row.get::<_,String>(1)?,"title":row.get::<_,String>(2)?,"artist":row.get::<_,String>(3)?,"durationMs":row.get::<_,i64>(4)?,"albumId":row.get::<_,String>(5)?,"aliases":[]}))).unwrap().collect::<plain_libs::rusqlite::Result<Vec<_>>>().unwrap());
                 let mut paths = params["paths"].as_array().unwrap().clone();
                 if let Some(ids) = params["ids"].as_array() {
                     paths.extend(ids.iter().filter_map(|id| {
@@ -98,7 +98,7 @@ fn fixture_with(
     prefs
         .set(
             "api_permissions",
-            serde_json::from_str::<Vec<String>>(permissions).unwrap(),
+            plain_libs::serde_json::from_str::<Vec<String>>(permissions).unwrap(),
         )
         .unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
@@ -119,13 +119,13 @@ fn database(schema: &PublicSchema) -> &Arc<Db> {
 async fn query(schema: &PublicSchema, document: &str) -> Value {
     let request =
         plain_graphql::Request::new(document).data(crate::graphql::executor::RequestOrigin::Remote);
-    serde_json::to_value(schema.execute(request).await).unwrap()
+    plain_libs::serde_json::to_value(schema.execute(request).await).unwrap()
 }
 
 async fn local_query(schema: &PublicSchema, document: &str) -> Value {
     let request =
         plain_graphql::Request::new(document).data(crate::graphql::executor::RequestOrigin::Local);
-    serde_json::to_value(schema.execute(request).await).unwrap()
+    plain_libs::serde_json::to_value(schema.execute(request).await).unwrap()
 }
 
 fn track(path: &str, title: &str, artist: &str) -> AudioTrack {
@@ -145,7 +145,7 @@ fn seed_queue(schema: &PublicSchema, tracks: &[(&str, &str, &str)]) {
         .map(|(path, title, artist)| track(path, title, artist))
         .collect();
     for item in &items {
-        database(schema).with_conn(|conn|conn.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES(?1,?2,?3,?4,?5,'')",rusqlite::params![format!("test:{}",item.path),item.path,item.title,item.artist,item.duration_ms])).unwrap();
+        database(schema).with_conn(|conn|conn.execute("INSERT INTO platform_audio_media(file_id,path,title,artist,duration_ms,album_id) VALUES(?1,?2,?3,?4,?5,'')",plain_libs::rusqlite::params![format!("test:{}",item.path),item.path,item.title,item.artist,item.duration_ms])).unwrap();
     }
     domain::enqueue(database(schema), &items, false).unwrap();
 }
@@ -382,7 +382,7 @@ async fn path_lyrics_reject_missing_storage_permission_before_reading_a_sidecar(
         &schema,
         &format!(
             "query {{ audioLyricsByPath(path: {}) }}",
-            serde_json::to_string(&track.to_string_lossy()).unwrap()
+            plain_libs::serde_json::to_string(&track.to_string_lossy()).unwrap()
         ),
     )
     .await;
@@ -431,7 +431,7 @@ async fn lyrics_use_embedded_tags_and_missing_tags_are_null() {
         &schema,
         &format!(
             "query {{ audioLyricsByPath(path: {}) }}",
-            serde_json::to_string(&track).unwrap()
+            plain_libs::serde_json::to_string(&track).unwrap()
         ),
     )
     .await;

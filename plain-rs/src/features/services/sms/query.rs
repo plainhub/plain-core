@@ -4,7 +4,7 @@ use crate::features::services::sms::addresses::select as addresses;
 use crate::infrastructure::db::Db;
 use plain_libs::utils::search_dsl::FilterField;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Request {
@@ -267,7 +267,7 @@ fn conversation_models(
     }).collect())
 }
 fn text_ids(facts: Value, filters: &[String]) -> plain_libs::anyhow::Result<Vec<String>> {
-    let parts: std::collections::BTreeMap<String, Vec<String>> = serde_json::from_value(facts)?;
+    let parts: std::collections::BTreeMap<String, Vec<String>> = plain_libs::serde_json::from_value(facts)?;
     Ok(parts
         .into_iter()
         .filter(|(_, parts)| {
@@ -335,7 +335,7 @@ async fn count(
 ) -> plain_libs::anyhow::Result<i64> {
     let plans = prepare(db, host, query, include_trashed, false).await?;
     let receipt = host
-        .call("systemSmsCountFacts", serde_json::to_value(plans)?)
+        .call("systemSmsCountFacts", plain_libs::serde_json::to_value(plans)?)
         .await
         .map_err(plain_libs::anyhow::Error::msg)?;
     let sms = receipt["sms"]
@@ -361,14 +361,14 @@ fn page(
                 .as_object_mut()
                 .and_then(|item| item.remove("parts"))
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("missing MMS parts"))?;
-            let parts = serde_json::from_value::<Vec<crate::features::services::sms::parts::Part>>(
+            let parts = plain_libs::serde_json::from_value::<Vec<crate::features::services::sms::parts::Part>>(
                 raw_parts,
             )?;
             let message = crate::features::services::sms::parts::message(&parts);
             item["body"] = json!(message.body);
-            item["attachments"] = serde_json::to_value(message.attachments)?;
+            item["attachments"] = plain_libs::serde_json::to_value(message.attachments)?;
             let candidates: Vec<crate::features::services::sms::addresses::MmsAddress> =
-                serde_json::from_value(item["addressCandidates"].clone())?;
+                plain_libs::serde_json::from_value(item["addressCandidates"].clone())?;
             item["address"] = json!(crate::features::services::sms::addresses::mms(&candidates));
         }
         plain_libs::anyhow::ensure!(
@@ -412,7 +412,7 @@ async fn matched_conversation_facts(
         .as_mut()
         .into_iter()
         .for_each(|m| m.clauses.retain(|c| !c.starts_with("date ")));
-    let hits: Vec<ThreadMatch> = serde_json::from_value(
+    let hits: Vec<ThreadMatch> = plain_libs::serde_json::from_value(
         host.call("systemSmsThreadFacts", json!({"plans":plans}))
             .await
             .map_err(plain_libs::anyhow::Error::msg)?,
@@ -450,7 +450,7 @@ async fn conversation_facts(
         )
         .await
         .map_err(plain_libs::anyhow::Error::msg)?;
-    Ok(serde_json::from_value(facts)?)
+    Ok(plain_libs::serde_json::from_value(facts)?)
 }
 pub async fn execute(
     db: &crate::infrastructure::db::Db,
@@ -476,13 +476,13 @@ pub async fn execute(
                 )
                 .await
                 .map_err(plain_libs::anyhow::Error::msg)?;
-            let candidates = serde_json::from_value(receipt["canonicalAddresses"].clone())?;
-            let own = serde_json::from_value::<Vec<String>>(receipt["ownNumbers"].clone())?;
+            let candidates = plain_libs::serde_json::from_value(receipt["canonicalAddresses"].clone())?;
+            let own = plain_libs::serde_json::from_value::<Vec<String>>(receipt["ownNumbers"].clone())?;
             let canonical = addresses(candidates, &own)
                 .into_iter()
                 .next()
                 .unwrap_or_default();
-            json!({"items":page(serde_json::from_value(receipt["items"].clone())?,offset,limit,&canonical)?})
+            json!({"items":page(plain_libs::serde_json::from_value(receipt["items"].clone())?,offset,limit,&canonical)?})
         }
         Request::Count { query } => json!({"count":count(db,host,&query,false).await?}),
         Request::Ids {
@@ -490,8 +490,8 @@ pub async fn execute(
             include_trashed,
         } => {
             let plans = prepare(db, host, &query, include_trashed, true).await?;
-            let ids: Vec<String> = serde_json::from_value(
-                host.call("systemSmsIdsFacts", serde_json::to_value(plans)?)
+            let ids: Vec<String> = plain_libs::serde_json::from_value(
+                host.call("systemSmsIdsFacts", plain_libs::serde_json::to_value(plans)?)
                     .await
                     .map_err(plain_libs::anyhow::Error::msg)?,
             )?;
@@ -555,7 +555,7 @@ pub async fn execute(
                 )
                 .await
                 .map_err(plain_libs::anyhow::Error::msg)?;
-            let rows: ConversationFacts = serde_json::from_value(facts)?;
+            let rows: ConversationFacts = plain_libs::serde_json::from_value(facts)?;
             let own = rows.own_numbers;
             let snippets = rows.snippet_candidates;
             let by_id = rows

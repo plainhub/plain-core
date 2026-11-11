@@ -17,9 +17,9 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let origin = format!("http://{}", listener.local_addr().unwrap());
     let icon_requests = Arc::new(AtomicUsize::new(0));
-    let router = axum::Router::new()
-        .route("/page", axum::routing::get(|| async { axum::response::Html("<title>fallback</title><meta content='Hello &amp; 🌍' property='og:title'><link href='icon' rel='shortcut icon'>") }))
-        .route("/icon", axum::routing::get({
+    let router = plain_libs::axum::Router::new()
+        .route("/page", plain_libs::axum::routing::get(|| async { plain_libs::axum::response::Html("<title>fallback</title><meta content='Hello &amp; 🌍' property='og:title'><link href='icon' rel='shortcut icon'>") }))
+        .route("/icon", plain_libs::axum::routing::get({
             let requests = icon_requests.clone();
             move || {
                 let requests = requests.clone();
@@ -30,7 +30,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
             }
         }));
     let web = tokio::spawn(async move {
-        axum::serve(listener, router).await.unwrap();
+        plain_libs::axum::serve(listener, router).await.unwrap();
     });
     let group = call(
         server.port,
@@ -57,7 +57,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     };
     let files_before = count_files();
     let metadata_query = "query($url: String!) {pageMetadata(url:$url) {title faviconUrl}}";
-    let metadata_variables = serde_json::json!({"url": format!("{origin}/page")});
+    let metadata_variables = plain_libs::serde_json::json!({"url": format!("{origin}/page")});
     let meta = call_variables(
         server.port,
         &token,
@@ -91,7 +91,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         server.port,
         &token,
         "query($id: ID!) {bookmark(id:$id) {title faviconPath}}",
-        serde_json::json!({"id": id}),
+        plain_libs::serde_json::json!({"id": id}),
     )
     .await;
     assert_eq!(read["data"]["bookmark"]["title"], before.title);
@@ -100,21 +100,21 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         server.port,
         &token,
         "query($id: ID!) {bookmark(id:$id) {id}}",
-        serde_json::json!({"id": "missing"}),
+        plain_libs::serde_json::json!({"id": "missing"}),
     )
     .await;
-    assert_eq!(missing["data"]["bookmark"], serde_json::Value::Null);
+    assert_eq!(missing["data"]["bookmark"], plain_libs::serde_json::Value::Null);
     let invalid_page = call_variables(
         server.port,
         &token,
         metadata_query,
-        serde_json::json!({"url": "file:///page.html"}),
+        plain_libs::serde_json::json!({"url": "file:///page.html"}),
     )
     .await;
     assert!(invalid_page.get("errors").is_some(), "{invalid_page}");
 
     let update_query = "mutation($id: ID!, $input: BookmarkInput!) {updateBookmark(id:$id,input:$input) {id title faviconPath clickCount}}";
-    let input = serde_json::json!({
+    let input = plain_libs::serde_json::json!({
         "url": format!("{origin}/page"),
         "title": "Chosen title",
         "faviconUrl": meta["data"]["pageMetadata"]["faviconUrl"],
@@ -126,7 +126,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         server.port,
         &token,
         update_query,
-        serde_json::json!({"id": id, "input": input}),
+        plain_libs::serde_json::json!({"id": id, "input": input}),
     )
     .await;
     assert!(saved.get("errors").is_none(), "{saved}");
@@ -145,7 +145,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         server.port,
         &token,
         "mutation($url: String!, $group: ID!) {addBookmarks(urls:[$url],groupId:$group) {id}}",
-        serde_json::json!({"url": format!("{origin}/page"), "group": gid}),
+        plain_libs::serde_json::json!({"url": format!("{origin}/page"), "group": gid}),
     )
     .await;
     let second_id = second["data"]["addBookmarks"][0]["id"].as_str().unwrap();
@@ -153,19 +153,19 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         server.port,
         &token,
         update_query,
-        serde_json::json!({"id": second_id, "input": input}),
+        plain_libs::serde_json::json!({"id": second_id, "input": input}),
     )
     .await;
     assert!(saved_second.get("errors").is_none(), "{saved_second}");
     assert_eq!(db.get_app_file(file_id).unwrap().ref_count, 2);
     let mut failed_input = input.clone();
-    failed_input["title"] = serde_json::json!("Must not persist");
-    failed_input["faviconUrl"] = serde_json::json!(format!("{origin}/missing-icon"));
+    failed_input["title"] = plain_libs::serde_json::json!("Must not persist");
+    failed_input["faviconUrl"] = plain_libs::serde_json::json!(format!("{origin}/missing-icon"));
     let failed = call_variables(
         server.port,
         &token,
         update_query,
-        serde_json::json!({"id": id, "input": failed_input}),
+        plain_libs::serde_json::json!({"id": id, "input": failed_input}),
     )
     .await;
     assert!(failed.get("errors").is_some(), "{failed}");
@@ -178,12 +178,12 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
     );
     assert_eq!(db.get_app_file(file_id).unwrap().ref_count, 2);
     let mut clear_input = input.clone();
-    clear_input["faviconUrl"] = serde_json::json!("");
+    clear_input["faviconUrl"] = plain_libs::serde_json::json!("");
     let cleared = call_variables(
         server.port,
         &token,
         update_query,
-        serde_json::json!({"id": second_id, "input": clear_input}),
+        plain_libs::serde_json::json!({"id": second_id, "input": clear_input}),
     )
     .await;
     assert_eq!(cleared["data"]["updateBookmark"]["faviconPath"], "");
@@ -192,7 +192,7 @@ async fn bookmark_http_lifecycle_metadata_and_reference_counts() {
         server.port,
         &token,
         update_query,
-        serde_json::json!({"id": second_id, "input": input}),
+        plain_libs::serde_json::json!({"id": second_id, "input": input}),
     )
     .await;
     assert!(restored.get("errors").is_none(), "{restored}");
@@ -320,7 +320,7 @@ async fn delete_bookmark_group_emits_stored_rows_after_database_changes() {
     })
     .await
     .unwrap();
-    let emitted: serde_json::Value = serde_json::from_str(&event.payload).unwrap();
+    let emitted: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
     let stored = store::get_bookmark_by_id(&db, &selected.id)
         .unwrap()
         .unwrap();
@@ -331,13 +331,13 @@ async fn delete_bookmark_group_emits_stored_rows_after_database_changes() {
     assert_eq!(emitted[0]["sortOrder"], stored.sort_order);
     assert_eq!(emitted[0]["updatedAt"], stored.updated_at);
     assert_eq!(
-        serde_json::to_value(
+        plain_libs::serde_json::to_value(
             store::get_bookmark_by_id(&db, &neighbor.id)
                 .unwrap()
                 .unwrap()
         )
         .unwrap(),
-        serde_json::to_value(neighbor).unwrap()
+        plain_libs::serde_json::to_value(neighbor).unwrap()
     );
     server.shutdown().await;
 }

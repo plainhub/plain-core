@@ -3,7 +3,7 @@ use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use futures_util::StreamExt;
 use plain_libs::protocols::http_client;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 pub struct Lan {
     pub client: http_client::Client,
@@ -85,7 +85,7 @@ pub async fn send(
         return Ok(json!({"data":null,"errors":[{"message":format!("Peer HTTP {status}")}]}));
     }
     let response: Value =
-        serde_json::from_slice(&plain).map_err(|e| Failure::Fatal(e.to_string()))?;
+        plain_libs::serde_json::from_slice(&plain).map_err(|e| Failure::Fatal(e.to_string()))?;
     if !response.is_object() {
         return Err(Failure::Fatal("Peer response is not a JSON object".into()));
     }
@@ -118,9 +118,9 @@ where
 }
 
 pub fn incoming_chunks(
-    mut body: hyper::body::Incoming,
-) -> impl futures_core::Stream<Item = Result<bytes::Bytes, hyper::Error>> {
-    use hyper::body::Body;
+    mut body: plain_libs::hyper::body::Incoming,
+) -> impl futures_core::Stream<Item = Result<bytes::Bytes, plain_libs::hyper::Error>> {
+    use plain_libs::hyper::body::Body;
     futures_util::stream::poll_fn(move |cx| {
         loop {
             match std::pin::Pin::new(&mut body).poll_frame(cx) {

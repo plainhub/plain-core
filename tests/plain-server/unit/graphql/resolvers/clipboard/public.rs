@@ -1,7 +1,7 @@
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::infrastructure::db::Db;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 fn fixture(permissions: Value) -> (plain_libs::temporary::TempDir, PublicSchema, Arc<Db>) {
     let dir = plain_libs::temporary::tempdir().unwrap();
@@ -94,7 +94,7 @@ async fn clipboard_id_selection_deletes_only_selected_rows() {
     ] {
         let query = format!(
             "mutation {{ deleteClipboardItems(query:{}) {{ affectedCount }} }}",
-            serde_json::to_string(&selection).unwrap()
+            plain_libs::serde_json::to_string(&selection).unwrap()
         );
         let response = schema.execute(query).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);

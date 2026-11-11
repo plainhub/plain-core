@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 
 #[test]
 fn existing_video_samples_preserve_bytes_metadata_and_keyframes() {
-    let reference: serde_json::Value = serde_json::from_str(include_str!(
+    let reference: crate::serde_json::Value = crate::serde_json::from_str(include_str!(
         "../../../../../../plain-rs/testdata/video/mp4-sample-reference.json"
     ))
     .unwrap();
@@ -29,7 +29,7 @@ fn existing_video_samples_preserve_bytes_metadata_and_keyframes() {
             case["duration_secs"].as_u64().unwrap()
         );
         let parameter_sets: Vec<Vec<u8>> =
-            serde_json::from_value(case["parameter_sets"].clone()).unwrap();
+            crate::serde_json::from_value(case["parameter_sets"].clone()).unwrap();
         assert_eq!(track.parameter_sets, parameter_sets);
         let samples = case["samples"].as_array().unwrap();
         for tick in [

@@ -220,7 +220,7 @@ async fn the_ids_request_refuses_a_whole_table_selection_before_asking_the_platf
 
 #[test]
 fn mms_text_search_joins_parts_and_requires_every_filter() {
-    let parts = serde_json::json!({"one":["First line", "Second Line"],"two":["First only"]});
+    let parts = plain_libs::serde_json::json!({"one":["First line", "Second Line"],"two":["First only"]});
     assert_eq!(
         text_ids(parts.clone(), &["first".into(), "LINE".into()]).unwrap(),
         ["one"]
@@ -253,7 +253,7 @@ async fn conversation_provider_reports_raw_candidates_and_rust_filters_own_numbe
             }
         };
         assert_eq!(request["method"], "systemSmsConversationFacts");
-        replies.reply(generation, serde_json::json!({"id":request["id"],"result":{"items":[{"id":"thread","date":"2026-10-16T00:00:00Z","snippet":"Message","messageCount":1,"read":true,"addresses":["+1 602 555 0100","+1 480 555 0101"]}],"ownNumbers":["6025550100"],"snippetCandidates":{}}})).unwrap();
+        replies.reply(generation, plain_libs::serde_json::json!({"id":request["id"],"result":{"items":[{"id":"thread","date":"2026-10-16T00:00:00Z","snippet":"Message","messageCount":1,"read":true,"addresses":["+1 602 555 0100","+1 480 555 0101"]}],"ownNumbers":["6025550100"],"snippetCandidates":{}}})).unwrap();
     });
     let result = execute(
         &db,
@@ -269,7 +269,7 @@ async fn conversation_provider_reports_raw_candidates_and_rust_filters_own_numbe
     assert_eq!(result["items"][0]["address"], "+1 480 555 0101");
     assert_eq!(
         result["items"][0]["addresses"],
-        serde_json::json!(["+1 480 555 0101"])
+        plain_libs::serde_json::json!(["+1 480 555 0101"])
     );
     responder.await.unwrap();
     host.disconnect(generation);
@@ -277,7 +277,7 @@ async fn conversation_provider_reports_raw_candidates_and_rust_filters_own_numbe
 
 #[test]
 fn mms_page_uses_raw_parts_for_body_attachments_and_address_fallback() {
-    let row = serde_json::json!({
+    let row = plain_libs::serde_json::json!({
         "id":"mms_1", "body":"", "isMms":true, "address":"",
         "date":"2026-10-16T00:00:00Z",
         "addressCandidates":[{"value":"insert-address-token","isSender":true}],
@@ -291,10 +291,10 @@ fn mms_page_uses_raw_parts_for_body_attachments_and_address_fallback() {
     assert_eq!(items[0]["address"], "canonical");
     assert_eq!(
         items[0]["attachments"],
-        serde_json::json!([{"path":"content://mms/part/2","contentType":"image/jpeg","name":"photo.jpg"}])
+        plain_libs::serde_json::json!([{"path":"content://mms/part/2","contentType":"image/jpeg","name":"photo.jpg"}])
     );
     assert!(items[0].get("parts").is_none());
-    assert!(page(vec![serde_json::json!({"isMms":true,"date":"2026-10-16T00:00:00Z","addressCandidates":[]})], 0, 10, "").is_err());
+    assert!(page(vec![plain_libs::serde_json::json!({"isMms":true,"date":"2026-10-16T00:00:00Z","addressCandidates":[]})], 0, 10, "").is_err());
 }
 
 #[test]

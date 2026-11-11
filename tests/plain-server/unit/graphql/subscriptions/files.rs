@@ -1,5 +1,5 @@
 use crate::server::ContentServer;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 #[tokio::test]
 async fn native_directory_search_streams_unindexed_files_in_excluded_directories_and_finishes() {
@@ -32,7 +32,7 @@ async fn native_directory_search_streams_unindexed_files_in_excluded_directories
     let mut counts = Vec::new();
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         while let Ok(message) = session.read().await {
-            let message: Value = serde_json::from_str(&message).unwrap();
+            let message: Value = plain_libs::serde_json::from_str(&message).unwrap();
             if message["type"] == "complete" {
                 break;
             }
@@ -90,7 +90,7 @@ async fn large_search_keeps_frames_bounded_and_waits_for_a_slow_reader() {
     tokio::time::timeout(std::time::Duration::from_secs(20), async {
         while let Ok(message) = session.read().await {
             assert!(message.len() < 1024 * 1024 - 49);
-            let message: Value = serde_json::from_str(&message).unwrap();
+            let message: Value = plain_libs::serde_json::from_str(&message).unwrap();
             if message["type"] == "complete" {
                 break;
             }

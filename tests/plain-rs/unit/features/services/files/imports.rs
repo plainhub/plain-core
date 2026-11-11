@@ -1,6 +1,6 @@
 use super::*;
 use crate::infrastructure::host::bridge::Host;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 fn fixture() -> (plain_libs::temporary::TempDir, Arc<FileStore>) {
     let directory = plain_libs::temporary::tempdir().unwrap();

@@ -1,7 +1,7 @@
 use crate::server::ServerState;
 use plain_rs::features::prefs::security::PasswordType;
 use plain_rs::infrastructure::db::SessionRow;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
@@ -408,7 +408,7 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
     }
     let frame = request
         .protection
-        .encrypt_response(&serde_json::to_vec(&response)?)?;
+        .encrypt_response(&plain_libs::serde_json::to_vec(&response)?)?;
     persist(state, request, &token)?;
     if chat_paired {
         let peer = &request.request["peer"];
@@ -425,7 +425,7 @@ async fn issue(state: &ServerState, request: &Pending) -> plain_libs::anyhow::Re
                 name: text(peer, "deviceName"),
                 ips,
                 port: peer["port"].as_u64().unwrap() as u16,
-                device_type: serde_json::from_value(peer["deviceType"].clone())?,
+                device_type: plain_libs::serde_json::from_value(peer["deviceType"].clone())?,
                 key: plain_libs::utils::base64::base64_encode(&Sha256::digest(&material)),
                 public_key: text(peer, "signaturePublicKey"),
             },
@@ -564,7 +564,7 @@ async fn execute_request(state: &ServerState, request: Request) -> plain_libs::a
         } => {
             let frame = plain_libs::utils::base64::base64_decode_checked(&frame)?;
             let bytes = channel.decrypt_request(&frame, now_ms())?;
-            let mut request: Value = serde_json::from_slice(&bytes)?;
+            let mut request: Value = plain_libs::serde_json::from_slice(&bytes)?;
             let protection = match &channel {
                 LoginChannel::Opaque(c) => {
                     plain_libs::anyhow::ensure!(request.get("password").is_none(), "invalid_login_request");
@@ -606,8 +606,8 @@ async fn execute_request(state: &ServerState, request: Request) -> plain_libs::a
                     "Invalid peer metadata"
                 );
                 let _: plain_rs::features::chat::enums::DeviceType =
-                    serde_json::from_value(peer["deviceType"].clone())?;
-                let _: Vec<String> = serde_json::from_value(peer["ips"].clone())?;
+                    plain_libs::serde_json::from_value(peer["deviceType"].clone())?;
+                let _: Vec<String> = plain_libs::serde_json::from_value(peer["ips"].clone())?;
             }
 
             protection.validate(state, &request)?;
@@ -632,7 +632,7 @@ async fn execute_request(state: &ServerState, request: Request) -> plain_libs::a
                 let response = json!({"clientId":state.prefs.get_or(plain_rs::features::prefs::pref_keys::CLIENT_ID,String::new()), "status":"PENDING"});
                 let encrypted = pending
                     .protection
-                    .encrypt_response(&serde_json::to_vec(&response)?)?;
+                    .encrypt_response(&plain_libs::serde_json::to_vec(&response)?)?;
                 let mut request_facts = pending.request.clone();
                 request_facts
                     .as_object_mut()

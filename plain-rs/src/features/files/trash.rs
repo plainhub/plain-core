@@ -4,7 +4,7 @@ use plain_libs::anyhow::{Context, Result, anyhow, bail};
 use plain_libs::chrono::{DateTime, Utc};
 use plain_libs::platform::mountinfo;
 use plain_libs::platform::mountinfo::CleanPath;
-use rusqlite::OptionalExtension;
+use plain_libs::rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 #[cfg(unix)]
@@ -43,23 +43,23 @@ pub struct Trash {
 
 const TOP_LEVEL: &str = "trashed=1 AND is_available=1 AND missing=0 AND NOT EXISTS(SELECT 1 FROM file_catalog parent WHERE parent.volume_id=file_catalog.volume_id AND parent.trashed=1 AND parent.file_id<>file_catalog.file_id AND substr(file_catalog.path,1,length(parent.path)+1)=parent.path||'/')";
 
-fn trash_item(row: &rusqlite::Row<'_>) -> rusqlite::Result<TrashItem> {
+fn trash_item(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<TrashItem> {
     let path: String = row.get(1)?;
     let absolute = Path::new(&path);
     let root = absolute
         .ancestors()
         .find(|part| part.file_name().is_some_and(|name| name == ".plain-trash"))
-        .ok_or(rusqlite::Error::InvalidQuery)?;
+        .ok_or(plain_libs::rusqlite::Error::InvalidQuery)?;
     let disk = root
         .parent()
         .and_then(Path::to_str)
-        .ok_or(rusqlite::Error::InvalidQuery)?
+        .ok_or(plain_libs::rusqlite::Error::InvalidQuery)?
         .to_owned();
     let relative = absolute
         .strip_prefix(root)
         .map_err(crate::infrastructure::db::files::sql_error)?
         .to_str()
-        .ok_or(rusqlite::Error::InvalidQuery)?
+        .ok_or(plain_libs::rusqlite::Error::InvalidQuery)?
         .to_owned();
     let time: String = row.get(4)?;
     let deleted_at = DateTime::parse_from_rfc3339(&time)
@@ -219,7 +219,7 @@ impl Trash {
     ) -> Result<Vec<TrashItem>> {
         let needle = text.trim().to_lowercase();
         let mut items=self.db.with_conn(|conn|conn.prepare(&format!("SELECT id,path,original_path,kind,trashed_at,size_bytes FROM file_catalog WHERE {TOP_LEVEL}"))?
-            .query_map([],trash_item)?.collect::<rusqlite::Result<Vec<_>>>())?;
+            .query_map([],trash_item)?.collect::<plain_libs::rusqlite::Result<Vec<_>>>())?;
         items.retain(|item| item.original_path.to_lowercase().contains(&needle));
         let name = |item: &TrashItem| {
             Path::new(&item.original_path)

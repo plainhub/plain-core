@@ -1,8 +1,8 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 fn source() -> Source {
-    serde_json::from_value(
+    plain_libs::serde_json::from_value(
         json!({"url":"https://example.com/releases/latest", "assets":[
             {"requiredAbis":["arm64-v8a","x86_64"],"nameContains":"Recommended"},
             {"nameSuffix":"-Old-32bit.apk"}
@@ -11,7 +11,7 @@ fn source() -> Source {
     .unwrap()
 }
 fn release() -> Release {
-    serde_json::from_value(json!({"tag_name":"v3.4.2", "body":"Changes", "created_at":"created", "assets":[
+    plain_libs::serde_json::from_value(json!({"tag_name":"v3.4.2", "body":"Changes", "created_at":"created", "assets":[
         {"name":"Plain-Old-32bit.apk","size":32,"browser_download_url":"https://example.com/old.apk"},
         {"name":"Plain-Recommended.apk","size":5_000_000_000u64,"browser_download_url":"https://example.com/recommended.apk"}
     ]})).unwrap()
@@ -105,7 +105,7 @@ fn availability_uses_the_same_three_component_comparison_as_the_app_baseline() {
     assert!(!available(&info, "3.4.1", "3.4.2"));
     assert_eq!(Version::parse("3.4.invalid"), Version::parse("3.4.0"));
     assert_eq!(Version::parse("3.4.2.extra"), Version::parse("3.4.2"));
-    assert!(serde_json::from_str::<Release>(r#"{"body":"missing tag"}"#).is_err());
+    assert!(plain_libs::serde_json::from_str::<Release>(r#"{"body":"missing tag"}"#).is_err());
 }
 
 #[test]

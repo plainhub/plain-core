@@ -169,7 +169,7 @@ async fn opaque_image_descriptors_use_logical_ranges_and_the_same_rust_exif_path
     host.reply(generation, json!({"id":request["id"],"result":null}))
         .unwrap();
     let metadata: Value =
-        serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
     assert_eq!(
         metadata,
         json!({"path":"content://fixture/image","file":true})
@@ -479,7 +479,7 @@ async fn assert_owned_video_info(name: &str, width: i64, height: i64, duration: 
     host.reply(generation, json!({"id":request["id"],"result":null}))
         .unwrap();
     let packet: Value =
-        serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+        plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
     assert_eq!(
         packet,
         json!({"path":"content://fixture/video","file":true})

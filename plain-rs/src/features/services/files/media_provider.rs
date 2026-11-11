@@ -4,7 +4,7 @@ use crate::features::{
 };
 use crate::infrastructure::host::bridge::Host;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
@@ -53,7 +53,7 @@ pub async fn run(
     from_trash: bool,
     destination: &str,
 ) -> Result<Outcome, String> {
-    let rows: Vec<Row> = serde_json::from_value(
+    let rows: Vec<Row> = plain_libs::serde_json::from_value(
         host.call(
             "mediaProviderRows",
             json!({"type":kind.kind(),"ids":ids,"includeVolumes":action == Action::Move}),
@@ -91,7 +91,7 @@ pub async fn run(
         });
     }
     let writes: Vec<_> = planned.iter().map(|item| &item.write).collect();
-    let receipts: Vec<Receipt> = serde_json::from_value(
+    let receipts: Vec<Receipt> = plain_libs::serde_json::from_value(
         host.call(
             "mediaProviderWrite",
             json!({"type":kind.kind(),"writes":writes}),

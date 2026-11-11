@@ -5,7 +5,7 @@ use crate::infrastructure::protocols::mdns::service_browser::MdnsServiceBrowser;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::{
     Arc, Mutex, RwLock,
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -303,7 +303,7 @@ impl Runtime {
                 name: found.name,
                 ips: found.ips.into_iter().chain(found.ipv6).collect(),
                 port: found.port,
-                device_type: serde_json::from_value(json!(found.device_type))
+                device_type: plain_libs::serde_json::from_value(json!(found.device_type))
                     .unwrap_or(crate::features::chat::enums::DeviceType::Other),
                 version: found.version,
                 platform: found.platform,
@@ -371,7 +371,7 @@ impl Runtime {
                             name: found.name,
                             ips: found.ips,
                             port: found.port,
-                            device_type: serde_json::from_value(json!(found.device_type))
+                            device_type: plain_libs::serde_json::from_value(json!(found.device_type))
                                 .unwrap_or(crate::features::chat::enums::DeviceType::Other),
                             version: found.version,
                             platform: found.platform,
@@ -466,7 +466,7 @@ impl Runtime {
             self.initialize(state).await?;
         }
         let service = if matches!(request, Request::Publish {} | Request::Update {}) {
-            Some(serde_json::from_value::<
+            Some(plain_libs::serde_json::from_value::<
                 plain_libs::protocols::mdns::records::MdnsServiceInfo,
             >(
                 crate::features::services::discovery::discovery_advertisement::execute(

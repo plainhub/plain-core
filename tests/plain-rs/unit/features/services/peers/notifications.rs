@@ -4,7 +4,7 @@ use crate::features::services::notifications::types::Notification;
 use crate::features::services::peers::management::Identity;
 use crate::infrastructure::db::DPeer;
 use plain_libs::anyhow::Result;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::collections::HashMap;
 
 use super::*;
@@ -16,8 +16,8 @@ use std::time::Duration;
 struct CallbackReceiver {
     host: Arc<crate::infrastructure::host::bridge::Host>,
     generation: u64,
-    requests: tokio::sync::mpsc::Receiver<serde_json::Value>,
-    buffered: std::collections::VecDeque<serde_json::Value>,
+    requests: tokio::sync::mpsc::Receiver<plain_libs::serde_json::Value>,
+    buffered: std::collections::VecDeque<plain_libs::serde_json::Value>,
 }
 
 impl CallbackReceiver {
@@ -31,7 +31,7 @@ impl CallbackReceiver {
         }
     }
 
-    fn try_recv(&mut self) -> Result<serde_json::Value, tokio::sync::mpsc::error::TryRecvError> {
+    fn try_recv(&mut self) -> Result<plain_libs::serde_json::Value, tokio::sync::mpsc::error::TryRecvError> {
         if let Some(value) = self.buffered.pop_front() {
             return Ok(value);
         }
@@ -46,7 +46,7 @@ impl CallbackReceiver {
         }
     }
 
-    async fn recv(&mut self) -> Option<serde_json::Value> {
+    async fn recv(&mut self) -> Option<plain_libs::serde_json::Value> {
         if let Some(value) = self.buffered.pop_front() {
             return Some(value);
         }
@@ -122,7 +122,7 @@ fn observation(items: Vec<Notification>) -> Result<(App, Vec<Notification>, http
     ))
 }
 
-fn event(receiver: &mut CallbackReceiver) -> serde_json::Value {
+fn event(receiver: &mut CallbackReceiver) -> plain_libs::serde_json::Value {
     receiver.try_recv().unwrap()
 }
 
@@ -317,7 +317,7 @@ async fn snapshots_recover_without_alerts_and_credentials_or_membership_retire_o
         )
         .unwrap();
     event(&mut receiver);
-    let initial: serde_json::Value = store.snapshot();
+    let initial: plain_libs::serde_json::Value = store.snapshot();
     assert_eq!(initial["groups"][0]["items"][0]["id"], "old");
     assert!(initial.get("alerts").is_none());
     peer.name = "Renamed".into();
@@ -338,7 +338,7 @@ async fn snapshots_recover_without_alerts_and_credentials_or_membership_retire_o
         &events,
     );
     assert!(receiver.try_recv().is_err());
-    let retained: serde_json::Value = store.snapshot();
+    let retained: plain_libs::serde_json::Value = store.snapshot();
     assert_eq!(retained["groups"][0]["items"][0]["id"], "old");
     store
         .apply(

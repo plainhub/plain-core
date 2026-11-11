@@ -12,7 +12,7 @@ fn test_ordered_vocab_iter() {
     .cloned()
     .collect();
     let order_vocab_iter = OrderedVocabIter::new(&vocab_r);
-    let serialized = serde_json::to_string(&order_vocab_iter).unwrap();
+    let serialized = crate::serde_json::to_string(&order_vocab_iter).unwrap();
     assert_eq!(serialized, "{\"a\":0,\"b\":1,\"c\":2,\"ab\":3}");
 }
 
@@ -153,7 +153,7 @@ fn test_tokenize_with_and_without_dropout() {
 
 #[test]
 fn test_bpe_from_json() {
-    let bpe: BPE = serde_json::from_str(
+    let bpe: BPE = crate::serde_json::from_str(
         r#"{"vocab":{"a":0,"b":1,"c":2,"ab":3},"merges":[["a","b"]]}"#,
     )
     .unwrap();
@@ -222,7 +222,7 @@ fn test_bpe_with_continuing_subword_prefix() {
 
 #[test]
 fn test_bpe_from_json_rejects_unknown_merge_token() {
-    let error = serde_json::from_str::<BPE>(
+    let error = crate::serde_json::from_str::<BPE>(
         r#"{"vocab":{"a":0,"b":1,"c":2,"ab":3},"merges":[["a","b"],["a","d"]]}"#,
     )
     .unwrap_err();
@@ -232,7 +232,7 @@ fn test_bpe_from_json_rejects_unknown_merge_token() {
 #[test]
 fn test_bpe_from_json_rejects_malformed_merge() {
     assert!(
-        serde_json::from_str::<BPE>(
+        crate::serde_json::from_str::<BPE>(
             r#"{"vocab":{"a":0,"b":1,"c":2,"ab":3},"merges":[["a","b"],["c"]]}"#,
         )
         .is_err()

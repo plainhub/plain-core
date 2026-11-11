@@ -16,7 +16,7 @@ use crate::infrastructure::db::row_to_channel;
 use crate::infrastructure::db::row_to_chat;
 use crate::infrastructure::db::row_to_peer;
 use plain_libs::anyhow::{Result, bail};
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 use sha2::{Digest, Sha256};
 #[derive(serde::Serialize)]
 pub struct Received {
@@ -55,7 +55,7 @@ pub fn forward_many(db: &Db, id: &str, targets: &[(String, String)]) -> Result<V
     })
 }
 fn create_in_transaction(
-    tx: &rusqlite::Transaction<'_>,
+    tx: &plain_libs::rusqlite::Transaction<'_>,
     targets: &[(String, String)],
     content: &str,
 ) -> Result<Vec<DChat>> {
@@ -72,7 +72,7 @@ fn create_in_transaction(
         chats.push(chat);
     }
     let refs = crate::features::chat::attachments::app_file_store::content_refs::collect(
-        &serde_json::from_str(content)?,
+        &plain_libs::serde_json::from_str(content)?,
     );
     for chat in &chats {
         crate::features::chat::attachments::app_file_store::content_refs::claim(tx, refs.clone())?;
@@ -97,7 +97,7 @@ pub fn receive(
         bail!("Invalid message receipt");
     }
     let receipt =
-        plain_libs::utils::base64::base64_encode(&Sha256::digest(serde_json::to_vec(&(
+        plain_libs::utils::base64::base64_encode(&Sha256::digest(plain_libs::serde_json::to_vec(&(
             from_id,
             channel_id,
             plain_libs::utils::base64::base64_encode(&raw),
@@ -177,7 +177,7 @@ fn delivery_impl(
                 bail!("Invalid delivery recipients");
             }
             if let Some(data) = chat.status_data.as_deref().filter(|_| retry) {
-                let old: StatusData = serde_json::from_str(data)?;
+                let old: StatusData = plain_libs::serde_json::from_str(data)?;
                 let mut merged: Vec<_> = old
                     .results
                     .unwrap_or_default()

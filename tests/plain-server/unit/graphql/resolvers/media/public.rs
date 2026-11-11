@@ -2,7 +2,7 @@ use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 const GRANTED: &str = r#"["IMAGES","VIDEOS","AUDIO","DOCS","FILES"]"#;
@@ -52,7 +52,7 @@ fn fixture_seeded(
     prefs
         .set(
             "api_permissions",
-            json!(serde_json::from_str::<Vec<String>>(permissions).unwrap()),
+            json!(plain_libs::serde_json::from_str::<Vec<String>>(permissions).unwrap()),
         )
         .unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
@@ -875,7 +875,7 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
 }
 
 fn access_sample(params: &Value, granted: bool) -> Value {
-    let values: serde_json::Map<String, Value> = params["features"]
+    let values: plain_libs::serde_json::Map<String, Value> = params["features"]
         .as_array()
         .unwrap()
         .iter()

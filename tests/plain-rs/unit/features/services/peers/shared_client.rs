@@ -5,7 +5,7 @@ use crate::infrastructure::db::DPeer;
 use crate::infrastructure::db::chat_store::SaveMode;
 use crate::infrastructure::db::chat_store::messages;
 use crate::infrastructure::db::chat_store::peers;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

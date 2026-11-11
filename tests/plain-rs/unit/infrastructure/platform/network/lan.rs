@@ -102,7 +102,7 @@ fn android_network_facts_keep_lan_priority_and_exclude_vpn_interfaces() {
     wireless.name = "radio".into();
     let mut vpn = interface(InterfaceType::Unknown, &["203.0.113.2/24"]);
     vpn.name = "private".into();
-    let facts = serde_json::from_value(serde_json::json!([
+    let facts = plain_libs::serde_json::from_value(plain_libs::serde_json::json!([
         {"name":"mobile", "networkType":"CELLULAR", "vpn":false},
         {"name":"wired", "networkType":"ETHERNET", "vpn":false},
         {"name":"radio", "networkType":"WIFI", "vpn":false},
@@ -134,7 +134,7 @@ fn android_network_facts_preserve_unregistered_addresses_and_native_flags() {
         });
     let mut unregistered = interface(InterfaceType::Unknown, &["192.0.2.1/24"]);
     unregistered.name = "additional".into();
-    let facts = serde_json::from_value(serde_json::json!([
+    let facts = plain_libs::serde_json::from_value(plain_libs::serde_json::json!([
         {"name":"radio", "networkType":"WIFI", "vpn":false},
         {"name":"disconnected", "networkType":"ETHERNET", "vpn":false},
     ]))
@@ -152,10 +152,10 @@ fn android_network_facts_preserve_unregistered_addresses_and_native_flags() {
 #[test]
 fn android_network_facts_reject_missing_or_unknown_transport_fields() {
     for value in [
-        serde_json::json!([{"name":"radio", "networkType":"WIFI"}]),
-        serde_json::json!([{"name":"radio", "networkType":"invalid", "vpn":false}]),
+        plain_libs::serde_json::json!([{"name":"radio", "networkType":"WIFI"}]),
+        plain_libs::serde_json::json!([{"name":"radio", "networkType":"invalid", "vpn":false}]),
     ] {
-        assert!(serde_json::from_value::<Vec<NetworkInterfaceFacts>>(value).is_err());
+        assert!(plain_libs::serde_json::from_value::<Vec<NetworkInterfaceFacts>>(value).is_err());
     }
 }
 

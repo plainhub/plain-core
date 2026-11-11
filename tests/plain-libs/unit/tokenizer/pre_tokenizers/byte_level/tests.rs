@@ -333,20 +333,20 @@ fn decode_unknown_characters() {
 #[test]
 fn deserialization() {
     // Before use_regex
-    let byte_level: ByteLevel = serde_json::from_str(
+    let byte_level: ByteLevel = crate::serde_json::from_str(
         r#"{"type": "ByteLevel", "add_prefix_space": true, "trim_offsets": false}"#,
     )
     .unwrap();
     assert!(byte_level.use_regex);
 
     // Loading works, new future BC test.
-    let byte_level: ByteLevel = serde_json::from_str(
+    let byte_level: ByteLevel = crate::serde_json::from_str(
             r#"{"type": "ByteLevel", "add_prefix_space": true, "trim_offsets": false, "use_regex": true}"#,
         )
         .unwrap();
     assert!(byte_level.use_regex);
 
-    let byte_level: ByteLevel = serde_json::from_str(
+    let byte_level: ByteLevel = crate::serde_json::from_str(
             r#"{"type": "ByteLevel", "add_prefix_space": true, "trim_offsets": false, "use_regex": false}"#,
         )
         .unwrap();

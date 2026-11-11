@@ -1,5 +1,5 @@
 use crate::server::ServerState;
-use axum::{
+use plain_libs::axum::{
     extract::{ConnectInfo, Path, Request as HttpRequest, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
@@ -36,7 +36,7 @@ impl From<BodyFailure> for StatusCode {
 
 /// Reads the body under [MAX_BODY] and reports which limit was hit, which the
 /// buffered extractor cannot: it folds both into one error.
-async fn read_body(body: axum::body::Body, limit: usize) -> Result<Vec<u8>, BodyFailure> {
+async fn read_body(body: plain_libs::axum::body::Body, limit: usize) -> Result<Vec<u8>, BodyFailure> {
     let mut stream = body.into_data_stream();
     let mut buffer = Vec::new();
     while let Some(chunk) = stream.next().await {
@@ -144,7 +144,7 @@ pub(crate) async fn receiver(
     if let Some(content_type) = &response.content_type {
         out = out.header("content-type", content_type.as_str());
     }
-    out.body(axum::body::Body::from(response.body))
+    out.body(plain_libs::axum::body::Body::from(response.body))
         .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
@@ -183,12 +183,12 @@ pub(crate) async fn media(
             .insert("transfermode.dlna.org", "Streaming".parse().unwrap());
     }
     let response = crate::http::file_response::secure(response, None, false);
-    let head = parts.method == axum::http::Method::HEAD;
+    let head = parts.method == plain_libs::axum::http::Method::HEAD;
     let (parts, body) = response.into_parts();
     let body = if head {
-        axum::body::Body::empty()
+        plain_libs::axum::body::Body::empty()
     } else {
-        axum::body::Body::from_stream(body.into_data_stream().take_until(resource.cancelled()))
+        plain_libs::axum::body::Body::from_stream(body.into_data_stream().take_until(resource.cancelled()))
     };
     Response::from_parts(parts, body)
 }
@@ -196,7 +196,7 @@ pub(crate) async fn media(
 async fn media_response(
     state: &ServerState,
     resource: &plain_rs::features::services::casting::media_alias::Resource,
-    method: &axum::http::Method,
+    method: &plain_libs::axum::http::Method,
     headers: &HeaderMap,
 ) -> Response {
     let path = &resource.path;
@@ -259,7 +259,7 @@ pub(crate) async fn callback(
     if !state.cast.media.accepts(peer.ip()) {
         return StatusCode::PRECONDITION_FAILED.into_response();
     }
-    let Ok(body) = axum::body::to_bytes(request.into_body(), 1024 * 1024).await else {
+    let Ok(body) = plain_libs::axum::body::to_bytes(request.into_body(), 1024 * 1024).await else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     let xml = String::from_utf8_lossy(&body);
@@ -334,7 +334,7 @@ fn remote_target_allowed(
             }))
 }
 
-async fn remote_media(url: &str, method: &axum::http::Method, headers: &HeaderMap) -> Response {
+async fn remote_media(url: &str, method: &plain_libs::axum::http::Method, headers: &HeaderMap) -> Response {
     let Ok(mut url) = http_client::Url::parse(url) else {
         return StatusCode::BAD_GATEWAY.into_response();
     };
@@ -396,7 +396,7 @@ async fn remote_media(url: &str, method: &axum::http::Method, headers: &HeaderMa
 
 async fn remote_fetch(
     url: http_client::Url,
-    method: &axum::http::Method,
+    method: &plain_libs::axum::http::Method,
     headers: &HeaderMap,
     address: SocketAddr,
 ) -> Result<http_client::Response, http_client::Error> {
@@ -420,7 +420,7 @@ async fn remote_fetch(
     request.send().await
 }
 
-fn remote_response(upstream: http_client::Response, method: &axum::http::Method) -> Response {
+fn remote_response(upstream: http_client::Response, method: &plain_libs::axum::http::Method) -> Response {
     let status = upstream.status();
     if !matches!(status.as_u16(), 200 | 206 | 416) {
         return StatusCode::BAD_GATEWAY.into_response();
@@ -436,10 +436,10 @@ fn remote_response(upstream: http_client::Response, method: &axum::http::Method)
             response = response.header(name, value.clone());
         }
     }
-    let body = if method == axum::http::Method::HEAD {
-        axum::body::Body::empty()
+    let body = if method == plain_libs::axum::http::Method::HEAD {
+        plain_libs::axum::body::Body::empty()
     } else {
-        axum::body::Body::from_stream(
+        plain_libs::axum::body::Body::from_stream(
             upstream
                 .bytes_stream()
                 .map(|chunk| chunk.map_err(std::io::Error::other)),

@@ -2,13 +2,13 @@
 
 use plain_graphql::{Request, Variables};
 use plain_rs::runtime::Runtime as ServerState;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Notify;
 
 async fn tls() -> (u16, tokio::task::JoinHandle<()>, Arc<Notify>, Arc<Notify>) {
-    use axum::{
+    use plain_libs::axum::{
         Router,
         body::{Body, Bytes},
         extract::Query,

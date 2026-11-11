@@ -9,7 +9,7 @@ use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::peers;
 use plain_rs::infrastructure::events::WsEvent;
 use plain_rs::runtime::Runtime as ServerState;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::time::Duration;
 use tokio::sync::watch;
 
@@ -54,7 +54,7 @@ async fn actual_management_socket_authenticates_and_relays_only_decrypted_native
                         .iter()
                         .filter_map(|name| name.as_str())
                         .map(|name| (name.to_owned(), json!(true)))
-                        .collect::<serde_json::Map<_, _>>();
+                        .collect::<plain_libs::serde_json::Map<_, _>>();
                     if granted.contains_key("CLIPBOARD") {
                         let _ = ready.try_send(());
                     }

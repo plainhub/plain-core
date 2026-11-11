@@ -5,8 +5,8 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::row_to_chat;
 use plain_libs::anyhow::{Result, bail};
-use rusqlite::{OptionalExtension, params};
-use serde_json::Value;
+use plain_libs::rusqlite::{OptionalExtension, params};
+use plain_libs::serde_json::Value;
 pub(crate) enum Selection<'a> {
     Attachment {
         message_id: &'a str,
@@ -31,7 +31,7 @@ pub(crate) fn commit(
         let mut chat=None;let mut references=1i64;
         if let Some(selection)=attachment {
             let mut row=tx.query_row(&format!("SELECT {CHAT_COLS} FROM chats WHERE id=?1"),[match &selection {Selection::Attachment{message_id,..}|Selection::LinkPreview{message_id,..}=>*message_id}],row_to_chat).optional()?.ok_or_else(||plain_libs::anyhow::anyhow!("Message unavailable"))?;
-            let mut content:Value=serde_json::from_str(&row.content)?;
+            let mut content:Value=plain_libs::serde_json::from_str(&row.content)?;
             match selection {
                 Selection::Attachment{id,original_uri,..}=>{
                     if !matches!(content["type"].as_str(),Some("IMAGES"|"FILES")) {bail!("Message has no attachments");}

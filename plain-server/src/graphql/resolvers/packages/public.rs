@@ -18,7 +18,7 @@ use plain_rs::features::prefs::settings::FileSortBy;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Long;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 const FEATURE: AccessFeature = AccessFeature::Apps;
@@ -44,7 +44,7 @@ impl PackagesQuery {
             .data::<Arc<Host>>()?
             .call(
                 "systemPackageStatuses",
-                serde_json::json!({"ids":[id.as_str()]}),
+                plain_libs::serde_json::json!({"ids":[id.as_str()]}),
             )
             .await
             .map_err(plain_graphql::Error::new)?;
@@ -114,7 +114,7 @@ impl PackagesQuery {
         let ids: Vec<String> = ids.iter().map(|id| id.0.clone()).collect();
         let facts = ctx
             .data_unchecked::<Arc<Host>>()
-            .call("systemPackageStatuses", serde_json::json!({ "ids": ids }))
+            .call("systemPackageStatuses", plain_libs::serde_json::json!({ "ids": ids }))
             .await
             .map_err(|error| plain_graphql::Error::new(error))?;
         Ok(package_statuses(&ids, &facts))
@@ -140,7 +140,7 @@ impl PackagesMutation {
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let ids: Vec<String> = ids.iter().map(|id| id.0.clone()).collect();
         ctx.data_unchecked::<Arc<Host>>()
-            .call("systemUninstallPackages", serde_json::json!({ "ids": ids }))
+            .call("systemUninstallPackages", plain_libs::serde_json::json!({ "ids": ids }))
             .await
             .map_err(|error| plain_graphql::Error::new(error))?;
         Ok(true)
@@ -180,10 +180,10 @@ async fn package_items(
 ) -> plain_graphql::Result<Vec<Value>> {
     let facts = ctx
         .data_unchecked::<Arc<Host>>()
-        .call("systemPackageFacts", serde_json::json!({}))
+        .call("systemPackageFacts", plain_libs::serde_json::json!({}))
         .await
         .map_err(|error| plain_graphql::Error::new(error))?;
-    let facts: Vec<Value> = serde_json::from_value(facts)
+    let facts: Vec<Value> = plain_libs::serde_json::from_value(facts)
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
     plain_rs::features::services::packages::query::packages(
         ctx.data_unchecked::<Arc<Db>>(),

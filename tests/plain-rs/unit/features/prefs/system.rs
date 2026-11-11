@@ -9,11 +9,11 @@ fn fixture() -> (plain_libs::temporary::TempDir, Prefs) {
 fn bootstrap_is_stable_and_snapshot_never_contains_private_secrets() {
     let (_dir, prefs) = fixture();
     bootstrap(&prefs).unwrap();
-    let first = serde_json::to_value(snapshot(&prefs).unwrap()).unwrap();
+    let first = plain_libs::serde_json::to_value(snapshot(&prefs).unwrap()).unwrap();
     bootstrap(&prefs).unwrap();
     assert_eq!(
         first,
-        serde_json::to_value(snapshot(&prefs).unwrap()).unwrap()
+        plain_libs::serde_json::to_value(snapshot(&prefs).unwrap()).unwrap()
     );
     assert_eq!(first["passwordType"], json!(PasswordType::None));
     assert_eq!(first["loginRequireApproval"], true);
@@ -40,7 +40,7 @@ fn parallel_permission_updates_do_not_lose_changes() {
         }
     });
     assert_eq!(snapshot(&prefs).unwrap().api_permissions.len(), 4);
-    assert!(serde_json::from_value::<Command>(serde_json::json!({
+    assert!(plain_libs::serde_json::from_value::<Command>(plain_libs::serde_json::json!({
         "action":"setApiPermission", "permission":"UNKNOWN", "enabled":true,
     })).is_err());
 }
@@ -55,21 +55,21 @@ fn runtime_preferences_use_shared_defaults_and_persist_only_system_values() {
         prefs.get::<String>(LOG_LEVEL).unwrap().as_deref(),
         Some("info")
     );
-    set_entry(&prefs, DEV_TOKEN, serde_json::json!("development")).unwrap();
-    set_entry(&prefs, LOG_LEVEL, serde_json::json!("warn")).unwrap();
+    set_entry(&prefs, DEV_TOKEN, plain_libs::serde_json::json!("development")).unwrap();
+    set_entry(&prefs, LOG_LEVEL, plain_libs::serde_json::json!("warn")).unwrap();
     bootstrap(&prefs).unwrap();
     let reloaded = Prefs::load(&dir.path().join("prefs.json")).unwrap();
     assert_eq!(dev_token(&reloaded).unwrap(), "development");
     assert_eq!(log_level(&reloaded).unwrap(), log::LevelFilter::Warn);
     assert!(!reloaded.entries().is_empty());
     for value in [
-        serde_json::json!("invalid"),
-        serde_json::json!(1),
-        serde_json::json!(null),
+        plain_libs::serde_json::json!("invalid"),
+        plain_libs::serde_json::json!(1),
+        plain_libs::serde_json::json!(null),
     ] {
         assert!(set_entry(&prefs, LOG_LEVEL, value).is_err());
     }
-    assert!(set_entry(&prefs, DEV_TOKEN, serde_json::json!(true)).is_err());
+    assert!(set_entry(&prefs, DEV_TOKEN, plain_libs::serde_json::json!(true)).is_err());
     assert_eq!(log_level(&prefs).unwrap(), log::LevelFilter::Warn);
     remove_entry(&prefs, LOG_LEVEL).unwrap();
     assert_eq!(log_level(&prefs).unwrap(), log::LevelFilter::Info);
@@ -82,20 +82,20 @@ fn key_value_settings_validate_protected_fields_and_patch_permissions_atomically
     bootstrap(&prefs).unwrap();
     let before = prefs.entries();
     for (key, value) in [
-        (PASSWORD_TYPE, serde_json::json!(4)),
-        (LOGIN_REQUIRE_APPROVAL, serde_json::json!("false")),
-        (SIGNATURE_KEY_PAIR, serde_json::json!("client-supplied")),
-        (MDNS_HOSTNAME, serde_json::json!("invalid.example")),
+        (PASSWORD_TYPE, plain_libs::serde_json::json!(4)),
+        (LOGIN_REQUIRE_APPROVAL, plain_libs::serde_json::json!("false")),
+        (SIGNATURE_KEY_PAIR, plain_libs::serde_json::json!("client-supplied")),
+        (MDNS_HOSTNAME, plain_libs::serde_json::json!("invalid.example")),
     ] {
         assert!(set_entry(&prefs, key, value).is_err());
         assert_eq!(prefs.entries(), before);
     }
-    set_entry(&prefs, PASSWORD, serde_json::json!("Synthetic password")).unwrap();
-    set_entry(&prefs, API_PERMISSIONS, serde_json::json!(["SMS", "AUDIO"])).unwrap();
+    set_entry(&prefs, PASSWORD, plain_libs::serde_json::json!("Synthetic password")).unwrap();
+    set_entry(&prefs, API_PERMISSIONS, plain_libs::serde_json::json!(["SMS", "AUDIO"])).unwrap();
     set_entry(
         &prefs,
         API_PERMISSIONS,
-        serde_json::json!({"SMS":false,"CONTACTS":true}),
+        plain_libs::serde_json::json!({"SMS":false,"CONTACTS":true}),
     )
     .unwrap();
     assert_eq!(
@@ -107,7 +107,7 @@ fn key_value_settings_validate_protected_fields_and_patch_permissions_atomically
         set_entry(
             &prefs,
             API_PERMISSIONS,
-            serde_json::json!({"SMS":true,"UNKNOWN":false})
+            plain_libs::serde_json::json!({"SMS":true,"UNKNOWN":false})
         )
         .is_err()
     );
@@ -199,10 +199,10 @@ fn keyed_security_reads_preserve_snapshot_defaults_without_reading_unrelated_key
 #[test]
 fn manage_files_patch_changes_all_five_features_and_preserves_other_access() {
     let (_directory, prefs) = fixture();
-    set_entry(&prefs, API_PERMISSIONS, serde_json::json!(["CONTACTS"])).unwrap();
+    set_entry(&prefs, API_PERMISSIONS, plain_libs::serde_json::json!(["CONTACTS"])).unwrap();
     for enabled in [true, false] {
         let patch: std::collections::BTreeMap<_, _> = AccessFeature::FILE_FEATURES.into_iter().map(|feature| (feature, enabled)).collect();
-        set_entry(&prefs, API_PERMISSIONS, serde_json::to_value(patch).unwrap()).unwrap();
+        set_entry(&prefs, API_PERMISSIONS, plain_libs::serde_json::to_value(patch).unwrap()).unwrap();
         assert!(crate::features::services::device::access::is_enabled(&prefs, &[AccessFeature::Contacts]));
         for feature in AccessFeature::FILE_FEATURES {
             assert_eq!(crate::features::services::device::access::is_enabled(&prefs, &[feature]), enabled);

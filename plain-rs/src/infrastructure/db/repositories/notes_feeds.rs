@@ -1,4 +1,4 @@
-use rusqlite::{OptionalExtension, params, params_from_iter, types::Value};
+use plain_libs::rusqlite::{OptionalExtension, params, params_from_iter, types::Value};
 
 use crate::infrastructure::db::Db;
 pub use crate::infrastructure::db::models::notes_feeds::FeedEntryRow;
@@ -12,7 +12,7 @@ const ENTRY_COLUMNS: &str = "id,title,url,image,description,author,content,feed_
 const NOTE_TAG_KIND: i32 = 6;
 const FEED_ENTRY_TAG_KIND: i32 = 7;
 
-fn note_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<NoteRow> {
+fn note_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<NoteRow> {
     Ok(NoteRow {
         id: row.get(0)?,
         title: row.get(1)?,
@@ -23,7 +23,7 @@ fn note_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<NoteRow> {
     })
 }
 
-fn feed_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FeedRow> {
+fn feed_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<FeedRow> {
     Ok(FeedRow {
         id: row.get(0)?,
         name: row.get(1)?,
@@ -37,7 +37,7 @@ fn feed_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FeedRow> {
     })
 }
 
-fn entry_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FeedEntryRow> {
+fn entry_from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<FeedEntryRow> {
     Ok(FeedEntryRow {
         id: row.get(0)?,
         title: row.get(1)?,
@@ -197,7 +197,7 @@ fn query_filter(
 }
 
 /// Same as [query_filter], carrying a rejected query as a rusqlite error so the
-/// `impl Db` methods below stay `rusqlite::Result`.
+/// `impl Db` methods below stay `plain_libs::rusqlite::Result`.
 ///
 /// `ModuleError` would describe this better ("our layer refused, SQLite said
 /// nothing") but it only exists under rusqlite's `vtab` feature, which this
@@ -208,8 +208,8 @@ fn filter(
     query: &str,
     notes: bool,
     force_trashed: Option<bool>,
-) -> rusqlite::Result<(String, Vec<Value>)> {
-    query_filter(query, notes, force_trashed).map_err(rusqlite::Error::InvalidParameterName)
+) -> plain_libs::rusqlite::Result<(String, Vec<Value>)> {
+    query_filter(query, notes, force_trashed).map_err(plain_libs::rusqlite::Error::InvalidParameterName)
 }
 
 impl Db {
@@ -218,7 +218,7 @@ impl Db {
         query: &str,
         limit: i64,
         offset: i64,
-    ) -> rusqlite::Result<Vec<NoteRow>> {
+    ) -> plain_libs::rusqlite::Result<Vec<NoteRow>> {
         let (where_sql, mut values) = filter(query, true, None)?;
         values.push(Value::Integer(limit.max(0)));
         values.push(Value::Integer(offset.max(0)));
@@ -228,7 +228,7 @@ impl Db {
         })
     }
 
-    pub fn notes_count(&self, query: &str) -> rusqlite::Result<i32> {
+    pub fn notes_count(&self, query: &str) -> plain_libs::rusqlite::Result<i32> {
         let (where_sql, values) = filter(query, true, None)?;
         self.with_conn(|c| {
             c.query_row(
@@ -243,7 +243,7 @@ impl Db {
         &self,
         query: &str,
         force_trashed: Option<bool>,
-    ) -> rusqlite::Result<Vec<String>> {
+    ) -> plain_libs::rusqlite::Result<Vec<String>> {
         let (where_sql, values) = filter(query, true, force_trashed)?;
         self.with_conn(|c| {
             let mut stmt = c.prepare(&format!("SELECT id FROM notes WHERE {where_sql}"))?;
@@ -252,7 +252,7 @@ impl Db {
         })
     }
 
-    pub fn note_get(&self, id: &str) -> rusqlite::Result<Option<NoteRow>> {
+    pub fn note_get(&self, id: &str) -> plain_libs::rusqlite::Result<Option<NoteRow>> {
         self.with_conn(|c| {
             c.query_row(
                 &format!("SELECT {NOTE_COLUMNS} FROM notes WHERE id=?"),
@@ -269,7 +269,7 @@ impl Db {
         title: &str,
         content: &str,
         now: &str,
-    ) -> rusqlite::Result<NoteRow> {
+    ) -> plain_libs::rusqlite::Result<NoteRow> {
         self.with_conn(|c| {
             c.execute("INSERT INTO notes(id,title,content,created_at,updated_at) VALUES(?1,?2,?3,?4,?4) ON CONFLICT(id) DO UPDATE SET title=excluded.title,content=excluded.content,updated_at=excluded.updated_at", params![id,title,content,now])?;
             c.query_row(&format!("SELECT {NOTE_COLUMNS} FROM notes WHERE id=?"), [id], note_from_row)
@@ -281,7 +281,7 @@ impl Db {
         ids: &[String],
         deleted: bool,
         now: &str,
-    ) -> rusqlite::Result<usize> {
+    ) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
             let mut count = 0;
@@ -296,7 +296,7 @@ impl Db {
         })
     }
 
-    pub fn notes_delete(&self, ids: &[String]) -> rusqlite::Result<usize> {
+    pub fn notes_delete(&self, ids: &[String]) -> plain_libs::rusqlite::Result<usize> {
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
             let mut count = 0;
@@ -312,7 +312,7 @@ impl Db {
         })
     }
 
-    pub fn feeds_list(&self) -> rusqlite::Result<Vec<FeedRow>> {
+    pub fn feeds_list(&self) -> plain_libs::rusqlite::Result<Vec<FeedRow>> {
         self.with_conn(|c| {
             let mut stmt = c.prepare(&format!(
                 "SELECT {FEED_COLUMNS} FROM feeds ORDER BY name COLLATE NOCASE"
@@ -321,7 +321,7 @@ impl Db {
         })
     }
 
-    pub fn feed_get(&self, id: &str) -> rusqlite::Result<Option<FeedRow>> {
+    pub fn feed_get(&self, id: &str) -> plain_libs::rusqlite::Result<Option<FeedRow>> {
         self.with_conn(|c| {
             c.query_row(
                 &format!("SELECT {FEED_COLUMNS} FROM feeds WHERE id=?"),
@@ -332,7 +332,7 @@ impl Db {
         })
     }
 
-    pub fn feed_get_by_url(&self, url: &str) -> rusqlite::Result<Option<FeedRow>> {
+    pub fn feed_get_by_url(&self, url: &str) -> plain_libs::rusqlite::Result<Option<FeedRow>> {
         self.with_conn(|c| {
             c.query_row(
                 &format!("SELECT {FEED_COLUMNS} FROM feeds WHERE url=?"),
@@ -350,7 +350,7 @@ impl Db {
         url: &str,
         fetch_full_content: bool,
         now: &str,
-    ) -> rusqlite::Result<FeedRow> {
+    ) -> plain_libs::rusqlite::Result<FeedRow> {
         self.with_conn(|c| {
             c.execute("INSERT INTO feeds(id,name,url,logo,fetch_full_content,last_error,created_at,updated_at) VALUES(?1,?2,?3,'',?4,'',?5,?5) ON CONFLICT(id) DO UPDATE SET name=excluded.name,url=excluded.url,fetch_full_content=excluded.fetch_full_content,updated_at=excluded.updated_at", params![id,name,url,fetch_full_content,now])?;
             c.query_row(&format!("SELECT {FEED_COLUMNS} FROM feeds WHERE id=?"), [id], feed_from_row)
@@ -364,7 +364,7 @@ impl Db {
         url: Option<&str>,
         fetch_full_content: Option<bool>,
         now: &str,
-    ) -> rusqlite::Result<Option<FeedRow>> {
+    ) -> plain_libs::rusqlite::Result<Option<FeedRow>> {
         self.with_conn(|connection| {
             let affected = connection.execute(
                 "UPDATE feeds SET name=COALESCE(?2,name),url=COALESCE(?3,url),fetch_full_content=COALESCE(?4,fetch_full_content),updated_at=?5 WHERE id=?1",
@@ -377,7 +377,7 @@ impl Db {
         })
     }
 
-    pub fn feed_delete(&self, id: &str) -> rusqlite::Result<bool> {
+    pub fn feed_delete(&self, id: &str) -> plain_libs::rusqlite::Result<bool> {
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
             tx.execute("DELETE FROM tag_relations WHERE target_key IN (SELECT id FROM feed_entries WHERE feed_id=?1) AND tag_id IN (SELECT id FROM tags WHERE type=?2)", params![id, FEED_ENTRY_TAG_KIND])?;
@@ -388,7 +388,7 @@ impl Db {
         })
     }
 
-    pub fn feed_entry_get(&self, id: &str) -> rusqlite::Result<Option<FeedEntryRow>> {
+    pub fn feed_entry_get(&self, id: &str) -> plain_libs::rusqlite::Result<Option<FeedEntryRow>> {
         self.with_conn(|c| {
             c.query_row(
                 &format!("SELECT {ENTRY_COLUMNS} FROM feed_entries WHERE id=?"),
@@ -404,7 +404,7 @@ impl Db {
         query: &str,
         limit: i64,
         offset: i64,
-    ) -> rusqlite::Result<Vec<FeedEntryRow>> {
+    ) -> plain_libs::rusqlite::Result<Vec<FeedEntryRow>> {
         let (where_sql, mut values) = filter(query, false, None)?;
         values.push(Value::Integer(limit.max(0)));
         values.push(Value::Integer(offset.max(0)));
@@ -414,7 +414,7 @@ impl Db {
         })
     }
 
-    pub fn feed_entry_ids(&self, query: &str) -> rusqlite::Result<Vec<String>> {
+    pub fn feed_entry_ids(&self, query: &str) -> plain_libs::rusqlite::Result<Vec<String>> {
         let (where_sql, values) = filter(query, false, None)?;
         self.with_conn(|connection| {
             let mut statement =
@@ -425,7 +425,7 @@ impl Db {
         })
     }
 
-    pub fn feed_entry_count(&self, query: &str) -> rusqlite::Result<i32> {
+    pub fn feed_entry_count(&self, query: &str) -> plain_libs::rusqlite::Result<i32> {
         let (where_sql, values) = filter(query, false, None)?;
         self.with_conn(|c| {
             c.query_row(
@@ -436,7 +436,7 @@ impl Db {
         })
     }
 
-    pub fn feed_entry_counts(&self) -> rusqlite::Result<Vec<(String, i32)>> {
+    pub fn feed_entry_counts(&self) -> plain_libs::rusqlite::Result<Vec<(String, i32)>> {
         self.with_conn(|c| {
             let mut stmt = c.prepare("SELECT feeds.id, COUNT(feed_entries.id) FROM feeds LEFT JOIN feed_entries ON feed_entries.feed_id=feeds.id GROUP BY feeds.id ORDER BY feeds.name COLLATE NOCASE")?;
             stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect()
@@ -446,7 +446,7 @@ impl Db {
     pub fn feed_entries_insert(
         &self,
         entries: &[FeedEntryRow],
-    ) -> rusqlite::Result<Vec<FeedEntryRow>> {
+    ) -> plain_libs::rusqlite::Result<Vec<FeedEntryRow>> {
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
             let mut inserted = Vec::new();
@@ -464,7 +464,7 @@ impl Db {
         id: &str,
         content: &str,
         now: &str,
-    ) -> rusqlite::Result<()> {
+    ) -> plain_libs::rusqlite::Result<()> {
         self.with_conn(|c| {
             c.execute(
                 "UPDATE feed_entries SET content=?,updated_at=? WHERE id=?",
@@ -474,14 +474,14 @@ impl Db {
         })
     }
 
-    pub fn feed_entries_delete(&self, query: &str) -> rusqlite::Result<usize> {
+    pub fn feed_entries_delete(&self, query: &str) -> plain_libs::rusqlite::Result<usize> {
         let (where_sql, values) = filter(query, false, None)?;
         self.with_conn(|c| {
             let tx = c.unchecked_transaction()?;
             let mut stmt = tx.prepare(&format!("SELECT id FROM feed_entries WHERE {where_sql}"))?;
             let ids: Vec<String> = stmt
                 .query_map(params_from_iter(values), |r| r.get(0))?
-                .collect::<rusqlite::Result<_>>()?;
+                .collect::<plain_libs::rusqlite::Result<_>>()?;
             drop(stmt);
             for id in &ids {
                 tx.execute("DELETE FROM tag_relations WHERE target_key=?1 AND tag_id IN (SELECT id FROM tags WHERE type=?2)", params![id, FEED_ENTRY_TAG_KIND])?;

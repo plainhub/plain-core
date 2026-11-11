@@ -1,6 +1,6 @@
 use super::*;
 use crate::infrastructure::host::bridge::Host;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 fn id3() -> Vec<u8> {
@@ -111,7 +111,7 @@ async fn sdk_bytes_cross_one_resource_stream_and_use_the_same_parser() {
         .unwrap();
     let metadata = stream.next_request().await.unwrap().unwrap();
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&metadata).unwrap(),
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&metadata).unwrap(),
         json!({"path":"content://fixture/audio"})
     );
     let bytes = id3();

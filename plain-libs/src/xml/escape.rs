@@ -1,4 +1,4 @@
-use memchr::{memchr, memchr2_iter, memchr3};
+use crate::memchr::{memchr, memchr2_iter, memchr3};
 use std::borrow::Cow;
 use std::fmt::{self, Write};
 use std::num::ParseIntError;

@@ -4,9 +4,9 @@ use super::*;
 fn serde() {
     let bert = BertProcessing::default();
     let bert_r = r#"{"type":"BertProcessing","sep":["[SEP]",102],"cls":["[CLS]",101]}"#;
-    assert_eq!(serde_json::to_string(&bert).unwrap(), bert_r);
+    assert_eq!(crate::serde_json::to_string(&bert).unwrap(), bert_r);
     assert_eq!(
-        serde_json::from_str::<BertProcessing>(bert_r).unwrap(),
+        crate::serde_json::from_str::<BertProcessing>(bert_r).unwrap(),
         bert
     );
 }

@@ -112,7 +112,7 @@ impl SyncService {
         let _delivery = self.notifications.lock().unwrap();
         self.host.notify(
             "feedSyncChanged",
-            serde_json::json!({"states":self.states(),"removed":[],"replace":true}),
+            plain_libs::serde_json::json!({"states":self.states(),"removed":[],"replace":true}),
         )
     }
     fn notify(self: &Arc<Self>, ids: &[String], removed: &[String]) {
@@ -135,7 +135,7 @@ impl SyncService {
             })
             .collect::<Vec<_>>();
         drop(runtime);
-        let payload = serde_json::json!({"states":states,"removed":removed,"replace":false});
+        let payload = plain_libs::serde_json::json!({"states":states,"removed":removed,"replace":false});
         if let Err(error) = self.host.notify("feedSyncChanged", payload) {
             log::warn!("Feed sync callback: {error}");
             if *recovering || !self.host.connected() {
@@ -148,7 +148,7 @@ impl SyncService {
                 let mut recovering = service.notifications.lock().unwrap();
                 if let Ok(permit) = permit {
                     let snapshot =
-                        serde_json::json!({"states":service.states(),"removed":[],"replace":true});
+                        plain_libs::serde_json::json!({"states":service.states(),"removed":[],"replace":true});
                     if let Err(error) =
                         service
                             .host
@@ -188,7 +188,7 @@ impl SyncService {
             .into_iter()
             .filter(|feed| !state.deleting.contains(&feed.id))
             .map(|feed| self.db.feed_get(&feed.id))
-            .collect::<rusqlite::Result<Vec<_>>>()?
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
@@ -348,7 +348,7 @@ impl SyncService {
                 state.error.clear();
                 let _ = self.events.send(WsEvent::broadcast(
                     "FEEDS_FETCHED",
-                    serde_json::json!({"feedId":feed.id,"cancelled":true}).to_string(),
+                    plain_libs::serde_json::json!({"feedId":feed.id,"cancelled":true}).to_string(),
                 ));
             }
             Some(Ok(())) => {

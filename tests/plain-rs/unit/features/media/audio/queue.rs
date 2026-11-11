@@ -266,8 +266,8 @@ fn mode_defaults_to_repeat_and_roundtrips() {
     assert_eq!(get_audio_mode(&prefs).unwrap(), "SHUFFLE");
     save_audio_mode(&prefs, "  REPEAT_ONE ").unwrap();
     assert_eq!(get_audio_mode(&prefs).unwrap(), "REPEAT_ONE");
-    let stored: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.path().join("prefs.json")).unwrap())
+    let stored: plain_libs::serde_json::Value =
+        plain_libs::serde_json::from_str(&std::fs::read_to_string(dir.path().join("prefs.json")).unwrap())
             .unwrap();
     assert_eq!(stored["audio_play_mode"], "REPEAT_ONE");
     prefs.set("audio_play_mode", "SHUFFLE").unwrap();

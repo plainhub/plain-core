@@ -1,6 +1,6 @@
 use crate::infrastructure::db::Db;
 use plain_libs::anyhow::{Result, bail};
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 #[cfg(test)]
 use std::fs;
 use std::{
@@ -116,7 +116,7 @@ fn mutate(
                 )?;
                 statement
                     .query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?
-                    .collect::<rusqlite::Result<_>>()?
+                    .collect::<plain_libs::rusqlite::Result<_>>()?
             }
             Selection::Channel(id) | Selection::ChannelRecord(id) => {
                 if id.is_empty() {
@@ -126,12 +126,12 @@ fn mutate(
                     tx.prepare("SELECT id,content FROM chats WHERE channel_id=?1")?;
                 statement
                     .query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?
-                    .collect::<rusqlite::Result<_>>()?
+                    .collect::<plain_libs::rusqlite::Result<_>>()?
             }
         };
         let mut releases: BTreeMap<String, i64> = BTreeMap::new();
         for (_, content) in &rows {
-            let content: serde_json::Value = serde_json::from_str(content)?;
+            let content: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(content)?;
             for (id, count) in super::content_refs::collect(&content) {
                 *releases.entry(id).or_default() += count;
             }
@@ -145,11 +145,11 @@ fn mutate(
                 let mut statement = tx.prepare("SELECT members FROM chat_channels")?;
                 let members = statement
                     .query_map([], |r| r.get::<_, String>(0))?
-                    .collect::<rusqlite::Result<Vec<_>>>()?;
+                    .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
                 let mut retained = false;
                 for raw in members {
                     let members: Vec<crate::features::chat::channels::messages::ChannelMember> =
-                        serde_json::from_str(&raw)?;
+                        plain_libs::serde_json::from_str(&raw)?;
                     retained |= members.iter().any(|member| member.peer_id == id);
                 }
                 if retained {

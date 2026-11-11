@@ -4,7 +4,7 @@ use crate::infrastructure::db::browse::TableColumnMeta;
 use crate::infrastructure::db::browse::rusqlite::Connection;
 use crate::infrastructure::db::browse::rusqlite::OpenFlags;
 use plain_libs::anyhow::{Result, bail};
-use serde_json::{Map, Value};
+use plain_libs::serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 

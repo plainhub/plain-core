@@ -11,7 +11,7 @@ use plain_rs::features::enums::DataType;
 use plain_rs::infrastructure::host::bridge::Host;
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 pub(crate) const STORAGE: AccessFeature = AccessFeature::Files;
@@ -64,7 +64,7 @@ impl MediaQuery {
             .buckets(data_type)
             .await
             .map_err(plain_graphql::Error::new)?;
-        let items = serde_json::from_value(facts)
+        let items = plain_libs::serde_json::from_value(facts)
             .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
         let buckets =
             plain_rs::features::services::files::media_buckets::aggregate(r#type.as_str(), items)
@@ -98,7 +98,7 @@ pub(crate) fn text_field(query: &str) -> String {
 
 /// One page of library rows, still in the host's raw JSON shape.
 pub(crate) async fn media_rows(ctx: &Context<'_>, params: Value) -> plain_graphql::Result<Value> {
-    let request: RowsRequest = serde_json::from_value(params)?;
+    let request: RowsRequest = plain_libs::serde_json::from_value(params)?;
     Ok(Value::Array(
         library_rows(
             ctx,

@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn shared_card_input_preserves_large_sizes_expiry_and_peer_identity() {
@@ -135,7 +135,7 @@ fn typed_cards_match_the_previous_scalar_encoding_at_precision_and_integer_bound
             let mut input = card(65535, expires);
             input.item_count = Long(size);
             input.total_size = Long(size);
-            let legacy: share_card::Card = serde_json::from_value(json!({
+            let legacy: share_card::Card = plain_libs::serde_json::from_value(json!({
                 "shareId":input.share_id,"urlToken":input.url_token,"peerInfo":{"id":input.peer_info.id,"ip":input.peer_info.ip,"port":input.peer_info.port},
                 "name":input.name,"itemCount":input.item_count,"totalSize":input.total_size,"expiresAt":input.expires_at,
             })).unwrap();

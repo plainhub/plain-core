@@ -5,7 +5,7 @@
 
 use crate::features::enums::DataType;
 use crate::infrastructure::db::MediaFileRow;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 fn media_type(kind: i32) -> Result<DataType, String> {
     [

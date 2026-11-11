@@ -12,7 +12,7 @@ async fn support_uses_one_capability_sample_without_permission_or_method_probes(
             assert_eq!(request["method"], "systemCapabilities");
             host.reply(
                 generation,
-                serde_json::json!({"id":request["id"],"result":["MEDIA_DELETE"]}),
+                plain_libs::serde_json::json!({"id":request["id"],"result":["MEDIA_DELETE"]}),
             )
             .unwrap();
             assert!(requests.try_recv().is_err());
@@ -35,7 +35,7 @@ async fn malformed_capabilities_are_errors_and_never_trigger_a_fallback() {
             assert_eq!(request["method"], "systemCapabilities");
             host.reply(
                 generation,
-                serde_json::json!({"id":request["id"],"result":{"capabilities":[]}}),
+                plain_libs::serde_json::json!({"id":request["id"],"result":{"capabilities":[]}}),
             )
             .unwrap();
             assert!(requests.try_recv().is_err());

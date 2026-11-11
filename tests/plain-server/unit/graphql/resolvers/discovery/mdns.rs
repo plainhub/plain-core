@@ -1,6 +1,6 @@
 use super::*;
 use crate::server::ContentServer;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -66,7 +66,7 @@ async fn native_main_schema_reads_and_stops_idle_mdns_without_initializing_the_h
 
 #[test]
 fn mdns_snapshot_projection_keeps_packet_timestamps_and_ipv6_without_loss() {
-    let state: MdnsState = serde_json::from_value(json!({
+    let state: MdnsState = plain_libs::serde_json::from_value(json!({
         "runtimeId":"fixture", "revision":5000000000_i64, "receiver":true,"running":true,"scanning":false,"published":true,"manualScanning":false,"debugSessionCount":1,"capturing":true,
         "services":[{"serviceType":"_plain._tcp.local.","instanceName":"fixture","instanceFqdn":"fixture._plain._tcp.local.","hostname":"fixture.local.","port":8443,"txtRecords":["id=fixture"],"ips":[],"ip6s":["fe80::1%4"],"complete":true}],
         "packetsIn":[{"time":1790812800123_i64,"direction":"IN","srcIp":"::1","srcPort":5353,"dstIp":"ff02::fb","dstPort":5353,"size":100,"summary":"PTR","detail":"fixture"}],"packetsOut":[]

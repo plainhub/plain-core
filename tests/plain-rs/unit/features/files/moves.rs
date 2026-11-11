@@ -212,7 +212,7 @@ fn raw_alias_and_canonical_roots_rebind_file_tags_and_remove_stale_path_caches()
                 .get::<_, i64>(0))?,
             1
         );
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
 }

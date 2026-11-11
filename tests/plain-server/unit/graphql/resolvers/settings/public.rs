@@ -2,7 +2,7 @@ use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -179,7 +179,7 @@ async fn an_oversized_pref_value_is_refused_by_its_byte_length() {
     let (_dir, schema) = fixture(|method, _| panic!("the platform must not be asked: {method}"));
     // 33_000 four-byte characters is ~132 KB of JSON but only 33k characters.
     let payload: String = std::iter::repeat_n(char::from_u32(0x1F600).unwrap(), 33_000).collect();
-    let value = serde_json::to_string(&payload).unwrap();
+    let value = plain_libs::serde_json::to_string(&payload).unwrap();
     let document = format!("mutation {{ setPref(key: \"locale\", value: {value}) }}");
     let response = schema.execute(&document).await;
     assert_eq!(response.errors.len(), 1);

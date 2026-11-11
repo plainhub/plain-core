@@ -1,9 +1,9 @@
 use super::SettingsPatch;
 use plain_libs::anyhow::{Result, ensure};
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 fn strings(value: &Value) -> Result<Vec<String>> {
-    Ok(serde_json::from_value(value.clone())?)
+    Ok(plain_libs::serde_json::from_value(value.clone())?)
 }
 fn fields(value: &Value, names: &[&str], predicate: fn(&Value) -> bool) -> Result<()> {
     ensure!(value.is_object(), "Expected a settings object");

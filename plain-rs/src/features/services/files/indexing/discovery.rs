@@ -21,7 +21,7 @@ pub async fn discover(state: &Runtime) -> Result<Vec<VolumeRow>, String> {
         path: String,
         drive_type: String,
     }
-    let mounts: Vec<Mount> = serde_json::from_value(facts).map_err(|error| error.to_string())?;
+    let mounts: Vec<Mount> = plain_libs::serde_json::from_value(facts).map_err(|error| error.to_string())?;
     tokio::task::spawn_blocking(move || {
         let paths = mounts
             .into_iter()
@@ -40,7 +40,7 @@ pub fn discover_native(state: &Runtime) -> Result<Vec<VolumeRow>, String> {
         mount_point: Option<String>,
     }
     let facts = crate::features::services::files::mounts::native_facts(&state.prefs)?;
-    let mounts: Vec<Mount> = serde_json::from_value(facts).map_err(|error| error.to_string())?;
+    let mounts: Vec<Mount> = plain_libs::serde_json::from_value(facts).map_err(|error| error.to_string())?;
     register_mounts(
         &state.db,
         mounts.into_iter().filter_map(|mount| mount.mount_point),

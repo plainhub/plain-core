@@ -99,7 +99,7 @@ impl Delivery {
             else {
                 return self.finish(&chat, None, retry, true);
             };
-            let members: Vec<ChannelMember> = serde_json::from_str(&channel.members)?;
+            let members: Vec<ChannelMember> = plain_libs::serde_json::from_str(&channel.members)?;
             if channel.status != ChannelStatus::Joined
                 || !members
                     .iter()
@@ -133,7 +133,7 @@ impl Delivery {
         chat.status = crate::features::chat::enums::ChatStatus::Pending;
         chat.updated_at = crate::infrastructure::db::now_iso();
         self.db.with_conn(|connection|->Result<()> {
-            let changed=connection.execute("UPDATE chats SET status='PENDING',updated_at=?3 WHERE id=?1 AND content=?2 AND from_id='me'",rusqlite::params![chat.id,chat.content,chat.updated_at])?;
+            let changed=connection.execute("UPDATE chats SET status='PENDING',updated_at=?3 WHERE id=?1 AND content=?2 AND from_id='me'",plain_libs::rusqlite::params![chat.id,chat.content,chat.updated_at])?;
             if changed!=1 {bail!("Message changed before delivery");}Ok(())
         })?;
         pending(&chat);
@@ -164,7 +164,7 @@ impl Delivery {
                             chat.channel_id.as_deref().unwrap_or_default(),
                         )?
                         .ok_or_else(|| plain_libs::anyhow::anyhow!("Channel unavailable during delivery"))?;
-                        let members: Vec<ChannelMember> = serde_json::from_str(&channel.members)?;
+                        let members: Vec<ChannelMember> = plain_libs::serde_json::from_str(&channel.members)?;
                         if channel.status != ChannelStatus::Joined
                             || !members
                                 .iter()

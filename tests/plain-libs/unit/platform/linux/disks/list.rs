@@ -1,6 +1,6 @@
 use super::*;
 
-fn dev(name: &str, kind: &str, rm: Option<serde_json::Value>) -> LsblkDevice {
+fn dev(name: &str, kind: &str, rm: Option<crate::serde_json::Value>) -> LsblkDevice {
     LsblkDevice {
         name: name.into(),
         path: format!("/dev/{name}"),
@@ -15,7 +15,7 @@ fn dev(name: &str, kind: &str, rm: Option<serde_json::Value>) -> LsblkDevice {
 #[test]
 fn only_top_level_disks_survive() {
     let devs = vec![
-        dev("sda", "disk", Some(serde_json::json!(false))),
+        dev("sda", "disk", Some(crate::serde_json::json!(false))),
         dev("sda1", "part", None),
         dev("zram0", "disk", None),
         dev("loop0", "disk", None),
@@ -32,13 +32,13 @@ fn only_top_level_disks_survive() {
 
 #[test]
 fn removable_from_rm_bool() {
-    let disks = disks_from_lsblk(&[dev("sdb", "disk", Some(serde_json::json!(true)))]);
+    let disks = disks_from_lsblk(&[dev("sdb", "disk", Some(crate::serde_json::json!(true)))]);
     assert!(disks[0].removable);
 }
 
 #[test]
 fn removable_boolish_string() {
-    let disks = disks_from_lsblk(&[dev("sdc", "disk", Some(serde_json::json!("1")))]);
+    let disks = disks_from_lsblk(&[dev("sdc", "disk", Some(crate::serde_json::json!("1")))]);
     assert!(disks[0].removable);
 }
 
@@ -106,7 +106,7 @@ fn a_disk_read_runs_one_collector_and_filters_its_rows() {
             dev(
                 "definitely-not-real-disk",
                 "disk",
-                Some(serde_json::json!(true)),
+                Some(crate::serde_json::json!(true)),
             ),
             dev("definitely-not-real-part", "part", None),
         ])

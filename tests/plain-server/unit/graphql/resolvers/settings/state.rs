@@ -41,7 +41,7 @@ async fn adb_token_verification_uses_native_management_and_has_no_graphql_oracle
         );
         let document = format!(
             "{{verifyAdbToken(token:{})}}",
-            serde_json::to_string(token).unwrap()
+            plain_libs::serde_json::to_string(token).unwrap()
         );
         for origin in [
             None,
@@ -161,7 +161,7 @@ async fn result_only_user_patch_does_not_read_unselected_system_settings() {
     prefs
         .set(
             "volume_alias",
-            serde_json::json!("malformed unrelated system data"),
+            plain_libs::serde_json::json!("malformed unrelated system data"),
         )
         .unwrap();
     let schema = Schema::build(

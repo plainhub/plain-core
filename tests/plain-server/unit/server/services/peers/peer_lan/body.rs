@@ -1,5 +1,5 @@
-use axum::body::Bytes;
-use hyper::body::Frame;
+use plain_libs::axum::body::Bytes;
+use plain_libs::hyper::body::Frame;
 use plain_rs::features::services::peers::peer_lan::limited_chunks;
 use std::{
     collections::VecDeque,
@@ -23,7 +23,7 @@ struct Frames {
     calls: Arc<AtomicUsize>,
     drops: Arc<AtomicUsize>,
 }
-impl hyper::body::Body for Frames {
+impl plain_libs::hyper::body::Body for Frames {
     type Data = Bytes;
     type Error = io::Error;
     fn poll_frame(
@@ -34,7 +34,7 @@ impl hyper::body::Body for Frames {
         this.calls.fetch_add(1, Ordering::SeqCst);
         Poll::Ready(match this.steps.pop_front() {
             Some(Step::Data(data)) => Some(Ok(Frame::data(Bytes::from_static(data)))),
-            Some(Step::Trailer) => Some(Ok(Frame::trailers(axum::http::HeaderMap::new()))),
+            Some(Step::Trailer) => Some(Ok(Frame::trailers(plain_libs::axum::http::HeaderMap::new()))),
             Some(Step::Failure) => Some(Err(io::Error::other("fixture body failure"))),
             Some(Step::Pending) => {
                 cx.waker().wake_by_ref();
@@ -73,7 +73,7 @@ async fn response_collection_preserves_pending_empty_data_trailers_and_exact_lim
         Step::Data(b"cd"),
     ]);
     assert_eq!(
-        limited_chunks(axum::body::Body::new(body).into_data_stream(), 4)
+        limited_chunks(plain_libs::axum::body::Body::new(body).into_data_stream(), 4)
             .await
             .unwrap(),
         b"abcd"
@@ -81,7 +81,7 @@ async fn response_collection_preserves_pending_empty_data_trailers_and_exact_lim
     assert_eq!(drops.load(Ordering::SeqCst), 1);
     let (body, _, _) = frames(vec![Step::Data(b""), Step::Trailer]);
     assert!(
-        limited_chunks(axum::body::Body::new(body).into_data_stream(), 0)
+        limited_chunks(plain_libs::axum::body::Body::new(body).into_data_stream(), 0)
             .await
             .unwrap()
             .is_empty()
@@ -92,7 +92,7 @@ async fn response_collection_preserves_pending_empty_data_trailers_and_exact_lim
 async fn collection_stops_on_overflow_or_the_original_body_error() {
     let (body, calls, drops) = frames(vec![Step::Data(b"ab"), Step::Data(b"unread")]);
     assert_eq!(
-        limited_chunks(axum::body::Body::new(body).into_data_stream(), 1)
+        limited_chunks(plain_libs::axum::body::Body::new(body).into_data_stream(), 1)
             .await
             .unwrap_err()
             .to_string(),
@@ -102,7 +102,7 @@ async fn collection_stops_on_overflow_or_the_original_body_error() {
     assert_eq!(drops.load(Ordering::SeqCst), 1);
     let (body, calls, _) = frames(vec![Step::Data(b"a"), Step::Failure, Step::Data(b"unread")]);
     assert!(
-        limited_chunks(axum::body::Body::new(body).into_data_stream(), 8)
+        limited_chunks(plain_libs::axum::body::Body::new(body).into_data_stream(), 8)
             .await
             .unwrap_err()
             .to_string()
@@ -116,7 +116,7 @@ fn canceling_collection_drops_the_underlying_body() {
     use std::future::Future;
     let (body, calls, drops) = frames(vec![Step::Pending, Step::Data(b"unread")]);
     let mut future = Box::pin(limited_chunks(
-        axum::body::Body::new(body).into_data_stream(),
+        plain_libs::axum::body::Body::new(body).into_data_stream(),
         8,
     ));
     let mut cx = Context::from_waker(std::task::Waker::noop());

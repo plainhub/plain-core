@@ -64,8 +64,8 @@ impl WsEvent {
                 device_name: String,
                 ip: String,
             }
-            let payload: PublicPairingSuccess = serde_json::from_str(&event.payload).ok()?;
-            event.payload = serde_json::to_string(&payload).ok()?;
+            let payload: PublicPairingSuccess = plain_libs::serde_json::from_str(&event.payload).ok()?;
+            event.payload = plain_libs::serde_json::to_string(&payload).ok()?;
             Some(event)
         }
         #[cfg(not(feature = "chat"))]

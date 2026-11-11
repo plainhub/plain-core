@@ -14,7 +14,7 @@ pub(crate) async fn clear(
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
         if host
-            .call_wait("systemClearMediaCache", serde_json::json!({}))
+            .call_wait("systemClearMediaCache", plain_libs::serde_json::json!({}))
             .await?
             != true
         {

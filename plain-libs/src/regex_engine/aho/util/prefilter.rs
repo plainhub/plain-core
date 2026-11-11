@@ -239,7 +239,7 @@ impl MemmemBuilder {
         fn imp(builder: &MemmemBuilder) -> Option<Prefilter> {
             let pattern = builder.one.as_ref()?;
             assert_eq!(1, builder.count);
-            let finder = Arc::new(Memmem(memchr::memmem::Finder::new(pattern).into_owned()));
+            let finder = Arc::new(Memmem(crate::memchr::memmem::Finder::new(pattern).into_owned()));
             let memory_usage = pattern.len();
             Some(Prefilter {
                 finder,
@@ -258,7 +258,7 @@ impl MemmemBuilder {
     }
 }
 #[derive(Clone, Debug)]
-struct Memmem(memchr::memmem::Finder<'static>);
+struct Memmem(crate::memchr::memmem::Finder<'static>);
 impl PrefilterI for Memmem {
     fn find_in(&self, haystack: &[u8], span: Span) -> Candidate {
         use crate::regex_engine::aho::util::primitives::PatternID;
@@ -439,7 +439,7 @@ struct RareBytesOne {
 }
 impl PrefilterI for RareBytesOne {
     fn find_in(&self, haystack: &[u8], span: Span) -> Candidate {
-        memchr::memchr(self.byte1, &haystack[span])
+        crate::memchr::memchr(self.byte1, &haystack[span])
             .map(|i| {
                 let pos = span.start + i;
                 cmp::max(span.start, pos.saturating_sub(usize::from(self.offset.max)))
@@ -455,7 +455,7 @@ struct RareBytesTwo {
 }
 impl PrefilterI for RareBytesTwo {
     fn find_in(&self, haystack: &[u8], span: Span) -> Candidate {
-        memchr::memchr2(self.byte1, self.byte2, &haystack[span])
+        crate::memchr::memchr2(self.byte1, self.byte2, &haystack[span])
             .map(|i| {
                 let pos = span.start + i;
                 let offset = self.offsets.set[usize::from(haystack[pos])].max;
@@ -473,7 +473,7 @@ struct RareBytesThree {
 }
 impl PrefilterI for RareBytesThree {
     fn find_in(&self, haystack: &[u8], span: Span) -> Candidate {
-        memchr::memchr3(self.byte1, self.byte2, self.byte3, &haystack[span])
+        crate::memchr::memchr3(self.byte1, self.byte2, self.byte3, &haystack[span])
             .map(|i| {
                 let pos = span.start + i;
                 let offset = self.offsets.set[usize::from(haystack[pos])].max;
@@ -564,7 +564,7 @@ struct StartBytesOne {
 }
 impl PrefilterI for StartBytesOne {
     fn find_in(&self, haystack: &[u8], span: Span) -> Candidate {
-        memchr::memchr(self.byte1, &haystack[span])
+        crate::memchr::memchr(self.byte1, &haystack[span])
             .map(|i| span.start + i)
             .map_or(Candidate::None, Candidate::PossibleStartOfMatch)
     }
@@ -576,7 +576,7 @@ struct StartBytesTwo {
 }
 impl PrefilterI for StartBytesTwo {
     fn find_in(&self, haystack: &[u8], span: Span) -> Candidate {
-        memchr::memchr2(self.byte1, self.byte2, &haystack[span])
+        crate::memchr::memchr2(self.byte1, self.byte2, &haystack[span])
             .map(|i| span.start + i)
             .map_or(Candidate::None, Candidate::PossibleStartOfMatch)
     }
@@ -589,7 +589,7 @@ struct StartBytesThree {
 }
 impl PrefilterI for StartBytesThree {
     fn find_in(&self, haystack: &[u8], span: Span) -> Candidate {
-        memchr::memchr3(self.byte1, self.byte2, self.byte3, &haystack[span])
+        crate::memchr::memchr3(self.byte1, self.byte2, self.byte3, &haystack[span])
             .map(|i| span.start + i)
             .map_or(Candidate::None, Candidate::PossibleStartOfMatch)
     }

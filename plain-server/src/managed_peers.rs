@@ -8,7 +8,7 @@ use plain_rs::{
     features::services::peers::{management_http, peer_address},
     infrastructure::db::{DPeer, chat_store::peers},
 };
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},

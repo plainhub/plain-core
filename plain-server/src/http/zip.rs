@@ -1,5 +1,5 @@
 use crate::server::ServerState;
-use axum::{
+use plain_libs::axum::{
     body::Body,
     extract::{Query, Request, State},
     http::{StatusCode, header},
@@ -43,7 +43,7 @@ fn response(result: Result<Download, Error>) -> Response {
         reader
             .read()
             .await
-            .map(|chunk| chunk.map(|bytes| (axum::body::Bytes::from(bytes), reader)))
+            .map(|chunk| chunk.map(|bytes| (plain_libs::axum::body::Bytes::from(bytes), reader)))
             .map_err(std::io::Error::other)
     });
     Response::builder()

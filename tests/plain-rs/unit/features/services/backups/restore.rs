@@ -39,7 +39,7 @@ fn prepare(bytes: Vec<u8>, directory: &Path) -> Result<(), String> {
     )
 }
 fn pending(directory: &Path) -> Pending {
-    serde_json::from_reader(
+    plain_libs::serde_json::from_reader(
         File::open(crate::infrastructure::data_paths::DataPaths::new(directory).pending_restore())
             .unwrap(),
     )
@@ -49,9 +49,9 @@ fn assert_restored(directory: &Path) {
     let paths = crate::infrastructure::data_paths::DataPaths::new(directory);
     assert!(!directory.join("plain.db-wal").exists());
     assert!(!directory.join("plain.db-shm").exists());
-    let db = rusqlite::Connection::open_with_flags(
+    let db = plain_libs::rusqlite::Connection::open_with_flags(
         paths.database(),
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        plain_libs::rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     )
     .unwrap();
     assert_eq!(
@@ -196,7 +196,7 @@ fn invalid_restore_plan_does_not_replace_current_data() {
     std::fs::write(directory.path().join("plain.db"), b"current data").unwrap();
     std::fs::write(
         crate::infrastructure::data_paths::DataPaths::new(directory.path()).pending_restore(),
-        serde_json::to_vec(&marker).unwrap(),
+        plain_libs::serde_json::to_vec(&marker).unwrap(),
     )
     .unwrap();
     assert!(apply(directory.path()).is_err());
@@ -259,12 +259,12 @@ async fn uri_restore_reads_one_bounded_descriptor_without_copying_the_archive_to
             .unwrap();
         host.reply(
             generation,
-            serde_json::json!({"id":request["id"],"result":null}),
+            plain_libs::serde_json::json!({"id":request["id"],"result":null}),
         )
         .unwrap();
-        let metadata: serde_json::Value =
-            serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
-        assert_eq!(metadata, serde_json::json!({"path":uri,"file":true}));
+        let metadata: plain_libs::serde_json::Value =
+            plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+        assert_eq!(metadata, plain_libs::serde_json::json!({"path":uri,"file":true}));
         stream
             .file(
                 crate::infrastructure::host::resource_stream::NativeResourceFile::new(

@@ -4,7 +4,7 @@ use plain_graphql::{Context, Enum, Object, SimpleObject};
 use plain_rs::infrastructure::db::DChat;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::types::Instant;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 pub use plain_rs::features::chat::enums::ChatStatus;
@@ -305,19 +305,19 @@ async fn action(
     action: &str,
     fields: &[(&str, Value)],
 ) -> plain_graphql::Result<ChatChannel> {
-    let mut params = serde_json::Map::new();
+    let mut params = plain_libs::serde_json::Map::new();
     params.insert("action".to_string(), json!(action));
     for (key, value) in fields {
         params.insert((*key).to_string(), value.clone());
     }
-    let request = serde_json::from_value(Value::Object(params))?;
+    let request = plain_libs::serde_json::from_value(Value::Object(params))?;
     let result = plain_rs::features::services::chat::channel_runtime::execute(
         ctx.data::<crate::server::ServerState>()?,
         request,
     )
     .await?;
     let row: plain_rs::infrastructure::db::DChannel =
-        serde_json::from_value(result["channel"].clone())?;
+        plain_libs::serde_json::from_value(result["channel"].clone())?;
     Ok(channel(&plain_rs::features::chat::events::channel_to_json(
         &row,
         &actor(ctx)?,
@@ -332,12 +332,12 @@ async fn flag(
     action: &str,
     fields: &[(&str, Value)],
 ) -> plain_graphql::Result<bool> {
-    let mut params = serde_json::Map::new();
+    let mut params = plain_libs::serde_json::Map::new();
     params.insert("action".to_string(), json!(action));
     for (key, value) in fields {
         params.insert((*key).to_string(), value.clone());
     }
-    let request = serde_json::from_value(Value::Object(params))?;
+    let request = plain_libs::serde_json::from_value(Value::Object(params))?;
     plain_rs::features::services::chat::channel_runtime::execute(
         ctx.data::<crate::server::ServerState>()?,
         request,

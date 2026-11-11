@@ -42,7 +42,7 @@ fn only_acknowledged_successes_are_cleaned_and_type_isolated() {
             )?,
             "/failed"
         );
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
 }
@@ -76,7 +76,7 @@ fn cleanup_transaction_failure_preserves_all_references() {
                 .get::<_, i64>(0))?,
             1
         );
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
 }
@@ -108,7 +108,7 @@ fn video_cleanup_keeps_other_types_and_move_keeps_user_tags() {
                 .get::<_, i64>(0))?,
             0
         );
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
     cleanup(
@@ -129,7 +129,7 @@ fn video_cleanup_keeps_other_types_and_move_keeps_user_tags() {
                 .get::<_, i64>(0))?,
             0
         );
-        Ok::<_, rusqlite::Error>(())
+        Ok::<_, plain_libs::rusqlite::Error>(())
     })
     .unwrap();
 }

@@ -2,7 +2,7 @@ use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn stub(host: Arc<Host>, handler: impl Fn(&str, Value) -> Value + Send + 'static) {
@@ -344,7 +344,7 @@ async fn a_blank_query_is_refused_before_the_platform_is_touched() {
 #[tokio::test]
 async fn notes_and_feed_entries_tag_selected_ids_without_host_or_body_reads() {
     use plain_graphql::{EmptySubscription, Schema};
-    use rusqlite::hooks::{AuthAction, AuthContext, Authorization};
+    use plain_libs::rusqlite::hooks::{AuthAction, AuthContext, Authorization};
     let db = Arc::new(Db::open(std::path::Path::new(":memory:")).unwrap());
     let now = "2026-01-02T03:04:05.000Z";
     for id in ["selected", "neighbor"] {
@@ -352,7 +352,7 @@ async fn notes_and_feed_entries_tag_selected_ids_without_host_or_body_reads() {
             .unwrap();
         db.with_conn(|connection| connection.execute(
             "INSERT INTO feed_entries(id,title,url,image,description,author,content,feed_id,source_entry_id,published_at,is_read,created_at,updated_at) VALUES(?1,?1,'https://example.invalid/','','','','body','feed',?1,?2,0,?2,?2)",
-            rusqlite::params![format!("feed-{id}"), now],
+            plain_libs::rusqlite::params![format!("feed-{id}"), now],
         )).unwrap();
     }
     db.with_conn(|connection| {

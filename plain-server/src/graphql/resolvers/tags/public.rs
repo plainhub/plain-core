@@ -8,7 +8,7 @@ use plain_rs::features::tags;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::db::TagRow;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -176,7 +176,7 @@ async fn provider_query_keys(
         )
         .await
         .map_err(|error| plain_graphql::Error::new(error.to_string()))?;
-        return serde_json::from_value(facts["ids"].clone())
+        return plain_libs::serde_json::from_value(facts["ids"].clone())
             .map_err(|error| plain_graphql::Error::new(error.to_string()));
     }
     let method = if kind == DataType::Call {
@@ -194,7 +194,7 @@ async fn provider_query_keys(
     let facts = crate::graphql::types::facts::host_json(ctx, method, params).await?;
     Ok(facts
         .iter()
-        .filter_map(serde_json::Value::as_str)
+        .filter_map(plain_libs::serde_json::Value::as_str)
         .map(str::to_owned)
         .collect())
 }

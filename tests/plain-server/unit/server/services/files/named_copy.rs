@@ -1,6 +1,6 @@
 use crate::server::ContentServer;
 use plain_graphql::{Request, Response, Variables};
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 async fn execute(
@@ -17,8 +17,8 @@ async fn execute(
 async fn resource_request(
     state: &crate::server::ServerState,
     generation: u64,
-    requests: &mut tokio::sync::mpsc::Receiver<serde_json::Value>,
-) -> serde_json::Value {
+    requests: &mut tokio::sync::mpsc::Receiver<plain_libs::serde_json::Value>,
+) -> plain_libs::serde_json::Value {
     loop {
         let request = requests.recv().await.unwrap();
         if request["method"] == "systemCapabilities" {
@@ -57,8 +57,8 @@ async fn provider_failure_never_publishes_partial_output_and_releases_staging() 
             .host
             .reply(generation, json!({"id":request["id"],"result":true}))
             .unwrap();
-        let metadata: serde_json::Value =
-            serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
+        let metadata: plain_libs::serde_json::Value =
+            plain_libs::serde_json::from_str(&stream.next_request().await.unwrap().unwrap()).unwrap();
         assert_eq!(metadata["path"], "content://fixture/picked");
         stream.write(b"first".to_vec()).await.unwrap();
         if succeeds {
@@ -139,9 +139,9 @@ async fn invalid_destinations_are_rejected_before_provider_reads_or_network_work
     use std::sync::atomic::{AtomicUsize, Ordering};
     let fetched = Arc::new(AtomicUsize::new(0));
     let observed = fetched.clone();
-    let routes = axum::Router::new().route(
+    let routes = plain_libs::axum::Router::new().route(
         "/file",
-        axum::routing::get(move || {
+        plain_libs::axum::routing::get(move || {
             let observed = observed.clone();
             async move {
                 observed.fetch_add(1, Ordering::SeqCst);
@@ -152,7 +152,7 @@ async fn invalid_destinations_are_rejected_before_provider_reads_or_network_work
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
-        axum::serve(listener, routes).await.unwrap();
+        plain_libs::axum::serve(listener, routes).await.unwrap();
     });
     let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&dir.path().join("data")).unwrap();
@@ -194,7 +194,7 @@ async fn invalid_destinations_are_rejected_before_provider_reads_or_network_work
 
 #[tokio::test]
 async fn remote_copy_follows_redirects_fetches_fresh_bytes_and_leaves_no_output_on_http_failure() {
-    use axum::{Router, http::StatusCode, response::Redirect, routing::get};
+    use plain_libs::axum::{Router, http::StatusCode, response::Redirect, routing::get};
     use std::sync::atomic::{AtomicUsize, Ordering};
     let requests = Arc::new(AtomicUsize::new(0));
     let count = requests.clone();
@@ -211,7 +211,7 @@ async fn remote_copy_follows_redirects_fetches_fresh_bytes_and_leaves_no_output_
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
-        axum::serve(listener, routes).await.unwrap();
+        plain_libs::axum::serve(listener, routes).await.unwrap();
     });
     let dir = plain_libs::temporary::tempdir().unwrap();
     let core = ContentServer::open(&dir.path().join("data")).unwrap();
@@ -264,9 +264,9 @@ async fn public_url_copy_rejects_untrusted_tls_even_after_a_peer_cache_client_wa
     let port = listener.local_addr().unwrap().port();
     let calls = Arc::new(AtomicUsize::new(0));
     let observed = calls.clone();
-    let router = axum::Router::new().route(
+    let router = plain_libs::axum::Router::new().route(
         "/file",
-        axum::routing::get(move || {
+        plain_libs::axum::routing::get(move || {
             let calls = observed.clone();
             async move {
                 calls.fetch_add(1, Ordering::SeqCst);

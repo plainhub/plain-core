@@ -15,7 +15,7 @@ fn deletion_releases_exact_references_and_preserves_other_conversations() {
     let file = import_bytes(&db, &root, b"owned fixture", "text/plain").unwrap();
     import_bytes(&db, &root, b"owned fixture", "text/plain").unwrap();
     import_bytes(&db, &root, b"owned fixture", "text/plain").unwrap();
-    let content = serde_json::json!({"type":"FILES","value":{"items":[{"uri":format!("fid:{}",file.fid_suffix),"size":13},{"uri":"fsid:foreign","size":0}]}}).to_string();
+    let content = plain_libs::serde_json::json!({"type":"FILES","value":{"items":[{"uri":format!("fid:{}",file.fid_suffix),"size":13},{"uri":"fsid:foreign","size":0}]}}).to_string();
     let mut direct = DChat::new("me", "peer", "", &content);
     direct.id = "direct".into();
     let mut group = DChat::new("peer", "me", "group", &content);
@@ -49,7 +49,7 @@ fn failed_sql_restores_attachment_and_message_then_retry_deletes_once() {
     fs::create_dir_all(&root).unwrap();
     let db = Db::open(&root.join("plain.db")).unwrap();
     let file = import_bytes(&db, &root, b"rollback fixture", "image/png").unwrap();
-    let content = serde_json::json!({"type":"IMAGES","value":{"items":[{"uri":format!("fid:{}",file.fid_suffix),"size":16}]}}).to_string();
+    let content = plain_libs::serde_json::json!({"type":"IMAGES","value":{"items":[{"uri":format!("fid:{}",file.fid_suffix),"size":16}]}}).to_string();
     let mut chat = DChat::new("me", "peer", "", &content);
     chat.id = "message".into();
     messages::save(&db, &[chat], SaveMode::Insert).unwrap();
@@ -100,7 +100,7 @@ fn entity_removal_is_atomic_retains_channel_peer_and_returns_removed_channel_sna
     channel.members = r#"[{"peerId":"peer","status":"PENDING"}]"#.into();
     channel.key = "channel-secret".into();
     channels::save(&db, &[channel], SaveMode::Insert).unwrap();
-    let content=serde_json::json!({"type":"FILES","value":{"items":[{"uri":format!("fid:{}",file.fid_suffix),"size":14}]}}).to_string();
+    let content=plain_libs::serde_json::json!({"type":"FILES","value":{"items":[{"uri":format!("fid:{}",file.fid_suffix),"size":14}]}}).to_string();
     let mut direct = DChat::new("me", "peer", "", &content);
     direct.id = "direct".into();
     let mut group = DChat::new("peer", "me", "group", &content);
@@ -203,7 +203,7 @@ fn checked_channel_delete_preserves_newer_row_message_and_attachment() {
     let db = Db::open(&root.join("plain.db")).unwrap();
     let channel = state::create(&db, "actor", "fixture").unwrap();
     let file = import_bytes(&db, &root, b"channel attachment", "text/plain").unwrap();
-    let content=serde_json::json!({"type":"FILES","value":{"items":[{"uri":format!("fid:{}",file.fid_suffix),"size":18}]}}).to_string();
+    let content=plain_libs::serde_json::json!({"type":"FILES","value":{"items":[{"uri":format!("fid:{}",file.fid_suffix),"size":18}]}}).to_string();
     let chat = DChat::new("actor", "", &channel.id, &content);
     messages::save(&db, &[chat.clone()], SaveMode::Insert).unwrap();
     let current: DChannel = state::apply(

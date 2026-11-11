@@ -6,7 +6,7 @@ use plain_libs::crypto::{
 };
 use plain_libs::utils::base64::{base64_decode, base64_encode};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use plain_libs::serde_json::json;
 use sha2::{Digest, Sha256};
 
 const DOMAIN: &str = "web-approval";
@@ -25,7 +25,7 @@ pub struct ServerHello {
     pub expires_at: u64,
     pub signature: String,
 }
-fn request_value(request: &ClientHello) -> serde_json::Value {
+fn request_value(request: &ClientHello) -> plain_libs::serde_json::Value {
     json!({"publicKey":request.public_key})
 }
 // Struct serialization fixes insertion order independently of serde_json map features.

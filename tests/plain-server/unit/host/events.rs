@@ -227,14 +227,14 @@ async fn raw_ble_advertisements_are_consumed_without_public_rebroadcast() {
     bridge
         .publish_text(
             "BLE_SCAN_STATE_REPORTED",
-            serde_json::json!({"scanId":scan,"active":true}).to_string(),
+            plain_libs::serde_json::json!({"scanId":scan,"active":true}).to_string(),
         )
         .await
         .unwrap();
     bridge
         .publish_text(
             "BLE_ADVERTISEMENT_REPORTED",
-            serde_json::json!({"scanId":scan,"clientId":"invalid"}).to_string(),
+            plain_libs::serde_json::json!({"scanId":scan,"clientId":"invalid"}).to_string(),
         )
         .await
         .unwrap();
@@ -242,7 +242,7 @@ async fn raw_ble_advertisements_are_consumed_without_public_rebroadcast() {
     bridge
         .publish_text(
             "BLE_SCAN_STATE_REPORTED",
-            serde_json::json!({"scanId":scan,"active":false}).to_string(),
+            plain_libs::serde_json::json!({"scanId":scan,"active":false}).to_string(),
         )
         .await
         .unwrap();
@@ -250,7 +250,7 @@ async fn raw_ble_advertisements_are_consumed_without_public_rebroadcast() {
         bridge
             .publish_text(
                 "BLE_ADVERTISEMENT_REPORTED",
-                serde_json::json!({"scanId":scan,"clientId":"706c6169-2d74-8e53-9a16-f08b62c591d3"}).to_string()
+                plain_libs::serde_json::json!({"scanId":scan,"clientId":"706c6169-2d74-8e53-9a16-f08b62c591d3"}).to_string()
             )
             .await
             .is_err()
@@ -312,7 +312,7 @@ async fn scan_facts_are_validated_and_scoped_to_the_connected_host() {
     let server = server(&dir);
     let old = server.host_events().unwrap();
     let id = plain_libs::utils::uuid::Uuid::from_u128(1).to_string();
-    let active = serde_json::json!({"scanId":id,"active":true}).to_string();
+    let active = plain_libs::serde_json::json!({"scanId":id,"active":true}).to_string();
     old.publish_text("BLE_SCAN_STATE_REPORTED", active.clone())
         .await
         .unwrap();
@@ -336,9 +336,9 @@ async fn scan_facts_are_validated_and_scoped_to_the_connected_host() {
         plain_rs::features::discovery::nearby_scan::Step::Read { .. }
     ));
     for invalid in [
-        serde_json::json!({"scanId":"invalid","active":true}),
-        serde_json::json!({"scanId":id,"active":"true"}),
-        serde_json::json!({"scanId":id,"active":true,"extra":true}),
+        plain_libs::serde_json::json!({"scanId":"invalid","active":true}),
+        plain_libs::serde_json::json!({"scanId":id,"active":"true"}),
+        plain_libs::serde_json::json!({"scanId":id,"active":true,"extra":true}),
     ] {
         assert!(
             bridge

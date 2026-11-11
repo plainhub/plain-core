@@ -1,5 +1,5 @@
 use super::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn native_batches_emit_one_deduplicated_public_invalidation_and_empty_batches_emit_none() {
@@ -11,7 +11,7 @@ fn native_batches_emit_one_deduplicated_public_invalidation_and_empty_batches_em
     assert_eq!(event.event_type, MEDIA_LIBRARY_UPDATED);
     assert!(!event.is_host_event());
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&event.payload).unwrap(),
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&event.payload).unwrap(),
         json!({"types":[1,3,24]})
     );
     assert!(receiver.try_recv().is_err());

@@ -1,12 +1,12 @@
 use crate::http::graphql;
 use crate::server::ContentServer;
 use crate::server::ServerState;
-use axum::{
+use plain_libs::axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
 };
 use plain_rs::features::prefs::Prefs;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn device() -> (plain_libs::temporary::TempDir, ContentServer, HeaderMap) {
@@ -19,7 +19,7 @@ fn device() -> (plain_libs::temporary::TempDir, ContentServer, HeaderMap) {
         prefs,
     )
     .unwrap();
-    let session = serde_json::to_value(
+    let session = plain_libs::serde_json::to_value(
         plain_rs::features::services::sessions::create(
             &server.runtime_state(),
             "Controller".into(),
@@ -44,14 +44,14 @@ async fn call(state: ServerState, headers: &HeaderMap, document: &str) -> (Statu
     let response = graphql::call(
         State(state),
         headers.clone(),
-        axum::body::Bytes::from(json!({"query":document}).to_string()),
+        plain_libs::axum::body::Bytes::from(json!({"query":document}).to_string()),
     )
     .await;
     let status = response.status();
-    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+    let body = plain_libs::axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
         .unwrap();
-    (status, serde_json::from_slice(&body).unwrap_or(Value::Null))
+    (status, plain_libs::serde_json::from_slice(&body).unwrap_or(Value::Null))
 }
 #[tokio::test]
 async fn remote_settings_authentication_device_isolation_and_disable_reply() {

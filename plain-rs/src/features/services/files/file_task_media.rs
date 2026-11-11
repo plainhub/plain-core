@@ -3,7 +3,7 @@ use crate::features::services::files::file_task_walk::FileWalker;
 use crate::features::services::files::platform::FilePlatform;
 use plain_libs::anyhow::{Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::{collections::HashSet, path::Path};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -77,7 +77,7 @@ pub async fn prepare(platform: &FilePlatform, source: &str) -> Result<Value> {
     if !batch.is_empty() {
         items.extend(lookup(platform, &batch).await?);
     }
-    Ok(serde_json::to_value(Snapshot { root, items })?)
+    Ok(plain_libs::serde_json::to_value(Snapshot { root, items })?)
 }
 pub struct MediaMoveBindings {
     pub bindings: Vec<Binding>,
@@ -85,7 +85,7 @@ pub struct MediaMoveBindings {
     pub destination_root: String,
 }
 pub fn source_root(snapshot: &Value) -> Result<String> {
-    Ok(serde_json::from_value::<Snapshot>(snapshot.clone())?.root)
+    Ok(plain_libs::serde_json::from_value::<Snapshot>(snapshot.clone())?.root)
 }
 
 pub async fn resolve(
@@ -93,7 +93,7 @@ pub async fn resolve(
     destination: &str,
     snapshot: &Value,
 ) -> Result<MediaMoveBindings> {
-    let snapshot: Snapshot = serde_json::from_value(snapshot.clone())?;
+    let snapshot: Snapshot = plain_libs::serde_json::from_value(snapshot.clone())?;
     let destination = normalized(Path::new(destination)).await?;
     let mut bindings = Vec::new();
     for batch in snapshot.items.chunks(128) {
@@ -143,13 +143,13 @@ pub async fn deletion_snapshot(
     for batch in paths.chunks(128) {
         items.extend(lookup(platform, batch).await?);
     }
-    Ok(serde_json::to_value(Snapshot { root, items })?)
+    Ok(plain_libs::serde_json::to_value(Snapshot { root, items })?)
 }
 pub fn deleted_items(
     snapshot: &Value,
     paths: &[String],
 ) -> Result<Vec<crate::features::files::deletes::Item>> {
-    let snapshot: Snapshot = serde_json::from_value(snapshot.clone())?;
+    let snapshot: Snapshot = plain_libs::serde_json::from_value(snapshot.clone())?;
     Ok(snapshot
         .items
         .into_iter()

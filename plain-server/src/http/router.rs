@@ -1,8 +1,8 @@
 #[cfg(feature = "core")]
 use crate::server::ServerState;
-use axum::{Router, routing::get};
+use plain_libs::axum::{Router, routing::get};
 #[cfg(feature = "core")]
-use axum::{
+use plain_libs::axum::{
     extract::DefaultBodyLimit,
     routing::{any, post},
 };
@@ -52,7 +52,7 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
         .route("/dlna/media/:id", get(crate::http::dlna::media))
         .route(
             "/dlna/callback",
-            axum::routing::any(crate::http::dlna::callback),
+            plain_libs::axum::routing::any(crate::http::dlna::callback),
         )
         .route("/init", post(crate::http::init::init))
         .layer(DefaultBodyLimit::max(32 * 1024 * 1024))
@@ -66,11 +66,11 @@ pub(crate) fn build_router(state: ServerState, receiver: watch::Receiver<bool>) 
         .merge(nearby_router)
         .merge(main_graphql_router)
         .merge(dlna_routes(state.clone()))
-        .layer(axum::middleware::from_fn_with_state(
+        .layer(plain_libs::axum::middleware::from_fn_with_state(
             state.clone(),
             crate::http::auth::local_client::authorize,
         ))
-        .layer(axum::middleware::from_fn_with_state(
+        .layer(plain_libs::axum::middleware::from_fn_with_state(
             state.clone(),
             crate::http::auth::cors::apply,
         ))

@@ -173,10 +173,10 @@ fn device_types_preserve_wire_names_and_cache_values() {
     ] {
         let mut value = device("typed", DiscoveryMethod::Lan);
         value.device_type = kind;
-        let wire = serde_json::to_value(&value).unwrap();
+        let wire = plain_libs::serde_json::to_value(&value).unwrap();
         assert_eq!(wire["deviceType"], kind.as_str());
         assert_eq!(
-            serde_json::from_value::<Device>(wire).unwrap().device_type,
+            plain_libs::serde_json::from_value::<Device>(wire).unwrap().device_type,
             kind
         );
         crate::infrastructure::db::chat_store::nearby::save(&db, &value.cache()).unwrap();
@@ -186,9 +186,9 @@ fn device_types_preserve_wire_names_and_cache_values() {
         );
         assert_eq!(db.get_cached_nearby_devices().unwrap()[0].device_type, kind);
     }
-    let mut wire = serde_json::to_value(device("invalid", DiscoveryMethod::Lan)).unwrap();
-    wire["deviceType"] = serde_json::json!("FUTURE_DEVICE");
-    assert!(serde_json::from_value::<Device>(wire).is_err());
+    let mut wire = plain_libs::serde_json::to_value(device("invalid", DiscoveryMethod::Lan)).unwrap();
+    wire["deviceType"] = plain_libs::serde_json::json!("FUTURE_DEVICE");
+    assert!(plain_libs::serde_json::from_value::<Device>(wire).is_err());
 }
 
 #[test]
@@ -202,16 +202,16 @@ fn discovery_methods_keep_supported_wire_values_and_reject_unknown_values() {
         assert_eq!(method.is_lan(), lan);
         let source = device("typed-method", method);
         source.validate().unwrap();
-        let value = serde_json::to_value(source).unwrap();
-        assert_eq!(value["discoveryMethods"], serde_json::json!([wire]));
+        let value = plain_libs::serde_json::to_value(source).unwrap();
+        assert_eq!(value["discoveryMethods"], plain_libs::serde_json::json!([wire]));
         assert_eq!(
-            serde_json::from_value::<Device>(value)
+            plain_libs::serde_json::from_value::<Device>(value)
                 .unwrap()
                 .discovery_methods,
             [method]
         );
     }
-    let mut value = serde_json::to_value(device("invalid-method", DiscoveryMethod::Lan)).unwrap();
-    value["discoveryMethods"] = serde_json::json!(["FUTURE_METHOD"]);
-    assert!(serde_json::from_value::<Device>(value).is_err());
+    let mut value = plain_libs::serde_json::to_value(device("invalid-method", DiscoveryMethod::Lan)).unwrap();
+    value["discoveryMethods"] = plain_libs::serde_json::json!(["FUTURE_METHOD"]);
+    assert!(plain_libs::serde_json::from_value::<Device>(value).is_err());
 }

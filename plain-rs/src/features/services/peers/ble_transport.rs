@@ -22,7 +22,7 @@ impl Runtime {
             .host
             .generation()
             .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE host unavailable"))?;
-        let request = serde_json::json!({
+        let request = plain_libs::serde_json::json!({
             "request": plain_libs::utils::base64::base64_encode(&bytes),
             "clientId": peer.id,
             "peer": crate::features::services::peers::peer_address::view(peer),
@@ -39,7 +39,7 @@ impl Runtime {
         }
         let encoded = reply
             .get("response")
-            .and_then(serde_json::Value::as_str)
+            .and_then(plain_libs::serde_json::Value::as_str)
             .ok_or_else(|| plain_libs::anyhow::anyhow!("BLE exchange returned no response"))?;
         let bytes = plain_libs::utils::base64::base64_decode(encoded);
         ble::decode_response(&bytes)?;
@@ -50,15 +50,15 @@ impl Runtime {
 #[cfg(any(test, feature = "test-seams"))]
 impl Runtime {
     /// Decodes the request bytes the host was asked to send.
-    pub fn request_for_test(&self, params: &serde_json::Value) -> ble::Request {
+    pub fn request_for_test(&self, params: &plain_libs::serde_json::Value) -> ble::Request {
         let bytes = plain_libs::utils::base64::base64_decode(
             params["request"].as_str().expect("host request bytes"),
         );
         ble::Request::decode(&bytes).unwrap()
     }
     /// Builds the host reply body for a given encoded response.
-    pub fn reply_for_test(&self, _params: &serde_json::Value, bytes: Vec<u8>) -> serde_json::Value {
-        serde_json::json!({
+    pub fn reply_for_test(&self, _params: &plain_libs::serde_json::Value, bytes: Vec<u8>) -> plain_libs::serde_json::Value {
+        plain_libs::serde_json::json!({
             "response": plain_libs::utils::base64::base64_encode(&bytes),
         })
     }
@@ -67,7 +67,7 @@ impl Runtime {
 #[cfg(any(test, feature = "test-seams"))]
 use crate::infrastructure::protocols::ble::Request;
 #[cfg(any(test, feature = "test-seams"))]
-pub fn test_peer_wire(runtime: &Runtime, params: &serde_json::Value, key: &[u8]) -> String {
+pub fn test_peer_wire(runtime: &Runtime, params: &plain_libs::serde_json::Value, key: &[u8]) -> String {
     let Request::PeerGraphql { body, .. } = runtime.request_for_test(params) else {
         panic!("Expected peer request")
     };
@@ -85,10 +85,10 @@ pub fn test_peer_wire(runtime: &Runtime, params: &serde_json::Value, key: &[u8])
 #[cfg(any(test, feature = "test-seams"))]
 pub fn test_reply(
     runtime: &Runtime,
-    params: &serde_json::Value,
-    value: serde_json::Value,
+    params: &plain_libs::serde_json::Value,
+    value: plain_libs::serde_json::Value,
     key: &[u8],
-) -> serde_json::Value {
+) -> plain_libs::serde_json::Value {
     let Request::PeerGraphql { body: request, .. } = runtime.request_for_test(params) else {
         panic!("Expected peer request")
     };

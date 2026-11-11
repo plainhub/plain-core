@@ -6,7 +6,7 @@ fn noble_vectors_match_the_shared_response_context_and_wire_bytes() {
         XChaCha20Poly1305, XNonce,
         aead::{Aead, KeyInit, Payload},
     };
-    let vectors: serde_json::Value = serde_json::from_str(include_str!(
+    let vectors: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(include_str!(
         "../../../../../plain-rs/testdata/crypto/http-response-vectors.json"
     ))
     .unwrap();

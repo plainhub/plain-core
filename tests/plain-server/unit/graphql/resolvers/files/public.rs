@@ -3,7 +3,7 @@ use crate::test_support::schema::SchemaFixture as PublicSchema;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{fs, sync::Arc};
 
 const GRANTED: &str = r#"["FILES"]"#;
@@ -74,7 +74,7 @@ fn fixture_with(
     prefs
         .set(
             "api_permissions",
-            json!(serde_json::from_str::<Vec<String>>(permissions).unwrap()),
+            json!(plain_libs::serde_json::from_str::<Vec<String>>(permissions).unwrap()),
         )
         .unwrap();
     let db = Arc::new(Db::open(&dir.path().join("data.db")).unwrap());
@@ -643,7 +643,7 @@ async fn batched_file_paths_use_native_rust_data_without_platform_requests() {
         "file:///tmp/file%20name.png",
         "app://icons/image.png",
     ];
-    let values = serde_json::to_value(
+    let values = plain_libs::serde_json::to_value(
         core.native_management()
             .unwrap()
             .file_paths(paths.into_iter().map(str::to_owned).collect())
@@ -688,7 +688,7 @@ async fn native_file_actions_resolve_registered_attachments_without_graphql() {
         .to_str()
         .unwrap();
     let (_generation, mut requests) = state.host.connect();
-    let paths = serde_json::to_value(
+    let paths = plain_libs::serde_json::to_value(
         core.native_management()
             .unwrap()
             .file_paths(vec![

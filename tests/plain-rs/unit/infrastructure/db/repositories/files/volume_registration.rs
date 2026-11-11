@@ -131,7 +131,7 @@ fn uuid_loss_and_recovery_preserve_registered_volume_files_and_index_configurati
                 })?,
                 0
             );
-            Ok::<_, rusqlite::Error>(())
+            Ok::<_, plain_libs::rusqlite::Error>(())
         })
         .unwrap();
         assert_eq!(std::fs::read(&file).unwrap(), contents);

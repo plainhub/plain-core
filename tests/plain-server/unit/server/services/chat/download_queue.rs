@@ -1,7 +1,7 @@
 #![cfg(feature = "http_transport")]
 
 use plain_rs::runtime::Runtime as ServerState;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::sync::Arc;
 
 fn fixture() -> (plain_libs::temporary::TempDir, crate::server::ContentServer, ServerState) {
@@ -53,7 +53,7 @@ async fn terminal(state: &ServerState, id: &str) -> Option<Value> {
                 if let Some(chat) =
                     plain_rs::infrastructure::db::chat_store::messages::get(&state.db, id).unwrap()
                 {
-                    let content: Value = serde_json::from_str(&chat.content).unwrap();
+                    let content: Value = plain_libs::serde_json::from_str(&chat.content).unwrap();
                     if content["value"]["items"][0]["uri"]
                         .as_str()
                         .is_some_and(|uri| uri.starts_with("fid:"))
@@ -134,12 +134,12 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
         let mut retired = false;
         while !updated || !retired {
             let event = events.recv().await.unwrap();
-            let payload: Value = serde_json::from_str(&event.payload).unwrap_or(Value::Null);
+            let payload: Value = plain_libs::serde_json::from_str(&event.payload).unwrap_or(Value::Null);
             if event.event_type == plain_rs::features::chat::events::WS_MESSAGE_UPDATED
                 && payload[0]["id"] == "exact"
             {
                 let content: Value =
-                    serde_json::from_str(payload[0]["content"].as_str().unwrap()).unwrap();
+                    plain_libs::serde_json::from_str(payload[0]["content"].as_str().unwrap()).unwrap();
                 assert!(
                     content["value"]["items"][0]["uri"]
                         .as_str()
@@ -174,7 +174,7 @@ async fn root_ble_chunks_commit_exact_bytes_and_reject_short_and_overlong_reads(
     let chat = plain_rs::infrastructure::db::chat_store::messages::get(&state.db, "exact")
         .unwrap()
         .unwrap();
-    let content: Value = serde_json::from_str(&chat.content).unwrap();
+    let content: Value = plain_libs::serde_json::from_str(&chat.content).unwrap();
     let uri = content["value"]["items"][0]["uri"].as_str().unwrap();
     assert!(uri.starts_with("fid:"));
     let hash = uri[4..].split('.').next().unwrap();
@@ -288,7 +288,7 @@ async fn explicit_download_retry_roots_probe_open_transport_and_commit_exact_byt
         let chat = plain_rs::infrastructure::db::chat_store::messages::get(&state.db, "retry")
             .unwrap()
             .unwrap();
-        let content: Value = serde_json::from_str(&chat.content).unwrap();
+        let content: Value = plain_libs::serde_json::from_str(&chat.content).unwrap();
         let uri = content["value"]["items"][0]["uri"].as_str().unwrap();
         let hash = uri.strip_prefix("fid:").unwrap().split('.').next().unwrap();
         let record = state.db.app_file_get(hash).unwrap().unwrap();

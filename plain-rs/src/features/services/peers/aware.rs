@@ -5,7 +5,7 @@ use crate::infrastructure::db::chat_store::peers;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::{Result, ensure};
 use serde::Serialize;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::collections::HashMap;
 
 #[derive(Clone, PartialEq, Eq, Serialize)]
@@ -137,7 +137,7 @@ impl Runtime {
             }
             let started = state
                 .host
-                .call("peerStartAware", serde_json::to_value(&subscription)?)
+                .call("peerStartAware", plain_libs::serde_json::to_value(&subscription)?)
                 .await
                 .map_err(plain_libs::anyhow::Error::msg)?;
             ensure!(state.host.is_current(generation), "Aware host replaced");

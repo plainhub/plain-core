@@ -44,7 +44,7 @@ async fn folder_share_is_created_once_and_same_card_is_sent_to_every_target() {
     let shares = state.db.share_list().unwrap();
     assert_eq!(shares.len(), 1);
     assert!(shares[0].read_only);
-    let content: serde_json::Value = serde_json::from_str(&messages[0].content).unwrap();
+    let content: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(&messages[0].content).unwrap();
     assert_eq!(content["type"], "SHARE");
     assert_eq!(content["value"]["shareId"], shares[0].id);
     assert_eq!(content["value"]["itemCount"], 2);
@@ -162,7 +162,7 @@ async fn failed_remote_delivery_retains_share_and_successful_local_message() {
                 .query_map([], |row| {
                     Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
                 })?
-                .collect::<rusqlite::Result<Vec<_>>>()
+                .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
         })
         .unwrap();
     assert_eq!(rows.len(), 2);
@@ -269,7 +269,7 @@ async fn a_committed_folder_share_survives_a_later_delivery_error() {
         })
         .unwrap();
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&content).unwrap()["value"]["shareId"],
+        plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(&content).unwrap()["value"]["shareId"],
         shares[0].id
     );
     assert!(folder_path.exists());

@@ -7,7 +7,7 @@ use crate::infrastructure::db::Db;
 use crate::infrastructure::db::chat_store;
 use crate::infrastructure::db::chat_store::SaveMode;
 use chat_store::{channels, messages, nearby, peers};
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn checked_chat_storage_is_atomic_literal_and_preserves_unrelated_conversations_and_login_tokens() {
@@ -80,7 +80,7 @@ fn checked_chat_storage_is_atomic_literal_and_preserves_unrelated_conversations_
         latest: false,
         count_only: false,
     };
-    let rows: Vec<DChat> = serde_json::from_value(messages::list(&db, &filter).unwrap()).unwrap();
+    let rows: Vec<DChat> = plain_libs::serde_json::from_value(messages::list(&db, &filter).unwrap()).unwrap();
     assert_eq!(rows[0].id, "two");
     filter.limit = None;
     filter.text = "%_".into();

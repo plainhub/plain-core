@@ -96,7 +96,7 @@ fn parser_matches_the_independent_google_syntax_and_region_replay() {
     use std::io::{BufRead, BufReader};
     let corpus = include_bytes!("../../../../plain-rs/testdata/phone/parser-reference.jsonl.gz");
     let mut lines = BufReader::new(GzDecoder::new(corpus.as_slice())).lines();
-    let header: CorpusHeader = serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
+    let header: CorpusHeader = crate::serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
     assert_eq!(
         header.reference.source,
         "google-libphonenumber-public-examples-and-syntax-variants"
@@ -118,7 +118,7 @@ fn parser_matches_the_independent_google_syntax_and_region_replay() {
     let mut failed = 0;
     let mut count = 0;
     for line in lines {
-        let case: Case = serde_json::from_str(&line.unwrap()).unwrap();
+        let case: Case = crate::serde_json::from_str(&line.unwrap()).unwrap();
         let actual = parse(&case.number, &case.region).map(|number| {
             let mut valid_regions = regions(number.country_code)
                 .filter(|plan| plan.kind(&number.national).is_some())

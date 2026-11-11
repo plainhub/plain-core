@@ -1,5 +1,5 @@
 use crate::{ConstValue, Name};
-use indexmap::IndexMap;
+use plain_libs::indexmap::IndexMap;
 #[test]
 fn test_macro() {
     assert_eq!(value!(1), ConstValue::Number(1.into()));

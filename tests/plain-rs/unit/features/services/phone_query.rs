@@ -5,7 +5,7 @@
 use super::*;
 use crate::features::services::files::provider_query::fields;
 use crate::infrastructure::db::Db;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 fn plan_ok(provider: Provider, fields: &[FilterField], dates: &Value) -> plain_libs::anyhow::Result<Plan> {
     plan(provider, fields, dates)
@@ -121,7 +121,7 @@ fn call_plans_bind_text_ids_and_only_closed_comparisons() {
     let result = plan_ok(
         Provider::Call,
         &parsed,
-        &serde_json::json!({"2026-10-05": 1234}),
+        &plain_libs::serde_json::json!({"2026-10-05": 1234}),
     )
     .unwrap();
     assert!(

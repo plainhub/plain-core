@@ -2,14 +2,14 @@ use super::*;
 #[test]
 fn post_processor_deserialization_no_type() {
     let json = r#"{"strip_left":false, "strip_right":true}"#;
-    let reconstructed = serde_json::from_str::<NormalizerWrapper>(json);
+    let reconstructed = crate::serde_json::from_str::<NormalizerWrapper>(json);
     assert!(matches!(
         reconstructed.unwrap(),
         NormalizerWrapper::StripNormalizer(_)
     ));
 
     let json = r#"{"trim_offsets":true, "add_prefix_space":true}"#;
-    let reconstructed = serde_json::from_str::<NormalizerWrapper>(json);
+    let reconstructed = crate::serde_json::from_str::<NormalizerWrapper>(json);
     match reconstructed {
         Err(err) => assert_eq!(
             err.to_string(),
@@ -19,7 +19,7 @@ fn post_processor_deserialization_no_type() {
     }
 
     let json = r#"{"prepend":"a"}"#;
-    let reconstructed = serde_json::from_str::<NormalizerWrapper>(json);
+    let reconstructed = crate::serde_json::from_str::<NormalizerWrapper>(json);
     assert!(matches!(
         reconstructed.unwrap(),
         NormalizerWrapper::Prepend(_)
@@ -29,9 +29,9 @@ fn post_processor_deserialization_no_type() {
 #[test]
 fn normalizer_serialization() {
     let json = r#"{"type":"Sequence","normalizers":[]}"#;
-    assert!(serde_json::from_str::<NormalizerWrapper>(json).is_ok());
+    assert!(crate::serde_json::from_str::<NormalizerWrapper>(json).is_ok());
     let json = r#"{"type":"Sequence","normalizers":[{}]}"#;
-    let parse = serde_json::from_str::<NormalizerWrapper>(json);
+    let parse = crate::serde_json::from_str::<NormalizerWrapper>(json);
     match parse {
         Err(err) => assert_eq!(
             format!("{err}"),
@@ -41,7 +41,7 @@ fn normalizer_serialization() {
     }
 
     let json = r#"{"replacement":"▁","prepend_scheme":"always"}"#;
-    let parse = serde_json::from_str::<NormalizerWrapper>(json);
+    let parse = crate::serde_json::from_str::<NormalizerWrapper>(json);
     match parse {
         Err(err) => assert_eq!(
             format!("{err}"),
@@ -51,7 +51,7 @@ fn normalizer_serialization() {
     }
 
     let json = r#"{"type":"Sequence","prepend_scheme":"always"}"#;
-    let parse = serde_json::from_str::<NormalizerWrapper>(json);
+    let parse = crate::serde_json::from_str::<NormalizerWrapper>(json);
     match parse {
         Err(err) => assert_eq!(format!("{err}"), "missing field `normalizers`"),
         _ => panic!("Expected error"),

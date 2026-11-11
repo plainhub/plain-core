@@ -10,24 +10,24 @@ fn piece_serde() {
     };
     let seq_0_s = r#"{"Sequence":{"id":"A","type_id":0}}"#;
 
-    assert_eq!(serde_json::to_string(&seq_0).unwrap(), seq_0_s);
-    assert_eq!(serde_json::from_str::<Piece>(seq_0_s).unwrap(), seq_0);
+    assert_eq!(crate::serde_json::to_string(&seq_0).unwrap(), seq_0_s);
+    assert_eq!(crate::serde_json::from_str::<Piece>(seq_0_s).unwrap(), seq_0);
 
     let seq_1 = Piece::Sequence {
         id: Sequence::B,
         type_id: 1,
     };
     let seq_1_s = r#"{"Sequence":{"id":"B","type_id":1}}"#;
-    assert_eq!(serde_json::to_string(&seq_1).unwrap(), seq_1_s);
-    assert_eq!(serde_json::from_str::<Piece>(seq_1_s).unwrap(), seq_1);
+    assert_eq!(crate::serde_json::to_string(&seq_1).unwrap(), seq_1_s);
+    assert_eq!(crate::serde_json::from_str::<Piece>(seq_1_s).unwrap(), seq_1);
 
     let spe = Piece::SpecialToken {
         id: "[CLS]".into(),
         type_id: 0,
     };
     let spe_s = r#"{"SpecialToken":{"id":"[CLS]","type_id":0}}"#;
-    assert_eq!(serde_json::to_string(&spe).unwrap(), spe_s);
-    assert_eq!(serde_json::from_str::<Piece>(spe_s).unwrap(), spe);
+    assert_eq!(crate::serde_json::to_string(&spe).unwrap(), spe_s);
+    assert_eq!(crate::serde_json::from_str::<Piece>(spe_s).unwrap(), spe);
 }
 
 #[test]
@@ -75,9 +75,9 @@ fn piece() {
 fn special_token_serde() {
     let simple = SpecialToken::from(("[CLS]", 0));
     let simple_s = r#"{"id":"[CLS]","ids":[0],"tokens":["[CLS]"]}"#;
-    assert_eq!(serde_json::to_string(&simple).unwrap(), simple_s);
+    assert_eq!(crate::serde_json::to_string(&simple).unwrap(), simple_s);
     assert_eq!(
-        serde_json::from_str::<SpecialToken>(simple_s).unwrap(),
+        crate::serde_json::from_str::<SpecialToken>(simple_s).unwrap(),
         simple
     );
 
@@ -88,9 +88,9 @@ fn special_token_serde() {
     )
     .unwrap();
     let complete_s = r#"{"id":"[2FR]","ids":[1,2,3],"tokens":["convert","to","FR"]}"#;
-    assert_eq!(serde_json::to_string(&complete).unwrap(), complete_s);
+    assert_eq!(crate::serde_json::to_string(&complete).unwrap(), complete_s);
     assert_eq!(
-        serde_json::from_str::<SpecialToken>(complete_s).unwrap(),
+        crate::serde_json::from_str::<SpecialToken>(complete_s).unwrap(),
         complete
     );
 
@@ -122,9 +122,9 @@ fn template_serde() {
     ]);
     let template_s =
         r#"[{"Sequence":{"id":"A","type_id":0}},{"SpecialToken":{"id":"[CLS]","type_id":0}}]"#;
-    assert_eq!(serde_json::to_string(&template).unwrap(), template_s);
+    assert_eq!(crate::serde_json::to_string(&template).unwrap(), template_s);
     assert_eq!(
-        serde_json::from_str::<Template>(template_s).unwrap(),
+        crate::serde_json::from_str::<Template>(template_s).unwrap(),
         template
     );
 }
@@ -133,9 +133,9 @@ fn template_serde() {
 fn tokens_serde() {
     let tokens = Tokens::from(vec![("[CLS]", 1), ("[SEP]", 0)]);
     let tokens_s = r#"{"[CLS]":{"id":"[CLS]","ids":[1],"tokens":["[CLS]"]},"[SEP]":{"id":"[SEP]","ids":[0],"tokens":["[SEP]"]}}"#;
-    let tokens_ser = serde_json::to_string(&tokens).unwrap();
+    let tokens_ser = crate::serde_json::to_string(&tokens).unwrap();
     assert_eq!(tokens_ser, tokens_s);
-    assert_eq!(serde_json::from_str::<Tokens>(tokens_s).unwrap(), tokens);
+    assert_eq!(crate::serde_json::from_str::<Tokens>(tokens_s).unwrap(), tokens);
 }
 
 fn get_bert_template() -> TemplateProcessing {
@@ -172,10 +172,10 @@ fn template_processing_serde() {
                     \"id\":\"[SEP]\",\"ids\":[0],\"tokens\":[\"[SEP]\"]\
                 }\
             }}";
-    let template_ser = serde_json::to_string(&template).unwrap();
+    let template_ser = crate::serde_json::to_string(&template).unwrap();
     assert_eq!(template_ser, template_s);
     assert_eq!(
-        serde_json::from_str::<TemplateProcessing>(template_s).unwrap(),
+        crate::serde_json::from_str::<TemplateProcessing>(template_s).unwrap(),
         template
     );
 }

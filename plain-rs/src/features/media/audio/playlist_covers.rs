@@ -47,7 +47,7 @@ pub fn playlist_covers(db: &Db, ids: &[String]) -> DomainResult<Vec<PlaylistCove
                 albums.last_mut().unwrap().candidate_paths.push(path);
             }
             Ok(PlaylistCovers { id: id.clone(), albums })
-        }).collect::<rusqlite::Result<Vec<_>>>()
+        }).collect::<plain_libs::rusqlite::Result<Vec<_>>>()
     })?)
 }
 

@@ -1,0 +1,10 @@
+{
+  "name": "hashbrown",
+  "version": "0.17.1",
+  "archive_sha256": "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a",
+  "repository": "https://github.com/rust-lang/hashbrown",
+  "revision": "c62a63a61b7caf2de8f9ecb7b06a66b0ab6bdf3d",
+  "retained_features": [
+    "default-hasher"
+  ]
+}

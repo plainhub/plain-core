@@ -54,7 +54,7 @@ impl ReaderState {
                 if self.config.check_comments {
                     let mut haystack = &buf_bytes[4..len - 3];
                     let mut off = 0;
-                    while let Some(p) = memchr::memchr(b'-', haystack) {
+                    while let Some(p) = crate::memchr::memchr(b'-', haystack) {
                         off += p + 1;
                         if buf_bytes[4 + off] == b'-' {
                             self.last_error_offset = self.offset - len as u64 + 4 + p as u64;

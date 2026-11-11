@@ -108,7 +108,7 @@ impl Attempts {
                 event(
                     state,
                     "PAIRING_STATE_CHANGED",
-                    serde_json::to_value(&a.state).unwrap(),
+                    plain_libs::serde_json::to_value(&a.state).unwrap(),
                 );
             }
         }
@@ -150,7 +150,7 @@ impl Attempts {
             event(
                 context,
                 "PAIRING_STATE_CHANGED",
-                serde_json::to_value(&state).unwrap(),
+                plain_libs::serde_json::to_value(&state).unwrap(),
             );
         }
         Ok((state, stopped, passwords))
@@ -181,7 +181,7 @@ impl Attempts {
             event(
                 state,
                 "PAIRING_STATE_CHANGED",
-                serde_json::to_value(&attempt.state).unwrap(),
+                plain_libs::serde_json::to_value(&attempt.state).unwrap(),
             );
         }
     }
@@ -195,7 +195,7 @@ impl Attempts {
             event(
                 state,
                 "PAIRING_STATE_CHANGED",
-                serde_json::to_value(&attempt.state).unwrap(),
+                plain_libs::serde_json::to_value(&attempt.state).unwrap(),
             );
         }
     }
@@ -220,7 +220,7 @@ impl Attempts {
         event(
             state,
             "PAIRING_STATE_CHANGED",
-            serde_json::to_value(&a.state).unwrap(),
+            plain_libs::serde_json::to_value(&a.state).unwrap(),
         );
         true
     }
@@ -254,7 +254,7 @@ impl Attempts {
                 event(
                     state,
                     "PAIRING_STATE_CHANGED",
-                    serde_json::to_value(&a.state).unwrap(),
+                    plain_libs::serde_json::to_value(&a.state).unwrap(),
                 );
             }
         }
@@ -305,7 +305,7 @@ impl Attempts {
             event(
                 state,
                 "PAIRING_STATE_CHANGED",
-                serde_json::to_value(&a.state).unwrap(),
+                plain_libs::serde_json::to_value(&a.state).unwrap(),
             );
         }
         Ok(a.state.clone())
@@ -321,7 +321,7 @@ impl Attempts {
         event(
             state,
             "PAIRING_STATE_CHANGED",
-            serde_json::to_value(&a.state).unwrap(),
+            plain_libs::serde_json::to_value(&a.state).unwrap(),
         );
         Some(a.state.clone())
     }

@@ -99,7 +99,7 @@ fn batches(
     };
     let mut bytes = 0;
     for item in page.items {
-        let size = serde_json::to_vec(&item)
+        let size = plain_libs::serde_json::to_vec(&item)
             .expect("file records serialize")
             .len()
             + 128;

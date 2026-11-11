@@ -1,5 +1,5 @@
 use plain_server::server::ContentServer;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 use std::sync::Arc;
 
 pub(super) fn handles(method: &str) -> bool {
@@ -28,7 +28,7 @@ pub(super) async fn dispatch(
         }
         plain_rs::infrastructure::host::commands::SYSTEM_HOSTNAME_SET => {
             let request: plain_rs::infrastructure::host::commands::HostnameRequest =
-                serde_json::from_value(params).map_err(|error| error.to_string())?;
+                plain_libs::serde_json::from_value(params).map_err(|error| error.to_string())?;
             tokio::task::spawn_blocking(move || {
                 plain_rs::infrastructure::platform::linux::hostname::set(&request.name)
             })
@@ -39,7 +39,7 @@ pub(super) async fn dispatch(
         }
         plain_rs::infrastructure::host::commands::SYSTEM_DISK_FORMAT => {
             let request: plain_rs::infrastructure::host::commands::DiskFormatRequest =
-                serde_json::from_value(params).map_err(|error| error.to_string())?;
+                plain_libs::serde_json::from_value(params).map_err(|error| error.to_string())?;
             let core = core.clone();
             tokio::task::spawn_blocking(move || {
                 let store = core.runtime().store.get().map_err(|e| e.to_string())?;

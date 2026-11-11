@@ -9,7 +9,7 @@ use plain_graphql::{Context, Object, SimpleObject};
 
 use plain_rs::infrastructure::types::Instant;
 use plain_rs::infrastructure::types::Long;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 const FEATURE: AccessFeature = AccessFeature::Videos;
 use crate::graphql::resolvers::media::public::media_count;

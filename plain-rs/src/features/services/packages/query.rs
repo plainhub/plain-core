@@ -1,6 +1,6 @@
 use crate::infrastructure::db::Db;
 use plain_libs::utils::search_dsl;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 fn text(value: &Value, key: &str) -> String {
     value[key].as_str().unwrap_or_default().to_lowercase()

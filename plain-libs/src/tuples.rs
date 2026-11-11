@@ -1,0 +1,34 @@
+macro_rules! for_http_tuples {
+(last, $name:ident) => {$name!([], T1: t1);
+$name!([T1: t1], T2: t2);
+$name!([T1: t1, T2: t2], T3: t3);
+$name!([T1: t1, T2: t2, T3: t3], T4: t4);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4], T5: t5);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5], T6: t6);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6], T7: t7);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7], T8: t8);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8], T9: t9);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9], T10: t10);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10], T11: t11);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11], T12: t12);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11, T12: t12], T13: t13);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11, T12: t12, T13: t13], T14: t14);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11, T12: t12, T13: t13, T14: t14], T15: t15);
+$name!([T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11, T12: t12, T13: t13, T14: t14, T15: t15], T16: t16);};
+(flat, $name:ident) => {$name!(T1: t1);
+$name!(T1: t1, T2: t2);
+$name!(T1: t1, T2: t2, T3: t3);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11, T12: t12);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11, T12: t12, T13: t13);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11, T12: t12, T13: t13, T14: t14);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11, T12: t12, T13: t13, T14: t14, T15: t15);
+$name!(T1: t1, T2: t2, T3: t3, T4: t4, T5: t5, T6: t6, T7: t7, T8: t8, T9: t9, T10: t10, T11: t11, T12: t12, T13: t13, T14: t14, T15: t15, T16: t16);};
+}

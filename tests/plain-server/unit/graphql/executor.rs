@@ -1,7 +1,7 @@
 use super::*;
 use crate::server::ContentServer;
 use futures_util::StreamExt;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -44,17 +44,17 @@ async fn local_and_remote_execute_the_same_envelope_and_preserve_errors() {
     let document = json!({"query":"query Count($q: String!) { noteCount(query: $q) } query Other { __typename }", "operationName":"Count", "variables":{"q":""}}).to_string();
     let local = server
         .graphql_executor()
-        .execute(serde_json::from_str(&document).unwrap())
+        .execute(plain_libs::serde_json::from_str(&document).unwrap())
         .await;
     let remote = execute_graphql(
         &state.public,
-        serde_json::from_str(&document).unwrap(),
+        plain_libs::serde_json::from_str(&document).unwrap(),
         RequestContext::remote(Some(state.clone())),
     )
     .await;
     assert_eq!(
-        serde_json::to_value(&local).unwrap(),
-        serde_json::to_value(&remote).unwrap()
+        plain_libs::serde_json::to_value(&local).unwrap(),
+        plain_libs::serde_json::to_value(&remote).unwrap()
     );
     assert!(local.errors.is_empty());
     for query in ["{ nonexistentField }", "{ audioHostQueueItems { path } }"] {
@@ -67,8 +67,8 @@ async fn local_and_remote_execute_the_same_envelope_and_preserve_errors() {
         .await;
         assert!(!local.errors.is_empty());
         assert_eq!(
-            serde_json::to_value(local).unwrap(),
-            serde_json::to_value(remote).unwrap()
+            plain_libs::serde_json::to_value(local).unwrap(),
+            plain_libs::serde_json::to_value(remote).unwrap()
         );
     }
     let query = r#"{ audioQueueItems(query: "", offset: 0, limit: 10) { mediaId } }"#;
@@ -81,8 +81,8 @@ async fn local_and_remote_execute_the_same_envelope_and_preserve_errors() {
     .await;
     assert!(local.errors.is_empty(), "{:?}", local.errors);
     assert_eq!(
-        serde_json::to_value(local).unwrap(),
-        serde_json::to_value(remote).unwrap()
+        plain_libs::serde_json::to_value(local).unwrap(),
+        plain_libs::serde_json::to_value(remote).unwrap()
     );
     #[cfg(feature = "http_transport")]
     server.stop_public().await;
@@ -270,7 +270,7 @@ async fn sms_subscription_replays_results_after_its_receiver_is_ready() {
     state
         .sms_sends
         .report(
-            serde_json::from_value(json!({
+            plain_libs::serde_json::from_value(json!({
                 "requestId":"send", "partIndex":0, "partCount":1, "success":true, "resultCode":-1
             }))
             .unwrap(),

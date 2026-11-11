@@ -29,13 +29,13 @@ fn test_replace_regex() {
 fn serialization() {
     let replace = Replace::new("Hello", "Hey").unwrap();
     let replace_s = r#"{"type":"Replace","pattern":{"String":"Hello"},"content":"Hey"}"#;
-    assert_eq!(serde_json::to_string(&replace).unwrap(), replace_s);
-    assert_eq!(serde_json::from_str::<Replace>(replace_s).unwrap(), replace);
+    assert_eq!(crate::serde_json::to_string(&replace).unwrap(), replace_s);
+    assert_eq!(crate::serde_json::from_str::<Replace>(replace_s).unwrap(), replace);
 
     let replace = Replace::new(ReplacePattern::Regex(r"\s+".into()), ' ').unwrap();
     let replace_s = r#"{"type":"Replace","pattern":{"Regex":"\\s+"},"content":" "}"#;
-    assert_eq!(serde_json::to_string(&replace).unwrap(), replace_s);
-    assert_eq!(serde_json::from_str::<Replace>(replace_s).unwrap(), replace);
+    assert_eq!(crate::serde_json::to_string(&replace).unwrap(), replace_s);
+    assert_eq!(crate::serde_json::from_str::<Replace>(replace_s).unwrap(), replace);
 }
 
 #[test]

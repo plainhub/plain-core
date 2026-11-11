@@ -6,7 +6,7 @@ use plain_rs::features::chat::enums::PeerStatus;
 use plain_rs::infrastructure::db::DPeer;
 use plain_rs::infrastructure::db::chat_store::SaveMode;
 use plain_rs::infrastructure::db::chat_store::peers;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -92,7 +92,7 @@ async fn aware_host_only_moves_raw_socket_bytes_rust_performs_tls_crypto_and_gra
                     assert!(
                         params
                             .get("peerId")
-                            .and_then(serde_json::Value::as_str)
+                            .and_then(plain_libs::serde_json::Value::as_str)
                             .is_some()
                     );
                     assert!(params.contains_key("token"));

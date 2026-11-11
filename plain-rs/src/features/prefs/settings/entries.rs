@@ -1,12 +1,12 @@
 use super::{Prefs, PrefsError, Result, SettingsPatch, keys};
-use serde_json::{Map, Value};
+use plain_libs::serde_json::{Map, Value};
 
 macro_rules! settings_keys {
     ($($key:ident => $field:ident),* $(,)?) => {
         pub fn values(prefs: &Prefs) -> Result<Map<String, Value>> {
             let super::Settings { $($field,)* } = super::snapshot(prefs)?;
             Ok(Map::from_iter([$(
-                (keys::$key.to_owned(), serde_json::to_value($field).map_err(PrefsError::Encode)?),
+                (keys::$key.to_owned(), plain_libs::serde_json::to_value($field).map_err(PrefsError::Encode)?),
             )*]))
         }
 
@@ -14,7 +14,7 @@ macro_rules! settings_keys {
             match key {
                 $(keys::$key => {
                     let value = prefs.get(key)?.unwrap_or_else(|| super::Settings::default().$field);
-                    Ok(Some(serde_json::to_value(value).map_err(PrefsError::Encode)?))
+                    Ok(Some(plain_libs::serde_json::to_value(value).map_err(PrefsError::Encode)?))
                 },)*
                 _ => Ok(None),
             }
@@ -23,7 +23,7 @@ macro_rules! settings_keys {
         pub fn set_entry(prefs: &Prefs, key: &str, value: Value) -> plain_libs::anyhow::Result<Option<bool>> {
             let patch = match key {
                 $(keys::$key => SettingsPatch {
-                    $field: serde_json::from_value(value)?,
+                    $field: plain_libs::serde_json::from_value(value)?,
                     ..Default::default()
                 },)*
                 _ => return Ok(None),

@@ -1,9 +1,9 @@
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 
 use crate::infrastructure::db::Db;
 pub use crate::infrastructure::db::models::image_editor_project::ImageEditorProjectRow;
 
-fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ImageEditorProjectRow> {
+fn from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<ImageEditorProjectRow> {
     Ok(ImageEditorProjectRow {
         id: row.get(0)?,
         state_b64: row.get(1)?,
@@ -19,7 +19,7 @@ fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ImageEditorProjectRow> 
 const COLUMNS: &str =
     "id,state_b64,thumbnail,canvas_width,canvas_height,layer_count,created_at,updated_at";
 
-pub fn get(db: &Db, id: &str) -> rusqlite::Result<Option<ImageEditorProjectRow>> {
+pub fn get(db: &Db, id: &str) -> plain_libs::rusqlite::Result<Option<ImageEditorProjectRow>> {
     db.with_conn(|conn| {
         conn.query_row(
             &format!("SELECT {COLUMNS} FROM image_editor_projects WHERE id=?1"),
@@ -30,7 +30,7 @@ pub fn get(db: &Db, id: &str) -> rusqlite::Result<Option<ImageEditorProjectRow>>
     })
 }
 
-pub fn list(db: &Db, limit: i32) -> rusqlite::Result<Vec<ImageEditorProjectRow>> {
+pub fn list(db: &Db, limit: i32) -> plain_libs::rusqlite::Result<Vec<ImageEditorProjectRow>> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(&format!(
             "SELECT {COLUMNS} FROM image_editor_projects ORDER BY updated_at DESC,id LIMIT ?1"
@@ -45,7 +45,7 @@ pub fn summaries(
     offset: i32,
     limit: i32,
     query: &str,
-) -> rusqlite::Result<Vec<ImageEditorProjectRow>> {
+) -> plain_libs::rusqlite::Result<Vec<ImageEditorProjectRow>> {
     let text = plain_libs::utils::search_dsl::field_value(query, "text").unwrap_or_default();
     let pattern = format!(
         "%{}%",
@@ -67,7 +67,7 @@ pub fn save(
     canvas_width: i32,
     canvas_height: i32,
     layer_count: i32,
-) -> rusqlite::Result<ImageEditorProjectRow> {
+) -> plain_libs::rusqlite::Result<ImageEditorProjectRow> {
     let now = plain_libs::utils::dbtime::now_iso_millis();
     db.with_conn(|conn| {
         conn.execute(
@@ -88,7 +88,7 @@ pub fn save(
     })
 }
 
-pub fn delete(db: &Db, id: &str) -> rusqlite::Result<bool> {
+pub fn delete(db: &Db, id: &str) -> plain_libs::rusqlite::Result<bool> {
     db.with_conn(|conn| {
         Ok(conn.execute("DELETE FROM image_editor_projects WHERE id=?1", params![id])? > 0)
     })

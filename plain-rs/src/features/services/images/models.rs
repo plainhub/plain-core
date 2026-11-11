@@ -8,7 +8,7 @@ use plain_libs::protocols::http_client;
 use crate::features::prefs::Prefs;
 use crate::infrastructure::events::WsEvent;
 use serde::Serialize;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::{
     path::PathBuf,
     sync::{
@@ -27,7 +27,7 @@ pub struct Snapshot {
 }
 impl Snapshot {
     pub fn event(&self) -> WsEvent {
-        WsEvent::broadcast("IMAGE_MODELS_UPDATED", serde_json::to_string(self).unwrap())
+        WsEvent::broadcast("IMAGE_MODELS_UPDATED", plain_libs::serde_json::to_string(self).unwrap())
     }
 }
 struct ModelState {
@@ -128,7 +128,7 @@ impl Runtime {
                 indexed_images: index.indexed_images.min(i32::MAX as usize) as i32,
             },
         };
-        let fingerprint = serde_json::to_string(&snapshot).unwrap();
+        let fingerprint = plain_libs::serde_json::to_string(&snapshot).unwrap();
         if state.fingerprint != fingerprint {
             state.version += 1;
             state.fingerprint = fingerprint;
@@ -412,7 +412,7 @@ impl Runtime {
         .map_err(|e| e.to_string())?;
         tokio::fs::write(
             directory.join("manifest.json"),
-            serde_json::to_vec(&manifest).map_err(|e| e.to_string())?,
+            plain_libs::serde_json::to_vec(&manifest).map_err(|e| e.to_string())?,
         )
         .await
         .map_err(|e| e.to_string())?;

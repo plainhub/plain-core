@@ -4,11 +4,11 @@ use crate::infrastructure::db::MediaFileMetadata;
 use crate::infrastructure::db::MediaFileMetadataAvailability;
 use crate::infrastructure::db::MediaFileMetadataRead;
 use crate::infrastructure::db::MediaFileRow;
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 
 pub const COLUMNS: &str = "id,data_type,path,title,artist,bucket_id,size_bytes,duration_ms,cover_image_id,width,height,rotation,taken_at,created_at,updated_at,favorited,trashed,original_path,album,album_artist,album_id";
 
-pub fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MediaFileRow> {
+pub fn from_row(row: &plain_libs::rusqlite::Row<'_>) -> plain_libs::rusqlite::Result<MediaFileRow> {
     Ok(MediaFileRow {
         id: row.get(0)?,
         data_type: row.get(1)?,
@@ -36,7 +36,7 @@ pub fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MediaFileRow> {
 
 pub const SOURCE: &str = "file_catalog";
 
-pub(crate) fn init(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+pub(crate) fn init(conn: &plain_libs::rusqlite::Connection) -> plain_libs::rusqlite::Result<()> {
     conn.execute_batch("CREATE TEMP VIEW file_catalog AS SELECT f.id AS id,f.id AS file_id,
 CASE f.kind WHEN 'AUDIO' THEN 1 WHEN 'VIDEO' THEN 2 WHEN 'IMAGE' THEN 3 WHEN 'DOC' THEN 24 ELSE 22 END AS data_type,
 CASE WHEN substr(v.path,-1)='/' THEN v.path||f.path ELSE v.path||CASE WHEN f.path='' THEN '' ELSE '/'||f.path END END AS path,
@@ -50,7 +50,7 @@ CASE WHEN f.original_path IS NULL THEN NULL ELSE rtrim(v.path,'/')||'/'||f.origi
 FROM files f JOIN volumes v ON v.id=f.volume_id")
 }
 
-fn kind(data_type: DataType) -> rusqlite::Result<crate::infrastructure::db::FileKind> {
+fn kind(data_type: DataType) -> plain_libs::rusqlite::Result<crate::infrastructure::db::FileKind> {
     crate::infrastructure::db::FileKind::try_from(data_type).map_err(super::files::sql_error)
 }
 
@@ -58,7 +58,7 @@ impl Db {
     pub fn record_media_files(
         &self,
         files: &[MediaFileMetadata],
-    ) -> rusqlite::Result<Vec<MediaFileRow>> {
+    ) -> plain_libs::rusqlite::Result<Vec<MediaFileRow>> {
         self.record_media_file_inputs(
             files
                 .iter()
@@ -69,7 +69,7 @@ impl Db {
     pub fn record_media_file_reads(
         &self,
         files: &[MediaFileMetadataRead],
-    ) -> rusqlite::Result<Vec<MediaFileRow>> {
+    ) -> plain_libs::rusqlite::Result<Vec<MediaFileRow>> {
         self.record_media_file_inputs(files.iter().map(|file| {
             (
                 &file.metadata,
@@ -88,13 +88,13 @@ impl Db {
                 Option<&'a str>,
             ),
         >,
-    ) -> rusqlite::Result<Vec<MediaFileRow>> {
+    ) -> plain_libs::rusqlite::Result<Vec<MediaFileRow>> {
         let inputs = files
             .into_iter()
             .map(|(file, available, identity)| {
                 Ok((file, available, identity, super::files::locate(&file.path)?))
             })
-            .collect::<rusqlite::Result<Vec<_>>>()?;
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
         self.with_conn(|conn| {
             let tx=conn.unchecked_transaction()?;
             let mut rows=Vec::with_capacity(inputs.len());
@@ -113,7 +113,7 @@ impl Db {
         &self,
         data_type: DataType,
         path: &str,
-    ) -> rusqlite::Result<Option<MediaFileRow>> {
+    ) -> plain_libs::rusqlite::Result<Option<MediaFileRow>> {
         kind(data_type)?;
         let location = super::files::locate(path)?;
         self.with_conn(|conn| {
@@ -125,17 +125,17 @@ impl Db {
         })
     }
 
-    pub fn forget_media_file(&self, path: &str) -> rusqlite::Result<usize> {
+    pub fn forget_media_file(&self, path: &str) -> plain_libs::rusqlite::Result<usize> {
         self.forget_media_file_types(path).map(|types| types.len())
     }
-    pub fn forget_media_file_types(&self, path: &str) -> rusqlite::Result<Vec<i32>> {
+    pub fn forget_media_file_types(&self, path: &str) -> plain_libs::rusqlite::Result<Vec<i32>> {
         self.forget_media_path_rows(path, false)
     }
-    pub fn forget_media_path_types(&self, path: &str) -> rusqlite::Result<Vec<i32>> {
+    pub fn forget_media_path_types(&self, path: &str) -> plain_libs::rusqlite::Result<Vec<i32>> {
         self.forget_media_path_rows(path, true)
     }
 
-    fn forget_media_path_rows(&self, path: &str, recursive: bool) -> rusqlite::Result<Vec<i32>> {
+    fn forget_media_path_rows(&self, path: &str, recursive: bool) -> plain_libs::rusqlite::Result<Vec<i32>> {
         if path.is_empty() {
             return Ok(Vec::new());
         }
@@ -143,11 +143,11 @@ impl Db {
         let path = location
             .path
             .to_str()
-            .ok_or(rusqlite::Error::InvalidQuery)?;
+            .ok_or(plain_libs::rusqlite::Error::InvalidQuery)?;
         let prefix = format!("{}/", path.trim_end_matches('/'));
         self.audio_transaction(|tx,state| {
             let rows=tx.prepare(&format!("SELECT file_id,data_type FROM {SOURCE} WHERE missing=0 AND (path=?1 OR (?2 AND substr(path,1,length(?3))=?3))"))?
-                .query_map(params![path,recursive,prefix],|row|Ok((row.get::<_,String>(0)?,row.get::<_,i32>(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+                .query_map(params![path,recursive,prefix],|row|Ok((row.get::<_,String>(0)?,row.get::<_,i32>(1)?)))?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
             for (id,_) in &rows {
                 tx.execute("UPDATE files SET missing=1 WHERE id=?1",[id])?;
                 if state.current_file_id.as_deref()==Some(id.as_str()) { state.select("")?; }
@@ -164,7 +164,7 @@ impl Db {
         data_type: DataType,
         limit: u32,
         offset: u32,
-    ) -> rusqlite::Result<Vec<MediaFileRow>> {
+    ) -> plain_libs::rusqlite::Result<Vec<MediaFileRow>> {
         let kind = kind(data_type)?;
         let directories = if data_type == DataType::File {
             " OR kind='DIRECTORY'"
@@ -174,7 +174,7 @@ impl Db {
         self.with_conn(|conn| conn.prepare(&format!("SELECT {COLUMNS} FROM {SOURCE} WHERE (kind=?1{directories}) AND trashed_at IS NULL AND missing=0 AND indexed=1 AND is_available=1 ORDER BY updated_at DESC,file_id LIMIT ?2 OFFSET ?3"))?
             .query_map(params![kind,limit,offset],from_row)?.collect())
     }
-    pub fn media_file_count(&self, data_type: DataType) -> rusqlite::Result<i64> {
+    pub fn media_file_count(&self, data_type: DataType) -> plain_libs::rusqlite::Result<i64> {
         let kind = kind(data_type)?;
         let directories = if data_type == DataType::File {
             " OR kind='DIRECTORY'"

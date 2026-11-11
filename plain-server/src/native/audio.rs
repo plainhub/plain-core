@@ -1,7 +1,7 @@
 use crate::server::ServerState;
 use plain_rs::infrastructure::host::audio::AudioPlaybackFacts;
 use plain_rs::infrastructure::host::audio::PLAYBACK_STATE;
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 
 #[derive(Clone)]
 pub struct NativeAudio {
@@ -17,7 +17,7 @@ impl NativeAudio {
         self.state.native_client_id()?;
         let method = method.to_owned();
         tokio::task::spawn_blocking(move || match method.as_str() {
-            PLAYBACK_STATE => serde_json::to_value(AudioPlaybackFacts {
+            PLAYBACK_STATE => plain_libs::serde_json::to_value(AudioPlaybackFacts {
                 is_playing: false,
                 position_ms: 0,
             })

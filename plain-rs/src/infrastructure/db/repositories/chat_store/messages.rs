@@ -5,7 +5,7 @@ use crate::infrastructure::db::repositories::chat::row_to_chat;
 use crate::infrastructure::db::repositories::chat_store::SaveMode;
 use crate::infrastructure::db::repositories::chat_store::validate;
 use plain_libs::anyhow::{Result, bail};
-use rusqlite::{OptionalExtension, params};
+use plain_libs::rusqlite::{OptionalExtension, params};
 pub fn get(db: &Db, id: &str) -> Result<Option<DChat>> {
     Ok(db.with_conn(|c| {
         c.query_row(
@@ -22,7 +22,7 @@ pub fn all(db: &Db) -> Result<Vec<DChat>> {
             "SELECT {CHAT_COLS} FROM chats ORDER BY julianday(created_at),id"
         ))?;
         s.query_map([], row_to_chat)?
-            .collect::<rusqlite::Result<Vec<_>>>()
+            .collect::<plain_libs::rusqlite::Result<Vec<_>>>()
     })?)
 }
 pub fn save(db: &Db, rows: &[DChat], mode: SaveMode) -> Result<()> {
@@ -49,7 +49,7 @@ pub fn delete(db: &Db, ids: &[String]) -> Result<usize> {
     })
 }
 pub(crate) fn validate_content(content: &str) -> Result<()> {
-    let value: serde_json::Value = serde_json::from_str(content)?;
+    let value: plain_libs::serde_json::Value = plain_libs::serde_json::from_str(content)?;
     if !matches!(
         value.get("type").and_then(|v| v.as_str()),
         Some("TEXT" | "IMAGES" | "FILES" | "SHARE")
@@ -67,7 +67,7 @@ pub(crate) fn validate_content(content: &str) -> Result<()> {
     }
     Ok(())
 }
-fn validate_attachment(item: &serde_json::Value) -> Result<()> {
+fn validate_attachment(item: &plain_libs::serde_json::Value) -> Result<()> {
     if !item.is_object()
         || !item
             .get("uri")
@@ -104,10 +104,10 @@ fn validate_attachment(item: &serde_json::Value) -> Result<()> {
     }
     if item
         .get("durationMs")
-        .is_none_or(serde_json::Value::is_null)
+        .is_none_or(plain_libs::serde_json::Value::is_null)
         && ["duration", "legacyDurationSec"].iter().any(|field| {
             item.get(field)
-                .and_then(serde_json::Value::as_i64)
+                .and_then(plain_libs::serde_json::Value::as_i64)
                 .is_some_and(|n| n.checked_mul(1000).is_none())
         })
     {
@@ -127,7 +127,7 @@ pub struct Filter {
     pub latest: bool,
     pub count_only: bool,
 }
-pub fn list(db: &Db, filter: &Filter) -> Result<serde_json::Value> {
+pub fn list(db: &Db, filter: &Filter) -> Result<plain_libs::serde_json::Value> {
     if filter.offset < 0
         || filter.limit.is_some_and(|v| v < 0)
         || (filter.peer.is_some() && filter.channel.is_some())
@@ -148,12 +148,12 @@ pub fn list(db: &Db, filter: &Filter) -> Result<serde_json::Value> {
     } else {
         ""
     };
-    db.with_conn(|c|->Result<serde_json::Value>{
- if filter.count_only { return Ok(serde_json::json!(c.query_row(&format!("SELECT count(*) FROM chats c WHERE {condition}{latest}"),params![filter.peer,filter.channel,filter.text,pattern],|r|r.get::<_,i64>(0))?)); }
+    db.with_conn(|c|->Result<plain_libs::serde_json::Value>{
+ if filter.count_only { return Ok(plain_libs::serde_json::json!(c.query_row(&format!("SELECT count(*) FROM chats c WHERE {condition}{latest}"),params![filter.peer,filter.channel,filter.text,pattern],|r|r.get::<_,i64>(0))?)); }
  let order=if filter.descending || filter.latest {"DESC"}else{"ASC"};
  let mut s=c.prepare(&format!("SELECT {CHAT_COLS} FROM chats c WHERE {condition}{latest} ORDER BY julianday(created_at) {order},id {order} LIMIT ?5 OFFSET ?6"))?;
- let rows=s.query_map(params![filter.peer,filter.channel,filter.text,pattern,filter.limit.unwrap_or(-1),filter.offset],row_to_chat)?.collect::<rusqlite::Result<Vec<_>>>()?;
- Ok(serde_json::to_value(rows)?)
+ let rows=s.query_map(params![filter.peer,filter.channel,filter.text,pattern,filter.limit.unwrap_or(-1),filter.offset],row_to_chat)?.collect::<plain_libs::rusqlite::Result<Vec<_>>>()?;
+ Ok(plain_libs::serde_json::to_value(rows)?)
  })
 }
 pub fn status(
@@ -164,7 +164,7 @@ pub fn status(
 ) -> Result<bool> {
     if let Some(data) = data {
         if !data.is_empty() {
-            serde_json::from_str::<serde_json::Value>(data)?;
+            plain_libs::serde_json::from_str::<plain_libs::serde_json::Value>(data)?;
         }
     }
     Ok(db.with_conn(|c| {
@@ -208,7 +208,7 @@ pub fn ids(db: &Db, query: &str) -> Result<Vec<String>> {
     if channel.is_none() && peer.is_none() {
         return Ok(Vec::new());
     }
-    let rows: Vec<DChat> = serde_json::from_value(list(
+    let rows: Vec<DChat> = plain_libs::serde_json::from_value(list(
         db,
         &Filter {
             peer,

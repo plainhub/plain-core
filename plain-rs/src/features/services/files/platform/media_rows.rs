@@ -11,8 +11,8 @@ struct Row {
     mime_type: Option<String>,
 }
 
-pub(super) fn identities(facts: serde_json::Value) -> plain_libs::anyhow::Result<Vec<Identity>> {
-    let rows: Vec<Row> = serde_json::from_value(facts)?;
+pub(super) fn identities(facts: plain_libs::serde_json::Value) -> plain_libs::anyhow::Result<Vec<Identity>> {
+    let rows: Vec<Row> = plain_libs::serde_json::from_value(facts)?;
     Ok(rows
         .into_iter()
         .filter_map(|row| {

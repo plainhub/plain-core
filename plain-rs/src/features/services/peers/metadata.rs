@@ -5,7 +5,7 @@ use crate::infrastructure::events::WsEvent;
 use crate::runtime::Runtime as CoreRuntime;
 use plain_libs::anyhow::Result;
 use serde::Deserialize;
-use serde_json::json;
+use plain_libs::serde_json::json;
 use tokio::sync::watch;
 
 #[derive(Deserialize)]
@@ -18,7 +18,7 @@ pub struct AppSnapshot {
 }
 
 fn apply(
-    connection: &rusqlite::Connection,
+    connection: &plain_libs::rusqlite::Connection,
     state: &CoreRuntime,
     id: &str,
     identity: &Identity,
@@ -60,7 +60,7 @@ pub async fn refresh(
         256 * 1024,
     )
     .await?;
-    let app: AppSnapshot = serde_json::from_value(data["app"].clone())?;
+    let app: AppSnapshot = plain_libs::serde_json::from_value(data["app"].clone())?;
     let state = state.clone();
     let id = id.to_owned();
     let identity = identity.clone();

@@ -1,7 +1,7 @@
 use super::NativeManagement;
 use plain_rs::features::services::casting::receiver::control;
 use plain_rs::features::services::casting::receiver::control::Request;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 impl NativeManagement {
     async fn receiver(&self, request: Request) -> Result<Value, String> {

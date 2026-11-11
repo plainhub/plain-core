@@ -4,7 +4,7 @@ use crate::features::chat::manager::chat_to_json;
 use crate::features::chat::service::ChatService;
 use crate::infrastructure::db::DChat;
 use crate::infrastructure::transport::contract::PeerTransport;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 impl<T: PeerTransport + 'static> ChatService<T> {
     pub(crate) fn spawn_delivery(&self, chat: &DChat) {

@@ -1,6 +1,6 @@
 use plain_libs::filesystem::browse::Request;
 use plain_libs::filesystem::record::FileRecord;
-use serde_json::Value;
+use plain_libs::serde_json::Value;
 
 pub const SEARCH_RESULT_LIMIT: usize = 1000;
 
@@ -26,7 +26,7 @@ pub async fn execute(
             .map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())?
     };
-    serde_json::to_value(page).map_err(|e| e.to_string())
+    plain_libs::serde_json::to_value(page).map_err(|e| e.to_string())
 }
 
 pub async fn search(

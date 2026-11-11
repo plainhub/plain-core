@@ -9,7 +9,7 @@ use crate::infrastructure::db::now_iso;
 use crate::infrastructure::db::row_to_channel;
 use crate::infrastructure::db::row_to_peer;
 use plain_libs::anyhow::{Result, bail};
-use rusqlite::{Connection, OptionalExtension, params};
+use plain_libs::rusqlite::{Connection, OptionalExtension, params};
 
 pub(crate) fn channel(c: &Connection, id: &str) -> Result<Option<DChannel>> {
     Ok(c.query_row(
@@ -28,7 +28,7 @@ pub(crate) fn peer(c: &Connection, id: &str) -> Result<Option<DPeer>> {
     .optional()?)
 }
 pub(crate) fn members(raw: &str) -> Result<Vec<ChannelMember>> {
-    Ok(serde_json::from_str(raw)?)
+    Ok(plain_libs::serde_json::from_str(raw)?)
 }
 pub(crate) fn public_key(key: &str) -> Result<()> {
     if plain_libs::utils::base64::base64_decode(key).len() != 32 {

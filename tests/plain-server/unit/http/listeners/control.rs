@@ -1,7 +1,7 @@
 use plain_libs::protocols::http_client;
 use super::*;
 use plain_rs::features::services::http_status::*;
-use serde_json::json;
+use plain_libs::serde_json::json;
 
 #[test]
 fn restart_receipts_are_serial_and_keep_live_ports_on_preflight_failure() {

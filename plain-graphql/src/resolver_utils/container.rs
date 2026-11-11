@@ -3,7 +3,7 @@ use crate::{
     parser::types::Selection,
 };
 
-use indexmap::IndexMap;
+use plain_libs::indexmap::IndexMap;
 use std::{future::Future, pin::Pin, sync::Arc};
 pub trait ContainerType: OutputType {
     #[doc(hidden)]

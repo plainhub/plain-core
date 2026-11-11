@@ -43,7 +43,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     use plain_rs::infrastructure::db::chat_store::messages;
     use plain_rs::infrastructure::db::chat_store::peers;
     use std::sync::Arc;
-    use tokio_tungstenite::tungstenite::Message;
+    use plain_libs::tokio_tungstenite::tungstenite::Message;
     let dir = plain_libs::temporary::tempdir().unwrap();
     let prefs =
         Arc::new(plain_rs::features::prefs::Prefs::load(&dir.path().join("system.json")).unwrap());
@@ -79,7 +79,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             if !message.is_text() {
                 continue;
             }
-            let request: Value = serde_json::from_str(message.to_text().unwrap()).unwrap();
+            let request: Value = plain_libs::serde_json::from_str(message.to_text().unwrap()).unwrap();
             let result = match request["method"].as_str().unwrap() {
                 "systemCapabilities" => json!(["WIFI_AWARE"]),
                 "mdnsMulticast" => {
@@ -121,10 +121,10 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
                         .as_bytes(),
                         parts[0]
                     ));
-                    let document: Value = serde_json::from_str(parts[3]).unwrap();
+                    let document: Value = plain_libs::serde_json::from_str(parts[3]).unwrap();
                     assert_eq!(document["variables"]["type"], "UPDATE");
                     let payload: Value =
-                        serde_json::from_str(document["variables"]["payload"].as_str().unwrap())
+                        plain_libs::serde_json::from_str(document["variables"]["payload"].as_str().unwrap())
                             .unwrap();
                     let local = payload["memberPeers"]
                         .as_array()
@@ -193,7 +193,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     let content = plain_rs::infrastructure::transport::http_response::Context::new(&body)
         .decrypt(&key, &response.bytes().await.unwrap())
         .unwrap();
-    let content: Value = serde_json::from_slice(&content).unwrap();
+    let content: Value = plain_libs::serde_json::from_slice(&content).unwrap();
     assert!(content.get("errors").is_none(), "{content}");
     let id = content["data"]["renamed"][0]["id"].as_str().unwrap();
     assert_eq!(messages::get(&db, id).unwrap().unwrap().from_id, "peer");
@@ -204,7 +204,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .expect("received message event");
     let stored = messages::get(&db, id).unwrap().unwrap();
     assert_eq!(
-        serde_json::from_str::<Value>(&event.payload).unwrap(),
+        plain_libs::serde_json::from_str::<Value>(&event.payload).unwrap(),
         json!([plain_rs::features::chat::service::chat_to_json(&stored)])
     );
     for expected in [false, true] {
@@ -221,7 +221,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
             .send()
             .await
             .unwrap();
-        let content: Value = serde_json::from_slice(
+        let content: Value = plain_libs::serde_json::from_slice(
             &plain_rs::infrastructure::transport::http_response::Context::new(&body)
                 .decrypt(&key, &response.bytes().await.unwrap())
                 .unwrap(),
@@ -238,7 +238,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .send()
         .await
         .unwrap();
-    let content: Value = serde_json::from_slice(
+    let content: Value = plain_libs::serde_json::from_slice(
         &plain_rs::infrastructure::transport::http_response::Context::new(&body)
             .decrypt(&key, &response.bytes().await.unwrap())
             .unwrap(),
@@ -278,7 +278,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
         .send()
         .await
         .unwrap();
-    let content: Value = serde_json::from_slice(
+    let content: Value = plain_libs::serde_json::from_slice(
         &plain_rs::infrastructure::transport::http_response::Context::new(&body)
             .decrypt(&key, &response.bytes().await.unwrap())
             .unwrap(),
@@ -295,7 +295,7 @@ async fn encrypted_public_and_ble_rpc_share_auth_executor_and_receipts() {
     })
     .await
     .unwrap();
-    let event: Value = serde_json::from_str(&event.payload).unwrap();
+    let event: Value = plain_libs::serde_json::from_str(&event.payload).unwrap();
     assert_eq!(event["channels"][0]["id"], channel.id);
     assert_eq!(event["channels"][0]["members"][1]["status"], "JOINED");
     assert!(event["channels"][0].get("key").is_none());

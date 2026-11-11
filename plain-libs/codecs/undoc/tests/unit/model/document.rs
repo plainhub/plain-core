@@ -72,7 +72,7 @@ fn test_metadata_serialization() {
         ..Default::default()
     };
 
-    let json = serde_json::to_string(&meta).unwrap();
+    let json = plain_libs::serde_json::to_string(&meta).unwrap();
     assert!(json.contains("Test Document"));
     assert!(json.contains("Test Author"));
     // Empty fields should not be serialized

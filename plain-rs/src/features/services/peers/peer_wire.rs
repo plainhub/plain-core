@@ -8,7 +8,7 @@ use crate::infrastructure::transport::contract::chat_item_request;
 use crate::infrastructure::transport::contract::signed_request;
 use plain_libs::anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use plain_libs::serde_json::json;
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Operation {

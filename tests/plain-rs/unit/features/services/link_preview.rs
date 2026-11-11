@@ -1,6 +1,6 @@
 use plain_libs::protocols::http_client;
 use super::*;
-use axum::{
+use plain_libs::axum::{
     Router,
     body::Body,
     http::{Response, header},
@@ -14,7 +14,7 @@ async fn fixture_server() -> (std::net::SocketAddr, tokio::task::JoinHandle<()>)
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let task = tokio::spawn(async move {
-        axum::serve(listener, server).await.unwrap();
+        plain_libs::axum::serve(listener, server).await.unwrap();
     });
     (addr, task)
 }
@@ -41,7 +41,7 @@ async fn html_image_fetch_and_atomic_message_commit_use_same_rust_pipeline() {
         .await
         .unwrap()
         .unwrap();
-    let content: Value = serde_json::from_str(&row.content).unwrap();
+    let content: Value = plain_libs::serde_json::from_str(&row.content).unwrap();
     let preview = &content["value"]["linkPreviews"][0];
     assert_eq!(preview["title"], "Fixture title");
     assert_eq!(preview["description"], "Fixture description");

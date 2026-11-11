@@ -1,0 +1,19 @@
+{
+  "name": "hyper-util",
+  "version": "0.1.21",
+  "archive_sha256": "ddc03d96684f9226b8a787cdb71488417b53ab5ea8fdb1dac946cb9431cc8bff",
+  "repository": "https://github.com/hyperium/hyper-util",
+  "revision": "23a868965964c1d6bb1b94f30ba4c420a4bebe7c",
+  "retained_features": [
+    "client",
+    "client-legacy",
+    "client-proxy",
+    "default",
+    "http1",
+    "http2",
+    "server",
+    "server-auto",
+    "service",
+    "tokio"
+  ]
+}

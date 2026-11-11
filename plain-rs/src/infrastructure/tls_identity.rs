@@ -1,5 +1,5 @@
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
-use serde_json::{Value, json};
+use plain_libs::serde_json::{Value, json};
 use std::{path::Path, sync::Mutex};
 static LOCK: Mutex<()> = Mutex::new(());
 
@@ -10,7 +10,7 @@ pub fn identity(path: &Path) -> Result<(Vec<u8>, Vec<u8>), String> {
 fn load(path: &Path) -> Result<(Vec<u8>, Vec<u8>), String> {
     match std::fs::read(path) {
         Ok(data) => {
-            let v: Value = serde_json::from_slice(&data).map_err(|e| e.to_string())?;
+            let v: Value = plain_libs::serde_json::from_slice(&data).map_err(|e| e.to_string())?;
             let cert = v["certificatePem"]
                 .as_str()
                 .ok_or("Invalid TLS certificate")?
@@ -30,7 +30,7 @@ fn load(path: &Path) -> Result<(Vec<u8>, Vec<u8>), String> {
 }
 fn save(path: &Path, cert: &[u8], key: &[u8]) -> Result<(), String> {
     config(cert, key)?;
-    let bytes = serde_json::to_vec(&json!({"certificatePem": std::str::from_utf8(cert).map_err(|e| e.to_string())?, "privateKeyPem": std::str::from_utf8(key).map_err(|e| e.to_string())?})).map_err(|e| e.to_string())?;
+    let bytes = plain_libs::serde_json::to_vec(&json!({"certificatePem": std::str::from_utf8(cert).map_err(|e| e.to_string())?, "privateKeyPem": std::str::from_utf8(key).map_err(|e| e.to_string())?})).map_err(|e| e.to_string())?;
     let temp = path.with_extension("tmp");
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
@@ -118,7 +118,7 @@ fn apply(
     save_pair: impl Fn(&[u8], &[u8]) -> Result<(), String>,
     generate_pair: impl Fn() -> Result<(Vec<u8>, Vec<u8>), String>,
 ) -> Result<String, String> {
-    let v: Value = serde_json::from_str(config).map_err(|e| e.to_string())?;
+    let v: Value = plain_libs::serde_json::from_str(config).map_err(|e| e.to_string())?;
     let _guard = LOCK.lock().map_err(|e| e.to_string())?;
     let pair = match v["action"].as_str() {
         Some("get") => load_pair()?,
@@ -261,7 +261,7 @@ pub fn config(
 
 pub async fn server_action(
     state: &crate::runtime::Runtime,
-    command: serde_json::Value,
+    command: plain_libs::serde_json::Value,
 ) -> Result<Vec<u8>, String> {
     let identity = state
         .tls_identity
@@ -275,7 +275,7 @@ pub async fn server_action(
     struct Signature {
         signature: Vec<u8>,
     }
-    serde_json::from_str::<Signature>(&value)
+    plain_libs::serde_json::from_str::<Signature>(&value)
         .map(|value| value.signature)
         .map_err(|error| error.to_string())
 }

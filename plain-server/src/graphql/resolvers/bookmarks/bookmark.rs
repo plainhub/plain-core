@@ -1,6 +1,6 @@
 use plain_graphql::{Context, ID, Object};
 
-use serde_json::json;
+use plain_libs::serde_json::json;
 use std::sync::Arc;
 
 use plain_rs::infrastructure::db::Db;
@@ -17,7 +17,7 @@ use plain_rs::infrastructure::events::WS_BOOKMARK_UPDATED;
 use plain_rs::infrastructure::events::WsEvent;
 use tokio::sync::broadcast;
 
-fn bookmark_to_json(b: &DBookmark) -> serde_json::Value {
+fn bookmark_to_json(b: &DBookmark) -> plain_libs::serde_json::Value {
     json!({
         "id": b.id,
         "url": b.url,

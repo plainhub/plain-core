@@ -116,7 +116,7 @@ async fn photo_queries_use_raw_pages_once_per_revision_and_remove_hidden_assets(
 fn photo_snapshot_stores_videos_in_the_shared_catalog_without_copying() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let db = Db::open(&directory.path().join("db")).unwrap();
-    let assets: Vec<Asset> = serde_json::from_value(json!([
+    let assets: Vec<Asset> = plain_libs::serde_json::from_value(json!([
         {"id":"photo/L0/001","name":"photo.jpg","mediaType":1,"durationMs":0,"width":800,"height":600,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","favorite":false},
         {"id":"video/L0/001","name":"video.mov","mediaType":2,"durationMs":1250,"width":1920,"height":1080,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","favorite":true}
     ])).unwrap();

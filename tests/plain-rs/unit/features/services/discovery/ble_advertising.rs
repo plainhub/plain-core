@@ -8,7 +8,7 @@ fn fixture() -> (
     CoreRuntime,
     Arc<Runtime>,
     u64,
-    mpsc::Receiver<serde_json::Value>,
+    mpsc::Receiver<plain_libs::serde_json::Value>,
 ) {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(
@@ -42,11 +42,11 @@ fn fixture() -> (
 async fn drive(
     state: &CoreRuntime,
     generation: u64,
-    requests: &mut mpsc::Receiver<serde_json::Value>,
+    requests: &mut mpsc::Receiver<plain_libs::serde_json::Value>,
     mut task: tokio::task::JoinHandle<Result<()>>,
     supported: bool,
     accepted: bool,
-) -> (Result<()>, Vec<serde_json::Value>) {
+) -> (Result<()>, Vec<plain_libs::serde_json::Value>) {
     let mut calls = Vec::new();
     loop {
         tokio::select! {
@@ -98,7 +98,7 @@ fn reconcile(
     tokio::spawn(async move { runtime.reconcile(&state, generation).await })
 }
 
-fn command(calls: &[serde_json::Value]) -> &serde_json::Value {
+fn command(calls: &[plain_libs::serde_json::Value]) -> &plain_libs::serde_json::Value {
     let mut commands = calls
         .iter()
         .filter(|call| call["method"] == "bleAdvertising");
@@ -354,7 +354,7 @@ async fn queued_unavailability_prevents_a_stale_start_after_capability_sampling(
 #[test]
 fn facts_accept_only_typed_platform_readings() {
     assert!(
-        serde_json::from_value::<Facts>(json!({"available":true,"lease":plain_libs::utils::uuid::Uuid::from_u128(1)}))
+        plain_libs::serde_json::from_value::<Facts>(json!({"available":true,"lease":plain_libs::utils::uuid::Uuid::from_u128(1)}))
             .is_ok()
     );
     for value in [
@@ -362,7 +362,7 @@ fn facts_accept_only_typed_platform_readings() {
         json!({"available":true,"awareRunning":false,"active":true}),
         json!({"available":true}),
     ] {
-        assert!(serde_json::from_value::<Facts>(value).is_err());
+        assert!(plain_libs::serde_json::from_value::<Facts>(value).is_err());
     }
 }
 

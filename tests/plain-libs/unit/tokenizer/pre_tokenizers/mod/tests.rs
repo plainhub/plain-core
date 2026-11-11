@@ -3,7 +3,7 @@ use super::*;
 
 #[test]
 fn test_deserialize() {
-    let pre_tokenizer: PreTokenizerWrapper = serde_json::from_str(r#"{"type":"Sequence","pretokenizers":[{"type":"WhitespaceSplit"},{"type":"Metaspace","replacement":"▁","str_rep":"▁","add_prefix_space":true}]}"#).unwrap();
+    let pre_tokenizer: PreTokenizerWrapper = crate::serde_json::from_str(r#"{"type":"Sequence","pretokenizers":[{"type":"WhitespaceSplit"},{"type":"Metaspace","replacement":"▁","str_rep":"▁","add_prefix_space":true}]}"#).unwrap();
 
     assert_eq!(
         pre_tokenizer,
@@ -14,7 +14,7 @@ fn test_deserialize() {
     );
 
     let pre_tokenizer: PreTokenizerWrapper =
-        serde_json::from_str(r#"{"type":"Metaspace","replacement":"▁","add_prefix_space":true}"#)
+        crate::serde_json::from_str(r#"{"type":"Metaspace","replacement":"▁","add_prefix_space":true}"#)
             .unwrap();
 
     assert_eq!(
@@ -22,7 +22,7 @@ fn test_deserialize() {
         PreTokenizerWrapper::Metaspace(Metaspace::new('▁', PrependScheme::Always, true))
     );
 
-    let pre_tokenizer: PreTokenizerWrapper = serde_json::from_str(r#"{"type":"Sequence","pretokenizers":[{"type":"WhitespaceSplit"},{"type":"Metaspace","replacement":"▁","add_prefix_space":true}]}"#).unwrap();
+    let pre_tokenizer: PreTokenizerWrapper = crate::serde_json::from_str(r#"{"type":"Sequence","pretokenizers":[{"type":"WhitespaceSplit"},{"type":"Metaspace","replacement":"▁","add_prefix_space":true}]}"#).unwrap();
 
     assert_eq!(
         pre_tokenizer,
@@ -32,7 +32,7 @@ fn test_deserialize() {
         ]))
     );
 
-    let pre_tokenizer: PreTokenizerWrapper = serde_json::from_str(
+    let pre_tokenizer: PreTokenizerWrapper = crate::serde_json::from_str(
             r#"{"type":"Metaspace","replacement":"▁","add_prefix_space":true, "prepend_scheme":"first"}"#,
         )
         .unwrap();
@@ -42,7 +42,7 @@ fn test_deserialize() {
         PreTokenizerWrapper::Metaspace(Metaspace::new('▁', metaspace::PrependScheme::First, true))
     );
 
-    let pre_tokenizer: PreTokenizerWrapper = serde_json::from_str(
+    let pre_tokenizer: PreTokenizerWrapper = crate::serde_json::from_str(
             r#"{"type":"Metaspace","replacement":"▁","add_prefix_space":true, "prepend_scheme":"always"}"#,
         )
         .unwrap();
@@ -56,7 +56,7 @@ fn test_deserialize() {
 #[test]
 fn test_deserialize_whitespace_split() {
     let pre_tokenizer: PreTokenizerWrapper =
-        serde_json::from_str(r#"{"type":"WhitespaceSplit"}"#).unwrap();
+        crate::serde_json::from_str(r#"{"type":"WhitespaceSplit"}"#).unwrap();
     assert_eq!(
         pre_tokenizer,
         PreTokenizerWrapper::WhitespaceSplit(WhitespaceSplit {})
@@ -66,7 +66,7 @@ fn test_deserialize_whitespace_split() {
 #[test]
 fn pre_tokenizer_deserialization_no_type() {
     let json = r#"{"replacement":"▁","add_prefix_space":true, "prepend_scheme":"always"}}"#;
-    let reconstructed = serde_json::from_str::<PreTokenizerWrapper>(json);
+    let reconstructed = crate::serde_json::from_str::<PreTokenizerWrapper>(json);
     match reconstructed {
         Err(err) => assert_eq!(
             err.to_string(),
@@ -76,20 +76,20 @@ fn pre_tokenizer_deserialization_no_type() {
     }
 
     let json = r#"{"type":"Metaspace", "replacement":"▁" }"#;
-    let reconstructed = serde_json::from_str::<PreTokenizerWrapper>(json).unwrap();
+    let reconstructed = crate::serde_json::from_str::<PreTokenizerWrapper>(json).unwrap();
     assert_eq!(
         reconstructed,
         PreTokenizerWrapper::Metaspace(Metaspace::default())
     );
 
     let json = r#"{"type":"Metaspace", "add_prefix_space":true }"#;
-    let reconstructed = serde_json::from_str::<PreTokenizerWrapper>(json);
+    let reconstructed = crate::serde_json::from_str::<PreTokenizerWrapper>(json);
     match reconstructed {
         Err(err) => assert_eq!(err.to_string(), "missing field `replacement`"),
         _ => panic!("Expected an error here"),
     }
     let json = r#"{"behavior":"default_split"}"#;
-    let reconstructed = serde_json::from_str::<PreTokenizerWrapper>(json);
+    let reconstructed = crate::serde_json::from_str::<PreTokenizerWrapper>(json);
     match reconstructed {
         Err(err) => assert_eq!(
             err.to_string(),
