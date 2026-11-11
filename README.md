@@ -4,19 +4,107 @@ Shared Rust code for PlainApp desktop, mobile and command-line hosts.
 
 ## Workspace
 
-| Directory | Purpose |
-| --- | --- |
-| [`plain-libs/`](plain-libs/) | Reusable algorithms, formats and native primitives |
-| [`plain-rs/`](plain-rs/) | Domain services, storage and core runtime |
-| [`plain-server/`](plain-server/) | GraphQL, HTTP, WebSocket and BLE adapters |
-| [`plain-cli/`](plain-cli/) | The `plainapp` executable and CLI host adapters |
-| [`plain-graphql/`](plain-graphql/) | GraphQL engine and macros |
-| [`tests/`](tests/) | Tests grouped by package; unit paths mirror `src/` |
-| [`schema/`](schema/) | Generated GraphQL and SQLite contracts |
-| [`assets/`](assets/) | Embedded Web UI and file icons |
+```text
+plain-core/
+├── Cargo.toml                Builds and tests the four packages together
+├── plain-libs/               Business-independent algorithms, formats, files and native primitives
+├── plain-rs/                 Domain services, application storage and runtime composition
+├── plain-server/             GraphQL, HTTP and native transport adapters
+├── plain-cli/                The plainapp command-line executable
+├── tests/                    Tests grouped by package; unit paths mirror src/
+├── assets/                   Shared Web bundle and canonical file icons
+├── schema/                   GraphQL and SQLite definitions
+└── scripts/                  Development tools
+```
 
 Desktop UI and OS adapters live in plain-desktop; mobile UI and JNI/C ABI adapters live in plain-app.
 Native and HTTP callers use the same main GraphQL schema.
+
+## Source layout
+
+```text
+plain-rs/src/
+├── lib.rs                  Public module entry points and compilation gates
+├── runtime.rs              Core construction and worker lifecycle
+├── features/               Product behavior and domain operations
+│   ├── chat/               Chat delivery and message operations
+│   ├── files/              File operations and resource references
+│   ├── media/              Media library, playback and catalog state
+│   ├── prefs/              Application preferences and identity
+│   └── services/           Runtime operations by domain
+│       └── files/          Browsing, previews, indexing and transfers
+└── infrastructure/         Application storage, host contracts and protocol policy
+    ├── db/                 Product schema, models and repositories
+    ├── host/               Application host commands, scopes and resource streams
+    ├── platform/           Application startup, host facts and system coordination
+    ├── protocols/          Peer framing and product discovery policy
+    ├── transport/          Authenticated peer transport
+    └── data_paths/         Application data roots and ownership
+
+plain-libs/src/
+├── crypto/                 Encryption, signatures, hashes and key formats
+├── media/                  Format parsing, decoding and thumbnails
+├── ai_image_search/        Model validation, preprocessing and inference
+├── apk/                    Android binary XML and resource parsing
+├── tls/                    Certificates and PKCS#12
+├── dlna/                   UPnP/DLNA parsing and protocol encoding
+├── protocols/mdns/         DNS/mDNS wire codecs and records
+├── phone/                  Number parsing and offline metadata lookup
+├── filesystem/             File operations and native watching
+├── kv.rs                   Generic SQLite key-value storage
+├── platform/               Native network, volume and filesystem primitives
+└── utils/                  Parsing, encoding, time and file utilities
+
+plain-cli/src/
+├── bootstrap.rs            Process initialization and command dispatch
+├── cli/                    Command parsing and terminal interaction
+├── service.rs              Background service startup, shutdown and failure handling
+├── host.rs                 CLI host capabilities and event handling
+├── host/linux.rs           Linux host command adapters
+├── login_socket.rs         Local login approval socket server and client
+└── storage.rs              Startup media sources and mount event wiring
+
+plain-server/
+├── src/
+│   ├── server.rs             Compose core runtime, schemas and transport state
+│   ├── http/
+│   │   ├── router.rs         All HTTP route registrations
+│   │   ├── fs.rs             /fs: files and previews
+│   │   ├── file_response.rs  Shared file streaming, Range and response headers
+│   │   ├── zip.rs            /zip/dir and /zip/files
+│   │   ├── upload.rs         /upload and /upload_chunk
+│   │   ├── managed_proxy.rs  /proxy/{peerId}/*: GraphQL, files, uploads and sockets to known devices
+│   │   ├── managed_proxy/    Raw relay, attachment, upload and socket proxy transports
+│   │   ├── graphql.rs        Main, peer and guest GraphQL HTTP adapters
+│   │   ├── init.rs           /init
+│   │   ├── nearby.rs         /nearby
+│   │   ├── health.rs         Health handler
+│   │   ├── dlna.rs           DLNA description, control, events, media and callbacks
+│   │   ├── static_files.rs   Web UI fallback and static files
+│   │   ├── web_bundle.rs     Embedded Web asset access
+│   │   ├── ble.rs            BLE adapter for the shared transfer routes
+│   │   ├── ble/nearby.rs     BLE nearby-device request handling
+│   │   ├── auth/            HTTP authorization and CORS middleware
+│   │   ├── listeners/       HTTP/TLS sockets and listener lifecycle
+│   │   └── websocket/       WebSocket entry points and transport
+│   │       ├── auth.rs      /auth upgrade
+│   │       ├── graphql.rs   /graphql upgrade and subscriptions
+│   │       ├── status.rs    /status and peer status connections
+│   │       ├── screen.rs    /screen upgrade
+│   │       ├── image_editor.rs  /image_editor upgrade
+│   │       ├── runtime.rs   Shared auth, screen and image-editor connections
+│   │       └── frames.rs    WebSocket frame encoding
+│   ├── graphql/
+│   │   ├── schemas/         Main, peer and guest schema construction
+│   │   ├── resolvers/       GraphQL queries and mutations by domain
+│   │   │   └── mobile/      Mobile GraphQL adapters (contacts and call log)
+│   │   ├── subscriptions/   GraphQL subscriptions
+│   │   ├── types/           GraphQL types
+│   │   └── executor.rs      Shared schema execution
+│   ├── host/events.rs        Host event dispatch into the core services
+│   └── native/              Native API entry points
+
+```
 
 ## Build
 
