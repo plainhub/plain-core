@@ -778,7 +778,7 @@ async fn loaded_image_search_preserves_filters_counts_and_semantic_order() {
         1.0,
     ));
     embeddings::save(&db, &embeddings).unwrap();
-    assert_eq!(models.search("cat", 50).await.unwrap().len(), 7);
+    assert_eq!(models.search("cat").await.unwrap().len(), 7);
 
     let active = format!("text:cat tag_id:{} bucket_id:/fixture trash:false", tag.id);
     let cases = [

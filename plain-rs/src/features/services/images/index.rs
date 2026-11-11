@@ -85,10 +85,9 @@ impl ImageIndex {
     pub fn search_with_score(
         &self,
         embedding: &str,
-        limit: usize,
         minimum_score: f32,
     ) -> DomainResult<Vec<image_embeddings::SearchResult>> {
-        image_embeddings::search_with_score(&self.db, embedding, limit, minimum_score)
+        image_embeddings::search_with_score(&self.db, embedding, minimum_score)
     }
     pub fn uses_system_catalog(&self) -> bool {
         #[cfg(any(test, feature = "test-seams"))]

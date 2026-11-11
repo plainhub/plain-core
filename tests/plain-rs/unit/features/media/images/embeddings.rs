@@ -65,3 +65,34 @@ fn invalid_vectors_and_failed_batch_do_not_commit_partial_updates() {
     assert!(search(&db, "invalid", 5).is_err());
     assert!(search(&db, &encode(&[1.0, 0.0]), 501).is_err());
 }
+
+#[test]
+fn scored_search_returns_all_matches_in_stable_order() {
+    let db = test_db("embeddings_all_matches");
+    for batch in (0..620).collect::<Vec<_>>().chunks(100) {
+        let items = batch
+            .iter()
+            .map(|i| item(&format!("image-{i:04}"), &[0.75, 0.0]))
+            .collect::<Vec<_>>();
+        save(&db, &items).unwrap();
+    }
+    let results = search_with_score(&db, &encode(&[1.0, 0.0]), 0.75).unwrap();
+    assert_eq!(results.len(), 620);
+    assert_eq!(
+        results
+            .iter()
+            .map(|r| r.image_id.clone())
+            .collect::<Vec<_>>(),
+        (0..620)
+            .map(|i| format!("image-{i:04}"))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        search_with_score(&db, &encode(&[1.0, 0.0]), 0.76)
+            .unwrap()
+            .is_empty()
+    );
+    for minimum in [f32::NAN, f32::INFINITY, -1.1, 1.1] {
+        assert!(search_with_score(&db, &encode(&[1.0, 0.0]), minimum).is_err());
+    }
+}

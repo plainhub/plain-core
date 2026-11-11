@@ -46,29 +46,31 @@ pub fn save(db: &Db, items: &[EmbeddingInput]) -> DomainResult<()> {
     })
 }
 pub fn search(db: &Db, query: &str, limit: usize) -> DomainResult<Vec<SearchResult>> {
-    search_with_score(db, query, limit, 0.15)
+    if limit > 500 {
+        return Err(DomainError::Other("image search limit too large".into()));
+    }
+    if limit == 0 {
+        vector(&decode(query)?)?;
+        return Ok(Vec::new());
+    }
+    let mut results = search_with_score(db, query, 0.15)?;
+    results.truncate(limit);
+    Ok(results)
 }
 pub fn search_with_score(
     db: &Db,
     query: &str,
-    limit: usize,
     minimum_score: f32,
 ) -> DomainResult<Vec<SearchResult>> {
     if !minimum_score.is_finite() || !(-1.0..=1.0).contains(&minimum_score) {
         return Err(DomainError::Other("Invalid model score threshold".into()));
     }
-    if limit > 500 {
-        return Err(DomainError::Other("image search limit too large".into()));
-    }
     let query = vector(&decode(query)?)?;
-    if limit == 0 {
-        return Ok(Vec::new());
-    }
     db.with_conn(|c| {
         let mut statement =
             c.prepare("SELECT file_id,embedding FROM image_embeddings ORDER BY file_id")?;
         let mut rows = statement.query([])?;
-        let mut top = Vec::<SearchResult>::new();
+        let mut matches = Vec::<SearchResult>::new();
         while let Some(row) = rows.next()? {
             let id: String = row.get(0)?;
             let values = vector(&row.get::<_, Vec<u8>>(1)?)?;
@@ -85,18 +87,17 @@ pub fn search_with_score(
             if score < minimum_score {
                 continue;
             }
-            top.push(SearchResult {
+            matches.push(SearchResult {
                 image_id: id,
                 score,
             });
-            top.sort_by(|a, b| {
-                b.score
-                    .total_cmp(&a.score)
-                    .then_with(|| a.image_id.cmp(&b.image_id))
-            });
-            top.truncate(limit);
         }
-        Ok(top)
+        matches.sort_by(|a, b| {
+            b.score
+                .total_cmp(&a.score)
+                .then_with(|| a.image_id.cmp(&b.image_id))
+        });
+        Ok(matches)
     })
 }
 pub fn ids(db: &Db) -> DomainResult<Vec<String>> {

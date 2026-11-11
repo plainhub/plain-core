@@ -76,7 +76,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
         crate::features::media::images::embeddings::count(&db).unwrap(),
         1
     );
-    assert_eq!(runtime.search("cat", 50).await.unwrap()[0].image_id, "one");
+    assert_eq!(runtime.search("cat").await.unwrap()[0].image_id, "one");
     let mut replacement = plain_libs::ai_image_search::models::test_fixture::fixture(&incoming);
     replacement.files[0].sha256 = "0".repeat(64);
     std::fs::write(
@@ -103,7 +103,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
         active.fingerprint().unwrap(),
         original.fingerprint().unwrap()
     );
-    assert_eq!(runtime.search("cat", 50).await.unwrap()[0].score, 1.0);
+    assert_eq!(runtime.search("cat").await.unwrap()[0].score, 1.0);
     runtime.shutdown().await;
     runtime.enable(true).await.unwrap();
     settled(&runtime).await;
@@ -112,7 +112,7 @@ async fn failed_replacement_preserves_active_package_index_and_search() {
         ImageSearchStatusType::Ready
     );
     assert!(runtime.snapshot().status.error_message.is_empty());
-    assert_eq!(runtime.search("cat", 50).await.unwrap()[0].score, 1.0);
+    assert_eq!(runtime.search("cat").await.unwrap()[0].score, 1.0);
     replacement = plain_libs::ai_image_search::models::test_fixture::fixture(&incoming);
     replacement.id = "different-space".into();
     std::fs::write(
@@ -427,4 +427,318 @@ async fn initial_snapshot_is_published_before_the_core_is_returned_to_consumers(
         assert!(!matches!(event.event_type, "IMAGE_MODELS_UPDATED"));
     }
     core.stop_core().await;
+}
+
+#[tokio::test]
+async fn semantic_search_pages_all_matches_and_filters_before_pagination() {
+    use crate::features::enums::DataType;
+    use crate::features::media::images::embeddings::{self, EmbeddingInput};
+    use crate::features::services::files::catalog::MediaCatalog;
+    use crate::features::services::images::search;
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let model_dir = directory.path().join("model");
+    let mut manifest = plain_libs::ai_image_search::models::test_fixture::fixture(&model_dir);
+    manifest.minimum_score = 0.15;
+    let engine = Arc::new(
+        plain_libs::ai_image_search::embedding::Engine::open(model_dir, manifest).unwrap(),
+    );
+    let vector = engine.text("cat").unwrap();
+    let host = Arc::new(Host::default());
+    let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
+    let db = Arc::new(Db::open(&directory.path().join("data.db")).unwrap());
+    let (events, _) = tokio::sync::broadcast::channel(16);
+    let index = Arc::new(ImageIndex::new(
+        db.clone(),
+        host.clone(),
+        events.clone(),
+        Arc::new(crate::infrastructure::host::resources::NativeResources::new(host.clone())),
+        directory.path().join("cache"),
+    ));
+    let runtime = Runtime::new(
+        directory.path().into(),
+        host.clone(),
+        prefs,
+        Arc::new(plain_libs::kv::LazyDb::new(
+            directory.path().join("plain.db"),
+        )),
+        index,
+        events,
+    );
+    *runtime.engine.lock().unwrap() = Some(engine);
+    runtime.state.lock().unwrap().status = ImageSearchStatusType::Ready;
+    let mut ranked = Vec::new();
+    let mut selected = Vec::new();
+    let mut filename = Vec::new();
+    for i in 0..620 {
+        let folder = if i >= 550 { "selected" } else { "other" };
+        let title = if i < 7 || (550..553).contains(&i) {
+            format!("cat-{i:04}")
+        } else {
+            format!("photo-{i:04}")
+        };
+        let rows = db
+            .record_media_files(&[crate::infrastructure::db::MediaFileMetadata {
+                data_type: DataType::Image,
+                path: format!("/synthetic/{folder}/{title}.png"),
+                title: title.clone(),
+                album: String::new(),
+                album_artist: String::new(),
+                artist: String::new(),
+                bucket_id: folder.into(),
+                size_bytes: 2048,
+                duration_ms: 0,
+                cover_image_id: None,
+                width: 64,
+                height: 64,
+                rotation: 0,
+                taken_at: None,
+                created_at: "2026-01-01T00:00:00Z".into(),
+                updated_at: "2026-01-01T00:00:00Z".into(),
+            }])
+            .unwrap();
+        let row = &rows[0];
+        let score = if i == 619 {
+            0.1
+        } else {
+            1.0 - i as f32 / 1000.0
+        };
+        let bytes = vector
+            .iter()
+            .flat_map(|v| (v * score).to_be_bytes())
+            .collect::<Vec<_>>();
+        embeddings::save(
+            &db,
+            &[EmbeddingInput {
+                id: row.id.clone(),
+                path: row.path.clone(),
+                embedding_base64: plain_libs::utils::base64::base64_encode(&bytes),
+            }],
+        )
+        .unwrap();
+        if title.starts_with("cat") {
+            filename.push(row.id.clone());
+        }
+        if i < 619 && !title.starts_with("cat") {
+            ranked.push(row.id.clone());
+        }
+        if i >= 550 && i < 619 {
+            selected.push(row.id.clone());
+        }
+    }
+    let orphan_bytes = vector
+        .iter()
+        .flat_map(|v| v.to_be_bytes())
+        .collect::<Vec<_>>();
+    embeddings::save(
+        &db,
+        &[EmbeddingInput {
+            id: "orphan".into(),
+            path: "/synthetic/missing.png".into(),
+            embedding_base64: plain_libs::utils::base64::base64_encode(&orphan_bytes),
+        }],
+    )
+    .unwrap();
+    let catalog = MediaCatalog::Native(db.clone());
+    let mut expected = filename;
+    expected.extend(ranked);
+    assert_eq!(
+        search::count(&catalog, &runtime, "cat", "text:cat")
+            .await
+            .unwrap(),
+        619
+    );
+    let mut actual = Vec::new();
+    for offset in (0..650).step_by(37) {
+        let page = search::rows(
+            &catalog, &runtime, "cat", "text:cat", offset, 37, "NAME_ASC",
+        )
+        .await
+        .unwrap();
+        actual.extend(
+            page.into_iter()
+                .map(|r| r["id"].as_str().unwrap().to_owned()),
+        );
+    }
+    assert_eq!(actual, expected);
+    let query = "text:cat bucket_id:/synthetic/selected";
+    assert_eq!(
+        search::count(&catalog, &runtime, "cat", query)
+            .await
+            .unwrap(),
+        69
+    );
+    let page = search::rows(&catalog, &runtime, "cat", query, 50, 50, "NAME_ASC")
+        .await
+        .unwrap();
+    assert_eq!(
+        page.iter()
+            .map(|r| r["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        selected[50..]
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        search::rows(&catalog, &runtime, "cat", query, 69, 10, "NAME_ASC")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        search::rows(&catalog, &runtime, "cat", query, 0, 0, "NAME_ASC")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        search::rows(&catalog, &runtime, "cat", query, -1, 10, "NAME_ASC")
+            .await
+            .is_err()
+    );
+    assert!(
+        search::rows(&catalog, &runtime, "cat", query, 0, -1, "NAME_ASC")
+            .await
+            .is_err()
+    );
+    let selected_id = selected.last().unwrap();
+    let id_query = format!("text:cat ids:{selected_id}");
+    assert_eq!(
+        search::count(&catalog, &runtime, "cat", &id_query)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        search::rows(&catalog, &runtime, "cat", &id_query, 0, 10, "NAME_ASC")
+            .await
+            .unwrap()[0]["id"],
+        *selected_id
+    );
+    assert_eq!(
+        search::count(&catalog, &runtime, "cat", "text:cat ids:missing")
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        search::count(&catalog, &runtime, "", "").await.unwrap(),
+        620
+    );
+    for volume in db.volumes().unwrap() {
+        db.set_volume_index(
+            &volume.id,
+            crate::infrastructure::db::IndexMode::Blocklist,
+            &[],
+            &[],
+        )
+        .unwrap();
+    }
+    let (generation, mut requests) = host.connect();
+    let replies = host.clone();
+    let provider_db = db.clone();
+    let worker = tokio::spawn(async move {
+        while let Some(request) = requests.recv().await {
+            let params = &request["params"];
+            let value = &params["plan"];
+            let plan = crate::features::services::files::provider_query::Plan {
+                clauses: serde_json::from_value(value["clauses"].clone()).unwrap(),
+                args: serde_json::from_value(value["args"].clone()).unwrap(),
+                ids_column: value["idsColumn"].as_str().map(str::to_owned),
+                ids: value
+                    .get("ids")
+                    .map(|ids| serde_json::from_value(ids.clone()).unwrap())
+                    .unwrap_or_default(),
+                trash: value["trash"].as_bool(),
+            };
+            if plan.ids_column.is_some() {
+                assert!(plan.ids.len() <= 256);
+            }
+            let count = request["method"] == "systemMediaCount";
+            assert!(count || request["method"] == "systemMediaRows");
+            let sort = if count {
+                crate::features::prefs::settings::FileSortBy::NameAsc
+            } else {
+                serde_json::from_value(params["sortBy"].clone()).unwrap()
+            };
+            let rows = crate::features::services::files::media_catalog::rows_with_plan(
+                &provider_db,
+                DataType::Image,
+                plan,
+                sort,
+                if count {
+                    u32::MAX
+                } else {
+                    params["limit"].as_u64().unwrap() as u32
+                },
+                if count {
+                    0
+                } else {
+                    params["offset"].as_u64().unwrap() as u32
+                },
+            )
+            .unwrap();
+            let result = if count {
+                json!(rows.len())
+            } else {
+                json!(
+                    rows.iter()
+                        .map(crate::features::services::files::media_catalog_facts::row_facts)
+                        .collect::<Result<Vec<_>, _>>()
+                        .unwrap()
+                )
+            };
+            replies
+                .reply(generation, json!({"id":request["id"],"result":result}))
+                .unwrap();
+        }
+    });
+    let platform = MediaCatalog::Platform {
+        db: db.clone(),
+        host,
+    };
+    assert_eq!(
+        search::count(&platform, &runtime, "cat", "text:cat")
+            .await
+            .unwrap(),
+        619
+    );
+    assert_eq!(
+        search::count(&platform, &runtime, "cat", query)
+            .await
+            .unwrap(),
+        69
+    );
+    let platform_page = search::rows(&platform, &runtime, "cat", query, 50, 50, "NAME_ASC")
+        .await
+        .unwrap();
+    assert_eq!(platform_page, page);
+    for volume in db.volumes().unwrap() {
+        db.set_volume_index(
+            &volume.id,
+            crate::infrastructure::db::IndexMode::Allowlist,
+            &[std::path::Path::new("/synthetic/selected")
+                .strip_prefix(&volume.path)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()],
+            &[],
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        search::count(&platform, &runtime, "cat", "text:cat")
+            .await
+            .unwrap(),
+        69
+    );
+    worker.abort();
+    runtime.state.lock().unwrap().status = ImageSearchStatusType::Unavailable;
+    assert_eq!(
+        search::count(&catalog, &runtime, "cat", "text:cat")
+            .await
+            .unwrap(),
+        10
+    );
 }

@@ -1,9 +1,9 @@
-use plain_libs::protocols::http_client;
 use crate::features::prefs::pref_keys::AI_IMAGE_SEARCH_MODEL;
 use crate::features::services::images::index::ImageIndex;
 use crate::features::services::images::status::ImageSearchStatus;
 use crate::features::services::images::status::ImageSearchStatusType;
 use crate::infrastructure::host::bridge::Host;
+use plain_libs::protocols::http_client;
 
 use crate::features::prefs::Prefs;
 use crate::infrastructure::events::WsEvent;
@@ -423,14 +423,10 @@ impl Runtime {
     pub async fn search(
         &self,
         text: &str,
-        limit: usize,
     ) -> Result<Vec<crate::features::media::images::embeddings::SearchResult>, String> {
         let _guard = self.operations.lock().await;
         if self.snapshot().status.status != ImageSearchStatusType::Ready {
             return Err("Image search models are unavailable".into());
-        }
-        if limit > 500 {
-            return Err("Image search limit too large".into());
         }
         let engine = self
             .engine
@@ -449,7 +445,7 @@ impl Runtime {
             .collect::<Vec<_>>();
         let encoded = plain_libs::utils::base64::base64_encode(&bytes);
         let index = self.index.clone();
-        tokio::task::spawn_blocking(move || index.search_with_score(&encoded, limit, minimum_score))
+        tokio::task::spawn_blocking(move || index.search_with_score(&encoded, minimum_score))
             .await
             .map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())

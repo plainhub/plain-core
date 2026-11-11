@@ -5,7 +5,7 @@ use crate::features::services::images::status::ImageSearchStatusType;
 
 use crate::features::enums::DataType;
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 fn enabled(models: &Runtime, text: &str) -> bool {
     !text.trim().is_empty() && models.snapshot().status.status == ImageSearchStatusType::Ready
@@ -33,25 +33,40 @@ async fn filename_rows(
         .await
 }
 
-async fn semantic_rows(
+async fn semantic_extras(
     catalog: &MediaCatalog,
     models: &Runtime,
     text: &str,
     query: &str,
-) -> Result<Vec<Value>, String> {
+) -> Result<Vec<String>, String> {
     let ids = models
-        .search(text, 50)
+        .search(text)
         .await?
         .into_iter()
         .map(|row| row.image_id)
         .collect::<Vec<_>>();
-    let mut rows = catalog.image_matches(query, &ids, false).await?;
-    rows.sort_by_key(|row| {
-        ids.iter()
-            .position(|id| Some(id.as_str()) == row["id"].as_str())
-            .unwrap_or(usize::MAX)
-    });
-    Ok(rows)
+    let mut extras = Vec::new();
+    for candidates in ids.chunks(256) {
+        let semantic = catalog.image_matches(query, candidates, false).await?;
+        let matches = catalog.image_matches(query, candidates, true).await?;
+        let filename_ids = matches
+            .iter()
+            .filter_map(|row| row["id"].as_str())
+            .collect::<HashSet<_>>();
+        let semantic_ids = semantic
+            .iter()
+            .filter_map(|row| row["id"].as_str())
+            .collect::<HashSet<_>>();
+        extras.extend(
+            candidates
+                .iter()
+                .filter(|id| {
+                    semantic_ids.contains(id.as_str()) && !filename_ids.contains(id.as_str())
+                })
+                .cloned(),
+        );
+    }
+    Ok(extras)
 }
 
 pub async fn rows(
@@ -78,34 +93,28 @@ pub async fn rows(
     let extra = semantic_extras(catalog, models, text, query).await?;
     let extra_offset = (i64::from(offset) - filename_count).max(0) as usize;
     let remaining = limit as usize - items.len();
-    items.extend(extra.into_iter().skip(extra_offset).take(remaining));
-    Ok(items)
-}
-
-async fn semantic_extras(
-    catalog: &MediaCatalog,
-    models: &Runtime,
-    text: &str,
-    query: &str,
-) -> Result<Vec<Value>, String> {
-    let semantic = semantic_rows(catalog, models, text, query).await?;
-    let candidates = semantic
-        .iter()
-        .filter_map(|row| row["id"].as_str().map(str::to_owned))
-        .collect::<Vec<_>>();
-    let matches = catalog.image_matches(query, &candidates, true).await?;
-    let filename_ids = matches
-        .iter()
-        .filter_map(|row| row["id"].as_str())
-        .collect::<HashSet<_>>();
-    Ok(semantic
+    let selected = extra
         .into_iter()
-        .filter(|row| {
-            row["id"]
-                .as_str()
-                .is_some_and(|id| !filename_ids.contains(id))
-        })
-        .collect())
+        .skip(extra_offset)
+        .take(remaining)
+        .collect::<Vec<_>>();
+    let positions = selected
+        .iter()
+        .enumerate()
+        .map(|(position, id)| (id.as_str(), position))
+        .collect::<HashMap<_, _>>();
+    let mut semantic = Vec::new();
+    for ids in selected.chunks(256) {
+        semantic.extend(catalog.image_matches(query, ids, false).await?);
+    }
+    semantic.sort_by_key(|row| {
+        positions
+            .get(row["id"].as_str().unwrap_or_default())
+            .copied()
+            .unwrap_or(usize::MAX)
+    });
+    items.extend(semantic);
+    Ok(items)
 }
 
 pub async fn count(
