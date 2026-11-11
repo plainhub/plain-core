@@ -35,11 +35,10 @@ async fn scanning_with_300_http_requests_and_page_changes_preserves_the_encrypte
         let address = listener.local_addr().unwrap();
         let app = axum::Router::new().route("/graphql", axum::routing::get(upgrade).post(crate::http::graphql::call)).with_state(state.clone());
         let serving = tokio::spawn(async { axum::serve(listener, app).await.unwrap() });
-        let mut request = format!("ws://{address}/graphql?cid={client}").into_client_request().unwrap();
-        request.headers_mut().insert("sec-websocket-protocol", PROTOCOL.parse().unwrap());
+        let request = format!("ws://{address}/graphql?cid={client}").into_client_request().unwrap();
         let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
         let init = graphql::seal_init(&key, &client, &serde_json::to_vec(&Init {
-            timestamp_millis: chrono::Utc::now().timestamp_millis(),
+            timestamp_millis: plain_libs::chrono::Utc::now().timestamp_millis(),
             client_nonce: "ab".repeat(32),
         }).unwrap()).unwrap();
         socket.send(ClientMessage::Binary(init.clone().into())).await.unwrap();
@@ -175,8 +174,8 @@ async fn fs_burst_and_page_cancellation(
     let origin = format!("https://localhost:{port}");
     let source = plain_libs::temporary::tempdir().unwrap();
     let original = source.path().join("original.jpg");
-    image::RgbImage::from_fn(800, 600, |x, y| {
-        image::Rgb([(x % 220) as u8, (y % 220) as u8, 60])
+    plain_libs::image::RgbImage::from_fn(800, 600, |x, y| {
+        plain_libs::image::Rgb([(x % 220) as u8, (y % 220) as u8, 60])
     })
     .save(&original)
     .unwrap();
@@ -226,7 +225,7 @@ async fn fs_burst_and_page_cancellation(
     );
     let plaintext = format!(
         "{}|{}|{}",
-        chrono::Utc::now().timestamp_millis(),
+        plain_libs::chrono::Utc::now().timestamp_millis(),
         plain_libs::utils::uuid::Uuid::new_v4(),
         json!({"query":r#"{noteCount(query:"")} "#})
     );
@@ -280,7 +279,7 @@ async fn fs_burst_and_page_cancellation(
         .await
         .unwrap();
     assert_eq!(next.status(), StatusCode::OK);
-    let image = image::load_from_memory(&next.bytes().await.unwrap()).unwrap();
+    let image = plain_libs::image::load_from_memory(&next.bytes().await.unwrap()).unwrap();
     assert_eq!((image.width(), image.height()), (256, 192));
     assert_eq!(
         state.thumbnails.native_decodes.load(Ordering::SeqCst),
@@ -298,7 +297,7 @@ async fn fs_burst_and_page_cancellation(
             assert_eq!(response.status(), StatusCode::OK);
             assert_eq!(response.version(), http_client::Version::HTTP_11);
             let bytes = response.bytes().await.unwrap();
-            let image = image::load_from_memory(&bytes).unwrap();
+            let image = plain_libs::image::load_from_memory(&bytes).unwrap();
             assert_eq!((image.width(), image.height()), (256, 192));
         });
     }
@@ -311,7 +310,7 @@ async fn fs_burst_and_page_cancellation(
         .map(|_| {
             let plaintext = format!(
                 "{}|{}|{}",
-                chrono::Utc::now().timestamp_millis(),
+                plain_libs::chrono::Utc::now().timestamp_millis(),
                 plain_libs::utils::uuid::Uuid::new_v4(),
                 json!({"query":r#"{noteCount(query:"")}"#})
             );

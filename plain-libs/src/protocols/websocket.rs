@@ -23,26 +23,10 @@ pub type WebSocket = WebSocketStream<TokioIo<Upgraded>>;
 pub struct WebSocketUpgrade {
     on_upgrade: OnUpgrade,
     key: HeaderValue,
-    offered_protocol: Option<HeaderValue>,
-    protocol: Option<&'static str>,
     config: WebSocketConfig,
 }
 
 impl WebSocketUpgrade {
-    pub fn require_protocol(mut self, protocol: &'static str) -> Option<Self> {
-        if self
-            .offered_protocol
-            .as_ref()
-            .and_then(|value| value.to_str().ok())
-            .is_some_and(|value| value.split(',').any(|item| item.trim() == protocol))
-        {
-            self.protocol = Some(protocol);
-            Some(self)
-        } else {
-            None
-        }
-    }
-
     pub fn max_message_size(mut self, size: usize) -> Self {
         self.config.max_message_size = Some(size);
         self
@@ -100,7 +84,7 @@ impl WebSocketUpgrade {
         F: FnOnce(WebSocket) -> Fut + Send + 'static,
         Fut: Future<Output = ()> + Send + 'static,
     {
-        let mut response = Response::builder()
+        let response = Response::builder()
             .status(StatusCode::SWITCHING_PROTOCOLS)
             .header(header::CONNECTION, "upgrade")
             .header(header::UPGRADE, "websocket")
@@ -108,9 +92,6 @@ impl WebSocketUpgrade {
                 header::SEC_WEBSOCKET_ACCEPT,
                 derive_accept_key(self.key.as_bytes()),
             );
-        if let Some(protocol) = self.protocol {
-            response = response.header(header::SEC_WEBSOCKET_PROTOCOL, protocol);
-        }
         tokio::spawn(async move {
             match self.on_upgrade.await {
                 Ok(upgraded) => {
@@ -182,8 +163,6 @@ impl<S: Send + Sync> FromRequestParts<S> for WebSocketUpgrade {
         Ok(Self {
             on_upgrade,
             key: key.clone(),
-            offered_protocol: parts.headers.get(header::SEC_WEBSOCKET_PROTOCOL).cloned(),
-            protocol: None,
             config: WebSocketConfig::default(),
         })
     }

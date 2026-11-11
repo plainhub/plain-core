@@ -50,7 +50,7 @@ impl ServerCertVerifier for PeerVerifier {
             .supported_schemes()
     }
 }
-pub fn config() -> anyhow::Result<rustls::ClientConfig> {
+pub fn config() -> plain_libs::anyhow::Result<rustls::ClientConfig> {
     let config = rustls::ClientConfig::builder_with_provider(Arc::new(
         rustls::crypto::ring::default_provider(),
     ))
@@ -62,18 +62,18 @@ pub fn config() -> anyhow::Result<rustls::ClientConfig> {
 }
 pub async fn connect(
     url: &str,
-) -> anyhow::Result<
+) -> plain_libs::anyhow::Result<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
     let ws_config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
         .max_message_size(Some(64 * 1024))
         .max_frame_size(Some(64 * 1024));
-    connect_with_config(url, ws_config, None, None).await
+    connect_with_config(url, ws_config, None).await
 }
 
 pub async fn connect_management(
     url: &str,
-) -> anyhow::Result<
+) -> plain_libs::anyhow::Result<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
     connect_management_with_pin(url, None).await
@@ -82,7 +82,7 @@ pub async fn connect_management(
 pub(super) async fn connect_management_with_pin(
     url: &str,
     pin: Option<[u8; 32]>,
-) -> anyhow::Result<
+) -> plain_libs::anyhow::Result<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
     let mut url = http_client::Url::parse(url)?;
@@ -92,7 +92,6 @@ pub(super) async fn connect_management_with_pin(
         tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
             .max_message_size(Some(1024 * 1024))
             .max_frame_size(Some(1024 * 1024)),
-        Some(crate::infrastructure::protocols::graphql::PROTOCOL),
         pin,
     )
     .await
@@ -101,38 +100,20 @@ pub(super) async fn connect_management_with_pin(
 async fn connect_with_config(
     url: &str,
     ws_config: tokio_tungstenite::tungstenite::protocol::WebSocketConfig,
-    protocol: Option<&str>,
     pin: Option<[u8; 32]>,
-) -> anyhow::Result<
+) -> plain_libs::anyhow::Result<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
     let config = match pin {
         Some(pin) => http_client::pinned_tls_config(pin)?,
         None => config()?,
     };
-    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-    let mut request = url.into_client_request()?;
-    if let Some(protocol) = protocol {
-        request
-            .headers_mut()
-            .insert("sec-websocket-protocol", protocol.parse()?);
-    }
-    let (socket, response) = tokio_tungstenite::connect_async_tls_with_config(
-        request,
+    let (socket, _) = tokio_tungstenite::connect_async_tls_with_config(
+        url,
         Some(ws_config),
         false,
         Some(tokio_tungstenite::Connector::Rustls(Arc::new(config))),
     )
     .await?;
-    if let Some(protocol) = protocol {
-        anyhow::ensure!(
-            response
-                .headers()
-                .get("sec-websocket-protocol")
-                .and_then(|value| value.to_str().ok())
-                == Some(protocol),
-            "Invalid subscription subprotocol"
-        );
-    }
     Ok(socket)
 }

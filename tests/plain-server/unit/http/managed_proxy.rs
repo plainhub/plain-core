@@ -112,7 +112,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
             &Scope::Session(browser.client_id.clone()),
             &format!("relay:{b_id}:{method}:{path}"),
             &decode_key(&browser.url_token).unwrap(),
-            &serde_json::to_vec(&chrono::Utc::now().timestamp_millis()).unwrap(),
+            &serde_json::to_vec(&plain_libs::chrono::Utc::now().timestamp_millis()).unwrap(),
         )
         .unwrap();
         let (path, query) = path.split_once('?').unwrap_or((path, ""));
@@ -252,7 +252,7 @@ async fn managed_proxy_keeps_the_browser_session_and_streams_a_peer_range() {
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()[header::CONTENT_TYPE], "application/zip");
     let mut archive =
-        zip::ZipArchive::new(std::io::Cursor::new(response.bytes().await.unwrap())).unwrap();
+        plain_libs::zip::ZipArchive::new(std::io::Cursor::new(response.bytes().await.unwrap())).unwrap();
     assert_eq!(archive.len(), 1);
     let mut entry = Vec::new();
     std::io::Read::read_to_end(&mut archive.by_name("entry.txt").unwrap(), &mut entry).unwrap();
@@ -465,7 +465,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
             &browser.client_id,
             path,
             &serde_json::to_vec(&graphql::Init {
-                timestamp_millis: chrono::Utc::now().timestamp_millis(),
+                timestamp_millis: plain_libs::chrono::Utc::now().timestamp_millis(),
                 client_nonce: plain_libs::utils::hex::bytes_to_hex(
                     &plain_libs::crypto::random_bytes(32),
                 ),
@@ -851,10 +851,7 @@ fn upload_body(metadata: &[u8], data: &[u8]) -> http_client::Body {
 }
 
 async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
-    let mut request = url.into_client_request().unwrap();
-    request
-        .headers_mut()
-        .insert("sec-websocket-protocol", graphql::PROTOCOL.parse().unwrap());
+    let request = url.into_client_request().unwrap();
     let tls = http_client::pinned_tls_config(pin).unwrap();
     let (mut socket, _) = tokio_tungstenite::connect_async_tls_with_config(
         request,
@@ -868,7 +865,7 @@ async fn subscription(url: &str, client: &str, key: &[u8], pin: [u8; 32]) {
         key,
         client,
         &serde_json::to_vec(&graphql::Init {
-            timestamp_millis: chrono::Utc::now().timestamp_millis(),
+            timestamp_millis: plain_libs::chrono::Utc::now().timestamp_millis(),
             client_nonce: "ab".repeat(32),
         })
         .unwrap(),

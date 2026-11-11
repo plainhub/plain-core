@@ -46,7 +46,7 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
     let (mut socket, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
     let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
-        chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
         &plain_rs::infrastructure::protocols::websocket::request_aad(
             "/image_editor",
             &client,
@@ -136,13 +136,9 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
             let _ = host.reply(json!({"id":request["id"],"result":result}));
         }
     });
-    let mut request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
+    let request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
         .into_client_request()
         .unwrap();
-    request.headers_mut().insert(
-        "Sec-WebSocket-Protocol",
-        "plain-graphql-ws-v1".parse().unwrap(),
-    );
     let (mut subscriptions, _) = tokio_tungstenite::connect_async(request).await.unwrap();
     let init = plain_rs::infrastructure::protocols::graphql::seal_init(
         &key,
@@ -215,7 +211,7 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     .unwrap();
     let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
-        chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
         &plain_rs::infrastructure::protocols::websocket::request_aad("/screen", &client, None),
     )
     .unwrap();
@@ -241,7 +237,7 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         br#"{"type":"screenMirrorControl","input":{"action":"BACK"}}"#.as_slice(),
         &[0x54, 1, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0],
     ] {
-        let mut plain = chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
+        let mut plain = plain_libs::chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
         plain.extend_from_slice(payload);
         screen
             .send(ClientMessage::Binary(
@@ -334,7 +330,7 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     })
     .await
     .unwrap();
-    let mut control = chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
+    let mut control = plain_libs::chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
     control.extend_from_slice(br#"{"type":"screenMirrorControl","input":{"action":"HOME"}}"#);
     let control = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
@@ -462,13 +458,9 @@ async fn remote_subscriptions_enforce_access_and_deliver_pomodoro_updates() {
         .unwrap();
     let key = plain_libs::utils::base64::base64_decode(&session.token);
     let client = session.client_id;
-    let mut request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
+    let request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
         .into_client_request()
         .unwrap();
-    request.headers_mut().insert(
-        "Sec-WebSocket-Protocol",
-        "plain-graphql-ws-v1".parse().unwrap(),
-    );
     let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
     let init = plain_rs::infrastructure::protocols::graphql::seal_init(
         &key,

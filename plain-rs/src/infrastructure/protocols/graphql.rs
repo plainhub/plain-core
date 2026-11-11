@@ -154,7 +154,6 @@ pub struct PeerSubscriptionTarget {
 pub mod messages;
 
 use serde::{Deserialize, Serialize};
-pub const PROTOCOL: &str = "plain-graphql-ws-v1";
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Init {

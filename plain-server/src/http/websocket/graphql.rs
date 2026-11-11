@@ -11,7 +11,6 @@ use plain_rs::infrastructure::host::request_scope::NativeRequestScope;
 use plain_rs::infrastructure::protocols::graphql;
 use plain_rs::infrastructure::protocols::graphql::Ack;
 use plain_rs::infrastructure::protocols::graphql::Init;
-use plain_rs::infrastructure::protocols::graphql::PROTOCOL;
 use plain_rs::infrastructure::protocols::graphql::Role;
 use serde::Deserialize;
 use std::time::Duration;
@@ -25,9 +24,6 @@ pub(crate) async fn upgrade(
     Query(params): Query<Params>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    let Some(ws) = ws.require_protocol(PROTOCOL) else {
-        return StatusCode::BAD_REQUEST.into_response();
-    };
     if params.cid.is_empty() || params.cid.len() > 1024 {
         return StatusCode::BAD_REQUEST.into_response();
     }
@@ -86,7 +82,7 @@ pub(crate) async fn acknowledge(
             &state.db,
             client,
             &format!("{}|{}|", init.timestamp_millis, init.client_nonce),
-            chrono::Utc::now().timestamp_millis(),
+            plain_libs::chrono::Utc::now().timestamp_millis(),
         )
         .map_err(|_| "Invalid handshake")?;
     let ack = Ack {
@@ -211,3 +207,7 @@ async fn run(mut socket: WebSocket, state: ServerState, client: String) {
 #[cfg(test)]
 #[path = "../../../../tests/plain-server/unit/http/websocket/graphql.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../../../tests/plain-server/unit/http/websocket/no_subprotocol.rs"]
+mod no_subprotocol_tests;

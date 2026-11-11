@@ -13,7 +13,7 @@ use plain_rs::{
         db::SessionRow,
         host::request_scope::NativeRequestScope,
         protocols::graphql::{
-            PROTOCOL, PeerSubscriptionTarget, Stream,
+            PeerSubscriptionTarget, Stream,
             messages::{ClientMessage, ServerMessage},
         },
     },
@@ -37,9 +37,6 @@ pub(super) async fn upgrade(state: ServerState, target: String, request: Request
     };
     let (mut parts, _) = request.into_parts();
     let Ok(socket) = WebSocketUpgrade::from_request_parts(&mut parts, &state).await else {
-        return StatusCode::BAD_REQUEST.into_response();
-    };
-    let Some(socket) = socket.require_protocol(PROTOCOL) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
     socket

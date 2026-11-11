@@ -142,7 +142,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
         });
         let inner = serde_json::to_vec(&request).unwrap();
         let frame = keys
-            .encrypt_request(&inner, chrono::Utc::now().timestamp_millis() as u64)
+            .encrypt_request(&inner, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
             .unwrap();
         socket
             .send(ClientMessage::Binary(frame.clone().into()))
@@ -174,7 +174,7 @@ async fn auth_confirmation_uses_host_callbacks_and_returns_the_hosts_decision_to
                 panic!("expected completed auth frame")
             };
             let inner = keys
-                .decrypt_response(&frame, chrono::Utc::now().timestamp_millis() as u64)
+                .decrypt_response(&frame, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
                 .unwrap();
             let decrypted = inner;
             let result: Value = serde_json::from_slice(&decrypted).unwrap();
@@ -279,7 +279,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                 b"invalid".to_vec()
             };
             let frame = keys
-                .encrypt_request(&inner, chrono::Utc::now().timestamp_millis() as u64)
+                .encrypt_request(&inner, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
                 .unwrap();
             socket
                 .send(ClientMessage::Binary(frame.into()))
@@ -295,7 +295,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                     panic!("expected completed login")
                 };
                 let inner = keys
-                    .decrypt_response(&frame, chrono::Utc::now().timestamp_millis() as u64)
+                    .decrypt_response(&frame, plain_libs::chrono::Utc::now().timestamp_millis() as u64)
                     .unwrap();
                 let plaintext = inner;
                 let result: Value = serde_json::from_slice(&plaintext).unwrap();
@@ -409,7 +409,7 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     .unwrap();
     let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
-        chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
         &plain_rs::infrastructure::protocols::websocket::request_aad("/screen", &client, None),
     )
     .unwrap();
@@ -421,7 +421,7 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     let touch = [0x54, 1, 0xff, 0xff, 0, 7, 0x34, 0x12, 0x78, 0x56, 0, 0];
     let mut last = Vec::new();
     for payload in [json_control.as_slice(), touch.as_slice()] {
-        let mut plain = chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
+        let mut plain = plain_libs::chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
         plain.extend_from_slice(payload);
         last = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
             &key,
@@ -469,14 +469,14 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     .unwrap();
     let next_registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
-        chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
         &plain_rs::infrastructure::protocols::websocket::request_aad("/screen", &client, None),
     )
     .unwrap();
     next.send(ClientMessage::Binary(next_registration.into()))
         .await
         .unwrap();
-    let mut old_bound = chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
+    let mut old_bound = plain_libs::chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
     old_bound.extend_from_slice(json_control);
     let old_bound = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
@@ -657,13 +657,9 @@ async fn online_clients_follow_authenticated_graphql_connections() {
     let host = core.host_events().unwrap();
     host_online(&host, json!([])).await;
     assert!(state.subscription_sessions.snapshot().is_empty());
-    let mut invalid_request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
+    let invalid_request = format!("ws://127.0.0.1:{}/graphql?cid={client}", core.port)
         .into_client_request()
         .unwrap();
-    invalid_request.headers_mut().insert(
-        "Sec-WebSocket-Protocol",
-        "plain-graphql-ws-v1".parse().unwrap(),
-    );
     let (mut invalid, _) = tokio_tungstenite::connect_async(invalid_request)
         .await
         .unwrap();
@@ -682,15 +678,11 @@ async fn online_clients_follow_authenticated_graphql_connections() {
         let nonce = nonce.to_owned();
         let port = core.port;
         async move {
-            let mut request = format!("ws://127.0.0.1:{port}/graphql?cid={client}")
+            let request = format!("ws://127.0.0.1:{port}/graphql?cid={client}")
                 .into_client_request()
                 .unwrap();
-            request.headers_mut().insert(
-                "Sec-WebSocket-Protocol",
-                "plain-graphql-ws-v1".parse().unwrap(),
-            );
             let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
-            let init = plain_rs::infrastructure::protocols::graphql::seal_init(&key, &client, json!({"timestampMillis": chrono::Utc::now().timestamp_millis(), "clientNonce": nonce.repeat(32)}).to_string().as_bytes()).unwrap();
+            let init = plain_rs::infrastructure::protocols::graphql::seal_init(&key, &client, json!({"timestampMillis": plain_libs::chrono::Utc::now().timestamp_millis(), "clientNonce": nonce.repeat(32)}).to_string().as_bytes()).unwrap();
             socket
                 .send(Frame::Binary(init.clone().into()))
                 .await
@@ -838,7 +830,7 @@ struct PasswordKeys {
 }
 #[cfg(feature = "http_transport")]
 impl PasswordKeys {
-    fn encrypt_request(&self, bytes: &[u8], _now: u64) -> anyhow::Result<Vec<u8>> {
+    fn encrypt_request(&self, bytes: &[u8], _now: u64) -> plain_libs::anyhow::Result<Vec<u8>> {
         let mut frame = self.ke3.clone();
         frame.extend(
             plain_libs::crypto::xchacha_encrypt_raw_with_aad(
@@ -850,13 +842,13 @@ impl PasswordKeys {
         );
         Ok(frame)
     }
-    fn decrypt_response(&self, bytes: &[u8], _now: u64) -> anyhow::Result<Vec<u8>> {
+    fn decrypt_response(&self, bytes: &[u8], _now: u64) -> plain_libs::anyhow::Result<Vec<u8>> {
         plain_libs::crypto::xchacha_decrypt_raw_with_aad(
             &self.key,
             bytes,
             &plain_libs::auth::auth_aad(&self.context, true),
         )
-        .ok_or_else(|| anyhow::anyhow!("invalid response"))
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("invalid response"))
     }
 }
 #[cfg(feature = "http_transport")]
@@ -925,7 +917,7 @@ async fn socket_registration_rejects_other_route_and_client_binding() {
         .unwrap();
         let frame = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
             &key,
-            chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+            plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
             &plain_rs::infrastructure::protocols::websocket::request_aad(path, cid, None),
         )
         .unwrap();
