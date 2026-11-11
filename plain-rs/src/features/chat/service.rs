@@ -88,8 +88,6 @@ pub struct ChatService<T: PeerTransport> {
     pub db: Db,
     pub delivery: std::sync::Arc<crate::features::chat::delivery::Delivery>,
     pub cacher: ChatCacher,
-    /// Base64 local URL token — the key behind `/fs` file ids.
-    pub token: String,
     pub identity: std::sync::Arc<ChatIdentity>,
     /// Device type advertised in channel wire traffic
     /// (COMPUTER on desktop, NAS on the server).
@@ -105,10 +103,8 @@ pub struct ChatService<T: PeerTransport> {
 }
 
 impl<T: PeerTransport + 'static> ChatService<T> {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         db: Db,
-        token: String,
         identity: std::sync::Arc<ChatIdentity>,
         wire_device_type: DeviceType,
         data_dir: PathBuf,
@@ -128,7 +124,6 @@ impl<T: PeerTransport + 'static> ChatService<T> {
             )),
             db,
             cacher,
-            token,
             identity,
             wire_device_type,
             data_dir,
@@ -159,7 +154,6 @@ impl<T: PeerTransport + 'static> ChatService<T> {
 
 pub use crate::features::chat::manager::chat_to_json;
 pub use crate::features::chat::manager::resolve_chat_ids;
-pub use crate::features::chat::messages::content::to_peer_content;
 
 #[cfg(test)]
 #[path = "../../../../tests/plain-rs/unit/features/chat/service.rs"]

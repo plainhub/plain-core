@@ -7,45 +7,40 @@ use plain_rs::features::prefs::pref_keys::{APP_HOME_FEATURES, AUTO_CHECK_UPDATE,
 use serde_json::Value;
 use std::sync::Arc;
 
-/// Measured in bytes, not characters: the limit is what the store has to
-/// hold, and a multi-byte value would slip past a character count.
-fn validate_value(value: &Value) -> plain_graphql::Result<()> {
-    if value.to_string().len() > 65536 {
-        return Err(plain_graphql::Error::new("invalid_pref_value"));
-    }
-    Ok(())
-}
-
 #[derive(Default)]
 pub struct PrefsQuery;
 
 #[Object]
 impl PrefsQuery {
-    fn prefs(&self, ctx: &Context<'_>) -> plain_graphql::Result<Json<Value>> {
+    fn prefs(
+        &self,
+        ctx: &Context<'_>,
+        keys: Option<Vec<String>>,
+    ) -> plain_graphql::Result<Json<Value>> {
         let prefs = prefs(ctx);
+        let Some(keys) = keys else {
+            super::super::common::require_developer_mode(ctx)?;
+            return Ok(Json(Value::Object(prefs.entries().into_iter().collect())));
+        };
         let mut values = serde_json::Map::new();
-        for (key, value) in prefs.entries() {
-            if plain_rs::features::prefs::pref_keys::readable(&key, is_local(ctx)) {
+        for key in keys {
+            if !plain_rs::features::prefs::pref_keys::readable(&key, is_local(ctx)) {
+                return Err(plain_graphql::Error::new("Preference is not accessible"));
+            }
+            if let Some(value) = prefs.get::<Value>(&key)? {
                 let value =
                     plain_rs::features::prefs::settings::get_entry(prefs, &key)?.unwrap_or(value);
                 values.insert(key, value);
+            } else if key == APP_HOME_FEATURES {
+                values.insert(
+                    key,
+                    Value::String(
+                        plain_rs::features::prefs::settings::Settings::default().app_home_features,
+                    ),
+                );
             }
         }
-        values
-            .entry(APP_HOME_FEATURES.to_owned())
-            .or_insert_with(|| {
-                Value::String(
-                    plain_rs::features::prefs::settings::Settings::default().app_home_features,
-                )
-            });
         Ok(Json(Value::Object(values)))
-    }
-    fn saved_value(&self, ctx: &Context<'_>, key: String) -> plain_graphql::Result<Json<Value>> {
-        saved_key(&key)?;
-        let state = ctx.data::<crate::server::ServerState>()?;
-        Ok(Json(
-            state.store.get()?.get_json(&key)?.unwrap_or(Value::Null),
-        ))
     }
 }
 
@@ -78,17 +73,6 @@ impl PrefsMutation {
         }
         Ok(true)
     }
-    fn set_saved_value(
-        &self,
-        ctx: &Context<'_>,
-        key: String,
-        value: Json<Value>,
-    ) -> plain_graphql::Result<bool> {
-        saved_key(&key)?;
-        validate_value(&value.0)?;
-        let state = ctx.data::<crate::server::ServerState>()?;
-        Ok(state.store.get()?.set_json(&key, value.0)?)
-    }
 }
 
 fn prefs<'a>(ctx: &'a Context<'_>) -> &'a Arc<Prefs> {
@@ -111,18 +95,4 @@ pub(crate) fn authorize(ctx: &Context<'_>, key: &str) -> plain_graphql::Result<(
         return Err(plain_graphql::Error::new("Preference is not accessible"));
     }
     Ok(())
-}
-
-fn saved_key(key: &str) -> plain_graphql::Result<()> {
-    if matches!(
-        key,
-        "last_file_path" | "quick_note_draft" | "recent_searches" | "recent_save_dirs"
-    ) || key.strip_prefix("chat_input_text:").is_some_and(|target| {
-        (target.starts_with("channel:") || target.starts_with("peer:"))
-            && target.split_once(':').is_some_and(|(_, id)| !id.is_empty())
-    }) {
-        Ok(())
-    } else {
-        Err(plain_graphql::Error::new("Unknown saved data key"))
-    }
 }

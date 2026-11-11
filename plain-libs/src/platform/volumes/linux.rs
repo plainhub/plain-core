@@ -48,16 +48,26 @@ fn filesystem_uuid(mount: &Mount, directory: &Path) -> Result<Option<String>> {
 }
 
 pub(super) fn containing(path: &Path) -> Result<Volume> {
-    let mount = mounts()?
+    containing_from_mounts(
+        path,
+        mounts()?,
+        Path::new("/dev/disk/by-uuid"),
+        Path::new("/proc/sys/kernel/random/boot_id"),
+    )
+}
+
+pub(super) fn containing_from_mounts(
+    path: &Path,
+    mounts: Vec<Mount>,
+    uuid_directory: &Path,
+    boot_id: &Path,
+) -> Result<Volume> {
+    let mount = mounts
         .into_iter()
         .filter(|mount| path.starts_with(&mount.path))
         .max_by_key(|mount| mount.path.components().count())
         .context("No containing filesystem mount")?;
-    volume(
-        mount,
-        Path::new("/dev/disk/by-uuid"),
-        Path::new("/proc/sys/kernel/random/boot_id"),
-    )
+    volume(mount, uuid_directory, boot_id)
 }
 
 fn volume(mount: Mount, uuid_directory: &Path, boot_id: &Path) -> Result<Volume> {

@@ -14,7 +14,6 @@ impl<T: PeerTransport + 'static> ChatService<T> {
         let delivery = self.delivery.clone();
         let transport = self.transport.clone();
         let identity = self.identity.clone();
-        let token = self.token.clone();
         let id = chat.id.clone();
         let events = self.event_tx.clone();
         let hooks = self.hooks.clone();
@@ -24,7 +23,6 @@ impl<T: PeerTransport + 'static> ChatService<T> {
                     &transport,
                     &identity.client_id,
                     &plain_libs::utils::base64::base64_decode(&identity.ed25519_keypair),
-                    &token,
                     &id,
                     None,
                 )

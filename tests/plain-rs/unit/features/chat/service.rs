@@ -3,9 +3,6 @@ use crate::features::chat::enums::ChannelStatus;
 use crate::features::chat::enums::ChatStatus;
 use crate::infrastructure::db::DChat;
 use crate::infrastructure::db::Db;
-use plain_libs::crypto::xchacha_decrypt;
-use plain_libs::utils::base64::base64_decode;
-use plain_libs::utils::base64::base64_encode;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -44,7 +41,6 @@ async fn send_chat_item_requires_prefixed_peer_and_local_targets() {
     let db = Db::open(&dir.join("plain.db")).expect("open db");
     let service = ChatService::new(
         db,
-        String::new(),
         std::sync::Arc::new(ChatIdentity::new("self", "Self", String::new())),
         DeviceType::Computer,
         dir,
@@ -139,75 +135,12 @@ fn resolve_unknown_query_returns_empty() {
     assert!(resolve_chat_ids(&db, "nocolon").is_empty());
 }
 
-#[test]
-fn to_peer_content_converts_fid_to_fsid() {
-    let token_raw = [99u8; 32];
-    let token = base64_encode(&token_raw);
-    let content = serde_json::json!({
-        "type": "images",
-        "value": {
-            "items": [
-                {"uri": "fid:abcdef0123456789.jpg", "fileName": "cat.jpg", "size": 1234}
-            ]
-        }
-    })
-    .to_string();
-
-    let peer_content = to_peer_content(&content, &token);
-    let v: Value = serde_json::from_str(&peer_content).unwrap();
-    let uri = v["value"]["items"][0]["uri"].as_str().unwrap();
-    assert!(
-        uri.starts_with("fsid:"),
-        "uri should be fsid: prefix, got: {uri}"
-    );
-
-    let (scope, payload) =
-        crate::features::files::resource_link::parse(uri.strip_prefix("fsid:").unwrap()).unwrap();
-    let resource = crate::features::files::resource_link::open(
-        &scope,
-        &plain_libs::utils::base64::base64_decode(&token),
-        payload,
-    )
-    .unwrap();
-    assert_eq!(
-        resource,
-        crate::features::files::resource_link::Resource::reference("fid:abcdef0123456789.jpg")
-    );
-}
-
-#[test]
-fn to_peer_content_preserves_non_fid_uris() {
-    let token = base64_encode(&[1u8; 32]);
-    let content = serde_json::json!({
-        "type": "files",
-        "value": {
-            "items": [
-                {"uri": "https://example.com/file.pdf", "fileName": "doc.pdf", "size": 5678}
-            ]
-        }
-    })
-    .to_string();
-
-    let peer_content = to_peer_content(&content, &token);
-    let v: Value = serde_json::from_str(&peer_content).unwrap();
-    let uri = v["value"]["items"][0]["uri"].as_str().unwrap();
-    assert_eq!(uri, "https://example.com/file.pdf");
-}
-
-#[test]
-fn to_peer_content_passthrough_on_invalid_json() {
-    let token = base64_encode(&[1u8; 32]);
-    let content = "not json at all";
-    assert_eq!(to_peer_content(content, &token), content);
-}
-
 #[tokio::test]
 async fn kicked_channel_rejects_incoming_message() {
     let dir = unique_tmp_dir("kicked-channel");
     let db = Db::open(&dir.join("plain.db")).expect("open db");
     let service = ChatService::new(
         db,
-        String::new(),
         std::sync::Arc::new(ChatIdentity::new("self", "Self", String::new())),
         DeviceType::Computer,
         dir,
@@ -269,7 +202,6 @@ async fn unpaired_peer_send_fails_and_local_cache_tracks_deletion() {
     db.upsert_peer(&peer);
     let service = ChatService::new(
         db,
-        String::new(),
         std::sync::Arc::new(ChatIdentity::new("self", "Self", String::new())),
         DeviceType::Computer,
         dir,

@@ -619,9 +619,11 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
 
     let file = dir.path().join("chat.txt");
     std::fs::write(&file, b"chat attachment").unwrap();
-    let b_key = b_state.url_key.to_vec();
+    let b_key = plain_rs::features::sessions::token_key(&b_state.native_url_token().unwrap())
+        .unwrap()
+        .to_vec();
     let file_id = resource_link::seal(
-        &Scope::Global,
+        &Scope::Session(b_state.native_client_id().unwrap()),
         &b_key,
         &Resource::reference(file.to_str().unwrap()),
     )
@@ -661,7 +663,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let ticket = resource_link::encrypt(
         &native_scope,
         "native-proxy",
-        &a_state.url_key,
+        &plain_rs::features::sessions::token_key(&a_state.native_url_token().unwrap()).unwrap(),
         &serde_json::to_vec(&json!({"base":format!("https://127.0.0.1:{b_port}")})).unwrap(),
     )
     .unwrap();
@@ -692,7 +694,7 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
     let native_attachment = resource_link::encrypt(
         &native_scope,
         &format!("chat-attachment:{b_id}"),
-        &a_state.url_key,
+        &plain_rs::features::sessions::token_key(&a_state.native_url_token().unwrap()).unwrap(),
         reference.as_bytes(),
     )
     .unwrap();
@@ -716,7 +718,12 @@ async fn first_login_and_chat_range_use_proxy_without_a_management_token() {
         .import_file(&file, "chat.txt", "text/plain", false)
         .unwrap();
     let local_ref = Resource::reference(&format!("fid:{}", imported.id));
-    let local_id = resource_link::seal(&native_scope, &a_state.url_key, &local_ref).unwrap();
+    let local_id = resource_link::seal(
+        &native_scope,
+        &plain_rs::features::sessions::token_key(&a_state.native_url_token().unwrap()).unwrap(),
+        &local_ref,
+    )
+    .unwrap();
     let response = http
         .get(format!(
             "http://localhost:{a_http}/fs?id={local_id}&action=download"
@@ -784,7 +791,7 @@ async fn native_proxy_streams_rest_through_the_main_listener() {
     let ticket = resource_link::encrypt(
         &scope,
         "native-proxy",
-        &state.url_key,
+        &plain_rs::features::sessions::token_key(&state.native_url_token().unwrap()).unwrap(),
         &serde_json::to_vec(&json!({"base":format!("http://{address}")})).unwrap(),
     )
     .unwrap();

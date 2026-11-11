@@ -1,8 +1,8 @@
 use crate::server::ContentServer;
 
 #[tokio::test]
-async fn every_runtime_uses_the_current_schema_and_the_same_persisted_identity_keys_and_a_fresh_url_key()
-{
+async fn every_runtime_uses_the_current_schema_and_the_same_persisted_identity_keys_and_a_fresh_native_session()
+ {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let first = ContentServer::open(directory.path()).unwrap();
     let state = first.runtime_state();
@@ -31,7 +31,12 @@ async fn every_runtime_uses_the_current_schema_and_the_same_persisted_identity_k
         plain_libs::utils::base64::base64_decode(&identity.ed25519_keypair),
         pair
     );
-    assert_eq!(plain_libs::utils::base64::base64_encode(&state.url_key), token);
+    let session = state.db.session_get(&client_id).unwrap().unwrap();
+    assert_eq!(session.url_token, token);
+    assert_eq!(session.token, state.token.as_ref());
+    assert_ne!(session.url_token, session.token);
+    assert!(state.prefs.get::<String>("url_token").unwrap().is_none());
+    assert!(state.prefs.get::<String>("urlToken").unwrap().is_none());
     assert_eq!(plain_libs::utils::base64::base64_decode(&token).len(), 32);
     first.shutdown().await;
     drop(state);

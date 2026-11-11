@@ -1,5 +1,9 @@
 use super::*;
 
+#[cfg(unix)]
+#[path = "files/volume_registration.rs"]
+mod volume_registration;
+
 #[test]
 fn file_paths_are_relative_and_preserve_user_state() {
     let directory = plain_libs::temporary::tempdir().unwrap();

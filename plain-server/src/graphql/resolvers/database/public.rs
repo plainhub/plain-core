@@ -182,10 +182,10 @@ impl DbMutation {
         table: String,
         ids: Vec<String>,
     ) -> plain_graphql::Result<bool> {
+        let file = app_db(ctx).await?;
         if ids.is_empty() {
             return Ok(false);
         }
-        let file = app_db(ctx).await?;
         if !has_path(&file) {
             return Ok(false);
         }
@@ -198,6 +198,7 @@ impl DbMutation {
 }
 
 async fn app_db(ctx: &Context<'_>) -> plain_graphql::Result<SqliteFile> {
+    super::super::common::require_developer_mode(ctx)?;
     let path = ctx
         .data::<Arc<plain_rs::infrastructure::db::Db>>()?
         .with_conn(|connection| connection.path().map(std::path::PathBuf::from))

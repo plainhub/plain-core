@@ -1,6 +1,6 @@
-use plain_libs::protocols::http_client;
 use super::*;
 use crate::test_support::schema::SchemaFixture as PublicSchema;
+use plain_libs::protocols::http_client;
 use plain_rs::features::prefs::Prefs;
 use plain_rs::infrastructure::db::Db;
 use plain_rs::infrastructure::host::bridge::Host;
@@ -589,11 +589,10 @@ async fn channel_snapshot_recovers_current_public_list_without_emitting_another_
 #[tokio::test]
 async fn channel_action_projection_matches_rust_event_projection_without_host_calls() {
     let (_directory, schema) = fixture();
-    let actor = "fixture-member";
-    schema
-        .data::<Arc<Prefs>>()
+    let actor = schema
+        .data::<plain_rs::runtime::Runtime>()
         .unwrap()
-        .set(plain_rs::features::prefs::pref_keys::CLIENT_ID, actor)
+        .native_client_id()
         .unwrap();
     let channel = plain_rs::features::chat::channels::state::create(
         database(&schema),
@@ -601,7 +600,7 @@ async fn channel_action_projection_matches_rust_event_projection_without_host_ca
         "Fixture channel",
     )
     .unwrap();
-    let event = plain_rs::features::chat::events::channel_to_json(&channel, actor);
+    let event = plain_rs::features::chat::events::channel_to_json(&channel, &actor);
     let result = query(
         &schema,
         "{ chatChannels { id actions { isOwner canRename canManageMembers canLeave canDelete } } }",

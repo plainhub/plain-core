@@ -365,7 +365,10 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
         && native_loopback(&state, &request)
         && state.native_client_id().is_ok_and(|native| native == id);
     let session = if native {
-        None
+        match plain_rs::features::services::sessions::native(&state) {
+            Ok(session) => session,
+            Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
+        }
     } else {
         if !same_origin(&request) {
             return StatusCode::FORBIDDEN.into_response();
@@ -373,22 +376,17 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
         let Ok(session) = caller(&state, &id) else {
             return StatusCode::UNAUTHORIZED.into_response();
         };
-        Some(session)
+        session
     };
-    let url_key = if let Some(session) = &session {
-        let Ok(key) = decode_key(&session.url_token) else {
-            return StatusCode::UNAUTHORIZED.into_response();
-        };
-        key
-    } else {
-        state.url_key.to_vec()
+    let Ok(url_key) = decode_key(&session.url_token) else {
+        return StatusCode::UNAUTHORIZED.into_response();
     };
     let scope = Scope::Session(id);
     let purpose = format!("managed:{target}:{path}:{}", parameters.action.as_str());
-    let plain = session
-        .as_ref()
+    let browser_session = (!native).then_some(&session);
+    let plain = browser_session
         .and_then(|_| resource_link::decrypt(&scope, &purpose, &url_key, payload).ok());
-    let (Some(session), Some(plain)) = (session.as_ref(), plain) else {
+    let (Some(session), Some(plain)) = (browser_session, plain) else {
         if path == "fs"
             && let Ok(reference) = resource_link::decrypt(
                 &scope,
@@ -402,7 +400,7 @@ async fn resource(state: ServerState, target: &str, path: &str, request: Request
                 target,
                 parameters,
                 &reference,
-                session.as_ref(),
+                browser_session,
                 request.headers(),
             )
             .await;

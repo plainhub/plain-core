@@ -23,8 +23,59 @@ async fn fixed_password_without_a_secret_never_advertises_remote_setup() {
     )
     .unwrap();
     assert_eq!(payload["passwordRequired"], true);
+    assert_eq!(payload["httpsPort"], 0);
     assert!(payload.get("needsSetup").is_none());
     assert!(payload.get("setupHttpsPort").is_none());
+    core.stop_core().await;
+}
+
+#[cfg(feature = "http_transport")]
+#[tokio::test]
+async fn init_advertises_the_running_https_port_instead_of_the_preference() {
+    use plain_libs::protocols::http_client;
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let core = crate::server::ContentServer::open(directory.path()).unwrap();
+    let state = core.runtime_state();
+    let (certificate, key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
+    let client = http_client::builder()
+        .no_proxy()
+        .add_root_certificate(http_client::Certificate::from_pem(&certificate).unwrap())
+        .build()
+        .unwrap();
+    let (http, https) = core.start_public(0, 0, certificate, key).await.unwrap();
+    state.prefs.set("https_port", 1).unwrap();
+    state.prefs.set("https", false).unwrap();
+    for (scheme, port) in [("http", http), ("https", https)] {
+        let response = client
+            .post(format!("{scheme}://localhost:{port}/init"))
+            .header("c-id", "browser")
+            .body(Vec::new())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status().as_u16(), 200);
+        let payload: serde_json::Value =
+            serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
+        assert_eq!(payload["httpsPort"], https);
+        assert_eq!(payload["authenticated"], false);
+    }
+    core.stop_public().await;
+    let mut headers = HeaderMap::new();
+    headers.insert("c-id", "browser".parse().unwrap());
+    let response = init(
+        State(state),
+        ConnectInfo("127.0.0.1:1234".parse().unwrap()),
+        headers,
+        Bytes::new(),
+    )
+    .await;
+    let payload: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 2048)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(payload["httpsPort"], 0);
     core.stop_core().await;
 }
 
@@ -53,20 +104,20 @@ async fn init_requires_a_client_id_and_returns_forbidden_when_access_is_disabled
 }
 
 #[tokio::test]
-async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_replacing_the_password()
- {
+async fn native_init_uses_its_stored_session_without_replacing_the_password() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let core = crate::server::ContentServer::open(directory.path()).unwrap();
     let state = core.runtime_state();
     let id = state.native_client_id().unwrap();
-    assert!(state.db.session_get(&id).unwrap().is_none());
+    let stored = state.db.session_get(&id).unwrap().unwrap();
+    assert_eq!(stored.token, state.token.as_ref());
     plain_rs::features::prefs::security::set_entry(
         &state.prefs,
         "password",
         serde_json::json!("existing-password"),
     )
     .unwrap();
-    let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
+    let key = plain_libs::utils::base64::base64_decode(&stored.token);
     let mut headers = HeaderMap::new();
     headers.insert("c-id", id.parse().unwrap());
     let response = init(
@@ -97,7 +148,10 @@ async fn native_init_uses_the_owned_url_key_without_creating_a_web_session_or_re
             .is_some()
     );
     assert!(payload.get("opaquePublicKey").is_none());
-    assert!(state.db.session_get(&id).unwrap().is_none());
+    assert_eq!(
+        state.db.session_get(&id).unwrap().unwrap().url_token,
+        stored.url_token
+    );
     core.stop_core().await;
 }
 

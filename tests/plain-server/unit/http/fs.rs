@@ -14,20 +14,22 @@ fn test_state() -> (plain_libs::temporary::TempDir, ContentServer, ServerState, 
     (directory, core, state, key)
 }
 
-fn file_id(key: &[u8], path: &str) -> String {
+fn file_id(state: &ServerState, path: &str) -> String {
     plain_rs::features::files::resource_link::seal(
-        &plain_rs::features::files::resource_link::Scope::Global,
-        key,
+        &plain_rs::features::files::resource_link::Scope::Session(
+            state.native_client_id().unwrap(),
+        ),
+        &plain_rs::features::sessions::token_key(&state.native_url_token().unwrap()).unwrap(),
         &plain_rs::features::files::resource_link::Resource::reference(path),
     )
     .unwrap()
 }
 
-fn temp_bin(key: &[u8]) -> (plain_libs::temporary::TempDir, String) {
+fn temp_bin(state: &ServerState) -> (plain_libs::temporary::TempDir, String) {
     let dir = plain_libs::temporary::tempdir().unwrap();
     let path = dir.path().join("movie.bin");
     std::fs::write(&path, b"0123456789").unwrap();
-    (dir, file_id(key, &path.to_string_lossy()))
+    (dir, file_id(state, &path.to_string_lossy()))
 }
 
 async fn call_fs(state: &ServerState, query: &str, headers: &[(&HeaderName, &str)]) -> Response {
@@ -52,7 +54,7 @@ fn range_header(v: &str) -> (&'static HeaderName, &str) {
 
 #[tokio::test]
 async fn fs_icons_return_original_bytes_for_all_preview_sizes() {
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -61,7 +63,7 @@ async fn fs_icons_return_original_bytes_for_all_preview_sizes() {
     for name in ["favicon.ico", "favicon.ICO"] {
         let path = files.path().join(name);
         std::fs::write(&path, original).unwrap();
-        let id = file_id(&key, path.to_str().unwrap());
+        let id = file_id(&state, path.to_str().unwrap());
         for size in ["", "&size=sm", "&size=lg"] {
             for download in [false, true] {
                 let query = format!(
@@ -99,7 +101,7 @@ async fn fs_icons_return_original_bytes_for_all_preview_sizes() {
 #[tokio::test]
 async fn fs_animated_png_preserves_frames_for_both_extensions_and_preview_sizes() {
     use plain_libs::image::AnimationDecoder;
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -120,7 +122,7 @@ async fn fs_animated_png_preserves_frames_for_both_extensions_and_preview_sizes(
     ] {
         let path = files.path().join(name);
         std::fs::write(&path, original).unwrap();
-        let id = file_id(&key, path.to_str().unwrap());
+        let id = file_id(&state, path.to_str().unwrap());
         for options in ["preview", "preview&size=sm", "preview&size=lg", "download"] {
             let response = call_fs(&state, &format!("id={id}&action={options}"), &[]).await;
             assert_eq!(response.status(), StatusCode::OK, "{name}{options}");
@@ -139,7 +141,7 @@ async fn fs_animated_png_preserves_frames_for_both_extensions_and_preview_sizes(
 
 #[tokio::test]
 async fn fs_bmp_previews_decode_and_downloads_keep_original_bytes() {
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -147,7 +149,7 @@ async fn fs_bmp_previews_decode_and_downloads_keep_original_bytes() {
     ));
     let path = files.path().join("photo.bmp");
     std::fs::write(&path, original).unwrap();
-    let id = file_id(&key, path.to_str().unwrap());
+    let id = file_id(&state, path.to_str().unwrap());
     let response = call_fs(&state, &format!("id={id}&action=preview"), &[]).await;
     assert_eq!(response.headers()[header::CONTENT_TYPE], "image/bmp");
     assert_eq!(body_bytes(response).await, original);
@@ -178,7 +180,7 @@ async fn fs_bmp_previews_decode_and_downloads_keep_original_bytes() {
 
 #[tokio::test]
 async fn fs_bmp_alpha_survives_uncropped_previews_and_cached_requests() {
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -186,7 +188,7 @@ async fn fs_bmp_alpha_survives_uncropped_previews_and_cached_requests() {
     ));
     let path = files.path().join("alpha.BMP");
     std::fs::write(&path, original).unwrap();
-    let id = file_id(&key, path.to_str().unwrap());
+    let id = file_id(&state, path.to_str().unwrap());
     for size in ["sm", "lg"] {
         let query = format!("id={id}&action=preview&size={size}");
         let response = call_fs(&state, &query, &[]).await;
@@ -231,8 +233,8 @@ async fn fs_bmp_alpha_survives_uncropped_previews_and_cached_requests() {
 
 #[tokio::test]
 async fn fs_range_serves_206_with_content_range() {
-    let (_root, _core, state, key) = test_state();
-    let (_dir, id) = temp_bin(&key);
+    let (_root, _core, state, _key) = test_state();
+    let (_dir, id) = temp_bin(&state);
     let resp = call_fs(
         &state,
         &format!("id={id}&action=preview"),
@@ -251,8 +253,8 @@ async fn fs_range_serves_206_with_content_range() {
 
 #[tokio::test]
 async fn fs_range_open_end_and_suffix() {
-    let (_root, _core, state, key) = test_state();
-    let (_dir, id) = temp_bin(&key);
+    let (_root, _core, state, _key) = test_state();
+    let (_dir, id) = temp_bin(&state);
     for (spec, expected) in [("bytes=7-", b"789".as_ref()), ("bytes=-2", b"89".as_ref())] {
         let resp = call_fs(
             &state,
@@ -267,8 +269,8 @@ async fn fs_range_open_end_and_suffix() {
 
 #[tokio::test]
 async fn fs_unsatisfiable_range_is_416() {
-    let (_root, _core, state, key) = test_state();
-    let (_dir, id) = temp_bin(&key);
+    let (_root, _core, state, _key) = test_state();
+    let (_dir, id) = temp_bin(&state);
     for spec in ["bytes=100-200", "bytes=10-", "bytes=-0"] {
         let resp = call_fs(
             &state,
@@ -288,8 +290,8 @@ async fn fs_unsatisfiable_range_is_416() {
 
 #[tokio::test]
 async fn fs_malformed_or_absent_range_serves_200_full() {
-    let (_root, _core, state, key) = test_state();
-    let (_dir, id) = temp_bin(&key);
+    let (_root, _core, state, _key) = test_state();
+    let (_dir, id) = temp_bin(&state);
     for spec in ["bytes=zzz", "items=0-9", "bytes=5-2"] {
         let resp = call_fs(
             &state,
@@ -308,8 +310,8 @@ async fn fs_malformed_or_absent_range_serves_200_full() {
 
 #[tokio::test]
 async fn fs_recent_tracked_once_per_view_not_per_chunk() {
-    let (_root, _core, state, key) = test_state();
-    let (_dir, id) = temp_bin(&key);
+    let (_root, _core, state, _key) = test_state();
+    let (_dir, id) = temp_bin(&state);
 
     call_fs(
         &state,
@@ -341,12 +343,12 @@ async fn fs_recent_tracked_once_per_view_not_per_chunk() {
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn fs_probe_reports_codec_json() {
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
     let path = concat!(
         concat!(env!("CARGO_MANIFEST_DIR"), "/../plain-rs"),
         "/testdata/video-h264-high.mp4"
     );
-    let id = file_id(&key, path);
+    let id = file_id(&state, path);
     let resp = call_fs(&state, &format!("id={id}&action=probe"), &[]).await;
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
@@ -359,7 +361,7 @@ async fn fs_probe_reports_codec_json() {
 
 #[tokio::test]
 async fn fs_serves_fid_uris_from_app_file_store() {
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
 
     let imported = plain_rs::features::chat::attachments::app_file_store::import_bytes(
         &state.db,
@@ -371,7 +373,7 @@ async fn fs_serves_fid_uris_from_app_file_store() {
     assert!(imported.fid_suffix.ends_with(".txt"));
 
     let uri = format!("fid:{}", imported.fid_suffix);
-    let id = file_id(&key, &uri);
+    let id = file_id(&state, &uri);
 
     let resp = call_fs(&state, &format!("id={id}&action=preview"), &[]).await;
     assert_eq!(resp.status(), axum::http::StatusCode::OK);
@@ -380,7 +382,7 @@ async fn fs_serves_fid_uris_from_app_file_store() {
 
 #[tokio::test]
 async fn fs_typed_attachment_and_file_references_keep_downloads_and_ranges() {
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("preview.txt");
     std::fs::write(&path, b"fid-payload-bytes").unwrap();
@@ -395,7 +397,7 @@ async fn fs_typed_attachment_and_file_references_keep_downloads_and_ranges() {
         format!("fid:{}", imported.fid_suffix),
         path.to_string_lossy().into_owned(),
     ] {
-        let id = file_id(&key, &reference);
+        let id = file_id(&state, &reference);
         let response = call_fs(
             &state,
             &format!("id={id}&action=download"),
@@ -416,7 +418,7 @@ async fn fs_typed_attachment_and_file_references_keep_downloads_and_ranges() {
 #[cfg(feature = "media")]
 #[tokio::test]
 async fn fs_typed_image_reference_returns_decodable_thumbnail() {
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
     let bytes = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../plain-rs/testdata/v-prog420.jpg"
@@ -428,7 +430,7 @@ async fn fs_typed_image_reference_returns_decodable_thumbnail() {
         "image/jpeg",
     )
     .unwrap();
-    let id = file_id(&key, &format!("fid:{}", imported.fid_suffix));
+    let id = file_id(&state, &format!("fid:{}", imported.fid_suffix));
     let response = call_fs(&state, &format!("id={id}&action=preview&size=sm"), &[]).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_bytes(response).await;
@@ -463,7 +465,7 @@ async fn fs_foreground_thumbnail_is_local_and_does_not_enable_passive_reads() {
         .unwrap()
         .remove(0);
     let passive = resource_link::seal(
-        &Scope::Global,
+        &Scope::Session(state.native_client_id().unwrap()),
         &key,
         &Resource {
             r#type: ResourceType::Media,
@@ -475,7 +477,12 @@ async fn fs_foreground_thumbnail_is_local_and_does_not_enable_passive_reads() {
         r#type: ResourceType::ForegroundMediaThumbnail,
         id: row.id,
     };
-    let explicit = resource_link::seal(&Scope::Global, &key, &foreground).unwrap();
+    let explicit = resource_link::seal(
+        &Scope::Session(state.native_client_id().unwrap()),
+        &key,
+        &foreground,
+    )
+    .unwrap();
     let response = call_fs(
         &state,
         &format!("id={explicit}&action=preview&size=sm"),
@@ -510,8 +517,8 @@ async fn fs_foreground_thumbnail_is_local_and_does_not_enable_passive_reads() {
 #[cfg(target_os = "macos")]
 #[tokio::test]
 async fn fs_protected_thumbnail_is_rejected_before_probing_the_source() {
-    let (_root, _core, state, key) = test_state();
-    let id = file_id(&key, "/Users/example/Documents/thumbnail-fixture.jpg");
+    let (_root, _core, state, _key) = test_state();
+    let id = file_id(&state, "/Users/example/Documents/thumbnail-fixture.jpg");
 
     let response = call_fs(&state, &format!("id={id}&action=preview&size=sm"), &[]).await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
@@ -541,8 +548,8 @@ async fn fs_rejects_missing_and_invalid_links_before_reading_files() {
 
 #[tokio::test]
 async fn fs_download_ranges_preserve_original_bytes_and_reject_retired_slice_parameters() {
-    let (_root, _core, state, key) = test_state();
-    let (_dir, id) = temp_bin(&key);
+    let (_root, _core, state, _key) = test_state();
+    let (_dir, id) = temp_bin(&state);
     let response = call_fs(
         &state,
         &format!("id={id}&action=download"),
@@ -627,12 +634,12 @@ async fn fs_share_links_use_the_share_key_and_become_unavailable_after_deletion(
 
 #[tokio::test]
 async fn fs_thumbnail_conditionals_and_downloads_keep_their_http_contract() {
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
     let images = plain_libs::temporary::tempdir().unwrap();
     let path = images.path().join("preview.png");
     plain_libs::image::RgbImage::new(64, 32).save(&path).unwrap();
     let original = std::fs::read(&path).unwrap();
-    let id = file_id(&key, path.to_str().unwrap());
+    let id = file_id(&state, path.to_str().unwrap());
     let query = format!("id={id}&action=preview&size=sm");
     let response = call_fs(&state, &query, &[]).await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -680,8 +687,8 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     let key = plain_libs::utils::base64::base64_decode(&first.url_token);
     let id =
         resource_link::seal(&Scope::Session(first.client_id.clone()), &key, &resource).unwrap();
-    let global = resource_link::seal(
-        &Scope::Global,
+    let native = resource_link::seal(
+        &Scope::Session(state.native_client_id().unwrap()),
         &plain_libs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
         &resource,
     )
@@ -758,7 +765,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     assert_eq!(
         client
             .get(&url)
-            .query(&[("id", global)])
+            .query(&[("id", native)])
             .header("Range", "bytes=0-0")
             .send()
             .await
@@ -768,7 +775,7 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
     );
     for internal in [data.join("prefs.json"), data.join("plain.db")] {
         let id = resource_link::seal(
-            &Scope::Global,
+            &Scope::Session(state.native_client_id().unwrap()),
             &plain_libs::utils::base64::base64_decode(&server.native_url_token().unwrap()),
             &Resource::reference(internal.to_str().unwrap()),
         )
@@ -790,9 +797,11 @@ async fn session_urls_revoke_new_requests_without_cancelling_started_transfers()
 #[tokio::test]
 async fn native_file_preview_uses_its_session_and_the_shared_preview() {
     use plain_rs::features::files::resource_link::{self, Resource, Scope};
-    let (_root, core, state, global) = test_state();
+    let (_root, core, state, _key) = test_state();
     let directory = plain_libs::temporary::tempdir().unwrap();
-    let native = core.runtime_state().url_key;
+    let native =
+        plain_rs::features::sessions::token_key(&core.runtime_state().native_url_token().unwrap())
+            .unwrap();
     let scope = Scope::Session(state.native_client_id().unwrap());
     for (name, bytes, expected) in [
         ("fixture.txt", b"text preview\n".as_slice(), "text preview"),
@@ -807,18 +816,22 @@ async fn native_file_preview_uses_its_session_and_the_shared_preview() {
         assert_eq!(preview.status, 200);
         assert!(preview.content.contains(expected));
         assert!(preview.headers["content-disposition"].contains(name));
-        assert_eq!(call_fs(&state, &format!("id={id}&action=preview"), &[]).await.status(), StatusCode::FORBIDDEN);
+        let response = call_fs(&state, &format!("id={id}&action=preview"), &[]).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(
+            String::from_utf8(body_bytes(response).await)
+                .unwrap()
+                .contains(expected)
+        );
         let wrong = resource_link::seal(&scope, &[9; 32], &resource).unwrap();
         assert_eq!(core.preview_native_file(wrong).await.unwrap().status, 403);
-        let legacy = resource_link::seal(&Scope::Global, &global, &resource).unwrap();
-        assert_eq!(core.preview_native_file(legacy).await.unwrap().status, 200);
     }
 }
 
 #[tokio::test]
 #[ignore]
 async fn fs_thumbnail_latency_benchmark() {
-    let (_root, core, _state, key) = test_state();
+    let (_root, core, state, _key) = test_state();
     let source = plain_libs::temporary::tempdir().unwrap();
     let (certificate_pem, certificate_key) = plain_libs::tls::generate_pem(&["localhost".into()]).unwrap();
     let pem = String::from_utf8(certificate_pem).unwrap();
@@ -854,7 +867,7 @@ async fn fs_thumbnail_latency_benchmark() {
         for index in 0..20 {
             let path = source.path().join(format!("{width}-{index}.{extension}"));
             std::fs::copy(&original, &path).unwrap();
-            let id = file_id(&key, path.to_str().unwrap());
+            let id = file_id(&state, path.to_str().unwrap());
             let started = std::time::Instant::now();
             let response = http
                 .get(format!("{origin}/fs"))
@@ -894,7 +907,7 @@ async fn fs_thumbnail_latency_benchmark() {
 
 #[tokio::test]
 async fn fs_300_cached_thumbnails_do_not_write_recent_files() {
-    let (_root, core, state, key) = test_state();
+    let (_root, core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("thumbnail.jpg");
     std::fs::write(
@@ -905,7 +918,7 @@ async fn fs_300_cached_thumbnails_do_not_write_recent_files() {
         )),
     )
     .unwrap();
-    let id = file_id(&key, path.to_str().unwrap());
+    let id = file_id(&state, path.to_str().unwrap());
     let query = format!("id={id}&action=preview&size=sm");
     let store = state.store.get().unwrap();
     let before = store.write_attempts_for_test();
@@ -1024,7 +1037,7 @@ async fn fs_serves_300_authenticated_media_hits_with_the_sqlite_connection_held(
 
 #[tokio::test]
 async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_invalid_values() {
-    let (_root, core, state, key) = test_state();
+    let (_root, core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("sizes.jpg");
     plain_libs::image::RgbImage::from_fn(1600, 1200, |x, y| {
@@ -1032,7 +1045,7 @@ async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_inval
     })
     .save(&path)
     .unwrap();
-    let id = file_id(&key, path.to_str().unwrap());
+    let id = file_id(&state, path.to_str().unwrap());
     for (size, dimensions) in [("sm", (256, 192)), ("lg", (1024, 768))] {
         let response = call_fs(&state, &format!("id={id}&action=preview&size={size}"), &[]).await;
         assert_eq!(response.status(), StatusCode::OK);
@@ -1052,13 +1065,17 @@ async fn fs_named_sizes_preserve_preview_quality_original_bytes_and_reject_inval
 
 #[tokio::test]
 async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
-    let (_root, core, state, key) = test_state();
+    let (_root, core, state, _key) = test_state();
     let directory = plain_libs::temporary::tempdir().unwrap();
     let path = directory.path().join("transparent.png");
-    plain_libs::image::RgbaImage::from_pixel(1200, 900, plain_libs::image::Rgba([40, 90, 150, 128]))
-        .save(&path)
-        .unwrap();
-    let id = file_id(&key, path.to_str().unwrap());
+    plain_libs::image::RgbaImage::from_pixel(
+        1200,
+        900,
+        plain_libs::image::Rgba([40, 90, 150, 128]),
+    )
+    .save(&path)
+    .unwrap();
+    let id = file_id(&state, path.to_str().unwrap());
     for (size, dimensions) in [("sm", (256, 192)), ("lg", (1024, 768))] {
         let query = format!("id={id}&action=preview&size={size}");
         let first = call_fs(&state, &query, &[]).await;
@@ -1083,7 +1100,7 @@ async fn fs_png_previews_preserve_alpha_mime_and_conditional_cache_responses() {
 
 #[tokio::test]
 async fn fs_tiff_avif_heic_and_heif_share_thumbnails_preserve_alpha_and_download_originals() {
-    let (_root, core, state, key) = test_state();
+    let (_root, core, state, _key) = test_state();
     let directory = plain_libs::temporary::tempdir().unwrap();
     for (extension, fixture, mime) in [
         ("tiff", "alpha.tiff", "image/tiff"),
@@ -1099,7 +1116,7 @@ async fn fs_tiff_avif_heic_and_heif_share_thumbnails_preserve_alpha_and_download
         .unwrap();
         let path = directory.path().join(format!("alpha.{extension}"));
         std::fs::write(&path, &original).unwrap();
-        let id = file_id(&key, path.to_str().unwrap());
+        let id = file_id(&state, path.to_str().unwrap());
         for size in ["sm", "lg"] {
             let query = format!("id={id}&action=preview&size={size}");
             let response = call_fs(&state, &query, &[]).await;
@@ -1155,7 +1172,7 @@ async fn fs_tiff_avif_heic_and_heif_share_thumbnails_preserve_alpha_and_download
 
 #[tokio::test]
 async fn fs_small_browser_images_keep_dimensions_and_original_bytes_for_both_sizes() {
-    let (_root, core, state, key) = test_state();
+    let (_root, core, state, _key) = test_state();
     let directory = plain_libs::temporary::tempdir().unwrap();
     for (extension, mime) in [
         ("jpg", "image/jpeg"),
@@ -1169,7 +1186,7 @@ async fn fs_small_browser_images_keep_dimensions_and_original_bytes_for_both_siz
         .save(&path)
         .unwrap();
         let original = std::fs::read(&path).unwrap();
-        let id = file_id(&key, path.to_str().unwrap());
+        let id = file_id(&state, path.to_str().unwrap());
         for size in ["sm", "lg"] {
             let response =
                 call_fs(&state, &format!("id={id}&action=preview&size={size}"), &[]).await;
@@ -1190,7 +1207,7 @@ async fn fs_small_browser_images_keep_dimensions_and_original_bytes_for_both_siz
 
 #[tokio::test]
 async fn fs_large_still_formats_preserve_aspect_ratio_for_both_preview_sizes() {
-    let (_root, core, state, key) = test_state();
+    let (_root, core, state, _key) = test_state();
     let directory = plain_libs::temporary::tempdir().unwrap();
     for (extension, fixture) in [
         ("tiff", "grid.tiff"),
@@ -1206,7 +1223,7 @@ async fn fs_large_still_formats_preserve_aspect_ratio_for_both_preview_sizes() {
             &path,
         )
         .unwrap();
-        let id = file_id(&key, path.to_str().unwrap());
+        let id = file_id(&state, path.to_str().unwrap());
         for (size, expected) in [("sm", (256, 192)), ("lg", (1024, 768))] {
             let response =
                 call_fs(&state, &format!("id={id}&action=preview&size={size}"), &[]).await;
@@ -1224,7 +1241,7 @@ async fn fs_large_still_formats_preserve_aspect_ratio_for_both_preview_sizes() {
 
 #[tokio::test]
 async fn fs_document_preview_returns_markdown_and_preserves_original_downloads() {
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
     let files = plain_libs::temporary::tempdir().unwrap();
     let path = files.path().join("preview.docx");
     let original = include_bytes!(concat!(
@@ -1232,7 +1249,7 @@ async fn fs_document_preview_returns_markdown_and_preserves_original_downloads()
         "/../plain-rs/testdata/preview.docx"
     ));
     std::fs::write(&path, original).unwrap();
-    let id = file_id(&key, path.to_str().unwrap());
+    let id = file_id(&state, path.to_str().unwrap());
     let response = call_fs(&state, &format!("id={id}&action=preview"), &[]).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
@@ -1247,15 +1264,15 @@ async fn fs_document_preview_returns_markdown_and_preserves_original_downloads()
     assert_eq!(body_bytes(response).await, original);
     let private = state.directory.join("private.docx");
     std::fs::write(&private, original).unwrap();
-    let id = file_id(&key, private.to_str().unwrap());
+    let id = file_id(&state, private.to_str().unwrap());
     let response = call_fs(&state, &format!("id={id}&action=preview"), &[]).await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
 async fn fs_requires_one_lowercase_action_and_rejects_conflicting_parameters() {
-    let (_root, _core, state, key) = test_state();
-    let (_files, id) = temp_bin(&key);
+    let (_root, _core, state, _key) = test_state();
+    let (_files, id) = temp_bin(&state);
     for query in [
         format!("id={id}"),
         format!("id={id}&action=PREVIEW"),
@@ -1275,10 +1292,10 @@ async fn fs_requires_one_lowercase_action_and_rejects_conflicting_parameters() {
 
 #[tokio::test]
 async fn fs_native_resource_ranges_use_the_provider_file_window() {
-    let (_root, _core, state, key) = test_state();
+    let (_root, _core, state, _key) = test_state();
     let (generation, mut requests) = state.host.connect();
     let resource = "content://documents/preview";
-    let id = file_id(&key, resource);
+    let id = file_id(&state, resource);
     let task = {
         let state = state.clone();
         tokio::spawn(async move {
@@ -1319,4 +1336,52 @@ async fn fs_native_resource_ranges_use_the_provider_file_window() {
     assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
     assert_eq!(response.headers()[header::CONTENT_RANGE], "bytes 2-5/10");
     assert_eq!(body_bytes(response).await, b"2345");
+}
+
+#[tokio::test]
+async fn native_resources_use_the_stored_session_url_token_and_follow_rotation_and_revocation() {
+    let (_root, core, state, _) = test_state();
+    let files = plain_libs::temporary::tempdir().unwrap();
+    let path = files.path().join("session.txt");
+    std::fs::write(&path, b"session-bound bytes").unwrap();
+    let client_id = state.native_client_id().unwrap();
+    let mut session = state.db.session_get(&client_id).unwrap().unwrap();
+    assert_eq!(core.native_url_token().unwrap(), session.url_token);
+    assert_ne!(session.token, session.url_token);
+    let first = file_id(&state, path.to_str().unwrap());
+    let response = call_fs(&state, &format!("id={first}&action=download"), &[]).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(body_bytes(response).await, b"session-bound bytes");
+    session.url_token = plain_libs::crypto::gen_token();
+    state.db.session_save(&session).unwrap();
+    assert_eq!(core.native_url_token().unwrap(), session.url_token);
+    assert_eq!(
+        call_fs(&state, &format!("id={first}&action=download"), &[])
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let current = file_id(&state, path.to_str().unwrap());
+    assert_eq!(
+        call_fs(&state, &format!("id={current}&action=download"), &[])
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    state.db.session_delete(&client_id).unwrap();
+    assert!(core.native_url_token().is_err());
+    assert_eq!(
+        call_fs(&state, &format!("id={current}&action=download"), &[])
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let response = core
+        .native_graphql()
+        .unwrap()
+        .execute("{ app { urlToken } }".into())
+        .await;
+    assert!(!response.errors.is_empty());
+    assert!(state.db.session_get(&client_id).unwrap().is_none());
+    core.stop_core().await;
 }

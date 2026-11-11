@@ -61,7 +61,7 @@ pub(crate) async fn init(
         Ok(pair) => pair,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    let mut result = json!({"signaturePublicKey":plain_libs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required});
+    let mut result = json!({"signaturePublicKey":plain_libs::utils::base64::base64_encode(&pair[32..]),"authenticated":authenticated,"passwordRequired":password_required,"httpsPort":0});
     if password_required {
         match plain_rs::features::prefs::security::opaque_public_key(&state.prefs) {
             Ok(Some(key)) => result["opaquePublicKey"] = json!(key),
@@ -71,6 +71,7 @@ pub(crate) async fn init(
     }
     #[cfg(feature = "http_transport")]
     if let Some(server) = state.public_server.lock().await.as_ref() {
+        result["httpsPort"] = json!(server.listeners.https_port);
         let pin = &server.tls_certificate_sha256;
         let proof = format!("plain-peer-tls-v1:{pin}");
         result["tlsCertificateSha256"] = json!(pin);

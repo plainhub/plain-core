@@ -237,6 +237,7 @@ impl DeviceQuery {
         offset: i32,
         limit: i32,
     ) -> plain_graphql::Result<Vec<String>> {
+        super::super::common::require_remote_developer_mode(ctx)?;
         ctx.data::<plain_rs::runtime::Runtime>()?
             .logs
             .read(text_of(&query), offset, limit)
@@ -245,6 +246,7 @@ impl DeviceQuery {
     }
 
     async fn app_log_files_size(&self, ctx: &Context<'_>) -> plain_graphql::Result<Long> {
+        super::super::common::require_remote_developer_mode(ctx)?;
         let size = ctx
             .data::<plain_rs::runtime::Runtime>()?
             .logs
@@ -255,6 +257,7 @@ impl DeviceQuery {
     }
 
     fn app_log_path(&self, ctx: &Context<'_>) -> plain_graphql::Result<String> {
+        super::super::common::require_remote_developer_mode(ctx)?;
         Ok(ctx
             .data::<plain_rs::runtime::Runtime>()?
             .logs
@@ -306,6 +309,7 @@ impl DeviceMutation {
     }
 
     async fn clear_app_logs(&self, ctx: &Context<'_>) -> plain_graphql::Result<bool> {
+        super::super::common::require_remote_developer_mode(ctx)?;
         ctx.data::<plain_rs::runtime::Runtime>()?
             .logs
             .clear()
@@ -315,6 +319,7 @@ impl DeviceMutation {
     }
 
     async fn export_app_logs(&self, ctx: &Context<'_>) -> plain_graphql::Result<Option<String>> {
+        super::super::common::require_remote_developer_mode(ctx)?;
         let state = ctx.data::<crate::server::ServerState>()?;
         ctx.data::<plain_rs::runtime::Runtime>()?
             .logs

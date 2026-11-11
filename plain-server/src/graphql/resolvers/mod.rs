@@ -24,6 +24,8 @@ pub mod chat;
 
 pub mod database;
 
+pub mod key_value;
+
 pub mod discovery;
 
 pub mod downloads;

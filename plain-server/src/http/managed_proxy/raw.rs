@@ -209,12 +209,14 @@ pub(super) async fn native(state: ServerState, ticket: &str, request: Request) -
     if !state.native_client_id().is_ok_and(|id| id == owner) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
-    let Ok(plain) = resource_link::decrypt(
-        &Scope::Session(owner),
-        "native-proxy",
-        &state.url_key,
-        payload,
-    ) else {
+    let Ok(session) = plain_rs::features::services::sessions::native(&state) else {
+        return StatusCode::UNAUTHORIZED.into_response();
+    };
+    let Ok(key) = decode_key(&session.url_token) else {
+        return StatusCode::UNAUTHORIZED.into_response();
+    };
+    let Ok(plain) = resource_link::decrypt(&Scope::Session(owner), "native-proxy", &key, payload)
+    else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let Ok(target) = serde_json::from_slice::<NativeTarget>(&plain) else {

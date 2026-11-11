@@ -47,8 +47,13 @@ async fn file_import_dedupe_release_and_restart_use_core_storage() {
     assert_eq!(page["data"]["appFileCount"], 1);
     assert_eq!(page["data"]["appFiles"][0]["id"], id);
     let encoded = plain_rs::features::files::resource_link::seal(
-        &plain_rs::features::files::resource_link::Scope::Global,
-        &server.runtime_state().url_key,
+        &plain_rs::features::files::resource_link::Scope::Session(
+            server.runtime_state().native_client_id().unwrap(),
+        ),
+        &plain_rs::features::sessions::token_key(
+            &server.runtime_state().native_url_token().unwrap(),
+        )
+        .unwrap(),
         &plain_rs::features::files::resource_link::Resource {
             r#type: plain_rs::features::files::resource_link::ResourceType::AppFile,
             id: id.to_owned(),

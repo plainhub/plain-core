@@ -309,7 +309,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
                 assert!(state.db.session_get(&cid).unwrap().is_none());
             }
             socket.close(None).await.ok();
-            assert_eq!(state.db.session_list().unwrap().len(), 1);
+            assert_eq!(state.db.session_list().unwrap().len(), 2);
             continue;
         }
         let response = tokio::time::timeout(Duration::from_secs(3), socket.next())
@@ -323,7 +323,7 @@ async fn malformed_login_frames_exhaust_the_ip_limit_before_decryption_despite_r
         assert_eq!(frame.reason, "too_many_login_attempts");
         assert!(state.db.session_get(&cid).unwrap().is_none());
         socket.close(None).await.ok();
-        assert_eq!(state.db.session_list().unwrap().len(), 1);
+        assert_eq!(state.db.session_list().unwrap().len(), 2);
     }
     core.shutdown().await;
 }
@@ -378,9 +378,7 @@ async fn encrypted_timed_controls_forward_exact_json_and_touch_inputs_once_and_r
     use tokio_tungstenite::tungstenite::Message as ClientMessage;
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
-    let key = plain_libs::utils::base64::base64_decode(&plain_libs::utils::base64::base64_encode(
-        &state.url_key,
-    ));
+    let key = plain_libs::utils::base64::base64_decode(&state.token);
     let client = state.native_client_id().unwrap();
     let (generation, mut requests) = crate::test_support::HostRequests::connect(&state.host);
     let host = state.host.clone();
@@ -645,9 +643,7 @@ async fn online_clients_follow_authenticated_graphql_connections() {
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
     let client = state.native_client_id().unwrap();
-    let key = plain_libs::utils::base64::base64_decode(&plain_libs::utils::base64::base64_encode(
-        &state.url_key,
-    ));
+    let key = plain_libs::utils::base64::base64_decode(&state.token);
     let native = core.native_graphql().unwrap();
     let native_id = native
         .open_subscriptions(
@@ -904,7 +900,7 @@ async fn socket_registration_rejects_other_route_and_client_binding() {
     let (_directory, core) = public_fixture();
     let state = core.runtime_state();
     let client = state.native_client_id().unwrap();
-    let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
+    let key = plain_libs::utils::base64::base64_decode(&core.runtime_state().token);
     for (path, cid) in [
         ("/screen", client.as_str()),
         ("/image_editor", "other-client"),

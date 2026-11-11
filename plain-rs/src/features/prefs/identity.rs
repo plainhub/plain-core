@@ -3,12 +3,11 @@
 //! duplicated in the server (`db::server_client_id` sibling logic) and
 //! the plain-desktop Tauri shells. Key names are the plain-app
 //! Prefs contract: `client_id` / `device_name` /
-//! `signature_key_pair` / `url_token` / `mdns_hostname`.
+//! `signature_key_pair` / `mdns_hostname`.
 
 use crate::features::prefs::Prefs;
 
 use plain_libs::crypto::ed25519_generate;
-use plain_libs::crypto::gen_token;
 use plain_libs::utils::base64::base64_encode;
 
 /// Persistent device identity loaded from the preferences store.

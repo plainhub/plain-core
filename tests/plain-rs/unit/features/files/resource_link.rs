@@ -3,7 +3,6 @@ use super::*;
 #[test]
 fn scopes_roundtrip_variable_identifiers_and_encode_only_binary_payload() {
     for scope in [
-        Scope::Global,
         Scope::Session("a".into()),
         Scope::Session("客户.id/?#%+".repeat(20)),
         Scope::Share("share.with.dots".into()),
@@ -36,7 +35,6 @@ fn rejects_scope_substitution_wrong_key_legacy_and_unknown_resources() {
     let id = seal(&scope, &[7; 32], &Resource::reference("/file")).unwrap();
     let (_, payload) = parse(&id).unwrap();
     assert!(open(&Scope::Session("another".into()), &[7; 32], payload).is_err());
-    assert!(open(&Scope::Global, &[7; 32], payload).is_err());
     assert!(open(&scope, &[8; 32], payload).is_err());
     assert!(decrypt(&scope, "proxyfs", &[7; 32], payload).is_err());
     for invalid in [
@@ -44,9 +42,9 @@ fn rejects_scope_substitution_wrong_key_legacy_and_unknown_resources() {
         "oldBase64",
         "c..abc",
         "x.abc",
-        "g.abc=",
-        "g.a+b",
-        "g.a/b",
+        "c.owner.abc=",
+        "c.owner.a+b",
+        "c.owner.a/b",
     ] {
         assert!(parse(invalid).is_err(), "{invalid}");
     }
@@ -85,27 +83,20 @@ fn noble_vector_decrypts_with_the_same_envelope_and_associated_data() {
 }
 
 #[test]
-fn native_reference_input_uses_shared_global_and_session_scopes() {
-    for (input, expected) in [
-        (r#"{"path":"/document.docx"}"#, Scope::Global),
-        (
-            r#"{"path":"fid:item","clientId":"client"}"#,
-            Scope::Session("client".into()),
-        ),
+fn native_reference_input_requires_its_session() {
+    let envelope = seal_reference(&[7; 32], r#"{"path":"fid:item","clientId":"client"}"#).unwrap();
+    let (scope, payload) = parse(&envelope).unwrap();
+    assert_eq!(scope, Scope::Session("client".into()));
+    assert_eq!(
+        open(&scope, &[7; 32], payload).unwrap(),
+        Resource::reference("fid:item")
+    );
+    for input in [
+        r#"{"path":"/document.docx"}"#,
+        r#"{"clientId":"client"}"#,
+        r#"{"path":"/document","clientId":false}"#,
+        r#"{"path":"/document","clientId":""}"#,
     ] {
-        let envelope = seal_reference(&[7; 32], input).unwrap();
-        let (scope, payload) = parse(&envelope).unwrap();
-        assert_eq!(scope, expected);
-        let resource = open(&scope, &[7; 32], payload).unwrap();
-        assert_eq!(
-            resource,
-            if matches!(scope, Scope::Global) {
-                Resource::reference("/document.docx")
-            } else {
-                Resource::reference("fid:item")
-            }
-        );
+        assert!(seal_reference(&[7; 32], input).is_err());
     }
-    assert!(seal_reference(&[7; 32], r#"{"clientId":"client"}"#).is_err());
-    assert!(seal_reference(&[7; 32], r#"{"path":"/document","clientId":false}"#).is_err());
 }

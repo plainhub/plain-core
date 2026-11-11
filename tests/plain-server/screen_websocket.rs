@@ -30,7 +30,7 @@ use tokio_tungstenite::tungstenite::{Message as ClientMessage, client::IntoClien
 #[tokio::test]
 async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
     let (_directory, core, prefs) = public_fixture();
-    let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
+    let key = plain_libs::utils::base64::base64_decode(&core.runtime().token);
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
     let url = format!("ws://127.0.0.1:{}/image_editor?cid={client}", core.port);
     let (mut denied, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
@@ -46,7 +46,10 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
     let (mut socket, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
     let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
-        plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        plain_libs::chrono::Utc::now()
+            .timestamp_millis()
+            .to_string()
+            .as_bytes(),
         &plain_rs::infrastructure::protocols::websocket::request_aad(
             "/image_editor",
             &client,
@@ -91,7 +94,7 @@ async fn image_editor_socket_authenticates_and_delivers_binary_updates() {
 #[tokio::test]
 async fn screen_transports_authenticated_media_and_controls_separately_from_subscriptions() {
     let (_directory, core, prefs) = public_fixture();
-    let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
+    let key = plain_libs::utils::base64::base64_decode(&core.runtime().token);
     let client = prefs.get::<String>("client_id").unwrap().unwrap();
     let bridge = Arc::new(core.host_events().unwrap());
     let host = bridge.clone();
@@ -211,7 +214,10 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     .unwrap();
     let registration = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,
-        plain_libs::chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+        plain_libs::chrono::Utc::now()
+            .timestamp_millis()
+            .to_string()
+            .as_bytes(),
         &plain_rs::infrastructure::protocols::websocket::request_aad("/screen", &client, None),
     )
     .unwrap();
@@ -237,7 +243,10 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
         br#"{"type":"screenMirrorControl","input":{"action":"BACK"}}"#.as_slice(),
         &[0x54, 1, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0],
     ] {
-        let mut plain = plain_libs::chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
+        let mut plain = plain_libs::chrono::Utc::now()
+            .timestamp_millis()
+            .to_be_bytes()
+            .to_vec();
         plain.extend_from_slice(payload);
         screen
             .send(ClientMessage::Binary(
@@ -330,7 +339,10 @@ async fn screen_transports_authenticated_media_and_controls_separately_from_subs
     })
     .await
     .unwrap();
-    let mut control = plain_libs::chrono::Utc::now().timestamp_millis().to_be_bytes().to_vec();
+    let mut control = plain_libs::chrono::Utc::now()
+        .timestamp_millis()
+        .to_be_bytes()
+        .to_vec();
     control.extend_from_slice(br#"{"type":"screenMirrorControl","input":{"action":"HOME"}}"#);
     let control = plain_libs::crypto::xchacha_encrypt_raw_with_aad(
         &key,

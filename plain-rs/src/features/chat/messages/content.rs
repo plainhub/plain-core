@@ -1,57 +1,8 @@
-//! URL-token file-id encryption the `/fs` endpoint decrypts. Mirrors
-//! plain-app `FileHelper.getFileId`.
-
-pub fn make_file_id(path: &str, token: &str) -> String {
-    use crate::features::files::resource_link::{self, Resource, Scope};
-    resource_link::seal(
-        &Scope::Global,
-        &plain_libs::utils::base64::base64_decode(token),
-        &Resource::reference(path),
-    )
-    .unwrap_or_default()
-}
-
-#[cfg(test)]
-#[path = "../../../../../tests/plain-rs/unit/features/chat/messages/content.rs"]
-mod tests;
-
+use crate::features::files::resource_link::{self, Resource, Scope};
+use crate::infrastructure::db::Db;
 use serde_json::Value;
 
-/// Convert `fid:` URIs to `fsid:` URIs for peer delivery. Mirrors
-/// `DMessageContent.toPeerMessageContent()`: each item's `uri` is
-/// encrypted with the local URL token and prefixed with `fsid:` so the
-/// receiver can fetch it via the sender's `/fs` endpoint. The stored
-/// content keeps the original `fid:` URIs.
-pub fn to_peer_content(content: &str, token: &str) -> String {
-    let Ok(mut v) = serde_json::from_str::<Value>(content) else {
-        return content.to_string();
-    };
-    let Some(items) = v
-        .get_mut("value")
-        .and_then(|v| v.get_mut("items"))
-        .and_then(|v| v.as_array_mut())
-    else {
-        return content.to_string();
-    };
-    for item in items.iter_mut() {
-        if let Some(uri) = item.get("uri").and_then(|u| u.as_str())
-            && uri.starts_with("fid:")
-        {
-            let encrypted = make_file_id(uri, token);
-            if !encrypted.is_empty()
-                && let Some(obj) = item.as_object_mut()
-            {
-                obj.insert(
-                    "uri".to_string(),
-                    Value::String(format!("fsid:{encrypted}")),
-                );
-            }
-        }
-    }
-    v.to_string()
-}
-
-pub fn peer_content(content: &str, token: &str) -> plain_libs::anyhow::Result<String> {
+pub fn peer_content(content: &str, client_id: &str, db: &Db) -> plain_libs::anyhow::Result<String> {
     let mut value: Value = serde_json::from_str(content)?;
     if !matches!(
         value.get("type").and_then(Value::as_str),
@@ -59,9 +10,11 @@ pub fn peer_content(content: &str, token: &str) -> plain_libs::anyhow::Result<St
     ) {
         return Ok(content.into());
     }
-    if plain_libs::utils::base64::base64_decode(token).len() != 32 {
-        plain_libs::anyhow::bail!("Invalid URL token");
-    }
+    let session = db
+        .session_get(client_id)?
+        .ok_or_else(|| plain_libs::anyhow::anyhow!("Session unavailable"))?;
+    let key = crate::features::sessions::token_key(&session.url_token)?;
+    let scope = Scope::Session(session.client_id);
     let items = value
         .get_mut("value")
         .and_then(|v| v.get_mut("items"))
@@ -72,13 +25,14 @@ pub fn peer_content(content: &str, token: &str) -> plain_libs::anyhow::Result<St
             .get("uri")
             .and_then(Value::as_str)
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing attachment URI"))?;
-        let file_id = make_file_id(uri, token);
-        if file_id.is_empty() {
-            plain_libs::anyhow::bail!("Attachment encryption failed");
-        }
+        let file_id = resource_link::seal(&scope, &key, &Resource::reference(uri))?;
         item.as_object_mut()
             .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid attachment"))?
             .insert("uri".into(), Value::String(format!("fsid:{file_id}")));
     }
     Ok(value.to_string())
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/plain-rs/unit/features/chat/messages/content.rs"]
+mod tests;

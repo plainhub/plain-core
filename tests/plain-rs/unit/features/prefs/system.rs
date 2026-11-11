@@ -209,3 +209,25 @@ fn manage_files_patch_changes_all_five_features_and_preserves_other_access() {
         }
     }
 }
+
+#[test]
+fn startup_never_generates_or_accepts_a_global_resource_token_preference() {
+    let (_dir, prefs) = fixture();
+    for _ in 0..2 {
+        bootstrap(&prefs).unwrap();
+        crate::features::prefs::identity::ensure_identity(&prefs);
+        crate::features::prefs::identity::ensure_mdns_hostname(&prefs);
+        for key in ["url_token", "urlToken"] {
+            assert!(prefs.get::<String>(key).unwrap().is_none());
+            assert!(prefs.set(key, "synthetic-retired-key").is_err());
+            assert!(prefs.get::<String>(key).unwrap().is_none());
+            assert!(
+                Prefs::load(prefs.path())
+                    .unwrap()
+                    .get::<String>(key)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+    }
+}

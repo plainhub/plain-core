@@ -55,7 +55,12 @@ async fn authenticated_native_and_remote_clients_can_list_session_metadata() {
         .as_array()
         .unwrap()
         .clone();
-    assert_eq!(sessions.len(), 2);
+    assert_eq!(sessions.len(), 3);
+    assert!(
+        sessions
+            .iter()
+            .any(|session| session["clientId"] == state.native_client_id().unwrap())
+    );
     assert!(
         sessions
             .iter()
@@ -79,7 +84,7 @@ async fn authenticated_native_and_remote_clients_can_list_session_metadata() {
             .as_array()
             .unwrap()
             .len(),
-        2
+        3
     );
     server.shutdown().await;
 }

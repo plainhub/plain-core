@@ -47,28 +47,17 @@ impl Delivery {
         transport: &T,
         client_id: &str,
         signing_key: &[u8],
-        url_token: &str,
         id: &str,
         recipients: Option<Vec<String>>,
     ) -> Result<Receipt> {
-        self.send_observed(
-            transport,
-            client_id,
-            signing_key,
-            url_token,
-            id,
-            recipients,
-            |_| {},
-        )
-        .await
+        self.send_observed(transport, client_id, signing_key, id, recipients, |_| {})
+            .await
     }
-    #[allow(clippy::too_many_arguments)]
     pub async fn send_observed<T: PeerTransport>(
         &self,
         transport: &T,
         client_id: &str,
         signing_key: &[u8],
-        url_token: &str,
         id: &str,
         recipients: Option<Vec<String>>,
         pending: impl Fn(&DChat) + Send,
@@ -94,8 +83,11 @@ impl Delivery {
                 rediscover: false,
             });
         }
-        let content =
-            crate::features::chat::messages::content::peer_content(&chat.content, url_token)?;
+        let content = crate::features::chat::messages::content::peer_content(
+            &chat.content,
+            client_id,
+            &self.db,
+        )?;
         let targets = if chat.channel_id.is_none() {
             if retry {
                 bail!("Targeted retry requires a channel");

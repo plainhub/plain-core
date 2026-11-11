@@ -27,7 +27,6 @@ impl Parameters {
 }
 
 pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> Response {
-    let native = super::managed_proxy::native_loopback(&state, &request);
     let request = request.into_parts().0;
     let parameters = match axum::extract::Query::<Parameters>::try_from_uri(&request.uri) {
         Ok(parameters) if parameters.is_valid() => parameters.0,
@@ -37,16 +36,7 @@ pub(crate) async fn get(State(state): State<ServerState>, request: Request) -> R
         Ok(managed) => managed,
         Err(status) => return status.into_response(),
     };
-    let native = native
-        && matches!(
-            plain_rs::features::files::resource_link::parse(&parameters.id),
-            Ok((plain_rs::features::files::resource_link::Scope::Session(id), _))
-                if state.native_client_id().is_ok_and(|native| native == id)
-        );
-    super::managed_proxy::mark_forwarded(
-        serve(state, parameters, request.headers, native).await,
-        managed,
-    )
+    super::managed_proxy::mark_forwarded(serve(state, parameters, request.headers).await, managed)
 }
 
 pub(crate) async fn native_preview(
@@ -60,7 +50,7 @@ pub(crate) async fn native_preview(
         size: None,
         version: None,
     };
-    let (parts, body) = serve(state, parameters, HeaderMap::new(), true)
+    let (parts, body) = serve(state, parameters, HeaderMap::new())
         .await
         .into_parts();
     let mut preview = FilePreview {
@@ -91,12 +81,7 @@ pub(crate) async fn native_preview(
     Ok(preview)
 }
 
-async fn serve(
-    state: ServerState,
-    parameters: Parameters,
-    mut headers: HeaderMap,
-    native: bool,
-) -> Response {
+async fn serve(state: ServerState, parameters: Parameters, mut headers: HeaderMap) -> Response {
     if matches!(
         parameters.action,
         content::Action::Probe | content::Action::Transcode
@@ -128,11 +113,7 @@ async fn serve(
         } else {
             links::ReadKind::Original
         };
-        let file = if native {
-            links::resolve_native(&state, &parameters.id, kind, state.url_key).await?
-        } else {
-            links::resolve(&state, &parameters.id, kind).await?
-        };
+        let file = links::resolve(&state, &parameters.id, kind).await?;
         let content = content::read(&state, file, options).await?;
         let response = match content {
             Content::File {

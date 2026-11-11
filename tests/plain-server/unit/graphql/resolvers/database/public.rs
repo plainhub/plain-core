@@ -11,6 +11,7 @@ fn fixture() -> (plain_libs::temporary::TempDir, PublicSchema) {
         ))
         .unwrap(),
     );
+    prefs.set("developer_mode", true).unwrap();
     let db = Arc::new(plain_rs::infrastructure::db::Db::open(&path).unwrap());
     db.with_conn(|conn| conn.execute_batch("CREATE TABLE test_rows (key TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT 'untitled', size INTEGER, ratio REAL, bytes BLOB); INSERT INTO test_rows VALUES('a','First',42,1.5,NULL),('b','Second',43,2.5,NULL);").unwrap());
     let host = Arc::new(plain_rs::infrastructure::host::bridge::Host::default());
@@ -83,4 +84,50 @@ async fn invalid_room_row_is_false_and_empty_delete_is_false() {
 #[test]
 fn an_unknown_column_type_is_unknown() {
     assert_eq!(DbColumnType::parse("WAT"), DbColumnType::Unknown);
+}
+
+#[tokio::test]
+async fn developer_mode_is_checked_for_every_database_request() {
+    let (_directory, schema) = fixture();
+    let prefs = schema
+        .data::<Arc<plain_rs::features::prefs::Prefs>>()
+        .unwrap();
+    let requests = [
+        "{dbPath}",
+        "{dbTables}",
+        "{dbTableInfo(table:\"test_rows\"){idKey}}",
+        "{dbTableRowCount(table:\"test_rows\")}",
+        "{dbTableColumns(table:\"test_rows\"){name}}",
+        "{dbTableRows(table:\"test_rows\",offset:0,limit:1)}",
+        r#"mutation {createDbTableRow(table:"test_rows",row:"{\"key\":\"denied\"}")}"#,
+        r#"mutation {deleteDbTableRows(table:"test_rows",ids:["a"])}"#,
+        r#"mutation {deleteDbTableRows(table:"test_rows",ids:[])}"#,
+    ];
+    for enabled in [false, true, false] {
+        prefs.set("developer_mode", enabled).unwrap();
+        for document in requests {
+            if enabled && document.starts_with("mutation") {
+                continue;
+            }
+            let response = schema.execute(document).await;
+            if enabled {
+                assert!(
+                    response.errors.is_empty(),
+                    "{document}: {:?}",
+                    response.errors
+                );
+            } else {
+                assert_eq!(response.errors.len(), 1, "{document}");
+                assert_eq!(
+                    response.errors[0].message, "No permission: developer mode is disabled",
+                    "{document}"
+                );
+            }
+        }
+    }
+    prefs.set("developer_mode", true).unwrap();
+    let response = schema
+        .execute("{dbTableRowCount(table:\"test_rows\")}")
+        .await;
+    assert_eq!(response.data.into_json().unwrap()["dbTableRowCount"], 2);
 }

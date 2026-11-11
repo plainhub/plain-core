@@ -1,14 +1,37 @@
 use super::*;
+
 #[test]
-fn make_file_id_roundtrips_through_fs_decrypt() {
-    let key = [7; 32];
-    let path = "app://Pictures/foo.png";
-    let id = make_file_id(path, &plain_libs::utils::base64::base64_encode(&key));
-    let (scope, payload) = crate::features::files::resource_link::parse(&id).unwrap();
-    let resource = crate::features::files::resource_link::open(&scope, &key, payload).unwrap();
-    assert_eq!(scope, crate::features::files::resource_link::Scope::Global);
-    assert_eq!(
-        resource,
-        crate::features::files::resource_link::Resource::reference(path)
-    );
+fn attachments_resolve_the_current_session_url_token_without_retaining_a_service_key() {
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    crate::features::sessions::SessionStore::new(&db)
+        .upsert(crate::features::sessions::SessionInfo {
+            client_id: "client".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    let mut session = db.session_get("client").unwrap().unwrap();
+    let content = r#"{"type":"FILES","value":{"items":[{"uri":"fid:fixture.txt"}]}}"#;
+    for _ in 0..2 {
+        let wire: Value =
+            serde_json::from_str(&peer_content(content, "client", &db).unwrap()).unwrap();
+        let id = wire["value"]["items"][0]["uri"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("fsid:")
+            .unwrap();
+        let (scope, payload) = resource_link::parse(id).unwrap();
+        assert_eq!(scope, Scope::Session("client".into()));
+        let key = crate::features::sessions::token_key(&session.url_token).unwrap();
+        assert_eq!(
+            resource_link::open(&scope, &key, payload).unwrap(),
+            Resource::reference("fid:fixture.txt")
+        );
+        session.url_token = plain_libs::crypto::gen_token();
+        db.session_save(&session).unwrap();
+        let rotated = crate::features::sessions::token_key(&session.url_token).unwrap();
+        assert!(resource_link::open(&scope, &rotated, payload).is_err());
+    }
+    db.session_delete("client").unwrap();
+    assert!(peer_content(content, "client", &db).is_err());
+    assert!(db.session_get("client").unwrap().is_none());
 }

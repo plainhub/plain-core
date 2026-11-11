@@ -705,7 +705,14 @@ async fn a_library_row_keeps_the_album_art_reference() {
         }])
         .unwrap();
 
-    let key = schema.data::<plain_rs::runtime::Runtime>().unwrap().url_key;
+    let key = plain_rs::features::sessions::token_key(
+        &schema
+            .data::<plain_rs::runtime::Runtime>()
+            .unwrap()
+            .native_url_token()
+            .unwrap(),
+    )
+    .unwrap();
     let document = r#"query { audios(offset: 0, limit: 10, query: "", sortBy: NAME_ASC) {
         id title artist path durationMs size bucketId albumFileId createdAt updatedAt isFavorite tags { name }
     } }"#;
@@ -714,7 +721,7 @@ async fn a_library_row_keeps_the_album_art_reference() {
         unauthenticated["errors"]
             .as_array()
             .is_some_and(|errors| !errors.is_empty()),
-        "A remote request without a session must not use the global key: {unauthenticated}"
+        "A remote request without a session must not use a native session credential: {unauthenticated}"
     );
     let listed = local_query(&schema, document).await;
     assert!(
@@ -727,7 +734,13 @@ async fn a_library_row_keeps_the_album_art_reference() {
             .unwrap();
     assert_eq!(
         scope,
-        plain_rs::features::files::resource_link::Scope::Global
+        plain_rs::features::files::resource_link::Scope::Session(
+            schema
+                .data::<plain_rs::runtime::Runtime>()
+                .unwrap()
+                .native_client_id()
+                .unwrap()
+        )
     );
     let resource = plain_rs::features::files::resource_link::open(&scope, &key, payload).unwrap();
     assert_eq!(
@@ -927,7 +940,7 @@ impl AlbumArtFixture {
 }
 
 #[tokio::test]
-async fn raw_album_art_is_encoded_only_when_selected_with_the_runtime_url_key() {
+async fn raw_album_art_is_encoded_only_when_selected_with_the_native_session_key() {
     let directory = plain_libs::temporary::tempdir().unwrap();
     let prefs = Arc::new(Prefs::load(&directory.path().join("prefs.json")).unwrap());
     let db = Arc::new(Db::open(&directory.path().join("data.db")).unwrap());
@@ -939,7 +952,8 @@ async fn raw_album_art_is_encoded_only_when_selected_with_the_runtime_url_key() 
         db,
         directory.path().to_path_buf(),
     );
-    let key = runtime.url_key;
+    let key =
+        plain_rs::features::sessions::token_key(&runtime.native_url_token().unwrap()).unwrap();
     let uri = "content://media/external/audio/albumart/17";
     let schema = plain_graphql::Schema::build(
         AlbumArtFixture(Audio {

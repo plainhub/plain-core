@@ -61,10 +61,20 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     assert_eq!(status, StatusCode::OK);
     assert!(result.get("errors").is_none(), "{result}");
     assert_eq!(result["data"]["font"], true);
-    let (_, result) = call(first.runtime_state(), &headers, "{prefs}").await;
+    let (_, result) = call(
+        first.runtime_state(),
+        &headers,
+        r#"{prefs(keys:["editor_font_size","feed_auto_refresh_interval"])}"#,
+    )
+    .await;
     assert_eq!(result["data"]["prefs"]["editor_font_size"], 20);
     assert_eq!(result["data"]["prefs"]["feed_auto_refresh_interval"], 3600);
-    let (_, result) = call(second.runtime_state(), &other, "{prefs} ").await;
+    let (_, result) = call(
+        second.runtime_state(),
+        &other,
+        r#"{prefs(keys:["editor_font_size","feed_auto_refresh_interval"])} "#,
+    )
+    .await;
     assert!(result["data"]["prefs"]["editor_font_size"].is_null());
     let (_, result) = call(first.runtime_state(), &headers, "{systemPrefs}").await;
     assert!(
@@ -74,7 +84,13 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
             .contains("Unknown field")
     );
     assert_eq!(
-        call(second.runtime_state(), &headers, "{prefs}").await.0,
+        call(
+            second.runtime_state(),
+            &headers,
+            r#"{prefs(keys:["editor_font_size","feed_auto_refresh_interval"])}"#
+        )
+        .await
+        .0,
         StatusCode::UNAUTHORIZED
     );
     let (_, result) = call(
@@ -85,7 +101,13 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     .await;
     assert!(result["errors"].is_array(), "{result}");
     assert_eq!(
-        call(first.runtime_state(), &headers, "{prefs}").await.0,
+        call(
+            first.runtime_state(),
+            &headers,
+            r#"{prefs(keys:["editor_font_size","feed_auto_refresh_interval"])}"#
+        )
+        .await
+        .0,
         StatusCode::OK
     );
     let native = first.native_graphql().unwrap();
@@ -97,14 +119,30 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     assert!(disabled.errors.is_empty(), "{:?}", disabled.errors);
     assert_eq!(disabled.data.into_json().unwrap()["setPref"], true);
     assert_eq!(
-        call(first.runtime_state(), &headers, "{prefs}").await.0,
+        call(
+            first.runtime_state(),
+            &headers,
+            r#"{prefs(keys:["editor_font_size","feed_auto_refresh_interval"])}"#
+        )
+        .await
+        .0,
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        call(second.runtime_state(), &other, "{prefs}").await.0,
+        call(
+            second.runtime_state(),
+            &other,
+            r#"{prefs(keys:["editor_font_size","feed_auto_refresh_interval"])}"#
+        )
+        .await
+        .0,
         StatusCode::OK
     );
-    let snapshot = native.execute(plain_graphql::Request::new("{prefs}")).await;
+    let snapshot = native
+        .execute(plain_graphql::Request::new(
+            r#"{prefs(keys:["remote_access"])}"#,
+        ))
+        .await;
     assert!(snapshot.errors.is_empty(), "{:?}", snapshot.errors);
     assert_eq!(
         snapshot.data.into_json().unwrap()["prefs"]["remote_access"],
@@ -112,4 +150,43 @@ async fn remote_settings_authentication_device_isolation_and_disable_reply() {
     );
     first.shutdown().await;
     second.shutdown().await;
+}
+
+#[tokio::test]
+async fn authenticated_developer_apis_follow_mode_changes_without_relogin() {
+    let (_directory, server, headers) = device();
+    let state = server.runtime_state();
+    for enabled in [false, true, false] {
+        state.prefs.set("developer_mode", enabled).unwrap();
+        for document in ["{prefs}", "{dbPath}", "{dbTables}", "{appLogPath}"] {
+            let (status, result) = call(state.clone(), &headers, document).await;
+            assert_eq!(status, StatusCode::OK);
+            if enabled {
+                assert!(result.get("errors").is_none(), "{document}: {result}");
+                if document == "{prefs}" {
+                    assert_eq!(
+                        result["data"]["prefs"],
+                        Value::Object(state.prefs.entries().into_iter().collect())
+                    );
+                }
+            } else {
+                assert_eq!(
+                    result["errors"][0]["message"], "No permission: developer mode is disabled",
+                    "{document}: {result}"
+                );
+            }
+        }
+        let (_, result) = call(
+            state.clone(),
+            &headers,
+            r#"{prefs(keys:["app_home_features"])}"#,
+        )
+        .await;
+        assert!(result.get("errors").is_none(), "{result}");
+        assert_eq!(
+            result["data"]["prefs"]["app_home_features"],
+            "IMAGES|VIDEOS|AUDIO|DOCS|FILES|NOTES|FEEDS"
+        );
+    }
+    server.shutdown().await;
 }

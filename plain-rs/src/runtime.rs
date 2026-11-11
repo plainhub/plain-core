@@ -76,7 +76,6 @@ pub struct Runtime {
     pub audio: Arc<crate::features::services::audio::host::Audio>,
     pub directory: std::path::PathBuf,
     pub token: Arc<str>,
-    pub url_key: [u8; 32],
     pub temp_values: crate::infrastructure::temp_values::TempValues,
     pub events: broadcast::Sender<WsEvent>,
     pub stop: watch::Receiver<bool>,
@@ -163,7 +162,18 @@ impl Runtime {
             )
             .map_err(|error| error.to_string())?;
         }
-        crate::features::prefs::identity::ensure_identity(&prefs);
+        let identity = crate::features::prefs::identity::ensure_identity(&prefs);
+        crate::features::sessions::SessionStore::new(&db)
+            .upsert(crate::features::sessions::SessionInfo {
+                client_id: identity.client_id,
+                token: token.clone(),
+                client_name: identity.device_name,
+                app_version: host.startup().app_version.clone(),
+                os_name: host.startup().os_name.clone(),
+                os_version: host.startup().os_version.clone(),
+                ..Default::default()
+            })
+            .map_err(|error| error.to_string())?;
         let (stop, receiver) = watch::channel(false);
         let lan = Arc::new(
             crate::features::services::peers::peer_lan::Lan::new().map_err(|e| e.to_string())?,
@@ -433,9 +443,6 @@ impl Runtime {
                 ),
             )),
             token: Arc::from(token.as_str()),
-            url_key: plain_libs::crypto::random_bytes(32)
-                .try_into()
-                .expect("32 random bytes"),
             temp_values: Default::default(),
             events,
             stop: receiver.clone(),
@@ -500,8 +507,9 @@ impl Runtime {
         Ok((state, stop))
     }
     pub fn native_url_token(&self) -> Result<String, String> {
-        self.native_client_id()?;
-        Ok(plain_libs::utils::base64::base64_encode(&self.url_key))
+        crate::features::services::sessions::native(self)
+            .map(|session| session.url_token)
+            .map_err(|error| error.to_string())
     }
 
     pub fn native_client_id(&self) -> Result<String, String> {

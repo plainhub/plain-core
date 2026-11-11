@@ -182,7 +182,7 @@ async fn native_upload_chunks_use_the_main_identity_key_and_the_owned_chunk_dire
     let core = crate::server::ContentServer::start(directory.path(), &token, prefs).unwrap();
     let state = core.runtime_state();
     let client_id = state.native_client_id().unwrap();
-    let key = plain_libs::utils::base64::base64_decode(&core.native_url_token().unwrap());
+    let key = plain_libs::utils::base64::base64_decode(&core.runtime_state().token);
     let data = vec![42; MAX_UPLOAD_WRITE_BYTES * 3 + 19];
     let info = serde_json::json!({"fileId":"fixture","index":0,"size":data.len()});
     let response = multipart_upload(

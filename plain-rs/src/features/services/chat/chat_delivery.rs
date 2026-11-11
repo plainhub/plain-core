@@ -59,12 +59,9 @@ pub async fn deliver_observed(
 ) -> plain_libs::anyhow::Result<crate::features::chat::delivery::Receipt> {
     let result = async {
         let client_id = state
-            .prefs
-            .get::<String>(crate::features::prefs::pref_keys::CLIENT_ID)?
-            .filter(|v| !v.is_empty())
-            .ok_or_else(|| plain_libs::anyhow::anyhow!("Missing chat identity"))?;
+            .native_client_id()
+            .map_err(plain_libs::anyhow::Error::msg)?;
         let key = crate::features::services::peers::peer_wire::signing_keypair(&state.prefs)?;
-        let token = plain_libs::utils::base64::base64_encode(&state.url_key);
         state
             .delivery
             .send_observed(
@@ -74,7 +71,6 @@ pub async fn deliver_observed(
                 },
                 &client_id,
                 &key,
-                &token,
                 id,
                 recipients,
                 |chat| {

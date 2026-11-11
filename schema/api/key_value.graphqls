@@ -1,0 +1,13 @@
+extend type Mutation {
+	"""
+	Save JSON application data up to 65,536 encoded bytes; returns whether the stored value changed.
+	"""
+	setKeyValue(key: String!, value: JSON!): Boolean!
+}
+
+extend type Query {
+	"""
+	Read JSON application data by key; returns null when absent and does not read preferences.
+	"""
+	keyValue(key: String!): JSON!
+}

@@ -49,7 +49,6 @@ fn service(dir_label: &str) -> ChatService<TestTransport> {
     );
     ChatService::new(
         db,
-        plain_libs::utils::base64::base64_encode(&[5u8; 32]),
         std::sync::Arc::new(identity),
         DeviceType::Nas,
         dir,

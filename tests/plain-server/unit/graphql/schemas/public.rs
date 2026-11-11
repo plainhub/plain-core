@@ -35,7 +35,11 @@ fn public_schema_exposes_the_contract_it_has_to_serve() {
     let sdl = sdl();
     assert!(!sdl.contains("includeTrashed"));
     assert!(!sdl.contains("embeddedAudioLyrics"));
+    assert!(sdl.contains("keyValue(key: String!): JSON!"));
+    assert!(sdl.contains("setKeyValue(key: String!, value: JSON!): Boolean!"));
     for removed in [
+        "savedValue(",
+        "setSavedValue(",
         "resetPassword:",
         "resetUrlToken:",
         "resetAdbToken:",

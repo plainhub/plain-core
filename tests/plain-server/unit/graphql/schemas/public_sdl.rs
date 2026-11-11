@@ -74,6 +74,11 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
     group!("Query", "settings", resolvers::settings::public::PrefsQuery);
     group!(
         "Query",
+        "key_value",
+        resolvers::key_value::public::KeyValueQuery
+    );
+    group!(
+        "Query",
         "app",
         resolvers::app::cache::CacheQuery,
         resolvers::app::platform::PlatformQuery
@@ -206,6 +211,11 @@ pub(super) fn files(sdl: &str) -> BTreeMap<String, String> {
         "Mutation",
         "settings",
         resolvers::settings::public::PrefsMutation
+    );
+    group!(
+        "Mutation",
+        "key_value",
+        resolvers::key_value::public::KeyValueMutation
     );
     group!(
         "Mutation",

@@ -3,10 +3,22 @@ use std::path::{Path, PathBuf};
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod apple;
-#[cfg(any(target_os = "linux", target_os = "android", all(test, unix)))]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    all(unix, any(test, feature = "test-seams"))
+))]
 pub mod linux;
-#[cfg(any(target_os = "linux", target_os = "android", test))]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    test,
+    all(unix, feature = "test-seams")
+))]
 mod mounts;
+#[cfg(all(unix, any(test, feature = "test-seams")))]
+#[path = "../../../../tests/plain-libs/support/volume_mounts.rs"]
+pub mod test_mounts;
 #[cfg(target_os = "windows")]
 mod windows;
 
@@ -54,20 +66,44 @@ pub fn locate(path: &Path) -> Result<Location> {
         }
     }
     let canonical = existing.canonicalize()?;
+    let mut location = native_location(canonical)?;
+    let suffix = path.strip_prefix(existing)?;
+    if !suffix.as_os_str().is_empty() {
+        location.path.push(suffix);
+    }
+    ensure!(
+        !location.volume.identity.is_empty() && location.volume.path.is_absolute(),
+        "Invalid native volume facts"
+    );
+    location
+        .path
+        .strip_prefix(&location.volume.path)
+        .context("File is outside its volume root")?;
+    Ok(location)
+}
+
+fn native_location(canonical: PathBuf) -> Result<Location> {
+    #[cfg(all(unix, any(test, feature = "test-seams")))]
+    if let Some(volume) = test_mounts::containing(&canonical) {
+        return Ok(Location {
+            volume: volume?,
+            path: canonical,
+        });
+    }
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    let mut location = apple::containing(&canonical)?;
+    return apple::containing(&canonical);
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    let mut location = Location {
+    return Ok(Location {
         volume: linux::containing(&canonical)?,
         path: canonical,
-    };
+    });
     #[cfg(target_os = "windows")]
-    let mut location = Location {
+    return Ok(Location {
         volume: windows::containing(&canonical)?,
         path: PathBuf::from(windows_path(
             canonical.to_str().context("File path is not Unicode")?,
         )),
-    };
+    });
     #[cfg(not(any(
         target_os = "macos",
         target_os = "ios",
@@ -75,31 +111,9 @@ pub fn locate(path: &Path) -> Result<Location> {
         target_os = "android",
         target_os = "windows"
     )))]
-    return Err(crate::anyhow::anyhow!(
+    Err(crate::anyhow::anyhow!(
         "Native filesystem volume identity is unavailable"
-    ));
-    #[cfg(any(
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "linux",
-        target_os = "android",
-        target_os = "windows"
-    ))]
-    {
-        let suffix = path.strip_prefix(existing)?;
-        if !suffix.as_os_str().is_empty() {
-            location.path.push(suffix);
-        }
-        ensure!(
-            !location.volume.identity.is_empty() && location.volume.path.is_absolute(),
-            "Invalid native volume facts"
-        );
-        location
-            .path
-            .strip_prefix(&location.volume.path)
-            .context("File is outside its volume root")?;
-        Ok(location)
-    }
+    ))
 }
 
 fn share_identity(source: &str) -> Result<String> {

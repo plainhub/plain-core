@@ -105,10 +105,17 @@ async fn incoming_preserves_file_bytes_without_host_bridge() {
         "image/jpeg",
     )
     .unwrap();
-    let id = plain_rs::features::chat::messages::content::make_file_id(
-        &format!("fid:{}", file.fid_suffix),
-        &plain_libs::utils::base64::base64_encode(&state.url_key),
-    );
+    let id = plain_rs::features::files::resource_link::seal(
+        &plain_rs::features::files::resource_link::Scope::Session(
+            state.native_client_id().unwrap(),
+        ),
+        &plain_libs::utils::base64::base64_decode(&state.native_url_token().unwrap()),
+        &plain_rs::features::files::resource_link::Resource::reference(&format!(
+            "fid:{}",
+            file.fid_suffix
+        )),
+    )
+    .unwrap();
     let bytes = incoming_exchange(
         &server,
         ble::HTTP_CHAR_UUID,

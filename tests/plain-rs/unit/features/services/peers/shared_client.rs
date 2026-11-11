@@ -42,7 +42,7 @@ fn discovery_selects_complete_matching_records_and_safe_ipv6_urls() {
         .unwrap();
     assert!(download_url(&format!("{url}&action=download")).is_ok());
     assert!(download_url(&format!("{url}&action=preview")).is_err());
-    assert!(download_url("https://localhost/fs?id=g.AA").is_err());
+    assert!(download_url("https://localhost/fs?id=c.owner.AA").is_err());
     assert!(download_url("https://localhost/fs?id=c.client.AA").is_err());
     assert!(download_url("https://localhost/fs?id=x").is_err());
 }

@@ -172,7 +172,8 @@ async fn configured_public_uses_core_settings_and_keeps_listeners_on_tls_preflig
 }
 
 #[tokio::test]
-async fn core_startup_persists_complete_identity_and_regenerates_the_url_key_on_recreation() {
+async fn core_startup_persists_complete_identity_and_regenerates_the_native_session_on_recreation()
+{
     use plain_rs::features::prefs::pref_keys::*;
     let directory = plain_libs::temporary::tempdir().unwrap();
     let cache = plain_libs::temporary::tempdir().unwrap();
@@ -205,7 +206,8 @@ async fn core_startup_persists_complete_identity_and_regenerates_the_url_key_on_
     drop(core);
     let core = ContentServer::open_with_cache(directory.path(), cache.path()).unwrap();
     assert_eq!(core.state.prefs.entries(), first);
-    let url_key = core.state.url_key;
+    let session_key =
+        plain_rs::features::sessions::token_key(&core.state.native_url_token().unwrap()).unwrap();
     plain_rs::features::prefs::security::set_entry(
         &core.state.prefs,
         PASSWORD,
@@ -217,9 +219,11 @@ async fn core_startup_persists_complete_identity_and_regenerates_the_url_key_on_
     core.stop_core().await;
     drop(core);
     let core = ContentServer::open_with_cache(directory.path(), cache.path()).unwrap();
-    assert_ne!(core.state.url_key, url_key);
-    let after: std::collections::BTreeMap<_, _> =
-        core.state.prefs.entries().into_iter().collect();
+    assert_ne!(
+        plain_rs::features::sessions::token_key(&core.state.native_url_token().unwrap()).unwrap(),
+        session_key
+    );
+    let after: std::collections::BTreeMap<_, _> = core.state.prefs.entries().into_iter().collect();
     assert_eq!(after, before);
     core.stop_core().await;
 }

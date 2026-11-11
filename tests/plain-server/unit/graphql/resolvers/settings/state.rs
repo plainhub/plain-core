@@ -94,8 +94,18 @@ async fn graphql_settings_are_isolated_between_devices() {
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(events.recv().await.unwrap().event_type, "PREFS_UPDATED");
-    let first = first.execute("{prefs}").await.data.into_json().unwrap();
-    let second = second.execute("{prefs}").await.data.into_json().unwrap();
+    let first = first
+        .execute(r#"{prefs(keys:["editor_font_size"])}"#)
+        .await
+        .data
+        .into_json()
+        .unwrap();
+    let second = second
+        .execute(r#"{prefs(keys:["editor_font_size"])}"#)
+        .await
+        .data
+        .into_json()
+        .unwrap();
     assert_eq!(first["prefs"]["editor_font_size"], 20);
     assert!(second["prefs"]["editor_font_size"].is_null());
 }

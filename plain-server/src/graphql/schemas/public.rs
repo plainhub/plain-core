@@ -1,5 +1,6 @@
 use crate::graphql::resolvers::docs::public::DocsQuery;
 use crate::graphql::resolvers::images::public::ImagesQuery;
+use crate::graphql::resolvers::key_value::public::{KeyValueMutation, KeyValueQuery};
 use crate::graphql::resolvers::mobile::{MobileMutation, MobileQuery};
 use crate::graphql::resolvers::videos::public::VideosQuery;
 
@@ -85,6 +86,7 @@ pub struct Query(
     DocsQuery,
     TagsQuery,
     PrefsQuery,
+    KeyValueQuery,
     DbQuery,
     UploadQuery,
     DeviceQuery,
@@ -126,6 +128,7 @@ pub struct Mutation(
     FavoriteFolderMutation,
     TagsMutation,
     PrefsMutation,
+    KeyValueMutation,
     DbMutation,
     FileOpsMutation,
     MediaItemsMutation,

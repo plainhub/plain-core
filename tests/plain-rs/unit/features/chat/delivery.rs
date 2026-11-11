@@ -82,7 +82,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
     let local = message_lifecycle::create(&db, "local", "", TEXT).unwrap();
     assert_eq!(
         delivery
-            .send(&transport, "self", &key, "", &local.id, None)
+            .send(&transport, "self", &key, &local.id, None)
             .await
             .unwrap()
             .chat
@@ -93,7 +93,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
     let unpaired = message_lifecycle::create(&db, "unpaired", "", TEXT).unwrap();
     assert_eq!(
         delivery
-            .send(&transport, "self", &key, "", &unpaired.id, None)
+            .send(&transport, "self", &key, &unpaired.id, None)
             .await
             .unwrap()
             .chat
@@ -105,7 +105,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
     let peer = message_lifecycle::create(&db, "peer", "", TEXT).unwrap();
     assert_eq!(
         delivery
-            .send(&transport, "self", &key, "", &peer.id, None)
+            .send(&transport, "self", &key, &peer.id, None)
             .await
             .unwrap()
             .chat
@@ -120,7 +120,7 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
     channels::save(&db, &[channel.clone()], SaveMode::Insert).unwrap();
     let group = message_lifecycle::create(&db, "", "group", TEXT).unwrap();
     let partial = delivery
-        .send(&transport, "self", &key, "", &group.id, None)
+        .send(&transport, "self", &key, &group.id, None)
         .await
         .unwrap()
         .chat
@@ -133,7 +133,6 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
                 &transport,
                 "self",
                 &key,
-                "",
                 &group.id,
                 Some(vec!["pending".into()])
             )
@@ -146,7 +145,6 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
                 &transport,
                 "self",
                 &key,
-                "",
                 &group.id,
                 Some(vec!["peer".into(), "peer".into()])
             )
@@ -159,7 +157,6 @@ async fn routing_uses_current_db_and_retries_only_current_joined_members() {
             &transport,
             "self",
             &key,
-            "",
             &group.id,
             Some(vec!["peer".into()]),
         )
@@ -189,7 +186,7 @@ async fn changed_content_cannot_be_marked_sent_by_an_older_attempt() {
     let chat = message_lifecycle::create(&db, "peer", "", TEXT).unwrap();
     assert!(
         delivery
-            .send(&transport, "self", &key, "", &chat.id, None)
+            .send(&transport, "self", &key, &chat.id, None)
             .await
             .is_err()
     );
@@ -199,7 +196,14 @@ async fn changed_content_cannot_be_marked_sent_by_an_older_attempt() {
 }
 #[test]
 fn attachment_uris_and_response_receipts_match_mobile_contract() {
-    let token = base64_encode(&[9; 32]);
+    let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+    crate::features::sessions::SessionStore::new(&db)
+        .upsert(crate::features::sessions::SessionInfo {
+            client_id: "sender".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    let token = db.session_get("sender").unwrap().unwrap().url_token;
     for uri in [
         "fid:abc",
         "content://provider/123",
@@ -208,13 +212,17 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
     ] {
         let content =
             json!({"type":"FILES","value":{"items":[{"uri":uri,"name":"x"}]}}).to_string();
-        let wire =
-            crate::features::chat::messages::content::peer_content(&content, &token).unwrap();
+        let wire = crate::features::chat::messages::content::peer_content(&content, "sender", &db)
+            .unwrap();
         let wire: Value = serde_json::from_str(&wire).unwrap();
         let uri_wire = wire["value"]["items"][0]["uri"].as_str().unwrap();
         let (scope, payload) =
             crate::features::files::resource_link::parse(uri_wire.strip_prefix("fsid:").unwrap())
                 .unwrap();
+        assert_eq!(
+            scope,
+            crate::features::files::resource_link::Scope::Session("sender".into())
+        );
         let resource = crate::features::files::resource_link::open(
             &scope,
             &plain_libs::utils::base64::base64_decode(&token),
@@ -225,7 +233,14 @@ fn attachment_uris_and_response_receipts_match_mobile_contract() {
             resource,
             crate::features::files::resource_link::Resource::reference(uri)
         );
-        assert!(crate::features::chat::messages::content::peer_content(&content, "").is_err());
+        assert!(
+            crate::features::chat::messages::content::peer_content(
+                &content,
+                "missing-session",
+                &db
+            )
+            .is_err()
+        );
     }
     assert!(
         crate::infrastructure::transport::contract::message_response(
@@ -294,7 +309,7 @@ async fn concurrent_sends_serialize_and_reload_content_after_old_attempt_finishe
         let t = transport.clone();
         let k = key.clone();
         let id = chat.id.clone();
-        tokio::spawn(async move { d.send(&t, "self", &k, "", &id, None).await })
+        tokio::spawn(async move { d.send(&t, "self", &k, &id, None).await })
     };
     transport.entered.notified().await;
     messages::content(&db, &chat.id, r#"{"type":"TEXT","value":{"text":"newer"}}"#).unwrap();
@@ -302,7 +317,7 @@ async fn concurrent_sends_serialize_and_reload_content_after_old_attempt_finishe
         let d = delivery.clone();
         let t = transport.clone();
         let id = chat.id.clone();
-        tokio::spawn(async move { d.send(&t, "self", &key, "", &id, None).await })
+        tokio::spawn(async move { d.send(&t, "self", &key, &id, None).await })
     };
     transport.release.notify_one();
     assert!(one.await.unwrap().is_err());

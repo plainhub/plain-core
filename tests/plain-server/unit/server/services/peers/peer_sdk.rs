@@ -201,10 +201,17 @@ async fn ble_incoming_file_uses_root_encrypted_fid_and_eof_without_native_http_b
         "text/plain",
     )
     .unwrap();
-    let encrypted = plain_rs::features::chat::messages::content::make_file_id(
-        &format!("fid:{}", imported.fid_suffix),
-        &plain_libs::utils::base64::base64_encode(&state.url_key),
-    );
+    let encrypted = plain_rs::features::files::resource_link::seal(
+        &plain_rs::features::files::resource_link::Scope::Session(
+            state.native_client_id().unwrap(),
+        ),
+        &plain_libs::utils::base64::base64_decode(&state.native_url_token().unwrap()),
+        &plain_rs::features::files::resource_link::Resource::reference(&format!(
+            "fid:{}",
+            imported.fid_suffix
+        )),
+    )
+    .unwrap();
     for (offset, length, expected_status, expected) in [
         (0, 6, 206, b"actual".as_slice()),
         (6, 8192, 206, b" bytes".as_slice()),

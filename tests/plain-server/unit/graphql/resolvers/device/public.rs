@@ -434,12 +434,15 @@ async fn app_preferences_do_not_call_the_platform() {
         .execute("{app{clientId urlToken httpPort httpsPort deviceName developerMode appDir deviceType buildChannel downloadsDir debug}}")
         .await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert_eq!(
-        response.data.into_json().unwrap()["app"]["urlToken"],
-        plain_libs::utils::base64::base64_encode(
-            &schema.data::<plain_rs::runtime::Runtime>().unwrap().url_key
-        )
-    );
+    assert_eq!(response.data.into_json().unwrap()["app"]["urlToken"], {
+        let runtime = schema.data::<plain_rs::runtime::Runtime>().unwrap();
+        runtime
+            .db
+            .session_get(&runtime.native_client_id().unwrap())
+            .unwrap()
+            .unwrap()
+            .url_token
+    });
 }
 
 #[tokio::test]
@@ -560,4 +563,36 @@ async fn access_request_uses_feature_and_preserves_host_acceptance() {
         assert!(!schema.execute(document).await.errors.is_empty());
     }
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn remote_logs_require_developer_mode_and_native_diagnostics_remain_available() {
+    let (_directory, schema) = fixture(|method, _| panic!("Unexpected host call: {method}"));
+    let prefs = schema.data::<Arc<Prefs>>().unwrap();
+    prefs.set("developer_mode", false).unwrap();
+    for document in [
+        r#"{appLogs(query:"",offset:0,limit:1)}"#,
+        "{appLogPath}",
+        "{appLogFilesSize}",
+        "mutation {clearAppLogs}",
+        "mutation {exportAppLogs}",
+    ] {
+        let response = schema.execute(document).await;
+        assert_eq!(response.errors.len(), 1, "{document}");
+        assert_eq!(
+            response.errors[0].message,
+            "No permission: developer mode is disabled"
+        );
+    }
+    for local in [true, false] {
+        if !local {
+            prefs.set("developer_mode", true).unwrap();
+        }
+        let mut request = plain_graphql::Request::new("{appLogPath appLogFilesSize}");
+        if local {
+            request = request.data(crate::graphql::executor::RequestOrigin::Local);
+        }
+        let response = schema.execute(request).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+    }
 }

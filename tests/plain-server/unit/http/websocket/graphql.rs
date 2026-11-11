@@ -186,7 +186,9 @@ async fn fs_burst_and_page_cancellation(
             let path = source.path().join(format!("photo-{index}.jpg"));
             std::fs::copy(&original, &path).unwrap();
             plain_rs::features::files::resource_link::seal(
-                &plain_rs::features::files::resource_link::Scope::Global,
+                &plain_rs::features::files::resource_link::Scope::Session(
+                    state.native_client_id().unwrap(),
+                ),
                 &resource_key,
                 &plain_rs::features::files::resource_link::Resource::reference(
                     path.to_str().unwrap(),

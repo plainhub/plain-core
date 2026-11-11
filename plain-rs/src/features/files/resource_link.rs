@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Scope {
     Session(String),
-    Global,
     Share(String),
 }
 
@@ -12,7 +11,6 @@ impl Scope {
     fn parts(&self) -> (char, &str) {
         match self {
             Self::Session(id) => ('c', id),
-            Self::Global => ('g', ""),
             Self::Share(id) => ('s', id),
         }
     }
@@ -62,10 +60,6 @@ impl Resource {
             matches!(scope, Scope::Share(_)) == (self.r#type == ResourceType::SharedFile),
             "Invalid resource scope"
         );
-        ensure!(
-            self.r#type != ResourceType::ForegroundMediaThumbnail || matches!(scope, Scope::Global),
-            "Foreground thumbnails require local resource scope"
-        );
         Ok(())
     }
 }
@@ -73,16 +67,13 @@ impl Resource {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ReferenceInput {
-    client_id: Option<String>,
+    client_id: String,
     path: String,
 }
 
 pub fn seal_reference(key: &[u8], payload: &str) -> Result<String> {
     let input: ReferenceInput = serde_json::from_str(payload)?;
-    let scope = match input.client_id {
-        Some(id) => Scope::Session(id),
-        None => Scope::Global,
-    };
+    let scope = Scope::Session(input.client_id);
     seal(&scope, key, &Resource::reference(&input.path))
 }
 
@@ -92,7 +83,6 @@ pub fn parse(envelope: &str) -> Result<(Scope, &str)> {
         .split_once('.')
         .ok_or_else(|| plain_libs::anyhow::anyhow!("Invalid resource envelope"))?;
     let (scope, payload) = match mode {
-        "g" => (Scope::Global, rest),
         "c" | "s" => {
             let (owner, payload) = rest
                 .rsplit_once('.')
@@ -128,11 +118,7 @@ pub fn encrypt(scope: &Scope, purpose: &str, key: &[u8], plain: &[u8]) -> Result
     let payload = plain_libs::utils::base64::base64_encode_url_safe(&bytes);
     let payload = payload.trim_end_matches('=');
     let (mode, owner) = scope.parts();
-    let envelope = if matches!(scope, Scope::Global) {
-        format!("{mode}.{payload}")
-    } else {
-        format!("{mode}.{owner}.{payload}")
-    };
+    let envelope = format!("{mode}.{owner}.{payload}");
     parse(&envelope)?;
     Ok(envelope)
 }

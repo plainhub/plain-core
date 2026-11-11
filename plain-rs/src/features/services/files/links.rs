@@ -34,7 +34,6 @@ pub(crate) fn key(state: &CoreRuntime, scope: &Scope) -> plain_libs::anyhow::Res
                 .ok_or_else(|| plain_libs::anyhow::anyhow!("Session unavailable"))?
                 .url_token
         }
-        Scope::Global => return Ok(state.url_key.to_vec()),
         Scope::Share(id) => {
             crate::features::files::shares::Service::new(state.db.clone(), state.prefs.clone())
                 .active(id, true)?
@@ -53,29 +52,18 @@ pub fn decrypt(state: &CoreRuntime, id: &str, purpose: &str) -> plain_libs::anyh
     resource_link::decrypt(&scope, purpose, &key(state, &scope)?, payload)
 }
 
-pub async fn resolve(state: &CoreRuntime, id: &str, kind: ReadKind) -> plain_libs::anyhow::Result<File> {
-    resolve_with_key(state, id, kind, None).await
-}
-
-pub async fn resolve_native(
-    state: &CoreRuntime,
-    id: &str,
-    kind: ReadKind,
-    key: [u8; 32],
-) -> plain_libs::anyhow::Result<File> {
-    resolve_with_key(state, id, kind, Some(key)).await
-}
-
 pub async fn resolve_native_reference(
     state: &CoreRuntime,
     reference: &str,
     kind: ReadKind,
 ) -> plain_libs::anyhow::Result<File> {
-    state.native_client_id().map_err(plain_libs::anyhow::Error::msg)?;
+    let client_id = state
+        .native_client_id()
+        .map_err(plain_libs::anyhow::Error::msg)?;
     plain_libs::anyhow::ensure!(!reference.is_empty(), "Empty resource reference");
     let file = resolve_resource(
         state,
-        Scope::Global,
+        Scope::Session(client_id),
         resource_link::Resource::reference(reference),
         kind,
     )
@@ -89,27 +77,22 @@ pub async fn resolve_native_reference(
     Ok(file)
 }
 
-async fn resolve_with_key(
+pub async fn resolve(
     state: &CoreRuntime,
     id: &str,
     kind: ReadKind,
-    native_key: Option<[u8; 32]>,
 ) -> plain_libs::anyhow::Result<File> {
     let owner = state.clone();
     let id = id.to_owned();
     let (scope, resource) = tokio::task::spawn_blocking(move || -> plain_libs::anyhow::Result<_> {
         let (scope, payload) = resource_link::parse(&id)?;
-        let resource = match (native_key, &scope) {
-            (Some(key), Scope::Session(id))
-                if owner.native_client_id().ok().as_ref() == Some(id) =>
-            {
-                resource_link::open(&scope, &key, payload)?
-            }
-            (Some(_), Scope::Session(_) | Scope::Share(_)) => {
-                plain_libs::anyhow::bail!("Invalid native resource scope")
-            }
-            _ => resource_link::open(&scope, &key(&owner, &scope)?, payload)?,
-        };
+        let resource = resource_link::open(&scope, &key(&owner, &scope)?, payload)?;
+        if resource.r#type == ResourceType::ForegroundMediaThumbnail {
+            plain_libs::anyhow::ensure!(
+                matches!(&scope, Scope::Session(id) if &crate::features::services::sessions::native(&owner)?.client_id == id),
+                "Foreground thumbnails require native session"
+            );
+        }
         Ok((scope, resource))
     })
     .await??;

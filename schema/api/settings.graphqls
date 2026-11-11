@@ -1,15 +1,8 @@
-"""
-A scalar that can represent any JSON value.
-"""
-scalar JSON
-
 extend type Mutation {
 	removePref(key: String!): Boolean!
 	setPref(key: String!, value: JSON!): Boolean!
-	setSavedValue(key: String!, value: JSON!): Boolean!
 }
 
 extend type Query {
-	prefs: JSON!
-	savedValue(key: String!): JSON!
+	prefs(keys: [String!]): JSON!
 }
