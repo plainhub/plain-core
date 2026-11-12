@@ -130,3 +130,32 @@ async fn failed_peer_connection_marks_the_session_closed_for_handle_cleanup() {
     assert!(session.send(r#"{"type":"ping"}"#).is_err());
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn request_limit_fills_exactly_one_mib_encrypted_frame() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let server = ContentServer::open(directory.path()).unwrap();
+    let state = server.runtime_state();
+    let peer = fixture_peer();
+    peers::save(&state.db, &[peer.clone()], SaveMode::Insert).unwrap();
+    let session = PeerSubscription::open(state, target(&peer), Default::default()).unwrap();
+    let empty = r#"{"type":"ping","payload":""}"#;
+    let encoded = empty.replacen(
+        "\"\"",
+        &format!("\"{}\"", "x".repeat(1024 * 1024 - 48 - empty.len())),
+        1,
+    );
+    session.send(&encoded).unwrap();
+    use crate::infrastructure::protocols::websocket::{Role, Stream};
+    let mut stream = Stream::new("/graphql", "client", b"init", b"ack", Role::Client).unwrap();
+    assert_eq!(
+        stream.encode(encoded.as_bytes(), &[7; 32]).unwrap().len(),
+        1024 * 1024
+    );
+    assert_eq!(
+        session.send(&(encoded + " ")).unwrap_err(),
+        "Subscription request too large"
+    );
+    session.close();
+    server.shutdown().await;
+}

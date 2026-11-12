@@ -38,13 +38,14 @@ fn counters_are_independent_strict_and_authenticated() {
     let (mut client, mut server) = pair("/screen");
     let first = client.encode(b"first", &key).unwrap();
     let second = client.encode(b"second", &key).unwrap();
-    assert_eq!(&first[1..9], &1u64.to_be_bytes());
-    assert_eq!(&second[1..9], &2u64.to_be_bytes());
+    assert_eq!(first.len(), 8 + 24 + b"first".len() + 16);
+    assert_eq!(&first[..8], &1u64.to_be_bytes());
+    assert_eq!(&second[..8], &2u64.to_be_bytes());
     assert!(server.decode(&second, &key).is_none());
     let mut changed = first.clone();
-    changed[8] = 2;
+    changed[7] = 2;
     assert!(server.decode(&changed, &key).is_none());
-    changed[8] = 1;
+    changed[7] = 1;
     *changed.last_mut().unwrap() ^= 1;
     assert!(server.decode(&changed, &key).is_none());
     assert!(server.decode(&first, &[8; 32]).is_none());
@@ -55,7 +56,7 @@ fn counters_are_independent_strict_and_authenticated() {
     assert!(server.decode(&first, &key).is_none());
     assert_eq!(server.decode(&second, &key).unwrap(), b"second");
     let response = server.encode(b"response", &key).unwrap();
-    assert_eq!(&response[1..9], &1u64.to_be_bytes());
+    assert_eq!(&response[..8], &1u64.to_be_bytes());
     assert_eq!(client.decode(&response, &key).unwrap(), b"response");
 }
 
@@ -90,7 +91,7 @@ fn sequence_overflow_fails_without_wrapping_or_consuming_state() {
     client.sent = u64::MAX - 1;
     server.received = u64::MAX - 1;
     let final_frame = client.encode(b"last", &key).unwrap();
-    assert_eq!(&final_frame[1..9], &u64::MAX.to_be_bytes());
+    assert_eq!(&final_frame[..8], &u64::MAX.to_be_bytes());
     assert_eq!(server.decode(&final_frame, &key).unwrap(), b"last");
     assert!(client.encode(b"overflow", &key).is_none());
     assert!(server.decode(&final_frame, &key).is_none());
@@ -109,18 +110,26 @@ fn handshake_binds_both_authenticated_fresh_frames_without_time() {
     })
     .unwrap();
     let init = seal_init(&key, "client", "/graphql", &body).unwrap();
+    assert_eq!(init.len(), 24 + body.len() + 16);
     assert_eq!(open_init(&key, "client", "/graphql", &init).unwrap(), body);
+    let mut changed_init = init.clone();
+    changed_init[0] ^= 1;
+    assert!(open_init(&key, "client", "/graphql", &changed_init).is_none());
     assert!(open_init(&key, "other", "/graphql", &init).is_none());
     assert!(open_init(&key, "client", "/screen", &init).is_none());
-    assert!(
-        plain_libs::serde_json::from_str::<Init>(r#"{"clientNonce":"ab","timestampMillis":0}"#)
-            .is_err()
-    );
+    assert!(plain_libs::serde_json::from_str::<Init>(
+        r#"{"clientNonce":"ab","timestampMillis":0}"#
+    )
+    .is_err());
     let response = plain_libs::serde_json::to_vec(&Ack {
         server_nonce: "cd".repeat(32),
     })
     .unwrap();
     let ack = seal_ack(&key, "client", "/graphql", &init, &response).unwrap();
+    assert_eq!(ack.len(), 24 + response.len() + 16);
+    let mut changed_ack = ack.clone();
+    changed_ack[0] ^= 1;
+    assert!(open_ack(&key, "client", "/graphql", &init, &changed_ack).is_none());
     let new_ack = seal_ack(&key, "client", "/graphql", &init, &response).unwrap();
     assert_ne!(ack, new_ack);
     assert_eq!(

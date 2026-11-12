@@ -119,7 +119,7 @@ impl PeerSubscription {
     }
     pub fn send(&self, encoded: &str) -> Result<(), String> {
         self.current().map_err(|error| error.to_string())?;
-        if encoded.len() > 1024 * 1024 - 49 {
+        if encoded.len() > 1024 * 1024 - 48 {
             return Err("Subscription request too large".into());
         }
         let message =

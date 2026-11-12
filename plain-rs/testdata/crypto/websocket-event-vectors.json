@@ -3,26 +3,26 @@
     "key": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",
     "client": "fixture-browser",
     "path": "/graphql",
-    "init": "AQoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCrYA1oCwT5ywTNnq8r4fbESTpe3cSleZexQ9CdN1+fnmKrZlP59k2Xz15Z6ktpcfnKYwXW0kXI3qqa87w6fVGRfrLnhl65oXByoUQQHrh8VzjluooRj1UZrMgalpm5vuIN4i",
-    "ack": "ARQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFJIeIkGhor0SEf9XikRPOpvmK36A57lQFZtlImQWIVaqhkkzau/khVAZqojYyS8VxfS/ZpoXLPdW/H5X+jAsRRKtQVG633jrpZ8X4S+4m6ikF4VRM7JNPe52QKqrCVAKA3Jh",
+    "init": "CgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKtgDWgLBPnLBM2eryvh9sRJOl7dxKV5l7FD0J03X5+eYqtmU/n2TZfPXlnqS2lx+cpjBdbSRcjeqprzvDp9UZF+sueGXrmhcHKhRBAeuHxXOOW6ihGPVRmsyBqWmbm+4g3iI=",
+    "ack": "FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUkh4iQaGivRIR/1eKRE86m+YrfoDnuVAVm2UiZBYhVqqGSTNq7+SFUBmqiNjJLxXF9L9mmhcs91b8flf6MCxFEq1BUbrfeOulnxfhL7ibqKQXhbOYyTLxU+U2PvQFHG9jrjk=",
     "clientFrames": [
       {
         "plain": "eyJ0eXBlIjoicGluZyJ9",
-        "frame": "AQAAAAAAAAABHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fXlbmCC8PLBx0kQFHUn50YfhxWgsBeRJ8If2cGLjVgg=="
+        "frame": "AAAAAAAAAAEfHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx9eVuYILw8sHHSRAUdSfnSJoCCzXJhk9IqRQ+NBLkvF"
       },
       {
         "plain": "eyJ0eXBlIjoiY29tcGxldGUiLCJpZCI6ImZpeHR1cmUifQ==",
-        "frame": "AQAAAAAAAAACICAgICAgICAgICAgICAgICAgICAgICAg7Meij3x73u/uunn0nyBY08eAHXyayfMKoxraqkUPolwn5Fe/zqnbVSAOKf+NHxdBf8Y="
+        "frame": "AAAAAAAAAAIgICAgICAgICAgICAgICAgICAgICAgICDsx6KPfHve7+66efSfIFjTx4AdfJrJ8wqjGtqqRQ+iXCfksteXRu4qrabx+RjSFUbwSw=="
       }
     ],
     "serverFrames": [
       {
         "plain": "eyJ0eXBlIjoicG9uZyJ9",
-        "frame": "AQAAAAAAAAABIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMj4SUXBZJ1ftd8Kaa7+0YzE9/fmLrb/jElMfnIrEOGMw=="
+        "frame": "AAAAAAAAAAEjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyPhJRcFknV+13wpprv7RjO3iUG+pV6J+4r6Y33Jy6Wj"
       },
       {
         "plain": "eyJ0eXBlIjoiY29tcGxldGUiLCJpZCI6ImZpeHR1cmUifQ==",
-        "frame": "AQAAAAAAAAACJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkc5KPVwcWVT0h0uLTumwCYoU7kIP/zsKiJy1b5rL5HxIF+LmyUrBPZtYtSZLDWs3EVWw="
+        "frame": "AAAAAAAAAAIkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCRzko9XBxZVPSHS4tO6bAJihTuQg//OwqInLVvmsvkfEgX40ByQWiyP2guTZcWHyhiTcQ=="
       }
     ]
   },
@@ -30,26 +30,26 @@
     "key": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ=",
     "client": "fixture-browser",
     "path": "/screen",
-    "init": "AQsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLC63h2MFRlNNsOt34s8ILrG94Xb0/IOLZ1QCtDSeZcEn/ATV0OqTwab4SKZ5aShiKqFftD2o43uqe9LsL/kEkE756a2xKnmzix+uqsPsB7X7JznSY9ItS/rJ0v+OBad/2rrDb",
-    "ack": "ARUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFQlSGR2c3+UBH1Yt5QsPxfPVy0/UGhYFZwdNiD3yCbdPp2xN/bSHC96ClBQYi8NnYPOp+e6C1VlyNqaT5EK1hEXTtEd7rGwpCXLqVwSaOX0dcJFNOzX4Gl5PZeNuPzJ5nXlO",
+    "init": "CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLreHYwVGU02w63fizwgusb3hdvT8g4tnVAK0NJ5lwSf8BNXQ6pPBpvhIpnlpKGIqoV+0Pajje6p70uwv+QSQTvnprbEqebOLH66qw+wHtfsnOdJj0i1L+snS/44Fp3/ausNs=",
+    "ack": "FRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVCVIZHZzf5QEfVi3lCw/F89XLT9QaFgVnB02IPfIJt0+nbE39tIcL3oKUFBiLw2dg86n57oLVWXI2ppPkQrWERdO0R3usbCkJcupXBJo5fR1wkT45hxhugy6V9TddryE8K+0=",
     "clientFrames": [
       {
         "plain": "",
-        "frame": "AQAAAAAAAAABKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpW+VbSQkUjeFG0bIC41gM/A=="
+        "frame": "AAAAAAAAAAEpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSn/jpKLwJZZFLhLdxd/3IL2"
       },
       {
         "plain": "VAD/AQID",
-        "frame": "AQAAAAAAAAACKioqKioqKioqKioqKioqKioqKioqKioqlFqkAuCAWY9mLeWg50fhrDJqrGeZZg=="
+        "frame": "AAAAAAAAAAIqKioqKioqKioqKioqKioqKioqKioqKiqUWqQC4IAMKIYaWK6xlaYXTCSF7KWU"
       }
     ],
     "serverFrames": [
       {
         "plain": "U0NSRUVOX01JUlJPUl9WSURFTwAA/wEC",
-        "frame": "AQAAAAAAAAABLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tqy+39hpsLG2cCYWYrk9RMT+jBDseDrH0kDC1rP9zOsi2VXkpUN+vdA=="
+        "frame": "AAAAAAAAAAEtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS2rL7f2GmwsbZwJhZiuT1ExP6MEOx4OsfT3No7SjDVzQs6OgNmYTIE/"
       },
       {
         "plain": "U0NSRUVOX01JUlJPUl9BVURJTwADAP4=",
-        "frame": "AQAAAAAAAAACLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4uF3+NomEWX2AslgRVt8lxXYZ6dsv8Hmfunm/ARpUFlBkZAs0HSu7F"
+        "frame": "AAAAAAAAAAIuLi4uLi4uLi4uLi4uLi4uLi4uLi4uLi4Xf42iYRZfYCyWBFW3yXFdhnp2y/weZ5+kW3qHa5LoP3DsS2ubAi0="
       }
     ]
   },
@@ -57,26 +57,26 @@
     "key": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU=",
     "client": "fixture-browser",
     "path": "/image_editor",
-    "init": "AQwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDDyaplPHW8zgSWVOH8Ya9IGhxV23gtVWjRZPLiL/QKIo5eAk7uUUfCYGlur3/keRH5kkdcQ1vZHnQ6Qk2qyKDWtI9BDgpz0bbS7aqz8dZcW9iXABN08cBx3sfdRQ/gnFGOa9",
-    "ack": "ARYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFiKwdVQEex/1TErmIy20rdq9Xwmn/zAdpMrFvFqGHkuMPI5gva4Ryr0LSkXczKc3RRF58oM3TWBrBCyXMYR2+fpMtql8Bqza2UKGYYeEn9HkN38YfoqMpVMg9WZKuI7lQEkR",
+    "init": "DAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMPJqmU8dbzOBJZU4fxhr0gaHFXbeC1VaNFk8uIv9Aoijl4CTu5RR8JgaW6vf+R5EfmSR1xDW9kedDpCTarIoNa0j0EOCnPRttLtqrPx1lxb2JcAE3TxwHHex91FD+CcUY5r0=",
+    "ack": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWIrB1VAR7H/VMSuYjLbSt2r1fCaf/MB2kysW8WoYeS4w8jmC9rhHKvQtKRdzMpzdFEXnygzdNYGsELJcxhHb5+ky2qXwGrNrZQoZhh4Sf0eQ3f1BNM5a3vizlEA05xO8xEjE=",
     "clientFrames": [
       {
         "plain": "",
-        "frame": "AQAAAAAAAAABMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzbUdUo15U7AO3fV+SB9m4Xg=="
+        "frame": "AAAAAAAAAAEzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzN17TOI17JRdYXyIZ8ZAPhK"
       },
       {
         "plain": "VAD/AQID",
-        "frame": "AQAAAAAAAAACNDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0o6knTM0dcdv4sT/PbObXLrkKsNvvhg=="
+        "frame": "AAAAAAAAAAI0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDSjqSdMzR0BxtsOHYIQh/bpYVuAVtAl"
       }
     ],
     "serverFrames": [
       {
         "plain": "SU1BR0VfRURJVE9SX1JFQURZAA==",
-        "frame": "AQAAAAAAAAABNzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Aq/6wlXVjaqR9DUcGTQ//PMR3R8SgsCSlc2ChQBClXbC5Q0="
+        "frame": "AAAAAAAAAAE3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3NzcCr/rCVdWNqpH0NRwZND/88xHdVPSRrKJL07WOKA+TVmfoGw=="
       },
       {
         "plain": "SU1BR0VfRURJVE9SX1VQREFURQAA//4B",
-        "frame": "AQAAAAAAAAACODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4YfNZIK4oQqpKlAWu8FBJmL8fh44IXeX6rkhiJ5Yb61l4tPZ1TE56WA=="
+        "frame": "AAAAAAAAAAI4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODhh81kgrihCqkqUBa7wUEmYvx+Hjghd5fqzUKNmoIkLQjV6qqHsz553"
       }
     ]
   }

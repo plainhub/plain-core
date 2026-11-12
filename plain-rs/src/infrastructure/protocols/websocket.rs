@@ -14,19 +14,10 @@ fn init_aad(client: &str, path: &str) -> Option<Vec<u8>> {
     fields(&[b"plain-ws-init", path.as_bytes(), client.as_bytes()])
 }
 pub fn seal_init(key: &[u8], client: &str, path: &str, plain: &[u8]) -> Option<Vec<u8>> {
-    let mut frame = vec![1];
-    frame.extend_from_slice(&xchacha_encrypt_raw_with_aad(
-        key,
-        plain,
-        &init_aad(client, path)?,
-    )?);
-    Some(frame)
+    xchacha_encrypt_raw_with_aad(key, plain, &init_aad(client, path)?)
 }
 pub fn open_init(key: &[u8], client: &str, path: &str, frame: &[u8]) -> Option<Vec<u8>> {
-    if frame.first() != Some(&1) {
-        return None;
-    }
-    xchacha_decrypt_raw_with_aad(key, frame.get(1..)?, &init_aad(client, path)?)
+    xchacha_decrypt_raw_with_aad(key, frame, &init_aad(client, path)?)
 }
 fn ack_aad(client: &str, path: &str, init: &[u8]) -> Option<Vec<u8>> {
     fields(&[
@@ -43,13 +34,7 @@ pub fn seal_ack(
     init: &[u8],
     plain: &[u8],
 ) -> Option<Vec<u8>> {
-    let mut frame = vec![1];
-    frame.extend_from_slice(&xchacha_encrypt_raw_with_aad(
-        key,
-        plain,
-        &ack_aad(client, path, init)?,
-    )?);
-    Some(frame)
+    xchacha_encrypt_raw_with_aad(key, plain, &ack_aad(client, path, init)?)
 }
 pub fn open_ack(
     key: &[u8],
@@ -58,10 +43,7 @@ pub fn open_ack(
     init: &[u8],
     frame: &[u8],
 ) -> Option<Vec<u8>> {
-    if frame.first() != Some(&1) {
-        return None;
-    }
-    xchacha_decrypt_raw_with_aad(key, frame.get(1..)?, &ack_aad(client, path, init)?)
+    xchacha_decrypt_raw_with_aad(key, frame, &ack_aad(client, path, init)?)
 }
 #[derive(Clone, Copy)]
 pub enum Role {
@@ -107,8 +89,7 @@ impl Stream {
     }
     pub fn encode(&mut self, plain: &[u8], key: &[u8]) -> Option<Vec<u8>> {
         let next = self.sent.checked_add(1)?;
-        let mut frame = vec![1];
-        frame.extend_from_slice(&next.to_be_bytes());
+        let mut frame = next.to_be_bytes().to_vec();
         frame.extend_from_slice(&xchacha_encrypt_raw_with_aad(
             key,
             plain,
@@ -118,16 +99,13 @@ impl Stream {
         Some(frame)
     }
     pub fn decode(&mut self, frame: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-        if frame.first() != Some(&1) {
-            return None;
-        }
-        let sequence = u64::from_be_bytes(frame.get(1..9)?.try_into().ok()?);
+        let sequence = u64::from_be_bytes(frame.get(..8)?.try_into().ok()?);
         let next = self.received.checked_add(1)?;
         if sequence != next {
             return None;
         }
         let plain =
-            xchacha_decrypt_raw_with_aad(key, frame.get(9..)?, &self.aad(false, sequence)?)?;
+            xchacha_decrypt_raw_with_aad(key, frame.get(8..)?, &self.aad(false, sequence)?)?;
         self.received = next;
         Some(plain)
     }

@@ -219,3 +219,45 @@ async fn peer_subscriptions_share_the_session_bound_and_closed_owners_are_reject
     );
     server.stop_core().await;
 }
+
+#[tokio::test]
+async fn request_and_response_limits_fill_exactly_one_mib_encrypted_frames() {
+    let directory = plain_libs::temporary::tempdir().unwrap();
+    let server = ContentServer::open(directory.path()).unwrap();
+    let executor = server.native_graphql().unwrap();
+    let handle = executor.open_subscriptions(Default::default()).unwrap();
+    let SubscriptionSession::Local(session) = executor.subscription_session(handle).unwrap() else {
+        panic!("local subscription required");
+    };
+    let empty = r#"{"type":"ping","payload":""}"#;
+    let payload = "x".repeat(1024 * 1024 - 48 - empty.len());
+    let encoded = empty.replacen("\"\"", &format!("\"{payload}\""), 1);
+    session.send(&encoded).unwrap();
+    let response = session.read().await.unwrap();
+    assert_eq!(response.len(), encoded.len());
+    use plain_rs::infrastructure::protocols::websocket::{Role, Stream};
+    let mut stream = Stream::new("/graphql", "client", b"init", b"ack", Role::Server).unwrap();
+    assert_eq!(
+        stream.encode(response.as_bytes(), &[7; 32]).unwrap().len(),
+        1024 * 1024
+    );
+    assert_eq!(
+        session.send(&(encoded + " ")).unwrap_err(),
+        "Subscription request too large"
+    );
+    assert_eq!(
+        session
+            .encode(
+                ServerMessage::Pong {
+                    payload: Some(plain_libs::serde_json::Value::String(payload + "x")),
+                },
+                None,
+                None
+            )
+            .err()
+            .unwrap(),
+        "Subscription response too large"
+    );
+    executor.close_subscriptions(handle);
+    server.shutdown().await;
+}

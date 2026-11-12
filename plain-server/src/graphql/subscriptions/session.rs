@@ -352,7 +352,7 @@ impl Session {
             ServerMessage::Pong { .. } => (None, false),
         };
         let mut encoded = plain_libs::serde_json::to_string(&message).map_err(|error| error.to_string())?;
-        if encoded.len() > 1024 * 1024 - 49 {
+        if encoded.len() > 1024 * 1024 - 48 {
             let Some(id) = &id else {
                 self.close();
                 return Err("Subscription response too large".into());
@@ -407,7 +407,7 @@ impl Session {
         if !self.valid() {
             return Err("Subscription session closed".into());
         }
-        if encoded.len() > 1024 * 1024 - 49 {
+        if encoded.len() > 1024 * 1024 - 48 {
             return Err("Subscription request too large".into());
         }
         match plain_libs::serde_json::from_str::<ClientMessage>(encoded).map_err(|e| e.to_string())? {

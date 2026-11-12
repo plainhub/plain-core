@@ -15,7 +15,7 @@ use std::{
 use tokio::sync::{mpsc, oneshot, watch};
 
 pub const MAX_SOCKET_FRAME_BYTES: usize = 16 * 1024 * 1024;
-pub const MAX_SOCKET_CONTROL_BYTES: usize = 65536 - 49;
+pub const MAX_SOCKET_CONTROL_BYTES: usize = 65536 - 48;
 const QUEUE_CAPACITY: usize = 8;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]

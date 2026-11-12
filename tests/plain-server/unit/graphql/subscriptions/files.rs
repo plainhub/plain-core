@@ -89,7 +89,7 @@ async fn large_search_keeps_frames_bounded_and_waits_for_a_slow_reader() {
     let mut final_page = false;
     tokio::time::timeout(std::time::Duration::from_secs(20), async {
         while let Ok(message) = session.read().await {
-            assert!(message.len() < 1024 * 1024 - 49);
+            assert!(message.len() < 1024 * 1024 - 48);
             let message: Value = plain_libs::serde_json::from_str(&message).unwrap();
             if message["type"] == "complete" {
                 break;
