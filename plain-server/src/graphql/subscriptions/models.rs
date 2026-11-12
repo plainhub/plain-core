@@ -1,6 +1,6 @@
 use plain_graphql::{ID, SimpleObject};
 
-use plain_rs::infrastructure::types::Long;
+use plain_rs::infrastructure::types::{Instant, Long};
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize)]
@@ -46,9 +46,11 @@ pub struct MmsSendResult {
     pub result_code: Option<i32>,
 }
 #[derive(SimpleObject, Deserialize)]
+#[graphql(complex)]
 pub struct ClipboardChange {
     pub text: String,
     pub sensitive: bool,
+    #[graphql(skip)]
     pub time: Long,
 }
 
@@ -137,3 +139,10 @@ pub struct PomodoroAction {
 #[cfg(test)]
 #[path = "../../../../tests/plain-server/unit/graphql/subscriptions/models.rs"]
 mod tests;
+
+#[plain_graphql::ComplexObject]
+impl ClipboardChange {
+    fn time(&self) -> plain_graphql::Result<Instant> {
+        crate::graphql::types::instant_from_millis(self.time.0)
+    }
+}

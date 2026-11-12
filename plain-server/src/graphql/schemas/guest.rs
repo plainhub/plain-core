@@ -2,7 +2,7 @@ use crate::server::ServerState;
 use plain_graphql::{Context, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject};
 
 use plain_rs::features::files::shares::Service;
-use plain_rs::infrastructure::types::Long;
+use plain_rs::infrastructure::types::{Instant, Long};
 
 #[derive(SimpleObject)]
 struct SharedFile {
@@ -18,7 +18,7 @@ struct SharedInfo {
     name: String,
     read_only: bool,
     requires_password: bool,
-    expires_at: Option<Long>,
+    expires_at: Option<Instant>,
     url_token: String,
     entries: Vec<SharedFile>,
 }
@@ -91,8 +91,8 @@ impl Query {
             expires_at: share
                 .expires_at
                 .as_deref()
-                .and_then(|t| plain_libs::chrono::DateTime::parse_from_rfc3339(t).ok())
-                .map(|t| Long(t.timestamp_millis())),
+                .map(crate::graphql::types::parse_instant)
+                .transpose()?,
             url_token: share.url_token,
             entries,
         })

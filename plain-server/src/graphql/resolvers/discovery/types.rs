@@ -1,7 +1,9 @@
-use plain_graphql::SimpleObject;
+use plain_graphql::{ComplexObject, SimpleObject};
 use plain_rs::features::services::device::types::DeviceType;
+use plain_rs::infrastructure::types::Instant;
 
 #[derive(SimpleObject, Clone, Debug)]
+#[graphql(complex)]
 pub struct NearbyDevice {
     pub id: plain_graphql::ID,
     pub name: String,
@@ -12,6 +14,7 @@ pub struct NearbyDevice {
     pub device_type: DeviceType,
     pub version: String,
     pub platform: String,
+    #[graphql(skip)]
     pub last_seen: String,
     pub discovery_methods: Vec<plain_rs::features::discovery::nearby_devices::DiscoveryMethod>,
     pub best_ip: String,
@@ -39,5 +42,12 @@ impl NearbyDevice {
             best_ip,
             status: plain_rs::features::chat::enums::PeerStatus::Unpaired,
         }
+    }
+}
+
+#[ComplexObject]
+impl NearbyDevice {
+    fn last_seen(&self) -> plain_graphql::Result<Instant> {
+        crate::graphql::types::parse_instant(&self.last_seen)
     }
 }

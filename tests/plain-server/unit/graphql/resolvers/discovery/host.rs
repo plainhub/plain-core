@@ -18,6 +18,7 @@ async fn nearby_snapshot_uses_the_main_contract_without_starting_discovery() {
         .next()
         .unwrap();
     assert!(nearby_type.contains("deviceType: DeviceType!"));
+    assert!(nearby_type.contains("lastSeen: Instant!"));
     assert!(!nearby_type.contains("deviceType: String!"));
     let stopped = native
         .execute(plain_graphql::Request::new("mutation { stopDiscovery }"))

@@ -3,13 +3,13 @@ use plain_graphql::{Context, Object, SimpleObject};
 
 use plain_rs::features::services::discovery::mdns_runtime;
 use plain_rs::features::services::discovery::mdns_runtime::Request;
-use plain_rs::infrastructure::types::Long;
+use plain_rs::infrastructure::types::{Instant, Long};
 use serde::Deserialize;
 
 #[derive(SimpleObject, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MdnsPacket {
-    time: Long,
+    time: Instant,
     direction: plain_rs::infrastructure::protocols::mdns::packet_capture::MdnsPacketDirection,
     src_ip: String,
     src_port: i32,
@@ -49,7 +49,7 @@ struct MdnsState {
 
 #[derive(SimpleObject)]
 struct MdnsActivity {
-    time: Long,
+    time: Instant,
     event: String,
     detail: String,
 }
@@ -63,7 +63,7 @@ impl MdnsState {
             .into_iter()
             .map(|entry| {
                 Ok(MdnsActivity {
-                    time: Long(i64::try_from(entry.time)?),
+                    time: crate::graphql::types::instant_from_millis(i64::try_from(entry.time)?)?,
                     event: entry.event,
                     detail: entry.detail,
                 })
@@ -82,11 +82,13 @@ impl MdnsQuery {
         if *state.stop.borrow() {
             return Err("Server stopped".into());
         }
-        Ok(plain_libs::serde_json::from_value(state.mdns.snapshot_fields(
-            ctx.look_ahead().field("services").exists(),
-            ctx.look_ahead().field("packetsIn").exists()
-                || ctx.look_ahead().field("packetsOut").exists(),
-        ))?)
+        Ok(plain_libs::serde_json::from_value(
+            state.mdns.snapshot_fields(
+                ctx.look_ahead().field("services").exists(),
+                ctx.look_ahead().field("packetsIn").exists()
+                    || ctx.look_ahead().field("packetsOut").exists(),
+            ),
+        )?)
     }
 }
 #[derive(Default)]

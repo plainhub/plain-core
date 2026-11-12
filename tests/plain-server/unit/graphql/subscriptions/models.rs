@@ -17,7 +17,9 @@ fn image_update_events_preserve_all_statuses_and_reject_unknown_statuses() {
         assert_eq!(value.version, Long(7));
         assert_eq!(value.download_progress, 50);
     }
-    assert!(plain_libs::serde_json::from_value::<ImageModelsUpdate>(source("FUTURE_STATUS")).is_err());
+    assert!(
+        plain_libs::serde_json::from_value::<ImageModelsUpdate>(source("FUTURE_STATUS")).is_err()
+    );
 }
 
 #[test]
@@ -41,7 +43,10 @@ fn pairing_notices_preserve_device_enums_and_reject_unknown_values() {
         assert_eq!(value.timestamp, Long(5000000000));
         assert_eq!(value.signature, "signature");
     }
-    assert!(plain_libs::serde_json::from_value::<PairingRequestNotice>(source("FUTURE_DEVICE")).is_err());
+    assert!(
+        plain_libs::serde_json::from_value::<PairingRequestNotice>(source("FUTURE_DEVICE"))
+            .is_err()
+    );
 }
 
 #[test]
@@ -51,4 +56,31 @@ fn internal_unknown_devices_project_to_the_public_other_variant() {
         plain_libs::serde_json::from_value::<DeviceType>(json!("UNKNOWN")).unwrap(),
         DeviceType::Other
     );
+}
+
+#[tokio::test]
+async fn clipboard_event_time_is_an_instant() {
+    struct Query;
+    #[plain_graphql::Object]
+    impl Query {
+        fn clipboard(&self) -> ClipboardChange {
+            plain_libs::serde_json::from_value(
+                json!({"text":"fixture","sensitive":false,"time":1790812800123_i64}),
+            )
+            .unwrap()
+        }
+    }
+    let schema = plain_graphql::Schema::build(
+        Query,
+        plain_graphql::EmptyMutation,
+        plain_graphql::EmptySubscription,
+    )
+    .finish();
+    let response = schema.execute("{ clipboard { time } }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["clipboard"]["time"],
+        "2026-10-01T00:00:00.123Z"
+    );
+    assert!(schema.sdl().contains("time: Instant!"));
 }

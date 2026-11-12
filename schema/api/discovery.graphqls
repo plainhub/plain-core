@@ -6,13 +6,13 @@ enum DiscoveryMethod {
 }
 
 type MdnsActivity {
-	time: Long!
+	time: Instant!
 	event: String!
 	detail: String!
 }
 
 type MdnsPacket {
-	time: Long!
+	time: Instant!
 	direction: MdnsPacketDirection!
 	srcIp: String!
 	srcPort: Int!
@@ -61,10 +61,10 @@ type NearbyDevice {
 	deviceType: DeviceType!
 	version: String!
 	platform: String!
-	lastSeen: String!
 	discoveryMethods: [DiscoveryMethod!]!
 	bestIp: String!
 	status: PeerStatus!
+	lastSeen: Instant!
 }
 
 extend type Mutation {

@@ -1,3 +1,5 @@
+scalar Instant
+
 scalar Long
 
 type Query {
@@ -17,7 +19,7 @@ type SharedInfo {
 	name: String!
 	readOnly: Boolean!
 	requiresPassword: Boolean!
-	expiresAt: Long
+	expiresAt: Instant
 	urlToken: String!
 	entries: [SharedFile!]!
 }

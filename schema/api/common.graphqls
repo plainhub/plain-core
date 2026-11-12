@@ -39,7 +39,7 @@ type ChannelInviteCancellation {
 type ClipboardChange {
 	text: String!
 	sensitive: Boolean!
-	time: Long!
+	time: Instant!
 }
 
 enum DeviceType {

@@ -9,7 +9,9 @@ fn capture_is_bounded_and_decodes_dns_without_global_test_state() {
     for direction in [MdnsPacketDirection::In, MdnsPacketDirection::Out] {
         for time in 0..60 {
             state.push(PacketLog {
-                time,
+                time: crate::infrastructure::types::Instant(
+                    plain_libs::chrono::DateTime::from_timestamp_millis(time).unwrap(),
+                ),
                 direction,
                 src_ip: "127.0.0.1".into(),
                 src_port: 5353,
@@ -23,8 +25,8 @@ fn capture_is_bounded_and_decodes_dns_without_global_test_state() {
     }
     assert_eq!(state.inbound.len(), 50);
     assert_eq!(state.outbound.len(), 50);
-    assert_eq!(state.inbound.front().unwrap().time, 59);
-    assert_eq!(state.inbound.back().unwrap().time, 10);
+    assert_eq!(state.inbound.front().unwrap().time.0.timestamp_millis(), 59);
+    assert_eq!(state.inbound.back().unwrap().time.0.timestamp_millis(), 10);
     assert_eq!(decode(&[0xff]).1, "(unparseable)");
 }
 
@@ -36,9 +38,17 @@ fn packet_directions_keep_fixed_wire_values_and_reject_unknown_values() {
     ] {
         assert_eq!(plain_libs::serde_json::to_value(direction).unwrap(), wire);
         assert_eq!(
-            plain_libs::serde_json::from_value::<MdnsPacketDirection>(plain_libs::serde_json::json!(wire)).unwrap(),
+            plain_libs::serde_json::from_value::<MdnsPacketDirection>(
+                plain_libs::serde_json::json!(wire)
+            )
+            .unwrap(),
             direction
         );
     }
-    assert!(plain_libs::serde_json::from_value::<MdnsPacketDirection>(plain_libs::serde_json::json!("SIDEWAYS")).is_err());
+    assert!(
+        plain_libs::serde_json::from_value::<MdnsPacketDirection>(plain_libs::serde_json::json!(
+            "SIDEWAYS"
+        ))
+        .is_err()
+    );
 }

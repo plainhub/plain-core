@@ -15,23 +15,24 @@ async fn shared_file_rows_read_metadata_directly_without_host_dispatch() {
             "Files".into(),
             vec![folder.to_string_lossy().into_owned()],
             true,
-            None,
+            Some("2099-01-01T00:00:00.123Z".into()),
         )
         .unwrap();
     let (_generation, mut requests) = state.host.connect();
     let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
         .data(Guest {
             state,
-            id: share.id,
+            id: share.id.clone(),
         })
         .finish();
     let result = schema
         .execute(
-            "{ sharedInfo(relativePath: \"Shared/\") { entries { name size mimeType hasThumb } } }",
+            "{ sharedInfo(relativePath: \"Shared/\") { expiresAt entries { name size mimeType hasThumb } } }",
         )
         .await;
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     let data = result.data.into_json().unwrap();
+    assert_eq!(data["sharedInfo"]["expiresAt"], "2099-01-01T00:00:00.123Z");
     let rows = data["sharedInfo"]["entries"].as_array().unwrap();
     assert_eq!(rows.len(), 2);
     let note = rows.iter().find(|row| row["name"] == "note.txt").unwrap();
@@ -42,6 +43,10 @@ async fn shared_file_rows_read_metadata_directly_without_host_dispatch() {
     assert_eq!(cover["size"], 11);
     assert_eq!(cover["mimeType"], "image/png");
     assert_eq!(cover["hasThumb"], true);
+    shares.update(&share.id, "Files", None, None).unwrap();
+    let response = schema.execute("{ sharedInfo { expiresAt } }").await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert!(response.data.into_json().unwrap()["sharedInfo"]["expiresAt"].is_null());
     assert!(requests.try_recv().is_err());
     server.stop_core().await;
 }

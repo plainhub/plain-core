@@ -21,7 +21,7 @@ pub enum MdnsPacketDirection {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PacketLog {
-    time: i64,
+    time: crate::infrastructure::types::Instant,
     direction: MdnsPacketDirection,
     src_ip: String,
     src_port: u16,
@@ -78,10 +78,7 @@ pub(crate) fn record(
     }
     let (summary, detail) = decode(bytes);
     let row = PacketLog {
-        time: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|value| value.as_millis() as i64)
-            .unwrap_or_else(|error| -(error.duration().as_millis() as i64)),
+        time: crate::infrastructure::types::Instant(plain_libs::chrono::Utc::now()),
         direction,
         src_ip: src.ip().to_string(),
         src_port: src.port(),

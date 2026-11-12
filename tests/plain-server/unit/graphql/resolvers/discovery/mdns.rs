@@ -69,10 +69,10 @@ fn mdns_snapshot_projection_keeps_packet_timestamps_and_ipv6_without_loss() {
     let state: MdnsState = plain_libs::serde_json::from_value(json!({
         "runtimeId":"fixture", "revision":5000000000_i64, "receiver":true,"running":true,"scanning":false,"published":true,"manualScanning":false,"debugSessionCount":1,"capturing":true,
         "services":[{"serviceType":"_plain._tcp.local.","instanceName":"fixture","instanceFqdn":"fixture._plain._tcp.local.","hostname":"fixture.local.","port":8443,"txtRecords":["id=fixture"],"ips":[],"ip6s":["fe80::1%4"],"complete":true}],
-        "packetsIn":[{"time":1790812800123_i64,"direction":"IN","srcIp":"::1","srcPort":5353,"dstIp":"ff02::fb","dstPort":5353,"size":100,"summary":"PTR","detail":"fixture"}],"packetsOut":[]
+        "packetsIn":[{"time":"2026-09-30T21:20:00.123Z","direction":"IN","srcIp":"::1","srcPort":5353,"dstIp":"ff02::fb","dstPort":5353,"size":100,"summary":"PTR","detail":"fixture"}],"packetsOut":[]
     })).unwrap();
     assert_eq!(state.revision, Long(5000000000));
-    assert_eq!(state.packets_in[0].time, Long(1790812800123));
+    assert_eq!(state.packets_in[0].time.0.timestamp_millis(), 1790803200123);
     assert_eq!(state.services[0].ip6s, ["fe80::1%4"]);
 }
 
@@ -221,4 +221,45 @@ async fn status_and_browser_queries_do_not_collect_packet_capture_snapshots() {
         1
     );
     core.stop_core().await;
+}
+
+#[tokio::test]
+async fn mdns_time_fields_are_instants() {
+    struct Query;
+    #[plain_graphql::Object]
+    impl Query {
+        fn packet(&self) -> MdnsPacket {
+            plain_libs::serde_json::from_value(json!({
+                "time":"2026-10-01T00:00:00.123Z", "direction":"IN",
+                "srcIp":"127.0.0.1", "srcPort":5353, "dstIp":"224.0.0.251",
+                "dstPort":5353, "size":1, "summary":"fixture", "detail":"fixture"
+            }))
+            .unwrap()
+        }
+        fn activity(&self) -> MdnsActivity {
+            MdnsActivity {
+                time: crate::graphql::types::instant_from_millis(1790812800123).unwrap(),
+                event: "query".into(),
+                detail: String::new(),
+            }
+        }
+    }
+    let schema = plain_graphql::Schema::build(
+        Query,
+        plain_graphql::EmptyMutation,
+        plain_graphql::EmptySubscription,
+    )
+    .finish();
+    let response = schema
+        .execute("{ packet { time } activity { time } }")
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap(),
+        json!({
+            "packet":{"time":"2026-10-01T00:00:00.123Z"},
+            "activity":{"time":"2026-10-01T00:00:00.123Z"}
+        })
+    );
+    assert_eq!(schema.sdl().matches("time: Instant!").count(), 2);
 }
